@@ -1,0 +1,107 @@
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    background: #faf8f2;
+    font-family: Inter, Manrope, system-ui, sans-serif;
+    color: #111111;
+  }
+
+  a {
+    text-decoration: none;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .btn-primary {
+    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-forest px-5 py-3 text-sm font-semibold text-ivory transition hover:bg-[#082f24] focus:outline-none focus:ring-2 focus:ring-champagne focus:ring-offset-2;
+  }
+
+  .btn-secondary {
+    @apply inline-flex min-h-12 items-center justify-center rounded-md border border-forest/20 bg-ivory px-5 py-3 text-sm font-semibold text-forest transition hover:border-champagne hover:text-[#082f24] focus:outline-none focus:ring-2 focus:ring-champagne focus:ring-offset-2;
+  }
+
+  .icon-button {
+    @apply inline-flex h-11 min-w-11 items-center justify-center rounded-md border border-forest/15 bg-ivory px-3 text-forest transition hover:border-champagne hover:bg-cream focus:outline-none focus:ring-2 focus:ring-champagne focus:ring-offset-2;
+  }
+
+  .hero-section {
+    background:
+      radial-gradient(circle at 78% 24%, rgba(201, 164, 92, 0.18), transparent 28rem),
+      linear-gradient(135deg, #faf8f2 0%, #f5f0e6 100%);
+  }
+
+  .feature-panel {
+    @apply rounded-lg border border-forest/10 bg-ivory p-6 shadow-sm;
+  }
+
+  .feature-panel h2 {
+    @apply mt-3 font-display text-3xl leading-tight text-forest;
+  }
+
+  .feature-panel p {
+    @apply mt-3 text-sm leading-6 text-ink/65;
+  }
+
+  .section-heading {
+    @apply mb-8 flex items-end justify-between gap-4;
+  }
+
+  .section-heading h2,
+  .page-intro h1 {
+    @apply font-display text-5xl leading-tight text-forest md:text-6xl;
+  }
+
+  .section-heading a {
+    @apply text-sm font-semibold text-forest underline decoration-champagne underline-offset-4;
+  }
+
+  .page-intro {
+    @apply max-w-3xl;
+  }
+
+  .page-intro p {
+    @apply mt-5 text-lg leading-8 text-ink/70;
+  }
+
+  .product-grid {
+    @apply grid gap-6 sm:grid-cols-2 xl:grid-cols-4;
+  }
+
+  .tag {
+    @apply rounded-full border border-champagne/40 bg-cream px-3 py-1 text-xs font-medium text-forest;
+  }
+
+  .admin-card {
+    @apply rounded-lg border border-forest/10 bg-ivory p-5 shadow-sm;
+  }
+
+  .input-field {
+    @apply min-h-11 w-full rounded-md border border-forest/15 bg-ivory px-3 py-2 text-sm text-ink outline-none transition focus:border-champagne focus:ring-2 focus:ring-champagne/30;
+  }
+}
