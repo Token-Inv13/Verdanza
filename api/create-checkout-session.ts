@@ -1,6 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import type Stripe from "stripe";
-import { getAdminAuth, getAdminDb } from "./_server/firebaseAdmin.js";
+import { getAdminDb } from "./_server/firebaseAdmin.js";
 import {
   assertMethod,
   sendJson,
@@ -29,7 +29,7 @@ export default async function handler(
     const stripe = getStripe();
     const priced = await priceCheckout(db, body);
     const verifiedCustomer = body.authToken
-      ? await getAdminAuth().verifyIdToken(body.authToken)
+      ? await verifyFirebaseIdToken(body.authToken)
       : null;
     const appUrl = process.env.VITE_APP_URL || process.env.APP_URL;
 
@@ -108,4 +108,32 @@ export default async function handler(
       400,
     );
   }
+}
+
+async function verifyFirebaseIdToken(idToken: string) {
+  const apiKey = process.env.VITE_FIREBASE_API_KEY;
+  if (!apiKey) throw new Error("Missing VITE_FIREBASE_API_KEY server variable.");
+
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ idToken }),
+    },
+  );
+  const payload = (await response.json()) as {
+    users?: Array<{ localId?: string; email?: string }>;
+    error?: { message?: string };
+  };
+
+  const user = payload.users?.[0];
+  if (!response.ok || !user?.localId) {
+    throw new Error(payload.error?.message || "Token client Firebase invalide.");
+  }
+
+  return {
+    uid: user.localId,
+    email: user.email ?? null,
+  };
 }

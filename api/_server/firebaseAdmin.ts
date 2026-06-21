@@ -1,5 +1,4 @@
 import { applicationDefault, cert, getApps, initializeApp } from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 
 function getServiceAccount() {
@@ -35,11 +34,6 @@ function getServiceAccount() {
 export function getAdminDb() {
   ensureAdminApp();
   return getFirestore();
-}
-
-export function getAdminAuth() {
-  ensureAdminApp();
-  return getAuth();
 }
 
 function ensureAdminApp() {
