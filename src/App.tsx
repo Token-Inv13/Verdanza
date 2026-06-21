@@ -14,6 +14,12 @@ import { CheckoutSuccessPage } from "./pages/CheckoutSuccessPage";
 import { LegalPage } from "./pages/LegalPage";
 import { AdminPage } from "./pages/admin/AdminPage";
 import { AdminAuthGate } from "./components/AdminAuthGate";
+import { AccountAuthGate } from "./components/AccountAuthGate";
+import { AuthPage } from "./pages/AuthPage";
+import { AccountLayout } from "./pages/account/AccountLayout";
+import { AccountOverviewPage } from "./pages/account/AccountOverviewPage";
+import { AccountOrdersPage } from "./pages/account/AccountOrdersPage";
+import { AccountProfilePage } from "./pages/account/AccountProfilePage";
 
 export function App() {
   return (
@@ -43,9 +49,18 @@ export function App() {
         <Route path="faq" element={<ContentPage variant="faq" />} />
         <Route path="contact" element={<ContentPage variant="contact" />} />
         <Route path="panier" element={<CartPage />} />
+        <Route path="connexion" element={<AuthPage mode="login" />} />
+        <Route path="inscription" element={<AuthPage mode="register" />} />
         <Route path="checkout" element={<CheckoutPage />} />
         <Route path="checkout/success" element={<CheckoutSuccessPage />} />
         <Route path="checkout/cancel" element={<CheckoutCancelPage />} />
+        <Route element={<AccountAuthGate />}>
+          <Route path="compte" element={<AccountLayout />}>
+            <Route index element={<AccountOverviewPage />} />
+            <Route path="commandes" element={<AccountOrdersPage />} />
+            <Route path="profil" element={<AccountProfilePage />} />
+          </Route>
+        </Route>
         <Route
           path="mentions-legales"
           element={<LegalPage title="Mentions legales" />}

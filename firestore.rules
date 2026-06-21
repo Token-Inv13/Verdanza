@@ -41,7 +41,21 @@ service cloud.firestore {
 
     match /customers/{customerId} {
       allow read: if isAdmin() || (signedIn() && customerId == request.auth.uid);
-      allow create, update, delete: if isAdmin();
+      allow create: if signedIn()
+        && customerId == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role == "customer";
+      allow update: if signedIn()
+        && customerId == request.auth.uid
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.role == "customer"
+        && request.resource.data.loyaltyPoints == resource.data.loyaltyPoints
+        && request.resource.data.orderCount == resource.data.orderCount
+        && request.resource.data.totalSpent == resource.data.totalSpent;
+      allow delete: if isAdmin();
     }
 
     match /stockMovements/{movementId} {

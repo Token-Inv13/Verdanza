@@ -30,6 +30,9 @@ La cle `STRIPE_SECRET_KEY` et `STRIPE_WEBHOOK_SECRET` doivent rester cote serveu
 npm run lint
 npm run typecheck:api
 npm run build
+npm run seed:products -- --yes
+npm run seed:admin -- --yes
+npm run seed:admin-auth -- --yes
 ```
 
 ## Stripe Checkout
@@ -123,6 +126,75 @@ Pour le premier admin, creer manuellement un document dans Firestore depuis la c
 ```
 
 L'identifiant du document peut etre l'UID Firebase Auth ou l'email exact. Les regles Firestore fournies dans `firestore.rules` bloquent la creation du premier admin depuis le client afin d'eviter une elevation de privileges.
+
+## Authentification client
+
+L'authentification client utilise Firebase Auth et supporte :
+
+- email / mot de passe ;
+- Google Auth ;
+- reset mot de passe depuis `/connexion` ;
+- espace compte protege.
+
+Routes publiques :
+
+- `/connexion` ;
+- `/inscription`.
+
+Routes compte protegees :
+
+- `/compte` ;
+- `/compte/commandes` ;
+- `/compte/profil`.
+
+Lorsqu'un utilisateur se connecte ou s'inscrit, l'application cree ou met a jour `customers/{uid}` avec :
+
+- `uid` ;
+- `email` ;
+- `displayName` ;
+- `phone` ;
+- `createdAt` ;
+- `updatedAt` ;
+- `loyaltyPoints: 0` ;
+- `orderCount: 0` ;
+- `totalSpent: 0` ;
+- `role: "customer"`.
+
+Le checkout invite reste possible. Si le client est connecte, le frontend transmet un ID token Firebase a `/api/create-checkout-session`. La fonction serverless verifie ce token avec Firebase Admin et rattache la commande a `customerId = uid`. Les commandes client sont ensuite visibles dans `/compte/commandes` uniquement pour ce `uid`.
+
+La base fidelite est preparee cote donnees seulement. Aucune promesse fidelite complete n'est affichee publiquement.
+
+## Bootstrap admin Auth
+
+Le document Firestore `adminUsers/token.invest13@gmail.com` donne les droits admin, mais l'utilisateur Firebase Auth doit aussi exister pour pouvoir se connecter.
+
+Commande :
+
+```bash
+BOOTSTRAP_ADMIN_EMAIL="token.invest13@gmail.com" npm run seed:admin-auth -- --yes
+```
+
+Sur PowerShell :
+
+```powershell
+$env:BOOTSTRAP_ADMIN_EMAIL="token.invest13@gmail.com"; npm run seed:admin-auth -- --yes
+```
+
+Pour definir ou reinitialiser un mot de passe temporaire localement :
+
+```powershell
+$env:BOOTSTRAP_ADMIN_EMAIL="token.invest13@gmail.com"
+$env:BOOTSTRAP_ADMIN_TEMP_PASSWORD="mot-de-passe-temporaire-local"
+npm run seed:admin-auth -- --yes
+```
+
+Precautions :
+
+- ne jamais coder le mot de passe dans le repo ;
+- ne jamais afficher le mot de passe dans les logs ;
+- ne jamais stocker le mot de passe dans Firestore ;
+- ne jamais versionner `.env.local` ou un service account Firebase ;
+- si le compte existe deja, utiliser aussi `Mot de passe oublie` sur `/admin` ou `/connexion`.
 
 ## Seed Firestore production
 

@@ -144,6 +144,20 @@ export type AdminUser = {
   updatedAt?: string;
 };
 
+export type CustomerProfile = {
+  id: string;
+  uid: string;
+  email: string;
+  displayName: string;
+  phone: string;
+  loyaltyPoints: number;
+  orderCount: number;
+  totalSpent: number;
+  role: "customer";
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type SiteSettings = {
   id: string;
   siteName: string;

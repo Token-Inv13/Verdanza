@@ -1,12 +1,14 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
+import { useAuth } from "../context/AuthContext";
 import { localDeliveryZones } from "../data/deliveryZones";
 import type { DeliveryMethod } from "../types";
 
 export function CheckoutPage() {
   const { itemCount, subtotal, items, lines } = useCart();
+  const { user, customerProfile } = useAuth();
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("postal");
   const [deliveryZone, setDeliveryZone] = useState(localDeliveryZones[0]?.id ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -28,17 +30,38 @@ export function CheckoutPage() {
   }, [deliveryMethod, deliveryZone, subtotal]);
   const estimatedTotal = subtotal + estimatedDeliveryFee;
 
+  useEffect(() => {
+    if (!user) return;
+    setCustomer((current) => ({
+      ...current,
+      email: current.email || user.email || "",
+      phone: current.phone || customerProfile?.phone || "",
+      firstName:
+        current.firstName ||
+        (customerProfile?.displayName || user.displayName || "").split(" ")[0] ||
+        "",
+      lastName:
+        current.lastName ||
+        (customerProfile?.displayName || user.displayName || "")
+          .split(" ")
+          .slice(1)
+          .join(" "),
+    }));
+  }, [customerProfile, user]);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
     setIsSubmitting(true);
 
     try {
+      const authToken = user ? await user.getIdToken() : undefined;
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           items,
+          authToken,
           deliveryMethod,
           deliveryZone: deliveryMethod === "local_express" ? deliveryZone : undefined,
           customer: {
@@ -86,6 +109,27 @@ export function CheckoutPage() {
           le total avant de creer la session Stripe.
         </p>
       </div>
+      {!user && itemCount > 0 && (
+        <section className="mt-8 rounded-lg border border-champagne/30 bg-cream p-5">
+          <p className="text-sm leading-6 text-forest">
+            Connectez-vous pour suivre votre commande et retrouver votre historique.
+            Le checkout invite reste disponible.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link to="/connexion" state={{ from: "/checkout" }} className="btn-primary">
+              Se connecter
+            </Link>
+            <Link to="/inscription" state={{ from: "/checkout" }} className="btn-secondary">
+              Creer un compte
+            </Link>
+          </div>
+        </section>
+      )}
+      {user && itemCount > 0 && (
+        <section className="mt-8 rounded-lg border border-forest/10 bg-cream p-5 text-sm text-forest">
+          Commande rattachee au compte {user.email}.
+        </section>
+      )}
       {itemCount === 0 ? (
         <section className="mt-10 rounded-lg border border-forest/10 bg-cream p-8">
           <p>Votre panier est vide.</p>

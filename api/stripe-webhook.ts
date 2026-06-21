@@ -133,6 +133,25 @@ export default async function handler(
         paidAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
+
+      if (order.customerId) {
+        const customerRef = db.collection("customers").doc(order.customerId);
+        transaction.set(
+          customerRef,
+          {
+            uid: order.customerId,
+            email: order.customerEmail,
+            displayName: order.customerName ?? "",
+            phone: order.customerPhone ?? "",
+            role: "customer",
+            loyaltyPoints: FieldValue.increment(0),
+            orderCount: FieldValue.increment(1),
+            totalSpent: FieldValue.increment(Number(order.total || 0)),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
     });
 
     sendJson(response, { received: true });

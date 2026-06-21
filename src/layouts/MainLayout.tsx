@@ -1,7 +1,8 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Menu, ShoppingBag } from "lucide-react";
+import { Menu, ShoppingBag, UserRound } from "lucide-react";
 import { useState } from "react";
 import { useCart } from "../context/CartContext";
+import { useAuth } from "../context/AuthContext";
 import { AgeGate } from "../components/AgeGate";
 import { ComplianceNote } from "../components/ComplianceNote";
 
@@ -17,6 +18,7 @@ const navItems = [
 export function MainLayout() {
   const [open, setOpen] = useState(false);
   const { itemCount } = useCart();
+  const { user } = useAuth();
 
   return (
     <div className="min-h-screen bg-ivory text-ink">
@@ -40,6 +42,16 @@ export function MainLayout() {
             ))}
           </nav>
           <div className="flex items-center gap-2">
+            <NavLink
+              to={user ? "/compte" : "/connexion"}
+              className="icon-button"
+              aria-label={user ? "Mon compte" : "Connexion"}
+            >
+              <UserRound size={18} />
+              <span className="hidden text-xs sm:inline">
+                {user ? "Mon compte" : "Connexion"}
+              </span>
+            </NavLink>
             <NavLink to="/panier" className="icon-button" aria-label="Panier">
               <ShoppingBag size={18} />
               {itemCount > 0 && <span className="ml-1 text-xs">{itemCount}</span>}
@@ -60,6 +72,9 @@ export function MainLayout() {
                 {item.label}
               </NavLink>
             ))}
+            <NavLink to={user ? "/compte" : "/connexion"} onClick={() => setOpen(false)}>
+              {user ? "Mon compte" : "Connexion"}
+            </NavLink>
           </nav>
         )}
       </header>

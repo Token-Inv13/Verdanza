@@ -6,6 +6,7 @@ import {
   query,
   serverTimestamp,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { collections } from "./collections";
@@ -23,6 +24,16 @@ export type AdminOrderRow = {
   items: OrderItem[];
   total: string;
   internalNote?: string;
+};
+
+export type CustomerOrderRow = {
+  id: string;
+  createdAt?: string;
+  items: OrderItem[];
+  total: number;
+  paymentStatus: PaymentStatus;
+  orderStatus: OrderStatus;
+  deliveryMethod: string;
 };
 
 export async function getAdminOrdersWithFallback() {
@@ -65,5 +76,29 @@ export async function updateOrderAdminFields(
   await updateDoc(doc(db, collections.orders, orderId), {
     ...data,
     updatedAt: serverTimestamp(),
+  });
+}
+
+export async function getCustomerOrders(customerId: string) {
+  if (!db) return [];
+  const snapshot = await getDocs(
+    query(
+      collection(db, collections.orders),
+      where("customerId", "==", customerId),
+      orderBy("createdAt", "desc"),
+    ),
+  );
+
+  return snapshot.docs.map((entry) => {
+    const order = { id: entry.id, ...entry.data() } as Order;
+    return {
+      id: order.id,
+      createdAt: order.createdAt,
+      items: order.items || [],
+      total: Number(order.total || 0),
+      paymentStatus: order.paymentStatus,
+      orderStatus: order.orderStatus,
+      deliveryMethod: order.deliveryZone || order.deliveryMethod,
+    } satisfies CustomerOrderRow;
   });
 }

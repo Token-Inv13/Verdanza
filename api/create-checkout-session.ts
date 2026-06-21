@@ -1,6 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import type Stripe from "stripe";
-import { getAdminDb } from "./_server/firebaseAdmin.js";
+import { getAdminAuth, getAdminDb } from "./_server/firebaseAdmin.js";
 import {
   assertMethod,
   sendJson,
@@ -28,6 +28,9 @@ export default async function handler(
     const db = getAdminDb();
     const stripe = getStripe();
     const priced = await priceCheckout(db, body);
+    const verifiedCustomer = body.authToken
+      ? await getAdminAuth().verifyIdToken(body.authToken)
+      : null;
     const appUrl = process.env.VITE_APP_URL || process.env.APP_URL;
 
     if (!appUrl) {
@@ -36,7 +39,7 @@ export default async function handler(
     }
 
     const orderRef = db.collection("orders").doc();
-    await orderRef.set(orderPayload(body, priced));
+    await orderRef.set(orderPayload(body, priced, verifiedCustomer?.uid));
 
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] =
       priced.orderItems.map((item) => ({

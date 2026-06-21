@@ -4,10 +4,11 @@ import { LockKeyhole } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 export function AdminAuthGate() {
-  const { isLoading, isAdmin, user, isFirebaseConfigured, signIn } = useAuth();
+  const { isLoading, isAdmin, user, isFirebaseConfigured, signIn, resetPassword } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (isLoading) {
@@ -31,6 +32,7 @@ export function AdminAuthGate() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setMessage("");
     setIsSubmitting(true);
     try {
       await signIn(email, password);
@@ -42,6 +44,25 @@ export function AdminAuthGate() {
       );
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleResetPassword() {
+    setError("");
+    setMessage("");
+    if (!email) {
+      setError("Renseigner l'email admin avant de demander un nouveau mot de passe.");
+      return;
+    }
+    try {
+      await resetPassword(email);
+      setMessage("Email de reinitialisation envoye si le compte existe.");
+    } catch (resetError) {
+      setError(
+        resetError instanceof Error
+          ? resetError.message
+          : "Reinitialisation impossible.",
+      );
     }
   }
 
@@ -78,8 +99,16 @@ export function AdminAuthGate() {
           />
         </label>
         {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
+        {message && <p className="mt-4 text-sm text-forest">{message}</p>}
         <button className="btn-primary mt-6 w-full" disabled={isSubmitting}>
           {isSubmitting ? "Connexion..." : "Se connecter"}
+        </button>
+        <button
+          type="button"
+          className="mt-4 text-sm font-medium text-forest underline decoration-champagne"
+          onClick={() => void handleResetPassword()}
+        >
+          Mot de passe oublie
         </button>
       </form>
     </div>

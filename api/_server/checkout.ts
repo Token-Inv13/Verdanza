@@ -59,6 +59,7 @@ export type CheckoutRequestBody = {
   deliveryMethod: DeliveryMethod;
   deliveryZone?: string;
   deliverySlot?: string;
+  authToken?: string;
   customer: CheckoutCustomerInput;
 };
 
@@ -199,8 +200,10 @@ async function getDeliveryZone(
 export function orderPayload(
   body: CheckoutRequestBody,
   priced: PricedCheckout,
+  customerId?: string,
 ): Record<string, unknown> {
   return {
+    customerId: customerId ?? null,
     customerEmail: body.customer.email,
     customerPhone: body.customer.phone,
     customerName: `${body.customer.firstName} ${body.customer.lastName}`,

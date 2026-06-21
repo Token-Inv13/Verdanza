@@ -11,6 +11,7 @@
     "typecheck:api": "tsc --noEmit --moduleResolution NodeNext --module NodeNext --target ES2022 --esModuleInterop --skipLibCheck --strict --types node api/create-checkout-session.ts api/stripe-webhook.ts api/_server/checkout.ts api/_server/firebaseAdmin.ts api/_server/http.ts api/_server/stripe.ts",
     "seed:products": "node --import tsx scripts/seedFirestoreProducts.ts",
     "seed:admin": "node --import tsx scripts/bootstrapAdmin.ts",
+    "seed:admin-auth": "node --import tsx scripts/bootstrapAdminAuth.ts",
     "preview": "vite preview"
   },
   "dependencies": {
