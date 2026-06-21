@@ -5,6 +5,7 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { localDeliveryZones } from "../data/deliveryZones";
 import type { DeliveryMethod } from "../types";
+import { trackEvent } from "../lib/analytics";
 
 export function CheckoutPage() {
   const { itemCount, subtotal, items, lines } = useCart();
@@ -56,6 +57,11 @@ export function CheckoutPage() {
 
     try {
       const authToken = user ? await user.getIdToken() : undefined;
+      trackEvent("begin_checkout", {
+        itemCount,
+        subtotal,
+        deliveryMethod,
+      });
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: { "content-type": "application/json" },

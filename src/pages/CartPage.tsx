@@ -13,7 +13,7 @@ export function CartPage() {
       <Seo title="Panier - Verdanza CBD" description="Panier local Verdanza CBD." />
       <div className="page-intro">
         <h1>Panier</h1>
-        <p>Panier local conserve dans le navigateur en attendant Stripe Checkout.</p>
+        <p>Panier conserve dans ce navigateur. Le paiement est securise par Stripe Checkout.</p>
       </div>
       {lines.length === 0 ? (
         <section className="mt-10 rounded-lg border border-forest/10 bg-cream p-8">
@@ -54,7 +54,7 @@ export function CartPage() {
                   </div>
                 </div>
                 <strong className="text-forest">
-                  {line.lineTotal.toFixed(2).replace(".", ",")} €
+                  {line.lineTotal.toFixed(2).replace(".", ",")} EUR
                 </strong>
               </article>
             ))}
@@ -64,15 +64,15 @@ export function CartPage() {
             <div className="mt-6 grid gap-3 text-sm">
               <p className="flex justify-between">
                 <span>Sous-total</span>
-                <span>{subtotal.toFixed(2).replace(".", ",")} €</span>
+                <span>{subtotal.toFixed(2).replace(".", ",")} EUR</span>
               </p>
               <p className="flex justify-between">
                 <span>Livraison estimee</span>
-                <span>{deliveryEstimate.toFixed(2).replace(".", ",")} €</span>
+                <span>{deliveryEstimate.toFixed(2).replace(".", ",")} EUR</span>
               </p>
               <p className="flex justify-between border-t border-forest/10 pt-3 text-lg font-semibold text-forest">
                 <span>Total</span>
-                <span>{total.toFixed(2).replace(".", ",")} €</span>
+                <span>{total.toFixed(2).replace(".", ",")} EUR</span>
               </p>
             </div>
             <Link to="/checkout" className="btn-primary mt-6 w-full justify-center">

@@ -22,8 +22,8 @@ export function CategoryPage({
       <div className="page-intro">
         <h1>{title}</h1>
         <p>
-          Une selection courte et lisible pour demarrer la boutique Verdanza,
-          avec fiches enrichies a partir des analyses de lots en Phase 2.
+          Une selection courte et lisible pour la pre-ouverture Verdanza, avec
+          fiches a confirmer a partir des analyses de lots.
         </p>
       </div>
       {isLoading ? (

@@ -14,8 +14,9 @@ export function ShopPage() {
       <div className="page-intro">
         <h1>Boutique CBD premium</h1>
         <p>
-          Catalogue Phase 1 construit depuis la selection produit fournie. Les
-          prix, stocks et donnees de lot sont placeholders avant connexion CMS.
+          Catalogue de pre-ouverture construit autour d'une selection courte.
+          Les prix, stocks et donnees de lot doivent etre valides dans l'admin
+          avant l'ouverture publique.
         </p>
         <p className="mt-3 text-sm text-forest/65">
           Source catalogue : {source === "firestore" ? "Firestore" : "fallback local"}.

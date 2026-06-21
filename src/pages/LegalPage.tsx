@@ -1,23 +1,121 @@
 import { Seo } from "../components/Seo";
 
 export function LegalPage({ title }: { title: string }) {
+  const sections = legalSections(title);
   return (
     <main className="container-page py-12">
       <Seo title={`${title} - Verdanza CBD`} description={`${title} Verdanza.`} />
       <div className="page-intro">
         <h1>{title}</h1>
         <p>
-          Placeholder juridique Phase 1. Ce contenu doit etre complete et relu
-          avant toute mise en production.
+          Informations de conformite preparees pour la pre-ouverture. Les donnees
+          editeur marquees "A completer avant lancement" doivent etre finalisees
+          avant l'ouverture publique.
         </p>
       </div>
-      <section className="mt-10 rounded-lg border border-forest/10 bg-cream p-8 leading-7 text-ink/70">
-        <p>Statut juridique, adresse, responsable de publication et politiques finales : a renseigner.</p>
-        <p className="mt-4">
-          Les produits sont reserves aux personnes majeures, avec un taux de THC
-          conforme inferieur a 0,3 %. Tenir hors de portee des enfants.
-        </p>
-      </section>
+      <div className="mt-10 grid gap-4">
+        {sections.map((section) => (
+          <section
+            key={section.heading}
+            className="rounded-lg border border-forest/10 bg-cream p-6 leading-7 text-ink/70"
+          >
+            <h2 className="font-display text-3xl text-forest">{section.heading}</h2>
+            {section.items.map((item) => (
+              <p key={item} className="mt-3">
+                {item}
+              </p>
+            ))}
+          </section>
+        ))}
+      </div>
     </main>
   );
+}
+
+function legalSections(title: string) {
+  const common = [
+    {
+      heading: "Conformite CBD",
+      items: [
+        "Vente reservee aux personnes majeures.",
+        "Produits issus du chanvre avec un taux de THC inferieur a 0,3 %.",
+        "Les produits ne remplacent pas un traitement medical et ne font l'objet d'aucune promesse therapeutique.",
+        "Tenir hors de portee des enfants. Deconseille aux femmes enceintes ou allaitantes.",
+      ],
+    },
+  ];
+
+  if (title.includes("Mentions")) {
+    return [
+      {
+        heading: "Editeur",
+        items: [
+          "Raison sociale : A completer avant lancement.",
+          "SIRET : A completer avant lancement.",
+          "Adresse du siege : A completer avant lancement.",
+          "Responsable de publication : A completer avant lancement.",
+        ],
+      },
+      {
+        heading: "Hebergement",
+        items: [
+          "Application hebergee par Vercel. Informations legales d'hebergement a completer avant lancement.",
+        ],
+      },
+      ...common,
+    ];
+  }
+
+  if (title.includes("Conditions")) {
+    return [
+      {
+        heading: "Commande et paiement",
+        items: [
+          "Les prix et stocks definitifs doivent etre valides dans l'admin avant ouverture.",
+          "Le paiement est traite par Stripe Checkout. Verdanza ne stocke pas les donnees de carte bancaire.",
+          "Une commande est confirmee apres validation du paiement et verification du stock.",
+        ],
+      },
+      {
+        heading: "Livraison",
+        items: [
+          "Livraison postale suivie selon les zones activees.",
+          "Livraison express locale autour d'Aix-en-Provence selon disponibilite et zones configurees.",
+        ],
+      },
+      ...common,
+    ];
+  }
+
+  if (title.includes("confidentialite")) {
+    return [
+      {
+        heading: "Donnees collectees",
+        items: [
+          "Les donnees de compte, commande, livraison et contact sont utilisees pour executer la commande et assurer le suivi client.",
+          "Firebase Auth et Firestore sont utilises pour l'authentification, les commandes et l'administration.",
+          "Stripe traite les donnees de paiement. Verdanza ne stocke pas les numeros de carte.",
+        ],
+      },
+      {
+        heading: "Droits utilisateur",
+        items: [
+          "Les modalites d'exercice des droits RGPD et le contact legal doivent etre completes avant lancement.",
+        ],
+      },
+      ...common,
+    ];
+  }
+
+  return [
+    {
+      heading: "Retours et annulation",
+      items: [
+        "La politique de retour definitive doit etre completee avant lancement selon les produits, leur etat et les obligations applicables.",
+        "Les produits ouverts, alteres ou impropres a la remise en vente peuvent etre exclus du retour selon la politique finale.",
+        "Les demandes client seront traitees via le contact officiel a completer avant lancement.",
+      ],
+    },
+    ...common,
+  ];
 }

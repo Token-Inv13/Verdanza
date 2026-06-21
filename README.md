@@ -386,3 +386,54 @@ Rappels :
 - ne jamais exposer de cle serveur avec le prefixe `VITE_` ;
 - configurer le webhook Stripe apres le premier deploy Vercel ;
 - tester localement avec `npm run lint`, `npm run typecheck:api`, `npm run build`.
+
+## Phase 5 - pre-lancement commercial
+
+Etat pret :
+
+- boutique, panier, checkout Stripe, webhook, admin commandes et stock sont operationnels ;
+- pages publiques principales indexables ;
+- `robots.txt` et `sitemap.xml` sont servis depuis `public/` pour le domaine actuel ;
+- pages legales presentes avec placeholders explicites quand les donnees juridiques manquent ;
+- evenements analytics prepares sans fournisseur externe via `src/lib/analytics.ts`.
+
+Blocages avant ouverture publique :
+
+- completer les mentions legales reelles : raison sociale, SIRET, adresse, responsable de publication, contact support ;
+- verifier un domaine Resend et remplacer `EMAIL_FROM` par une adresse du domaine valide pour envoyer aux clients ;
+- valider les produits reels : images, lots, certificats, taux cannabinoides, prix et stocks ;
+- remplacer `VITE_APP_URL`, canonical, sitemap, webhook Stripe et Resend apres achat du domaine final.
+
+Structure catalogue recommandee avant saisie definitive :
+
+- `purchasePrice` : prix achat ;
+- `price` : prix vente ;
+- `marginRate` ou marge calculee ;
+- `stock` : stock reel disponible ;
+- `supplier` : fournisseur ;
+- `batchNumber` : lot ;
+- `labReportUrl` : certificat ou analyse ;
+- `cbdRate`, `cbgRate`, `thcRate` : taux verifies par lot ;
+- `weight` : poids ou conditionnement ;
+- `isActive` / `isFeatured` : publication.
+
+Analytics prepares :
+
+- `view_product` ;
+- `add_to_cart` ;
+- `begin_checkout` ;
+- `purchase` ;
+- `login` ;
+- `signup`.
+
+La couche actuelle pousse ces evenements dans `window.dataLayer` si un outil est ajoute plus tard, et emet aussi un evenement navigateur `verdanza:analytics`. Aucun service externe n'est charge sans validation.
+
+Checklist domaine futur :
+
+1. Ajouter le domaine dans Vercel.
+2. Mettre a jour `VITE_APP_URL`.
+3. Mettre a jour canonical et `public/sitemap.xml`.
+4. Verifier ou recreer le webhook Stripe si l'URL change.
+5. Verifier le domaine dans Resend.
+6. Mettre a jour `EMAIL_FROM`.
+7. Redeployer et refaire un paiement test complet.

@@ -3,7 +3,7 @@ import { Seo } from "../components/Seo";
 const content = {
   quality: {
     title: "Qualite & conformite",
-    text: "Verdanza privilegie une selection courte, tracable et conforme. Les analyses de lot, certificats et informations fournisseurs seront connectes au CMS avant publication commerciale.",
+    text: "Verdanza privilegie une selection courte, tracable et conforme. Les analyses de lot, certificats et informations fournisseurs doivent etre verifies avant ouverture commerciale.",
     points: [
       "THC inferieur a 0,3 %",
       "Produits reserves aux personnes majeures",
@@ -23,22 +23,22 @@ const content = {
   },
   faq: {
     title: "FAQ",
-    text: "Les reponses finales devront etre relues avant publication. Cette base couvre les questions principales de Phase 1.",
+    text: "Reponses pratiques sur les produits, la conformite, la livraison et le paiement.",
     points: [
       "Les produits sont-ils reserves aux majeurs ? Oui.",
       "Le THC est-il conforme ? Les fiches indiquent un taux inferieur a 0,3 %.",
       "La livraison express couvre-t-elle toute la France ? Non, elle est locale autour d'Aix.",
-      "Le paiement Stripe est-il actif ? Pas encore, le checkout serveur arrive en Phase 2.",
+      "Le paiement Stripe est-il actif ? Oui, le paiement est traite par Stripe Checkout.",
     ],
   },
   contact: {
     title: "Contact",
     text: "Les coordonnees definitives restent a valider. Cette page prepare le futur point de contact client.",
     points: [
-      "Email support : a renseigner",
-      "Telephone ou WhatsApp : a renseigner",
-      "Adresse legale : a renseigner",
-      "Horaires livraison locale : a parametrer",
+      "Email support : A completer avant lancement",
+      "Telephone ou WhatsApp : A completer avant lancement",
+      "Adresse legale : A completer avant lancement",
+      "Horaires livraison locale : A parametrer avant lancement",
     ],
   },
 } as const;

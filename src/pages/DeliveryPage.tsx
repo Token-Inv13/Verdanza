@@ -26,7 +26,10 @@ export function DeliveryPage({ mode }: { mode: "local" | "postal" }) {
           {localDeliveryZones.map((zone) => (
             <article key={zone.id} className="feature-panel">
               <h2>{zone.name}</h2>
-              <p>Minimum {zone.minimumOrder} € - frais {zone.fee.toFixed(2)} €</p>
+              <p>
+                Minimum {zone.minimumOrder} EUR - frais{" "}
+                {zone.fee.toFixed(2).replace(".", ",")} EUR
+              </p>
               <p>Delai estime : {zone.estimatedDelay}</p>
             </article>
           ))}
@@ -35,8 +38,8 @@ export function DeliveryPage({ mode }: { mode: "local" | "postal" }) {
         <section className="mt-10 rounded-lg border border-forest/10 bg-cream p-8">
           <h2 className="font-display text-3xl text-forest">Expedition suivie</h2>
           <p className="mt-4 max-w-3xl leading-7 text-ink/70">
-            Frais placeholder : 5,90 €. Livraison offerte et transporteurs a
-            parametrer en Phase 2 selon la strategie commerciale finale.
+            Frais indicatif : 5,90 EUR. Livraison offerte et transporteurs a
+            parametrer selon la strategie commerciale finale.
           </p>
         </section>
       )}

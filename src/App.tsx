@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import { MainLayout } from "./layouts/MainLayout";
 import { AdminLayout } from "./layouts/AdminLayout";
 import { HomePage } from "./pages/HomePage";
@@ -20,6 +20,7 @@ import { AccountLayout } from "./pages/account/AccountLayout";
 import { AccountOverviewPage } from "./pages/account/AccountOverviewPage";
 import { AccountOrdersPage } from "./pages/account/AccountOrdersPage";
 import { AccountProfilePage } from "./pages/account/AccountProfilePage";
+import { NotFoundPage } from "./pages/NotFoundPage";
 
 export function App() {
   return (
@@ -87,7 +88,7 @@ export function App() {
           <Route path="parametres" element={<AdminPage section="Parametres" />} />
         </Route>
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }

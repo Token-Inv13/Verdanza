@@ -2,6 +2,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useEffect } from "react";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
+import { trackEvent } from "../lib/analytics";
 
 export function CheckoutSuccessPage() {
   const [params] = useSearchParams();
@@ -9,7 +10,10 @@ export function CheckoutSuccessPage() {
 
   useEffect(() => {
     clearCart();
-  }, [clearCart]);
+    trackEvent("purchase", {
+      hasStripeSession: Boolean(params.get("session_id")),
+    });
+  }, [clearCart, params]);
 
   return (
     <main className="container-page py-16">

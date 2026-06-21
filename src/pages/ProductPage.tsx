@@ -1,14 +1,25 @@
 import { Link, useParams } from "react-router-dom";
 import { ShoppingBag } from "lucide-react";
+import { useEffect } from "react";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
 import { useProducts } from "../hooks/useProducts";
+import { trackEvent } from "../lib/analytics";
 
 export function ProductPage() {
   const { slug } = useParams();
   const { products, isLoading } = useProducts();
   const product = slug ? products.find((entry) => entry.slug === slug) : undefined;
   const { addItem } = useCart();
+
+  useEffect(() => {
+    if (!product) return;
+    trackEvent("view_product", {
+      productId: product.id,
+      productName: product.name,
+      price: product.price,
+    });
+  }, [product]);
 
   if (isLoading) {
     return (
@@ -49,7 +60,7 @@ export function ProductPage() {
               ["THC", product.thcRate],
               ["Origine", product.origin],
               ["Culture", product.cultureType],
-              ["Stock", `${product.stock} unites placeholder`],
+              ["Stock", product.stock > 0 ? "Disponible" : "Indisponible"],
             ].map(([label, value]) => (
               <div key={label} className="rounded-md border border-forest/10 bg-ivory p-4">
                 <dt className="text-xs uppercase tracking-[0.14em] text-ink/45">
@@ -71,9 +82,19 @@ export function ProductPage() {
           </div>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
             <span className="font-display text-4xl text-forest">
-              {product.price.toFixed(2).replace(".", ",")} €
+              {product.price.toFixed(2).replace(".", ",")} EUR
             </span>
-            <button className="btn-primary" onClick={() => addItem(product.id)}>
+            <button
+              className="btn-primary"
+              onClick={() => {
+                addItem(product.id);
+                trackEvent("add_to_cart", {
+                  productId: product.id,
+                  productName: product.name,
+                  price: product.price,
+                });
+              }}
+            >
               <ShoppingBag size={18} /> Ajouter au panier
             </button>
           </div>

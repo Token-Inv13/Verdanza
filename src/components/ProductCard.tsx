@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { ShoppingBag } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import type { Product } from "../types";
+import { trackEvent } from "../lib/analytics";
 
 export function ProductCard({ product }: { product: Product }) {
   const { addItem } = useCart();
@@ -46,12 +47,19 @@ export function ProductCard({ product }: { product: Product }) {
         </dl>
         <div className="flex items-center justify-between gap-3">
           <span className="font-display text-2xl text-forest">
-            {product.price.toFixed(2).replace(".", ",")} €
+            {product.price.toFixed(2).replace(".", ",")} EUR
           </span>
           <button
             className="icon-button"
             aria-label={`Ajouter ${product.name} au panier`}
-            onClick={() => addItem(product.id)}
+            onClick={() => {
+              addItem(product.id);
+              trackEvent("add_to_cart", {
+                productId: product.id,
+                productName: product.name,
+                price: product.price,
+              });
+            }}
             title="Ajouter au panier"
           >
             <ShoppingBag size={18} />
