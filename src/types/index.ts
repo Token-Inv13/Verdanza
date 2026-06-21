@@ -114,7 +114,18 @@ export type StatusHistoryEntry = {
 
 export type OrderEmails = {
   orderConfirmationSentAt?: string;
+  orderConfirmationStatus?: "sent" | "skipped" | "failed";
+  orderConfirmationFailedAt?: string;
+  orderConfirmationSkippedAt?: string;
+  orderConfirmationError?: string;
+  orderConfirmationProviderId?: string;
   adminNotificationSentAt?: string;
+  adminNotificationStatus?: "sent" | "skipped" | "failed";
+  adminNotificationFailedAt?: string;
+  adminNotificationSkippedAt?: string;
+  adminNotificationError?: string;
+  adminNotificationProviderId?: string;
+  lastAttemptedAt?: string;
   statusUpdateSentAt?: Partial<Record<OrderStatus, string>>;
   refundNotificationSentAt?: string;
 };

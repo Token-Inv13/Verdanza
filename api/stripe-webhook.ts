@@ -9,10 +9,7 @@ import {
   type VercelResponseLike,
 } from "./_server/http.js";
 import { getStripe } from "./_server/stripe.js";
-import {
-  sendAdminNewOrderEmail,
-  sendOrderConfirmationEmail,
-} from "./_server/email.js";
+import { sendPostPaymentEmails } from "./_server/orderEmailDelivery.js";
 import type { Order } from "../src/types/index.js";
 
 export const config = {
@@ -75,6 +72,7 @@ export default async function handler(
 
   try {
     let processedPayment = false;
+    let shouldAttemptPostPaymentEmails = false;
     await db.runTransaction(async (transaction) => {
       const orderRef = db.collection("orders").doc(orderId);
       const orderSnapshot = await transaction.get(orderRef);
@@ -91,6 +89,10 @@ export default async function handler(
       const processedEventIds = order.stripeEventIds ?? [];
 
       if (order.paymentStatus === "paid" || processedEventIds.includes(event.id)) {
+        shouldAttemptPostPaymentEmails = Boolean(
+          !order.emails?.orderConfirmationSentAt ||
+            !order.emails?.adminNotificationSentAt,
+        );
         transaction.update(orderRef, {
           stripeEventIds: FieldValue.arrayUnion(event.id),
           updatedAt: FieldValue.serverTimestamp(),
@@ -98,6 +100,7 @@ export default async function handler(
         return;
       }
       processedPayment = true;
+      shouldAttemptPostPaymentEmails = true;
 
       for (const item of order.items) {
         const productRef = db.collection("products").doc(item.productId);
@@ -167,7 +170,7 @@ export default async function handler(
       }
     });
 
-    if (processedPayment) {
+    if (processedPayment || shouldAttemptPostPaymentEmails) {
       await sendPostPaymentEmails(db, orderId);
     }
 
@@ -179,37 +182,5 @@ export default async function handler(
       { error: error instanceof Error ? error.message : "Webhook processing failed." },
       500,
     );
-  }
-}
-
-async function sendPostPaymentEmails(
-  db: FirebaseFirestore.Firestore,
-  orderId: string,
-) {
-  const orderRef = db.collection("orders").doc(orderId);
-  const orderSnapshot = await orderRef.get();
-  if (!orderSnapshot.exists) return;
-  const order = { id: orderSnapshot.id, ...orderSnapshot.data() } as Order;
-  const emailUpdates: Record<string, unknown> = {};
-
-  if (!order.emails?.orderConfirmationSentAt) {
-    const result = await sendOrderConfirmationEmail(order);
-    if (result.status === "sent") {
-      emailUpdates["emails.orderConfirmationSentAt"] = FieldValue.serverTimestamp();
-    }
-  }
-
-  if (!order.emails?.adminNotificationSentAt) {
-    const result = await sendAdminNewOrderEmail(order);
-    if (result.status === "sent") {
-      emailUpdates["emails.adminNotificationSentAt"] = FieldValue.serverTimestamp();
-    }
-  }
-
-  if (Object.keys(emailUpdates).length) {
-    await orderRef.update({
-      ...emailUpdates,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
   }
 }

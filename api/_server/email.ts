@@ -1,9 +1,15 @@
 import type { Order, OrderStatus } from "../../src/types/index.js";
 
-type EmailResult =
+export type EmailResult =
   | { status: "sent"; id?: string }
   | { status: "skipped"; reason: string }
-  | { status: "failed"; reason: string };
+  | { status: "failed"; reason: string; statusCode?: number };
+
+type TransactionalEmailKind =
+  | "order_confirmation"
+  | "admin_new_order"
+  | "order_status_update"
+  | "refund_notification";
 
 const statusLabels: Record<OrderStatus, string> = {
   pending: "En attente",
@@ -18,8 +24,19 @@ const statusLabels: Record<OrderStatus, string> = {
 };
 
 export async function sendOrderConfirmationEmail(order: Order) {
+  if (!order.customerEmail) {
+    console.info("Email client ignore", {
+      kind: "order_confirmation",
+      orderId: order.id,
+      reason: "customer_email_absent",
+    });
+    return { status: "skipped", reason: "customer_email_absent" } satisfies EmailResult;
+  }
+
   const subject = `Confirmation de commande Verdanza ${shortOrderId(order.id)}`;
   return sendTransactionalEmail({
+    kind: "order_confirmation",
+    orderId: order.id,
     to: order.customerEmail,
     subject,
     html: orderEmailHtml(order, "Votre paiement est confirme. Nous preparons votre commande."),
@@ -33,6 +50,8 @@ export async function sendAdminNewOrderEmail(order: Order) {
   if (!adminEmail) return { status: "skipped", reason: "ADMIN_NOTIFICATION_EMAIL absent" } satisfies EmailResult;
 
   return sendTransactionalEmail({
+    kind: "admin_new_order",
+    orderId: order.id,
     to: adminEmail,
     subject: `Nouvelle commande Verdanza ${shortOrderId(order.id)}`,
     html: orderEmailHtml(order, "Nouvelle commande payee a traiter dans l'administration."),
@@ -48,6 +67,8 @@ export async function sendOrderStatusUpdateEmail(
 ) {
   const subject = `Commande Verdanza ${shortOrderId(order.id)} : ${statusLabels[nextStatus]}`;
   return sendTransactionalEmail({
+    kind: "order_status_update",
+    orderId: order.id,
     to: order.customerEmail,
     subject,
     html: orderEmailHtml(
@@ -64,6 +85,8 @@ export async function sendOrderStatusUpdateEmail(
 
 export async function sendRefundNotificationEmail(order: Order) {
   return sendTransactionalEmail({
+    kind: "refund_notification",
+    orderId: order.id,
     to: order.customerEmail,
     subject: `Remboursement Verdanza ${shortOrderId(order.id)}`,
     html: orderEmailHtml(order, "Le remboursement de votre commande a ete initie."),
@@ -73,6 +96,8 @@ export async function sendRefundNotificationEmail(order: Order) {
 }
 
 async function sendTransactionalEmail(input: {
+  kind: TransactionalEmailKind;
+  orderId: string;
   to: string;
   subject: string;
   html: string;
@@ -82,7 +107,12 @@ async function sendTransactionalEmail(input: {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
   if (!apiKey || !from) {
-    console.info("Email transactionnel ignore: RESEND_API_KEY ou EMAIL_FROM absent.");
+    console.info("Email transactionnel ignore", {
+      kind: input.kind,
+      orderId: input.orderId,
+      to: redactEmail(input.to),
+      reason: "email_not_configured",
+    });
     return { status: "skipped", reason: "email_not_configured" };
   }
 
@@ -104,20 +134,51 @@ async function sendTransactionalEmail(input: {
     });
     const payload = (await response.json().catch(() => ({}))) as { id?: string; message?: string };
     if (!response.ok) {
+      const reason = classifyResendError(response.status, payload.message);
       console.warn("Email transactionnel non envoye", {
+        kind: input.kind,
+        orderId: input.orderId,
+        to: redactEmail(input.to),
         status: response.status,
-        message: payload.message,
+        reason,
       });
-      return { status: "failed", reason: payload.message || `HTTP ${response.status}` };
+      return { status: "failed", reason, statusCode: response.status };
     }
+    console.info("Email transactionnel envoye", {
+      kind: input.kind,
+      orderId: input.orderId,
+      to: redactEmail(input.to),
+      providerId: payload.id,
+    });
     return { status: "sent", id: payload.id };
   } catch (error) {
-    console.warn("Email transactionnel en erreur", error);
+    console.warn("Email transactionnel en erreur", {
+      kind: input.kind,
+      orderId: input.orderId,
+      to: redactEmail(input.to),
+      reason: error instanceof Error ? error.message : "email_failed",
+    });
     return {
       status: "failed",
       reason: error instanceof Error ? error.message : "email_failed",
     };
   }
+}
+
+function classifyResendError(status: number, message?: string) {
+  if (
+    status === 403 &&
+    message?.includes("You can only send testing emails to your own email address")
+  ) {
+    return "resend_testing_recipient_blocked";
+  }
+  return message || `HTTP ${status}`;
+}
+
+function redactEmail(email: string) {
+  const [local, domain] = email.split("@");
+  if (!local || !domain) return "invalid_email";
+  return `${local.slice(0, 2)}***@${domain}`;
 }
 
 function orderEmailHtml(order: Order, intro: string) {

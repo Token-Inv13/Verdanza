@@ -311,6 +311,7 @@ Emails transactionnels :
 - `ADMIN_NOTIFICATION_EMAIL` recoit la notification interne de nouvelle commande payee ;
 - si les variables email sont absentes, le checkout et le webhook continuent sans bloquer le paiement ;
 - aucun secret email n'est expose cote client.
+- avec `onboarding@resend.dev`, Resend limite les envois aux emails de test autorises par le compte ; pour envoyer aux vrais clients, verifier un domaine Resend puis utiliser un `EMAIL_FROM` de ce domaine.
 
 Evenements envoyes :
 
@@ -344,6 +345,7 @@ Verification Phase 4 :
 5. Se connecter admin, changer le statut, puis verifier la nouvelle entree `statusHistory`.
 6. Verifier `/compte/commandes` avec le compte client lie a la commande.
 7. Tester `/api/update-order-status` et `/api/refund-order` sans token : les endpoints doivent refuser.
+8. Si une confirmation client echoue apres paiement, corriger `EMAIL_FROM` / domaine Resend puis relancer via l'endpoint admin securise `/api/retry-order-emails` avec `target: "client"`.
 
 ## Deploiement Vercel
 
