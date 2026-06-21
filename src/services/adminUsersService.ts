@@ -7,14 +7,18 @@ import type { AdminUser } from "../types";
 export async function getAdminUserForAuthUser(user: User | null) {
   if (!db || !user?.email) return null;
 
-  const byUid = await getDoc(doc(db, collections.adminUsers, user.uid));
-  if (byUid.exists()) {
-    return { id: byUid.id, ...byUid.data() } as AdminUser;
-  }
+  try {
+    const byUid = await getDoc(doc(db, collections.adminUsers, user.uid));
+    if (byUid.exists()) {
+      return { id: byUid.id, ...byUid.data() } as AdminUser;
+    }
 
-  const byEmail = await getDoc(doc(db, collections.adminUsers, user.email));
-  if (byEmail.exists()) {
-    return { id: byEmail.id, ...byEmail.data() } as AdminUser;
+    const byEmail = await getDoc(doc(db, collections.adminUsers, user.email));
+    if (byEmail.exists()) {
+      return { id: byEmail.id, ...byEmail.data() } as AdminUser;
+    }
+  } catch (error) {
+    console.warn("Admin lookup unavailable for current user", error);
   }
 
   return null;
