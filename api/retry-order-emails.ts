@@ -17,13 +17,14 @@ export default async function handler(
   if (assertMethod(request, response, "POST")) return;
 
   try {
-    const body = parseBody(request.body);
-    const idToken = body.authToken || bearerToken(request);
+    const rawBody = parseJsonObject(request.body);
+    const idToken = rawBody.authToken || bearerToken(request);
     if (!idToken) {
       sendJson(response, { error: "Token admin requis." }, 401);
       return;
     }
 
+    const body = parseBody(rawBody);
     const db = getAdminDb();
     await assertAdminUser(db, idToken);
 
@@ -62,6 +63,20 @@ function parseBody(value: unknown): {
     throw new Error("Cible email invalide.");
   }
   return { orderId: payload.orderId, target, authToken: payload.authToken };
+}
+
+function parseJsonObject(value: unknown): {
+  orderId?: string;
+  target?: RetryTarget;
+  authToken?: string;
+} {
+  const body = typeof value === "string" ? JSON.parse(value) : value;
+  if (!body || typeof body !== "object") throw new Error("Payload invalide.");
+  return body as {
+    orderId?: string;
+    target?: RetryTarget;
+    authToken?: string;
+  };
 }
 
 function bearerToken(request: VercelRequestLike) {

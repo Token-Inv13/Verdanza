@@ -29,13 +29,14 @@ export default async function handler(
   if (assertMethod(request, response, "POST")) return;
 
   try {
-    const body = parseBody(request.body);
-    const idToken = body.authToken || bearerToken(request);
+    const rawBody = parseJsonObject(request.body);
+    const idToken = rawBody.authToken || bearerToken(request);
     if (!idToken) {
       sendJson(response, { error: "Token admin requis." }, 401);
       return;
     }
 
+    const body = parseBody(rawBody);
     const db = getAdminDb();
     const admin = await assertAdminUser(db, idToken);
     let updatedOrder: Order | null = null;
@@ -126,6 +127,24 @@ function parseBody(value: unknown): {
   return {
     ...payload,
     orderId: payload.orderId,
+  };
+}
+
+function parseJsonObject(value: unknown): {
+  orderId?: string;
+  orderStatus?: OrderStatus;
+  internalNote?: string;
+  historyNote?: string;
+  authToken?: string;
+} {
+  const body = typeof value === "string" ? JSON.parse(value) : value;
+  if (!body || typeof body !== "object") throw new Error("Payload invalide.");
+  return body as {
+    orderId?: string;
+    orderStatus?: OrderStatus;
+    internalNote?: string;
+    historyNote?: string;
+    authToken?: string;
   };
 }
 
