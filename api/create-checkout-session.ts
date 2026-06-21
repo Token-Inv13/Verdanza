@@ -1,28 +1,38 @@
 import { FieldValue } from "firebase-admin/firestore";
 import type Stripe from "stripe";
-import { getAdminDb } from "./_server/firebaseAdmin";
-import { assertMethod, jsonResponse } from "./_server/http";
+import { getAdminDb } from "./_server/firebaseAdmin.js";
+import {
+  assertMethod,
+  sendJson,
+  type VercelRequestLike,
+  type VercelResponseLike,
+} from "./_server/http.js";
 import {
   cents,
   orderPayload,
   parseCheckoutBody,
   priceCheckout,
-} from "./_server/checkout";
-import { getStripe } from "./_server/stripe";
+} from "./_server/checkout.js";
+import { getStripe } from "./_server/stripe.js";
 
-export default async function handler(request: Request) {
-  const methodError = assertMethod(request, "POST");
-  if (methodError) return methodError;
+export default async function handler(
+  request: VercelRequestLike,
+  response: VercelResponseLike,
+) {
+  if (assertMethod(request, response, "POST")) return;
 
   try {
-    const body = parseCheckoutBody(await request.json());
+    const requestBody =
+      typeof request.body === "string" ? JSON.parse(request.body) : request.body;
+    const body = parseCheckoutBody(requestBody);
     const db = getAdminDb();
     const stripe = getStripe();
     const priced = await priceCheckout(db, body);
     const appUrl = process.env.VITE_APP_URL || process.env.APP_URL;
 
     if (!appUrl) {
-      return jsonResponse({ error: "Missing VITE_APP_URL server variable." }, 500);
+      sendJson(response, { error: "Missing VITE_APP_URL server variable." }, 500);
+      return;
     }
 
     const orderRef = db.collection("orders").doc();
@@ -83,13 +93,14 @@ export default async function handler(request: Request) {
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    return jsonResponse({
+    sendJson(response, {
       url: session.url,
       orderId: orderRef.id,
     });
   } catch (error) {
     console.error("create-checkout-session failed", error);
-    return jsonResponse(
+    sendJson(
+      response,
       { error: error instanceof Error ? error.message : "Checkout impossible." },
       400,
     );

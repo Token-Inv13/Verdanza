@@ -3,11 +3,14 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "packageManager": "npm@11.13.0",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "typecheck:api": "tsc --noEmit --moduleResolution Bundler --module ESNext --target ES2022 --esModuleInterop --skipLibCheck --strict --types node api/create-checkout-session.ts api/stripe-webhook.ts api/_server/checkout.ts api/_server/firebaseAdmin.ts api/_server/http.ts api/_server/stripe.ts",
+    "typecheck:api": "tsc --noEmit --moduleResolution NodeNext --module NodeNext --target ES2022 --esModuleInterop --skipLibCheck --strict --types node api/create-checkout-session.ts api/stripe-webhook.ts api/_server/checkout.ts api/_server/firebaseAdmin.ts api/_server/http.ts api/_server/stripe.ts",
+    "seed:products": "node --import tsx scripts/seedFirestoreProducts.ts",
+    "seed:admin": "node --import tsx scripts/bootstrapAdmin.ts",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -26,6 +29,7 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
+    "dotenv": "^17.4.2",
     "eslint": "^9.17.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.16",
@@ -33,6 +37,7 @@
     "playwright": "^1.61.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.22.4",
     "typescript": "~5.6.3",
     "typescript-eslint": "^8.18.2",
     "vite": "^6.0.5"

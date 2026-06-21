@@ -1,37 +1,55 @@
 import { FieldValue } from "firebase-admin/firestore";
 import Stripe from "stripe";
-import { getAdminDb } from "./_server/firebaseAdmin";
-import { assertMethod, jsonResponse } from "./_server/http";
-import { getStripe } from "./_server/stripe";
-import type { Order } from "../src/types";
+import { getAdminDb } from "./_server/firebaseAdmin.js";
+import {
+  assertMethod,
+  readRawBody,
+  sendJson,
+  type VercelRequestLike,
+  type VercelResponseLike,
+} from "./_server/http.js";
+import { getStripe } from "./_server/stripe.js";
+import type { Order } from "../src/types/index.js";
 
-export default async function handler(request: Request) {
-  const methodError = assertMethod(request, "POST");
-  if (methodError) return methodError;
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
+export default async function handler(
+  request: VercelRequestLike,
+  response: VercelResponseLike,
+) {
+  if (assertMethod(request, response, "POST")) return;
 
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) {
-    return jsonResponse({ error: "Missing STRIPE_WEBHOOK_SECRET." }, 500);
+    sendJson(response, { error: "Missing STRIPE_WEBHOOK_SECRET." }, 500);
+    return;
   }
 
-  const signature = request.headers.get("stripe-signature");
+  const signature = request.headers["stripe-signature"];
   if (!signature) {
-    return jsonResponse({ error: "Missing Stripe signature." }, 400);
+    sendJson(response, { error: "Missing Stripe signature." }, 400);
+    return;
   }
 
   const stripe = getStripe();
-  const rawBody = await request.text();
+  const rawBody = await readRawBody(request);
   let event: Stripe.Event;
 
   try {
     event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch (error) {
     console.error("Invalid Stripe webhook signature", error);
-    return jsonResponse({ error: "Invalid Stripe signature." }, 400);
+    sendJson(response, { error: "Invalid Stripe signature." }, 400);
+    return;
   }
 
   if (event.type !== "checkout.session.completed") {
-    return jsonResponse({ received: true });
+    sendJson(response, { received: true });
+    return;
   }
 
   const session = event.data.object;
@@ -47,7 +65,8 @@ export default async function handler(request: Request) {
   }
 
   if (!orderId) {
-    return jsonResponse({ error: "Order not found for Stripe session." }, 400);
+    sendJson(response, { error: "Order not found for Stripe session." }, 400);
+    return;
   }
 
   try {
@@ -116,10 +135,11 @@ export default async function handler(request: Request) {
       });
     });
 
-    return jsonResponse({ received: true });
+    sendJson(response, { received: true });
   } catch (error) {
     console.error("stripe-webhook failed", error);
-    return jsonResponse(
+    sendJson(
+      response,
       { error: error instanceof Error ? error.message : "Webhook processing failed." },
       500,
     );

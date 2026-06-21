@@ -26,3 +26,6 @@ pnpm-debug.log*
 
 # Local QA artifacts
 tmp_logo_contact_sheet.png
+
+.vercel
+.env*

@@ -124,6 +124,102 @@ Pour le premier admin, creer manuellement un document dans Firestore depuis la c
 
 L'identifiant du document peut etre l'UID Firebase Auth ou l'email exact. Les regles Firestore fournies dans `firestore.rules` bloquent la creation du premier admin depuis le client afin d'eviter une elevation de privileges.
 
+## Seed Firestore production
+
+Le seed production doit etre execute depuis un environnement local controle avec Firebase Admin. Il ne doit jamais passer par le client public.
+
+Prerequis :
+
+- `.env.local` ignore par Git ;
+- variables Firebase Admin presentes :
+  - `FIREBASE_SERVICE_ACCOUNT_BASE64`, ou
+  - `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` ;
+- acces Vercel CLI au projet `verdanza`, si les variables sont tirees depuis Vercel.
+
+Recuperer les variables production Vercel, si necessaire :
+
+```bash
+npx vercel env pull .env.local --environment=production --scope token-inv13s-projects
+```
+
+Seeder les produits initiaux :
+
+```bash
+npm run seed:products -- --yes
+```
+
+Le script :
+
+- lit `src/data/products.ts` ;
+- ecrit dans `products` avec `setDoc(..., { merge: true })` ;
+- ne supprime aucun document ;
+- preserve le stock Firestore existant quand un produit existe deja ;
+- cree les produits absents avec leur stock placeholder initial ;
+- verifie que chaque produit seed est actif, a un slug et un stock numerique ;
+- affiche seulement un resume sans secret.
+
+Creer le premier admin :
+
+```bash
+BOOTSTRAP_ADMIN_EMAIL="admin@example.com" npm run seed:admin -- --yes
+```
+
+Sur PowerShell :
+
+```powershell
+$env:BOOTSTRAP_ADMIN_EMAIL="admin@example.com"; npm run seed:admin -- --yes
+```
+
+Optionnellement, `BOOTSTRAP_ADMIN_UID` peut etre fourni si l'UID Firebase Auth est connu. Sinon le document est cree avec l'email comme identifiant, ce qui est supporte par `adminUsersService` et `firestore.rules`.
+
+Precautions :
+
+- ne jamais commiter `.env.local` ;
+- ne jamais commiter un service account Firebase ;
+- ne jamais afficher les cles Firebase Admin ou Stripe ;
+- verifier le `projectId` affiche par le script avant de valider le resultat ;
+- ne pas relancer le seed produits pour corriger un stock commercial sans verifier les valeurs existantes.
+
+Verification apres seed :
+
+1. `npm run seed:products -- --yes` doit afficher 9 produits verifies.
+2. `POST /api/create-checkout-session` ne doit plus retourner `Produit introuvable ou catalogue Firestore non initialise.`
+3. La boutique production doit afficher les produits depuis Firestore ou fallback local, avec IDs compatibles panier/API.
+4. L'admin connecte doit acceder aux produits et commandes si son document `adminUsers/{email}` ou `adminUsers/{uid}` est actif.
+
+## Validation paiement reel
+
+URL production :
+
+```text
+https://verdanza-opal.vercel.app
+```
+
+Procedure :
+
+1. Ouvrir la production et valider l'age gate.
+2. Ajouter un produit actif au panier.
+3. Ouvrir `/checkout`.
+4. Saisir un client test et choisir la livraison postale.
+5. Verifier la redirection Stripe Checkout.
+6. Payer avec la carte test Stripe `4242 4242 4242 4242`, une date future et un CVC quelconque.
+7. Verifier le retour `/checkout/success`.
+8. Verifier dans Firestore :
+   - commande creee dans `orders` ;
+   - `paymentStatus: "paid"` ;
+   - `orderStatus: "preparing"` ;
+   - `stripeSessionId`, `stripePaymentIntentId` et `stripeEventIds` renseignes ;
+   - stock produit decremente ;
+   - mouvement cree dans `stockMovements`.
+9. Verifier dans `/admin` que la commande apparait, que les infos client et produits sont correctes, puis tester la modification de statut et la note interne.
+
+Webhook Stripe :
+
+- l'evenement attendu est `checkout.session.completed` ;
+- l'endpoint production est `/api/stripe-webhook` ;
+- une signature invalide doit retourner `400 Invalid Stripe signature.` ;
+- le traitement est idempotent via `stripeEventIds` et `paymentStatus: "paid"`.
+
 ### Regles Firestore
 
 `firestore.rules` prepare :
@@ -151,7 +247,7 @@ Parametres du projet :
 - Build Command : `npm run build`
 - Output Directory : `dist`
 
-Variables client :
+Variables a ajouter dans Vercel, en `Production` et `Preview` :
 
 ```env
 VITE_FIREBASE_API_KEY=
@@ -163,11 +259,6 @@ VITE_FIREBASE_APP_ID=
 VITE_FIREBASE_MEASUREMENT_ID=
 VITE_STRIPE_PUBLIC_KEY=
 VITE_APP_URL=
-```
-
-Variables serveur :
-
-```env
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 FIREBASE_PROJECT_ID=
