@@ -103,6 +103,22 @@ export type OrderItem = {
   unitPrice: number;
 };
 
+export type StatusHistoryEntry = {
+  status: OrderStatus;
+  previousStatus?: OrderStatus;
+  changedAt: string;
+  changedBy: "system" | "stripe" | "admin";
+  changedByUid?: string;
+  note?: string;
+};
+
+export type OrderEmails = {
+  orderConfirmationSentAt?: string;
+  adminNotificationSentAt?: string;
+  statusUpdateSentAt?: Partial<Record<OrderStatus, string>>;
+  refundNotificationSentAt?: string;
+};
+
 export type Order = {
   id: string;
   customerId?: string;
@@ -122,6 +138,10 @@ export type Order = {
   stripeSessionId?: string;
   stripePaymentIntentId?: string;
   stripeEventIds?: string[];
+  refundId?: string;
+  refundedAt?: string;
+  statusHistory?: StatusHistoryEntry[];
+  emails?: OrderEmails;
   internalNote?: string;
   paidAt?: string;
   createdAt: string;

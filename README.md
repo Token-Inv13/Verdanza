@@ -302,12 +302,48 @@ Webhook Stripe :
 - stocks, settings, coupons, fournisseurs et rapports modifiables admin uniquement ;
 - acces `adminUsers` reserve aux admins.
 
-## Phase 4 prevue
+## Phase 4 - emails, suivi commande et remboursements
 
-- Emails transactionnels et notifications.
-- Remboursements Stripe automatiques.
-- Historique detaille des statuts de commande.
-- Optimisation du bundle et code-splitting admin.
+Emails transactionnels :
+
+- les emails sont envoyes cote serveur via Resend ;
+- `RESEND_API_KEY` et `EMAIL_FROM` sont requis pour envoyer ;
+- `ADMIN_NOTIFICATION_EMAIL` recoit la notification interne de nouvelle commande payee ;
+- si les variables email sont absentes, le checkout et le webhook continuent sans bloquer le paiement ;
+- aucun secret email n'est expose cote client.
+
+Evenements envoyes :
+
+- confirmation client apres `checkout.session.completed` ;
+- notification admin apres paiement confirme ;
+- email client lors d'un changement de statut admin ;
+- email client apres remboursement Stripe initie.
+
+Historique de statut :
+
+- chaque commande contient `statusHistory` ;
+- la creation ajoute `pending` ;
+- le webhook Stripe ajoute `preparing` apres paiement ;
+- l'admin ajoute une entree a chaque changement de statut ;
+- les clients voient le suivi dans `/compte/commandes` sans note interne.
+
+Remboursements :
+
+- l'endpoint serveur `/api/refund-order` exige un token Firebase admin valide ;
+- seules les commandes `paymentStatus: "paid"` avec `stripePaymentIntentId` sont remboursables ;
+- l'admin peut choisir de remettre le stock en place ;
+- un mouvement `stockMovements` de type `return` est cree si le restock est active ;
+- la commande passe en `paymentStatus: "refunded"` et `orderStatus: "refunded"`.
+
+Verification Phase 4 :
+
+1. Configurer `RESEND_API_KEY`, `EMAIL_FROM` et `ADMIN_NOTIFICATION_EMAIL` dans Vercel Production et Preview.
+2. Payer une commande test Stripe.
+3. Verifier que le webhook conserve `paymentStatus: "paid"`, `orderStatus: "preparing"`, le decrement stock et `stockMovements`.
+4. Verifier que `statusHistory` contient `pending` puis `preparing`.
+5. Se connecter admin, changer le statut, puis verifier la nouvelle entree `statusHistory`.
+6. Verifier `/compte/commandes` avec le compte client lie a la commande.
+7. Tester `/api/update-order-status` et `/api/refund-order` sans token : les endpoints doivent refuser.
 
 ## Deploiement Vercel
 
@@ -337,6 +373,9 @@ FIREBASE_PROJECT_ID=
 FIREBASE_CLIENT_EMAIL=
 FIREBASE_PRIVATE_KEY=
 FIREBASE_SERVICE_ACCOUNT_BASE64=
+RESEND_API_KEY=
+EMAIL_FROM=
+ADMIN_NOTIFICATION_EMAIL=
 ```
 
 Rappels :

@@ -8,8 +8,12 @@ import {
   upsertProduct,
   type ProductInput,
 } from "../../services/productsService";
-import { updateOrderAdminFields } from "../../services/ordersService";
-import type { OrderStatus, Product, ProductCategory } from "../../types";
+import {
+  refundOrderAdmin,
+  updateOrderAdminFields,
+} from "../../services/ordersService";
+import type { OrderStatus, Product, ProductCategory, StatusHistoryEntry } from "../../types";
+import { orderStatusLabel, paymentStatusLabel } from "../../utils/orderStatus";
 
 const emptyProduct: ProductInput = {
   slug: "",
@@ -102,6 +106,19 @@ export function AdminPage({ section }: { section: string }) {
     await refresh();
   }
 
+  async function handleRefund(orderId: string, restock: boolean) {
+    if (orderSource === "mock") {
+      setMessage("Les commandes mockees ne sont pas remboursables.");
+      return;
+    }
+    const result = await refundOrderAdmin(orderId, {
+      restock,
+      reason: "Remboursement initie depuis l'administration Verdanza.",
+    });
+    setMessage(`Remboursement Stripe enregistre : ${result.refundId ?? "OK"}.`);
+    await refresh();
+  }
+
   return (
     <div className="p-5 md:p-8">
       <div className="flex flex-col justify-between gap-4 border-b border-forest/10 pb-6 md:flex-row md:items-end">
@@ -162,6 +179,7 @@ export function AdminPage({ section }: { section: string }) {
               await updateOrderAdminFields(orderId, data);
               await refresh();
             }}
+            onRefund={handleRefund}
           />
         </>
       )}
@@ -215,6 +233,7 @@ export function AdminPage({ section }: { section: string }) {
               await updateOrderAdminFields(orderId, data);
               await refresh();
             }}
+            onRefund={handleRefund}
           />
         </>
       )}
@@ -484,6 +503,7 @@ function AdminOrders({
   orders,
   orderSource,
   onUpdate,
+  onRefund,
 }: {
   orders: {
     id: string;
@@ -496,11 +516,18 @@ function AdminOrders({
     items: { name: string; quantity: number }[];
     total: string;
     internalNote?: string;
+    statusHistory?: StatusHistoryEntry[];
+    refundId?: string;
+    stripePaymentIntentId?: string;
   }[];
   orderSource: "firestore" | "mock";
   onUpdate: (
     orderId: string,
-    data: { orderStatus?: OrderStatus; internalNote?: string },
+    data: { orderStatus?: OrderStatus; internalNote?: string; historyNote?: string },
+  ) => Promise<void>;
+  onRefund: (
+    orderId: string,
+    restock: boolean,
   ) => Promise<void>;
 }) {
   return (
@@ -518,6 +545,8 @@ function AdminOrders({
                 "Produits",
                 "Total",
                 "Note interne",
+                "Historique",
+                "Remboursement",
               ].map((header) => (
                 <th key={header} className="px-4 py-3 font-medium">{header}</th>
               ))}
@@ -532,17 +561,20 @@ function AdminOrders({
                   <span className="block text-xs text-ink/55">{order.customerEmail}</span>
                   <span className="block text-xs text-ink/55">{order.customerPhone}</span>
                 </td>
-                <td className="px-4 py-4">{order.paymentStatus}</td>
+                <td className="px-4 py-4">{paymentStatusLabel(order.paymentStatus)}</td>
                 <td className="px-4 py-4">
                   <select
                     className="input-field"
                     value={order.orderStatus}
                     disabled={orderSource === "mock"}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const historyNote =
+                        window.prompt("Note historique optionnelle", "") || "";
                       void onUpdate(order.id, {
                         orderStatus: event.target.value as OrderStatus,
-                      })
-                    }
+                        historyNote,
+                      });
+                    }}
                   >
                     {[
                       "pending",
@@ -556,7 +588,7 @@ function AdminOrders({
                       "refunded",
                     ].map((status) => (
                       <option key={status} value={status}>
-                        {status}
+                        {orderStatusLabel(status)}
                       </option>
                     ))}
                   </select>
@@ -580,6 +612,39 @@ function AdminOrders({
                       })
                     }
                   />
+                </td>
+                <td className="px-4 py-4 text-xs text-ink/60">
+                  {order.statusHistory?.length
+                    ? order.statusHistory
+                        .slice(-3)
+                        .map((entry) => orderStatusLabel(entry.status))
+                        .join(" -> ")
+                    : "Aucun historique"}
+                </td>
+                <td className="px-4 py-4">
+                  {order.refundId ? (
+                    <span className="text-xs text-forest">Rembourse</span>
+                  ) : (
+                    <button
+                      className="btn-secondary whitespace-nowrap text-xs"
+                      disabled={
+                        orderSource === "mock" ||
+                        order.paymentStatus !== "paid" ||
+                        !order.stripePaymentIntentId
+                      }
+                      onClick={() => {
+                        const restock = window.confirm(
+                          "Remettre les produits en stock apres remboursement ?",
+                        );
+                        const confirmed = window.confirm(
+                          "Confirmer le remboursement Stripe de cette commande ?",
+                        );
+                        if (confirmed) void onRefund(order.id, restock);
+                      }}
+                    >
+                      Rembourser
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

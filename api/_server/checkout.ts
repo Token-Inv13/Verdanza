@@ -220,6 +220,15 @@ export function orderPayload(
     stripeSessionId: null,
     stripePaymentIntentId: null,
     stripeEventIds: [],
+    statusHistory: [
+      {
+        status: "pending",
+        changedAt: new Date().toISOString(),
+        changedBy: "system",
+        note: "Commande creee avant paiement.",
+      },
+    ],
+    emails: {},
     internalNote: "",
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),

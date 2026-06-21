@@ -14,6 +14,7 @@ import {
   priceCheckout,
 } from "./_server/checkout.js";
 import { getStripe } from "./_server/stripe.js";
+import { verifyFirebaseIdToken } from "./_server/adminAuth.js";
 
 export default async function handler(
   request: VercelRequestLike,
@@ -108,32 +109,4 @@ export default async function handler(
       400,
     );
   }
-}
-
-async function verifyFirebaseIdToken(idToken: string) {
-  const apiKey = process.env.VITE_FIREBASE_API_KEY;
-  if (!apiKey) throw new Error("Missing VITE_FIREBASE_API_KEY server variable.");
-
-  const response = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ idToken }),
-    },
-  );
-  const payload = (await response.json()) as {
-    users?: Array<{ localId?: string; email?: string }>;
-    error?: { message?: string };
-  };
-
-  const user = payload.users?.[0];
-  if (!response.ok || !user?.localId) {
-    throw new Error(payload.error?.message || "Token client Firebase invalide.");
-  }
-
-  return {
-    uid: user.localId,
-    email: user.email ?? null,
-  };
 }

@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { getCustomerOrders, type CustomerOrderRow } from "../../services/ordersService";
 import { useAuth } from "../../context/AuthContext";
+import {
+  orderStatusLabel,
+  paymentStatusLabel,
+  visibleOrderSteps,
+} from "../../utils/orderStatus";
 
 export function AccountOrdersPage() {
   const { user } = useAuth();
@@ -57,8 +62,8 @@ export function AccountOrdersPage() {
               <strong>{order.total.toFixed(2).replace(".", ",")} EUR</strong>
             </div>
             <div className="mt-3 grid gap-2 text-sm text-ink/70">
-              <p>Paiement : {order.paymentStatus}</p>
-              <p>Statut : {order.orderStatus}</p>
+              <p>Paiement : {paymentStatusLabel(order.paymentStatus)}</p>
+              <p>Statut : {orderStatusLabel(order.orderStatus)}</p>
               <p>Livraison : {order.deliveryMethod}</p>
               <p>
                 Produits :{" "}
@@ -67,10 +72,53 @@ export function AccountOrdersPage() {
                   .join(", ")}
               </p>
             </div>
+            <OrderProgress order={order} />
           </article>
         ))}
       </div>
     </section>
+  );
+}
+
+function OrderProgress({ order }: { order: CustomerOrderRow }) {
+  const exceptional = order.orderStatus === "cancelled" || order.orderStatus === "refunded";
+  const activeIndex = visibleOrderSteps.indexOf(order.orderStatus);
+
+  return (
+    <div className="mt-4 border-t border-forest/10 pt-4">
+      {exceptional ? (
+        <p className="rounded-md bg-ivory px-3 py-2 text-sm text-forest">
+          Statut final : {orderStatusLabel(order.orderStatus)}.
+        </p>
+      ) : (
+        <ol className="grid gap-2 text-xs text-ink/60 md:grid-cols-5">
+          {visibleOrderSteps.map((status, index) => {
+            const isDone = activeIndex >= index;
+            return (
+              <li
+                key={status}
+                className={`rounded-md border px-3 py-2 ${
+                  isDone
+                    ? "border-forest/30 bg-ivory text-forest"
+                    : "border-forest/10 bg-transparent"
+                }`}
+              >
+                {orderStatusLabel(status)}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+      {order.statusHistory?.length ? (
+        <div className="mt-3 grid gap-1 text-xs text-ink/55">
+          {order.statusHistory.slice(-3).map((entry, index) => (
+            <p key={`${entry.status}-${entry.changedAt}-${index}`}>
+              {formatDate(entry.changedAt)} - {orderStatusLabel(entry.status)}
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
