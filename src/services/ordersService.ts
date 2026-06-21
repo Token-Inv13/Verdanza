@@ -82,23 +82,33 @@ export async function updateOrderAdminFields(
 export async function getCustomerOrders(customerId: string) {
   if (!db) return [];
   const snapshot = await getDocs(
-    query(
-      collection(db, collections.orders),
-      where("customerId", "==", customerId),
-      orderBy("createdAt", "desc"),
-    ),
+    query(collection(db, collections.orders), where("customerId", "==", customerId)),
   );
 
-  return snapshot.docs.map((entry) => {
-    const order = { id: entry.id, ...entry.data() } as Order;
-    return {
-      id: order.id,
-      createdAt: order.createdAt,
-      items: order.items || [],
-      total: Number(order.total || 0),
-      paymentStatus: order.paymentStatus,
-      orderStatus: order.orderStatus,
-      deliveryMethod: order.deliveryZone || order.deliveryMethod,
-    } satisfies CustomerOrderRow;
-  });
+  return snapshot.docs
+    .map((entry) => {
+      const order = { id: entry.id, ...entry.data() } as Order;
+      return {
+        id: order.id,
+        createdAt: order.createdAt,
+        items: order.items || [],
+        total: Number(order.total || 0),
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.orderStatus,
+        deliveryMethod: order.deliveryZone || order.deliveryMethod,
+      } satisfies CustomerOrderRow;
+    })
+    .sort((left, right) => timestampMs(right.createdAt) - timestampMs(left.createdAt));
+}
+
+function timestampMs(value: unknown) {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "toDate" in value &&
+    typeof value.toDate === "function"
+  ) {
+    return value.toDate().getTime();
+  }
+  return value ? new Date(String(value)).getTime() || 0 : 0;
 }
