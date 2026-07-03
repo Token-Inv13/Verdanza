@@ -25,7 +25,7 @@ export function Seo({
 }
 
 function canonicalUrl(path?: string) {
-  const base = "https://verdanza-opal.vercel.app";
+  const base = "https://verdanza.fr";
   if (!path) return `${base}${window.location.pathname}`;
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }

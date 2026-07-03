@@ -4,4 +4,4 @@ Disallow: /admin
 Disallow: /compte
 Disallow: /checkout
 
-Sitemap: https://verdanza-opal.vercel.app/sitemap.xml
+Sitemap: https://verdanza.fr/sitemap.xml

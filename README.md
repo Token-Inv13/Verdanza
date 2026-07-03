@@ -264,7 +264,7 @@ Verification apres seed :
 URL production :
 
 ```text
-https://verdanza-opal.vercel.app
+https://verdanza.fr
 ```
 
 Procedure :
@@ -402,7 +402,8 @@ Blocages avant ouverture publique :
 - completer les mentions legales reelles : raison sociale, SIRET, adresse, responsable de publication, contact support ;
 - verifier un domaine Resend et remplacer `EMAIL_FROM` par une adresse du domaine valide pour envoyer aux clients ;
 - valider les produits reels : images, lots, certificats, taux cannabinoides, prix et stocks ;
-- remplacer `VITE_APP_URL`, canonical, sitemap, webhook Stripe et Resend apres achat du domaine final.
+- domaines `verdanza.fr`, `www.verdanza.fr`, `verdanza-cbd.fr` et `www.verdanza-cbd.fr` ajoutes au projet Vercel ;
+- `VITE_APP_URL`, canonical et sitemap pointent vers `https://verdanza.fr`.
 
 Structure catalogue recommandee avant saisie definitive :
 
@@ -428,12 +429,16 @@ Analytics prepares :
 
 La couche actuelle pousse ces evenements dans `window.dataLayer` si un outil est ajoute plus tard, et emet aussi un evenement navigateur `verdanza:analytics`. Aucun service externe n'est charge sans validation.
 
-Checklist domaine futur :
+Checklist domaine Verdanza :
 
-1. Ajouter le domaine dans Vercel.
-2. Mettre a jour `VITE_APP_URL`.
-3. Mettre a jour canonical et `public/sitemap.xml`.
-4. Verifier ou recreer le webhook Stripe si l'URL change.
+1. Ajouter les domaines dans Vercel : `verdanza.fr`, `www.verdanza.fr`, `verdanza-cbd.fr`, `www.verdanza-cbd.fr`.
+2. Dans Hostinger, remplacer les anciens DNS pointant vers `2.57.91.91` par les enregistrements recommandes par Vercel :
+   - `verdanza.fr` : `A @ 216.198.79.1` et `A @ 64.29.17.1`
+   - `www.verdanza.fr` : `CNAME www fd2887f4143f792f.vercel-dns-017.com.`
+   - `verdanza-cbd.fr` : `A @ 216.198.79.1` et `A @ 64.29.17.1`
+   - `www.verdanza-cbd.fr` : `CNAME www fd2887f4143f792f.vercel-dns-017.com.`
+3. Verifier dans Vercel que les quatre domaines passent en configuration valide.
+4. Verifier ou recreer le webhook Stripe avec l'URL `https://verdanza.fr/api/stripe-webhook`.
 5. Verifier le domaine dans Resend.
 6. Mettre a jour `EMAIL_FROM`.
 7. Redeployer et refaire un paiement test complet.
