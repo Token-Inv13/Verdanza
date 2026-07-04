@@ -9,7 +9,8 @@ type TransactionalEmailKind =
   | "order_confirmation"
   | "admin_new_order"
   | "order_status_update"
-  | "refund_notification";
+  | "refund_notification"
+  | "contact_message";
 
 const statusLabels: Record<OrderStatus, string> = {
   pending: "En attente",
@@ -92,6 +93,30 @@ export async function sendRefundNotificationEmail(order: Order) {
     html: orderEmailHtml(order, "Le remboursement de votre commande a ete initie."),
     text: orderEmailText(order, "Le remboursement de votre commande a ete initie."),
     idempotencyKey: `order-refund-${order.id}`,
+  });
+}
+
+export async function sendContactMessageEmail(input: {
+  name: string;
+  email: string;
+  phone?: string;
+  subject: string;
+  message: string;
+}) {
+  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
+  if (!adminEmail) {
+    return { status: "skipped", reason: "ADMIN_NOTIFICATION_EMAIL absent" } satisfies EmailResult;
+  }
+
+  const safeSubject = input.subject || "Message contact Verdanza";
+  return sendTransactionalEmail({
+    kind: "contact_message",
+    orderId: "contact",
+    to: adminEmail,
+    subject: `Contact Verdanza - ${safeSubject}`,
+    html: contactEmailHtml(input),
+    text: contactEmailText(input),
+    idempotencyKey: `contact-${Date.now()}-${Math.random().toString(16).slice(2)}`,
   });
 }
 
@@ -218,6 +243,46 @@ function orderEmailText(order: Order, intro: string) {
     `Total: ${formatMoney(Number(order.total || 0))}`,
     `Livraison: ${order.deliveryZone || order.deliveryMethod}`,
   ].join("\n");
+}
+
+function contactEmailHtml(input: {
+  name: string;
+  email: string;
+  phone?: string;
+  subject: string;
+  message: string;
+}) {
+  return `
+    <div style="font-family:Arial,sans-serif;color:#183c2f;line-height:1.5">
+      <h1>Nouveau message Verdanza</h1>
+      <p><strong>Nom :</strong> ${escapeHtml(input.name)}</p>
+      <p><strong>Email :</strong> ${escapeHtml(input.email)}</p>
+      ${input.phone ? `<p><strong>Telephone :</strong> ${escapeHtml(input.phone)}</p>` : ""}
+      <p><strong>Sujet :</strong> ${escapeHtml(input.subject)}</p>
+      <p><strong>Message :</strong></p>
+      <p>${escapeHtml(input.message).replaceAll("\n", "<br>")}</p>
+    </div>
+  `;
+}
+
+function contactEmailText(input: {
+  name: string;
+  email: string;
+  phone?: string;
+  subject: string;
+  message: string;
+}) {
+  return [
+    "Nouveau message Verdanza",
+    `Nom: ${input.name}`,
+    `Email: ${input.email}`,
+    input.phone ? `Telephone: ${input.phone}` : "",
+    `Sujet: ${input.subject}`,
+    "Message:",
+    input.message,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function shortOrderId(orderId: string) {
