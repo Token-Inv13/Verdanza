@@ -46,6 +46,26 @@ export type DeliveryZone = {
   slots: string[];
 };
 
+export type CouponDiscountType = "percent" | "fixed" | "free_shipping";
+
+export type Coupon = {
+  id: string;
+  code: string;
+  label: string;
+  discountType: CouponDiscountType;
+  discountValue: number;
+  minimumOrder: number;
+  maxUses?: number;
+  usedCount: number;
+  startsAt?: string;
+  endsAt?: string;
+  isActive: boolean;
+  productIds?: string[];
+  categories?: ProductCategory[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type StockMovementType =
   | "manual_add"
   | "sale"
@@ -139,6 +159,8 @@ export type Order = {
   items: OrderItem[];
   subtotal: number;
   deliveryFee: number;
+  discountAmount?: number;
+  couponCode?: string;
   total: number;
   paymentStatus: PaymentStatus;
   orderStatus: OrderStatus;
@@ -184,9 +206,22 @@ export type CustomerProfile = {
   loyaltyPoints: number;
   orderCount: number;
   totalSpent: number;
+  internalNote?: string;
   role: "customer";
   createdAt?: string;
   updatedAt?: string;
+};
+
+export type LoyaltyMovement = {
+  id: string;
+  customerId: string;
+  customerEmail?: string;
+  points: number;
+  reason: "order_paid" | "admin_adjustment" | "reward_redeemed";
+  note?: string;
+  orderId?: string;
+  createdAt?: string;
+  createdBy?: string;
 };
 
 export type SiteSettings = {

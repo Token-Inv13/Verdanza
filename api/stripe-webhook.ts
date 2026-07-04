@@ -152,6 +152,7 @@ export default async function handler(
 
       if (order.customerId) {
         const customerRef = db.collection("customers").doc(order.customerId);
+        const loyaltyPoints = Math.max(0, Math.floor(Number(order.total || 0)));
         transaction.set(
           customerRef,
           {
@@ -160,9 +161,32 @@ export default async function handler(
             displayName: order.customerName ?? "",
             phone: order.customerPhone ?? "",
             role: "customer",
-            loyaltyPoints: FieldValue.increment(0),
+            loyaltyPoints: FieldValue.increment(loyaltyPoints),
             orderCount: FieldValue.increment(1),
             totalSpent: FieldValue.increment(Number(order.total || 0)),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+        if (loyaltyPoints > 0) {
+          transaction.set(db.collection("loyaltyMovements").doc(), {
+            customerId: order.customerId,
+            customerEmail: order.customerEmail,
+            points: loyaltyPoints,
+            reason: "order_paid",
+            orderId,
+            note: "Points credites automatiquement apres paiement.",
+            createdAt: FieldValue.serverTimestamp(),
+            createdBy: "stripe-webhook",
+          });
+        }
+      }
+
+      if (order.couponCode) {
+        transaction.set(
+          db.collection("coupons").doc(order.couponCode.toLowerCase()),
+          {
+            usedCount: FieldValue.increment(1),
             updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true },

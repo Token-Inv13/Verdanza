@@ -5,6 +5,7 @@ import type {
   DeliveryZone,
   OrderItem,
   Product,
+  Coupon,
 } from "../../src/types/index.js";
 
 const fallbackDeliveryZones: DeliveryZone[] = [
@@ -59,6 +60,7 @@ export type CheckoutRequestBody = {
   deliveryMethod: DeliveryMethod;
   deliveryZone?: string;
   deliverySlot?: string;
+  couponCode?: string;
   authToken?: string;
   customer: CheckoutCustomerInput;
 };
@@ -67,6 +69,8 @@ export type PricedCheckout = {
   orderItems: OrderItem[];
   subtotal: number;
   deliveryFee: number;
+  discountAmount: number;
+  couponCode?: string;
   total: number;
   deliveryZoneName?: string;
 };
@@ -148,14 +152,96 @@ export async function priceCheckout(
     orderItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
   );
   const { fee, zoneName } = await resolveDeliveryFee(db, body, subtotal);
-  const total = roundMoney(subtotal + fee);
+  const coupon = body.couponCode
+    ? await resolveCoupon(db, body.couponCode, subtotal, fee, orderItems)
+    : null;
+  const beforeDiscount = roundMoney(subtotal + fee);
+  const discountAmount = coupon
+    ? Math.min(coupon.discountAmount, Math.max(0, beforeDiscount - 0.5))
+    : 0;
+  const total = roundMoney(beforeDiscount - discountAmount);
 
   return {
     orderItems,
     subtotal,
     deliveryFee: fee,
+    discountAmount,
+    couponCode: coupon?.code,
     total,
     deliveryZoneName: zoneName,
+  };
+}
+
+async function resolveCoupon(
+  db: FirebaseFirestore.Firestore,
+  rawCode: string,
+  subtotal: number,
+  deliveryFee: number,
+  orderItems: OrderItem[],
+) {
+  const code = rawCode.trim().toUpperCase().replace(/\s+/g, "");
+  if (!code) return null;
+
+  const couponSnapshot = await db.collection("coupons").doc(code.toLowerCase()).get();
+  if (!couponSnapshot.exists) {
+    throw new Error("Code promo invalide.");
+  }
+
+  const coupon = { id: couponSnapshot.id, ...couponSnapshot.data() } as Coupon;
+  const now = Date.now();
+  const startsAt = coupon.startsAt ? Date.parse(coupon.startsAt) : 0;
+  const endsAt = coupon.endsAt ? Date.parse(coupon.endsAt) : 0;
+  const allowedProductIds = coupon.productIds ?? [];
+  const allowedCategories = coupon.categories ?? [];
+
+  if (!coupon.isActive) throw new Error("Code promo inactif.");
+  if (startsAt && now < startsAt) throw new Error("Code promo pas encore actif.");
+  if (endsAt && now > endsAt) throw new Error("Code promo expire.");
+  if (coupon.maxUses && coupon.usedCount >= coupon.maxUses) {
+    throw new Error("Code promo deja utilise au maximum.");
+  }
+  if (subtotal < Number(coupon.minimumOrder || 0)) {
+    throw new Error(
+      `Code promo disponible a partir de ${Number(coupon.minimumOrder).toFixed(0)} EUR d'achat.`,
+    );
+  }
+
+  let eligibleSubtotal = subtotal;
+  if (allowedProductIds.length || allowedCategories.length) {
+    eligibleSubtotal = 0;
+    for (const item of orderItems) {
+      const productSnapshot = await db.collection("products").doc(item.productId).get();
+      const product = {
+        id: productSnapshot.id,
+        ...productSnapshot.data(),
+      } as Product;
+      const productAllowed =
+        allowedProductIds.includes(item.productId) ||
+        allowedCategories.includes(product.category);
+      if (productAllowed) {
+        eligibleSubtotal += item.unitPrice * item.quantity;
+      }
+    }
+  }
+
+  if (eligibleSubtotal <= 0 && coupon.discountType !== "free_shipping") {
+    throw new Error("Code promo non applicable a ce panier.");
+  }
+
+  const discountAmount =
+    coupon.discountType === "percent"
+      ? roundMoney(eligibleSubtotal * (Number(coupon.discountValue || 0) / 100))
+      : coupon.discountType === "fixed"
+        ? roundMoney(Number(coupon.discountValue || 0))
+        : roundMoney(deliveryFee);
+
+  if (discountAmount <= 0) {
+    throw new Error("Code promo sans remise applicable.");
+  }
+
+  return {
+    code,
+    discountAmount,
   };
 }
 
@@ -230,6 +316,8 @@ export function orderPayload(
     items: priced.orderItems,
     subtotal: priced.subtotal,
     deliveryFee: priced.deliveryFee,
+    discountAmount: priced.discountAmount,
+    couponCode: priced.couponCode ?? null,
     total: priced.total,
     paymentStatus: "pending",
     orderStatus: "pending",

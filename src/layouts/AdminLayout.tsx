@@ -1,10 +1,12 @@
 import { NavLink, Outlet } from "react-router-dom";
 import {
   BarChart3,
+  BadgePercent,
   Boxes,
   Package,
   ShoppingCart,
   Truck,
+  Users,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { Seo } from "../components/Seo";
@@ -15,6 +17,8 @@ const adminNav = [
   { label: "Stocks", to: "/admin/stocks", icon: Boxes },
   { label: "Commandes", to: "/admin/commandes", icon: ShoppingCart },
   { label: "Livraisons", to: "/admin/livraisons", icon: Truck },
+  { label: "Promos", to: "/admin/coupons", icon: BadgePercent },
+  { label: "Clients", to: "/admin/clients", icon: Users },
 ];
 
 export function AdminLayout() {

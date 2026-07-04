@@ -11,8 +11,21 @@ import {
   refundOrderAdmin,
   updateOrderAdminFields,
 } from "../../services/ordersService";
+import { updateDeliveryZoneAdmin } from "../../services/deliveryZonesService";
+import {
+  updateCouponStatus,
+  upsertCoupon,
+  type CouponInput,
+} from "../../services/couponsService";
+import {
+  adjustCustomerLoyalty,
+  updateCustomerInternalNote,
+} from "../../services/adminCustomersService";
 import type {
   AdminMetric,
+  Coupon,
+  CustomerProfile,
+  DeliveryZone,
   OrderStatus,
   Product,
   ProductCategory,
@@ -43,6 +56,18 @@ const emptyProduct: ProductInput = {
   seoDescription: "",
 };
 
+const emptyCoupon: CouponInput = {
+  code: "",
+  label: "",
+  discountType: "percent",
+  discountValue: 10,
+  minimumOrder: 0,
+  usedCount: 0,
+  isActive: true,
+  productIds: [],
+  categories: [],
+};
+
 export function AdminPage({ section }: { section: string }) {
   const {
     products,
@@ -51,11 +76,16 @@ export function AdminPage({ section }: { section: string }) {
     orderSource,
     deliveryZones,
     deliverySource,
+    coupons,
+    couponSource,
+    customers,
+    customerSource,
     isLoading,
     refresh,
   } = useAdminData();
   const [message, setMessage] = useState("");
   const [editingProduct, setEditingProduct] = useState<ProductInput>(emptyProduct);
+  const [editingCoupon, setEditingCoupon] = useState<CouponInput>(emptyCoupon);
 
   const lowStockProducts = useMemo(
     () => products.filter((product) => product.stock <= product.lowStockThreshold),
@@ -112,6 +142,41 @@ export function AdminPage({ section }: { section: string }) {
     } else {
       await updateProductStock(product.id, stock, threshold);
     }
+    await refresh();
+  }
+
+  async function handleDeliveryZoneSave(
+    zone: DeliveryZone,
+    data: Pick<DeliveryZone, "isActive" | "fee" | "minimumOrder" | "estimatedDelay">,
+  ) {
+    await updateDeliveryZoneAdmin(zone.id, data);
+    setMessage(`Zone ${zone.name} mise a jour.`);
+    await refresh();
+  }
+
+  async function handleCouponSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await upsertCoupon({
+      ...editingCoupon,
+      productIds: normalizeList(editingCoupon.productIds ?? []),
+      categories: normalizeList(editingCoupon.categories ?? []) as ProductCategory[],
+    });
+    setEditingCoupon(emptyCoupon);
+    setMessage("Code promo enregistre.");
+    await refresh();
+  }
+
+  async function handleCouponToggle(coupon: Coupon) {
+    await updateCouponStatus(coupon.id, !coupon.isActive);
+    await refresh();
+  }
+
+  async function handleLoyaltyAdjustment(customer: CustomerProfile) {
+    const rawPoints = window.prompt("Nombre de points a ajouter ou retirer", "0");
+    const points = Number(rawPoints);
+    if (!Number.isFinite(points) || points === 0) return;
+    const note = window.prompt("Motif de l'ajustement", "") || "";
+    await adjustCustomerLoyalty(customer, points, note);
     await refresh();
   }
 
@@ -250,22 +315,43 @@ export function AdminPage({ section }: { section: string }) {
       {section === "Livraisons locales" && (
         <>
           <SourceLine source={deliverySource} />
-          <AdminTable
-            headers={["Zone", "Frais", "Minimum", "Delai", "Statut"]}
-            rows={deliveryZones
-              .filter((zone) => zone.method === "local_express")
-              .map((zone) => [
-                zone.name,
-                `${zone.fee.toFixed(2)} EUR`,
-                `${zone.minimumOrder} EUR`,
-                zone.estimatedDelay,
-                zone.isActive ? "Active" : "Inactive",
-              ])}
+          <DeliveryZonesPanel zones={deliveryZones} onSave={handleDeliveryZoneSave} />
+        </>
+      )}
+
+      {section === "Coupons" && (
+        <div className="mt-8 grid gap-6 xl:grid-cols-[420px_1fr]">
+          <CouponForm
+            coupon={editingCoupon}
+            onChange={setEditingCoupon}
+            onSubmit={handleCouponSubmit}
+          />
+          <section>
+            <SourceLine source={couponSource} />
+            <CouponsTable
+              coupons={coupons}
+              onEdit={setEditingCoupon}
+              onToggle={handleCouponToggle}
+            />
+          </section>
+        </div>
+      )}
+
+      {section === "Clients" && (
+        <>
+          <SourceLine source={customerSource} />
+          <CustomersTable
+            customers={customers}
+            onAdjustPoints={handleLoyaltyAdjustment}
+            onNote={async (customer, note) => {
+              await updateCustomerInternalNote(customer.id, note);
+              await refresh();
+            }}
           />
         </>
       )}
 
-      {["Clients", "Coupons", "Parametres"].includes(section) && (
+      {["Parametres"].includes(section) && (
         <section className="admin-card mt-8">
           <h2 className="font-display text-3xl text-forest">Module non affiche</h2>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-ink/65">
@@ -497,6 +583,292 @@ function StockRow({
         Enregistrer
       </button>
     </article>
+  );
+}
+
+function DeliveryZonesPanel({
+  zones,
+  onSave,
+}: {
+  zones: DeliveryZone[];
+  onSave: (
+    zone: DeliveryZone,
+    data: Pick<DeliveryZone, "isActive" | "fee" | "minimumOrder" | "estimatedDelay">,
+  ) => Promise<void>;
+}) {
+  return (
+    <section className="mt-8 grid gap-4">
+      {zones.map((zone) => (
+        <DeliveryZoneRow key={zone.id} zone={zone} onSave={onSave} />
+      ))}
+    </section>
+  );
+}
+
+function DeliveryZoneRow({
+  zone,
+  onSave,
+}: {
+  zone: DeliveryZone;
+  onSave: (
+    zone: DeliveryZone,
+    data: Pick<DeliveryZone, "isActive" | "fee" | "minimumOrder" | "estimatedDelay">,
+  ) => Promise<void>;
+}) {
+  const [isActive, setIsActive] = useState(zone.isActive);
+  const [fee, setFee] = useState(zone.fee);
+  const [minimumOrder, setMinimumOrder] = useState(zone.minimumOrder);
+  const [estimatedDelay, setEstimatedDelay] = useState(zone.estimatedDelay);
+
+  return (
+    <article className="admin-card grid gap-4 xl:grid-cols-[1fr_120px_140px_1.2fr_110px_auto] xl:items-end">
+      <div>
+        <p className="text-xs uppercase tracking-[0.14em] text-champagne">
+          {zone.method === "postal" ? "Postale" : "Locale"}
+        </p>
+        <h2 className="font-display text-2xl text-forest">{zone.name}</h2>
+      </div>
+      <NumberInput label="Frais" value={fee} onChange={setFee} />
+      <NumberInput label="Minimum" value={minimumOrder} onChange={setMinimumOrder} />
+      <Input label="Delai" value={estimatedDelay} onChange={setEstimatedDelay} />
+      <label className="text-sm font-medium text-forest">
+        Statut
+        <select
+          className="input-field mt-2"
+          value={isActive ? "active" : "inactive"}
+          onChange={(event) => setIsActive(event.target.value === "active")}
+        >
+          <option value="active">Actif</option>
+          <option value="inactive">Inactif</option>
+        </select>
+      </label>
+      <button
+        className="btn-primary"
+        onClick={() =>
+          void onSave(zone, {
+            isActive,
+            fee,
+            minimumOrder,
+            estimatedDelay,
+          })
+        }
+      >
+        Enregistrer
+      </button>
+    </article>
+  );
+}
+
+function CouponForm({
+  coupon,
+  onChange,
+  onSubmit,
+}: {
+  coupon: CouponInput;
+  onChange: (coupon: CouponInput) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form onSubmit={onSubmit} className="admin-card h-fit">
+      <h2 className="font-display text-3xl text-forest">
+        {coupon.id ? "Editer promo" : "Creer promo"}
+      </h2>
+      <div className="mt-5 grid gap-4">
+        <Input label="Code" value={coupon.code} onChange={(code) => onChange({ ...coupon, code: code.toUpperCase() })} />
+        <Input label="Libelle" value={coupon.label} onChange={(label) => onChange({ ...coupon, label })} />
+        <label className="text-sm font-medium text-forest">
+          Type
+          <select
+            className="input-field mt-2"
+            value={coupon.discountType}
+            onChange={(event) =>
+              onChange({
+                ...coupon,
+                discountType: event.target.value as Coupon["discountType"],
+              })
+            }
+          >
+            <option value="percent">Pourcentage</option>
+            <option value="fixed">Montant fixe</option>
+            <option value="free_shipping">Livraison offerte</option>
+          </select>
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <NumberInput
+            label="Valeur"
+            value={coupon.discountValue}
+            onChange={(discountValue) => onChange({ ...coupon, discountValue })}
+          />
+          <NumberInput
+            label="Minimum"
+            value={coupon.minimumOrder}
+            onChange={(minimumOrder) => onChange({ ...coupon, minimumOrder })}
+          />
+          <NumberInput
+            label="Limite utilisations"
+            value={coupon.maxUses || 0}
+            onChange={(maxUses) => onChange({ ...coupon, maxUses: maxUses || undefined })}
+          />
+          <NumberInput
+            label="Deja utilise"
+            value={coupon.usedCount || 0}
+            onChange={(usedCount) => onChange({ ...coupon, usedCount })}
+          />
+        </div>
+        <Input
+          label="Debut ISO optionnel"
+          value={coupon.startsAt || ""}
+          onChange={(startsAt) => onChange({ ...coupon, startsAt: startsAt || undefined })}
+        />
+        <Input
+          label="Fin ISO optionnelle"
+          value={coupon.endsAt || ""}
+          onChange={(endsAt) => onChange({ ...coupon, endsAt: endsAt || undefined })}
+        />
+        <Input
+          label="IDs produits optionnels"
+          value={(coupon.productIds ?? []).join(", ")}
+          onChange={(productIds) => onChange({ ...coupon, productIds: normalizeList(productIds) })}
+        />
+        <Input
+          label="Categories optionnelles"
+          value={(coupon.categories ?? []).join(", ")}
+          onChange={(categories) =>
+            onChange({ ...coupon, categories: normalizeList(categories) as ProductCategory[] })
+          }
+        />
+        <label className="flex items-center gap-2 text-sm text-forest">
+          <input
+            type="checkbox"
+            checked={coupon.isActive}
+            onChange={(event) => onChange({ ...coupon, isActive: event.target.checked })}
+          />
+          Actif
+        </label>
+        <button className="btn-primary" type="submit">
+          Enregistrer promo
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function CouponsTable({
+  coupons,
+  onEdit,
+  onToggle,
+}: {
+  coupons: Coupon[];
+  onEdit: (coupon: CouponInput) => void;
+  onToggle: (coupon: Coupon) => Promise<void>;
+}) {
+  return (
+    <section className="overflow-hidden rounded-lg border border-forest/10 bg-ivory">
+      {!coupons.length && (
+        <p className="border-b border-forest/10 bg-cream px-4 py-4 text-sm text-forest">
+          Aucun code promo pour le moment.
+        </p>
+      )}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px] text-left text-sm">
+          <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
+            <tr>
+              {["Code", "Type", "Valeur", "Minimum", "Utilisations", "Statut", "Action"].map((header) => (
+                <th key={header} className="px-4 py-3 font-medium">{header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {coupons.map((coupon) => (
+              <tr key={coupon.id} className="border-t border-forest/10">
+                <td className="px-4 py-4">
+                  <strong className="block text-forest">{coupon.code}</strong>
+                  <span className="text-xs text-ink/55">{coupon.label}</span>
+                </td>
+                <td className="px-4 py-4">{coupon.discountType}</td>
+                <td className="px-4 py-4">{coupon.discountValue}</td>
+                <td className="px-4 py-4">{coupon.minimumOrder} EUR</td>
+                <td className="px-4 py-4">
+                  {coupon.usedCount}
+                  {coupon.maxUses ? ` / ${coupon.maxUses}` : ""}
+                </td>
+                <td className="px-4 py-4">
+                  <button className="tag" onClick={() => void onToggle(coupon)}>
+                    {coupon.isActive ? "Actif" : "Inactif"}
+                  </button>
+                </td>
+                <td className="px-4 py-4">
+                  <button className="btn-secondary min-h-9 px-3 py-2" onClick={() => onEdit(coupon)}>
+                    Editer
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function CustomersTable({
+  customers,
+  onAdjustPoints,
+  onNote,
+}: {
+  customers: CustomerProfile[];
+  onAdjustPoints: (customer: CustomerProfile) => Promise<void>;
+  onNote: (customer: CustomerProfile, note: string) => Promise<void>;
+}) {
+  return (
+    <section className="mt-8 overflow-hidden rounded-lg border border-forest/10 bg-ivory">
+      {!customers.length && (
+        <p className="border-b border-forest/10 bg-cream px-4 py-4 text-sm text-forest">
+          Aucun client pour le moment.
+        </p>
+      )}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[980px] text-left text-sm">
+          <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
+            <tr>
+              {["Client", "Commandes", "Total", "Points", "Note interne", "Action"].map((header) => (
+                <th key={header} className="px-4 py-3 font-medium">{header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {customers.map((customer) => (
+              <tr key={customer.id} className="border-t border-forest/10">
+                <td className="px-4 py-4">
+                  <strong className="block text-forest">{customer.displayName || "Client"}</strong>
+                  <span className="block text-xs text-ink/55">{customer.email}</span>
+                  <span className="block text-xs text-ink/55">{customer.phone}</span>
+                </td>
+                <td className="px-4 py-4">{customer.orderCount || 0}</td>
+                <td className="px-4 py-4">{formatEuro(Number(customer.totalSpent || 0))} EUR</td>
+                <td className="px-4 py-4">{customer.loyaltyPoints || 0}</td>
+                <td className="px-4 py-4">
+                  <input
+                    className="input-field"
+                    defaultValue={customer.internalNote || ""}
+                    placeholder="Note"
+                    onBlur={(event) => void onNote(customer, event.currentTarget.value)}
+                  />
+                </td>
+                <td className="px-4 py-4">
+                  <button
+                    className="btn-secondary whitespace-nowrap"
+                    onClick={() => void onAdjustPoints(customer)}
+                  >
+                    Ajuster points
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -770,37 +1142,6 @@ function parseEuro(value: string) {
 
 function formatEuro(value: number) {
   return value.toFixed(2).replace(".", ",");
-}
-
-function AdminTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
-  return (
-    <section className="mt-8 overflow-hidden rounded-lg border border-forest/10 bg-ivory">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
-            <tr>
-              {headers.map((header) => (
-                <th key={header} className="px-4 py-3 font-medium">
-                  {header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.join("-")} className="border-t border-forest/10">
-                {row.map((cell) => (
-                  <td key={cell} className="px-4 py-4 text-ink/75">
-                    {cell}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
 }
 
 function Input({

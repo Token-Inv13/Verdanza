@@ -62,6 +62,10 @@ service cloud.firestore {
       allow read, create, update, delete: if isAdmin();
     }
 
+    match /loyaltyMovements/{movementId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
     match /deliveryZones/{zoneId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();

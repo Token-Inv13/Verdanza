@@ -12,6 +12,7 @@ export function CheckoutPage() {
   const { user, customerProfile } = useAuth();
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("postal");
   const [deliveryZone, setDeliveryZone] = useState(localDeliveryZones[0]?.id ?? "");
+  const [couponCode, setCouponCode] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [customer, setCustomer] = useState({
@@ -85,6 +86,7 @@ export function CheckoutPage() {
           authToken,
           deliveryMethod,
           deliveryZone: deliveryMethod === "local_express" ? deliveryZone : "postal-france",
+          couponCode: couponCode.trim() || undefined,
           customer: {
             email: customer.email,
             phone: customer.phone,
@@ -249,10 +251,24 @@ export function CheckoutPage() {
                 <span>Livraison estimée</span>
                 <span>{estimatedDeliveryFee.toFixed(2).replace(".", ",")} EUR</span>
               </p>
+              <label className="grid gap-2 border-t border-forest/10 pt-3 text-sm font-medium text-forest">
+                Code promo
+                <input
+                  className="input-field"
+                  value={couponCode}
+                  onChange={(event) => setCouponCode(event.target.value.toUpperCase())}
+                  placeholder="WELCOME10"
+                />
+              </label>
               <p className="flex justify-between text-lg font-semibold text-forest">
                 <span>Total estimé</span>
                 <span>{estimatedTotal.toFixed(2).replace(".", ",")} EUR</span>
               </p>
+              {couponCode.trim() && (
+                <p className="text-xs leading-5 text-ink/55">
+                  La remise sera vérifiée et appliquée automatiquement avant le paiement.
+                </p>
+              )}
             </div>
             <label className="mt-6 flex items-start gap-3 text-sm text-ink/70">
               <input type="checkbox" className="mt-1" required />

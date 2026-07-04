@@ -1,4 +1,11 @@
-import { collection, doc, getDocs, serverTimestamp, setDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDocs,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+} from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { deliveryZones as localDeliveryZones } from "../data/deliveryZones";
 import { collections } from "./collections";
@@ -34,4 +41,18 @@ export async function seedInitialDeliveryZones() {
     ),
   );
   return localDeliveryZones.length;
+}
+
+export async function updateDeliveryZoneAdmin(
+  zoneId: string,
+  data: Pick<DeliveryZone, "isActive" | "fee" | "minimumOrder" | "estimatedDelay">,
+) {
+  if (!db) throw new Error("Firebase is not configured.");
+  await updateDoc(doc(db, collections.deliveryZones, zoneId), {
+    isActive: data.isActive,
+    fee: Number(data.fee || 0),
+    minimumOrder: Number(data.minimumOrder || 0),
+    estimatedDelay: data.estimatedDelay,
+    updatedAt: serverTimestamp(),
+  });
 }

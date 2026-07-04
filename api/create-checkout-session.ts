@@ -73,11 +73,27 @@ export default async function handler(
       });
     }
 
+    const discounts: Stripe.Checkout.SessionCreateParams.Discount[] = [];
+    if (priced.discountAmount > 0) {
+      const coupon = await stripe.coupons.create({
+        amount_off: cents(priced.discountAmount),
+        currency: "eur",
+        duration: "once",
+        name: priced.couponCode ? `Code ${priced.couponCode}` : "Remise Verdanza",
+        metadata: {
+          orderId: orderRef.id,
+          couponCode: priced.couponCode ?? "",
+        },
+      });
+      discounts.push({ coupon: coupon.id });
+    }
+
     let session: Stripe.Checkout.Session;
     try {
       session = await stripe.checkout.sessions.create({
         mode: "payment",
         line_items: lineItems,
+        discounts,
         customer_email: body.customer.email,
         phone_number_collection: { enabled: true },
         billing_address_collection: "required",
@@ -86,6 +102,7 @@ export default async function handler(
         metadata: {
           orderId: orderRef.id,
           deliveryMethod: body.deliveryMethod,
+          couponCode: priced.couponCode ?? "",
         },
         payment_intent_data: {
           metadata: {
