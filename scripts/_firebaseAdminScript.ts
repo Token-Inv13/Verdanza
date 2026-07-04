@@ -1,7 +1,8 @@
 import { config } from "dotenv";
 import { getAdminDb } from "../api/_server/firebaseAdmin.js";
 
-config({ path: ".env.local", quiet: true });
+config({ path: ".env.vercel.production.local", override: false, quiet: true });
+config({ path: ".env.local", override: false, quiet: true });
 
 type ServiceAccountJson = {
   project_id?: string;
