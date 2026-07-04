@@ -3,12 +3,12 @@ import type { DeliveryZone } from "../types/index.js";
 export const deliveryZones: DeliveryZone[] = [
   {
     id: "postal-france",
-    name: "Livraison hors zone",
+    name: "Livraison postale en France",
     method: "postal",
-    isActive: false,
+    isActive: true,
     fee: 0,
     minimumOrder: 0,
-    estimatedDelay: "Option non ouverte au lancement local",
+    estimatedDelay: "Expedition suivie en France",
     slots: ["Expedition suivie"],
   },
   ...[

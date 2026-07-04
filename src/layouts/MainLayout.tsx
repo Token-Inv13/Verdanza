@@ -96,7 +96,6 @@ export function MainLayout() {
             <NavLink to="/livraison-express-aix">Express local Aix</NavLink>
             <NavLink to="/faq">FAQ</NavLink>
             <NavLink to="/contact">Contact</NavLink>
-            <NavLink to="/admin">Admin cockpit</NavLink>
           </div>
           <div className="grid gap-2 text-sm text-forest/80">
             <strong className="text-forest">Legal</strong>

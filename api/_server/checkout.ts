@@ -10,12 +10,12 @@ import type {
 const fallbackDeliveryZones: DeliveryZone[] = [
   {
     id: "postal-france",
-    name: "Livraison hors zone",
+    name: "Livraison postale en France",
     method: "postal",
-    isActive: false,
+    isActive: true,
     fee: 0,
     minimumOrder: 0,
-    estimatedDelay: "Option non ouverte au lancement local",
+    estimatedDelay: "Expedition suivie en France",
     slots: ["Expedition suivie"],
   },
   ...[
@@ -118,7 +118,7 @@ export async function priceCheckout(
     const productRef = db.collection("products").doc(item.productId);
     const productSnapshot = await productRef.get();
     if (!productSnapshot.exists) {
-      throw new Error("Produit introuvable ou catalogue Firestore non initialise.");
+      throw new Error("Ce produit n'est plus disponible.");
     }
 
     const product = {
@@ -165,7 +165,24 @@ async function resolveDeliveryFee(
   subtotal: number,
 ) {
   if (body.deliveryMethod === "postal") {
-    throw new Error("Livraison hors zone indisponible pour l'ouverture.");
+    const zone = await getDeliveryZone(db, body.deliveryZone ?? "postal-france");
+    const fallbackZone = fallbackDeliveryZones.find(
+      (entry) => entry.id === (body.deliveryZone ?? "postal-france"),
+    );
+    const selectedZone = zone?.isActive ? zone : fallbackZone;
+
+    if (!selectedZone || selectedZone.method !== "postal" || !selectedZone.isActive) {
+      throw new Error("Livraison postale indisponible pour le moment.");
+    }
+
+    const minimumOrder = selectedZone.minimumOrder ?? 0;
+    if (minimumOrder > 0 && subtotal < minimumOrder) {
+      throw new Error(
+        `Livraison postale disponible a partir de ${minimumOrder.toFixed(0)} EUR d'achat.`,
+      );
+    }
+
+    return { fee: selectedZone.fee, zoneName: selectedZone.name };
   }
 
   if (!body.deliveryZone) {

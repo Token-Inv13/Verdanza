@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { LockKeyhole } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { Seo } from "./Seo";
 
 export function AdminAuthGate() {
   const { isLoading, isAdmin, user, isFirebaseConfigured, signIn, resetPassword } = useAuth();
@@ -25,7 +26,7 @@ export function AdminAuthGate() {
 
   if (!isFirebaseConfigured) {
     return (
-      <AdminGateShell message="Firebase n'est pas configure. Renseigner .env.local pour activer l'auth admin." />
+      <AdminGateShell message="Connexion administrateur indisponible pour le moment." />
     );
   }
 
@@ -68,6 +69,11 @@ export function AdminAuthGate() {
 
   return (
     <div className="grid min-h-screen place-items-center bg-cream px-4">
+      <Seo
+        title="Acces administrateur - Verdanza CBD"
+        description="Acces reserve Verdanza."
+        noindex
+      />
       <form
         onSubmit={handleSubmit}
         className="w-full max-w-md rounded-lg border border-forest/10 bg-ivory p-8 shadow-soft"
@@ -75,8 +81,7 @@ export function AdminAuthGate() {
         <LockKeyhole className="text-champagne" />
         <h1 className="mt-4 font-display text-4xl text-forest">Admin Verdanza</h1>
         <p className="mt-3 text-sm leading-6 text-ink/60">
-          Connectez-vous avec un compte Firebase Auth autorise dans la collection
-          adminUsers.
+          Connectez-vous avec un compte administrateur autorise.
         </p>
         <label className="mt-6 block text-sm font-medium text-forest">
           Email
@@ -122,6 +127,11 @@ function AdminGateShell({ message }: { message: string }) {
 
   return (
     <div className="grid min-h-screen place-items-center bg-cream px-4">
+      <Seo
+        title="Acces administrateur - Verdanza CBD"
+        description="Acces reserve Verdanza."
+        noindex
+      />
       <div className="max-w-md rounded-lg border border-forest/10 bg-ivory p-8 text-center shadow-soft">
         <LockKeyhole className="mx-auto text-champagne" />
         <h1 className="mt-4 font-display text-4xl text-forest">Acces admin</h1>

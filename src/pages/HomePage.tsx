@@ -65,7 +65,7 @@ export function HomePage() {
             {
               icon: Truck,
               title: "Livraison France",
-              text: "Expedition postale nationale, avec suivi selon le mode disponible au checkout.",
+              text: "Expedition postale nationale, avec suivi selon le mode choisi.",
             },
             {
               icon: PackageCheck,

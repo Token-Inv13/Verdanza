@@ -7,18 +7,19 @@ export function CartPage() {
   const { lines, subtotal, addItem, decrementItem, removeItem } = useCart();
   const deliveryEstimate = 0;
   const total = subtotal + (lines.length ? deliveryEstimate : 0);
-  const localDeliveryMinimum = 30;
-  const isBelowLocalMinimum = lines.length > 0 && subtotal < localDeliveryMinimum;
 
   return (
     <main className="container-page py-12">
       <Seo title="Panier - Verdanza CBD" description="Panier local Verdanza CBD." />
       <div className="page-intro">
         <h1>Panier</h1>
-        <p>Panier conserve dans ce navigateur. Le paiement est securise par Stripe Checkout.</p>
+        <p>
+          Verifiez vos produits avant de choisir votre mode de livraison et de
+          finaliser le paiement securise.
+        </p>
         <p className="mt-3 text-sm text-forest/70">
-          Livraison express Aix-en-Provence et alentours, 7j/7 de 11h a 01h,
-          a partir de 30 EUR d'achat.
+          Livraison postale en France ou livraison locale sur Aix-en-Provence et
+          alentours selon disponibilite.
         </p>
       </div>
       {lines.length === 0 ? (
@@ -73,30 +74,21 @@ export function CartPage() {
                 <span>{subtotal.toFixed(2).replace(".", ",")} EUR</span>
               </p>
               <p className="flex justify-between">
-                <span>Livraison express locale</span>
-                <span>{deliveryEstimate.toFixed(2).replace(".", ",")} EUR</span>
+                <span>Livraison estimee</span>
+                <span>
+                  {deliveryEstimate > 0
+                    ? `${deliveryEstimate.toFixed(2).replace(".", ",")} EUR`
+                    : "Calculee a l'etape suivante"}
+                </span>
               </p>
               <p className="flex justify-between border-t border-forest/10 pt-3 text-lg font-semibold text-forest">
                 <span>Total</span>
                 <span>{total.toFixed(2).replace(".", ",")} EUR</span>
               </p>
             </div>
-            {isBelowLocalMinimum && (
-              <p className="mt-4 rounded-md border border-champagne/40 bg-ivory p-3 text-sm leading-6 text-forest">
-                Minimum livraison locale : {localDeliveryMinimum} EUR. Ajoutez{" "}
-                {(localDeliveryMinimum - subtotal).toFixed(2).replace(".", ",")} EUR
-                pour continuer.
-              </p>
-            )}
-            {isBelowLocalMinimum ? (
-              <button className="btn-primary mt-6 w-full justify-center opacity-60" disabled>
-                Minimum 30 EUR requis
-              </button>
-            ) : (
-              <Link to="/checkout" className="btn-primary mt-6 w-full justify-center">
-                Continuer
-              </Link>
-            )}
+            <Link to="/checkout" className="btn-primary mt-6 w-full justify-center">
+              Continuer
+            </Link>
           </aside>
         </div>
       )}

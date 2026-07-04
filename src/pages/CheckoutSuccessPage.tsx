@@ -28,11 +28,6 @@ export function CheckoutSuccessPage() {
           preparation. Vous recevrez les informations utiles lorsque la commande
           avancera.
         </p>
-        {params.get("session_id") && (
-          <p className="mt-4 text-xs text-ink/50">
-            Reference paiement Stripe recue. Aucune donnee sensible n'est affichee.
-          </p>
-        )}
         <Link to="/boutique" className="btn-primary mt-8 inline-flex">
           Retour boutique
         </Link>

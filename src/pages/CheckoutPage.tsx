@@ -3,14 +3,14 @@ import { Link } from "react-router-dom";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
-import { localDeliveryZones } from "../data/deliveryZones";
+import { deliveryZones, localDeliveryZones } from "../data/deliveryZones";
 import type { DeliveryMethod } from "../types";
 import { trackEvent } from "../lib/analytics";
 
 export function CheckoutPage() {
   const { itemCount, subtotal, items, lines } = useCart();
   const { user, customerProfile } = useAuth();
-  const [deliveryMethod] = useState<DeliveryMethod>("local_express");
+  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("postal");
   const [deliveryZone, setDeliveryZone] = useState(localDeliveryZones[0]?.id ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -29,9 +29,16 @@ export function CheckoutPage() {
     () => localDeliveryZones.find((zone) => zone.id === deliveryZone),
     [deliveryZone],
   );
+  const postalZone = useMemo(
+    () => deliveryZones.find((zone) => zone.id === "postal-france"),
+    [],
+  );
+  const isLocalDelivery = deliveryMethod === "local_express";
   const localDeliveryMinimum = selectedZone?.minimumOrder ?? 30;
-  const isBelowLocalMinimum = itemCount > 0 && subtotal < localDeliveryMinimum;
-  const estimatedDeliveryFee = selectedZone?.fee ?? 0;
+  const isBelowLocalMinimum = isLocalDelivery && itemCount > 0 && subtotal < localDeliveryMinimum;
+  const estimatedDeliveryFee = isLocalDelivery
+    ? selectedZone?.fee ?? 0
+    : postalZone?.fee ?? 0;
   const estimatedTotal = subtotal + estimatedDeliveryFee;
 
   useEffect(() => {
@@ -77,7 +84,7 @@ export function CheckoutPage() {
           items,
           authToken,
           deliveryMethod,
-          deliveryZone: deliveryMethod === "local_express" ? deliveryZone : undefined,
+          deliveryZone: deliveryMethod === "local_express" ? deliveryZone : "postal-france",
           customer: {
             email: customer.email,
             phone: customer.phone,
@@ -113,25 +120,21 @@ export function CheckoutPage() {
   return (
     <main className="container-page py-12">
       <Seo
-        title="Checkout Stripe - Verdanza CBD"
-        description="Paiement securise Stripe Checkout pour Verdanza CBD."
+        title="Finaliser ma commande - Verdanza CBD"
+        description="Finalisation de commande Verdanza CBD avec paiement securise."
       />
       <div className="page-intro">
-        <h1>Checkout</h1>
+        <h1>Finaliser ma commande</h1>
         <p>
-          Le serveur relit les produits Firestore, verifie le stock et recalcule
-          le total avant de creer la session Stripe.
-        </p>
-        <p className="mt-3 text-sm text-forest/70">
-          Livraison express Aix-en-Provence et alentours, 7j/7 de 11h a 01h,
-          a partir de 30 EUR d'achat.
+          Finalisez votre commande Verdanza. Verifiez vos informations,
+          choisissez votre mode de livraison, puis procedez au paiement securise.
         </p>
       </div>
       {!user && itemCount > 0 && (
         <section className="mt-8 rounded-lg border border-champagne/30 bg-cream p-5">
           <p className="text-sm leading-6 text-forest">
             Connectez-vous pour suivre votre commande et retrouver votre historique.
-            Le checkout invite reste disponible.
+            La commande sans compte reste disponible.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             <Link to="/connexion" state={{ from: "/checkout" }} className="btn-primary">
@@ -145,7 +148,7 @@ export function CheckoutPage() {
       )}
       {user && itemCount > 0 && (
         <section className="mt-8 rounded-lg border border-forest/10 bg-cream p-5 text-sm text-forest">
-          Commande rattachee au compte {user.email}.
+          Votre commande sera rattachee au compte {user.email}.
         </section>
       )}
       {itemCount === 0 ? (
@@ -164,54 +167,71 @@ export function CheckoutPage() {
             <div className="rounded-lg border border-forest/10 bg-ivory p-6">
               <h2 className="font-display text-3xl text-forest">Contact</h2>
               <div className="mt-5 grid gap-4 md:grid-cols-2">
-                <CheckoutInput label="Prenom" value={customer.firstName} onChange={(firstName) => setCustomer({ ...customer, firstName })} />
+                <CheckoutInput label="Prénom" value={customer.firstName} onChange={(firstName) => setCustomer({ ...customer, firstName })} />
                 <CheckoutInput label="Nom" value={customer.lastName} onChange={(lastName) => setCustomer({ ...customer, lastName })} />
                 <CheckoutInput label="Email" type="email" value={customer.email} onChange={(email) => setCustomer({ ...customer, email })} />
-                <CheckoutInput label="Telephone" value={customer.phone} onChange={(phone) => setCustomer({ ...customer, phone })} />
+                <CheckoutInput label="Téléphone" value={customer.phone} onChange={(phone) => setCustomer({ ...customer, phone })} />
               </div>
             </div>
 
             <div className="rounded-lg border border-forest/10 bg-ivory p-6">
               <h2 className="font-display text-3xl text-forest">Livraison</h2>
-              <div className="mt-5 rounded-md border border-champagne/30 bg-cream p-4 text-sm leading-6 text-forest">
-                Livraison locale uniquement pour l'ouverture : Aix-en-Provence
-                et alentours, minimum 30 EUR, 7j/7 de 11h a 01h.
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                <DeliveryChoice
+                  checked={deliveryMethod === "postal"}
+                  title="Livraison postale en France"
+                  text="Livraison postale disponible en France. Les frais et delais sont indiques avant validation de la commande."
+                  onChange={() => setDeliveryMethod("postal")}
+                />
+                <DeliveryChoice
+                  checked={deliveryMethod === "local_express"}
+                  title="Livraison locale Aix-en-Provence"
+                  text="Livraison locale disponible a Aix-en-Provence et alentours, 7j/7 de 11h a 01h, a partir de 30 EUR d'achat."
+                  onChange={() => setDeliveryMethod("local_express")}
+                />
               </div>
-              <label className="mt-5 block text-sm font-medium text-forest">
-                Zone locale
-                <select
-                  className="input-field mt-2"
-                  value={deliveryZone}
-                  onChange={(event) => setDeliveryZone(event.target.value)}
-                >
-                  {localDeliveryZones.map((zone) => (
-                    <option key={zone.id} value={zone.id}>
-                      {zone.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {isLocalDelivery && (
+                <label className="mt-5 block text-sm font-medium text-forest">
+                  Zone locale
+                  <select
+                    className="input-field mt-2"
+                    value={deliveryZone}
+                    onChange={(event) => setDeliveryZone(event.target.value)}
+                  >
+                    {localDeliveryZones.map((zone) => (
+                      <option key={zone.id} value={zone.id}>
+                        {zone.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               {isBelowLocalMinimum && (
                 <p className="mt-4 rounded-md border border-champagne/40 bg-cream p-3 text-sm leading-6 text-forest">
                   Minimum livraison locale : {localDeliveryMinimum} EUR. Il manque{" "}
                   {(localDeliveryMinimum - subtotal).toFixed(2).replace(".", ",")} EUR.
                 </p>
               )}
-              <p className="mt-3 text-sm text-ink/60">
-                Hors zone : contactez Verdanza avant commande pour confirmer la
-                disponibilite de livraison.
-              </p>
+              {!isLocalDelivery && (
+                <p className="mt-4 rounded-md border border-champagne/30 bg-cream p-3 text-sm leading-6 text-forest">
+                  Livraison postale disponible en France. Les delais dependent du
+                  transporteur et seront confirmes avec le suivi de commande.
+                </p>
+              )}
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <CheckoutInput label="Adresse" value={customer.line1} onChange={(line1) => setCustomer({ ...customer, line1 })} />
-                <CheckoutInput label="Complement" required={false} value={customer.line2} onChange={(line2) => setCustomer({ ...customer, line2 })} />
+                <CheckoutInput label="Complément" required={false} value={customer.line2} onChange={(line2) => setCustomer({ ...customer, line2 })} />
                 <CheckoutInput label="Code postal" value={customer.postalCode} onChange={(postalCode) => setCustomer({ ...customer, postalCode })} />
                 <CheckoutInput label="Ville" value={customer.city} onChange={(city) => setCustomer({ ...customer, city })} />
+                {!isLocalDelivery && (
+                  <CheckoutInput label="Pays" value={customer.country} onChange={(country) => setCustomer({ ...customer, country })} />
+                )}
               </div>
             </div>
           </section>
 
           <aside className="h-fit rounded-lg border border-champagne/30 bg-cream p-6">
-            <h2 className="font-display text-3xl text-forest">Resume</h2>
+            <h2 className="font-display text-3xl text-forest">Résumé</h2>
             <div className="mt-5 grid gap-3 text-sm">
               {lines.map((line) => (
                 <p key={line.productId} className="flex justify-between gap-4">
@@ -222,31 +242,59 @@ export function CheckoutPage() {
                 </p>
               ))}
               <p className="flex justify-between border-t border-forest/10 pt-3">
-                <span>Sous-total estime</span>
+                <span>Sous-total estimé</span>
                 <span>{subtotal.toFixed(2).replace(".", ",")} EUR</span>
               </p>
               <p className="flex justify-between">
-                <span>Livraison estimee</span>
+                <span>Livraison estimée</span>
                 <span>{estimatedDeliveryFee.toFixed(2).replace(".", ",")} EUR</span>
               </p>
               <p className="flex justify-between text-lg font-semibold text-forest">
-                <span>Total estime</span>
+                <span>Total estimé</span>
                 <span>{estimatedTotal.toFixed(2).replace(".", ",")} EUR</span>
               </p>
             </div>
             <label className="mt-6 flex items-start gap-3 text-sm text-ink/70">
               <input type="checkbox" className="mt-1" required />
-              Je confirme etre majeur et avoir pris connaissance des informations
-              de conformite.
+              Je confirme être majeur et avoir pris connaissance des informations
+              de conformité.
             </label>
             {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
             <button className="btn-primary mt-6 w-full" disabled={isSubmitting}>
-              {isSubmitting ? "Redirection..." : "Payer avec Stripe"}
+              {isSubmitting ? "Redirection..." : "Payer ma commande"}
             </button>
           </aside>
         </form>
       )}
     </main>
+  );
+}
+
+function DeliveryChoice({
+  checked,
+  title,
+  text,
+  onChange,
+}: {
+  checked: boolean;
+  title: string;
+  text: string;
+  onChange: () => void;
+}) {
+  return (
+    <label className="flex cursor-pointer gap-3 rounded-md border border-forest/10 bg-cream p-4 text-sm leading-6 text-forest has-[:checked]:border-champagne">
+      <input
+        type="radio"
+        name="deliveryMethod"
+        className="mt-1"
+        checked={checked}
+        onChange={onChange}
+      />
+      <span>
+        <strong className="block">{title}</strong>
+        <span className="text-ink/65">{text}</span>
+      </span>
+    </label>
   );
 }
 

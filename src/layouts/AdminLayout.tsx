@@ -7,6 +7,7 @@ import {
   Truck,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { Seo } from "../components/Seo";
 
 const adminNav = [
   { label: "Dashboard", to: "/admin", icon: BarChart3 },
@@ -21,6 +22,11 @@ export function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-[#f6f3ec] text-ink lg:grid lg:grid-cols-[260px_1fr]">
+      <Seo
+        title="Administration - Verdanza CBD"
+        description="Espace administration Verdanza."
+        noindex
+      />
       <aside className="border-r border-forest/10 bg-forest p-5 text-ivory">
         <img src="/verdanza-logo.png" alt="Verdanza" className="h-16 rounded bg-ivory p-2" />
         <p className="mt-6 text-xs uppercase tracking-[0.18em] text-champagne">

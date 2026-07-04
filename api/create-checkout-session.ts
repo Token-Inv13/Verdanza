@@ -35,7 +35,7 @@ export default async function handler(
     const appUrl = process.env.VITE_APP_URL || process.env.APP_URL;
 
     if (!appUrl) {
-      sendJson(response, { error: "Missing VITE_APP_URL server variable." }, 500);
+      sendJson(response, { error: "Paiement temporairement indisponible." }, 500);
       return;
     }
 
@@ -134,7 +134,7 @@ function sanitizeStripeError(error: unknown) {
     message.toLowerCase().includes("api key") ||
     message.toLowerCase().includes("stripe")
   ) {
-    return new Error("Configuration Stripe invalide. Paiement temporairement indisponible.");
+    return new Error("Paiement temporairement indisponible.");
   }
 
   return error;

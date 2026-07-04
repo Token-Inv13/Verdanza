@@ -69,16 +69,16 @@ function legalSections(title: string) {
       {
         heading: "Commande et paiement",
         items: [
-          "Les prix sont affiches au gramme et les stocks sont geres dans l'administration.",
-          "Le paiement est traite par Stripe Checkout. Verdanza ne stocke pas les donnees de carte bancaire.",
+          "Les prix sont affiches au gramme et les disponibilites sont verifiees avant validation du paiement.",
+          "Le paiement est traite par un prestataire specialise. Verdanza ne stocke pas les donnees de carte bancaire.",
           "Une commande est confirmee apres validation du paiement et verification du stock.",
         ],
       },
       {
         heading: "Livraison",
         items: [
-          "Livraison express locale autour d'Aix-en-Provence, 7j/7 de 11h a 01h, selon zones configurees.",
-          "Livraison hors zone non ouverte au lancement local, sauf confirmation directe par Verdanza.",
+          "Livraison postale disponible en France selon les informations indiquees avant validation de la commande.",
+          "Livraison locale disponible autour d'Aix-en-Provence, 7j/7 de 11h a 01h, selon zone ouverte.",
         ],
       },
       ...common,
@@ -91,8 +91,8 @@ function legalSections(title: string) {
         heading: "Donnees collectees",
         items: [
           "Les donnees de compte, commande, livraison et contact sont utilisees pour executer la commande et assurer le suivi client.",
-          "Firebase Auth et Firestore sont utilises pour l'authentification, les commandes et l'administration.",
-          "Stripe traite les donnees de paiement. Verdanza ne stocke pas les numeros de carte.",
+          "Les donnees sont traitees par des prestataires techniques necessaires au fonctionnement du site et au suivi des commandes.",
+          "Les donnees de paiement sont traitees par un prestataire specialise. Verdanza ne stocke pas les numeros de carte.",
         ],
       },
       {

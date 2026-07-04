@@ -16,7 +16,7 @@ export function AccountOverviewPage() {
         <h2 className="font-display text-3xl text-forest">Suivi client</h2>
         <p className="mt-3 text-sm leading-6 text-ink/65">
           Votre espace regroupe les commandes rattachees a votre compte lorsque
-          vous passez checkout en etant connecte.
+          vous commandez en etant connecte.
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           <Link to="/compte/commandes" className="btn-primary">

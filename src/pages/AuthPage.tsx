@@ -92,7 +92,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
           {mode === "register" ? "Creer un compte" : "Connexion"}
         </h1>
         <p className="mt-4 text-sm leading-6 text-ink/65">
-          Retrouvez vos commandes et facilitez vos prochains passages en checkout.
+          Retrouvez vos commandes et facilitez vos prochaines commandes.
         </p>
 
         {!isFirebaseConfigured && (

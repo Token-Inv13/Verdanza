@@ -17,8 +17,8 @@ const content = {
     text: "Verdanza est une marque inspiree par la Provence, construite autour d'une experience vegetale sobre, premium et transparente.",
     points: [
       "Selection CBD premium",
-      "Service local a Aix-en-Provence",
-      "Livraison express locale 7j/7 de 11h a 01h",
+      "Boutique en ligne avec livraison en France",
+      "Livraison locale selon zone disponible",
       "Design naturel et haut de gamme",
     ],
   },
@@ -28,8 +28,8 @@ const content = {
     points: [
       "Les produits sont-ils reserves aux majeurs ? Oui.",
       "Le THC est-il conforme ? Les fiches indiquent un taux inferieur a 0,3 %.",
-      "La livraison express couvre-t-elle toute la France ? Non, elle est locale autour d'Aix-en-Provence.",
-      "Le paiement Stripe est-il actif ? Oui, le paiement est traite par Stripe Checkout.",
+      "Quels modes de livraison sont proposes ? Livraison postale en France et livraison locale selon zone disponible.",
+      "Le paiement est-il securise ? Oui, le paiement est traite par un prestataire specialise. Verdanza ne stocke pas les donnees de carte bancaire.",
     ],
   },
   contact: {
@@ -129,7 +129,7 @@ function ContactForm() {
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <ContactInput
-          label="Telephone"
+          label="Téléphone"
           required={false}
           value={form.phone}
           onChange={(phone) => setForm({ ...form, phone })}
