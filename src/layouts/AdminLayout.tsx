@@ -2,12 +2,9 @@ import { NavLink, Outlet } from "react-router-dom";
 import {
   BarChart3,
   Boxes,
-  Cog,
   Package,
-  Percent,
   ShoppingCart,
   Truck,
-  Users,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -17,9 +14,6 @@ const adminNav = [
   { label: "Stocks", to: "/admin/stocks", icon: Boxes },
   { label: "Commandes", to: "/admin/commandes", icon: ShoppingCart },
   { label: "Livraisons", to: "/admin/livraisons", icon: Truck },
-  { label: "Clients", to: "/admin/clients", icon: Users },
-  { label: "Coupons", to: "/admin/coupons", icon: Percent },
-  { label: "Parametres", to: "/admin/parametres", icon: Cog },
 ];
 
 export function AdminLayout() {

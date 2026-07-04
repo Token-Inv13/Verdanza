@@ -266,20 +266,12 @@ export function AdminPage({ section }: { section: string }) {
       )}
 
       {["Clients", "Coupons", "Parametres"].includes(section) && (
-        <section className="mt-8 grid gap-4 lg:grid-cols-3">
-          {[
-            "Collection preparee",
-            "Ecriture admin uniquement",
-            "Connexion UI detaillee Phase 3",
-          ].map((item) => (
-            <article key={item} className="admin-card">
-              <h2 className="font-display text-3xl text-forest">{item}</h2>
-              <p className="mt-3 text-sm leading-6 text-ink/60">
-                Module {section.toLowerCase()} structure pour Firestore, sans
-                logique metier avancee dans cette phase.
-              </p>
-            </article>
-          ))}
+        <section className="admin-card mt-8">
+          <h2 className="font-display text-3xl text-forest">Module non affiche</h2>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-ink/65">
+            Cette section n'est pas exposee dans la navigation admin tant qu'elle
+            ne presente pas de donnees operationnelles utiles.
+          </p>
         </section>
       )}
     </div>
@@ -707,20 +699,21 @@ function buildDashboardMetrics(
 ): AdminMetric[] {
   const paidOrders = orders.filter((order) => order.paymentStatus === "paid");
   const revenue = paidOrders.reduce((sum, order) => sum + parseEuro(order.total), 0);
-  const pendingOrders = orders.filter((order) =>
-    ["pending", "paid", "preparing", "ready", "out_for_delivery"].includes(
-      order.orderStatus,
-    ),
+  const preparingOrders = orders.filter((order) =>
+    ["paid", "preparing", "ready"].includes(order.orderStatus),
   );
-  const localOrders = orders.filter((order) =>
-    order.delivery.toLowerCase().includes("aix") ||
-    order.delivery.toLowerCase().includes("local") ||
-    order.delivery.toLowerCase().includes("livraison"),
+  const deliveryOrders = orders.filter((order) =>
+    order.orderStatus === "out_for_delivery",
   );
   const lowStockProducts = products.filter(
     (product) => product.stock <= product.lowStockThreshold,
   );
   const averageCart = paidOrders.length ? revenue / paidOrders.length : 0;
+  const activeProducts = products.filter((product) => product.isActive);
+  const totalStock = activeProducts.reduce(
+    (sum, product) => sum + Number(product.stock || 0),
+    0,
+  );
 
   return [
     {
@@ -729,34 +722,39 @@ function buildDashboardMetrics(
       detail: `${paidOrders.length} commande(s) payee(s)`,
     },
     {
-      label: "Commandes",
-      value: String(orders.length),
-      detail: "Firestore",
+      label: "Commandes payees",
+      value: String(paidOrders.length),
+      detail: "Paiements confirmes",
     },
     {
-      label: "En cours",
-      value: String(pendingOrders.length),
-      detail: "A traiter ou livrer",
+      label: "A preparer",
+      value: String(preparingOrders.length),
+      detail: "Payees, en preparation ou pretes",
     },
     {
-      label: "Livraisons locales",
-      value: String(localOrders.length),
-      detail: "Aix et alentours",
+      label: "En livraison",
+      value: String(deliveryOrders.length),
+      detail: "Statut out_for_delivery",
     },
     {
       label: "Produits actifs",
-      value: String(products.filter((product) => product.isActive).length),
-      detail: `${products.length} produit(s) total`,
+      value: String(activeProducts.length),
+      detail: "Catalogue public",
     },
     {
-      label: "Stocks bas",
-      value: String(lowStockProducts.length),
-      detail: "Selon seuil produit",
+      label: "Stock total",
+      value: `${totalStock} g`,
+      detail: "Produits actifs",
     },
     {
       label: "Panier moyen",
       value: `${formatEuro(averageCart)} EUR`,
       detail: "Commandes payees",
+    },
+    {
+      label: "Stocks bas",
+      value: String(lowStockProducts.length),
+      detail: "Selon seuil produit",
     },
     {
       label: "Ruptures",
