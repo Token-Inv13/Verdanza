@@ -7,7 +7,6 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { collections } from "./collections";
-import { mockOrders } from "../data/adminMock";
 import type {
   Order,
   OrderItem,
@@ -21,7 +20,7 @@ export type AdminOrderRow = {
   customer: string;
   customerEmail?: string;
   customerPhone?: string;
-  paymentStatus: PaymentStatus | "mock";
+  paymentStatus: PaymentStatus;
   orderStatus: OrderStatus | string;
   delivery: string;
   items: OrderItem[];
@@ -44,8 +43,7 @@ export type CustomerOrderRow = {
 };
 
 export async function getAdminOrdersWithFallback() {
-  const fallbackOrders = mockOrders as AdminOrderRow[];
-  if (!db) return { orders: fallbackOrders, source: "mock" as const };
+  if (!db) return { orders: [], source: "empty" as const };
   try {
     const snapshot = await getDocs(
       query(collection(db, collections.orders), orderBy("createdAt", "desc")),
@@ -69,12 +67,12 @@ export async function getAdminOrdersWithFallback() {
       };
     });
     return {
-      orders: orders.length ? orders : fallbackOrders,
-      source: orders.length ? ("firestore" as const) : ("mock" as const),
+      orders,
+      source: orders.length ? ("firestore" as const) : ("empty" as const),
     };
   } catch (error) {
-    console.warn("Falling back to mock orders", error);
-    return { orders: fallbackOrders, source: "mock" as const };
+    console.warn("Unable to load Firestore orders", error);
+    return { orders: [], source: "empty" as const };
   }
 }
 

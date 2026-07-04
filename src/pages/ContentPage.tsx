@@ -3,11 +3,11 @@ import { Seo } from "../components/Seo";
 const content = {
   quality: {
     title: "Qualite & conformite",
-    text: "Verdanza privilegie une selection courte, tracable et conforme. Les analyses de lot, certificats et informations fournisseurs doivent etre verifies avant ouverture commerciale.",
+    text: "Verdanza privilegie une selection courte, tracable et conforme, reservee aux adultes.",
     points: [
-      "THC inferieur a 0,3 %",
+      "THC conforme selon analyse fournisseur",
       "Produits reserves aux personnes majeures",
-      "Lots controles et informations a confirmer avant mise en vente",
+      "Produits naturels selectionnes avec exigence",
       "Aucune promesse medicale",
     ],
   },
@@ -17,7 +17,7 @@ const content = {
     points: [
       "Selection CBD premium",
       "Service local a Aix-en-Provence",
-      "Livraison postale discrete",
+      "Livraison express locale 7j/7 de 11h a 01h",
       "Design naturel et haut de gamme",
     ],
   },
@@ -27,18 +27,18 @@ const content = {
     points: [
       "Les produits sont-ils reserves aux majeurs ? Oui.",
       "Le THC est-il conforme ? Les fiches indiquent un taux inferieur a 0,3 %.",
-      "La livraison express couvre-t-elle toute la France ? Non, elle est locale autour d'Aix.",
+      "La livraison express couvre-t-elle toute la France ? Non, elle est locale autour d'Aix-en-Provence.",
       "Le paiement Stripe est-il actif ? Oui, le paiement est traite par Stripe Checkout.",
     ],
   },
   contact: {
     title: "Contact",
-    text: "Les coordonnees definitives restent a valider. Cette page prepare le futur point de contact client.",
+    text: "Contactez Verdanza pour toute question produit, commande ou livraison locale.",
     points: [
-      "Email support : A completer avant lancement",
+      "Email support : a configurer sur le domaine verdanza.fr",
       "Telephone ou WhatsApp : A completer avant lancement",
       "Adresse legale : A completer avant lancement",
-      "Horaires livraison locale : A parametrer avant lancement",
+      "Horaires livraison locale : 7j/7 de 11h a 01h",
     ],
   },
 } as const;

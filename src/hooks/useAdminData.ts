@@ -8,7 +8,7 @@ export function useAdminData() {
   const [products, setProducts] = useState<Product[]>([]);
   const [productSource, setProductSource] = useState<"firestore" | "local">("local");
   const [orders, setOrders] = useState<AdminOrderRow[]>([]);
-  const [orderSource, setOrderSource] = useState<"firestore" | "mock">("mock");
+  const [orderSource, setOrderSource] = useState<"firestore" | "empty">("empty");
   const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
   const [deliverySource, setDeliverySource] = useState<"firestore" | "local">("local");
   const [isLoading, setIsLoading] = useState(true);

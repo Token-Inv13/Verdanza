@@ -1,6 +1,6 @@
 # Verdanza CBD
 
-Base e-commerce Verdanza : boutique CBD premium, livraison postale, livraison express locale a Aix-en-Provence, panier local, cockpit admin connectable Firestore, et preparation Firebase/Stripe.
+Base e-commerce Verdanza : boutique CBD premium au gramme, livraison express locale a Aix-en-Provence et alentours, panier local, cockpit admin Firestore, Firebase Auth, Stripe Checkout et emails transactionnels.
 
 ## Stack
 
@@ -31,6 +31,7 @@ npm run lint
 npm run typecheck:api
 npm run build
 npm run seed:products -- --yes
+npm run seed:delivery-zones -- --yes
 npm run seed:admin -- --yes
 npm run seed:admin-auth -- --yes
 ```
@@ -84,7 +85,7 @@ Copier le webhook secret affiche dans `STRIPE_WEBHOOK_SECRET`.
 
 Pour tester un paiement :
 
-1. Seeder les produits Firestore depuis l'admin.
+1. Seeder les produits Firestore depuis le script local ou l'admin.
 2. Ajouter un produit au panier.
 3. Completer `/checkout`.
 4. Payer avec une carte test Stripe, par exemple `4242 4242 4242 4242`.
@@ -105,11 +106,11 @@ La couche Firestore est dans `src/services/`.
 
 - `productsService` lit les produits actifs cote public, lit tous les produits cote admin, et retombe sur `src/data/products.ts` si Firestore est vide ou indisponible.
 - `deliveryZonesService` lit les zones Firestore avec fallback local.
-- `ordersService` prepare la collection `orders` et garde les commandes mockees si aucune commande Firestore n'existe.
+- `ordersService` lit la collection `orders` et retourne une liste vide si aucune commande Firestore n'existe.
 - `stockMovementsService` prepare les mouvements de stock.
 - `adminUsersService` verifie les droits admin via la collection `adminUsers`.
 
-Le seed initial est manuel et non destructif : bouton `Seed manuel Phase 1` dans l'admin. Il utilise `setDoc(..., { merge: true })` et ne supprime aucune donnee Firestore.
+Le seed initial est manuel et non destructif : bouton `Seed catalogue` dans l'admin. Il utilise `setDoc(..., { merge: true })`, ne supprime aucune donnee Firestore et desactive les anciens produits absents du catalogue local.
 
 ### Bootstrap admin
 
@@ -230,6 +231,14 @@ Le script :
 - verifie que chaque produit seed est actif, a un slug et un stock numerique ;
 - affiche seulement un resume sans secret.
 
+Seeder les zones de livraison :
+
+```bash
+npm run seed:delivery-zones -- --yes
+```
+
+Le script met a jour `deliveryZones` avec la livraison locale active, gratuite, 7j/7 de 11h a 01h, minimum 30 EUR, et garde la livraison hors zone inactive pour l'ouverture locale.
+
 Creer le premier admin :
 
 ```bash
@@ -250,11 +259,12 @@ Precautions :
 - ne jamais commiter un service account Firebase ;
 - ne jamais afficher les cles Firebase Admin ou Stripe ;
 - verifier le `projectId` affiche par le script avant de valider le resultat ;
-- ne pas relancer le seed produits pour corriger un stock commercial sans verifier les valeurs existantes.
+- ne pas relancer le seed produits pour corriger un stock commercial sans verifier les valeurs existantes ;
+- le seed desactive les anciens produits absents de `src/data/products.ts`, sans les supprimer.
 
 Verification apres seed :
 
-1. `npm run seed:products -- --yes` doit afficher 9 produits verifies.
+1. `npm run seed:products -- --yes` doit afficher 5 produits verifies.
 2. `POST /api/create-checkout-session` ne doit plus retourner `Produit introuvable ou catalogue Firestore non initialise.`
 3. La boutique production doit afficher les produits depuis Firestore ou fallback local, avec IDs compatibles panier/API.
 4. L'admin connecte doit acceder aux produits et commandes si son document `adminUsers/{email}` ou `adminUsers/{uid}` est actif.
@@ -272,7 +282,7 @@ Procedure :
 1. Ouvrir la production et valider l'age gate.
 2. Ajouter un produit actif au panier.
 3. Ouvrir `/checkout`.
-4. Saisir un client test et choisir la livraison postale.
+4. Saisir un client test et choisir une zone de livraison locale.
 5. Verifier la redirection Stripe Checkout.
 6. Payer avec la carte test Stripe `4242 4242 4242 4242`, une date future et un CVC quelconque.
 7. Verifier le retour `/checkout/success`.

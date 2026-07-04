@@ -10,12 +10,12 @@ import type {
 const fallbackDeliveryZones: DeliveryZone[] = [
   {
     id: "postal-france",
-    name: "Livraison postale",
+    name: "Livraison hors zone",
     method: "postal",
-    isActive: true,
-    fee: 5.9,
+    isActive: false,
+    fee: 0,
     minimumOrder: 0,
-    estimatedDelay: "48 h a 72 h apres preparation",
+    estimatedDelay: "Option non ouverte au lancement local",
     slots: ["Expedition suivie"],
   },
   ...[
@@ -34,10 +34,10 @@ const fallbackDeliveryZones: DeliveryZone[] = [
     name,
     method: "local_express",
     isActive: true,
-    fee: index < 4 ? 4.9 : 6.9,
-    minimumOrder: 35,
-    estimatedDelay: index < 4 ? "60 a 120 min" : "Selon creneau disponible",
-    slots: ["12:00-14:00", "18:00-21:00"],
+    fee: 0,
+    minimumOrder: 30,
+    estimatedDelay: "Livraison express 7j/7 de 11h00 a 01h00",
+    slots: ["11:00-14:00", "14:00-18:00", "18:00-22:00", "22:00-01:00"],
   })),
 ];
 
@@ -147,7 +147,7 @@ export async function priceCheckout(
   const subtotal = roundMoney(
     orderItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
   );
-  const { fee, zoneName } = await resolveDeliveryFee(db, body);
+  const { fee, zoneName } = await resolveDeliveryFee(db, body, subtotal);
   const total = roundMoney(subtotal + fee);
 
   return {
@@ -162,13 +162,10 @@ export async function priceCheckout(
 async function resolveDeliveryFee(
   db: FirebaseFirestore.Firestore,
   body: CheckoutRequestBody,
+  subtotal: number,
 ) {
   if (body.deliveryMethod === "postal") {
-    const postal = await getDeliveryZone(db, "postal-france");
-    return {
-      fee: postal?.fee ?? 5.9,
-      zoneName: postal?.name ?? "Livraison postale",
-    };
+    throw new Error("Livraison hors zone indisponible pour l'ouverture.");
   }
 
   if (!body.deliveryZone) {
@@ -185,6 +182,12 @@ async function resolveDeliveryFee(
     throw new Error("Zone de livraison locale indisponible.");
   }
 
+  const minimumOrder = selectedZone.minimumOrder ?? 30;
+  if (subtotal < minimumOrder) {
+    throw new Error(
+      `Livraison locale disponible a partir de ${minimumOrder.toFixed(0)} EUR d'achat.`,
+    );
+  }
   return { fee: selectedZone.fee, zoneName: selectedZone.name };
 }
 

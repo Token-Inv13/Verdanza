@@ -17,13 +17,13 @@ export function CategoryPage({
     <main className="container-page py-12">
       <Seo
         title={`${title} - Verdanza CBD`}
-        description={`${title} selection premium Verdanza, produits conformes et livraison Aix ou postale.`}
+        description={`${title} Verdanza, produits CBD premium au gramme avec livraison express Aix-en-Provence et alentours.`}
       />
       <div className="page-intro">
         <h1>{title}</h1>
         <p>
-          Une selection courte et lisible pour la pre-ouverture Verdanza, avec
-          fiches a confirmer a partir des analyses de lots.
+          Une selection courte, réelle et lisible, centrée sur les produits
+          actuellement disponibles chez Verdanza.
         </p>
       </div>
       {isLoading ? (

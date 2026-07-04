@@ -54,6 +54,7 @@ async function main() {
   let created = 0;
   let updated = 0;
   let preservedStock = 0;
+  let deactivatedMissing = 0;
 
   for (const product of products) {
     const productRef = db.collection("products").doc(product.id);
@@ -69,6 +70,25 @@ async function main() {
     if (snapshot.exists) updated += 1;
     else created += 1;
   }
+
+  const allProductsSnapshot = await db.collection("products").get();
+  const batch = db.batch();
+  for (const entry of allProductsSnapshot.docs) {
+    if (uniqueIds.has(entry.id)) continue;
+    const data = entry.data() as Partial<ProductDocument>;
+    if (data.isActive === false && data.isFeatured === false) continue;
+    batch.set(
+      entry.ref,
+      {
+        isActive: false,
+        isFeatured: false,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    deactivatedMissing += 1;
+  }
+  if (deactivatedMissing) await batch.commit();
 
   const verification = await Promise.all(
     products.map(async (product) => {
@@ -103,6 +123,7 @@ async function main() {
         created,
         updated,
         preservedStock,
+        deactivatedMissing,
         verifiedActiveProducts: verification.length,
         productIds: verification.map((entry) => entry.id),
       },

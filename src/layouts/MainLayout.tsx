@@ -86,13 +86,13 @@ export function MainLayout() {
             <img src="/verdanza-logo.png" alt="Verdanza" className="h-16 w-auto" />
             <p className="mt-4 max-w-md text-sm leading-6 text-ink/70">
               Verdanza selectionne des produits CBD premium, conformes et
-              controles, avec livraison postale ou express locale a
-              Aix-en-Provence.
+              controles, avec livraison express locale a Aix-en-Provence et
+              alentours.
             </p>
           </div>
           <div className="grid gap-2 text-sm text-forest/80">
             <strong className="text-forest">Informations</strong>
-            <NavLink to="/livraison-postale">Livraison postale</NavLink>
+            <NavLink to="/livraison-express-aix">Livraison express Aix</NavLink>
             <NavLink to="/faq">FAQ</NavLink>
             <NavLink to="/contact">Contact</NavLink>
             <NavLink to="/admin">Admin cockpit</NavLink>

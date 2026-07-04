@@ -47,7 +47,7 @@ export function ProductCard({ product }: { product: Product }) {
         </dl>
         <div className="flex items-center justify-between gap-3">
           <span className="font-display text-2xl text-forest">
-            {product.price.toFixed(2).replace(".", ",")} EUR
+            {product.price.toFixed(2).replace(".", ",")} EUR/g
           </span>
           <button
             className="icon-button"

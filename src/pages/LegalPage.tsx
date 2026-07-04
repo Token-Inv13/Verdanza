@@ -8,9 +8,8 @@ export function LegalPage({ title }: { title: string }) {
       <div className="page-intro">
         <h1>{title}</h1>
         <p>
-          Informations de conformite preparees pour la pre-ouverture. Les donnees
-          editeur marquees "A completer avant lancement" doivent etre finalisees
-          avant l'ouverture publique.
+          Informations de conformite Verdanza. Les donnees editeur obligatoires
+          doivent etre finalisees avant communication publique complete.
         </p>
       </div>
       <div className="mt-10 grid gap-4">
@@ -71,7 +70,7 @@ function legalSections(title: string) {
       {
         heading: "Commande et paiement",
         items: [
-          "Les prix et stocks definitifs doivent etre valides dans l'admin avant ouverture.",
+          "Les prix sont affiches au gramme et les stocks sont geres dans l'administration.",
           "Le paiement est traite par Stripe Checkout. Verdanza ne stocke pas les donnees de carte bancaire.",
           "Une commande est confirmee apres validation du paiement et verification du stock.",
         ],
@@ -79,8 +78,8 @@ function legalSections(title: string) {
       {
         heading: "Livraison",
         items: [
-          "Livraison postale suivie selon les zones activees.",
-          "Livraison express locale autour d'Aix-en-Provence selon disponibilite et zones configurees.",
+          "Livraison express locale autour d'Aix-en-Provence, 7j/7 de 11h a 01h, selon zones configurees.",
+          "Livraison hors zone non ouverte au lancement local, sauf confirmation directe par Verdanza.",
         ],
       },
       ...common,

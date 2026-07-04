@@ -3,12 +3,12 @@ import type { DeliveryZone } from "../types";
 export const deliveryZones: DeliveryZone[] = [
   {
     id: "postal-france",
-    name: "Livraison postale",
+    name: "Livraison hors zone",
     method: "postal",
-    isActive: true,
-    fee: 5.9,
+    isActive: false,
+    fee: 0,
     minimumOrder: 0,
-    estimatedDelay: "48 h a 72 h apres preparation",
+    estimatedDelay: "Option non ouverte au lancement local",
     slots: ["Expedition suivie"],
   },
   ...[
@@ -27,10 +27,10 @@ export const deliveryZones: DeliveryZone[] = [
     name,
     method: "local_express",
     isActive: true,
-    fee: index < 4 ? 4.9 : 6.9,
-    minimumOrder: 35,
-    estimatedDelay: index < 4 ? "60 a 120 min" : "Selon creneau disponible",
-    slots: ["12:00-14:00", "18:00-21:00"],
+    fee: 0,
+    minimumOrder: 30,
+    estimatedDelay: "Livraison express 7j/7 de 11h00 a 01h00",
+    slots: ["11:00-14:00", "14:00-18:00", "18:00-22:00", "22:00-01:00"],
   })),
 ];
 

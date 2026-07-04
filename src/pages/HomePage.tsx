@@ -12,7 +12,7 @@ export function HomePage() {
     <>
       <Seo
         title="Verdanza CBD - CBD premium livre a Aix-en-Provence"
-        description="Verdanza selectionne des produits CBD premium avec livraison express locale a Aix-en-Provence et livraison postale."
+        description="Verdanza selectionne des fleurs et resines CBD premium au gramme avec livraison express locale a Aix-en-Provence et alentours."
       />
       <main>
         <section className="hero-section">
@@ -23,8 +23,8 @@ export function HomePage() {
               </h1>
               <p className="mt-6 max-w-2xl text-lg leading-8 text-ink/70">
                 Verdanza selectionne des produits CBD de qualite, conformes et
-                controles, disponibles en livraison express locale ou en
-                livraison postale discrete.
+                controles, disponibles en livraison express locale a
+                Aix-en-Provence et alentours.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Link to="/boutique" className="btn-primary">
@@ -53,17 +53,17 @@ export function HomePage() {
             {
               icon: ShieldCheck,
               title: "Conformite",
-              text: "Taux de THC inferieur a 0,3 % et lots a verifier avant publication.",
+              text: "Produits reserves aux adultes, THC conforme selon analyse fournisseur.",
             },
             {
               icon: Truck,
-              title: "Livraison postale",
-              text: "Expedition suivie pour les commandes hors zone locale.",
+              title: "Livraison 7j/7",
+              text: "Express locale de 11h a 01h, a partir de 30 EUR d'achat.",
             },
             {
               icon: MapPin,
               title: "Express Aix",
-              text: "Zones locales preparees pour Aix-en-Provence et alentours.",
+              text: "Aix-en-Provence et communes proches selon zone selectionnee.",
             },
           ].map((item) => (
             <article key={item.title} className="feature-panel">

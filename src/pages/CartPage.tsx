@@ -5,8 +5,10 @@ import { useCart } from "../context/CartContext";
 
 export function CartPage() {
   const { lines, subtotal, addItem, decrementItem, removeItem } = useCart();
-  const deliveryEstimate = subtotal >= 35 ? 0 : 5.9;
+  const deliveryEstimate = 0;
   const total = subtotal + (lines.length ? deliveryEstimate : 0);
+  const localDeliveryMinimum = 30;
+  const isBelowLocalMinimum = lines.length > 0 && subtotal < localDeliveryMinimum;
 
   return (
     <main className="container-page py-12">
@@ -14,6 +16,10 @@ export function CartPage() {
       <div className="page-intro">
         <h1>Panier</h1>
         <p>Panier conserve dans ce navigateur. Le paiement est securise par Stripe Checkout.</p>
+        <p className="mt-3 text-sm text-forest/70">
+          Livraison express Aix-en-Provence et alentours, 7j/7 de 11h a 01h,
+          a partir de 30 EUR d'achat.
+        </p>
       </div>
       {lines.length === 0 ? (
         <section className="mt-10 rounded-lg border border-forest/10 bg-cream p-8">
@@ -44,7 +50,7 @@ export function CartPage() {
                     <button className="icon-button" onClick={() => decrementItem(line.productId)}>
                       <Minus size={16} />
                     </button>
-                    <span className="w-8 text-center">{line.quantity}</span>
+                    <span className="w-12 text-center">{line.quantity} g</span>
                     <button className="icon-button" onClick={() => addItem(line.productId)}>
                       <Plus size={16} />
                     </button>
@@ -67,7 +73,7 @@ export function CartPage() {
                 <span>{subtotal.toFixed(2).replace(".", ",")} EUR</span>
               </p>
               <p className="flex justify-between">
-                <span>Livraison estimee</span>
+                <span>Livraison express locale</span>
                 <span>{deliveryEstimate.toFixed(2).replace(".", ",")} EUR</span>
               </p>
               <p className="flex justify-between border-t border-forest/10 pt-3 text-lg font-semibold text-forest">
@@ -75,9 +81,22 @@ export function CartPage() {
                 <span>{total.toFixed(2).replace(".", ",")} EUR</span>
               </p>
             </div>
-            <Link to="/checkout" className="btn-primary mt-6 w-full justify-center">
-              Continuer
-            </Link>
+            {isBelowLocalMinimum && (
+              <p className="mt-4 rounded-md border border-champagne/40 bg-ivory p-3 text-sm leading-6 text-forest">
+                Minimum livraison locale : {localDeliveryMinimum} EUR. Ajoutez{" "}
+                {(localDeliveryMinimum - subtotal).toFixed(2).replace(".", ",")} EUR
+                pour continuer.
+              </p>
+            )}
+            {isBelowLocalMinimum ? (
+              <button className="btn-primary mt-6 w-full justify-center opacity-60" disabled>
+                Minimum 30 EUR requis
+              </button>
+            ) : (
+              <Link to="/checkout" className="btn-primary mt-6 w-full justify-center">
+                Continuer
+              </Link>
+            )}
           </aside>
         </div>
       )}

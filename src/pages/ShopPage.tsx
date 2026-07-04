@@ -9,17 +9,16 @@ export function ShopPage() {
     <main className="container-page py-12">
       <Seo
         title="Boutique Verdanza CBD"
-        description="Catalogue initial Verdanza CBD : fleurs et resines premium, THC inferieur a 0,3 %."
+        description="Catalogue Verdanza CBD : fleurs et resines premium disponibles au gramme, livraison express Aix-en-Provence et alentours."
       />
       <div className="page-intro">
         <h1>Boutique CBD premium</h1>
         <p>
-          Catalogue de pre-ouverture construit autour d'une selection courte.
-          Les prix, stocks et donnees de lot doivent etre valides dans l'admin
-          avant l'ouverture publique.
+          Selection réelle Verdanza : fleurs et résines CBD premium disponibles
+          au gramme, avec livraison express locale à Aix-en-Provence et alentours.
         </p>
         <p className="mt-3 text-sm text-forest/65">
-          Source catalogue : {source === "firestore" ? "Firestore" : "fallback local"}.
+          Catalogue : {source === "firestore" ? "stock en ligne" : "selection locale"}.
         </p>
       </div>
       {isLoading ? (

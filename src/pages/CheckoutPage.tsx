@@ -10,7 +10,7 @@ import { trackEvent } from "../lib/analytics";
 export function CheckoutPage() {
   const { itemCount, subtotal, items, lines } = useCart();
   const { user, customerProfile } = useAuth();
-  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("postal");
+  const [deliveryMethod] = useState<DeliveryMethod>("local_express");
   const [deliveryZone, setDeliveryZone] = useState(localDeliveryZones[0]?.id ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -25,10 +25,13 @@ export function CheckoutPage() {
     city: "",
     country: "France",
   });
-  const estimatedDeliveryFee = useMemo(() => {
-    if (deliveryMethod === "postal") return subtotal >= 60 ? 0 : 5.9;
-    return localDeliveryZones.find((zone) => zone.id === deliveryZone)?.fee ?? 4.9;
-  }, [deliveryMethod, deliveryZone, subtotal]);
+  const selectedZone = useMemo(
+    () => localDeliveryZones.find((zone) => zone.id === deliveryZone),
+    [deliveryZone],
+  );
+  const localDeliveryMinimum = selectedZone?.minimumOrder ?? 30;
+  const isBelowLocalMinimum = itemCount > 0 && subtotal < localDeliveryMinimum;
+  const estimatedDeliveryFee = selectedZone?.fee ?? 0;
   const estimatedTotal = subtotal + estimatedDeliveryFee;
 
   useEffect(() => {
@@ -56,6 +59,11 @@ export function CheckoutPage() {
     setIsSubmitting(true);
 
     try {
+      if (isBelowLocalMinimum) {
+        throw new Error(
+          `Livraison locale disponible a partir de ${localDeliveryMinimum} EUR d'achat.`,
+        );
+      }
       const authToken = user ? await user.getIdToken() : undefined;
       trackEvent("begin_checkout", {
         itemCount,
@@ -114,6 +122,10 @@ export function CheckoutPage() {
           Le serveur relit les produits Firestore, verifie le stock et recalcule
           le total avant de creer la session Stripe.
         </p>
+        <p className="mt-3 text-sm text-forest/70">
+          Livraison express Aix-en-Provence et alentours, 7j/7 de 11h a 01h,
+          a partir de 30 EUR d'achat.
+        </p>
       </div>
       {!user && itemCount > 0 && (
         <section className="mt-8 rounded-lg border border-champagne/30 bg-cream p-5">
@@ -161,50 +173,34 @@ export function CheckoutPage() {
 
             <div className="rounded-lg border border-forest/10 bg-ivory p-6">
               <h2 className="font-display text-3xl text-forest">Livraison</h2>
-              <div className="mt-5 grid gap-3 md:grid-cols-2">
-                <label className="feature-panel cursor-pointer">
-                  <input
-                    type="radio"
-                    name="delivery"
-                    value="postal"
-                    checked={deliveryMethod === "postal"}
-                    onChange={() => setDeliveryMethod("postal")}
-                  />
-                  <h3 className="mt-2 font-display text-2xl text-forest">
-                    Livraison postale
-                  </h3>
-                  <p>Expedition suivie et discrete.</p>
-                </label>
-                <label className="feature-panel cursor-pointer">
-                  <input
-                    type="radio"
-                    name="delivery"
-                    value="local_express"
-                    checked={deliveryMethod === "local_express"}
-                    onChange={() => setDeliveryMethod("local_express")}
-                  />
-                  <h3 className="mt-2 font-display text-2xl text-forest">
-                    Express Aix
-                  </h3>
-                  <p>Zone locale selon disponibilite.</p>
-                </label>
+              <div className="mt-5 rounded-md border border-champagne/30 bg-cream p-4 text-sm leading-6 text-forest">
+                Livraison locale uniquement pour l'ouverture : Aix-en-Provence
+                et alentours, minimum 30 EUR, 7j/7 de 11h a 01h.
               </div>
-              {deliveryMethod === "local_express" && (
-                <label className="mt-5 block text-sm font-medium text-forest">
-                  Zone locale
-                  <select
-                    className="input-field mt-2"
-                    value={deliveryZone}
-                    onChange={(event) => setDeliveryZone(event.target.value)}
-                  >
-                    {localDeliveryZones.map((zone) => (
-                      <option key={zone.id} value={zone.id}>
-                        {zone.name} - {zone.fee.toFixed(2).replace(".", ",")} EUR
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              <label className="mt-5 block text-sm font-medium text-forest">
+                Zone locale
+                <select
+                  className="input-field mt-2"
+                  value={deliveryZone}
+                  onChange={(event) => setDeliveryZone(event.target.value)}
+                >
+                  {localDeliveryZones.map((zone) => (
+                    <option key={zone.id} value={zone.id}>
+                      {zone.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {isBelowLocalMinimum && (
+                <p className="mt-4 rounded-md border border-champagne/40 bg-cream p-3 text-sm leading-6 text-forest">
+                  Minimum livraison locale : {localDeliveryMinimum} EUR. Il manque{" "}
+                  {(localDeliveryMinimum - subtotal).toFixed(2).replace(".", ",")} EUR.
+                </p>
               )}
+              <p className="mt-3 text-sm text-ink/60">
+                Hors zone : contactez Verdanza avant commande pour confirmer la
+                disponibilite de livraison.
+              </p>
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <CheckoutInput label="Adresse" value={customer.line1} onChange={(line1) => setCustomer({ ...customer, line1 })} />
                 <CheckoutInput label="Complement" required={false} value={customer.line2} onChange={(line2) => setCustomer({ ...customer, line2 })} />
@@ -220,7 +216,7 @@ export function CheckoutPage() {
               {lines.map((line) => (
                 <p key={line.productId} className="flex justify-between gap-4">
                   <span>
-                    {line.product.name} x {line.quantity}
+                    {line.product.name} x {line.quantity} g
                   </span>
                   <span>{line.lineTotal.toFixed(2).replace(".", ",")} EUR</span>
                 </p>

@@ -1,5 +1,4 @@
 import { FormEvent, useMemo, useState } from "react";
-import { adminMetrics } from "../../data/adminMock";
 import { useAdminData } from "../../hooks/useAdminData";
 import { runManualInitialSeed } from "../../services/seedService";
 import {
@@ -12,7 +11,13 @@ import {
   refundOrderAdmin,
   updateOrderAdminFields,
 } from "../../services/ordersService";
-import type { OrderStatus, Product, ProductCategory, StatusHistoryEntry } from "../../types";
+import type {
+  AdminMetric,
+  OrderStatus,
+  Product,
+  ProductCategory,
+  StatusHistoryEntry,
+} from "../../types";
 import { orderStatusLabel, paymentStatusLabel } from "../../utils/orderStatus";
 
 const emptyProduct: ProductInput = {
@@ -56,16 +61,20 @@ export function AdminPage({ section }: { section: string }) {
     () => products.filter((product) => product.stock <= product.lowStockThreshold),
     [products],
   );
+  const dashboardMetrics = useMemo(
+    () => buildDashboardMetrics(products, orders),
+    [orders, products],
+  );
 
   async function handleSeed() {
     setMessage("");
     const confirmed = window.confirm(
-      "Seeder les produits et zones Phase 1 dans Firestore ? Operation non destructive avec merge.",
+      "Seeder le catalogue Verdanza et les zones de livraison dans Firestore ? Operation non destructive avec merge. Les anciens produits absents du catalogue seront desactives.",
     );
     if (!confirmed) return;
     const result = await runManualInitialSeed();
     setMessage(
-      `Seed termine : ${result.products} produits, ${result.deliveryZones} zones.`,
+      `Seed termine : ${result.products.upserted} produits, ${result.products.deactivated} anciens produits desactives, ${result.deliveryZones} zones.`,
     );
     await refresh();
   }
@@ -107,8 +116,8 @@ export function AdminPage({ section }: { section: string }) {
   }
 
   async function handleRefund(orderId: string, restock: boolean) {
-    if (orderSource === "mock") {
-      setMessage("Les commandes mockees ne sont pas remboursables.");
+    if (orderSource !== "firestore") {
+      setMessage("Aucune commande Firestore remboursable.");
       return;
     }
     const result = await refundOrderAdmin(orderId, {
@@ -133,7 +142,7 @@ export function AdminPage({ section }: { section: string }) {
             Rafraichir
           </button>
           <button className="btn-primary" onClick={() => void handleSeed()}>
-            Seed manuel Phase 1
+            Seed catalogue
           </button>
         </div>
       </div>
@@ -149,7 +158,7 @@ export function AdminPage({ section }: { section: string }) {
       {section === "Dashboard" && (
         <>
           <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {adminMetrics.map((metric) => (
+            {dashboardMetrics.map((metric) => (
               <article key={metric.label} className="admin-card">
                 <p className="text-sm text-ink/55">{metric.label}</p>
                 <strong className="mt-2 block font-display text-4xl text-forest">
@@ -172,8 +181,8 @@ export function AdminPage({ section }: { section: string }) {
             orders={orders}
             orderSource={orderSource}
             onUpdate={async (orderId, data) => {
-              if (orderSource === "mock") {
-                setMessage("Les commandes mockees ne sont pas modifiables.");
+              if (orderSource !== "firestore") {
+                setMessage("Aucune commande Firestore modifiable.");
                 return;
               }
               await updateOrderAdminFields(orderId, data);
@@ -211,7 +220,7 @@ export function AdminPage({ section }: { section: string }) {
               <article key={product.id} className="admin-card border-champagne/40">
                 <h2 className="font-display text-3xl text-forest">{product.name}</h2>
                 <p className="mt-2 text-sm text-ink/60">
-                  Stock {product.stock}, seuil {product.lowStockThreshold}.
+                  Stock {product.stock} g, seuil {product.lowStockThreshold} g.
                 </p>
               </article>
             ))}
@@ -226,8 +235,8 @@ export function AdminPage({ section }: { section: string }) {
             orders={orders}
             orderSource={orderSource}
             onUpdate={async (orderId, data) => {
-              if (orderSource === "mock") {
-                setMessage("Les commandes mockees ne sont pas modifiables.");
+              if (orderSource !== "firestore") {
+                setMessage("Aucune commande Firestore modifiable.");
                 return;
               }
               await updateOrderAdminFields(orderId, data);
@@ -318,7 +327,7 @@ function ProductForm({
         </label>
         <div className="grid grid-cols-2 gap-3">
           <NumberInput
-            label="Prix"
+            label="Prix / g"
             value={product.price}
             onChange={(price) => onChange({ ...product, price })}
           />
@@ -419,8 +428,8 @@ function ProductTable({
               <tr key={product.id} className="border-t border-forest/10">
                 <td className="px-4 py-4 text-forest">{product.name}</td>
                 <td className="px-4 py-4">{product.category}</td>
-                <td className="px-4 py-4">{product.price.toFixed(2)} EUR</td>
-                <td className="px-4 py-4">{product.stock}</td>
+                <td className="px-4 py-4">{product.price.toFixed(2)} EUR/g</td>
+                <td className="px-4 py-4">{product.stock} g</td>
                 <td className="px-4 py-4">
                   <button className="tag" onClick={() => void onFlagChange(product, "isActive")}>
                     {product.isActive ? "Actif" : "Inactif"}
@@ -520,7 +529,7 @@ function AdminOrders({
     refundId?: string;
     stripePaymentIntentId?: string;
   }[];
-  orderSource: "firestore" | "mock";
+  orderSource: "firestore" | "empty";
   onUpdate: (
     orderId: string,
     data: { orderStatus?: OrderStatus; internalNote?: string; historyNote?: string },
@@ -532,6 +541,11 @@ function AdminOrders({
 }) {
   return (
     <section className="mt-8 overflow-hidden rounded-lg border border-forest/10 bg-ivory">
+      {!orders.length && (
+        <p className="border-b border-forest/10 bg-cream px-4 py-4 text-sm text-forest">
+          Aucune commande Firestore pour le moment.
+        </p>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1120px] text-left text-sm">
           <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
@@ -566,7 +580,7 @@ function AdminOrders({
                   <select
                     className="input-field"
                     value={order.orderStatus}
-                    disabled={orderSource === "mock"}
+                    disabled={orderSource !== "firestore"}
                     onChange={(event) => {
                       const historyNote =
                         window.prompt("Note historique optionnelle", "") || "";
@@ -596,7 +610,7 @@ function AdminOrders({
                 <td className="px-4 py-4">{order.delivery}</td>
                 <td className="px-4 py-4">
                   {order.items.length
-                    ? order.items.map((item) => `${item.name} x${item.quantity}`).join(", ")
+                    ? order.items.map((item) => `${item.name} x${item.quantity} g`).join(", ")
                     : "A renseigner"}
                 </td>
                 <td className="px-4 py-4">{order.total}</td>
@@ -605,7 +619,7 @@ function AdminOrders({
                     className="input-field"
                     defaultValue={order.internalNote || ""}
                     placeholder="Note"
-                    disabled={orderSource === "mock"}
+                    disabled={orderSource !== "firestore"}
                     onBlur={(event) =>
                       void onUpdate(order.id, {
                         internalNote: event.currentTarget.value,
@@ -628,7 +642,7 @@ function AdminOrders({
                     <button
                       className="btn-secondary whitespace-nowrap text-xs"
                       disabled={
-                        orderSource === "mock" ||
+                        orderSource !== "firestore" ||
                         order.paymentStatus !== "paid" ||
                         !order.stripePaymentIntentId
                       }
@@ -676,10 +690,88 @@ function SourceCard({
 function SourceLine({ source }: { source: string }) {
   return (
     <p className="mb-4 rounded-md border border-forest/10 bg-cream px-4 py-3 text-sm text-forest">
-      Source actuelle : {source}. Si Firestore est vide ou indisponible, les
-      donnees locales Phase 1 restent utilisees.
+      Source actuelle : {source}. Les donnees locales ne servent que de secours
+      technique si Firestore est indisponible.
     </p>
   );
+}
+
+function buildDashboardMetrics(
+  products: Product[],
+  orders: {
+    paymentStatus: string;
+    orderStatus: string;
+    delivery: string;
+    total: string;
+  }[],
+): AdminMetric[] {
+  const paidOrders = orders.filter((order) => order.paymentStatus === "paid");
+  const revenue = paidOrders.reduce((sum, order) => sum + parseEuro(order.total), 0);
+  const pendingOrders = orders.filter((order) =>
+    ["pending", "paid", "preparing", "ready", "out_for_delivery"].includes(
+      order.orderStatus,
+    ),
+  );
+  const localOrders = orders.filter((order) =>
+    order.delivery.toLowerCase().includes("aix") ||
+    order.delivery.toLowerCase().includes("local") ||
+    order.delivery.toLowerCase().includes("livraison"),
+  );
+  const lowStockProducts = products.filter(
+    (product) => product.stock <= product.lowStockThreshold,
+  );
+  const averageCart = paidOrders.length ? revenue / paidOrders.length : 0;
+
+  return [
+    {
+      label: "CA paye",
+      value: `${formatEuro(revenue)} EUR`,
+      detail: `${paidOrders.length} commande(s) payee(s)`,
+    },
+    {
+      label: "Commandes",
+      value: String(orders.length),
+      detail: "Firestore",
+    },
+    {
+      label: "En cours",
+      value: String(pendingOrders.length),
+      detail: "A traiter ou livrer",
+    },
+    {
+      label: "Livraisons locales",
+      value: String(localOrders.length),
+      detail: "Aix et alentours",
+    },
+    {
+      label: "Produits actifs",
+      value: String(products.filter((product) => product.isActive).length),
+      detail: `${products.length} produit(s) total`,
+    },
+    {
+      label: "Stocks bas",
+      value: String(lowStockProducts.length),
+      detail: "Selon seuil produit",
+    },
+    {
+      label: "Panier moyen",
+      value: `${formatEuro(averageCart)} EUR`,
+      detail: "Commandes payees",
+    },
+    {
+      label: "Ruptures",
+      value: String(products.filter((product) => product.stock <= 0).length),
+      detail: "Stock a 0 g",
+    },
+  ];
+}
+
+function parseEuro(value: string) {
+  return Number(value.replace("EUR", "").replace(",", ".").trim()) || 0;
+}
+
+function formatEuro(value: number) {
+  return value.toFixed(2).replace(".", ",");
 }
 
 function AdminTable({ headers, rows }: { headers: string[]; rows: string[][] }) {

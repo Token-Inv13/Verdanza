@@ -6,6 +6,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  writeBatch,
   updateDoc,
   where,
 } from "firebase/firestore";
@@ -111,6 +112,7 @@ export async function updateProductStock(
 export async function seedInitialProducts() {
   if (!db) throw new Error("Firebase is not configured.");
   const database = db;
+  const localIds = new Set(localProducts.map((product) => product.id));
   await Promise.all(
     localProducts.map((product) =>
       setDoc(
@@ -124,5 +126,26 @@ export async function seedInitialProducts() {
       ),
     ),
   );
-  return localProducts.length;
+
+  const snapshot = await getDocs(collection(database, collections.products));
+  const batch = writeBatch(database);
+  let deactivated = 0;
+
+  snapshot.docs.forEach((entry) => {
+    if (!localIds.has(entry.id) && entry.data().isActive !== false) {
+      batch.set(
+        doc(database, collections.products, entry.id),
+        {
+          isActive: false,
+          isFeatured: false,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      deactivated += 1;
+    }
+  });
+
+  if (deactivated) await batch.commit();
+  return { upserted: localProducts.length, deactivated };
 }

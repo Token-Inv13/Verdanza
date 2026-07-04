@@ -82,7 +82,7 @@ export function ProductPage() {
           </div>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
             <span className="font-display text-4xl text-forest">
-              {product.price.toFixed(2).replace(".", ",")} EUR
+              {product.price.toFixed(2).replace(".", ",")} EUR/g
             </span>
             <button
               className="btn-primary"
@@ -95,7 +95,7 @@ export function ProductPage() {
                 });
               }}
             >
-              <ShoppingBag size={18} /> Ajouter au panier
+              <ShoppingBag size={18} /> Ajouter 1 g au panier
             </button>
           </div>
           <p className="mt-6 text-sm leading-6 text-ink/60">
