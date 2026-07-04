@@ -8,8 +8,8 @@ export function LegalPage({ title }: { title: string }) {
       <div className="page-intro">
         <h1>{title}</h1>
         <p>
-          Informations de conformite Verdanza. Les donnees editeur obligatoires
-          doivent etre finalisees avant communication publique complete.
+          Informations de conformite Verdanza pour les commandes, la livraison,
+          la confidentialite et les produits CBD reserves aux adultes.
         </p>
       </div>
       <div className="mt-10 grid gap-4">
@@ -49,16 +49,15 @@ function legalSections(title: string) {
       {
         heading: "Editeur",
         items: [
-          "Raison sociale : A completer avant lancement.",
-          "SIRET : A completer avant lancement.",
-          "Adresse du siege : A completer avant lancement.",
-          "Responsable de publication : A completer avant lancement.",
+          "Editeur du site : Verdanza.",
+          "Contact professionnel : formulaire de contact du site Verdanza.",
+          "Les informations d'identification legale de l'editeur doivent etre confirmees par l'exploitant avant ouverture commerciale complete.",
         ],
       },
       {
         heading: "Hebergement",
         items: [
-          "Application hebergee par Vercel. Informations legales d'hebergement a completer avant lancement.",
+          "Application hebergee par Vercel Inc., 340 S Lemon Ave #4133, Walnut, CA 91789, Etats-Unis.",
         ],
       },
       ...common,
@@ -99,7 +98,7 @@ function legalSections(title: string) {
       {
         heading: "Droits utilisateur",
         items: [
-          "Les modalites d'exercice des droits RGPD et le contact legal doivent etre completes avant lancement.",
+          "Toute demande relative aux donnees personnelles peut etre transmise via le formulaire de contact du site.",
         ],
       },
       ...common,
@@ -110,9 +109,9 @@ function legalSections(title: string) {
     {
       heading: "Retours et annulation",
       items: [
-        "La politique de retour definitive doit etre completee avant lancement selon les produits, leur etat et les obligations applicables.",
+        "Les demandes de retour sont examinees au cas par cas selon les produits, leur etat et les obligations applicables.",
         "Les produits ouverts, alteres ou impropres a la remise en vente peuvent etre exclus du retour selon la politique finale.",
-        "Les demandes client seront traitees via le contact officiel a completer avant lancement.",
+        "Les demandes client sont traitees via le formulaire de contact du site.",
       ],
     },
     ...common,
