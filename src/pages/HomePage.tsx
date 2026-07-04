@@ -47,14 +47,6 @@ export function HomePage() {
           </div>
         </section>
 
-        <section className="bg-forest py-4 text-ivory">
-          <div className="container-page grid gap-3 text-sm font-medium md:grid-cols-3">
-            <span>Golden Static - 5,50 EUR/g</span>
-            <span>Suprême Purple - 5,00 EUR/g</span>
-            <span>Cookie Kush, OG Kush, Harlequin dès 4,00 EUR/g</span>
-          </div>
-        </section>
-
         <section className="container-page grid gap-4 py-12 md:grid-cols-3">
           {[
             {
