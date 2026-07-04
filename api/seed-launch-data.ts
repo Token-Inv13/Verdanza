@@ -120,13 +120,11 @@ async function seedDeliveryZones(db: FirebaseFirestore.Firestore) {
     const zoneRef = db.collection("deliveryZones").doc(zone.id);
     const snapshot = await zoneRef.get();
     await zoneRef.set(
-      {
+      withoutUndefined({
         ...zone,
-        createdAt: snapshot.exists
-          ? snapshot.data()?.createdAt
-          : FieldValue.serverTimestamp(),
+        createdAt: snapshot.data()?.createdAt ?? FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-      },
+      }),
       { merge: true },
     );
     if (snapshot.exists) updated += 1;
