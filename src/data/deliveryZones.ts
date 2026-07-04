@@ -1,4 +1,4 @@
-import type { DeliveryZone } from "../types";
+import type { DeliveryZone } from "../types/index.js";
 
 export const deliveryZones: DeliveryZone[] = [
   {

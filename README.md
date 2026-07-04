@@ -111,6 +111,7 @@ La couche Firestore est dans `src/services/`.
 - `adminUsersService` verifie les droits admin via la collection `adminUsers`.
 
 Le seed initial est manuel et non destructif : bouton `Seed catalogue` dans l'admin. Il utilise `setDoc(..., { merge: true })`, ne supprime aucune donnee Firestore et desactive les anciens produits absents du catalogue local.
+En production, ce bouton appelle `/api/seed-launch-data` avec le token Firebase de l'admin connecte, afin d'utiliser Firebase Admin cote serveur sans exposer de cle service account.
 
 ### Bootstrap admin
 
