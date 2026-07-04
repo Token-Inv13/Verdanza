@@ -73,24 +73,35 @@ export default async function handler(
       });
     }
 
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      line_items: lineItems,
-      customer_email: body.customer.email,
-      phone_number_collection: { enabled: true },
-      billing_address_collection: "required",
-      success_url: `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}/checkout/cancel`,
-      metadata: {
-        orderId: orderRef.id,
-        deliveryMethod: body.deliveryMethod,
-      },
-      payment_intent_data: {
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        line_items: lineItems,
+        customer_email: body.customer.email,
+        phone_number_collection: { enabled: true },
+        billing_address_collection: "required",
+        success_url: `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${appUrl}/checkout/cancel`,
         metadata: {
           orderId: orderRef.id,
+          deliveryMethod: body.deliveryMethod,
         },
-      },
-    });
+        payment_intent_data: {
+          metadata: {
+            orderId: orderRef.id,
+          },
+        },
+      });
+    } catch (stripeError) {
+      await orderRef.update({
+        paymentStatus: "failed",
+        orderStatus: "cancelled",
+        internalNote: "Creation Stripe Checkout impossible.",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      throw sanitizeStripeError(stripeError);
+    }
 
     await orderRef.update({
       stripeSessionId: session.id,
@@ -109,4 +120,22 @@ export default async function handler(
       400,
     );
   }
+}
+
+function sanitizeStripeError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  const stripeType =
+    typeof error === "object" && error !== null && "type" in error
+      ? String((error as { type?: unknown }).type)
+      : "";
+
+  if (
+    stripeType.toLowerCase().includes("stripe") ||
+    message.toLowerCase().includes("api key") ||
+    message.toLowerCase().includes("stripe")
+  ) {
+    return new Error("Configuration Stripe invalide. Paiement temporairement indisponible.");
+  }
+
+  return error;
 }
