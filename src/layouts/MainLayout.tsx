@@ -11,7 +11,7 @@ const navItems = [
   { label: "Boutique", to: "/boutique" },
   { label: "Fleurs CBD", to: "/fleurs-cbd" },
   { label: "Resines CBD", to: "/resines-cbd" },
-  { label: "Livraison express Aix", to: "/livraison-express-aix" },
+  { label: "Livraison", to: "/livraison-postale" },
   { label: "Qualite", to: "/qualite-conformite" },
 ];
 
@@ -86,13 +86,14 @@ export function MainLayout() {
             <img src="/verdanza-logo.png" alt="Verdanza" className="h-16 w-auto" />
             <p className="mt-4 max-w-md text-sm leading-6 text-ink/70">
               Verdanza selectionne des produits CBD premium, conformes et
-              controles, avec livraison express locale a Aix-en-Provence et
-              alentours.
+              controles, avec livraison postale en France et livraison locale
+              selon zone disponible.
             </p>
           </div>
           <div className="grid gap-2 text-sm text-forest/80">
             <strong className="text-forest">Informations</strong>
-            <NavLink to="/livraison-express-aix">Livraison express Aix</NavLink>
+            <NavLink to="/livraison-postale">Livraison en France</NavLink>
+            <NavLink to="/livraison-express-aix">Express local Aix</NavLink>
             <NavLink to="/faq">FAQ</NavLink>
             <NavLink to="/contact">Contact</NavLink>
             <NavLink to="/admin">Admin cockpit</NavLink>

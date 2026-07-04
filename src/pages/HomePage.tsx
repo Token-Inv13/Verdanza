@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, Leaf, MapPin, ShieldCheck, Truck } from "lucide-react";
+import { ArrowRight, Leaf, PackageCheck, ShieldCheck, Truck } from "lucide-react";
 import { ProductCard } from "../components/ProductCard";
 import { Seo } from "../components/Seo";
 import { useProducts } from "../hooks/useProducts";
@@ -7,15 +7,12 @@ import { useProducts } from "../hooks/useProducts";
 export function HomePage() {
   const { products } = useProducts();
   const featuredProducts = products.filter((product) => product.isFeatured);
-  const startingPrice = products.length
-    ? Math.min(...products.map((product) => product.price))
-    : 0;
 
   return (
     <>
       <Seo
-        title="Verdanza CBD - CBD premium livre a Aix-en-Provence"
-        description="Verdanza selectionne des fleurs et resines CBD premium au gramme avec livraison express locale a Aix-en-Provence et alentours."
+        title="Verdanza CBD - Fleurs et resines CBD premium en ligne"
+        description="Boutique en ligne de fleurs et resines CBD premium, avec livraison postale en France et livraison locale selon zone disponible."
       />
       <main>
         <section className="hero-section relative overflow-hidden">
@@ -25,48 +22,27 @@ export function HomePage() {
             className="absolute inset-0 h-full w-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-forest/95 via-forest/78 to-forest/25" />
-          <div className="container-page relative flex min-h-[calc(100svh-5rem)] items-center py-14 md:min-h-[680px]">
+          <div className="container-page relative flex min-h-[620px] items-center py-12 md:min-h-[680px] md:py-14">
             <div className="max-w-3xl text-ivory">
               <p className="inline-flex items-center gap-2 rounded-full border border-ivory/25 bg-ivory/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-champagne">
                 <Leaf size={14} /> Verdanza CBD
               </p>
               <h1 className="mt-5 font-display text-4xl leading-tight sm:text-5xl md:text-7xl">
-                Fleurs et resines CBD premium a Aix-en-Provence
+                Fleurs et resines CBD premium en ligne
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-ivory/82 md:mt-6 md:text-lg md:leading-8">
-                Une selection courte, au gramme, livree en express local a
-                Aix-en-Provence et alentours de 11h a 01h.
+                Une selection courte, exigeante et conforme, disponible au
+                gramme avec livraison postale en France et express local selon
+                zone disponible.
               </p>
               <div className="mt-6 flex flex-col gap-3 sm:flex-row md:mt-8">
                 <Link to="/boutique" className="btn-primary bg-champagne text-forest hover:bg-[#d7b66e]">
                   Voir la boutique <ArrowRight size={18} />
                 </Link>
-                <Link to="/livraison-express-aix" className="btn-secondary border-ivory/35 bg-ivory/10 text-ivory hover:bg-ivory hover:text-forest">
-                  Livraison express Aix
+                <Link to="/livraison-postale" className="btn-secondary border-ivory/35 bg-ivory/10 text-ivory hover:bg-ivory hover:text-forest">
+                  Livraison en France
                 </Link>
               </div>
-              <dl className="mt-7 grid max-w-2xl gap-2 sm:grid-cols-3 md:mt-10 md:gap-3">
-                <div className="border-l border-champagne/70 pl-4">
-                  <dt className="text-xs uppercase tracking-[0.14em] text-ivory/60">
-                    Selection
-                  </dt>
-                  <dd className="mt-1 font-display text-2xl md:text-3xl">{products.length}</dd>
-                </div>
-                <div className="border-l border-champagne/70 pl-4">
-                  <dt className="text-xs uppercase tracking-[0.14em] text-ivory/60">
-                    Prix dès
-                  </dt>
-                  <dd className="mt-1 font-display text-2xl md:text-3xl">
-                    {startingPrice.toFixed(2).replace(".", ",")} EUR/g
-                  </dd>
-                </div>
-                <div className="border-l border-champagne/70 pl-4">
-                  <dt className="text-xs uppercase tracking-[0.14em] text-ivory/60">
-                    Livraison
-                  </dt>
-                  <dd className="mt-1 font-display text-2xl md:text-3xl">30 EUR min.</dd>
-                </div>
-              </dl>
             </div>
           </div>
         </section>
@@ -88,13 +64,13 @@ export function HomePage() {
             },
             {
               icon: Truck,
-              title: "Livraison 7j/7",
-              text: "Express locale de 11h a 01h, a partir de 30 EUR d'achat.",
+              title: "Livraison France",
+              text: "Expedition postale nationale, avec suivi selon le mode disponible au checkout.",
             },
             {
-              icon: MapPin,
-              title: "Express Aix",
-              text: "Aix-en-Provence et communes proches selon zone selectionnee.",
+              icon: PackageCheck,
+              title: "Express local",
+              text: "Livraison rapide sur Aix-en-Provence et zones ouvertes, en complement du postal.",
             },
           ].map((item) => (
             <article key={item.title} className="feature-panel">
