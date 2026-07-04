@@ -331,6 +331,37 @@ Evenements envoyes :
 - email client lors d'un changement de statut admin ;
 - email client apres remboursement Stripe initie.
 
+Alertes telephone admin :
+
+- le webhook peut envoyer une alerte SMS et/ou WhatsApp apres `checkout.session.completed` ;
+- l'envoi passe par Twilio et reste optionnel ;
+- si Twilio n'est pas configure, le paiement, le stock, les emails et la commande ne sont pas bloques ;
+- l'idempotence est suivie dans `orders/{orderId}.alerts` pour eviter les doublons quand une alerte est marquee envoyee.
+
+Variables SMS :
+
+```env
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_SMS_FROM=
+ADMIN_ALERT_PHONE=
+```
+
+Variables WhatsApp :
+
+```env
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+ADMIN_ALERT_WHATSAPP=whatsapp:+33XXXXXXXXX
+```
+
+Emails domaine :
+
+- `VITE_CONTACT_EMAIL` affiche l'adresse publique sur la page contact, le footer et les mentions legales ;
+- `ADMIN_NOTIFICATION_EMAIL` definit l'adresse qui recoit les notifications internes de commande et les messages du formulaire contact ;
+- recommandation : `contact@verdanza.fr` pour les clients, `commandes@verdanza.fr` ou une redirection vers votre boite principale pour les commandes.
+
 Historique de statut :
 
 - chaque commande contient `statusHistory` ;
@@ -349,7 +380,7 @@ Remboursements :
 
 Verification Phase 4 :
 
-1. Configurer `RESEND_API_KEY`, `EMAIL_FROM` et `ADMIN_NOTIFICATION_EMAIL` dans Vercel Production et Preview.
+1. Configurer `RESEND_API_KEY`, `EMAIL_FROM`, `ADMIN_NOTIFICATION_EMAIL` et `VITE_CONTACT_EMAIL` dans Vercel Production et Preview.
 2. Payer une commande test Stripe.
 3. Verifier que le webhook conserve `paymentStatus: "paid"`, `orderStatus: "preparing"`, le decrement stock et `stockMovements`.
 4. Verifier que `statusHistory` contient `pending` puis `preparing`.
@@ -357,6 +388,7 @@ Verification Phase 4 :
 6. Verifier `/compte/commandes` avec le compte client lie a la commande.
 7. Tester `/api/update-order-status` et `/api/refund-order` sans token : les endpoints doivent refuser.
 8. Si une confirmation client echoue apres paiement, corriger `EMAIL_FROM` / domaine Resend puis relancer via l'endpoint admin securise `/api/retry-order-emails` avec `target: "client"`.
+9. Si Twilio est configure, verifier que `orders/{orderId}.alerts.adminSmsStatus` ou `adminWhatsappStatus` passe a `sent`.
 
 ## Deploiement Vercel
 
@@ -380,6 +412,7 @@ VITE_FIREBASE_APP_ID=
 VITE_FIREBASE_MEASUREMENT_ID=
 VITE_STRIPE_PUBLIC_KEY=
 VITE_APP_URL=
+VITE_CONTACT_EMAIL=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 FIREBASE_PROJECT_ID=
@@ -389,6 +422,12 @@ FIREBASE_SERVICE_ACCOUNT_BASE64=
 RESEND_API_KEY=
 EMAIL_FROM=
 ADMIN_NOTIFICATION_EMAIL=
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_SMS_FROM=
+ADMIN_ALERT_PHONE=
+TWILIO_WHATSAPP_FROM=
+ADMIN_ALERT_WHATSAPP=
 ```
 
 Rappels :

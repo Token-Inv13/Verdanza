@@ -46,6 +46,7 @@ const content = {
 
 export function ContentPage({ variant }: { variant: keyof typeof content }) {
   const page = content[variant];
+  const contactEmail = import.meta.env.VITE_CONTACT_EMAIL as string | undefined;
   return (
     <main className="container-page py-12">
       <Seo title={`${page.title} - Verdanza CBD`} description={page.text} />
@@ -53,6 +54,14 @@ export function ContentPage({ variant }: { variant: keyof typeof content }) {
         <h1>{page.title}</h1>
         <p>{page.text}</p>
       </div>
+      {variant === "contact" && contactEmail && (
+        <p className="mt-6 text-sm text-forest/80">
+          Email direct :{" "}
+          <a className="underline decoration-champagne" href={`mailto:${contactEmail}`}>
+            {contactEmail}
+          </a>
+        </p>
+      )}
       {variant === "contact" && <ContactForm />}
       <div className="mt-10 grid gap-4 md:grid-cols-2">
         {page.points.map((point) => (

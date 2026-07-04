@@ -1,7 +1,8 @@
 import { Seo } from "../components/Seo";
 
 export function LegalPage({ title }: { title: string }) {
-  const sections = legalSections(title);
+  const contactEmail = import.meta.env.VITE_CONTACT_EMAIL as string | undefined;
+  const sections = legalSections(title, contactEmail);
   return (
     <main className="container-page py-12">
       <Seo title={`${title} - Verdanza CBD`} description={`${title} Verdanza.`} />
@@ -31,7 +32,7 @@ export function LegalPage({ title }: { title: string }) {
   );
 }
 
-function legalSections(title: string) {
+function legalSections(title: string, contactEmail?: string) {
   const common = [
     {
       heading: "Conformite CBD",
@@ -50,7 +51,9 @@ function legalSections(title: string) {
         heading: "Editeur",
         items: [
           "Editeur du site : Verdanza.",
-          "Contact professionnel : formulaire de contact du site Verdanza.",
+          contactEmail
+            ? `Contact professionnel : ${contactEmail}.`
+            : "Contact professionnel : formulaire de contact du site Verdanza.",
           "Les informations d'identification legale de l'editeur doivent etre confirmees par l'exploitant avant ouverture commerciale complete.",
         ],
       },
@@ -98,7 +101,9 @@ function legalSections(title: string) {
       {
         heading: "Droits utilisateur",
         items: [
-          "Toute demande relative aux donnees personnelles peut etre transmise via le formulaire de contact du site.",
+          contactEmail
+            ? `Toute demande relative aux donnees personnelles peut etre transmise a ${contactEmail}.`
+            : "Toute demande relative aux donnees personnelles peut etre transmise via le formulaire de contact du site.",
         ],
       },
       ...common,
@@ -111,7 +116,9 @@ function legalSections(title: string) {
       items: [
         "Les demandes de retour sont examinees au cas par cas selon les produits, leur etat et les obligations applicables.",
         "Les produits ouverts, alteres ou impropres a la remise en vente peuvent etre exclus du retour selon la politique finale.",
-        "Les demandes client sont traitees via le formulaire de contact du site.",
+        contactEmail
+          ? `Les demandes client sont traitees via ${contactEmail} ou le formulaire de contact du site.`
+          : "Les demandes client sont traitees via le formulaire de contact du site.",
       ],
     },
     ...common,

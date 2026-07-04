@@ -150,6 +150,22 @@ export type OrderEmails = {
   refundNotificationSentAt?: string;
 };
 
+export type OrderAlerts = {
+  adminSmsSentAt?: string;
+  adminSmsStatus?: "sent" | "skipped" | "failed";
+  adminSmsFailedAt?: string;
+  adminSmsSkippedAt?: string;
+  adminSmsError?: string;
+  adminSmsProviderId?: string;
+  adminWhatsappSentAt?: string;
+  adminWhatsappStatus?: "sent" | "skipped" | "failed";
+  adminWhatsappFailedAt?: string;
+  adminWhatsappSkippedAt?: string;
+  adminWhatsappError?: string;
+  adminWhatsappProviderId?: string;
+  lastAttemptedAt?: string;
+};
+
 export type Order = {
   id: string;
   customerId?: string;
@@ -175,6 +191,7 @@ export type Order = {
   refundedAt?: string;
   statusHistory?: StatusHistoryEntry[];
   emails?: OrderEmails;
+  alerts?: OrderAlerts;
   internalNote?: string;
   paidAt?: string;
   createdAt: string;

@@ -19,6 +19,7 @@ export function MainLayout() {
   const [open, setOpen] = useState(false);
   const { itemCount } = useCart();
   const { user } = useAuth();
+  const contactEmail = import.meta.env.VITE_CONTACT_EMAIL as string | undefined;
 
   return (
     <div className="min-h-screen bg-ivory text-ink">
@@ -96,6 +97,7 @@ export function MainLayout() {
             <NavLink to="/livraison-express-aix">Express local Aix</NavLink>
             <NavLink to="/faq">FAQ</NavLink>
             <NavLink to="/contact">Contact</NavLink>
+            {contactEmail && <a href={`mailto:${contactEmail}`}>{contactEmail}</a>}
           </div>
           <div className="grid gap-2 text-sm text-forest/80">
             <strong className="text-forest">Legal</strong>

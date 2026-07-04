@@ -10,6 +10,7 @@ import {
 } from "./_server/http.js";
 import { getStripe } from "./_server/stripe.js";
 import { sendPostPaymentEmails } from "./_server/orderEmailDelivery.js";
+import { sendPostPaymentOrderAlerts } from "./_server/orderAlerts.js";
 import type { Order } from "../src/types/index.js";
 
 export const config = {
@@ -72,7 +73,7 @@ export default async function handler(
 
   try {
     let processedPayment = false;
-    let shouldAttemptPostPaymentEmails = false;
+    let shouldAttemptPostPaymentNotifications = false;
     await db.runTransaction(async (transaction) => {
       const orderRef = db.collection("orders").doc(orderId);
       const orderSnapshot = await transaction.get(orderRef);
@@ -89,9 +90,11 @@ export default async function handler(
       const processedEventIds = order.stripeEventIds ?? [];
 
       if (order.paymentStatus === "paid" || processedEventIds.includes(event.id)) {
-        shouldAttemptPostPaymentEmails = Boolean(
+        shouldAttemptPostPaymentNotifications = Boolean(
           !order.emails?.orderConfirmationSentAt ||
-            !order.emails?.adminNotificationSentAt,
+            !order.emails?.adminNotificationSentAt ||
+            !order.alerts?.adminSmsSentAt ||
+            !order.alerts?.adminWhatsappSentAt,
         );
         transaction.update(orderRef, {
           stripeEventIds: FieldValue.arrayUnion(event.id),
@@ -100,7 +103,7 @@ export default async function handler(
         return;
       }
       processedPayment = true;
-      shouldAttemptPostPaymentEmails = true;
+      shouldAttemptPostPaymentNotifications = true;
 
       for (const item of order.items) {
         const productRef = db.collection("products").doc(item.productId);
@@ -194,8 +197,9 @@ export default async function handler(
       }
     });
 
-    if (processedPayment || shouldAttemptPostPaymentEmails) {
+    if (processedPayment || shouldAttemptPostPaymentNotifications) {
       await sendPostPaymentEmails(db, orderId);
+      await sendPostPaymentOrderAlerts(db, orderId);
     }
 
     sendJson(response, { received: true });
