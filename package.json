@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "typecheck:api": "tsc --noEmit --moduleResolution NodeNext --module NodeNext --target ES2022 --esModuleInterop --skipLibCheck --strict --types node api/create-order.ts api/update-order-status.ts api/retry-order-emails.ts api/contact.ts api/seed-launch-data.ts api/_server/adminAuth.ts api/_server/checkout.ts api/_server/email.ts api/_server/firebaseAdmin.ts api/_server/http.ts api/_server/orderAlerts.ts",
+    "typecheck:api": "tsc --noEmit --moduleResolution NodeNext --module NodeNext --target ES2022 --esModuleInterop --skipLibCheck --strict --types node api/create-order.ts api/update-order-status.ts api/retry-order-emails.ts api/contact.ts api/invoices.ts api/seed-launch-data.ts api/_server/adminAuth.ts api/_server/checkout.ts api/_server/email.ts api/_server/firebaseAdmin.ts api/_server/http.ts api/_server/invoicePdf.ts api/_server/orderAlerts.ts",
     "seed:products": "node --import tsx scripts/seedFirestoreProducts.ts",
     "seed:delivery-zones": "node --import tsx scripts/seedFirestoreDeliveryZones.ts",
     "seed:admin": "node --import tsx scripts/bootstrapAdmin.ts",
@@ -20,6 +20,7 @@
     "firebase": "^11.1.0",
     "firebase-admin": "^14.0.0",
     "lucide-react": "^0.468.0",
+    "pdf-lib": "^1.17.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.1.1"

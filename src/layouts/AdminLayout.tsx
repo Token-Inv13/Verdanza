@@ -3,7 +3,9 @@ import {
   BarChart3,
   BadgePercent,
   Boxes,
+  FileText,
   Package,
+  Settings,
   ShoppingCart,
   Truck,
   Users,
@@ -18,6 +20,8 @@ const adminNav = [
   { label: "Commandes", to: "/admin/commandes", icon: ShoppingCart },
   { label: "Livraisons", to: "/admin/livraisons", icon: Truck },
   { label: "Promos", to: "/admin/coupons", icon: BadgePercent },
+  { label: "Factures", to: "/admin/factures", icon: FileText },
+  { label: "Facturation", to: "/admin/facturation", icon: Settings },
   { label: "Clients", to: "/admin/clients", icon: Users },
 ];
 

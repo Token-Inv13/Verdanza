@@ -98,15 +98,17 @@ Variables serveur :
 RESEND_API_KEY=
 EMAIL_FROM=
 ADMIN_NOTIFICATION_EMAIL=contact@verdanza.fr
+ADMIN_NOTIFICATION_EMAILS=contact@verdanza.fr,verdanza.1@gmail.com
 VERDANZA_CONTACT_PHONE=07 80 81 41 37
 ```
 
 Emails envoyes :
 
 - confirmation client apres commande ;
-- notification admin a `ADMIN_NOTIFICATION_EMAIL` ;
+- notification admin aux adresses `ADMIN_NOTIFICATION_EMAILS` ;
 - mise a jour client lors d'un changement de statut admin ;
-- formulaire contact vers `ADMIN_NOTIFICATION_EMAIL`.
+- formulaire contact vers les adresses admin ;
+- facture client avec PDF joint depuis l'admin.
 
 Les emails ne doivent contenir aucune mention de prestataire de reglement en ligne.
 
@@ -146,9 +148,11 @@ VITE_FIREBASE_APP_ID=
 VITE_FIREBASE_MEASUREMENT_ID=
 VITE_APP_URL=https://verdanza.fr
 VITE_CONTACT_EMAIL=contact@verdanza.fr
+VITE_CONTACT_PHONE=07 80 81 41 37
 RESEND_API_KEY=
 EMAIL_FROM=
 ADMIN_NOTIFICATION_EMAIL=contact@verdanza.fr
+ADMIN_NOTIFICATION_EMAILS=contact@verdanza.fr,verdanza.1@gmail.com
 VERDANZA_CONTACT_PHONE=07 80 81 41 37
 FIREBASE_PROJECT_ID=
 FIREBASE_CLIENT_EMAIL=
@@ -169,12 +173,16 @@ Ne jamais versionner `.env.local`, cle Firebase Admin, cle Resend ou secret Twil
 Le cockpit admin permet :
 
 - voir les commandes ;
-- contacter les clients ;
+- contacter les clients par appel, WhatsApp, SMS ou message copie ;
 - modifier le statut de commande ;
 - modifier le statut de reglement ;
 - ajouter une reference de reglement ;
 - ajouter un numero de suivi postal ;
 - ajouter une note interne ;
+- creer une facture brouillon depuis une commande ;
+- creer une facture manuelle pour une vente directe ;
+- telecharger une facture PDF ;
+- envoyer une facture par email au client ;
 - gerer produits, stocks, zones de livraison, coupons et clients.
 
 Statuts commande :
@@ -194,6 +202,36 @@ Statuts reglement :
 - `pending`
 - `paid`
 - `cancelled`
+
+## Facturation
+
+Le module facturation est accessible uniquement dans l'admin.
+
+Comportement :
+
+- une commande web peut generer une facture brouillon ;
+- une vente hors site peut generer une facture manuelle ;
+- la numerotation suit le format `VER-YYYY-0001` ;
+- les factures validees ne doivent pas etre modifiees silencieusement ;
+- les PDF et l'envoi email sont proteges par authentification admin.
+
+Configuration provisoire par defaut :
+
+- nom commercial : `Verdanza`
+- nom affiche : `Token APP`
+- telephone : `07 80 81 41 37`
+- email : `contact@verdanza.fr`
+- regime TVA : non configure
+- informations legales : non validees manuellement
+
+Important : les informations personnelles issues du certificat SIRENE ne sont pas
+affichees cote client tant que la configuration n'est pas validee manuellement.
+L'admin affiche un avertissement avant l'envoi officiel d'une facture si les
+informations legales ou TVA ne sont pas confirmees.
+
+Les champs SIREN/SIRET peuvent etre pre-renseignes dans l'admin, mais la raison
+sociale, la forme juridique, l'adresse, le regime TVA et les mentions obligatoires
+doivent etre verifies avant emission officielle.
 
 ## Verification
 

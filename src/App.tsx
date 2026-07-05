@@ -85,6 +85,8 @@ export function App() {
           />
           <Route path="clients" element={<AdminPage section="Clients" />} />
           <Route path="coupons" element={<AdminPage section="Coupons" />} />
+          <Route path="factures" element={<AdminPage section="Factures" />} />
+          <Route path="facturation" element={<AdminPage section="Parametres de facturation" />} />
           <Route path="parametres" element={<AdminPage section="Parametres" />} />
         </Route>
       </Route>

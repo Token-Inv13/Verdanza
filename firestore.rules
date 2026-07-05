@@ -75,8 +75,16 @@ service cloud.firestore {
       allow read, create, update, delete: if isAdmin();
     }
 
+    match /invoices/{invoiceId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    match /counters/{counterId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
     match /settings/{settingId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow create, update, delete: if isAdmin();
     }
 

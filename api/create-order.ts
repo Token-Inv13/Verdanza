@@ -18,7 +18,7 @@ import {
   type EmailResult,
 } from "./_server/email.js";
 import { sendPostPaymentOrderAlerts } from "./_server/orderAlerts.js";
-import type { Order } from "../src/types/index.js";
+import type { Invoice, Order } from "../src/types/index.js";
 
 export default async function handler(
   request: VercelRequestLike,
@@ -86,6 +86,12 @@ export default async function handler(
 
     const orderSnapshot = await orderRef.get();
     const order = { id: orderSnapshot.id, ...orderSnapshot.data() } as Order;
+    await createDraftInvoiceForOrder(db, order).catch((error) => {
+      console.warn("Draft invoice creation skipped", {
+        orderId: order.id,
+        reason: error instanceof Error ? error.message : "invoice_failed",
+      });
+    });
     const clientEmailResult = await sendManualOrderConfirmationEmail(order);
     const adminEmailResult = await sendAdminManualOrderEmail(order);
     await orderRef.update({
@@ -109,6 +115,74 @@ export default async function handler(
       400,
     );
   }
+}
+
+async function createDraftInvoiceForOrder(
+  db: FirebaseFirestore.Firestore,
+  order: Order,
+) {
+  const existing = await db.collection("invoices").where("orderId", "==", order.id).limit(1).get();
+  if (!existing.empty) return;
+  const invoiceNumber = await nextInvoiceNumber(db);
+  const now = new Date().toISOString();
+  const invoiceRef = db.collection("invoices").doc();
+  const invoice: Invoice = {
+    id: invoiceRef.id,
+    invoiceNumber,
+    orderId: order.id,
+    origin: "order",
+    status: "draft",
+    customerName: order.customerName || order.customerEmail || "Client",
+    customerEmail: order.customerEmail,
+    customerPhone: order.customerPhone,
+    customerAddress: order.deliveryAddress,
+    lines: order.items.map((item) => ({
+      id: item.productId,
+      label: item.name,
+      quantity: item.quantity,
+      unitPrice: Number(item.unitPrice || 0),
+      total: roundMoney(Number(item.unitPrice || 0) * Number(item.quantity || 0)),
+    })),
+    subtotal: Number(order.subtotal || 0),
+    deliveryFee: Number(order.deliveryFee || 0),
+    discountAmount: Number(order.discountAmount || 0),
+    total: Number(order.total || 0),
+    paymentMethod: order.paymentInstructions || "Reglement a confirmer",
+    paymentStatus: order.paymentStatus || "to_confirm",
+    internalNote: "",
+    createdAt: now,
+    updatedAt: now,
+  };
+  await invoiceRef.set(invoice);
+  await db.collection("orders").doc(order.id).update({
+    invoiceId: invoiceRef.id,
+    invoiceNumber,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+}
+
+async function nextInvoiceNumber(db: FirebaseFirestore.Firestore) {
+  const year = new Date().getFullYear();
+  const counterRef = db.collection("counters").doc(`invoices-${year}`);
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(counterRef);
+    const current = Number(snapshot.data()?.value || 0);
+    const next = current + 1;
+    transaction.set(
+      counterRef,
+      {
+        value: next,
+        year,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    return `VER-${year}-${String(next).padStart(4, "0")}`;
+  });
+}
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 function emailResultUpdate(prefix: string, result: EmailResult) {

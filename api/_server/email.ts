@@ -1,4 +1,4 @@
-import type { Order, OrderStatus } from "../../src/types/index.js";
+import type { BillingSettings, Invoice, Order, OrderStatus } from "../../src/types/index.js";
 
 export type EmailResult =
   | { status: "sent"; id?: string }
@@ -9,7 +9,8 @@ type TransactionalEmailKind =
   | "order_confirmation"
   | "admin_new_order"
   | "order_status_update"
-  | "contact_message";
+  | "contact_message"
+  | "invoice";
 
 const statusLabels: Record<OrderStatus, string> = {
   new: "Nouvelle commande",
@@ -36,14 +37,14 @@ export async function sendOrderConfirmationEmail(order: Order) {
 }
 
 export async function sendAdminNewOrderEmail(order: Order) {
-  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
-  if (!adminEmail) return { status: "skipped", reason: "ADMIN_NOTIFICATION_EMAIL absent" } satisfies EmailResult;
+  const adminEmails = adminNotificationEmails();
+  if (!adminEmails.length) return { status: "skipped", reason: "ADMIN_NOTIFICATION_EMAILS absent" } satisfies EmailResult;
 
   return sendTransactionalEmail({
     kind: "admin_new_order",
     orderId: order.id,
-    to: adminEmail,
-    subject: "Nouvelle commande Verdanza",
+    to: adminEmails,
+    subject: `Nouvelle commande Verdanza #${shortOrderId(order.id)}`,
     html: adminOrderEmailHtml(order),
     text: adminOrderEmailText(order),
     idempotencyKey: `admin-new-order-${order.id}`,
@@ -72,14 +73,14 @@ export async function sendManualOrderConfirmationEmail(order: Order) {
 }
 
 export async function sendAdminManualOrderEmail(order: Order) {
-  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
-  if (!adminEmail) return { status: "skipped", reason: "ADMIN_NOTIFICATION_EMAIL absent" } satisfies EmailResult;
+  const adminEmails = adminNotificationEmails();
+  if (!adminEmails.length) return { status: "skipped", reason: "ADMIN_NOTIFICATION_EMAILS absent" } satisfies EmailResult;
 
   return sendTransactionalEmail({
     kind: "admin_new_order",
     orderId: order.id,
-    to: adminEmail,
-    subject: "Nouvelle commande Verdanza",
+    to: adminEmails,
+    subject: `Nouvelle commande Verdanza #${shortOrderId(order.id)}`,
     html: adminOrderEmailHtml(order),
     text: adminOrderEmailText(order),
     idempotencyKey: `admin-manual-order-${order.id}`,
@@ -116,16 +117,16 @@ export async function sendContactMessageEmail(input: {
   subject: string;
   message: string;
 }) {
-  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
-  if (!adminEmail) {
-    return { status: "skipped", reason: "ADMIN_NOTIFICATION_EMAIL absent" } satisfies EmailResult;
+  const adminEmails = adminNotificationEmails();
+  if (!adminEmails.length) {
+    return { status: "skipped", reason: "ADMIN_NOTIFICATION_EMAILS absent" } satisfies EmailResult;
   }
 
   const safeSubject = input.subject || "Message contact Verdanza";
   return sendTransactionalEmail({
     kind: "contact_message",
     orderId: "contact",
-    to: adminEmail,
+    to: adminEmails,
     subject: `Contact Verdanza - ${safeSubject}`,
     html: contactEmailHtml(input),
     text: contactEmailText(input),
@@ -133,14 +134,40 @@ export async function sendContactMessageEmail(input: {
   });
 }
 
+export async function sendInvoiceToCustomerEmail(
+  invoice: Invoice,
+  settings: BillingSettings,
+  pdfBuffer: Buffer,
+) {
+  if (!invoice.customerEmail) {
+    return { status: "skipped", reason: "customer_email_absent" } satisfies EmailResult;
+  }
+  return sendTransactionalEmail({
+    kind: "invoice",
+    orderId: invoice.orderId || invoice.id,
+    to: invoice.customerEmail,
+    subject: `Votre facture Verdanza ${invoice.invoiceNumber}`,
+    html: invoiceEmailHtml(invoice, settings),
+    text: invoiceEmailText(invoice, settings),
+    idempotencyKey: `invoice-${invoice.id}-${invoice.status}-${invoice.sentAt || "send"}`,
+    attachments: [
+      {
+        filename: `${invoice.invoiceNumber}.pdf`,
+        content: pdfBuffer.toString("base64"),
+      },
+    ],
+  });
+}
+
 async function sendTransactionalEmail(input: {
   kind: TransactionalEmailKind;
   orderId: string;
-  to: string;
+  to: string | string[];
   subject: string;
   html: string;
   text: string;
   idempotencyKey: string;
+  attachments?: Array<{ filename: string; content: string }>;
 }): Promise<EmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
@@ -148,7 +175,7 @@ async function sendTransactionalEmail(input: {
     console.info("Email transactionnel ignore", {
       kind: input.kind,
       orderId: input.orderId,
-      to: redactEmail(input.to),
+      to: redactRecipients(input.to),
       reason: "email_not_configured",
     });
     return { status: "skipped", reason: "email_not_configured" };
@@ -168,6 +195,7 @@ async function sendTransactionalEmail(input: {
         subject: input.subject,
         html: input.html,
         text: input.text,
+        attachments: input.attachments,
       }),
     });
     const payload = (await response.json().catch(() => ({}))) as { id?: string; message?: string };
@@ -176,7 +204,7 @@ async function sendTransactionalEmail(input: {
       console.warn("Email transactionnel non envoye", {
         kind: input.kind,
         orderId: input.orderId,
-        to: redactEmail(input.to),
+        to: redactRecipients(input.to),
         status: response.status,
         reason,
       });
@@ -185,7 +213,7 @@ async function sendTransactionalEmail(input: {
     console.info("Email transactionnel envoye", {
       kind: input.kind,
       orderId: input.orderId,
-      to: redactEmail(input.to),
+      to: redactRecipients(input.to),
       providerId: payload.id,
     });
     return { status: "sent", id: payload.id };
@@ -193,7 +221,7 @@ async function sendTransactionalEmail(input: {
     console.warn("Email transactionnel en erreur", {
       kind: input.kind,
       orderId: input.orderId,
-      to: redactEmail(input.to),
+      to: redactRecipients(input.to),
       reason: error instanceof Error ? error.message : "email_failed",
     });
     return {
@@ -217,6 +245,21 @@ function redactEmail(email: string) {
   const [local, domain] = email.split("@");
   if (!local || !domain) return "invalid_email";
   return `${local.slice(0, 2)}***@${domain}`;
+}
+
+function redactRecipients(to: string | string[]) {
+  return Array.isArray(to) ? to.map(redactEmail).join(",") : redactEmail(to);
+}
+
+function adminNotificationEmails() {
+  const raw =
+    process.env.ADMIN_NOTIFICATION_EMAILS ||
+    process.env.ADMIN_NOTIFICATION_EMAIL ||
+    "contact@verdanza.fr,verdanza.1@gmail.com";
+  return raw
+    .split(",")
+    .map((email) => email.trim())
+    .filter(Boolean);
 }
 
 function orderEmailHtml(order: Order, intro: string) {
@@ -307,6 +350,7 @@ function adminOrderEmailHtml(order: Order) {
         .join("")}</ul>
       <p><strong>Total estime :</strong> ${formatMoney(Number(order.total || 0))}</p>
       ${order.customerMessage ? `<p><strong>Message client :</strong> ${escapeHtml(order.customerMessage)}</p>` : ""}
+      ${adminUrl() ? `<p><a href="${adminUrl()}">Ouvrir le cockpit admin</a></p>` : ""}
     </div>
   `;
 }
@@ -324,9 +368,43 @@ function adminOrderEmailText(order: Order) {
     order.items.map((item) => `${item.name} x ${item.quantity} g`).join("\n"),
     `Total estime: ${formatMoney(Number(order.total || 0))}`,
     order.customerMessage ? `Message client: ${order.customerMessage}` : "",
+    adminUrl() ? `Admin: ${adminUrl()}` : "",
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function invoiceEmailHtml(invoice: Invoice, settings: BillingSettings) {
+  return `
+    <div style="font-family:Arial,sans-serif;color:#183c2f;line-height:1.5">
+      <h1>Votre facture Verdanza ${escapeHtml(invoice.invoiceNumber)}</h1>
+      <p>Bonjour ${escapeHtml(invoice.customerName || "Client")},</p>
+      <p>Vous trouverez votre facture Verdanza en piece jointe.</p>
+      <p><strong>Total :</strong> ${formatMoney(Number(invoice.total || 0))}</p>
+      <p><strong>Statut du reglement :</strong> ${escapeHtml(invoice.paymentStatus)}</p>
+      ${invoice.orderId ? `<p><strong>Commande :</strong> ${escapeHtml(shortOrderId(invoice.orderId))}</p>` : ""}
+      <p>Pour toute question : ${escapeHtml(settings.phone)} - ${escapeHtml(settings.email)}</p>
+      <p>Merci,<br>Verdanza</p>
+    </div>
+  `;
+}
+
+function invoiceEmailText(invoice: Invoice, settings: BillingSettings) {
+  return [
+    `Votre facture Verdanza ${invoice.invoiceNumber}`,
+    "",
+    `Bonjour ${invoice.customerName || "Client"},`,
+    "Vous trouverez votre facture Verdanza en piece jointe.",
+    invoice.orderId ? `Commande: ${shortOrderId(invoice.orderId)}` : "",
+    `Total: ${formatMoney(Number(invoice.total || 0))}`,
+    `Statut du reglement: ${invoice.paymentStatus}`,
+    "",
+    `Telephone: ${settings.phone}`,
+    `Email: ${settings.email}`,
+    "",
+    "Merci,",
+    "Verdanza",
+  ].filter(Boolean).join("\n");
 }
 
 function contactEmailHtml(input: {
@@ -395,6 +473,10 @@ function contactPhone() {
 
 function contactEmail() {
   return process.env.VITE_CONTACT_EMAIL || "contact@verdanza.fr";
+}
+
+function adminUrl() {
+  return process.env.VITE_APP_URL ? `${process.env.VITE_APP_URL}/admin` : "";
 }
 
 function escapeHtml(value: string) {

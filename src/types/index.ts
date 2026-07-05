@@ -201,6 +201,72 @@ export type Order = {
   updatedAt: string;
 };
 
+export type InvoiceStatus =
+  | "draft"
+  | "validated"
+  | "sent"
+  | "paid"
+  | "cancelled"
+  | "credit_note_issued";
+
+export type VatMode = "not_configured" | "vat_exempt" | "vat_applicable" | "other";
+
+export type InvoiceLine = {
+  id: string;
+  label: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+};
+
+export type BillingSettings = {
+  id: "billing";
+  tradeName: string;
+  displayName: string;
+  legalName?: string;
+  legalForm?: string;
+  siren?: string;
+  siret?: string;
+  vatMode: VatMode;
+  vatNumber?: string;
+  vatMention?: string;
+  address?: string;
+  phone: string;
+  email: string;
+  paymentTerms?: string;
+  legalMentions?: string;
+  logoUrl?: string;
+  isManuallyValidated: boolean;
+  validationWarning: string;
+  updatedAt?: string;
+};
+
+export type Invoice = {
+  id: string;
+  invoiceNumber: string;
+  orderId?: string;
+  origin: "order" | "manual";
+  status: InvoiceStatus;
+  customerName: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  customerAddress?: Address;
+  lines: InvoiceLine[];
+  subtotal: number;
+  deliveryFee: number;
+  discountAmount: number;
+  total: number;
+  paymentMethod?: string;
+  paymentStatus: PaymentStatus;
+  internalNote?: string;
+  issuedAt?: string;
+  validatedAt?: string;
+  sentAt?: string;
+  sentTo?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type AdminMetric = {
   label: string;
   value: string;

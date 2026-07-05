@@ -2,9 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
 import { getAdminCustomersWithFallback } from "../services/adminCustomersService";
 import { getCouponsWithFallback } from "../services/couponsService";
+import {
+  defaultBillingSettings,
+  getBillingSettings,
+  getInvoicesWithFallback,
+} from "../services/invoicesService";
 import { getAdminOrdersWithFallback, type AdminOrderRow } from "../services/ordersService";
 import { getAdminProductsWithFallback } from "../services/productsService";
-import type { Coupon, CustomerProfile, DeliveryZone, Product } from "../types";
+import type { BillingSettings, Coupon, CustomerProfile, DeliveryZone, Invoice, Product } from "../types";
 
 export function useAdminData() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -17,6 +22,10 @@ export function useAdminData() {
   const [couponSource, setCouponSource] = useState<"firestore" | "empty">("empty");
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
   const [customerSource, setCustomerSource] = useState<"firestore" | "empty">("empty");
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoiceSource, setInvoiceSource] = useState<"firestore" | "empty">("empty");
+  const [billingSettings, setBillingSettings] = useState<BillingSettings>(defaultBillingSettings);
+  const [billingSource, setBillingSource] = useState<"firestore" | "local">("local");
   const [isLoading, setIsLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -27,12 +36,16 @@ export function useAdminData() {
       deliveryResult,
       couponResult,
       customerResult,
+      invoiceResult,
+      billingResult,
     ] = await Promise.all([
       getAdminProductsWithFallback(),
       getAdminOrdersWithFallback(),
       getDeliveryZonesWithFallback(),
       getCouponsWithFallback(),
       getAdminCustomersWithFallback(),
+      getInvoicesWithFallback(),
+      getBillingSettings(),
     ]);
     setProducts(productResult.products);
     setProductSource(productResult.source);
@@ -44,6 +57,10 @@ export function useAdminData() {
     setCouponSource(couponResult.source);
     setCustomers(customerResult.customers);
     setCustomerSource(customerResult.source);
+    setInvoices(invoiceResult.invoices);
+    setInvoiceSource(invoiceResult.source);
+    setBillingSettings(billingResult.settings);
+    setBillingSource(billingResult.source);
     setIsLoading(false);
   }, []);
 
@@ -62,6 +79,10 @@ export function useAdminData() {
     couponSource,
     customers,
     customerSource,
+    invoices,
+    invoiceSource,
+    billingSettings,
+    billingSource,
     isLoading,
     refresh,
   };
