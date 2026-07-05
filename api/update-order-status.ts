@@ -79,6 +79,57 @@ export default async function handler(
         });
       }
 
+      if (
+        body.orderStatus === "cancelled" &&
+        order.orderStatus !== "cancelled" &&
+        !order.stockRestoredAt
+      ) {
+        const now = new Date().toISOString();
+        for (const item of order.items || []) {
+          const quantity = Number(item.quantity || 0);
+          if (!item.productId || quantity <= 0) continue;
+          const productRef = db.collection("products").doc(item.productId);
+          transaction.update(productRef, {
+            stock: FieldValue.increment(quantity),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          transaction.set(db.collection("stockMovements").doc(), {
+            productId: item.productId,
+            productName: item.name,
+            type: "order_cancelled",
+            quantity,
+            note: `Annulation commande ${order.id}`,
+            createdAt: FieldValue.serverTimestamp(),
+            createdBy: admin.uid,
+            orderId: order.id,
+          });
+        }
+        update.stockRestoredAt = now;
+        update.cancelledAt = now;
+        if (!body.paymentStatus) update.paymentStatus = "cancelled";
+        if (order.couponCode && !order.couponRestoredAt) {
+          transaction.set(
+            db.collection("coupons").doc(order.couponCode.toLowerCase()),
+            {
+              usedCount: FieldValue.increment(-1),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+          update.couponRestoredAt = now;
+        }
+        if (order.invoiceId) {
+          transaction.set(
+            db.collection("invoices").doc(order.invoiceId),
+            {
+              status: "cancelled",
+              updatedAt: now,
+            },
+            { merge: true },
+          );
+        }
+      }
+
       transaction.update(
         orderRef,
         update as FirebaseFirestore.UpdateData<FirebaseFirestore.DocumentData>,
@@ -86,7 +137,10 @@ export default async function handler(
       updatedOrder = {
         ...order,
         orderStatus: nextStatus,
-        paymentStatus: body.paymentStatus ?? order.paymentStatus,
+        paymentStatus:
+          (update.paymentStatus as PaymentStatus | undefined) ??
+          body.paymentStatus ??
+          order.paymentStatus,
         internalNote: body.internalNote ?? order.internalNote,
       };
     });

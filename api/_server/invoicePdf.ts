@@ -117,14 +117,17 @@ export async function renderInvoicePdf(invoice: Invoice, settings: BillingSettin
     selectedFont: typeof font,
     color = rgb(0, 0, 0),
   ) {
-    lines.forEach((line, index) => {
-      page.drawText(sanitize(line).slice(0, 90), {
+    let offset = 0;
+    const maxWidth = x > 300 ? 210 : 500;
+    lines.flatMap((line) => wrapText(sanitize(line), selectedFont, size, maxWidth)).forEach((line) => {
+      page.drawText(line, {
         x,
-        y: startY - index * (size + 4),
+        y: startY - offset * (size + 4),
         size,
         font: selectedFont,
         color,
       });
+      offset += 1;
     });
   }
 
@@ -160,7 +163,38 @@ function formatMoney(value: number) {
 
 function sanitize(value: string) {
   return value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\x20-\x7E]/g, " ");
+    .replaceAll("€", "EUR")
+    .replaceAll("œ", "oe")
+    .replaceAll("Œ", "OE")
+    .replaceAll("’", "'")
+    .replaceAll("‘", "'")
+    .replaceAll("“", "\"")
+    .replaceAll("”", "\"")
+    .replaceAll("–", "-")
+    .replaceAll("—", "-")
+    .replaceAll("…", "...")
+    .replaceAll("\u00A0", " ")
+    .replace(/[^\x20-\x7E\xA0-\xFF]/g, " ");
+}
+
+function wrapText(
+  value: string,
+  font: Awaited<ReturnType<PDFDocument["embedFont"]>>,
+  size: number,
+  maxWidth: number,
+) {
+  const words = value.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+      current = candidate;
+      continue;
+    }
+    if (current) lines.push(current);
+    current = word;
+  }
+  if (current) lines.push(current);
+  return lines.length ? lines : [""];
 }

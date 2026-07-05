@@ -192,11 +192,16 @@ export type Order = {
   deliveryZone?: string;
   deliverySlot?: string;
   trackingNumber?: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
   statusHistory?: StatusHistoryEntry[];
   emails?: OrderEmails;
   alerts?: OrderAlerts;
   internalNote?: string;
   paidAt?: string;
+  cancelledAt?: string;
+  stockRestoredAt?: string;
+  couponRestoredAt?: string;
   createdAt: string;
   updatedAt: string;
 };

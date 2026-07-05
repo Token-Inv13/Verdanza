@@ -561,10 +561,10 @@ function ProductTable({
   return (
     <section className="overflow-hidden rounded-lg border border-forest/10 bg-ivory">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[860px] text-left text-sm">
+        <table className="w-full min-w-[960px] text-left text-sm">
           <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
             <tr>
-              {["Nom", "Categorie", "Prix", "Stock", "Actif", "Mis en avant", "Action"].map((header) => (
+              {["Produit", "Categorie", "Prix", "Stock", "Actif", "Mis en avant", "Action"].map((header) => (
                 <th key={header} className="px-4 py-3 font-medium">{header}</th>
               ))}
             </tr>
@@ -572,7 +572,20 @@ function ProductTable({
           <tbody>
             {products.map((product) => (
               <tr key={product.id} className="border-t border-forest/10">
-                <td className="px-4 py-4 text-forest">{product.name}</td>
+                <td className="px-4 py-4">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={product.image || "/verdanza-label.png"}
+                      alt=""
+                      className="h-14 w-14 rounded-md border border-forest/10 object-cover"
+                      loading="lazy"
+                    />
+                    <div>
+                      <strong className="block text-forest">{product.name}</strong>
+                      <span className="text-xs text-ink/50">{product.slug}</span>
+                    </div>
+                  </div>
+                </td>
                 <td className="px-4 py-4">{product.category}</td>
                 <td className="px-4 py-4">{product.price.toFixed(2)} EUR/g</td>
                 <td className="px-4 py-4">{product.stock} g</td>
