@@ -12,20 +12,15 @@ import type { Order, OrderStatus, PaymentStatus } from "../src/types/index.js";
 
 const orderStatuses: OrderStatus[] = [
   "new",
-  "pending",
-  "waiting_payment",
-  "payment_on_delivery",
-  "bank_transfer_pending",
-  "paid",
+  "contact_required",
+  "confirmed",
   "preparing",
-  "ready",
-  "shipped",
   "out_for_delivery",
+  "shipped",
   "delivered",
   "cancelled",
-  "refunded",
 ];
-const paymentStatuses: PaymentStatus[] = ["pending", "paid", "failed", "refunded"];
+const paymentStatuses: PaymentStatus[] = ["to_confirm", "pending", "paid", "cancelled"];
 
 export default async function handler(
   request: VercelRequestLike,
@@ -146,7 +141,7 @@ function parseBody(value: unknown): {
     throw new Error("Statut commande invalide.");
   }
   if (payload.paymentStatus && !paymentStatuses.includes(payload.paymentStatus)) {
-    throw new Error("Statut paiement invalide.");
+    throw new Error("Statut reglement invalide.");
   }
   return {
     ...payload,

@@ -90,7 +90,6 @@ export type StockMovement = {
   createdAt: string;
   createdBy?: string;
   orderId?: string;
-  stripeEventId?: string;
 };
 
 export type CartItem = {
@@ -110,20 +109,15 @@ export type Address = {
 
 export type OrderStatus =
   | "new"
-  | "pending"
-  | "waiting_payment"
-  | "payment_on_delivery"
-  | "bank_transfer_pending"
-  | "paid"
+  | "contact_required"
+  | "confirmed"
   | "preparing"
-  | "ready"
-  | "shipped"
   | "out_for_delivery"
+  | "shipped"
   | "delivered"
-  | "cancelled"
-  | "refunded";
+  | "cancelled";
 
-export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
+export type PaymentStatus = "to_confirm" | "pending" | "paid" | "cancelled";
 
 export type OrderItem = {
   productId: string;
@@ -136,7 +130,7 @@ export type StatusHistoryEntry = {
   status: OrderStatus;
   previousStatus?: OrderStatus;
   changedAt: string;
-  changedBy: "system" | "stripe" | "admin";
+  changedBy: "system" | "admin";
   changedByUid?: string;
   note?: string;
 };
@@ -191,17 +185,13 @@ export type Order = {
   paymentStatus: PaymentStatus;
   paymentReference?: string;
   paymentInstructions?: string;
+  customerMessage?: string;
   orderStatus: OrderStatus;
   deliveryMethod: DeliveryMethod;
   deliveryAddress: Address;
   deliveryZone?: string;
   deliverySlot?: string;
   trackingNumber?: string;
-  stripeSessionId?: string;
-  stripePaymentIntentId?: string;
-  stripeEventIds?: string[];
-  refundId?: string;
-  refundedAt?: string;
   statusHistory?: StatusHistoryEntry[];
   emails?: OrderEmails;
   alerts?: OrderAlerts;

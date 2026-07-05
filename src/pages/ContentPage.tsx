@@ -24,12 +24,12 @@ const content = {
   },
   faq: {
     title: "FAQ",
-    text: "Reponses pratiques sur les produits, la conformite, la livraison et le paiement.",
+    text: "Reponses pratiques sur les produits, la conformite, la livraison et le reglement.",
     points: [
       "Les produits sont-ils reserves aux majeurs ? Oui.",
       "Le THC est-il conforme ? Les fiches indiquent un taux inferieur a 0,3 %.",
       "Quels modes de livraison sont proposes ? Livraison postale en France et livraison locale selon zone disponible.",
-      "Quels modes de paiement sont proposes ? Virement bancaire, paiement a la livraison locale ou confirmation manuelle selon la commande.",
+      "Comment se passe le reglement ? Verdanza vous contacte apres validation pour confirmer les disponibilites, la livraison et le reglement.",
     ],
   },
   contact: {

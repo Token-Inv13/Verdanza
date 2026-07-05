@@ -9,23 +9,17 @@ type TransactionalEmailKind =
   | "order_confirmation"
   | "admin_new_order"
   | "order_status_update"
-  | "refund_notification"
   | "contact_message";
 
 const statusLabels: Record<OrderStatus, string> = {
   new: "Nouvelle commande",
-  pending: "En attente",
-  waiting_payment: "En attente de paiement",
-  payment_on_delivery: "Paiement a recuperer a la livraison",
-  bank_transfer_pending: "Virement en attente",
-  paid: "Payee",
+  contact_required: "Client a contacter",
+  confirmed: "Confirmee",
   preparing: "En preparation",
-  ready: "Prete",
-  shipped: "Expediee",
   out_for_delivery: "En livraison",
+  shipped: "Expediee",
   delivered: "Livree",
   cancelled: "Annulee",
-  refunded: "Remboursee",
 };
 
 export async function sendOrderConfirmationEmail(order: Order) {
@@ -38,16 +32,7 @@ export async function sendOrderConfirmationEmail(order: Order) {
     return { status: "skipped", reason: "customer_email_absent" } satisfies EmailResult;
   }
 
-  const subject = `Confirmation de commande Verdanza ${shortOrderId(order.id)}`;
-  return sendTransactionalEmail({
-    kind: "order_confirmation",
-    orderId: order.id,
-    to: order.customerEmail,
-    subject,
-    html: orderEmailHtml(order, "Votre paiement est confirme. Nous preparons votre commande."),
-    text: orderEmailText(order, "Votre paiement est confirme. Nous preparons votre commande."),
-    idempotencyKey: `order-confirmation-${order.id}`,
-  });
+  return sendManualOrderConfirmationEmail(order);
 }
 
 export async function sendAdminNewOrderEmail(order: Order) {
@@ -58,9 +43,9 @@ export async function sendAdminNewOrderEmail(order: Order) {
     kind: "admin_new_order",
     orderId: order.id,
     to: adminEmail,
-    subject: `Nouvelle commande Verdanza ${shortOrderId(order.id)}`,
-    html: orderEmailHtml(order, "Nouvelle commande payee a traiter dans l'administration."),
-    text: orderEmailText(order, "Nouvelle commande payee a traiter dans l'administration."),
+    subject: "Nouvelle commande Verdanza",
+    html: adminOrderEmailHtml(order),
+    text: adminOrderEmailText(order),
     idempotencyKey: `admin-new-order-${order.id}`,
   });
 }
@@ -79,15 +64,9 @@ export async function sendManualOrderConfirmationEmail(order: Order) {
     kind: "order_confirmation",
     orderId: order.id,
     to: order.customerEmail,
-    subject: `Commande Verdanza ${shortOrderId(order.id)} enregistree`,
-    html: orderEmailHtml(
-      order,
-      `Votre commande est enregistree. ${order.paymentInstructions || "Nous vous recontactons pour confirmer les prochaines etapes."}`,
-    ),
-    text: orderEmailText(
-      order,
-      `Votre commande est enregistree. ${order.paymentInstructions || "Nous vous recontactons pour confirmer les prochaines etapes."}`,
-    ),
+    subject: "Votre commande Verdanza a bien ete recue",
+    html: customerManualOrderEmailHtml(order),
+    text: customerManualOrderEmailText(order),
     idempotencyKey: `manual-order-confirmation-${order.id}`,
   });
 }
@@ -100,9 +79,9 @@ export async function sendAdminManualOrderEmail(order: Order) {
     kind: "admin_new_order",
     orderId: order.id,
     to: adminEmail,
-    subject: `Nouvelle commande Verdanza ${shortOrderId(order.id)}`,
-    html: orderEmailHtml(order, "Nouvelle commande a verifier dans l'administration."),
-    text: orderEmailText(order, "Nouvelle commande a verifier dans l'administration."),
+    subject: "Nouvelle commande Verdanza",
+    html: adminOrderEmailHtml(order),
+    text: adminOrderEmailText(order),
     idempotencyKey: `admin-manual-order-${order.id}`,
   });
 }
@@ -127,18 +106,6 @@ export async function sendOrderStatusUpdateEmail(
       `Votre commande passe de "${statusLabels[previousStatus]}" a "${statusLabels[nextStatus]}".`,
     ),
     idempotencyKey: `order-status-${order.id}-${nextStatus}`,
-  });
-}
-
-export async function sendRefundNotificationEmail(order: Order) {
-  return sendTransactionalEmail({
-    kind: "refund_notification",
-    orderId: order.id,
-    to: order.customerEmail,
-    subject: `Remboursement Verdanza ${shortOrderId(order.id)}`,
-    html: orderEmailHtml(order, "Le remboursement de votre commande a ete initie."),
-    text: orderEmailText(order, "Le remboursement de votre commande a ete initie."),
-    idempotencyKey: `order-refund-${order.id}`,
   });
 }
 
@@ -270,8 +237,9 @@ function orderEmailHtml(order: Order, intro: string) {
       <p>${escapeHtml(intro)}</p>
       <p><strong>Commande :</strong> ${escapeHtml(shortOrderId(order.id))}</p>
       <ul>${rows}</ul>
-      <p><strong>Total :</strong> ${formatMoney(Number(order.total || 0))}</p>
+      <p><strong>Total estime :</strong> ${formatMoney(Number(order.total || 0))}</p>
       <p><strong>Livraison :</strong> ${escapeHtml(order.deliveryZone || order.deliveryMethod)}</p>
+      <p><strong>Contact Verdanza :</strong> ${escapeHtml(contactPhone())} - ${escapeHtml(contactEmail())}</p>
       ${accountUrl ? `<p><a href="${accountUrl}">Voir mes commandes</a></p>` : ""}
     </div>
   `;
@@ -286,9 +254,79 @@ function orderEmailText(order: Order, intro: string) {
     intro,
     `Commande: ${shortOrderId(order.id)}`,
     items,
-    `Total: ${formatMoney(Number(order.total || 0))}`,
+    `Total estime: ${formatMoney(Number(order.total || 0))}`,
     `Livraison: ${order.deliveryZone || order.deliveryMethod}`,
+    `Contact Verdanza: ${contactPhone()} - ${contactEmail()}`,
   ].join("\n");
+}
+
+function customerManualOrderEmailHtml(order: Order) {
+  return orderEmailHtml(
+    order,
+    "Votre commande a bien ete transmise a Verdanza. Nous vous contacterons rapidement par telephone ou par email afin de confirmer les disponibilites, la livraison et le reglement.",
+  );
+}
+
+function customerManualOrderEmailText(order: Order) {
+  return [
+    "Bonjour,",
+    "",
+    "Votre commande a bien ete transmise a Verdanza.",
+    "",
+    "Nous vous contacterons rapidement par telephone ou par email afin de confirmer les disponibilites, la livraison et le reglement.",
+    "",
+    "Contact Verdanza:",
+    `Telephone: ${contactPhone()}`,
+    `Email: ${contactEmail()}`,
+    "",
+    "Resume de votre commande:",
+    order.items
+      .map((item) => `${item.name} x ${item.quantity} g - ${formatMoney(item.unitPrice * item.quantity)}`)
+      .join("\n"),
+    `Total estime: ${formatMoney(Number(order.total || 0))}`,
+    "",
+    "Merci,",
+    "Verdanza",
+  ].join("\n");
+}
+
+function adminOrderEmailHtml(order: Order) {
+  const address = order.deliveryAddress;
+  return `
+    <div style="font-family:Arial,sans-serif;color:#183c2f;line-height:1.5">
+      <h1>Nouvelle commande Verdanza</h1>
+      <p><strong>Commande :</strong> ${escapeHtml(shortOrderId(order.id))}</p>
+      <p><strong>Client :</strong> ${escapeHtml(order.customerName || "Client")}</p>
+      <p><strong>Telephone :</strong> ${escapeHtml(order.customerPhone || "")}</p>
+      <p><strong>Email :</strong> ${escapeHtml(order.customerEmail || "")}</p>
+      <p><strong>Adresse :</strong> ${escapeHtml(formatAddress(address))}</p>
+      <p><strong>Livraison :</strong> ${escapeHtml(order.deliveryZone || order.deliveryMethod)}</p>
+      <p><strong>Produits :</strong></p>
+      <ul>${order.items
+        .map((item) => `<li>${escapeHtml(item.name)} x ${item.quantity} g</li>`)
+        .join("")}</ul>
+      <p><strong>Total estime :</strong> ${formatMoney(Number(order.total || 0))}</p>
+      ${order.customerMessage ? `<p><strong>Message client :</strong> ${escapeHtml(order.customerMessage)}</p>` : ""}
+    </div>
+  `;
+}
+
+function adminOrderEmailText(order: Order) {
+  return [
+    "Nouvelle commande Verdanza",
+    `Commande: ${shortOrderId(order.id)}`,
+    `Client: ${order.customerName || "Client"}`,
+    `Telephone: ${order.customerPhone || ""}`,
+    `Email: ${order.customerEmail || ""}`,
+    `Adresse: ${formatAddress(order.deliveryAddress)}`,
+    `Livraison: ${order.deliveryZone || order.deliveryMethod}`,
+    "Produits:",
+    order.items.map((item) => `${item.name} x ${item.quantity} g`).join("\n"),
+    `Total estime: ${formatMoney(Number(order.total || 0))}`,
+    order.customerMessage ? `Message client: ${order.customerMessage}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function contactEmailHtml(input: {
@@ -337,6 +375,26 @@ function shortOrderId(orderId: string) {
 
 function formatMoney(value: number) {
   return `${value.toFixed(2).replace(".", ",")} EUR`;
+}
+
+function formatAddress(address?: Order["deliveryAddress"]) {
+  if (!address) return "Adresse non renseignee";
+  return [
+    address.line1,
+    address.line2,
+    `${address.postalCode} ${address.city}`.trim(),
+    address.country,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function contactPhone() {
+  return process.env.VERDANZA_CONTACT_PHONE || "07 80 81 41 37";
+}
+
+function contactEmail() {
+  return process.env.VITE_CONTACT_EMAIL || "contact@verdanza.fr";
 }
 
 function escapeHtml(value: string) {

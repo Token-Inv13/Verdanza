@@ -4,17 +4,21 @@ import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { deliveryZones, localDeliveryZones } from "../data/deliveryZones";
-import type { DeliveryMethod, PaymentProvider } from "../types";
+import type { DeliveryMethod } from "../types";
 import { trackEvent } from "../lib/analytics";
+
+const contactPhone = (import.meta.env.VITE_CONTACT_PHONE as string | undefined) || "07 80 81 41 37";
+const contactEmail = (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) || "contact@verdanza.fr";
 
 export function CheckoutPage() {
   const { itemCount, subtotal, items, lines } = useCart();
   const { user, customerProfile } = useAuth();
   const navigate = useNavigate();
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("postal");
-  const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>("bank_transfer");
   const [deliveryZone, setDeliveryZone] = useState(localDeliveryZones[0]?.id ?? "");
   const [couponCode, setCouponCode] = useState("");
+  const [customerMessage, setCustomerMessage] = useState("");
+  const [complianceAccepted, setComplianceAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [customer, setCustomer] = useState({
@@ -88,8 +92,9 @@ export function CheckoutPage() {
           authToken,
           deliveryMethod,
           deliveryZone: deliveryMethod === "local_express" ? deliveryZone : "postal-france",
-          paymentProvider,
           couponCode: couponCode.trim() || undefined,
+          customerMessage: customerMessage.trim() || undefined,
+          complianceAccepted,
           customer: {
             email: customer.email,
             phone: customer.phone,
@@ -111,9 +116,23 @@ export function CheckoutPage() {
       if (!response.ok || !payload.orderId) {
         throw new Error(payload.error || "Commande indisponible.");
       }
-      navigate(
-        `/checkout/success?order_id=${encodeURIComponent(payload.orderId)}&payment=${paymentProvider}`,
+      window.sessionStorage.setItem(
+        "verdanza:lastOrderSummary",
+        JSON.stringify({
+          orderId: payload.orderId,
+          items: lines.map((line) => ({
+            name: line.product.name,
+            quantity: line.quantity,
+            total: line.lineTotal,
+          })),
+          delivery:
+            deliveryMethod === "local_express"
+              ? selectedZone?.name || "Livraison locale"
+              : "Livraison postale en France",
+          total: estimatedTotal,
+        }),
       );
+      navigate(`/checkout/success?order_id=${encodeURIComponent(payload.orderId)}`);
     } catch (checkoutError) {
       setError(
         checkoutError instanceof Error
@@ -133,11 +152,20 @@ export function CheckoutPage() {
       <div className="page-intro">
         <h1>Finaliser ma commande</h1>
         <p>
-          Verifiez vos informations, choisissez votre livraison et votre mode de
-          paiement. Votre commande est verifiee avant validation afin de confirmer
-          les disponibilites et les informations de livraison.
+          Votre commande sera transmise a Verdanza. Nous vous contacterons
+          rapidement par telephone ou par email pour confirmer les disponibilites,
+          la livraison et le reglement.
         </p>
       </div>
+      <section className="mt-8 rounded-lg border border-champagne/30 bg-cream p-5 text-sm leading-6 text-forest">
+        <p>Contact direct : {contactPhone}</p>
+        <p>
+          Email :{" "}
+          <a className="underline decoration-champagne" href={`mailto:${contactEmail}`}>
+            {contactEmail}
+          </a>
+        </p>
+      </section>
       {!user && itemCount > 0 && (
         <section className="mt-8 rounded-lg border border-champagne/30 bg-cream p-5">
           <p className="text-sm leading-6 text-forest">
@@ -189,12 +217,7 @@ export function CheckoutPage() {
                   checked={deliveryMethod === "postal"}
                   title="Livraison postale en France"
                   text="Livraison postale disponible en France. Les frais et delais sont indiques avant validation de la commande."
-                  onChange={() => {
-                    setDeliveryMethod("postal");
-                    if (paymentProvider === "cash_on_delivery") {
-                      setPaymentProvider("bank_transfer");
-                    }
-                  }}
+                  onChange={() => setDeliveryMethod("postal")}
                 />
                 <DeliveryChoice
                   checked={deliveryMethod === "local_express"}
@@ -228,7 +251,8 @@ export function CheckoutPage() {
               {!isLocalDelivery && (
                 <p className="mt-4 rounded-md border border-champagne/30 bg-cream p-3 text-sm leading-6 text-forest">
                   Livraison postale disponible en France. Les delais dependent du
-                  transporteur et seront confirmes avec le suivi de commande.
+                  transporteur. Le reglement et les frais de livraison sont
+                  confirmes directement avec vous apres validation.
                 </p>
               )}
               <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -243,29 +267,21 @@ export function CheckoutPage() {
             </div>
 
             <div className="rounded-lg border border-forest/10 bg-ivory p-6">
-              <h2 className="font-display text-3xl text-forest">Paiement</h2>
-              <div className="mt-5 grid gap-3">
-                {isLocalDelivery && (
-                  <PaymentChoice
-                    checked={paymentProvider === "cash_on_delivery"}
-                    title="Paiement a la livraison"
-                    text="Disponible en livraison locale. Le paiement sera effectue lors de la remise de commande."
-                    onChange={() => setPaymentProvider("cash_on_delivery")}
-                  />
-                )}
-                <PaymentChoice
-                  checked={paymentProvider === "bank_transfer"}
-                  title="Virement bancaire"
-                  text="Disponible en livraison locale et postale. Les informations de virement sont envoyees apres validation."
-                  onChange={() => setPaymentProvider("bank_transfer")}
+              <h2 className="font-display text-3xl text-forest">Reglement</h2>
+              <p className="mt-4 text-sm leading-6 text-ink/70">
+                Le reglement est confirme directement avec vous apres validation
+                de la commande. Aucun reglement n'est demande sur le site.
+              </p>
+              <label className="mt-5 block text-sm font-medium text-forest">
+                Message optionnel
+                <textarea
+                  className="input-field mt-2 min-h-32 resize-y"
+                  value={customerMessage}
+                  onChange={(event) => setCustomerMessage(event.target.value)}
+                  maxLength={1000}
+                  placeholder="Precision sur votre commande, vos disponibilites ou la livraison."
                 />
-                <PaymentChoice
-                  checked={paymentProvider === "manual"}
-                  title="Paiement manuel apres confirmation"
-                  text="Verdanza vous recontacte pour confirmer la commande et le moyen de paiement adapte."
-                  onChange={() => setPaymentProvider("manual")}
-                />
-              </div>
+              </label>
             </div>
           </section>
 
@@ -308,7 +324,13 @@ export function CheckoutPage() {
               )}
             </div>
             <label className="mt-6 flex items-start gap-3 text-sm text-ink/70">
-              <input type="checkbox" className="mt-1" required />
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={complianceAccepted}
+                onChange={(event) => setComplianceAccepted(event.target.checked)}
+                required
+              />
               Je confirme être majeur et avoir pris connaissance des informations
               de conformité.
             </label>
@@ -339,34 +361,6 @@ function DeliveryChoice({
       <input
         type="radio"
         name="deliveryMethod"
-        className="mt-1"
-        checked={checked}
-        onChange={onChange}
-      />
-      <span>
-        <strong className="block">{title}</strong>
-        <span className="text-ink/65">{text}</span>
-      </span>
-    </label>
-  );
-}
-
-function PaymentChoice({
-  checked,
-  title,
-  text,
-  onChange,
-}: {
-  checked: boolean;
-  title: string;
-  text: string;
-  onChange: () => void;
-}) {
-  return (
-    <label className="flex cursor-pointer gap-3 rounded-md border border-forest/10 bg-cream p-4 text-sm leading-6 text-forest has-[:checked]:border-champagne">
-      <input
-        type="radio"
-        name="paymentProvider"
         className="mt-1"
         checked={checked}
         onChange={onChange}

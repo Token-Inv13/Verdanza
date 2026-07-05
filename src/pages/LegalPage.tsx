@@ -70,10 +70,10 @@ function legalSections(title: string, contactEmail?: string) {
   if (title.includes("Conditions")) {
     return [
       {
-        heading: "Commande et paiement",
+        heading: "Commande et reglement",
         items: [
           "Les prix sont affiches au gramme et les disponibilites sont verifiees avant validation de la commande.",
-          "Les moyens de paiement disponibles sont indiques au checkout et peuvent inclure virement bancaire, paiement a la livraison locale ou confirmation manuelle.",
+          "Le reglement est confirme directement avec le client par telephone ou par email apres validation de commande.",
           "Une commande est enregistree apres verification du panier, du stock et des informations de livraison.",
         ],
       },
@@ -95,7 +95,7 @@ function legalSections(title: string, contactEmail?: string) {
         items: [
           "Les donnees de compte, commande, livraison et contact sont utilisees pour executer la commande et assurer le suivi client.",
           "Les donnees sont traitees par des prestataires techniques necessaires au fonctionnement du site et au suivi des commandes.",
-          "Les donnees de paiement manuel sont utilisees uniquement pour le suivi de commande et la confirmation administrative.",
+          "Les donnees de reglement manuel sont utilisees uniquement pour le suivi de commande et la confirmation administrative.",
         ],
       },
       {

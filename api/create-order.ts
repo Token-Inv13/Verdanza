@@ -99,7 +99,6 @@ export default async function handler(
     sendJson(response, {
       orderId: orderRef.id,
       total: priced.total,
-      paymentProvider: body.paymentProvider ?? "manual",
       paymentInstructions: order.paymentInstructions,
     });
   } catch (error) {

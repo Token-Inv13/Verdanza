@@ -6,7 +6,11 @@ import {
   type VercelRequestLike,
   type VercelResponseLike,
 } from "./_server/http.js";
-import { sendPostPaymentEmails } from "./_server/orderEmailDelivery.js";
+import {
+  sendAdminManualOrderEmail,
+  sendManualOrderConfirmationEmail,
+} from "./_server/email.js";
+import type { Order } from "../src/types/index.js";
 
 type RetryTarget = "all" | "client" | "admin";
 
@@ -30,12 +34,14 @@ export default async function handler(
 
     const orderSnapshot = await db.collection("orders").doc(body.orderId).get();
     if (!orderSnapshot.exists) throw new Error("Commande introuvable.");
-    const order = orderSnapshot.data();
-    if (order?.paymentStatus !== "paid") {
-      throw new Error("Les emails post-paiement ne peuvent etre relances que sur une commande payee.");
-    }
+    const order = { id: orderSnapshot.id, ...orderSnapshot.data() } as Order;
 
-    await sendPostPaymentEmails(db, body.orderId, body.target);
+    if (body.target === "all" || body.target === "client") {
+      await sendManualOrderConfirmationEmail(order);
+    }
+    if (body.target === "all" || body.target === "admin") {
+      await sendAdminManualOrderEmail(order);
+    }
     sendJson(response, { ok: true });
   } catch (error) {
     console.error("retry-order-emails failed", error);

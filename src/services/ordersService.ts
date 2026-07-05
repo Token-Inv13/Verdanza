@@ -28,12 +28,11 @@ export type AdminOrderRow = {
   delivery: string;
   trackingNumber?: string;
   paymentReference?: string;
+  customerMessage?: string;
   items: OrderItem[];
   total: string;
   internalNote?: string;
   statusHistory?: StatusHistoryEntry[];
-  refundId?: string;
-  stripePaymentIntentId?: string;
 };
 
 export type CustomerOrderRow = {
@@ -69,12 +68,11 @@ export async function getAdminOrdersWithFallback() {
         delivery: order.deliveryZone || order.deliveryMethod,
         trackingNumber: order.trackingNumber,
         paymentReference: order.paymentReference,
+        customerMessage: order.customerMessage,
         items: order.items || [],
         total: `${Number(order.total || 0).toFixed(2).replace(".", ",")} EUR`,
         internalNote: order.internalNote,
         statusHistory: order.statusHistory || [],
-        refundId: order.refundId,
-        stripePaymentIntentId: order.stripePaymentIntentId,
       };
     });
     return {
@@ -112,30 +110,6 @@ export async function updateOrderAdminFields(
   if (!response.ok) {
     throw new Error(payload.error || "Mise a jour commande impossible.");
   }
-}
-
-export async function refundOrderAdmin(
-  orderId: string,
-  data: { restock?: boolean; reason?: string } = {},
-) {
-  const token = await auth?.currentUser?.getIdToken();
-  if (!token) throw new Error("Connexion admin requise.");
-  const response = await fetch("/api/refund-order", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ orderId, ...data }),
-  });
-  const payload = (await response.json().catch(() => ({}))) as {
-    error?: string;
-    refundId?: string;
-  };
-  if (!response.ok) {
-    throw new Error(payload.error || "Remboursement impossible.");
-  }
-  return payload;
 }
 
 export async function getCustomerOrders(customerId: string) {

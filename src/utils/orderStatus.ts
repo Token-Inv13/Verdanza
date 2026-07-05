@@ -2,41 +2,35 @@ import type { OrderStatus, PaymentProvider, PaymentStatus } from "../types";
 
 export const orderStatusLabels: Record<OrderStatus, string> = {
   new: "Nouvelle commande",
-  pending: "En attente",
-  waiting_payment: "En attente de paiement",
-  payment_on_delivery: "Paiement a recuperer a la livraison",
-  bank_transfer_pending: "Virement en attente",
-  paid: "Payee",
+  contact_required: "Client a contacter",
+  confirmed: "Confirmee",
   preparing: "En preparation",
-  ready: "Prete",
-  shipped: "Expediee",
   out_for_delivery: "En livraison",
+  shipped: "Expediee",
   delivered: "Livree",
   cancelled: "Annulee",
-  refunded: "Remboursee",
 };
 
 export const paymentStatusLabels: Record<PaymentStatus, string> = {
+  to_confirm: "A confirmer",
   pending: "En attente",
-  paid: "Paye",
-  failed: "Echec",
-  refunded: "Rembourse",
+  paid: "Regle",
+  cancelled: "Annule",
 };
 
 export const paymentProviderLabels: Record<PaymentProvider, string> = {
-  manual: "Paiement manuel apres confirmation",
-  bank_transfer: "Virement bancaire",
-  cash_on_delivery: "Paiement a la livraison",
-  future_psp: "Prestataire de paiement a venir",
+  manual: "Reglement a confirmer directement",
+  bank_transfer: "Reglement a confirmer directement",
+  cash_on_delivery: "Reglement a confirmer directement",
+  future_psp: "Reglement a confirmer directement",
 };
 
 export const visibleOrderSteps: OrderStatus[] = [
   "new",
-  "waiting_payment",
-  "bank_transfer_pending",
-  "payment_on_delivery",
+  "contact_required",
+  "confirmed",
   "preparing",
-  "ready",
+  "out_for_delivery",
   "shipped",
   "delivered",
 ];

@@ -3,7 +3,6 @@ import { getCustomerOrders, type CustomerOrderRow } from "../../services/ordersS
 import { useAuth } from "../../context/AuthContext";
 import {
   orderStatusLabel,
-  paymentProviderLabel,
   paymentStatusLabel,
   visibleOrderSteps,
 } from "../../utils/orderStatus";
@@ -63,8 +62,7 @@ export function AccountOrdersPage() {
               <strong>{order.total.toFixed(2).replace(".", ",")} EUR</strong>
             </div>
             <div className="mt-3 grid gap-2 text-sm text-ink/70">
-              <p>Mode de paiement : {paymentProviderLabel(order.paymentProvider)}</p>
-              <p>Paiement : {paymentStatusLabel(order.paymentStatus)}</p>
+              <p>Reglement : {paymentStatusLabel(order.paymentStatus)}</p>
               <p>Statut : {orderStatusLabel(order.orderStatus)}</p>
               <p>Livraison : {order.deliveryMethod}</p>
               {order.trackingNumber && <p>Suivi postal : {order.trackingNumber}</p>}
@@ -84,7 +82,7 @@ export function AccountOrdersPage() {
 }
 
 function OrderProgress({ order }: { order: CustomerOrderRow }) {
-  const exceptional = order.orderStatus === "cancelled" || order.orderStatus === "refunded";
+  const exceptional = order.orderStatus === "cancelled";
   const activeIndex = visibleOrderSteps.indexOf(order.orderStatus);
 
   return (

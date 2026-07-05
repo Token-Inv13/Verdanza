@@ -7,10 +7,7 @@ import {
   upsertProduct,
   type ProductInput,
 } from "../../services/productsService";
-import {
-  refundOrderAdmin,
-  updateOrderAdminFields,
-} from "../../services/ordersService";
+import { updateOrderAdminFields } from "../../services/ordersService";
 import { updateDeliveryZoneAdmin } from "../../services/deliveryZonesService";
 import {
   updateCouponStatus,
@@ -186,19 +183,6 @@ export function AdminPage({ section }: { section: string }) {
     await refresh();
   }
 
-  async function handleRefund(orderId: string, restock: boolean) {
-    if (orderSource !== "firestore") {
-      setMessage("Aucune commande remboursable.");
-      return;
-    }
-    const result = await refundOrderAdmin(orderId, {
-      restock,
-      reason: "Remboursement initie depuis l'administration Verdanza.",
-    });
-    setMessage(`Remboursement enregistre : ${result.refundId ?? "OK"}.`);
-    await refresh();
-  }
-
   return (
     <div className="p-5 md:p-8">
       <div className="flex flex-col justify-between gap-4 border-b border-forest/10 pb-6 md:flex-row md:items-end">
@@ -259,7 +243,6 @@ export function AdminPage({ section }: { section: string }) {
               await updateOrderAdminFields(orderId, data);
               await refresh();
             }}
-            onRefund={handleRefund}
           />
         </>
       )}
@@ -313,7 +296,6 @@ export function AdminPage({ section }: { section: string }) {
               await updateOrderAdminFields(orderId, data);
               await refresh();
             }}
-            onRefund={handleRefund}
           />
         </>
       )}
@@ -882,7 +864,6 @@ function AdminOrders({
   orders,
   orderSource,
   onUpdate,
-  onRefund,
 }: {
   orders: {
     id: string;
@@ -902,12 +883,11 @@ function AdminOrders({
     delivery: string;
     trackingNumber?: string;
     paymentReference?: string;
+    customerMessage?: string;
     items: { name: string; quantity: number }[];
     total: string;
     internalNote?: string;
     statusHistory?: StatusHistoryEntry[];
-    refundId?: string;
-    stripePaymentIntentId?: string;
   }[];
   orderSource: "firestore" | "empty";
   onUpdate: (
@@ -920,10 +900,6 @@ function AdminOrders({
       paymentReference?: string;
       trackingNumber?: string;
     },
-  ) => Promise<void>;
-  onRefund: (
-    orderId: string,
-    restock: boolean,
   ) => Promise<void>;
 }) {
   return (
@@ -940,7 +916,7 @@ function AdminOrders({
               {[
                 "Commande",
                 "Client",
-                "Paiement",
+                "Reglement",
                 "Statut commande",
                 "Livraison",
                 "Produits",
@@ -948,7 +924,6 @@ function AdminOrders({
                 "Reference / suivi",
                 "Note interne",
                 "Historique",
-                "Remboursement",
               ].map((header) => (
                 <th key={header} className="px-4 py-3 font-medium">{header}</th>
               ))}
@@ -977,7 +952,7 @@ function AdminOrders({
                       })
                     }
                   >
-                    {["pending", "paid", "failed", "refunded"].map((status) => (
+                    {["to_confirm", "pending", "paid", "cancelled"].map((status) => (
                       <option key={status} value={status}>
                         {paymentStatusLabel(status)}
                       </option>
@@ -999,19 +974,14 @@ function AdminOrders({
                     }}
                   >
                     {[
-                      "pending",
                       "new",
-                      "waiting_payment",
-                      "payment_on_delivery",
-                      "bank_transfer_pending",
-                      "paid",
+                      "contact_required",
+                      "confirmed",
                       "preparing",
-                      "ready",
-                      "shipped",
                       "out_for_delivery",
+                      "shipped",
                       "delivered",
                       "cancelled",
-                      "refunded",
                     ].map((status) => (
                       <option key={status} value={status}>
                         {orderStatusLabel(status)}
@@ -1029,6 +999,11 @@ function AdminOrders({
                       {order.deliveryAddress.postalCode} {order.deliveryAddress.city}
                     </span>
                   )}
+                  {order.customerMessage && (
+                    <span className="mt-2 block text-xs leading-5 text-forest">
+                      Message : {order.customerMessage}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-4">
                   {order.items.length
@@ -1040,7 +1015,7 @@ function AdminOrders({
                   <input
                     className="input-field"
                     defaultValue={order.paymentReference || ""}
-                    placeholder="Ref paiement"
+                    placeholder="Reference reglement"
                     disabled={orderSource !== "firestore"}
                     onBlur={(event) =>
                       void onUpdate(order.id, {
@@ -1080,31 +1055,6 @@ function AdminOrders({
                         .map((entry) => orderStatusLabel(entry.status))
                         .join(" -> ")
                     : "Aucun historique"}
-                </td>
-                <td className="px-4 py-4">
-                  {order.refundId ? (
-                    <span className="text-xs text-forest">Rembourse</span>
-                  ) : (
-                    <button
-                      className="btn-secondary whitespace-nowrap text-xs"
-                      disabled={
-                        orderSource !== "firestore" ||
-                        order.paymentStatus !== "paid" ||
-                        !order.stripePaymentIntentId
-                      }
-                      onClick={() => {
-                        const restock = window.confirm(
-                          "Remettre les produits en stock apres remboursement ?",
-                        );
-                        const confirmed = window.confirm(
-                          "Confirmer le remboursement de cette commande ?",
-                        );
-                        if (confirmed) void onRefund(order.id, restock);
-                      }}
-                    >
-                      Rembourser
-                    </button>
-                  )}
                 </td>
               </tr>
             ))}
@@ -1158,17 +1108,17 @@ function buildDashboardMetrics(
     total: string;
   }[],
 ): AdminMetric[] {
+  const estimatedTotal = orders.reduce((sum, order) => sum + parseEuro(order.total), 0);
   const paidOrders = orders.filter((order) => order.paymentStatus === "paid");
-  const revenue = paidOrders.reduce((sum, order) => sum + parseEuro(order.total), 0);
+  const paymentToConfirm = orders.filter((order) =>
+    ["to_confirm", "pending"].includes(order.paymentStatus),
+  );
   const preparingOrders = orders.filter((order) =>
     [
       "new",
-      "waiting_payment",
-      "payment_on_delivery",
-      "bank_transfer_pending",
-      "paid",
+      "contact_required",
+      "confirmed",
       "preparing",
-      "ready",
     ].includes(order.orderStatus),
   );
   const deliveryOrders = orders.filter((order) =>
@@ -1177,7 +1127,7 @@ function buildDashboardMetrics(
   const lowStockProducts = products.filter(
     (product) => product.stock <= product.lowStockThreshold,
   );
-  const averageCart = paidOrders.length ? revenue / paidOrders.length : 0;
+  const averageCart = orders.length ? estimatedTotal / orders.length : 0;
   const activeProducts = products.filter((product) => product.isActive);
   const totalStock = activeProducts.reduce(
     (sum, product) => sum + Number(product.stock || 0),
@@ -1186,14 +1136,14 @@ function buildDashboardMetrics(
 
   return [
     {
-      label: "CA paye",
-      value: `${formatEuro(revenue)} EUR`,
-      detail: `${paidOrders.length} commande(s) payee(s)`,
+      label: "Total estime",
+      value: `${formatEuro(estimatedTotal)} EUR`,
+      detail: `${orders.length} commande(s)`,
     },
     {
-      label: "Commandes payees",
-      value: String(paidOrders.length),
-      detail: "Paiements confirmes",
+      label: "Reglements a suivre",
+      value: String(paymentToConfirm.length),
+      detail: `${paidOrders.length} deja regle(s)`,
     },
     {
       label: "A preparer",
@@ -1218,7 +1168,7 @@ function buildDashboardMetrics(
     {
       label: "Panier moyen",
       value: `${formatEuro(averageCart)} EUR`,
-      detail: "Commandes payees",
+      detail: "Commandes enregistrees",
     },
     {
       label: "Stocks bas",
