@@ -23,6 +23,11 @@ export default async function handler(
   if (assertMethod(request, response, "POST")) return;
 
   try {
+    if (process.env.STRIPE_CHECKOUT_ENABLED !== "true") {
+      sendJson(response, { error: "Paiement en ligne temporairement indisponible." }, 503);
+      return;
+    }
+
     const requestBody =
       typeof request.body === "string" ? JSON.parse(request.body) : request.body;
     const body = parseCheckoutBody(requestBody);

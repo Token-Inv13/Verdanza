@@ -8,10 +8,14 @@ import {
   type VercelResponseLike,
 } from "./_server/http.js";
 import { sendOrderStatusUpdateEmail } from "./_server/email.js";
-import type { Order, OrderStatus } from "../src/types/index.js";
+import type { Order, OrderStatus, PaymentStatus } from "../src/types/index.js";
 
 const orderStatuses: OrderStatus[] = [
+  "new",
   "pending",
+  "waiting_payment",
+  "payment_on_delivery",
+  "bank_transfer_pending",
   "paid",
   "preparing",
   "ready",
@@ -21,6 +25,7 @@ const orderStatuses: OrderStatus[] = [
   "cancelled",
   "refunded",
 ];
+const paymentStatuses: PaymentStatus[] = ["pending", "paid", "failed", "refunded"];
 
 export default async function handler(
   request: VercelRequestLike,
@@ -57,6 +62,15 @@ export default async function handler(
       if (body.internalNote !== undefined) {
         update.internalNote = body.internalNote;
       }
+      if (body.paymentStatus) {
+        update.paymentStatus = body.paymentStatus;
+      }
+      if (body.paymentReference !== undefined) {
+        update.paymentReference = body.paymentReference;
+      }
+      if (body.trackingNumber !== undefined) {
+        update.trackingNumber = body.trackingNumber;
+      }
 
       if (body.orderStatus && body.orderStatus !== order.orderStatus) {
         update.orderStatus = body.orderStatus;
@@ -77,6 +91,7 @@ export default async function handler(
       updatedOrder = {
         ...order,
         orderStatus: nextStatus,
+        paymentStatus: body.paymentStatus ?? order.paymentStatus,
         internalNote: body.internalNote ?? order.internalNote,
       };
     });
@@ -107,7 +122,10 @@ export default async function handler(
 function parseBody(value: unknown): {
   orderId: string;
   orderStatus?: OrderStatus;
+  paymentStatus?: PaymentStatus;
   internalNote?: string;
+  paymentReference?: string;
+  trackingNumber?: string;
   historyNote?: string;
   authToken?: string;
 } {
@@ -116,13 +134,19 @@ function parseBody(value: unknown): {
   const payload = body as {
     orderId?: string;
     orderStatus?: OrderStatus;
+    paymentStatus?: PaymentStatus;
     internalNote?: string;
+    paymentReference?: string;
+    trackingNumber?: string;
     historyNote?: string;
     authToken?: string;
   };
   if (!payload.orderId) throw new Error("orderId requis.");
   if (payload.orderStatus && !orderStatuses.includes(payload.orderStatus)) {
     throw new Error("Statut commande invalide.");
+  }
+  if (payload.paymentStatus && !paymentStatuses.includes(payload.paymentStatus)) {
+    throw new Error("Statut paiement invalide.");
   }
   return {
     ...payload,
@@ -133,7 +157,10 @@ function parseBody(value: unknown): {
 function parseJsonObject(value: unknown): {
   orderId?: string;
   orderStatus?: OrderStatus;
+  paymentStatus?: PaymentStatus;
   internalNote?: string;
+  paymentReference?: string;
+  trackingNumber?: string;
   historyNote?: string;
   authToken?: string;
 } {
@@ -142,7 +169,10 @@ function parseJsonObject(value: unknown): {
   return body as {
     orderId?: string;
     orderStatus?: OrderStatus;
+    paymentStatus?: PaymentStatus;
     internalNote?: string;
+    paymentReference?: string;
+    trackingNumber?: string;
     historyNote?: string;
     authToken?: string;
   };

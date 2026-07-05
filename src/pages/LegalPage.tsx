@@ -72,9 +72,9 @@ function legalSections(title: string, contactEmail?: string) {
       {
         heading: "Commande et paiement",
         items: [
-          "Les prix sont affiches au gramme et les disponibilites sont verifiees avant validation du paiement.",
-          "Le paiement est traite par un prestataire specialise. Verdanza ne stocke pas les donnees de carte bancaire.",
-          "Une commande est confirmee apres validation du paiement et verification du stock.",
+          "Les prix sont affiches au gramme et les disponibilites sont verifiees avant validation de la commande.",
+          "Les moyens de paiement disponibles sont indiques au checkout et peuvent inclure virement bancaire, paiement a la livraison locale ou confirmation manuelle.",
+          "Une commande est enregistree apres verification du panier, du stock et des informations de livraison.",
         ],
       },
       {
@@ -95,7 +95,7 @@ function legalSections(title: string, contactEmail?: string) {
         items: [
           "Les donnees de compte, commande, livraison et contact sont utilisees pour executer la commande et assurer le suivi client.",
           "Les donnees sont traitees par des prestataires techniques necessaires au fonctionnement du site et au suivi des commandes.",
-          "Les donnees de paiement sont traitees par un prestataire specialise. Verdanza ne stocke pas les numeros de carte.",
+          "Les donnees de paiement manuel sont utilisees uniquement pour le suivi de commande et la confirmation administrative.",
         ],
       },
       {

@@ -13,7 +13,11 @@ type TransactionalEmailKind =
   | "contact_message";
 
 const statusLabels: Record<OrderStatus, string> = {
+  new: "Nouvelle commande",
   pending: "En attente",
+  waiting_payment: "En attente de paiement",
+  payment_on_delivery: "Paiement a recuperer a la livraison",
+  bank_transfer_pending: "Virement en attente",
   paid: "Payee",
   preparing: "En preparation",
   ready: "Prete",
@@ -58,6 +62,48 @@ export async function sendAdminNewOrderEmail(order: Order) {
     html: orderEmailHtml(order, "Nouvelle commande payee a traiter dans l'administration."),
     text: orderEmailText(order, "Nouvelle commande payee a traiter dans l'administration."),
     idempotencyKey: `admin-new-order-${order.id}`,
+  });
+}
+
+export async function sendManualOrderConfirmationEmail(order: Order) {
+  if (!order.customerEmail) {
+    console.info("Email client ignore", {
+      kind: "order_confirmation",
+      orderId: order.id,
+      reason: "customer_email_absent",
+    });
+    return { status: "skipped", reason: "customer_email_absent" } satisfies EmailResult;
+  }
+
+  return sendTransactionalEmail({
+    kind: "order_confirmation",
+    orderId: order.id,
+    to: order.customerEmail,
+    subject: `Commande Verdanza ${shortOrderId(order.id)} enregistree`,
+    html: orderEmailHtml(
+      order,
+      `Votre commande est enregistree. ${order.paymentInstructions || "Nous vous recontactons pour confirmer les prochaines etapes."}`,
+    ),
+    text: orderEmailText(
+      order,
+      `Votre commande est enregistree. ${order.paymentInstructions || "Nous vous recontactons pour confirmer les prochaines etapes."}`,
+    ),
+    idempotencyKey: `manual-order-confirmation-${order.id}`,
+  });
+}
+
+export async function sendAdminManualOrderEmail(order: Order) {
+  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
+  if (!adminEmail) return { status: "skipped", reason: "ADMIN_NOTIFICATION_EMAIL absent" } satisfies EmailResult;
+
+  return sendTransactionalEmail({
+    kind: "admin_new_order",
+    orderId: order.id,
+    to: adminEmail,
+    subject: `Nouvelle commande Verdanza ${shortOrderId(order.id)}`,
+    html: orderEmailHtml(order, "Nouvelle commande a verifier dans l'administration."),
+    text: orderEmailText(order, "Nouvelle commande a verifier dans l'administration."),
+    idempotencyKey: `admin-manual-order-${order.id}`,
   });
 }
 

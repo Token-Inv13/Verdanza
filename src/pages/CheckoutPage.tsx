@@ -1,16 +1,18 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { deliveryZones, localDeliveryZones } from "../data/deliveryZones";
-import type { DeliveryMethod } from "../types";
+import type { DeliveryMethod, PaymentProvider } from "../types";
 import { trackEvent } from "../lib/analytics";
 
 export function CheckoutPage() {
   const { itemCount, subtotal, items, lines } = useCart();
   const { user, customerProfile } = useAuth();
+  const navigate = useNavigate();
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("postal");
+  const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>("bank_transfer");
   const [deliveryZone, setDeliveryZone] = useState(localDeliveryZones[0]?.id ?? "");
   const [couponCode, setCouponCode] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -78,7 +80,7 @@ export function CheckoutPage() {
         subtotal,
         deliveryMethod,
       });
-      const response = await fetch("/api/create-checkout-session", {
+      const response = await fetch("/api/create-order", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -86,6 +88,7 @@ export function CheckoutPage() {
           authToken,
           deliveryMethod,
           deliveryZone: deliveryMethod === "local_express" ? deliveryZone : "postal-france",
+          paymentProvider,
           couponCode: couponCode.trim() || undefined,
           customer: {
             email: customer.email,
@@ -104,16 +107,18 @@ export function CheckoutPage() {
           },
         }),
       });
-      const payload = (await response.json()) as { url?: string; error?: string };
-      if (!response.ok || !payload.url) {
-        throw new Error(payload.error || "Checkout indisponible.");
+      const payload = (await response.json()) as { orderId?: string; error?: string };
+      if (!response.ok || !payload.orderId) {
+        throw new Error(payload.error || "Commande indisponible.");
       }
-      window.location.assign(payload.url);
+      navigate(
+        `/checkout/success?order_id=${encodeURIComponent(payload.orderId)}&payment=${paymentProvider}`,
+      );
     } catch (checkoutError) {
       setError(
         checkoutError instanceof Error
           ? checkoutError.message
-          : "Impossible de demarrer le paiement.",
+          : "Impossible de valider la commande.",
       );
       setIsSubmitting(false);
     }
@@ -123,13 +128,14 @@ export function CheckoutPage() {
     <main className="container-page py-12">
       <Seo
         title="Finaliser ma commande - Verdanza CBD"
-        description="Finalisation de commande Verdanza CBD avec paiement securise."
+        description="Finalisation de commande Verdanza CBD avec verification des disponibilites."
       />
       <div className="page-intro">
         <h1>Finaliser ma commande</h1>
         <p>
-          Finalisez votre commande Verdanza. Verifiez vos informations,
-          choisissez votre mode de livraison, puis procedez au paiement securise.
+          Verifiez vos informations, choisissez votre livraison et votre mode de
+          paiement. Votre commande est verifiee avant validation afin de confirmer
+          les disponibilites et les informations de livraison.
         </p>
       </div>
       {!user && itemCount > 0 && (
@@ -183,7 +189,12 @@ export function CheckoutPage() {
                   checked={deliveryMethod === "postal"}
                   title="Livraison postale en France"
                   text="Livraison postale disponible en France. Les frais et delais sont indiques avant validation de la commande."
-                  onChange={() => setDeliveryMethod("postal")}
+                  onChange={() => {
+                    setDeliveryMethod("postal");
+                    if (paymentProvider === "cash_on_delivery") {
+                      setPaymentProvider("bank_transfer");
+                    }
+                  }}
                 />
                 <DeliveryChoice
                   checked={deliveryMethod === "local_express"}
@@ -230,6 +241,32 @@ export function CheckoutPage() {
                 )}
               </div>
             </div>
+
+            <div className="rounded-lg border border-forest/10 bg-ivory p-6">
+              <h2 className="font-display text-3xl text-forest">Paiement</h2>
+              <div className="mt-5 grid gap-3">
+                {isLocalDelivery && (
+                  <PaymentChoice
+                    checked={paymentProvider === "cash_on_delivery"}
+                    title="Paiement a la livraison"
+                    text="Disponible en livraison locale. Le paiement sera effectue lors de la remise de commande."
+                    onChange={() => setPaymentProvider("cash_on_delivery")}
+                  />
+                )}
+                <PaymentChoice
+                  checked={paymentProvider === "bank_transfer"}
+                  title="Virement bancaire"
+                  text="Disponible en livraison locale et postale. Les informations de virement sont envoyees apres validation."
+                  onChange={() => setPaymentProvider("bank_transfer")}
+                />
+                <PaymentChoice
+                  checked={paymentProvider === "manual"}
+                  title="Paiement manuel apres confirmation"
+                  text="Verdanza vous recontacte pour confirmer la commande et le moyen de paiement adapte."
+                  onChange={() => setPaymentProvider("manual")}
+                />
+              </div>
+            </div>
           </section>
 
           <aside className="h-fit rounded-lg border border-champagne/30 bg-cream p-6">
@@ -266,7 +303,7 @@ export function CheckoutPage() {
               </p>
               {couponCode.trim() && (
                 <p className="text-xs leading-5 text-ink/55">
-                  La remise sera vérifiée et appliquée automatiquement avant le paiement.
+                  La remise sera verifiee et appliquee avant validation de la commande.
                 </p>
               )}
             </div>
@@ -277,7 +314,7 @@ export function CheckoutPage() {
             </label>
             {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
             <button className="btn-primary mt-6 w-full" disabled={isSubmitting}>
-              {isSubmitting ? "Redirection..." : "Payer ma commande"}
+              {isSubmitting ? "Validation..." : "Valider ma commande"}
             </button>
           </aside>
         </form>
@@ -302,6 +339,34 @@ function DeliveryChoice({
       <input
         type="radio"
         name="deliveryMethod"
+        className="mt-1"
+        checked={checked}
+        onChange={onChange}
+      />
+      <span>
+        <strong className="block">{title}</strong>
+        <span className="text-ink/65">{text}</span>
+      </span>
+    </label>
+  );
+}
+
+function PaymentChoice({
+  checked,
+  title,
+  text,
+  onChange,
+}: {
+  checked: boolean;
+  title: string;
+  text: string;
+  onChange: () => void;
+}) {
+  return (
+    <label className="flex cursor-pointer gap-3 rounded-md border border-forest/10 bg-cream p-4 text-sm leading-6 text-forest has-[:checked]:border-champagne">
+      <input
+        type="radio"
+        name="paymentProvider"
         className="mt-1"
         checked={checked}
         onChange={onChange}

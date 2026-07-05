@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "typecheck:api": "tsc --noEmit --moduleResolution NodeNext --module NodeNext --target ES2022 --esModuleInterop --skipLibCheck --strict --types node api/create-checkout-session.ts api/stripe-webhook.ts api/update-order-status.ts api/refund-order.ts api/retry-order-emails.ts api/contact.ts api/seed-launch-data.ts api/_server/adminAuth.ts api/_server/checkout.ts api/_server/email.ts api/_server/firebaseAdmin.ts api/_server/http.ts api/_server/orderAlerts.ts api/_server/orderEmailDelivery.ts api/_server/stripe.ts",
+    "typecheck:api": "tsc --noEmit --moduleResolution NodeNext --module NodeNext --target ES2022 --esModuleInterop --skipLibCheck --strict --types node api/create-order.ts api/create-checkout-session.ts api/stripe-webhook.ts api/update-order-status.ts api/refund-order.ts api/retry-order-emails.ts api/contact.ts api/seed-launch-data.ts api/_server/adminAuth.ts api/_server/checkout.ts api/_server/email.ts api/_server/firebaseAdmin.ts api/_server/http.ts api/_server/orderAlerts.ts api/_server/orderEmailDelivery.ts api/_server/stripe.ts",
     "seed:products": "node --import tsx scripts/seedFirestoreProducts.ts",
     "seed:delivery-zones": "node --import tsx scripts/seedFirestoreDeliveryZones.ts",
     "seed:admin": "node --import tsx scripts/bootstrapAdmin.ts",

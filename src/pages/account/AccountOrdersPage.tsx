@@ -3,6 +3,7 @@ import { getCustomerOrders, type CustomerOrderRow } from "../../services/ordersS
 import { useAuth } from "../../context/AuthContext";
 import {
   orderStatusLabel,
+  paymentProviderLabel,
   paymentStatusLabel,
   visibleOrderSteps,
 } from "../../utils/orderStatus";
@@ -62,9 +63,11 @@ export function AccountOrdersPage() {
               <strong>{order.total.toFixed(2).replace(".", ",")} EUR</strong>
             </div>
             <div className="mt-3 grid gap-2 text-sm text-ink/70">
+              <p>Mode de paiement : {paymentProviderLabel(order.paymentProvider)}</p>
               <p>Paiement : {paymentStatusLabel(order.paymentStatus)}</p>
               <p>Statut : {orderStatusLabel(order.orderStatus)}</p>
               <p>Livraison : {order.deliveryMethod}</p>
+              {order.trackingNumber && <p>Suivi postal : {order.trackingNumber}</p>}
               <p>
                 Produits :{" "}
                 {order.items
@@ -91,7 +94,7 @@ function OrderProgress({ order }: { order: CustomerOrderRow }) {
           Statut final : {orderStatusLabel(order.orderStatus)}.
         </p>
       ) : (
-        <ol className="grid gap-2 text-xs text-ink/60 md:grid-cols-5">
+        <ol className="grid gap-2 text-xs text-ink/60 md:grid-cols-4">
           {visibleOrderSteps.map((status, index) => {
             const isDone = activeIndex >= index;
             return (

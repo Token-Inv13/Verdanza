@@ -11,6 +11,7 @@ import type {
   Order,
   OrderItem,
   OrderStatus,
+  PaymentProvider,
   PaymentStatus,
   StatusHistoryEntry,
 } from "../types";
@@ -20,9 +21,13 @@ export type AdminOrderRow = {
   customer: string;
   customerEmail?: string;
   customerPhone?: string;
+  deliveryAddress?: Order["deliveryAddress"];
+  paymentProvider?: PaymentProvider;
   paymentStatus: PaymentStatus;
   orderStatus: OrderStatus | string;
   delivery: string;
+  trackingNumber?: string;
+  paymentReference?: string;
   items: OrderItem[];
   total: string;
   internalNote?: string;
@@ -36,9 +41,11 @@ export type CustomerOrderRow = {
   createdAt?: string;
   items: OrderItem[];
   total: number;
+  paymentProvider?: PaymentProvider;
   paymentStatus: PaymentStatus;
   orderStatus: OrderStatus;
   deliveryMethod: string;
+  trackingNumber?: string;
   statusHistory?: StatusHistoryEntry[];
 };
 
@@ -55,9 +62,13 @@ export async function getAdminOrdersWithFallback() {
         customer: order.customerName || order.customerEmail || "Client",
         customerEmail: order.customerEmail,
         customerPhone: order.customerPhone,
+        deliveryAddress: order.deliveryAddress,
+        paymentProvider: order.paymentProvider,
         paymentStatus: order.paymentStatus,
         orderStatus: order.orderStatus,
         delivery: order.deliveryZone || order.deliveryMethod,
+        trackingNumber: order.trackingNumber,
+        paymentReference: order.paymentReference,
         items: order.items || [],
         total: `${Number(order.total || 0).toFixed(2).replace(".", ",")} EUR`,
         internalNote: order.internalNote,
@@ -78,7 +89,14 @@ export async function getAdminOrdersWithFallback() {
 
 export async function updateOrderAdminFields(
   orderId: string,
-  data: { orderStatus?: OrderStatus; internalNote?: string; historyNote?: string },
+  data: {
+    orderStatus?: OrderStatus;
+    paymentStatus?: PaymentStatus;
+    internalNote?: string;
+    historyNote?: string;
+    paymentReference?: string;
+    trackingNumber?: string;
+  },
 ) {
   const token = await auth?.currentUser?.getIdToken();
   if (!token) throw new Error("Connexion admin requise.");
@@ -134,9 +152,11 @@ export async function getCustomerOrders(customerId: string) {
         createdAt: order.createdAt,
         items: order.items || [],
         total: Number(order.total || 0),
+        paymentProvider: order.paymentProvider,
         paymentStatus: order.paymentStatus,
         orderStatus: order.orderStatus,
         deliveryMethod: order.deliveryZone || order.deliveryMethod,
+        trackingNumber: order.trackingNumber,
         statusHistory: order.statusHistory || [],
       } satisfies CustomerOrderRow;
     })

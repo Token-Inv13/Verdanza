@@ -29,7 +29,7 @@ const content = {
       "Les produits sont-ils reserves aux majeurs ? Oui.",
       "Le THC est-il conforme ? Les fiches indiquent un taux inferieur a 0,3 %.",
       "Quels modes de livraison sont proposes ? Livraison postale en France et livraison locale selon zone disponible.",
-      "Le paiement est-il securise ? Oui, le paiement est traite par un prestataire specialise. Verdanza ne stocke pas les donnees de carte bancaire.",
+      "Quels modes de paiement sont proposes ? Virement bancaire, paiement a la livraison locale ou confirmation manuelle selon la commande.",
     ],
   },
   contact: {

@@ -27,11 +27,17 @@ import type {
   CustomerProfile,
   DeliveryZone,
   OrderStatus,
+  PaymentProvider,
+  PaymentStatus,
   Product,
   ProductCategory,
   StatusHistoryEntry,
 } from "../../types";
-import { orderStatusLabel, paymentStatusLabel } from "../../utils/orderStatus";
+import {
+  orderStatusLabel,
+  paymentProviderLabel,
+  paymentStatusLabel,
+} from "../../utils/orderStatus";
 
 const emptyProduct: ProductInput = {
   slug: "",
@@ -99,7 +105,7 @@ export function AdminPage({ section }: { section: string }) {
   async function handleSeed() {
     setMessage("");
     const confirmed = window.confirm(
-      "Seeder le catalogue Verdanza et les zones de livraison dans Firestore ? Operation non destructive avec merge. Les anciens produits absents du catalogue seront desactives.",
+      "Mettre a jour le catalogue Verdanza et les zones de livraison ? Operation non destructive. Les anciens produits absents du catalogue seront desactives.",
     );
     if (!confirmed) return;
     const result = await runManualInitialSeed();
@@ -119,7 +125,7 @@ export function AdminPage({ section }: { section: string }) {
       tags: normalizeList(editingProduct.tags),
     });
     setEditingProduct(emptyProduct);
-    setMessage("Produit enregistre dans Firestore.");
+    setMessage("Produit enregistre.");
     await refresh();
   }
 
@@ -182,14 +188,14 @@ export function AdminPage({ section }: { section: string }) {
 
   async function handleRefund(orderId: string, restock: boolean) {
     if (orderSource !== "firestore") {
-      setMessage("Aucune commande Firestore remboursable.");
+      setMessage("Aucune commande remboursable.");
       return;
     }
     const result = await refundOrderAdmin(orderId, {
       restock,
       reason: "Remboursement initie depuis l'administration Verdanza.",
     });
-    setMessage(`Remboursement Stripe enregistre : ${result.refundId ?? "OK"}.`);
+    setMessage(`Remboursement enregistre : ${result.refundId ?? "OK"}.`);
     await refresh();
   }
 
@@ -218,7 +224,7 @@ export function AdminPage({ section }: { section: string }) {
         </p>
       )}
 
-      {isLoading && <p className="mt-8 text-forest/70">Chargement Firestore...</p>}
+      {isLoading && <p className="mt-8 text-forest/70">Chargement des donnees...</p>}
 
       {section === "Dashboard" && (
         <>
@@ -247,7 +253,7 @@ export function AdminPage({ section }: { section: string }) {
             orderSource={orderSource}
             onUpdate={async (orderId, data) => {
               if (orderSource !== "firestore") {
-                setMessage("Aucune commande Firestore modifiable.");
+                setMessage("Aucune commande modifiable.");
                 return;
               }
               await updateOrderAdminFields(orderId, data);
@@ -301,7 +307,7 @@ export function AdminPage({ section }: { section: string }) {
             orderSource={orderSource}
             onUpdate={async (orderId, data) => {
               if (orderSource !== "firestore") {
-                setMessage("Aucune commande Firestore modifiable.");
+                setMessage("Aucune commande modifiable.");
                 return;
               }
               await updateOrderAdminFields(orderId, data);
@@ -474,7 +480,7 @@ function ProductForm({
           </label>
         </div>
         <button className="btn-primary" type="submit">
-          Enregistrer dans Firestore
+          Enregistrer
         </button>
       </div>
     </form>
@@ -883,9 +889,19 @@ function AdminOrders({
     customer: string;
     customerEmail?: string;
     customerPhone?: string;
+    deliveryAddress?: {
+      line1: string;
+      line2?: string;
+      postalCode: string;
+      city: string;
+      country: string;
+    };
+    paymentProvider?: PaymentProvider;
     paymentStatus: string;
     orderStatus: string;
     delivery: string;
+    trackingNumber?: string;
+    paymentReference?: string;
     items: { name: string; quantity: number }[];
     total: string;
     internalNote?: string;
@@ -896,7 +912,14 @@ function AdminOrders({
   orderSource: "firestore" | "empty";
   onUpdate: (
     orderId: string,
-    data: { orderStatus?: OrderStatus; internalNote?: string; historyNote?: string },
+    data: {
+      orderStatus?: OrderStatus;
+      paymentStatus?: PaymentStatus;
+      internalNote?: string;
+      historyNote?: string;
+      paymentReference?: string;
+      trackingNumber?: string;
+    },
   ) => Promise<void>;
   onRefund: (
     orderId: string,
@@ -907,11 +930,11 @@ function AdminOrders({
     <section className="mt-8 overflow-hidden rounded-lg border border-forest/10 bg-ivory">
       {!orders.length && (
         <p className="border-b border-forest/10 bg-cream px-4 py-4 text-sm text-forest">
-          Aucune commande Firestore pour le moment.
+          Aucune commande pour le moment.
         </p>
       )}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1120px] text-left text-sm">
+        <table className="w-full min-w-[1380px] text-left text-sm">
           <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
             <tr>
               {[
@@ -922,6 +945,7 @@ function AdminOrders({
                 "Livraison",
                 "Produits",
                 "Total",
+                "Reference / suivi",
                 "Note interne",
                 "Historique",
                 "Remboursement",
@@ -939,7 +963,27 @@ function AdminOrders({
                   <span className="block text-xs text-ink/55">{order.customerEmail}</span>
                   <span className="block text-xs text-ink/55">{order.customerPhone}</span>
                 </td>
-                <td className="px-4 py-4">{paymentStatusLabel(order.paymentStatus)}</td>
+                <td className="px-4 py-4">
+                  <span className="block text-xs text-ink/55">
+                    {paymentProviderLabel(order.paymentProvider)}
+                  </span>
+                  <select
+                    className="input-field mt-2"
+                    value={order.paymentStatus}
+                    disabled={orderSource !== "firestore"}
+                    onChange={(event) =>
+                      void onUpdate(order.id, {
+                        paymentStatus: event.target.value as PaymentStatus,
+                      })
+                    }
+                  >
+                    {["pending", "paid", "failed", "refunded"].map((status) => (
+                      <option key={status} value={status}>
+                        {paymentStatusLabel(status)}
+                      </option>
+                    ))}
+                  </select>
+                </td>
                 <td className="px-4 py-4">
                   <select
                     className="input-field"
@@ -956,6 +1000,10 @@ function AdminOrders({
                   >
                     {[
                       "pending",
+                      "new",
+                      "waiting_payment",
+                      "payment_on_delivery",
+                      "bank_transfer_pending",
                       "paid",
                       "preparing",
                       "ready",
@@ -971,13 +1019,47 @@ function AdminOrders({
                     ))}
                   </select>
                 </td>
-                <td className="px-4 py-4">{order.delivery}</td>
+                <td className="px-4 py-4">
+                  <strong className="block text-forest">{order.delivery}</strong>
+                  {order.deliveryAddress && (
+                    <span className="mt-1 block text-xs leading-5 text-ink/60">
+                      {order.deliveryAddress.line1}
+                      {order.deliveryAddress.line2 ? `, ${order.deliveryAddress.line2}` : ""}
+                      <br />
+                      {order.deliveryAddress.postalCode} {order.deliveryAddress.city}
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-4">
                   {order.items.length
                     ? order.items.map((item) => `${item.name} x${item.quantity} g`).join(", ")
                     : "A renseigner"}
                 </td>
                 <td className="px-4 py-4">{order.total}</td>
+                <td className="px-4 py-4">
+                  <input
+                    className="input-field"
+                    defaultValue={order.paymentReference || ""}
+                    placeholder="Ref paiement"
+                    disabled={orderSource !== "firestore"}
+                    onBlur={(event) =>
+                      void onUpdate(order.id, {
+                        paymentReference: event.currentTarget.value,
+                      })
+                    }
+                  />
+                  <input
+                    className="input-field mt-2"
+                    defaultValue={order.trackingNumber || ""}
+                    placeholder="Suivi postal"
+                    disabled={orderSource !== "firestore"}
+                    onBlur={(event) =>
+                      void onUpdate(order.id, {
+                        trackingNumber: event.currentTarget.value,
+                      })
+                    }
+                  />
+                </td>
                 <td className="px-4 py-4">
                   <input
                     className="input-field"
@@ -1015,7 +1097,7 @@ function AdminOrders({
                           "Remettre les produits en stock apres remboursement ?",
                         );
                         const confirmed = window.confirm(
-                          "Confirmer le remboursement Stripe de cette commande ?",
+                          "Confirmer le remboursement de cette commande ?",
                         );
                         if (confirmed) void onRefund(order.id, restock);
                       }}
@@ -1046,7 +1128,7 @@ function SourceCard({
     <article className="admin-card">
       <p className="text-sm text-ink/55">{label}</p>
       <strong className="mt-2 block text-forest">{count} entree(s)</strong>
-      <span className="text-xs text-ink/50">Source : {value}</span>
+      <span className="text-xs text-ink/50">Source : {sourceLabel(value)}</span>
     </article>
   );
 }
@@ -1054,10 +1136,17 @@ function SourceCard({
 function SourceLine({ source }: { source: string }) {
   return (
     <p className="mb-4 rounded-md border border-forest/10 bg-cream px-4 py-3 text-sm text-forest">
-      Source actuelle : {source}. Les donnees locales ne servent que de secours
-      technique si Firestore est indisponible.
+      Source actuelle : {sourceLabel(source)}. Les donnees de secours ne sont
+      utilisees que si la base en ligne est indisponible.
     </p>
   );
+}
+
+function sourceLabel(source: string) {
+  if (source === "firestore") return "base en ligne";
+  if (source === "local") return "secours local";
+  if (source === "empty") return "aucune donnee";
+  return source;
 }
 
 function buildDashboardMetrics(
@@ -1072,7 +1161,15 @@ function buildDashboardMetrics(
   const paidOrders = orders.filter((order) => order.paymentStatus === "paid");
   const revenue = paidOrders.reduce((sum, order) => sum + parseEuro(order.total), 0);
   const preparingOrders = orders.filter((order) =>
-    ["paid", "preparing", "ready"].includes(order.orderStatus),
+    [
+      "new",
+      "waiting_payment",
+      "payment_on_delivery",
+      "bank_transfer_pending",
+      "paid",
+      "preparing",
+      "ready",
+    ].includes(order.orderStatus),
   );
   const deliveryOrders = orders.filter((order) =>
     order.orderStatus === "out_for_delivery",
@@ -1101,12 +1198,12 @@ function buildDashboardMetrics(
     {
       label: "A preparer",
       value: String(preparingOrders.length),
-      detail: "Payees, en preparation ou pretes",
+      detail: "Nouvelles, a confirmer ou a preparer",
     },
     {
       label: "En livraison",
       value: String(deliveryOrders.length),
-      detail: "Statut out_for_delivery",
+      detail: "Commandes en cours de livraison",
     },
     {
       label: "Produits actifs",

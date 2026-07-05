@@ -34,6 +34,11 @@ export type Product = {
 };
 
 export type DeliveryMethod = "postal" | "local_express";
+export type PaymentProvider =
+  | "manual"
+  | "bank_transfer"
+  | "cash_on_delivery"
+  | "future_psp";
 
 export type DeliveryZone = {
   id: string;
@@ -104,7 +109,11 @@ export type Address = {
 };
 
 export type OrderStatus =
+  | "new"
   | "pending"
+  | "waiting_payment"
+  | "payment_on_delivery"
+  | "bank_transfer_pending"
   | "paid"
   | "preparing"
   | "ready"
@@ -178,12 +187,16 @@ export type Order = {
   discountAmount?: number;
   couponCode?: string;
   total: number;
+  paymentProvider?: PaymentProvider;
   paymentStatus: PaymentStatus;
+  paymentReference?: string;
+  paymentInstructions?: string;
   orderStatus: OrderStatus;
   deliveryMethod: DeliveryMethod;
   deliveryAddress: Address;
   deliveryZone?: string;
   deliverySlot?: string;
+  trackingNumber?: string;
   stripeSessionId?: string;
   stripePaymentIntentId?: string;
   stripeEventIds?: string[];

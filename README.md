@@ -1,6 +1,6 @@
 # Verdanza CBD
 
-Base e-commerce Verdanza : boutique CBD premium au gramme, livraison express locale a Aix-en-Provence et alentours, panier local, cockpit admin Firestore, Firebase Auth, Stripe Checkout et emails transactionnels.
+Base e-commerce Verdanza : boutique CBD premium au gramme, livraison express locale a Aix-en-Provence et alentours, livraison postale, panier local, administration, Firebase Auth, commandes manuelles et emails transactionnels.
 
 ## Stack
 
@@ -8,7 +8,7 @@ Base e-commerce Verdanza : boutique CBD premium au gramme, livraison express loc
 - Tailwind CSS
 - React Router
 - Firebase client prepare : Auth, Firestore, Storage, Analytics optionnel
-- Stripe client prepare via `loadStripe`
+- Couche paiement preparee pour commande manuelle et futur prestataire compatible
 - Architecture compatible Vercel
 
 ## Installation
@@ -36,7 +36,36 @@ npm run seed:admin -- --yes
 npm run seed:admin-auth -- --yes
 ```
 
-## Stripe Checkout
+## Commande sans paiement en ligne
+
+Le flux actif permet de recevoir des commandes sans Stripe :
+
+- `api/create-order.ts` relit les produits, verifie les stocks, applique la livraison et les codes promo ;
+- la livraison locale impose le minimum configure, par defaut 30 EUR ;
+- la livraison postale n'impose pas automatiquement le minimum local ;
+- le stock est reserve au moment de la validation de commande ;
+- la commande est creee avec `paymentProvider`, `paymentStatus`, `paymentReference`, `paymentInstructions` et `trackingNumber` ;
+- les emails client/admin et les alertes telephone optionnelles sont envoyes apres enregistrement.
+
+Modes prevus :
+
+```txt
+paymentProvider: manual | bank_transfer | cash_on_delivery | future_psp
+paymentStatus: pending | paid | failed | refunded
+```
+
+Variables utiles :
+
+```env
+BANK_TRANSFER_INSTRUCTIONS=""
+STRIPE_CHECKOUT_ENABLED="false"
+```
+
+## Stripe Checkout isole
+
+Stripe reste dans le code pour reprise eventuelle, mais la creation de session est desactivee tant que `STRIPE_CHECKOUT_ENABLED` n'est pas egal a `true`.
+
+Historique Phase 3 :
 
 Le flux Stripe Checkout reel est implemente en Phase 3 :
 
@@ -415,6 +444,8 @@ VITE_APP_URL=
 VITE_CONTACT_EMAIL=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
+STRIPE_CHECKOUT_ENABLED=false
+BANK_TRANSFER_INSTRUCTIONS=
 FIREBASE_PROJECT_ID=
 FIREBASE_CLIENT_EMAIL=
 FIREBASE_PRIVATE_KEY=
@@ -441,7 +472,7 @@ Rappels :
 
 Etat pret :
 
-- boutique, panier, checkout Stripe, webhook, admin commandes et stock sont operationnels ;
+- boutique, panier, commande sans paiement en ligne, admin commandes et stock sont operationnels ;
 - pages publiques principales indexables ;
 - `robots.txt` et `sitemap.xml` sont servis depuis `public/` pour le domaine actuel ;
 - pages legales presentes avec placeholders explicites quand les donnees juridiques manquent ;

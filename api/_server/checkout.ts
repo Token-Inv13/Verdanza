@@ -4,6 +4,7 @@ import type {
   DeliveryMethod,
   DeliveryZone,
   OrderItem,
+  PaymentProvider,
   Product,
   Coupon,
 } from "../../src/types/index.js";
@@ -61,6 +62,7 @@ export type CheckoutRequestBody = {
   deliveryZone?: string;
   deliverySlot?: string;
   couponCode?: string;
+  paymentProvider?: PaymentProvider;
   authToken?: string;
   customer: CheckoutCustomerInput;
 };
@@ -86,6 +88,17 @@ export function parseCheckoutBody(value: unknown): CheckoutRequestBody {
   }
   if (body.deliveryMethod !== "postal" && body.deliveryMethod !== "local_express") {
     throw new Error("Mode de livraison invalide.");
+  }
+  if (
+    body.paymentProvider &&
+    !["manual", "bank_transfer", "cash_on_delivery", "future_psp"].includes(
+      body.paymentProvider,
+    )
+  ) {
+    throw new Error("Mode de paiement invalide.");
+  }
+  if (body.paymentProvider === "cash_on_delivery" && body.deliveryMethod !== "local_express") {
+    throw new Error("Le paiement a la livraison est reserve a la livraison locale.");
   }
   if (!body.customer?.email || !body.customer.phone) {
     throw new Error("Email et telephone client requis.");
@@ -308,6 +321,17 @@ export function orderPayload(
   priced: PricedCheckout,
   customerId?: string,
 ): Record<string, unknown> {
+  const paymentProvider = body.paymentProvider ?? "future_psp";
+  const paymentInstructions = paymentInstructionsFor(paymentProvider);
+  const orderStatus =
+    paymentProvider === "cash_on_delivery"
+      ? "payment_on_delivery"
+      : paymentProvider === "bank_transfer"
+        ? "bank_transfer_pending"
+        : paymentProvider === "manual"
+          ? "waiting_payment"
+          : "pending";
+
   return {
     customerId: customerId ?? null,
     customerEmail: body.customer.email,
@@ -319,21 +343,25 @@ export function orderPayload(
     discountAmount: priced.discountAmount,
     couponCode: priced.couponCode ?? null,
     total: priced.total,
+    paymentProvider,
     paymentStatus: "pending",
-    orderStatus: "pending",
+    paymentReference: null,
+    paymentInstructions,
+    orderStatus,
     deliveryMethod: body.deliveryMethod,
     deliveryAddress: body.customer.address,
     deliveryZone: priced.deliveryZoneName ?? body.deliveryZone ?? null,
     deliverySlot: body.deliverySlot ?? null,
+    trackingNumber: "",
     stripeSessionId: null,
     stripePaymentIntentId: null,
     stripeEventIds: [],
     statusHistory: [
       {
-        status: "pending",
+        status: orderStatus,
         changedAt: new Date().toISOString(),
         changedBy: "system",
-        note: "Commande creee avant paiement.",
+        note: "Commande enregistree avant confirmation du paiement.",
       },
     ],
     emails: {},
@@ -349,4 +377,18 @@ export function cents(value: number) {
 
 export function roundMoney(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+export function paymentInstructionsFor(paymentProvider: PaymentProvider) {
+  if (paymentProvider === "bank_transfer") {
+    return process.env.BANK_TRANSFER_INSTRUCTIONS ||
+      "Les informations de virement vous seront transmises par email. La commande sera preparee apres confirmation du paiement.";
+  }
+  if (paymentProvider === "cash_on_delivery") {
+    return "Le paiement sera effectue lors de la livraison locale.";
+  }
+  if (paymentProvider === "manual") {
+    return "Verdanza vous recontactera pour confirmer le mode de paiement et la livraison.";
+  }
+  return "Le paiement sera confirme par le prochain prestataire disponible.";
 }

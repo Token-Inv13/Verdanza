@@ -15,7 +15,7 @@ export function CartPage() {
         <h1>Panier</h1>
         <p>
           Verifiez vos produits avant de choisir votre mode de livraison et de
-          finaliser le paiement securise.
+          valider votre commande.
         </p>
         <p className="mt-3 text-sm text-forest/70">
           Livraison postale en France ou livraison locale sur Aix-en-Provence et
