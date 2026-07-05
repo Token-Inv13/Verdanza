@@ -36,13 +36,13 @@ export const defaultBillingSettings: BillingSettings = {
   vatMention: "",
   address: "",
   phone: "07 80 81 41 37",
-  email: "contact@verdanza.fr",
-  paymentTerms: "Reglement a confirmer directement avec le client.",
+  email: "contacte@verdanza.fr",
+  paymentTerms: "Règlement à confirmer directement avec le client.",
   legalMentions: "",
   logoUrl: "/verdanza-logo.png",
   isManuallyValidated: false,
   validationWarning:
-    "Les informations legales de facturation ne sont pas encore validees. Verifiez la raison sociale, le SIRET, l'adresse, le regime TVA et les mentions obligatoires avant emission officielle.",
+    "Les informations légales de facturation ne sont pas encore validées. Vérifiez la raison sociale, le SIRET, l'adresse, le régime TVA et les mentions obligatoires avant émission officielle.",
 };
 
 export async function getInvoicesWithFallback() {

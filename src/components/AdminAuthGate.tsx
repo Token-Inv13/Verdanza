@@ -71,7 +71,7 @@ export function AdminAuthGate() {
     <div className="grid min-h-screen place-items-center bg-cream px-4">
       <Seo
         title="Acces administrateur - Verdanza CBD"
-        description="Acces reserve Verdanza."
+        description="Accès réservé Verdanza."
         noindex
       />
       <form
@@ -129,7 +129,7 @@ function AdminGateShell({ message }: { message: string }) {
     <div className="grid min-h-screen place-items-center bg-cream px-4">
       <Seo
         title="Acces administrateur - Verdanza CBD"
-        description="Acces reserve Verdanza."
+        description="Accès réservé Verdanza."
         noindex
       />
       <div className="max-w-md rounded-lg border border-forest/10 bg-ivory p-8 text-center shadow-soft">

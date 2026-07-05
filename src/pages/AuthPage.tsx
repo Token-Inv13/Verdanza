@@ -89,7 +89,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
       />
       <section className="mx-auto max-w-lg rounded-lg border border-forest/10 bg-ivory p-8 shadow-soft">
         <h1 className="font-display text-5xl text-forest">
-          {mode === "register" ? "Creer un compte" : "Connexion"}
+          {mode === "register" ? "Créer un compte" : "Connexion"}
         </h1>
         <p className="mt-4 text-sm leading-6 text-ink/65">
           Retrouvez vos commandes et facilitez vos prochaines commandes.
@@ -97,13 +97,13 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
         {!isFirebaseConfigured && (
           <p className="mt-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            Firebase n'est pas configure.
+            Le service de connexion est temporairement indisponible.
           </p>
         )}
 
         <form onSubmit={handleSubmit} className="mt-6 grid gap-4">
           {mode === "register" && (
-            <AuthInput label="Nom affiche" value={displayName} onChange={setDisplayName} />
+            <AuthInput label="Nom affiché" value={displayName} onChange={setDisplayName} />
           )}
           <AuthInput label="Email" type="email" value={email} onChange={setEmail} />
           <AuthInput
@@ -118,7 +118,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             {isSubmitting
               ? "Traitement..."
               : mode === "register"
-                ? "Creer le compte"
+                ? "Créer le compte"
                 : "Se connecter"}
           </button>
         </form>
@@ -147,7 +147,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             to={mode === "register" ? "/connexion" : "/inscription"}
             state={{ from: redirectTo }}
           >
-            {mode === "register" ? "Se connecter" : "Creer un compte"}
+            {mode === "register" ? "Se connecter" : "Créer un compte"}
           </Link>
         </p>
       </section>

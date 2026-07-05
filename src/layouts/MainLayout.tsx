@@ -5,25 +5,29 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { AgeGate } from "../components/AgeGate";
 import { ComplianceNote } from "../components/ComplianceNote";
+import { PreorderModal } from "../components/PreorderModal";
 
 const navItems = [
   { label: "Accueil", to: "/" },
   { label: "Boutique", to: "/boutique" },
   { label: "Fleurs CBD", to: "/fleurs-cbd" },
-  { label: "Resines CBD", to: "/resines-cbd" },
+  { label: "Résines CBD", to: "/resines-cbd" },
   { label: "Livraison", to: "/livraison-postale" },
-  { label: "Qualite", to: "/qualite-conformite" },
+  { label: "Qualité", to: "/qualite-conformite" },
 ];
 
 export function MainLayout() {
   const [open, setOpen] = useState(false);
   const { itemCount } = useCart();
   const { user } = useAuth();
-  const contactEmail = import.meta.env.VITE_CONTACT_EMAIL as string | undefined;
+  const contactEmail =
+    (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
+    "contacte@verdanza.fr";
 
   return (
     <div className="min-h-screen bg-ivory text-ink">
       <AgeGate />
+      <PreorderModal />
       <header className="sticky top-0 z-40 border-b border-forest/10 bg-ivory/95 backdrop-blur">
         <div className="container-page flex min-h-20 items-center justify-between gap-4">
           <NavLink to="/" className="flex items-center gap-3">
@@ -86,8 +90,8 @@ export function MainLayout() {
           <div>
             <img src="/verdanza-logo.png" alt="Verdanza" className="h-16 w-auto" />
             <p className="mt-4 max-w-md text-sm leading-6 text-ink/70">
-              Verdanza selectionne des produits CBD premium, conformes et
-              controles, avec livraison postale en France et livraison locale
+              Verdanza sélectionne des produits CBD premium, conformes et
+              contrôlés, avec livraison postale en France et livraison locale
               selon zone disponible.
             </p>
           </div>
@@ -100,10 +104,10 @@ export function MainLayout() {
             {contactEmail && <a href={`mailto:${contactEmail}`}>{contactEmail}</a>}
           </div>
           <div className="grid gap-2 text-sm text-forest/80">
-            <strong className="text-forest">Legal</strong>
-            <NavLink to="/mentions-legales">Mentions legales</NavLink>
+            <strong className="text-forest">Légal</strong>
+            <NavLink to="/mentions-legales">Mentions légales</NavLink>
             <NavLink to="/cgv">CGV</NavLink>
-            <NavLink to="/confidentialite">Confidentialite</NavLink>
+            <NavLink to="/confidentialite">Confidentialité</NavLink>
             <NavLink to="/retours">Retours</NavLink>
           </div>
         </div>

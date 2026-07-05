@@ -41,13 +41,13 @@ const fallbackBillingSettings: BillingSettings = {
   vatMention: "",
   address: "",
   phone: "07 80 81 41 37",
-  email: "contact@verdanza.fr",
-  paymentTerms: "Reglement a confirmer directement avec le client.",
+  email: "contacte@verdanza.fr",
+  paymentTerms: "Règlement à confirmer directement avec le client.",
   legalMentions: "",
   logoUrl: "/verdanza-logo.png",
   isManuallyValidated: false,
   validationWarning:
-    "Les informations legales de facturation ne sont pas encore validees. Verifiez la raison sociale, le SIRET, l'adresse, le regime TVA et les mentions obligatoires avant emission officielle.",
+    "Les informations légales de facturation ne sont pas encore validées. Vérifiez la raison sociale, le SIRET, l'adresse, le régime TVA et les mentions obligatoires avant émission officielle.",
 };
 
 export default async function handler(
@@ -186,7 +186,7 @@ async function createInvoiceFromOrder(db: FirebaseFirestore.Firestore, orderId: 
     deliveryFee: Number(order.deliveryFee || 0),
     discountAmount: Number(order.discountAmount || 0),
     total: Number(order.total || 0),
-    paymentMethod: order.paymentInstructions || "Reglement a confirmer",
+    paymentMethod: order.paymentInstructions || "Règlement à confirmer",
     paymentStatus: order.paymentStatus || "to_confirm",
     internalNote: "",
     createdAt: now,
@@ -287,7 +287,7 @@ function parseManualInvoice(value: unknown) {
     total: roundMoney(Number(line.quantity || 0) * Number(line.unitPrice || 0)),
   }));
   const paymentStatus = input.paymentStatus || "to_confirm";
-  if (!paymentStatuses.includes(paymentStatus)) throw new Error("Statut reglement invalide.");
+  if (!paymentStatuses.includes(paymentStatus)) throw new Error("Statut règlement invalide.");
   return {
     customerName: input.customerName,
     customerEmail: input.customerEmail || "",
@@ -295,7 +295,7 @@ function parseManualInvoice(value: unknown) {
     lines: normalizedLines,
     deliveryFee: Number(input.deliveryFee || 0),
     discountAmount: Number(input.discountAmount || 0),
-    paymentMethod: input.paymentMethod || "Reglement a confirmer",
+    paymentMethod: input.paymentMethod || "Règlement à confirmer",
     paymentStatus,
     internalNote: input.internalNote || "",
   };

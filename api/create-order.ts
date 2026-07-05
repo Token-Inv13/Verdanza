@@ -38,9 +38,15 @@ export default async function handler(
     const orderRef = db.collection("orders").doc();
 
     await db.runTransaction(async (transaction) => {
-      for (const item of priced.orderItems) {
-        const productRef = db.collection("products").doc(item.productId);
-        const productSnapshot = await transaction.get(productRef);
+      const productReads = await Promise.all(
+        priced.orderItems.map(async (item) => {
+          const productRef = db.collection("products").doc(item.productId);
+          const productSnapshot = await transaction.get(productRef);
+          return { item, productRef, productSnapshot };
+        }),
+      );
+
+      for (const { item, productRef, productSnapshot } of productReads) {
         if (!productSnapshot.exists) {
           throw new Error(`Produit indisponible : ${item.name}.`);
         }
@@ -111,7 +117,10 @@ export default async function handler(
     console.error("create-order failed", error);
     sendJson(
       response,
-      { error: error instanceof Error ? error.message : "Commande impossible." },
+      {
+        error:
+          "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza au 07 80 81 41 37.",
+      },
       400,
     );
   }
@@ -147,7 +156,7 @@ async function createDraftInvoiceForOrder(
     deliveryFee: Number(order.deliveryFee || 0),
     discountAmount: Number(order.discountAmount || 0),
     total: Number(order.total || 0),
-    paymentMethod: order.paymentInstructions || "Reglement a confirmer",
+    paymentMethod: order.paymentInstructions || "Règlement à confirmer",
     paymentStatus: order.paymentStatus || "to_confirm",
     internalNote: "",
     createdAt: now,

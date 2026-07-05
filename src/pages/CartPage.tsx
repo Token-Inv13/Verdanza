@@ -14,12 +14,12 @@ export function CartPage() {
       <div className="page-intro">
         <h1>Panier</h1>
         <p>
-          Verifiez vos produits avant de choisir votre mode de livraison et de
+          Vérifiez vos produits avant de choisir votre mode de livraison et de
           valider votre commande.
         </p>
         <p className="mt-3 text-sm text-forest/70">
           Livraison postale en France ou livraison locale sur Aix-en-Provence et
-          alentours selon disponibilite.
+          alentours selon disponibilité.
         </p>
       </div>
       {lines.length === 0 ? (
@@ -67,18 +67,18 @@ export function CartPage() {
             ))}
           </div>
           <aside className="h-fit rounded-lg border border-champagne/30 bg-cream p-6">
-            <h2 className="font-display text-3xl text-forest">Resume</h2>
+            <h2 className="font-display text-3xl text-forest">Résumé</h2>
             <div className="mt-6 grid gap-3 text-sm">
               <p className="flex justify-between">
                 <span>Sous-total</span>
                 <span>{subtotal.toFixed(2).replace(".", ",")} EUR</span>
               </p>
               <p className="flex justify-between">
-                <span>Livraison estimee</span>
+                <span>Livraison estimée</span>
                 <span>
                   {deliveryEstimate > 0
                     ? `${deliveryEstimate.toFixed(2).replace(".", ",")} EUR`
-                    : "Calculee a l'etape suivante"}
+                    : "Calculée à l'étape suivante"}
                 </span>
               </p>
               <p className="flex justify-between border-t border-forest/10 pt-3 text-lg font-semibold text-forest">

@@ -21,12 +21,12 @@ export function AgeGate() {
           alt="Verdanza CBD"
           className="mx-auto mb-6 h-28 w-28 object-contain"
         />
-        <h2 className="font-display text-4xl">Acces reserve aux majeurs</h2>
+        <h2 className="font-display text-4xl">Accès réservé aux majeurs</h2>
         <p className="mt-4 text-sm leading-6 text-forest/75">
-          Les produits presentes sur Verdanza sont reserves aux personnes
-          majeures. Ils contiennent un taux de THC conforme, inferieur a 0,3 %,
-          ne remplacent pas un traitement medical et doivent etre tenus hors de
-          portee des enfants.
+          Les produits présentés sur Verdanza sont réservés aux personnes
+          majeures. Ils contiennent un taux de THC conforme, inférieur à 0,3 %,
+          ne remplacent pas un traitement médical et doivent être tenus hors de
+          portée des enfants.
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <button className="btn-primary flex-1" onClick={() => setIsConfirmed(true)}>

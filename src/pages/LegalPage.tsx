@@ -1,7 +1,9 @@
 import { Seo } from "../components/Seo";
 
 export function LegalPage({ title }: { title: string }) {
-  const contactEmail = import.meta.env.VITE_CONTACT_EMAIL as string | undefined;
+  const contactEmail =
+    (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
+    "contacte@verdanza.fr";
   const sections = legalSections(title, contactEmail);
   return (
     <main className="container-page py-12">
@@ -9,8 +11,8 @@ export function LegalPage({ title }: { title: string }) {
       <div className="page-intro">
         <h1>{title}</h1>
         <p>
-          Informations de conformite Verdanza pour les commandes, la livraison,
-          la confidentialite et les produits CBD reserves aux adultes.
+          Informations de conformité Verdanza pour les commandes, la livraison,
+          la confidentialité et les produits CBD réservés aux adultes.
         </p>
       </div>
       <div className="mt-10 grid gap-4">
@@ -35,12 +37,12 @@ export function LegalPage({ title }: { title: string }) {
 function legalSections(title: string, contactEmail?: string) {
   const common = [
     {
-      heading: "Conformite CBD",
+      heading: "Conformité CBD",
       items: [
-        "Vente reservee aux personnes majeures.",
-        "Produits issus du chanvre avec un taux de THC inferieur a 0,3 %.",
-        "Les produits ne remplacent pas un traitement medical et ne font l'objet d'aucune promesse therapeutique.",
-        "Tenir hors de portee des enfants. Deconseille aux femmes enceintes ou allaitantes.",
+        "Vente réservée aux personnes majeures.",
+        "Produits issus du chanvre avec un taux de THC inférieur à 0,3 %.",
+        "Les produits ne remplacent pas un traitement médical et ne font l'objet d'aucune promesse thérapeutique.",
+        "Tenir hors de portée des enfants. Déconseillé aux femmes enceintes ou allaitantes.",
       ],
     },
   ];
@@ -48,19 +50,17 @@ function legalSections(title: string, contactEmail?: string) {
   if (title.includes("Mentions")) {
     return [
       {
-        heading: "Editeur",
+        heading: "Éditeur",
         items: [
-          "Editeur du site : Verdanza.",
-          contactEmail
-            ? `Contact professionnel : ${contactEmail}.`
-            : "Contact professionnel : formulaire de contact du site Verdanza.",
-          "Les informations d'identification legale de l'editeur doivent etre confirmees par l'exploitant avant ouverture commerciale complete.",
+          "Éditeur du site : Verdanza.",
+          `Contact professionnel : ${contactEmail}.`,
+          "Les informations d'identification légale de l'éditeur doivent être confirmées par l'exploitant avant ouverture commerciale complète.",
         ],
       },
       {
-        heading: "Hebergement",
+        heading: "Hébergement",
         items: [
-          "Application hebergee par Vercel Inc., 340 S Lemon Ave #4133, Walnut, CA 91789, Etats-Unis.",
+          "Application hébergée par Vercel Inc., 340 S Lemon Ave #4133, Walnut, CA 91789, États-Unis.",
         ],
       },
       ...common,
@@ -70,40 +70,38 @@ function legalSections(title: string, contactEmail?: string) {
   if (title.includes("Conditions")) {
     return [
       {
-        heading: "Commande et reglement",
+        heading: "Commande et règlement",
         items: [
-          "Les prix sont affiches au gramme et les disponibilites sont verifiees avant validation de la commande.",
-          "Le reglement est confirme directement avec le client par telephone ou par email apres validation de commande.",
-          "Une commande est enregistree apres verification du panier, du stock et des informations de livraison.",
+          "Les prix sont affichés au gramme et les disponibilités sont vérifiées avant validation de la commande.",
+          "Le règlement est confirmé directement avec le client par téléphone ou par email après validation de commande.",
+          "Une commande est enregistrée après vérification du panier, du stock et des informations de livraison.",
         ],
       },
       {
         heading: "Livraison",
         items: [
-          "Livraison postale disponible en France selon les informations indiquees avant validation de la commande.",
-          "Livraison locale disponible autour d'Aix-en-Provence, 7j/7 de 11h a 01h, selon zone ouverte.",
+          "Livraison postale disponible en France selon les informations indiquées avant validation de la commande.",
+          "Livraison locale disponible autour d'Aix-en-Provence, 7j/7 de 11h à 01h, selon zone ouverte.",
         ],
       },
       ...common,
     ];
   }
 
-  if (title.includes("confidentialite")) {
+  if (title.includes("Confidentialité") || title.includes("confidentialite")) {
     return [
       {
-        heading: "Donnees collectees",
+        heading: "Données collectées",
         items: [
-          "Les donnees de compte, commande, livraison et contact sont utilisees pour executer la commande et assurer le suivi client.",
-          "Les donnees sont traitees par des prestataires techniques necessaires au fonctionnement du site et au suivi des commandes.",
-          "Les donnees de reglement manuel sont utilisees uniquement pour le suivi de commande et la confirmation administrative.",
+          "Les données de compte, commande, livraison et contact sont utilisées pour exécuter la commande et assurer le suivi client.",
+          "Les données sont traitées par des prestataires techniques nécessaires au fonctionnement du site et au suivi des commandes.",
+          "Les données de règlement manuel sont utilisées uniquement pour le suivi de commande et la confirmation administrative.",
         ],
       },
       {
         heading: "Droits utilisateur",
         items: [
-          contactEmail
-            ? `Toute demande relative aux donnees personnelles peut etre transmise a ${contactEmail}.`
-            : "Toute demande relative aux donnees personnelles peut etre transmise via le formulaire de contact du site.",
+          `Toute demande relative aux données personnelles peut être transmise à ${contactEmail}.`,
         ],
       },
       ...common,
@@ -114,11 +112,9 @@ function legalSections(title: string, contactEmail?: string) {
     {
       heading: "Retours et annulation",
       items: [
-        "Les demandes de retour sont examinees au cas par cas selon les produits, leur etat et les obligations applicables.",
-        "Les produits ouverts, alteres ou impropres a la remise en vente peuvent etre exclus du retour selon la politique finale.",
-        contactEmail
-          ? `Les demandes client sont traitees via ${contactEmail} ou le formulaire de contact du site.`
-          : "Les demandes client sont traitees via le formulaire de contact du site.",
+        "Les demandes de retour sont examinées au cas par cas selon les produits, leur état et les obligations applicables.",
+        "Les produits ouverts, altérés ou impropres à la remise en vente peuvent être exclus du retour selon la politique finale.",
+        `Les demandes client sont traitées via ${contactEmail} ou le formulaire de contact du site.`,
       ],
     },
     ...common,

@@ -48,7 +48,7 @@ export function AccountOrdersPage() {
       {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
       {!error && orders.length === 0 && (
         <p className="mt-4 text-sm text-ink/65">
-          Aucune commande rattachee a ce compte pour le moment.
+          Aucune commande rattachée à ce compte pour le moment.
         </p>
       )}
       <div className="mt-5 grid gap-4">
@@ -62,7 +62,7 @@ export function AccountOrdersPage() {
               <strong>{order.total.toFixed(2).replace(".", ",")} EUR</strong>
             </div>
             <div className="mt-3 grid gap-2 text-sm text-ink/70">
-              <p>Reglement : {paymentStatusLabel(order.paymentStatus)}</p>
+              <p>Règlement : {paymentStatusLabel(order.paymentStatus)}</p>
               <p>Statut : {orderStatusLabel(order.orderStatus)}</p>
               <p>Livraison : {order.deliveryMethod}</p>
               {order.trackingNumber && <p>Suivi postal : {order.trackingNumber}</p>}

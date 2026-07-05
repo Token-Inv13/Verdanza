@@ -11,6 +11,7 @@ import type {
   Order,
   OrderItem,
   OrderStatus,
+  OrderType,
   PaymentProvider,
   PaymentStatus,
   StatusHistoryEntry,
@@ -18,6 +19,7 @@ import type {
 
 export type AdminOrderRow = {
   id: string;
+  orderType?: OrderType;
   customer: string;
   customerEmail?: string;
   customerPhone?: string;
@@ -25,6 +27,7 @@ export type AdminOrderRow = {
   paymentProvider?: PaymentProvider;
   paymentStatus: PaymentStatus;
   orderStatus: OrderStatus | string;
+  deliveryMethod?: Order["deliveryMethod"];
   delivery: string;
   trackingNumber?: string;
   paymentReference?: string;
@@ -58,6 +61,7 @@ export async function getAdminOrdersWithFallback() {
       const order = { id: entry.id, ...entry.data() } as Order;
       return {
         id: order.id,
+        orderType: order.orderType || "order",
         customer: order.customerName || order.customerEmail || "Client",
         customerEmail: order.customerEmail,
         customerPhone: order.customerPhone,
@@ -65,6 +69,7 @@ export async function getAdminOrdersWithFallback() {
         paymentProvider: order.paymentProvider,
         paymentStatus: order.paymentStatus,
         orderStatus: order.orderStatus,
+        deliveryMethod: order.deliveryMethod,
         delivery: order.deliveryZone || order.deliveryMethod,
         trackingNumber: order.trackingNumber,
         paymentReference: order.paymentReference,

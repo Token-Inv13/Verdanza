@@ -11,8 +11,8 @@ export function HomePage() {
   return (
     <>
       <Seo
-        title="Verdanza CBD - Fleurs et resines CBD premium en ligne"
-        description="Boutique en ligne de fleurs et resines CBD premium, avec livraison postale en France et livraison locale selon zone disponible."
+        title="Verdanza CBD - Fleurs et résines CBD premium en ligne"
+        description="Boutique en ligne de fleurs et résines CBD premium, avec livraison postale en France et livraison locale selon zone disponible."
       />
       <main>
         <section className="hero-section relative overflow-hidden">
@@ -28,10 +28,10 @@ export function HomePage() {
                 <Leaf size={14} /> Verdanza CBD
               </p>
               <h1 className="mt-5 font-display text-4xl leading-tight sm:text-5xl md:text-7xl">
-                Fleurs et resines CBD premium en ligne
+                Fleurs et résines CBD premium en ligne
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-ivory/82 md:mt-6 md:text-lg md:leading-8">
-                Une selection courte, exigeante et conforme, disponible au
+                Une sélection courte, exigeante et conforme, disponible au
                 gramme avec livraison postale en France et express local selon
                 zone disponible.
               </p>
@@ -51,18 +51,18 @@ export function HomePage() {
           {[
             {
               icon: ShieldCheck,
-              title: "Conformite",
-              text: "Produits reserves aux adultes, THC conforme selon analyse fournisseur.",
+              title: "Conformité",
+              text: "Produits réservés aux adultes, THC conforme selon analyse fournisseur.",
             },
             {
               icon: Truck,
               title: "Livraison France",
-              text: "Expedition postale nationale, avec suivi selon le mode choisi.",
+              text: "Expédition postale nationale, avec suivi selon le mode choisi.",
             },
             {
               icon: PackageCheck,
               title: "Express local",
-              text: "Livraison rapide sur Aix-en-Provence et zones ouvertes, en complement du postal.",
+              text: "Livraison rapide sur Aix-en-Provence et zones ouvertes, en complément du postal.",
             },
           ].map((item) => (
             <article key={item.title} className="feature-panel">
@@ -75,7 +75,7 @@ export function HomePage() {
 
         <section className="container-page py-14">
           <div className="section-heading">
-            <h2>Selection Verdanza</h2>
+            <h2>Sélection Verdanza</h2>
             <Link to="/boutique">Tout voir</Link>
           </div>
           <div className="product-grid">

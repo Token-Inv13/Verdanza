@@ -2,27 +2,27 @@ import type { OrderStatus, PaymentProvider, PaymentStatus } from "../types";
 
 export const orderStatusLabels: Record<OrderStatus, string> = {
   new: "Nouvelle commande",
-  contact_required: "Client a contacter",
-  confirmed: "Confirmee",
-  preparing: "En preparation",
+  contact_required: "Client à contacter",
+  confirmed: "Confirmée",
+  preparing: "En préparation",
   out_for_delivery: "En livraison",
-  shipped: "Expediee",
-  delivered: "Livree",
-  cancelled: "Annulee",
+  shipped: "Expédiée",
+  delivered: "Livrée",
+  cancelled: "Annulée",
 };
 
 export const paymentStatusLabels: Record<PaymentStatus, string> = {
-  to_confirm: "A confirmer",
+  to_confirm: "À confirmer",
   pending: "En attente",
-  paid: "Regle",
-  cancelled: "Annule",
+  paid: "Réglé",
+  cancelled: "Annulé",
 };
 
 export const paymentProviderLabels: Record<PaymentProvider, string> = {
-  manual: "Reglement a confirmer directement",
-  bank_transfer: "Reglement a confirmer directement",
-  cash_on_delivery: "Reglement a confirmer directement",
-  future_psp: "Reglement a confirmer directement",
+  manual: "Règlement à confirmer directement",
+  bank_transfer: "Règlement à confirmer directement",
+  cash_on_delivery: "Règlement à confirmer directement",
+  future_psp: "Règlement à confirmer directement",
 };
 
 export const visibleOrderSteps: OrderStatus[] = [
@@ -44,6 +44,6 @@ export function paymentStatusLabel(status: PaymentStatus | string) {
 }
 
 export function paymentProviderLabel(provider?: PaymentProvider | string) {
-  if (!provider) return "A confirmer";
+  if (!provider) return "À confirmer";
   return paymentProviderLabels[provider as PaymentProvider] ?? provider;
 }

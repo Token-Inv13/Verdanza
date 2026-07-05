@@ -6,9 +6,15 @@ import { useAuth } from "../context/AuthContext";
 import { deliveryZones, localDeliveryZones } from "../data/deliveryZones";
 import type { DeliveryMethod } from "../types";
 import { trackEvent } from "../lib/analytics";
+import { isPreorderActive } from "../lib/preorder";
 
-const contactPhone = (import.meta.env.VITE_CONTACT_PHONE as string | undefined) || "07 80 81 41 37";
-const contactEmail = (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) || "contact@verdanza.fr";
+const contactPhone =
+  (import.meta.env.VITE_CONTACT_PHONE as string | undefined) || "07 80 81 41 37";
+const contactEmail =
+  (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
+  "contacte@verdanza.fr";
+const checkoutErrorMessage =
+  "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza au 07 80 81 41 37.";
 
 export function CheckoutPage() {
   const { itemCount, subtotal, items, lines } = useCart();
@@ -32,6 +38,7 @@ export function CheckoutPage() {
     city: "",
     country: "France",
   });
+
   const selectedZone = useMemo(
     () => localDeliveryZones.find((zone) => zone.id === deliveryZone),
     [deliveryZone],
@@ -42,11 +49,13 @@ export function CheckoutPage() {
   );
   const isLocalDelivery = deliveryMethod === "local_express";
   const localDeliveryMinimum = selectedZone?.minimumOrder ?? 30;
-  const isBelowLocalMinimum = isLocalDelivery && itemCount > 0 && subtotal < localDeliveryMinimum;
+  const isBelowLocalMinimum =
+    isLocalDelivery && itemCount > 0 && subtotal < localDeliveryMinimum;
   const estimatedDeliveryFee = isLocalDelivery
     ? selectedZone?.fee ?? 0
     : postalZone?.fee ?? 0;
   const estimatedTotal = subtotal + estimatedDeliveryFee;
+  const preorderActive = isPreorderActive();
 
   useEffect(() => {
     if (!user) return;
@@ -75,15 +84,17 @@ export function CheckoutPage() {
     try {
       if (isBelowLocalMinimum) {
         throw new Error(
-          `Livraison locale disponible a partir de ${localDeliveryMinimum} EUR d'achat.`,
+          `Livraison locale disponible à partir de ${localDeliveryMinimum} EUR d'achat.`,
         );
       }
+
       const authToken = user ? await user.getIdToken() : undefined;
       trackEvent("begin_checkout", {
         itemCount,
         subtotal,
         deliveryMethod,
       });
+
       const response = await fetch("/api/create-order", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -91,7 +102,8 @@ export function CheckoutPage() {
           items,
           authToken,
           deliveryMethod,
-          deliveryZone: deliveryMethod === "local_express" ? deliveryZone : "postal-france",
+          deliveryZone:
+            deliveryMethod === "local_express" ? deliveryZone : "postal-france",
           couponCode: couponCode.trim() || undefined,
           customerMessage: customerMessage.trim() || undefined,
           complianceAccepted,
@@ -112,14 +124,19 @@ export function CheckoutPage() {
           },
         }),
       });
-      const payload = (await response.json()) as { orderId?: string; error?: string };
+      const payload = (await response.json().catch(() => ({}))) as {
+        orderId?: string;
+      };
+
       if (!response.ok || !payload.orderId) {
-        throw new Error(payload.error || "Commande indisponible.");
+        throw new Error(checkoutErrorMessage);
       }
+
       window.sessionStorage.setItem(
         "verdanza:lastOrderSummary",
         JSON.stringify({
           orderId: payload.orderId,
+          orderType: preorderActive ? "preorder" : "order",
           items: lines.map((line) => ({
             name: line.product.name,
             quantity: line.quantity,
@@ -132,13 +149,20 @@ export function CheckoutPage() {
           total: estimatedTotal,
         }),
       );
-      navigate(`/checkout/success?order_id=${encodeURIComponent(payload.orderId)}`);
-    } catch (checkoutError) {
-      setError(
-        checkoutError instanceof Error
-          ? checkoutError.message
-          : "Impossible de valider la commande.",
+
+      navigate(
+        `/checkout/success?order_id=${encodeURIComponent(payload.orderId)}${
+          preorderActive ? "&type=preorder" : ""
+        }`,
       );
+    } catch (checkoutError) {
+      console.error("Checkout submission failed", checkoutError);
+      const message =
+        checkoutError instanceof Error &&
+        checkoutError.message.includes("Livraison locale disponible")
+          ? checkoutError.message
+          : checkoutErrorMessage;
+      setError(message);
       setIsSubmitting(false);
     }
   }
@@ -146,17 +170,32 @@ export function CheckoutPage() {
   return (
     <main className="container-page py-12">
       <Seo
-        title="Finaliser ma commande - Verdanza CBD"
-        description="Finalisation de commande Verdanza CBD avec verification des disponibilites."
+        title={
+          preorderActive
+            ? "Finaliser ma précommande - Verdanza CBD"
+            : "Finaliser ma commande - Verdanza CBD"
+        }
+        description="Finalisation de commande Verdanza CBD avec vérification des disponibilités."
       />
       <div className="page-intro">
-        <h1>Finaliser ma commande</h1>
+        <h1>{preorderActive ? "Finaliser ma précommande" : "Finaliser ma commande"}</h1>
         <p>
-          Votre commande sera transmise a Verdanza. Nous vous contacterons
-          rapidement par telephone ou par email pour confirmer les disponibilites,
-          la livraison et le reglement.
+          {preorderActive
+            ? "Votre précommande sera transmise à Verdanza. Nous vous contacterons rapidement pour confirmer les disponibilités, la livraison et le règlement."
+            : "Votre commande sera transmise à Verdanza. Nous vous contacterons rapidement par téléphone ou par email pour confirmer les disponibilités, la livraison et le règlement."}
         </p>
       </div>
+
+      {preorderActive && (
+        <section className="mt-8 rounded-lg border border-champagne/40 bg-cream p-5 text-sm leading-6 text-forest">
+          <strong className="block text-base">Précommande</strong>
+          <span>
+            L'ouverture officielle est prévue le jeudi 16 juillet. Votre panier
+            peut être validé dès maintenant, sans paiement en ligne.
+          </span>
+        </section>
+      )}
+
       <section className="mt-8 rounded-lg border border-champagne/30 bg-cream p-5 text-sm leading-6 text-forest">
         <p>Contact direct : {contactPhone}</p>
         <p>
@@ -166,6 +205,7 @@ export function CheckoutPage() {
           </a>
         </p>
       </section>
+
       {!user && itemCount > 0 && (
         <section className="mt-8 rounded-lg border border-champagne/30 bg-cream p-5">
           <p className="text-sm leading-6 text-forest">
@@ -177,16 +217,18 @@ export function CheckoutPage() {
               Se connecter
             </Link>
             <Link to="/inscription" state={{ from: "/checkout" }} className="btn-secondary">
-              Creer un compte
+              Créer un compte
             </Link>
           </div>
         </section>
       )}
+
       {user && itemCount > 0 && (
         <section className="mt-8 rounded-lg border border-forest/10 bg-cream p-5 text-sm text-forest">
-          Votre commande sera rattachee au compte {user.email}.
+          Votre commande sera rattachée au compte {user.email}.
         </section>
       )}
+
       {itemCount === 0 ? (
         <section className="mt-10 rounded-lg border border-forest/10 bg-cream p-8">
           <p>Votre panier est vide.</p>
@@ -203,10 +245,27 @@ export function CheckoutPage() {
             <div className="rounded-lg border border-forest/10 bg-ivory p-6">
               <h2 className="font-display text-3xl text-forest">Contact</h2>
               <div className="mt-5 grid gap-4 md:grid-cols-2">
-                <CheckoutInput label="Prénom" value={customer.firstName} onChange={(firstName) => setCustomer({ ...customer, firstName })} />
-                <CheckoutInput label="Nom" value={customer.lastName} onChange={(lastName) => setCustomer({ ...customer, lastName })} />
-                <CheckoutInput label="Email" type="email" value={customer.email} onChange={(email) => setCustomer({ ...customer, email })} />
-                <CheckoutInput label="Téléphone" value={customer.phone} onChange={(phone) => setCustomer({ ...customer, phone })} />
+                <CheckoutInput
+                  label="Prénom"
+                  value={customer.firstName}
+                  onChange={(firstName) => setCustomer({ ...customer, firstName })}
+                />
+                <CheckoutInput
+                  label="Nom"
+                  value={customer.lastName}
+                  onChange={(lastName) => setCustomer({ ...customer, lastName })}
+                />
+                <CheckoutInput
+                  label="Email"
+                  type="email"
+                  value={customer.email}
+                  onChange={(email) => setCustomer({ ...customer, email })}
+                />
+                <CheckoutInput
+                  label="Téléphone"
+                  value={customer.phone}
+                  onChange={(phone) => setCustomer({ ...customer, phone })}
+                />
               </div>
             </div>
 
@@ -216,16 +275,17 @@ export function CheckoutPage() {
                 <DeliveryChoice
                   checked={deliveryMethod === "postal"}
                   title="Livraison postale en France"
-                  text="Livraison postale disponible en France. Les frais et delais sont indiques avant validation de la commande."
+                  text="Livraison postale disponible en France. Les frais et délais sont indiqués avant validation de la commande."
                   onChange={() => setDeliveryMethod("postal")}
                 />
                 <DeliveryChoice
                   checked={deliveryMethod === "local_express"}
                   title="Livraison locale Aix-en-Provence"
-                  text="Livraison locale disponible a Aix-en-Provence et alentours, 7j/7 de 11h a 01h, a partir de 30 EUR d'achat."
+                  text="Livraison locale disponible à Aix-en-Provence et alentours, 7j/7 de 11h à 01h, à partir de 30 EUR d'achat."
                   onChange={() => setDeliveryMethod("local_express")}
                 />
               </div>
+
               {isLocalDelivery && (
                 <label className="mt-5 block text-sm font-medium text-forest">
                   Zone locale
@@ -242,35 +302,60 @@ export function CheckoutPage() {
                   </select>
                 </label>
               )}
+
               {isBelowLocalMinimum && (
                 <p className="mt-4 rounded-md border border-champagne/40 bg-cream p-3 text-sm leading-6 text-forest">
                   Minimum livraison locale : {localDeliveryMinimum} EUR. Il manque{" "}
                   {(localDeliveryMinimum - subtotal).toFixed(2).replace(".", ",")} EUR.
                 </p>
               )}
+
               {!isLocalDelivery && (
                 <p className="mt-4 rounded-md border border-champagne/30 bg-cream p-3 text-sm leading-6 text-forest">
-                  Livraison postale disponible en France. Les delais dependent du
-                  transporteur. Le reglement et les frais de livraison sont
-                  confirmes directement avec vous apres validation.
+                  Livraison postale disponible en France. Les délais dépendent du
+                  transporteur. Le règlement et les frais de livraison sont
+                  confirmés directement avec vous après validation.
                 </p>
               )}
+
               <div className="mt-5 grid gap-4 md:grid-cols-2">
-                <CheckoutInput label="Adresse" value={customer.line1} onChange={(line1) => setCustomer({ ...customer, line1 })} />
-                <CheckoutInput label="Complément" required={false} value={customer.line2} onChange={(line2) => setCustomer({ ...customer, line2 })} />
-                <CheckoutInput label="Code postal" value={customer.postalCode} onChange={(postalCode) => setCustomer({ ...customer, postalCode })} />
-                <CheckoutInput label="Ville" value={customer.city} onChange={(city) => setCustomer({ ...customer, city })} />
+                <CheckoutInput
+                  label="Adresse"
+                  value={customer.line1}
+                  onChange={(line1) => setCustomer({ ...customer, line1 })}
+                />
+                <CheckoutInput
+                  label="Complément"
+                  required={false}
+                  value={customer.line2}
+                  onChange={(line2) => setCustomer({ ...customer, line2 })}
+                />
+                <CheckoutInput
+                  label="Code postal"
+                  value={customer.postalCode}
+                  onChange={(postalCode) => setCustomer({ ...customer, postalCode })}
+                />
+                <CheckoutInput
+                  label="Ville"
+                  value={customer.city}
+                  onChange={(city) => setCustomer({ ...customer, city })}
+                />
                 {!isLocalDelivery && (
-                  <CheckoutInput label="Pays" value={customer.country} onChange={(country) => setCustomer({ ...customer, country })} />
+                  <CheckoutInput
+                    label="Pays"
+                    value={customer.country}
+                    onChange={(country) => setCustomer({ ...customer, country })}
+                  />
                 )}
               </div>
             </div>
 
             <div className="rounded-lg border border-forest/10 bg-ivory p-6">
-              <h2 className="font-display text-3xl text-forest">Reglement</h2>
+              <h2 className="font-display text-3xl text-forest">Règlement</h2>
               <p className="mt-4 text-sm leading-6 text-ink/70">
-                Le reglement est confirme directement avec vous apres validation
-                de la commande. Aucun reglement n'est demande sur le site.
+                Le règlement est confirmé directement avec vous après validation
+                de la commande. Aucun paiement en ligne n'est demandé sur le site
+                pour le moment.
               </p>
               <label className="mt-5 block text-sm font-medium text-forest">
                 Message optionnel
@@ -279,7 +364,7 @@ export function CheckoutPage() {
                   value={customerMessage}
                   onChange={(event) => setCustomerMessage(event.target.value)}
                   maxLength={1000}
-                  placeholder="Precision sur votre commande, vos disponibilites ou la livraison."
+                  placeholder="Précision sur votre commande, vos disponibilités ou la livraison."
                 />
               </label>
             </div>
@@ -319,7 +404,7 @@ export function CheckoutPage() {
               </p>
               {couponCode.trim() && (
                 <p className="text-xs leading-5 text-ink/55">
-                  La remise sera verifiee et appliquee avant validation de la commande.
+                  La remise sera vérifiée et appliquée avant validation de la commande.
                 </p>
               )}
             </div>
@@ -336,7 +421,11 @@ export function CheckoutPage() {
             </label>
             {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
             <button className="btn-primary mt-6 w-full" disabled={isSubmitting}>
-              {isSubmitting ? "Validation..." : "Valider ma commande"}
+              {isSubmitting
+                ? "Validation..."
+                : preorderActive
+                  ? "Valider ma précommande"
+                  : "Valider ma commande"}
             </button>
           </aside>
         </form>

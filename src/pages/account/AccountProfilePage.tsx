@@ -22,12 +22,12 @@ export function AccountProfilePage() {
     try {
       await updateCustomerProfile(user.uid, { displayName, phone });
       await refreshCustomerProfile();
-      setMessage("Profil mis a jour.");
+      setMessage("Profil mis à jour.");
     } catch (profileError) {
       setError(
         profileError instanceof Error
           ? profileError.message
-          : "Mise a jour impossible.",
+            : "Mise à jour impossible.",
       );
     }
   }
@@ -38,7 +38,7 @@ export function AccountProfilePage() {
       <p className="mt-2 text-sm text-ink/60">{user?.email}</p>
       <form onSubmit={handleSubmit} className="mt-6 grid max-w-xl gap-4">
         <label className="text-sm font-medium text-forest">
-          Nom affiche
+          Nom affiché
           <input
             className="input-field mt-2"
             value={displayName}
@@ -46,7 +46,7 @@ export function AccountProfilePage() {
           />
         </label>
         <label className="text-sm font-medium text-forest">
-          Telephone
+          Téléphone
           <input
             className="input-field mt-2"
             value={phone}

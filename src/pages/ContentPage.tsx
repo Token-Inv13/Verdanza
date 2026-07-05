@@ -3,13 +3,15 @@ import { Seo } from "../components/Seo";
 
 const content = {
   quality: {
-    title: "Qualite & conformite",
-    text: "Verdanza privilegie une selection courte, tracable et conforme, reservee aux adultes.",
+    title: "Qualité & conformité",
+    text: "Verdanza sélectionne une gamme courte de produits CBD, avec une attention particulière portée à la conformité, à la traçabilité et à la clarté des informations transmises aux clients.",
     points: [
-      "THC conforme selon analyse fournisseur",
-      "Produits reserves aux personnes majeures",
-      "Produits naturels selectionnes avec exigence",
-      "Aucune promesse medicale",
+      "Sélection contrôlée",
+      "THC conforme selon analyses fournisseur",
+      "Produits réservés aux adultes",
+      "Aucune promesse médicale",
+      "Traçabilité et transparence",
+      "Besoin d'une information avant commande ?",
     ],
   },
   about: {
@@ -24,21 +26,21 @@ const content = {
   },
   faq: {
     title: "FAQ",
-    text: "Reponses pratiques sur les produits, la conformite, la livraison et le reglement.",
+    text: "Réponses pratiques sur les produits, la conformité, la livraison et le règlement.",
     points: [
-      "Les produits sont-ils reserves aux majeurs ? Oui.",
-      "Le THC est-il conforme ? Les fiches indiquent un taux inferieur a 0,3 %.",
-      "Quels modes de livraison sont proposes ? Livraison postale en France et livraison locale selon zone disponible.",
-      "Comment se passe le reglement ? Verdanza vous contacte apres validation pour confirmer les disponibilites, la livraison et le reglement.",
+      "Les produits sont-ils réservés aux majeurs ? Oui.",
+      "Le THC est-il conforme ? Les fiches indiquent un taux inférieur à 0,3 %.",
+      "Quels modes de livraison sont proposés ? Livraison postale en France et livraison locale selon zone disponible.",
+      "Comment se passe le règlement ? Verdanza vous contacte après validation pour confirmer les disponibilités, la livraison et le règlement.",
     ],
   },
   contact: {
     title: "Contact",
     text: "Contactez Verdanza pour toute question produit, commande ou livraison locale.",
     points: [
-      "Reponse par email apres reception du message",
-      "Indiquez votre numero si la demande concerne une livraison",
-      "Aucune donnee bancaire ne doit etre transmise via ce formulaire",
+      "Réponse par email après réception du message",
+      "Indiquez votre numéro si la demande concerne une livraison",
+      "Aucune donnée bancaire ne doit être transmise via ce formulaire",
       "Horaires livraison locale : 7j/7 de 11h a 01h",
     ],
   },
@@ -46,7 +48,9 @@ const content = {
 
 export function ContentPage({ variant }: { variant: keyof typeof content }) {
   const page = content[variant];
-  const contactEmail = import.meta.env.VITE_CONTACT_EMAIL as string | undefined;
+  const contactEmail =
+    (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
+    "contacte@verdanza.fr";
   return (
     <main className="container-page py-12">
       <Seo title={`${page.title} - Verdanza CBD`} description={page.text} />
@@ -63,14 +67,86 @@ export function ContentPage({ variant }: { variant: keyof typeof content }) {
         </p>
       )}
       {variant === "contact" && <ContactForm />}
-      <div className="mt-10 grid gap-4 md:grid-cols-2">
-        {page.points.map((point) => (
-          <article key={point} className="feature-panel">
-            <h2>{point}</h2>
+      {variant === "quality" && <QualityTrustSection />}
+      {variant !== "quality" && (
+        <div className="mt-10 grid gap-4 md:grid-cols-2">
+          {page.points.map((point) => (
+            <article key={point} className="feature-panel">
+              <h2>{point}</h2>
+            </article>
+          ))}
+        </div>
+      )}
+    </main>
+  );
+}
+
+function QualityTrustSection() {
+  const contactEmail =
+    (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
+    "contacte@verdanza.fr";
+
+  const sections = [
+    {
+      title: "Sélection contrôlée",
+      text: "La sélection Verdanza reste volontairement courte afin de mieux suivre les références proposées, leur présentation, leur fraîcheur et leur cohérence avec les attentes clients.",
+    },
+    {
+      title: "THC conforme selon analyses fournisseur",
+      text: "Les fleurs et résines CBD sont proposées sur la base des informations et analyses transmises par les fournisseurs. Les taux de THC annoncés doivent rester conformes au cadre applicable.",
+    },
+    {
+      title: "Produits réservés aux adultes",
+      text: "Les produits Verdanza sont réservés aux personnes majeures. Ils doivent être tenus hors de portée des enfants et ne sont pas destinés aux mineurs.",
+    },
+    {
+      title: "Aucune promesse médicale",
+      text: "Les produits CBD proposés ne sont pas des médicaments, ne remplacent pas un traitement médical et ne font l'objet d'aucune promesse thérapeutique.",
+    },
+    {
+      title: "Traçabilité et transparence",
+      text: "Verdanza conserve les informations fournisseur disponibles et peut répondre aux questions produit avant commande : origine, culture, taux annoncés, profil aromatique ou disponibilité.",
+    },
+    {
+      title: "Contrôle visuel avant mise en vente",
+      text: "Chaque référence est vérifiée visuellement avant mise en avant : aspect, texture, cohérence de la fiche produit et disponibilité réelle du stock.",
+    },
+  ];
+
+  return (
+    <section className="mt-10 grid gap-6">
+      <div className="rounded-lg border border-champagne/30 bg-cream p-6">
+        <h2 className="font-display text-3xl text-forest">
+          Une démarche simple : clarté, conformité, disponibilité
+        </h2>
+        <p className="mt-4 max-w-3xl leading-7 text-ink/70">
+          Verdanza privilégie une information sobre et vérifiable. Les fiches
+          produits distinguent fleurs et résines CBD, précisent les données
+          disponibles, et évitent toute allégation excessive.
+        </p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        {sections.map((section) => (
+          <article key={section.title} className="feature-panel">
+            <h2>{section.title}</h2>
+            <p className="mt-3 text-sm leading-6 text-ink/70">{section.text}</p>
           </article>
         ))}
       </div>
-    </main>
+      <div className="rounded-lg border border-forest/10 bg-ivory p-6">
+        <h2 className="font-display text-3xl text-forest">
+          Besoin d'une information avant commande ?
+        </h2>
+        <p className="mt-4 leading-7 text-ink/70">
+          Pour toute question sur un produit ou une commande, vous pouvez
+          contacter Verdanza au 07 80 81 41 37 ou par email à{" "}
+          <a className="underline decoration-champagne" href={`mailto:${contactEmail}`}>
+            {contactEmail}
+          </a>
+          .
+        </p>
+      </div>
+    </section>
   );
 }
 
@@ -161,7 +237,7 @@ function ContactForm() {
         />
       </label>
       <label className="hidden">
-        Societe
+        Société
         <input
           value={form.company}
           onChange={(event) => setForm({ ...form, company: event.target.value })}

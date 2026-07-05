@@ -99,9 +99,9 @@ export function ProductPage() {
             </button>
           </div>
           <p className="mt-6 text-sm leading-6 text-ink/60">
-            Produit reserve aux personnes majeures. Tenir hors de portee des
-            enfants. Ce produit n'est pas destine a remplacer un traitement
-            medical.
+            Produit réservé aux personnes majeures. Tenir hors de portée des
+            enfants. Ce produit n'est pas destiné à remplacer un traitement
+            médical.
           </p>
         </section>
       </div>

@@ -403,7 +403,7 @@ export function AdminPage({ section }: { section: string }) {
         </>
       )}
 
-      {section === "Parametres de facturation" && (
+      {(section === "Parametres de facturation" || section === "Paramètres de facturation") && (
         <>
           <SourceLine source={billingSource} />
           <BillingSettingsPanel
@@ -412,14 +412,14 @@ export function AdminPage({ section }: { section: string }) {
             onSubmit={async (event) => {
               event.preventDefault();
               await saveBillingSettings(editingBilling);
-              setMessage("Parametres de facturation enregistres.");
+              setMessage("Paramètres de facturation enregistrés.");
               await refresh();
             }}
           />
         </>
       )}
 
-      {["Parametres"].includes(section) && (
+      {["Parametres", "Paramètres"].includes(section) && (
         <section className="admin-card mt-8">
           <h2 className="font-display text-3xl text-forest">Module non affiche</h2>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-ink/65">
@@ -444,7 +444,7 @@ function ProductForm({
   return (
     <form onSubmit={onSubmit} className="admin-card h-fit">
       <h2 className="font-display text-3xl text-forest">
-        {product.id ? "Editer produit" : "Creer produit"}
+        {product.id ? "Éditer produit" : "Créer produit"}
       </h2>
       <div className="mt-5 grid gap-4">
         <Input label="Nom" value={product.name} onChange={(name) => onChange({ ...product, name })} />
@@ -752,7 +752,7 @@ function CouponForm({
   return (
     <form onSubmit={onSubmit} className="admin-card h-fit">
       <h2 className="font-display text-3xl text-forest">
-        {coupon.id ? "Editer promo" : "Creer promo"}
+        {coupon.id ? "Éditer promo" : "Créer promo"}
       </h2>
       <div className="mt-5 grid gap-4">
         <Input label="Code" value={coupon.code} onChange={(code) => onChange({ ...coupon, code: code.toUpperCase() })} />
@@ -986,7 +986,7 @@ function BillingSettingsPanel({
         <Input label="Forme juridique" value={settings.legalForm || ""} onChange={(legalForm) => onChange({ ...settings, legalForm })} />
         <Input label="SIREN" value={settings.siren || ""} onChange={(siren) => onChange({ ...settings, siren })} />
         <Input label="SIRET" value={settings.siret || ""} onChange={(siret) => onChange({ ...settings, siret })} />
-        <Input label="Telephone" value={settings.phone} onChange={(phone) => onChange({ ...settings, phone })} />
+        <Input label="Téléphone" value={settings.phone} onChange={(phone) => onChange({ ...settings, phone })} />
         <Input label="Email" value={settings.email} onChange={(email) => onChange({ ...settings, email })} />
         <label className="text-sm font-medium text-forest">
           Regime TVA
@@ -995,13 +995,13 @@ function BillingSettingsPanel({
             value={settings.vatMode}
             onChange={(event) => onChange({ ...settings, vatMode: event.target.value as BillingSettings["vatMode"] })}
           >
-            <option value="not_configured">TVA non configuree</option>
+            <option value="not_configured">TVA non configurée</option>
             <option value="vat_exempt">Franchise en base de TVA</option>
             <option value="vat_applicable">TVA applicable</option>
             <option value="other">Autre regime</option>
           </select>
         </label>
-        <Input label="Numero TVA intracommunautaire" value={settings.vatNumber || ""} onChange={(vatNumber) => onChange({ ...settings, vatNumber })} />
+        <Input label="Numéro TVA intracommunautaire" value={settings.vatNumber || ""} onChange={(vatNumber) => onChange({ ...settings, vatNumber })} />
         <Input label="Mention TVA applicable" value={settings.vatMention || ""} onChange={(vatMention) => onChange({ ...settings, vatMention })} />
         <Input label="Logo facture" value={settings.logoUrl || ""} onChange={(logoUrl) => onChange({ ...settings, logoUrl })} />
         <label className="md:col-span-2 text-sm font-medium text-forest">
@@ -1013,14 +1013,14 @@ function BillingSettingsPanel({
           />
         </label>
         <Textarea label="Conditions de paiement" value={settings.paymentTerms || ""} onChange={(paymentTerms) => onChange({ ...settings, paymentTerms })} />
-        <Textarea label="Mentions legales specifiques" value={settings.legalMentions || ""} onChange={(legalMentions) => onChange({ ...settings, legalMentions })} />
+        <Textarea label="Mentions légales spécifiques" value={settings.legalMentions || ""} onChange={(legalMentions) => onChange({ ...settings, legalMentions })} />
         <label className="md:col-span-2 flex items-center gap-2 text-sm text-forest">
           <input
             type="checkbox"
             checked={settings.isManuallyValidated}
             onChange={(event) => onChange({ ...settings, isManuallyValidated: event.target.checked })}
           />
-          Informations validees manuellement
+          Informations validées manuellement
         </label>
       </div>
       <button className="btn-primary mt-6" type="submit">
@@ -1039,7 +1039,7 @@ function ManualInvoiceForm({ onCreate }: { onCreate: (input: ManualInvoiceInput)
   const [unitPrice, setUnitPrice] = useState(0);
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState("Reglement a confirmer");
+  const [paymentMethod, setPaymentMethod] = useState("Règlement à confirmer");
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("to_confirm");
   const [internalNote, setInternalNote] = useState("");
 
@@ -1068,21 +1068,21 @@ function ManualInvoiceForm({ onCreate }: { onCreate: (input: ManualInvoiceInput)
         });
       }}
     >
-      <h2 className="font-display text-3xl text-forest">Creer facture manuelle</h2>
+      <h2 className="font-display text-3xl text-forest">Créer facture manuelle</h2>
       <div className="mt-5 grid gap-4">
         <Input label="Client" value={customerName} onChange={setCustomerName} />
         <Input label="Email client" value={customerEmail} onChange={setCustomerEmail} />
-        <Input label="Telephone client" value={customerPhone} onChange={setCustomerPhone} />
+        <Input label="Téléphone client" value={customerPhone} onChange={setCustomerPhone} />
         <Input label="Produit ou prestation" value={label} onChange={setLabel} />
         <div className="grid grid-cols-2 gap-3">
-          <NumberInput label="Quantite" value={quantity} onChange={setQuantity} />
+          <NumberInput label="Quantité" value={quantity} onChange={setQuantity} />
           <NumberInput label="Prix unitaire" value={unitPrice} onChange={setUnitPrice} />
           <NumberInput label="Livraison" value={deliveryFee} onChange={setDeliveryFee} />
           <NumberInput label="Remise" value={discountAmount} onChange={setDiscountAmount} />
         </div>
-        <Input label="Mode de reglement" value={paymentMethod} onChange={setPaymentMethod} />
+        <Input label="Mode de règlement" value={paymentMethod} onChange={setPaymentMethod} />
         <label className="text-sm font-medium text-forest">
-          Statut reglement
+          Statut règlement
           <select
             className="input-field mt-2"
             value={paymentStatus}
@@ -1094,7 +1094,7 @@ function ManualInvoiceForm({ onCreate }: { onCreate: (input: ManualInvoiceInput)
           </select>
         </label>
         <Textarea label="Note interne" value={internalNote} onChange={setInternalNote} />
-        <button className="btn-primary" type="submit">Creer le brouillon</button>
+        <button className="btn-primary" type="submit">Créer le brouillon</button>
       </div>
     </form>
   );
@@ -1122,7 +1122,7 @@ function InvoicesPanel({
         <table className="w-full min-w-[1080px] text-left text-sm">
           <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
             <tr>
-              {["Facture", "Client", "Origine", "Statut", "Reglement", "Total", "Actions"].map((header) => (
+              {["Facture", "Client", "Origine", "Statut", "Règlement", "Total", "Actions"].map((header) => (
                 <th key={header} className="px-4 py-3 font-medium">{header}</th>
               ))}
             </tr>
@@ -1177,6 +1177,7 @@ function AdminOrders({
 }: {
   orders: {
     id: string;
+    orderType?: string;
     customer: string;
     customerEmail?: string;
     customerPhone?: string;
@@ -1190,6 +1191,7 @@ function AdminOrders({
     paymentProvider?: PaymentProvider;
     paymentStatus: string;
     orderStatus: string;
+    deliveryMethod?: string;
     delivery: string;
     trackingNumber?: string;
     paymentReference?: string;
@@ -1214,7 +1216,22 @@ function AdminOrders({
     },
   ) => Promise<void>;
 }) {
+  const [filter, setFilter] = useState("all");
   const invoiceByOrderId = new Map(invoices.map((invoice) => [invoice.orderId, invoice]));
+  const filteredOrders = orders.filter((order) => orderMatchesAdminFilter(order, filter));
+  const filters = [
+    ["all", "Toutes"],
+    ["preorder", "Précommandes"],
+    ["local", "Commandes locales"],
+    ["postal", "Commandes postales"],
+    ["contact_required", "ì contacter"],
+    ["confirmed", "Confirmées"],
+    ["preparing", "En préparation"],
+    ["out_for_delivery", "En livraison"],
+    ["delivered", "Livrées"],
+    ["cancelled", "Annulées"],
+  ];
+
   return (
     <section className="mt-8 overflow-hidden rounded-lg border border-forest/10 bg-ivory">
       {!orders.length && (
@@ -1222,14 +1239,34 @@ function AdminOrders({
           Aucune commande pour le moment.
         </p>
       )}
+      {!!orders.length && (
+        <div className="flex flex-wrap gap-2 border-b border-forest/10 bg-cream px-4 py-4">
+          {filters.map(([value, label]) => (
+            <button
+              key={value}
+              className={filter === value ? "btn-primary min-h-8 px-3 py-1 text-xs" : "btn-secondary min-h-8 px-3 py-1 text-xs"}
+              onClick={() => setFilter(value)}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {!!orders.length && !filteredOrders.length && (
+        <p className="border-b border-forest/10 px-4 py-4 text-sm text-forest">
+          Aucune commande pour ce filtre.
+        </p>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1380px] text-left text-sm">
           <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
             <tr>
               {[
+                "Type",
                 "Commande",
                 "Client",
-                "Reglement",
+                "Règlement",
                 "Statut commande",
                 "Livraison",
                 "Produits",
@@ -1244,8 +1281,13 @@ function AdminOrders({
             </tr>
           </thead>
           <tbody>
-            {orders.map((order) => (
+            {filteredOrders.map((order) => (
               <tr key={order.id} className="border-t border-forest/10">
+                <td className="px-4 py-4">
+                  <span className="rounded-full border border-champagne/40 px-2 py-1 text-xs text-forest">
+                    {order.orderType === "preorder" ? "Précommande" : "Commande"}
+                  </span>
+                </td>
                 <td className="px-4 py-4">{order.id}</td>
                 <td className="px-4 py-4">
                   <strong className="block text-forest">{order.customer}</strong>
@@ -1351,7 +1393,7 @@ function AdminOrders({
                   <input
                     className="input-field"
                     defaultValue={order.paymentReference || ""}
-                    placeholder="Reference reglement"
+                    placeholder="Référence règlement"
                     disabled={orderSource !== "firestore"}
                     onBlur={(event) =>
                       void onUpdate(order.id, {
@@ -1387,7 +1429,7 @@ function AdminOrders({
                       disabled={!onCreateInvoice || orderSource !== "firestore"}
                       onClick={() => void onCreateInvoice?.(order.id)}
                     >
-                      Creer facture
+                      Créer facture
                     </button>
                   )}
                 </td>
@@ -1421,6 +1463,21 @@ function AdminOrders({
   );
 }
 
+function orderMatchesAdminFilter(
+  order: {
+    orderType?: string;
+    deliveryMethod?: string;
+    orderStatus: string;
+  },
+  filter: string,
+) {
+  if (filter === "all") return true;
+  if (filter === "preorder") return order.orderType === "preorder";
+  if (filter === "local") return order.deliveryMethod === "local_express";
+  if (filter === "postal") return order.deliveryMethod === "postal";
+  return order.orderStatus === filter;
+}
+
 function SourceCard({
   label,
   value,
@@ -1433,7 +1490,7 @@ function SourceCard({
   return (
     <article className="admin-card">
       <p className="text-sm text-ink/55">{label}</p>
-      <strong className="mt-2 block text-forest">{count} entree(s)</strong>
+      <strong className="mt-2 block text-forest">{count} entrée(s)</strong>
       <span className="text-xs text-ink/50">Source : {sourceLabel(value)}</span>
     </article>
   );
@@ -1442,8 +1499,8 @@ function SourceCard({
 function SourceLine({ source }: { source: string }) {
   return (
     <p className="mb-4 rounded-md border border-forest/10 bg-cream px-4 py-3 text-sm text-forest">
-      Source actuelle : {sourceLabel(source)}. Les donnees de secours ne sont
-      utilisees que si la base en ligne est indisponible.
+      Source actuelle : {sourceLabel(source)}. Les données de secours ne sont
+      utilisées que si la base en ligne est indisponible.
     </p>
   );
 }
@@ -1451,7 +1508,7 @@ function SourceLine({ source }: { source: string }) {
 function sourceLabel(source: string) {
   if (source === "firestore") return "base en ligne";
   if (source === "local") return "secours local";
-  if (source === "empty") return "aucune donnee";
+  if (source === "empty") return "aucune donnée";
   return source;
 }
 
@@ -1493,19 +1550,19 @@ function buildDashboardMetrics(
 
   return [
     {
-      label: "Total estime",
+      label: "Total estimé",
       value: `${formatEuro(estimatedTotal)} EUR`,
       detail: `${activeOrders.length} commande(s) active(s)`,
     },
     {
-      label: "Reglements a suivre",
+      label: "Règlements à suivre",
       value: String(paymentToConfirm.length),
-      detail: `${paidOrders.length} deja regle(s)`,
+      detail: `${paidOrders.length} déjà réglé(s)`,
     },
     {
-      label: "A preparer",
+      label: "À préparer",
       value: String(preparingOrders.length),
-      detail: "Nouvelles, a confirmer ou a preparer",
+      detail: "Nouvelles, à confirmer ou à préparer",
     },
     {
       label: "En livraison",
@@ -1535,7 +1592,7 @@ function buildDashboardMetrics(
     {
       label: "Ruptures",
       value: String(products.filter((product) => product.stock <= 0).length),
-      detail: "Stock a 0 g",
+      detail: "Stock à 0 g",
     },
   ];
 }
@@ -1551,11 +1608,11 @@ function formatEuro(value: number) {
 function invoiceStatusLabel(status: InvoiceStatus) {
   const labels: Record<InvoiceStatus, string> = {
     draft: "Brouillon",
-    validated: "Validee",
-    sent: "Envoyee",
-    paid: "Payee",
-    cancelled: "Annulee",
-    credit_note_issued: "Avoir emis",
+    validated: "Validée",
+    sent: "Envoyée",
+    paid: "Payée",
+    cancelled: "Annulée",
+    credit_note_issued: "Avoir émis",
   };
   return labels[status] || status;
 }
@@ -1575,6 +1632,7 @@ function whatsappLink(order: {
   customerPhone?: string;
   customer: string;
   id: string;
+  orderType?: string;
   orderStatus: string;
   delivery: string;
   total: string;
@@ -1588,6 +1646,7 @@ function smsLink(order: {
   customerPhone?: string;
   customer: string;
   id: string;
+  orderType?: string;
   orderStatus: string;
   delivery: string;
   total: string;
@@ -1600,6 +1659,7 @@ async function copyOrderMessage(order: {
   customerPhone?: string;
   customer: string;
   id: string;
+  orderType?: string;
   orderStatus: string;
   delivery: string;
   total: string;
@@ -1611,34 +1671,38 @@ async function copyOrderMessage(order: {
 function orderMessage(order: {
   customer: string;
   id: string;
+  orderType?: string;
   orderStatus: string;
   delivery: string;
   total: string;
   trackingNumber?: string;
 }) {
   const firstName = order.customer.split(" ")[0] || "Bonjour";
-  const common = `Bonjour ${firstName}, votre commande Verdanza n°${order.id.slice(0, 8).toUpperCase()}`;
+  const shortId = order.id.slice(0, 8).toUpperCase();
+  if (order.orderType === "preorder") {
+    return `Bonjour ${firstName}, votre précommande Verdanza n°${shortId} a bien été reçue. Nous vous contacterons rapidement pour confirmer les disponibilités, la livraison et le règlement. Total estimé : ${order.total}.`;
+  }
+  const common = `Bonjour ${firstName}, votre commande Verdanza n°${shortId}`;
   if (order.orderStatus === "confirmed") {
-    return `${common} est confirmee. Mode de livraison : ${order.delivery}. Total estime : ${order.total}. Nous vous tenons informe de la suite.`;
+    return `${common} est confirmée. Mode de livraison : ${order.delivery}. Total estimé : ${order.total}. Nous vous tenons informé de la suite.`;
   }
   if (order.orderStatus === "preparing") {
-    return `${common} est en preparation.`;
+    return `${common} est en préparation.`;
   }
   if (order.orderStatus === "out_for_delivery") {
-    return `${common} est en cours de livraison. Le livreur arrive prochainement a l'adresse indiquee.`;
+    return `${common} est en cours de livraison. Le livreur arrive prochainement à l'adresse indiquée.`;
   }
   if (order.orderStatus === "shipped") {
-    return `${common} a ete expediee. Numero de suivi : ${order.trackingNumber || "a venir"}.`;
+    return `${common} a été expédiée. Numéro de suivi : ${order.trackingNumber || "à venir"}.`;
   }
   if (order.orderStatus === "delivered") {
-    return `${common} est indiquee comme livree. Merci pour votre commande.`;
+    return `${common} est indiquée comme livrée. Merci pour votre commande.`;
   }
   if (order.orderStatus === "cancelled") {
-    return `${common} a ete annulee. Contactez-nous si besoin au 07 80 81 41 37.`;
+    return `${common} a été annulée. Contactez-nous si besoin au 07 80 81 41 37.`;
   }
-  return `${common} a bien ete recue. Nous verifions les disponibilites et revenons vers vous rapidement. Total estime : ${order.total}.`;
+  return `${common} a bien été reçue. Nous vérifions les disponibilités et revenons vers vous rapidement. Total estimé : ${order.total}.`;
 }
-
 function Input({
   label,
   value,

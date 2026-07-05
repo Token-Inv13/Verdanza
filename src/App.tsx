@@ -34,7 +34,7 @@ export function App() {
         />
         <Route
           path="resines-cbd"
-          element={<CategoryPage category="resins" title="Resines CBD" />}
+          element={<CategoryPage category="resins" title="Résines CBD" />}
         />
         <Route path="produits/:slug" element={<ProductPage />} />
         <Route
@@ -64,12 +64,12 @@ export function App() {
         </Route>
         <Route
           path="mentions-legales"
-          element={<LegalPage title="Mentions legales" />}
+          element={<LegalPage title="Mentions légales" />}
         />
-        <Route path="cgv" element={<LegalPage title="Conditions generales de vente" />} />
+        <Route path="cgv" element={<LegalPage title="Conditions générales de vente" />} />
         <Route
           path="confidentialite"
-          element={<LegalPage title="Politique de confidentialite" />}
+          element={<LegalPage title="Politique de confidentialité" />}
         />
         <Route path="retours" element={<LegalPage title="Politique de retour" />} />
       </Route>
@@ -86,8 +86,8 @@ export function App() {
           <Route path="clients" element={<AdminPage section="Clients" />} />
           <Route path="coupons" element={<AdminPage section="Coupons" />} />
           <Route path="factures" element={<AdminPage section="Factures" />} />
-          <Route path="facturation" element={<AdminPage section="Parametres de facturation" />} />
-          <Route path="parametres" element={<AdminPage section="Parametres" />} />
+          <Route path="facturation" element={<AdminPage section="Paramètres de facturation" />} />
+          <Route path="parametres" element={<AdminPage section="Paramètres" />} />
         </Route>
       </Route>
       <Route path="*" element={<NotFoundPage />} />

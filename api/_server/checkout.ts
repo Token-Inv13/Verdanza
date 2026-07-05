@@ -316,8 +316,10 @@ export function orderPayload(
   const paymentProvider = "manual";
   const paymentInstructions = paymentInstructionsFor();
   const orderStatus = "contact_required";
+  const orderType = isPreorderActive() ? "preorder" : "order";
 
   return {
+    orderType,
     customerId: customerId ?? null,
     customerEmail: body.customer.email,
     customerPhone: body.customer.phone,
@@ -344,7 +346,10 @@ export function orderPayload(
         status: orderStatus,
         changedAt: new Date().toISOString(),
         changedBy: "system",
-        note: "Commande transmise. Client a contacter pour confirmer disponibilites, livraison et reglement.",
+        note:
+          orderType === "preorder"
+            ? "Precommande transmise. Client a contacter pour confirmer disponibilites, livraison et reglement."
+            : "Commande transmise. Client a contacter pour confirmer disponibilites, livraison et reglement.",
       },
     ],
     emails: {},
@@ -364,4 +369,16 @@ export function roundMoney(value: number) {
 
 export function paymentInstructionsFor() {
   return "Verdanza vous contactera rapidement par telephone ou par email pour confirmer les disponibilites, la livraison et le reglement.";
+}
+
+export function isPreorderActive() {
+  const enabled = (process.env.VITE_PREORDER_MODAL_ENABLED ?? "true").toLowerCase();
+  if (["false", "0", "off", "no"].includes(enabled)) return false;
+
+  const openingDate =
+    process.env.VITE_OPENING_DATE || "2026-07-16T11:00:00+02:00";
+  const openingTime = Date.parse(openingDate);
+  if (!Number.isFinite(openingTime)) return true;
+
+  return Date.now() < openingTime;
 }

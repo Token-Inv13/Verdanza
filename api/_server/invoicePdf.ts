@@ -24,7 +24,7 @@ export async function renderInvoicePdf(invoice: Invoice, settings: BillingSettin
     settings.isManuallyValidated ? formatSiren(settings.siren) : "",
     settings.isManuallyValidated ? formatSiret(settings.siret) : "",
     settings.isManuallyValidated ? settings.address || "" : "",
-    `Telephone : ${settings.phone}`,
+    `Téléphone : ${settings.phone}`,
     `Email : ${settings.email}`,
   ].filter(Boolean), 40, y, 10, font, muted);
 
@@ -32,7 +32,7 @@ export async function renderInvoicePdf(invoice: Invoice, settings: BillingSettin
   drawMultiline([
     invoice.customerName || "Client",
     invoice.customerEmail ? `Email : ${invoice.customerEmail}` : "",
-    invoice.customerPhone ? `Telephone : ${invoice.customerPhone}` : "",
+    invoice.customerPhone ? `Téléphone : ${invoice.customerPhone}` : "",
     invoice.customerAddress?.line1 || "",
     invoice.customerAddress?.line2 || "",
     invoice.customerAddress
@@ -73,9 +73,9 @@ export async function renderInvoicePdf(invoice: Invoice, settings: BillingSettin
   drawTotal("Total estime", invoice.total, true);
   y -= 20;
 
-  drawText(`Reglement : ${invoice.paymentMethod || "A confirmer"}`, 40, y, 10, font, muted);
+  drawText(`Règlement : ${invoice.paymentMethod || "À confirmer"}`, 40, y, 10, font, muted);
   y -= 16;
-  drawText(`Statut reglement : ${invoice.paymentStatus}`, 40, y, 10, font, muted);
+  drawText(`Statut règlement : ${invoice.paymentStatus}`, 40, y, 10, font, muted);
   y -= 24;
 
   const vatText = vatMention(settings);
@@ -85,13 +85,13 @@ export async function renderInvoicePdf(invoice: Invoice, settings: BillingSettin
   }
   if (!settings.isManuallyValidated) {
     drawMultiline([
-      "Brouillon - informations legales non validees.",
+      "Brouillon - informations légales non validées.",
       "Verifier raison sociale, SIRET, adresse, regime TVA et mentions obligatoires avant emission officielle.",
     ], 40, y, 9, bold, rgb(0.58, 0.28, 0.05));
     y -= 32;
   }
   drawMultiline([
-    "Produits reserves aux adultes. Taux de THC conforme selon analyse fournisseur.",
+    "Produits réservés aux adultes. Taux de THC conforme selon analyse fournisseur.",
     settings.legalMentions || "",
     settings.paymentTerms || "",
   ].filter(Boolean), 40, Math.max(y, 70), 8, font, muted);

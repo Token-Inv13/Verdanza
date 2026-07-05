@@ -34,6 +34,7 @@ export type Product = {
 };
 
 export type DeliveryMethod = "postal" | "local_express";
+export type OrderType = "order" | "preorder";
 export type PaymentProvider =
   | "manual"
   | "bank_transfer"
@@ -171,6 +172,7 @@ export type OrderAlerts = {
 
 export type Order = {
   id: string;
+  orderType?: OrderType;
   customerId?: string;
   customerEmail: string;
   customerPhone: string;
