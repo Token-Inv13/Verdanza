@@ -1464,12 +1464,13 @@ function buildDashboardMetrics(
     total: string;
   }[],
 ): AdminMetric[] {
-  const estimatedTotal = orders.reduce((sum, order) => sum + parseEuro(order.total), 0);
-  const paidOrders = orders.filter((order) => order.paymentStatus === "paid");
-  const paymentToConfirm = orders.filter((order) =>
+  const activeOrders = orders.filter((order) => order.orderStatus !== "cancelled");
+  const estimatedTotal = activeOrders.reduce((sum, order) => sum + parseEuro(order.total), 0);
+  const paidOrders = activeOrders.filter((order) => order.paymentStatus === "paid");
+  const paymentToConfirm = activeOrders.filter((order) =>
     ["to_confirm", "pending"].includes(order.paymentStatus),
   );
-  const preparingOrders = orders.filter((order) =>
+  const preparingOrders = activeOrders.filter((order) =>
     [
       "new",
       "contact_required",
@@ -1477,13 +1478,13 @@ function buildDashboardMetrics(
       "preparing",
     ].includes(order.orderStatus),
   );
-  const deliveryOrders = orders.filter((order) =>
+  const deliveryOrders = activeOrders.filter((order) =>
     order.orderStatus === "out_for_delivery",
   );
   const lowStockProducts = products.filter(
     (product) => product.stock <= product.lowStockThreshold,
   );
-  const averageCart = orders.length ? estimatedTotal / orders.length : 0;
+  const averageCart = activeOrders.length ? estimatedTotal / activeOrders.length : 0;
   const activeProducts = products.filter((product) => product.isActive);
   const totalStock = activeProducts.reduce(
     (sum, product) => sum + Number(product.stock || 0),
@@ -1494,7 +1495,7 @@ function buildDashboardMetrics(
     {
       label: "Total estime",
       value: `${formatEuro(estimatedTotal)} EUR`,
-      detail: `${orders.length} commande(s)`,
+      detail: `${activeOrders.length} commande(s) active(s)`,
     },
     {
       label: "Reglements a suivre",
@@ -1524,7 +1525,7 @@ function buildDashboardMetrics(
     {
       label: "Panier moyen",
       value: `${formatEuro(averageCart)} EUR`,
-      detail: "Commandes enregistrees",
+      detail: "Commandes actives",
     },
     {
       label: "Stocks bas",
