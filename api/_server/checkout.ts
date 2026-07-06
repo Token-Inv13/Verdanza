@@ -396,7 +396,7 @@ export function isPreorderActive() {
   if (["false", "0", "off", "no"].includes(enabled)) return false;
 
   const openingDate =
-    process.env.VITE_OPENING_DATE || "2026-07-16T11:00:00+02:00";
+    process.env.VITE_OPENING_DATE || "2026-07-09T11:00:00+02:00";
   const openingTime = Date.parse(openingDate);
   if (!Number.isFinite(openingTime)) return true;
 

@@ -229,7 +229,7 @@ export function CheckoutPage() {
         <section className="mt-8 rounded-lg border border-champagne/40 bg-cream p-5 text-sm leading-6 text-forest">
           <strong className="block text-base">Précommande</strong>
           <span>
-            L'ouverture officielle est prévue le jeudi 16 juillet. Votre panier
+            L'ouverture officielle est prévue le jeudi 9 juillet. Votre panier
             peut être validé dès maintenant, sans paiement en ligne.
           </span>
         </section>

@@ -35,7 +35,7 @@ export function PreorderModal() {
           Ouverture Verdanza bientôt disponible
         </h2>
         <p className="mt-4 leading-7 text-ink/75">
-          Verdanza ouvre officiellement le jeudi 16 juillet. Les précommandes
+          Verdanza ouvre officiellement le jeudi 9 juillet. Les précommandes
           sont déjà possibles : validez votre panier, nous vous recontactons
           pour confirmer les disponibilités, la livraison et le règlement.
         </p>

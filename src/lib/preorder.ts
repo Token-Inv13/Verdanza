@@ -1,6 +1,6 @@
 export const preorderOpeningDate =
   (import.meta.env.VITE_OPENING_DATE as string | undefined) ||
-  "2026-07-16T11:00:00+02:00";
+  "2026-07-09T11:00:00+02:00";
 
 export function isPreorderEnabled() {
   const raw =
