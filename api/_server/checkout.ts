@@ -89,6 +89,12 @@ export type PricedCheckout = {
   deliveryFee: number;
   discountAmount: number;
   couponCode?: string;
+  couponId?: string;
+  discountType?: Coupon["discountType"];
+  discountValue?: number;
+  promoApplied: boolean;
+  subtotalBeforeDiscount: number;
+  totalAfterDiscount: number;
   total: number;
   deliveryZoneName?: string;
   deliveryMinimumApplied: number;
@@ -190,26 +196,48 @@ export async function priceCheckout(
   );
   const delivery = await resolveDeliveryFee(db, body, subtotal);
   const coupon = body.couponCode
-    ? await resolveCoupon(db, body.couponCode, subtotal, delivery.fee, orderItems)
+    ? await resolveCoupon(
+        db,
+        body.couponCode,
+        subtotal,
+        orderItems,
+        body.deliveryMethod,
+      )
     : null;
-  const beforeDiscount = roundMoney(subtotal + delivery.fee);
+  const effectiveDelivery =
+    coupon?.freeShippingApplied && body.deliveryMethod === "postal"
+      ? {
+          ...delivery,
+          fee: 0,
+          postalFreeShippingApplied: true,
+          deliveryFeeStatus: "free" as DeliveryFeeStatus,
+          deliveryNote: "Livraison postale offerte par code promo.",
+        }
+      : delivery;
+  const beforeDiscount = roundMoney(subtotal + effectiveDelivery.fee);
   const discountAmount = coupon
-    ? Math.min(coupon.discountAmount, Math.max(0, beforeDiscount - 0.5))
+    ? Math.min(coupon.discountAmount, Math.max(0, beforeDiscount))
     : 0;
   const total = roundMoney(beforeDiscount - discountAmount);
 
   return {
     orderItems,
     subtotal,
-    deliveryFee: delivery.fee,
+    subtotalBeforeDiscount: beforeDiscount,
+    deliveryFee: effectiveDelivery.fee,
     discountAmount,
     couponCode: coupon?.code,
+    couponId: coupon?.id,
+    discountType: coupon?.discountType,
+    discountValue: coupon?.discountValue,
+    promoApplied: Boolean(coupon),
+    totalAfterDiscount: total,
     total,
-    deliveryZoneName: delivery.zoneName,
-    deliveryMinimumApplied: delivery.minimumApplied,
-    postalFreeShippingApplied: delivery.postalFreeShippingApplied,
-    deliveryFeeStatus: delivery.deliveryFeeStatus,
-    deliveryNote: delivery.deliveryNote,
+    deliveryZoneName: effectiveDelivery.zoneName,
+    deliveryMinimumApplied: effectiveDelivery.minimumApplied,
+    postalFreeShippingApplied: effectiveDelivery.postalFreeShippingApplied,
+    deliveryFeeStatus: effectiveDelivery.deliveryFeeStatus,
+    deliveryNote: effectiveDelivery.deliveryNote,
   };
 }
 
@@ -217,8 +245,8 @@ async function resolveCoupon(
   db: FirebaseFirestore.Firestore,
   rawCode: string,
   subtotal: number,
-  deliveryFee: number,
   orderItems: OrderItem[],
+  deliveryMethod: DeliveryMethod,
 ) {
   const code = rawCode.trim().toUpperCase().replace(/\s+/g, "");
   if (!code) return null;
@@ -236,6 +264,7 @@ async function resolveCoupon(
   const allowedCategories = coupon.categories ?? [];
 
   if (!coupon.isActive) throw new Error("Code promo inactif.");
+  if (coupon.isArchived) throw new Error("Code promo invalide.");
   if (startsAt && now < startsAt) throw new Error("Code promo pas encore actif.");
   if (endsAt && now > endsAt) throw new Error("Code promo expire.");
   if (coupon.maxUses && coupon.usedCount >= coupon.maxUses) {
@@ -268,21 +297,28 @@ async function resolveCoupon(
   if (eligibleSubtotal <= 0 && coupon.discountType !== "free_shipping") {
     throw new Error("Code promo non applicable a ce panier.");
   }
+  if (coupon.discountType === "free_shipping" && deliveryMethod !== "postal") {
+    throw new Error("Ce code promo est reserve a la livraison postale.");
+  }
 
   const discountAmount =
     coupon.discountType === "percent"
       ? roundMoney(eligibleSubtotal * (Number(coupon.discountValue || 0) / 100))
       : coupon.discountType === "fixed"
         ? roundMoney(Number(coupon.discountValue || 0))
-        : roundMoney(deliveryFee);
+        : 0;
 
-  if (discountAmount <= 0) {
+  if (discountAmount <= 0 && coupon.discountType !== "free_shipping") {
     throw new Error("Code promo sans remise applicable.");
   }
 
   return {
+    id: coupon.id,
     code,
+    discountType: coupon.discountType,
+    discountValue: Number(coupon.discountValue || 0),
     discountAmount,
+    freeShippingApplied: coupon.discountType === "free_shipping",
   };
 }
 
@@ -409,9 +445,16 @@ export function orderPayload(
     customerName: `${body.customer.firstName} ${body.customer.lastName}`,
     items: priced.orderItems,
     subtotal: priced.subtotal,
+    subtotalBeforeDiscount: priced.subtotalBeforeDiscount,
     deliveryFee: priced.deliveryFee,
     discountAmount: priced.discountAmount,
     couponCode: priced.couponCode ?? null,
+    promoCode: priced.couponCode ?? null,
+    promoId: priced.couponId ?? null,
+    discountType: priced.discountType ?? null,
+    discountValue: priced.discountValue ?? null,
+    totalAfterDiscount: priced.totalAfterDiscount,
+    promoApplied: priced.promoApplied,
     total: priced.total,
     paymentProvider,
     paymentStatus: "to_confirm",

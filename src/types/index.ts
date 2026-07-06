@@ -90,6 +90,8 @@ export type Coupon = {
   isActive: boolean;
   productIds?: string[];
   categories?: ProductCategory[];
+  isArchived?: boolean;
+  internalNote?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -205,9 +207,16 @@ export type Order = {
   customerName?: string;
   items: OrderItem[];
   subtotal: number;
+  subtotalBeforeDiscount?: number;
   deliveryFee: number;
   discountAmount?: number;
   couponCode?: string;
+  promoCode?: string;
+  promoId?: string;
+  discountType?: CouponDiscountType;
+  discountValue?: number;
+  totalAfterDiscount?: number;
+  promoApplied?: boolean;
   total: number;
   paymentProvider?: PaymentProvider;
   paymentStatus: PaymentStatus;

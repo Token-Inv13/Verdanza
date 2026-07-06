@@ -145,9 +145,10 @@ export default async function handler(
         update.stockRestoredAt = now;
         update.cancelledAt = now;
         if (!body.paymentStatus) update.paymentStatus = "cancelled";
-        if (order.couponCode && !order.couponRestoredAt) {
+        const couponRestoreId = order.promoId || (order.couponCode ? order.couponCode.toLowerCase() : "");
+        if (couponRestoreId && !order.couponRestoredAt) {
           transaction.set(
-            db.collection("coupons").doc(order.couponCode.toLowerCase()),
+            db.collection("coupons").doc(couponRestoreId),
             {
               usedCount: FieldValue.increment(-1),
               updatedAt: FieldValue.serverTimestamp(),

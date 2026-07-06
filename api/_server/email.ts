@@ -358,6 +358,7 @@ function orderEmailHtml(order: Order, intro: string) {
       <p><strong>Type :</strong> ${escapeHtml(orderTypeLabel(order))}</p>
       <p><strong>Commande :</strong> ${escapeHtml(shortOrderId(order.id))}</p>
       <ul>${rows}</ul>
+      ${promoEmailHtml(order)}
       <p><strong>Total estimé :</strong> ${formatMoney(Number(order.total || 0))}</p>
       <p><strong>Livraison :</strong> ${escapeHtml(order.deliveryZone || order.deliveryMethod)}</p>
       <p><strong>Information livraison :</strong> ${escapeHtml(deliveryInfoText(order))}</p>
@@ -379,6 +380,7 @@ function orderEmailText(order: Order, intro: string) {
     `Type: ${orderTypeLabel(order)}`,
     `Commande: ${shortOrderId(order.id)}`,
     items,
+    ...promoEmailTextLines(order),
     `Total estimé: ${formatMoney(Number(order.total || 0))}`,
     `Livraison: ${order.deliveryZone || order.deliveryMethod}`,
     `Information livraison: ${deliveryInfoText(order)}`,
@@ -386,6 +388,38 @@ function orderEmailText(order: Order, intro: string) {
     "Votre commande est en attente de confirmation par l'equipe Verdanza. Apres verification des disponibilites et du mode de livraison, nous vous confirmerons le montant final. Si vous avez choisi ou souhaitez un paiement par carte bancaire, un lien de paiement vous sera envoye par email et/ou message.",
     `Contact Verdanza: ${contactPhone()} - ${contactEmail()}`,
   ].join("\n");
+}
+
+function promoEmailHtml(order: Order) {
+  const code = order.couponCode || order.promoCode;
+  const hasPromo = Boolean(order.promoApplied || code || Number(order.discountAmount || 0) > 0);
+  if (!hasPromo) return "";
+  const subtotal = Number(order.subtotalBeforeDiscount || order.subtotal || 0);
+  const discount = Number(order.discountAmount || 0);
+  const discountLabel =
+    order.discountType === "free_shipping" && discount <= 0
+      ? "Livraison postale offerte"
+      : `-${formatMoney(discount)}`;
+  return `
+    <p><strong>Sous-total avant remise :</strong> ${formatMoney(subtotal)}</p>
+    <p><strong>Code promo ${escapeHtml(code || "")} :</strong> ${escapeHtml(discountLabel)}</p>
+  `;
+}
+
+function promoEmailTextLines(order: Order) {
+  const code = order.couponCode || order.promoCode;
+  const hasPromo = Boolean(order.promoApplied || code || Number(order.discountAmount || 0) > 0);
+  if (!hasPromo) return [];
+  const subtotal = Number(order.subtotalBeforeDiscount || order.subtotal || 0);
+  const discount = Number(order.discountAmount || 0);
+  const discountLabel =
+    order.discountType === "free_shipping" && discount <= 0
+      ? "Livraison postale offerte"
+      : `-${formatMoney(discount)}`;
+  return [
+    `Sous-total avant remise: ${formatMoney(subtotal)}`,
+    `Code promo ${code || ""}: ${discountLabel}`,
+  ];
 }
 
 function customerManualOrderEmailHtml(order: Order) {
@@ -417,6 +451,7 @@ function customerManualOrderEmailText(order: Order) {
     order.items
       .map((item) => `${item.name} x ${item.quantity} g - ${formatMoney(item.unitPrice * item.quantity)}`)
       .join("\n"),
+    ...promoEmailTextLines(order),
     `Total estimé: ${formatMoney(Number(order.total || 0))}`,
     "",
     "Merci,",
@@ -445,6 +480,7 @@ function adminOrderEmailHtml(order: Order) {
       <ul>${order.items
         .map((item) => `<li>${escapeHtml(item.name)} x ${item.quantity} g</li>`)
         .join("")}</ul>
+      ${promoEmailHtml(order)}
       <p><strong>Total estimé :</strong> ${formatMoney(Number(order.total || 0))}</p>
       ${order.customerMessage ? `<p><strong>Message client :</strong> ${escapeHtml(order.customerMessage)}</p>` : ""}
       ${adminUrl() ? `<p><a href="${adminUrl()}">Ouvrir le cockpit admin</a></p>` : ""}
@@ -469,6 +505,7 @@ function adminOrderEmailText(order: Order) {
     "Action paiement: lien de paiement a envoyer si CB souhaitee.",
     "Produits:",
     order.items.map((item) => `${item.name} x ${item.quantity} g`).join("\n"),
+    ...promoEmailTextLines(order),
     `Total estimé: ${formatMoney(Number(order.total || 0))}`,
     order.customerMessage ? `Message client: ${order.customerMessage}` : "",
     adminUrl() ? `Admin: ${adminUrl()}` : "",

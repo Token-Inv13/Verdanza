@@ -45,6 +45,13 @@ export type AdminOrderRow = {
   paymentLinkChannel?: PaymentLinkChannel;
   customerMessage?: string;
   items: OrderItem[];
+  subtotal?: number;
+  subtotalBeforeDiscount?: number;
+  discountAmount?: number;
+  couponCode?: string;
+  promoApplied?: boolean;
+  discountType?: Order["discountType"];
+  discountValue?: number;
   total: string;
   internalNote?: string;
   statusHistory?: StatusHistoryEntry[];
@@ -104,6 +111,13 @@ export async function getAdminOrdersWithFallback() {
         paymentLinkChannel: order.paymentLinkChannel,
         customerMessage: order.customerMessage,
         items: order.items || [],
+        subtotal: order.subtotal,
+        subtotalBeforeDiscount: order.subtotalBeforeDiscount,
+        discountAmount: order.discountAmount,
+        couponCode: order.couponCode || order.promoCode,
+        promoApplied: order.promoApplied,
+        discountType: order.discountType,
+        discountValue: order.discountValue,
         total: `${Number(order.total || 0).toFixed(2).replace(".", ",")} EUR`,
         internalNote: order.internalNote,
         statusHistory: order.statusHistory || [],

@@ -8,6 +8,7 @@ import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
 import type { DeliveryMethod, DeliveryZone, PreferredPaymentMethod } from "../types";
 import { trackEvent } from "../lib/analytics";
 import { isPreorderActive } from "../lib/preorder";
+import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
 import {
   effectiveLocalDeliveryMinimum,
   effectivePostalDeliveryMinimum,
@@ -22,6 +23,7 @@ const contactEmail =
   "contact@verdanza.fr";
 const checkoutErrorMessage =
   "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza au 07 80 81 41 37.";
+const promoStorageKey = "verdanza-coupon-code";
 
 const paymentMethodLabels: Record<PreferredPaymentMethod, string> = {
   card_payment_link: "Carte bancaire via lien de paiement après confirmation",
@@ -37,7 +39,12 @@ export function CheckoutPage() {
   const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>(fallbackDeliveryZones);
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("postal");
   const [deliveryZone, setDeliveryZone] = useState("");
-  const [couponCode, setCouponCode] = useState("");
+  const [couponCode, setCouponCode] = useState(() =>
+    window.localStorage.getItem(promoStorageKey) || "",
+  );
+  const [quote, setQuote] = useState<OrderQuote | null>(null);
+  const [promoMessage, setPromoMessage] = useState("");
+  const [isCheckingPromo, setIsCheckingPromo] = useState(false);
   const [customerMessage, setCustomerMessage] = useState("");
   const [preferredPaymentMethod, setPreferredPaymentMethod] =
     useState<PreferredPaymentMethod>("card_payment_link");
@@ -93,7 +100,8 @@ export function CheckoutPage() {
   const estimatedDeliveryFee = isLocalDelivery
     ? selectedZone?.fee ?? 0
     : postalZone?.fee ?? 0;
-  const estimatedTotal = subtotal + estimatedDeliveryFee;
+  const discountAmount = quote?.promoApplied ? quote.discountAmount : 0;
+  const estimatedTotal = Math.max(0, subtotal + estimatedDeliveryFee - discountAmount);
   const preorderActive = isPreorderActive();
 
   useEffect(() => {
@@ -124,6 +132,20 @@ export function CheckoutPage() {
   }, [deliveryMethod, preferredPaymentMethod]);
 
   useEffect(() => {
+    if (!couponCode.trim()) {
+      window.localStorage.removeItem(promoStorageKey);
+      setQuote(null);
+      setPromoMessage("");
+    }
+  }, [couponCode]);
+
+  useEffect(() => {
+    if (!quote?.promoApplied || !couponCode.trim()) return;
+    void handleApplyPromo(false).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliveryMethod, deliveryZone, subtotal]);
+
+  useEffect(() => {
     if (!user) return;
     setCustomer((current) => ({
       ...current,
@@ -142,6 +164,35 @@ export function CheckoutPage() {
     }));
   }, [customerProfile, user]);
 
+  async function handleApplyPromo(showSuccess = true) {
+    const code = couponCode.trim().toUpperCase();
+    setCouponCode(code);
+    setPromoMessage("");
+    setQuote(null);
+    if (!code) return null;
+    setIsCheckingPromo(true);
+    try {
+      const nextQuote = await quoteOrder({
+        items,
+        deliveryMethod,
+        deliveryZone: deliveryMethod === "local_express" ? deliveryZone : "postal-france",
+        couponCode: code,
+      });
+      setQuote(nextQuote);
+      window.localStorage.setItem(promoStorageKey, code);
+      if (showSuccess) setPromoMessage("Code promo appliqué.");
+      return nextQuote;
+    } catch (error) {
+      window.localStorage.removeItem(promoStorageKey);
+      const message =
+        error instanceof Error ? error.message : "Ce code promo n'est pas valide.";
+      setPromoMessage(message);
+      throw new Error(message);
+    } finally {
+      setIsCheckingPromo(false);
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
@@ -159,6 +210,7 @@ export function CheckoutPage() {
           "La zone de livraison sélectionnée n’est actuellement pas disponible. Veuillez choisir une autre zone ou contacter Verdanza.",
         );
       }
+      const finalQuote = couponCode.trim() ? await handleApplyPromo(false) : quote;
 
       const authToken = user ? await user.getIdToken() : undefined;
       trackEvent("begin_checkout", {
@@ -227,7 +279,9 @@ export function CheckoutPage() {
                 ? "Livraison postale offerte."
                 : "Frais postaux confirmés avec vous après validation de la commande.",
           preferredPaymentMethod: paymentMethodLabels[preferredPaymentMethod],
-          total: estimatedTotal,
+          couponCode: finalQuote?.couponCode || undefined,
+          discountAmount: finalQuote?.discountAmount || 0,
+          total: finalQuote?.total ?? estimatedTotal,
         }),
       );
 
@@ -241,6 +295,9 @@ export function CheckoutPage() {
       const message =
         checkoutError instanceof Error &&
         (checkoutError.message.includes("minimum de commande") ||
+          checkoutError.message.includes("Code promo") ||
+          checkoutError.message.includes("code promo") ||
+          checkoutError.message.includes("promo") ||
           checkoutError.message.includes("Livraison locale disponible") ||
           checkoutError.message.includes("zone de livraison"))
           ? checkoutError.message
@@ -508,12 +565,12 @@ export function CheckoutPage() {
                   <span>
                     {line.product.name} x {line.quantity} g
                   </span>
-                  <span>{line.lineTotal.toFixed(2).replace(".", ",")} EUR</span>
+                  <span>{formatEuro(line.lineTotal)}</span>
                 </p>
               ))}
               <p className="flex justify-between border-t border-forest/10 pt-3">
                 <span>Sous-total estimé</span>
-                <span>{subtotal.toFixed(2).replace(".", ",")} EUR</span>
+                <span>{formatEuro(subtotal)}</span>
               </p>
               <p className="flex justify-between">
                 <span>Livraison estimée</span>
@@ -522,7 +579,7 @@ export function CheckoutPage() {
                     ? "Offerte"
                     : !isLocalDelivery
                       ? "À confirmer"
-                      : `${estimatedDeliveryFee.toFixed(2).replace(".", ",")} EUR`}
+                      : formatEuro(estimatedDeliveryFee)}
                 </span>
               </p>
               {!isLocalDelivery && (
@@ -534,23 +591,55 @@ export function CheckoutPage() {
               )}
               <label className="grid gap-2 border-t border-forest/10 pt-3 text-sm font-medium text-forest">
                 Code promo
-                <input
-                  className="input-field"
-                  value={couponCode}
-                  onChange={(event) => setCouponCode(event.target.value.toUpperCase())}
-                  placeholder="WELCOME10"
-                />
+                <div className="flex gap-2">
+                  <input
+                    className="input-field"
+                    value={couponCode}
+                    onChange={(event) => setCouponCode(event.target.value.toUpperCase())}
+                    placeholder="WELCOME10"
+                  />
+                  <button
+                    className="btn-secondary min-h-11 px-3 py-2"
+                    type="button"
+                    disabled={isCheckingPromo}
+                    onClick={() => void handleApplyPromo().catch(() => undefined)}
+                  >
+                    {isCheckingPromo ? "..." : "Appliquer"}
+                  </button>
+                </div>
               </label>
+              {promoMessage && (
+                <p
+                  className={`text-xs leading-5 ${
+                    quote?.promoApplied ? "text-forest" : "text-red-700"
+                  }`}
+                >
+                  {promoMessage}
+                </p>
+              )}
+              {quote?.promoApplied && (
+                <p className="flex justify-between text-forest">
+                  <span>
+                    Code promo {quote.couponCode}
+                    {quote.discountType === "free_shipping" ? " livraison offerte" : ""}
+                  </span>
+                  <span>
+                    {quote.discountAmount > 0
+                      ? `-${formatEuro(quote.discountAmount)}`
+                      : "Appliqué"}
+                  </span>
+                </p>
+              )}
               <p className="flex justify-between text-lg font-semibold text-forest">
                 <span>Total estimé</span>
-                <span>{estimatedTotal.toFixed(2).replace(".", ",")} EUR</span>
+                <span>{formatEuro(estimatedTotal)}</span>
               </p>
               <p className="rounded-md border border-forest/10 bg-ivory p-3 text-xs leading-5 text-forest">
                 Paiement : lien envoyé après confirmation si paiement CB souhaité.
                 <br />
                 Souhait indiqué : {paymentMethodLabels[preferredPaymentMethod]}.
               </p>
-              {couponCode.trim() && (
+              {couponCode.trim() && !quote?.promoApplied && (
                 <p className="text-xs leading-5 text-ink/55">
                   La remise sera vérifiée et appliquée avant validation de la commande.
                 </p>

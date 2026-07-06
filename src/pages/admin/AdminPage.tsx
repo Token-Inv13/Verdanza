@@ -9,6 +9,7 @@ import {
 import { updateOrderAdminFields } from "../../services/ordersService";
 import { updateDeliveryZoneAdmin } from "../../services/deliveryZonesService";
 import {
+  archiveCoupon,
   updateCouponStatus,
   upsertCoupon,
   type CouponInput,
@@ -203,6 +204,16 @@ export function AdminPage({ section }: { section: string }) {
     await refresh();
   }
 
+  async function handleCouponArchive(coupon: Coupon) {
+    const confirmed = window.confirm(
+      "Cette action archive le code promo. Il restera consultable mais ne devra plus etre utilise.",
+    );
+    if (!confirmed) return;
+    await archiveCoupon(coupon.id);
+    setMessage(`Code promo ${coupon.code} archive.`);
+    await refresh();
+  }
+
   async function handleLoyaltyAdjustment(customer: CustomerProfile) {
     const rawPoints = window.prompt("Nombre de points a ajouter ou retirer", "0");
     const points = Number(rawPoints);
@@ -363,6 +374,7 @@ export function AdminPage({ section }: { section: string }) {
               coupons={coupons}
               onEdit={setEditingCoupon}
               onToggle={handleCouponToggle}
+              onArchive={handleCouponArchive}
             />
           </section>
         </div>
@@ -564,12 +576,14 @@ function ProductForm({
   );
 }
 
+type AdminBadgeTone = "neutral" | "success" | "warning" | "danger" | "muted" | "gold";
+
 function AdminBadge({
   children,
   tone = "neutral",
 }: {
   children: string | number;
-  tone?: "neutral" | "success" | "warning" | "danger" | "muted" | "gold";
+  tone?: AdminBadgeTone;
 }) {
   const styles = {
     neutral: "border-forest/15 bg-ivory text-forest",
@@ -921,16 +935,30 @@ function CouponForm({
   onChange: (coupon: CouponInput) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const preview = couponPreview(coupon);
+
   return (
     <form onSubmit={onSubmit} className="admin-card h-fit">
       <h2 className="font-display text-3xl text-forest">
-        {coupon.id ? "Éditer promo" : "Créer promo"}
+        {coupon.id ? "Modifier une promotion" : "Créer une promotion"}
       </h2>
       <div className="mt-5 grid gap-4">
-        <Input label="Code" value={coupon.code} onChange={(code) => onChange({ ...coupon, code: code.toUpperCase() })} />
-        <Input label="Libelle" value={coupon.label} onChange={(label) => onChange({ ...coupon, label })} />
+        <div>
+          <Input
+            label="Code promo"
+            value={coupon.code}
+            onChange={(code) => onChange({ ...coupon, code: code.toUpperCase().replace(/\s+/g, "") })}
+          />
+          <p className="mt-1 text-xs text-ink/55">Exemple : WELCOME10</p>
+        </div>
+        <Input
+          label="Nom / libellé"
+          value={coupon.label}
+          onChange={(label) => onChange({ ...coupon, label })}
+        />
         <label className="text-sm font-medium text-forest">
-          Type
+          Type de réduction
           <select
             className="input-field mt-2"
             value={coupon.discountType}
@@ -943,52 +971,44 @@ function CouponForm({
           >
             <option value="percent">Pourcentage</option>
             <option value="fixed">Montant fixe</option>
-            <option value="free_shipping">Livraison offerte</option>
+            <option value="free_shipping">Livraison postale offerte</option>
           </select>
+          <span className="mt-1 block text-xs font-normal text-ink/55">
+            Choisissez pourcentage, montant fixe ou livraison offerte.
+          </span>
         </label>
         <div className="grid grid-cols-2 gap-3">
           <NumberInput
-            label="Valeur"
+            label="Valeur de la remise"
             value={coupon.discountValue}
             onChange={(discountValue) => onChange({ ...coupon, discountValue })}
           />
           <NumberInput
-            label="Minimum"
+            label="Minimum de commande"
             value={coupon.minimumOrder}
             onChange={(minimumOrder) => onChange({ ...coupon, minimumOrder })}
           />
           <NumberInput
-            label="Limite utilisations"
+            label="Nombre maximum d'utilisations"
             value={coupon.maxUses || 0}
             onChange={(maxUses) => onChange({ ...coupon, maxUses: maxUses || undefined })}
           />
-          <NumberInput
-            label="Deja utilise"
-            value={coupon.usedCount || 0}
-            onChange={(usedCount) => onChange({ ...coupon, usedCount })}
-          />
         </div>
+        <p className="text-xs leading-5 text-ink/55">
+          Pour 10 %, indiquez 10. Pour 5 €, indiquez 5. Laissez 0 en limite
+          d'utilisation pour illimité.
+        </p>
         <Input
-          label="Debut ISO optionnel"
-          value={coupon.startsAt || ""}
+          label="Date de début"
+          value={dateInputValue(coupon.startsAt)}
           onChange={(startsAt) => onChange({ ...coupon, startsAt: startsAt || undefined })}
+          type="date"
         />
         <Input
-          label="Fin ISO optionnelle"
-          value={coupon.endsAt || ""}
+          label="Date de fin"
+          value={dateInputValue(coupon.endsAt)}
           onChange={(endsAt) => onChange({ ...coupon, endsAt: endsAt || undefined })}
-        />
-        <Input
-          label="IDs produits optionnels"
-          value={(coupon.productIds ?? []).join(", ")}
-          onChange={(productIds) => onChange({ ...coupon, productIds: normalizeList(productIds) })}
-        />
-        <Input
-          label="Categories optionnelles"
-          value={(coupon.categories ?? []).join(", ")}
-          onChange={(categories) =>
-            onChange({ ...coupon, categories: normalizeList(categories) as ProductCategory[] })
-          }
+          type="date"
         />
         <label className="flex items-center gap-2 text-sm text-forest">
           <input
@@ -998,8 +1018,46 @@ function CouponForm({
           />
           Actif
         </label>
+        <div className="rounded-md border border-champagne/30 bg-cream p-3 text-sm leading-6 text-forest">
+          <strong className="block">Aperçu</strong>
+          {preview}
+        </div>
+        <button
+          className="btn-secondary min-h-10 justify-between px-3 py-2 text-sm"
+          type="button"
+          onClick={() => setShowAdvanced((value) => !value)}
+        >
+          Options avancées
+          <span>{showAdvanced ? "Masquer" : "Afficher"}</span>
+        </button>
+        {showAdvanced && (
+          <div className="grid gap-4 rounded-md border border-forest/10 bg-cream p-4">
+            <NumberInput
+              label="Utilisations actuelles"
+              value={coupon.usedCount || 0}
+              onChange={(usedCount) => onChange({ ...coupon, usedCount })}
+            />
+            <Input
+              label="Produits concernés"
+              value={(coupon.productIds ?? []).join(", ")}
+              onChange={(productIds) => onChange({ ...coupon, productIds: normalizeList(productIds) })}
+            />
+            <Input
+              label="Catégories concernées"
+              value={(coupon.categories ?? []).join(", ")}
+              onChange={(categories) =>
+                onChange({ ...coupon, categories: normalizeList(categories) as ProductCategory[] })
+              }
+            />
+            <Input
+              label="Notes internes"
+              value={coupon.internalNote || ""}
+              onChange={(internalNote) => onChange({ ...coupon, internalNote })}
+            />
+          </div>
+        )}
         <button className="btn-primary" type="submit">
-          Enregistrer promo
+          Enregistrer la promotion
         </button>
       </div>
     </form>
@@ -1010,56 +1068,125 @@ function CouponsTable({
   coupons,
   onEdit,
   onToggle,
+  onArchive,
 }: {
   coupons: Coupon[];
   onEdit: (coupon: CouponInput) => void;
   onToggle: (coupon: Coupon) => Promise<void>;
+  onArchive: (coupon: Coupon) => Promise<void>;
 }) {
+  const activeCount = coupons.filter((coupon) => couponStatus(coupon).label === "Actif").length;
+  const expiredCount = coupons.filter((coupon) => couponStatus(coupon).label === "Expiré").length;
+  const usedCount = coupons.reduce((sum, coupon) => sum + Number(coupon.usedCount || 0), 0);
+
   return (
-    <section className="overflow-hidden rounded-lg border border-forest/10 bg-ivory">
+    <section className="grid gap-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        <article className="admin-card">
+          <p className="text-sm text-ink/55">Codes actifs</p>
+          <strong className="mt-2 block font-display text-3xl text-forest">{activeCount}</strong>
+        </article>
+        <article className="admin-card">
+          <p className="text-sm text-ink/55">Codes expirés</p>
+          <strong className="mt-2 block font-display text-3xl text-forest">{expiredCount}</strong>
+        </article>
+        <article className="admin-card">
+          <p className="text-sm text-ink/55">Utilisations totales</p>
+          <strong className="mt-2 block font-display text-3xl text-forest">{usedCount}</strong>
+        </article>
+      </div>
+      <section className="overflow-hidden rounded-lg border border-forest/10 bg-ivory">
       {!coupons.length && (
-        <p className="border-b border-forest/10 bg-cream px-4 py-4 text-sm text-forest">
-          Aucun code promo pour le moment.
-        </p>
+        <AdminEmptyState
+          title="Aucun code promo créé pour le moment."
+          description="Créez un code simple comme WELCOME10, BIENVENUE5 ou POSTALOFFERT."
+        />
+      )}
+      {!!coupons.length && (
+        <div className="grid gap-3 p-3 lg:hidden">
+          {coupons.map((coupon) => {
+            const status = couponStatus(coupon);
+            return (
+              <article key={coupon.id} className="rounded-lg border border-forest/10 bg-ivory p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <strong className="block text-forest">{coupon.code}</strong>
+                    <span className="text-xs text-ink/55">{coupon.label}</span>
+                  </div>
+                  <AdminBadge tone={status.tone}>{status.label}</AdminBadge>
+                </div>
+                <p className="mt-3 text-sm text-ink/70">{couponDescription(coupon)}</p>
+                <p className="mt-2 text-xs text-ink/55">
+                  Minimum {formatEuro(Number(coupon.minimumOrder || 0))} EUR · Utilisations{" "}
+                  {coupon.usedCount || 0}
+                  {coupon.maxUses ? ` / ${coupon.maxUses}` : " / illimité"}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs" onClick={() => onEdit(coupon)}>
+                    Modifier
+                  </button>
+                  <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs" onClick={() => void onToggle(coupon)}>
+                    {coupon.isActive ? "Désactiver" : "Activer"}
+                  </button>
+                  <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs" onClick={() => void onArchive(coupon)}>
+                    Archiver
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
       )}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px] text-left text-sm">
+        <table className="hidden w-full min-w-[980px] text-left text-sm lg:table">
           <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
             <tr>
-              {["Code", "Type", "Valeur", "Minimum", "Utilisations", "Statut", "Action"].map((header) => (
+              {["Code", "Type", "Valeur", "Minimum", "Utilisations", "Validité", "Statut", "Actions"].map((header) => (
                 <th key={header} className="px-4 py-3 font-medium">{header}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {coupons.map((coupon) => (
-              <tr key={coupon.id} className="border-t border-forest/10">
-                <td className="px-4 py-4">
-                  <strong className="block text-forest">{coupon.code}</strong>
-                  <span className="text-xs text-ink/55">{coupon.label}</span>
-                </td>
-                <td className="px-4 py-4">{coupon.discountType}</td>
-                <td className="px-4 py-4">{coupon.discountValue}</td>
-                <td className="px-4 py-4">{coupon.minimumOrder} EUR</td>
-                <td className="px-4 py-4">
-                  {coupon.usedCount}
-                  {coupon.maxUses ? ` / ${coupon.maxUses}` : ""}
-                </td>
-                <td className="px-4 py-4">
-                  <button className="tag" onClick={() => void onToggle(coupon)}>
-                    {coupon.isActive ? "Actif" : "Inactif"}
-                  </button>
-                </td>
-                <td className="px-4 py-4">
-                  <button className="btn-secondary min-h-9 px-3 py-2" onClick={() => onEdit(coupon)}>
-                    Editer
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {coupons.map((coupon) => {
+              const status = couponStatus(coupon);
+              return (
+                <tr key={coupon.id} className="border-t border-forest/10">
+                  <td className="px-4 py-4">
+                    <strong className="block text-forest">{coupon.code}</strong>
+                    <span className="text-xs text-ink/55">{coupon.label}</span>
+                  </td>
+                  <td className="px-4 py-4">{couponTypeLabel(coupon.discountType)}</td>
+                  <td className="px-4 py-4">{couponValueLabel(coupon)}</td>
+                  <td className="px-4 py-4">{formatEuro(Number(coupon.minimumOrder || 0))} EUR</td>
+                  <td className="px-4 py-4">
+                    {coupon.usedCount || 0}
+                    {coupon.maxUses ? ` / ${coupon.maxUses}` : " / illimité"}
+                  </td>
+                  <td className="px-4 py-4 text-xs text-ink/60">
+                    {coupon.startsAt || "Immédiat"} → {coupon.endsAt || "Sans fin"}
+                  </td>
+                  <td className="px-4 py-4">
+                    <button onClick={() => void onToggle(coupon)}>
+                      <AdminBadge tone={status.tone}>{status.label}</AdminBadge>
+                    </button>
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex flex-wrap gap-2">
+                      <button className="btn-secondary min-h-9 px-3 py-2" onClick={() => onEdit(coupon)}>
+                        Modifier
+                      </button>
+                      <button className="btn-secondary min-h-9 px-3 py-2" onClick={() => void onArchive(coupon)}>
+                        Archiver
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
+    </section>
     </section>
   );
 }
@@ -1379,6 +1506,13 @@ function AdminOrders({
     paymentLinkChannel?: PaymentLinkChannel;
     customerMessage?: string;
     items: { name: string; quantity: number }[];
+    subtotal?: number;
+    subtotalBeforeDiscount?: number;
+    discountAmount?: number;
+    couponCode?: string;
+    promoApplied?: boolean;
+    discountType?: Coupon["discountType"];
+    discountValue?: number;
     total: string;
     internalNote?: string;
     statusHistory?: StatusHistoryEntry[];
@@ -1583,6 +1717,11 @@ function AdminOrders({
                 {order.items.length
                   ? order.items.map((item) => `${item.name} x${item.quantity} g`).join(", ")
                   : "Produits a renseigner"}
+                {order.promoApplied && (
+                  <span className="mt-2 block text-forest">
+                    Code promo {order.couponCode} : -{formatEuro(Number(order.discountAmount || 0))} EUR
+                  </span>
+                )}
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <a className="btn-secondary min-h-9 px-3 py-1.5 text-xs" href={telLink(order.customerPhone)}>
@@ -1865,6 +2004,15 @@ function AdminOrders({
                   {order.items.length
                     ? order.items.map((item) => `${item.name} x${item.quantity} g`).join(", ")
                     : "A renseigner"}
+                  {order.promoApplied && (
+                    <span className="mt-2 block text-xs leading-5 text-forest">
+                      Code promo {order.couponCode}
+                      <br />
+                      Remise : -{formatEuro(Number(order.discountAmount || 0))} EUR
+                      <br />
+                      Avant remise : {formatEuro(Number(order.subtotalBeforeDiscount || order.subtotal || 0))} EUR
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-4">{order.total}</td>
                 <td className="px-4 py-4">
@@ -2204,6 +2352,56 @@ function formatEuro(value: number) {
   return value.toFixed(2).replace(".", ",");
 }
 
+function dateInputValue(value?: string) {
+  if (!value) return "";
+  return value.includes("T") ? value.slice(0, 10) : value;
+}
+
+function couponPreview(coupon: CouponInput) {
+  const code = coupon.code || "CODE";
+  const minimum = Number(coupon.minimumOrder || 0);
+  const minimumText = minimum > 0 ? ` à partir de ${formatEuro(minimum)} EUR d'achat` : "";
+  if (coupon.discountType === "free_shipping") {
+    return `Le client bénéficiera de la livraison postale offerte avec le code ${code}${minimumText}.`;
+  }
+  if (coupon.discountType === "fixed") {
+    return `Le client obtiendra ${formatEuro(Number(coupon.discountValue || 0))} EUR de réduction avec le code ${code}${minimumText}.`;
+  }
+  return `Le client obtiendra ${Number(coupon.discountValue || 0)} % de réduction avec le code ${code}${minimumText}.`;
+}
+
+function couponTypeLabel(type: Coupon["discountType"]) {
+  if (type === "fixed") return "Montant fixe";
+  if (type === "free_shipping") return "Livraison postale offerte";
+  return "Pourcentage";
+}
+
+function couponValueLabel(coupon: Pick<Coupon, "discountType" | "discountValue">) {
+  if (coupon.discountType === "free_shipping") return "Livraison offerte";
+  if (coupon.discountType === "fixed") return `${formatEuro(Number(coupon.discountValue || 0))} EUR`;
+  return `${Number(coupon.discountValue || 0)} %`;
+}
+
+function couponDescription(coupon: Coupon) {
+  const minimum = Number(coupon.minimumOrder || 0);
+  const minimumText = minimum > 0 ? ` à partir de ${formatEuro(minimum)} EUR` : " sans minimum";
+  return `${couponTypeLabel(coupon.discountType)} : ${couponValueLabel(coupon)}${minimumText}.`;
+}
+
+function couponStatus(coupon: Coupon): { label: string; tone: AdminBadgeTone } {
+  const now = Date.now();
+  const startsAt = coupon.startsAt ? Date.parse(coupon.startsAt) : 0;
+  const endsAt = coupon.endsAt ? Date.parse(coupon.endsAt) : 0;
+  if (coupon.isArchived) return { label: "Archivé", tone: "muted" };
+  if (!coupon.isActive) return { label: "Inactif", tone: "muted" };
+  if (startsAt && now < startsAt) return { label: "Programmé", tone: "gold" };
+  if (endsAt && now > endsAt) return { label: "Expiré", tone: "danger" };
+  if (coupon.maxUses && Number(coupon.usedCount || 0) >= Number(coupon.maxUses)) {
+    return { label: "Limite atteinte", tone: "warning" };
+  }
+  return { label: "Actif", tone: "success" };
+}
+
 function invoiceStatusLabel(status: InvoiceStatus) {
   const labels: Record<InvoiceStatus, string> = {
     draft: "Brouillon",
@@ -2352,16 +2550,19 @@ function Input({
   label,
   value,
   onChange,
+  type = "text",
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  type?: string;
 }) {
   return (
     <label className="text-sm font-medium text-forest">
       {label}
       <input
         className="input-field mt-2"
+        type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />

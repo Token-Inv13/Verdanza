@@ -68,6 +68,16 @@ export async function updateCouponStatus(couponId: string, isActive: boolean) {
   });
 }
 
+export async function archiveCoupon(couponId: string) {
+  if (!db) throw new Error("Firebase is not configured.");
+  await updateDoc(doc(db, collections.coupons, couponId), {
+    isActive: false,
+    isArchived: true,
+    archivedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export function normalizeCouponCode(value: string) {
   return value.trim().toUpperCase().replace(/\s+/g, "");
 }

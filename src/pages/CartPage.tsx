@@ -1,12 +1,58 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
+import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
+
+const promoStorageKey = "verdanza-coupon-code";
 
 export function CartPage() {
-  const { lines, subtotal, addItem, decrementItem, removeItem } = useCart();
+  const { items, lines, subtotal, addItem, decrementItem, removeItem } = useCart();
   const deliveryEstimate = 0;
-  const total = subtotal + (lines.length ? deliveryEstimate : 0);
+  const [couponCode, setCouponCode] = useState(() =>
+    window.localStorage.getItem(promoStorageKey) || "",
+  );
+  const [quote, setQuote] = useState<OrderQuote | null>(null);
+  const [promoMessage, setPromoMessage] = useState("");
+  const [isCheckingPromo, setIsCheckingPromo] = useState(false);
+  const discountAmount = quote?.promoApplied ? quote.discountAmount : 0;
+  const total = Math.max(0, subtotal + (lines.length ? deliveryEstimate : 0) - discountAmount);
+
+  useEffect(() => {
+    if (!couponCode.trim()) {
+      window.localStorage.removeItem(promoStorageKey);
+      setQuote(null);
+      setPromoMessage("");
+    }
+  }, [couponCode]);
+
+  async function handleApplyPromo() {
+    const code = couponCode.trim().toUpperCase();
+    setCouponCode(code);
+    setPromoMessage("");
+    setQuote(null);
+    if (!code) return;
+    setIsCheckingPromo(true);
+    try {
+      const nextQuote = await quoteOrder({
+        items,
+        deliveryMethod: "postal",
+        deliveryZone: "postal-france",
+        couponCode: code,
+      });
+      setQuote(nextQuote);
+      window.localStorage.setItem(promoStorageKey, code);
+      setPromoMessage("Code promo appliqué.");
+    } catch (error) {
+      window.localStorage.removeItem(promoStorageKey);
+      setPromoMessage(
+        error instanceof Error ? error.message : "Ce code promo n'est pas valide.",
+      );
+    } finally {
+      setIsCheckingPromo(false);
+    }
+  }
 
   return (
     <main className="container-page py-12">
@@ -30,7 +76,7 @@ export function CartPage() {
           </Link>
         </section>
       ) : (
-        <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_360px]">
+        <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_380px]">
           <div className="grid gap-4">
             {lines.map((line) => (
               <article
@@ -60,9 +106,7 @@ export function CartPage() {
                     </button>
                   </div>
                 </div>
-                <strong className="text-forest">
-                  {line.lineTotal.toFixed(2).replace(".", ",")} EUR
-                </strong>
+                <strong className="text-forest">{formatEuro(line.lineTotal)}</strong>
               </article>
             ))}
           </div>
@@ -71,19 +115,60 @@ export function CartPage() {
             <div className="mt-6 grid gap-3 text-sm">
               <p className="flex justify-between">
                 <span>Sous-total</span>
-                <span>{subtotal.toFixed(2).replace(".", ",")} EUR</span>
+                <span>{formatEuro(subtotal)}</span>
               </p>
+              <label className="grid gap-2 border-t border-forest/10 pt-3 text-sm font-medium text-forest">
+                Code promo
+                <div className="flex gap-2">
+                  <input
+                    className="input-field"
+                    value={couponCode}
+                    onChange={(event) => setCouponCode(event.target.value.toUpperCase())}
+                    placeholder="WELCOME10"
+                  />
+                  <button
+                    className="btn-secondary min-h-11 px-3 py-2"
+                    type="button"
+                    disabled={isCheckingPromo}
+                    onClick={() => void handleApplyPromo()}
+                  >
+                    {isCheckingPromo ? "..." : "Appliquer"}
+                  </button>
+                </div>
+              </label>
+              {promoMessage && (
+                <p
+                  className={`text-xs leading-5 ${
+                    quote?.promoApplied ? "text-forest" : "text-red-700"
+                  }`}
+                >
+                  {promoMessage}
+                </p>
+              )}
+              {quote?.promoApplied && (
+                <p className="flex justify-between text-forest">
+                  <span>
+                    Code promo {quote.couponCode}
+                    {quote.discountType === "free_shipping" ? " livraison offerte" : ""}
+                  </span>
+                  <span>
+                    {quote.discountAmount > 0
+                      ? `-${formatEuro(quote.discountAmount)}`
+                      : "Appliqué"}
+                  </span>
+                </p>
+              )}
               <p className="flex justify-between">
                 <span>Livraison estimée</span>
                 <span>
                   {deliveryEstimate > 0
-                    ? `${deliveryEstimate.toFixed(2).replace(".", ",")} EUR`
+                    ? formatEuro(deliveryEstimate)
                     : "Calculée à l'étape suivante"}
                 </span>
               </p>
               <p className="flex justify-between border-t border-forest/10 pt-3 text-lg font-semibold text-forest">
                 <span>Total</span>
-                <span>{total.toFixed(2).replace(".", ",")} EUR</span>
+                <span>{formatEuro(total)}</span>
               </p>
             </div>
             <Link to="/checkout" className="btn-primary mt-6 w-full justify-center">
