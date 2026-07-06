@@ -1,6 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAdminData } from "../../hooks/useAdminData";
-import { runManualInitialSeed } from "../../services/seedService";
 import {
   updateProductFlags,
   updateProductStock,
@@ -122,19 +121,6 @@ export function AdminPage({ section }: { section: string }) {
     [orders, products],
   );
 
-  async function handleSeed() {
-    setMessage("");
-    const confirmed = window.confirm(
-      "Mettre a jour le catalogue Verdanza et les zones de livraison ? Operation non destructive. Les anciens produits absents du catalogue seront desactives.",
-    );
-    if (!confirmed) return;
-    const result = await runManualInitialSeed();
-    setMessage(
-      `Seed termine : ${result.products.upserted} produits, ${result.products.deactivated} anciens produits desactives, ${result.deliveryZones} zones.`,
-    );
-    await refresh();
-  }
-
   async function handleProductSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
@@ -231,9 +217,6 @@ export function AdminPage({ section }: { section: string }) {
         <div className="flex flex-wrap gap-2 text-sm">
           <button className="btn-secondary" onClick={() => void refresh()}>
             Rafraichir
-          </button>
-          <button className="btn-primary" onClick={() => void handleSeed()}>
-            Seed catalogue
           </button>
         </div>
       </div>
