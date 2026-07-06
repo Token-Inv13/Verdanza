@@ -360,6 +360,7 @@ function orderEmailHtml(order: Order, intro: string) {
       <ul>${rows}</ul>
       <p><strong>Total estimé :</strong> ${formatMoney(Number(order.total || 0))}</p>
       <p><strong>Livraison :</strong> ${escapeHtml(order.deliveryZone || order.deliveryMethod)}</p>
+      <p><strong>Information livraison :</strong> ${escapeHtml(deliveryInfoText(order))}</p>
       <p><strong>Mode de règlement souhaité :</strong> ${escapeHtml(preferredPaymentMethodLabel(order.preferredPaymentMethod))}</p>
       <p>Votre commande est en attente de confirmation par l'équipe Verdanza. Après vérification des disponibilités et du mode de livraison, nous vous confirmerons le montant final. Si vous avez choisi ou souhaitez un paiement par carte bancaire, un lien de paiement vous sera envoyé par email et/ou message.</p>
       <p><strong>Contact Verdanza :</strong> ${escapeHtml(contactPhone())} - ${escapeHtml(contactEmail())}</p>
@@ -380,6 +381,7 @@ function orderEmailText(order: Order, intro: string) {
     items,
     `Total estimé: ${formatMoney(Number(order.total || 0))}`,
     `Livraison: ${order.deliveryZone || order.deliveryMethod}`,
+    `Information livraison: ${deliveryInfoText(order)}`,
     `Mode de reglement souhaite: ${preferredPaymentMethodLabel(order.preferredPaymentMethod)}`,
     "Votre commande est en attente de confirmation par l'equipe Verdanza. Apres verification des disponibilites et du mode de livraison, nous vous confirmerons le montant final. Si vous avez choisi ou souhaitez un paiement par carte bancaire, un lien de paiement vous sera envoye par email et/ou message.",
     `Contact Verdanza: ${contactPhone()} - ${contactEmail()}`,
@@ -434,6 +436,9 @@ function adminOrderEmailHtml(order: Order) {
       <p><strong>Email :</strong> ${escapeHtml(order.customerEmail || "")}</p>
       <p><strong>Adresse :</strong> ${escapeHtml(formatAddress(address))}</p>
       <p><strong>Livraison :</strong> ${escapeHtml(order.deliveryZone || order.deliveryMethod)}</p>
+      <p><strong>Minimum appliqué :</strong> ${escapeHtml(String(order.deliveryMinimumApplied ?? (order.deliveryMethod === "postal" ? 15 : 20)))} €</p>
+      <p><strong>Livraison postale offerte :</strong> ${order.deliveryMethod === "postal" && order.postalFreeShippingApplied ? "Oui" : "Non"}</p>
+      <p><strong>Frais postaux à confirmer :</strong> ${order.deliveryMethod === "postal" && !order.postalFreeShippingApplied ? "Oui" : "Non"}</p>
       <p><strong>Mode de règlement souhaité :</strong> ${escapeHtml(preferredPaymentMethodLabel(order.preferredPaymentMethod))}</p>
       <p><strong>Action paiement :</strong> Lien de paiement à envoyer si CB souhaitée.</p>
       <p><strong>Produits :</strong></p>
@@ -457,6 +462,9 @@ function adminOrderEmailText(order: Order) {
     `Email: ${order.customerEmail || ""}`,
     `Adresse: ${formatAddress(order.deliveryAddress)}`,
     `Livraison: ${order.deliveryZone || order.deliveryMethod}`,
+    `Minimum applique: ${order.deliveryMinimumApplied ?? (order.deliveryMethod === "postal" ? 15 : 20)} EUR`,
+    `Livraison postale offerte: ${order.deliveryMethod === "postal" && order.postalFreeShippingApplied ? "Oui" : "Non"}`,
+    `Frais postaux a confirmer: ${order.deliveryMethod === "postal" && !order.postalFreeShippingApplied ? "Oui" : "Non"}`,
     `Mode de reglement souhaite: ${preferredPaymentMethodLabel(order.preferredPaymentMethod)}`,
     "Action paiement: lien de paiement a envoyer si CB souhaitee.",
     "Produits:",
@@ -581,6 +589,16 @@ function preferredPaymentMethodLabel(method?: Order["preferredPaymentMethod"]) {
   if (method === "bank_transfer") return "Virement bancaire";
   if (method === "local_delivery_payment") return "Paiement à la livraison locale";
   return "À confirmer avec Verdanza";
+}
+
+function deliveryInfoText(order: Order) {
+  if (order.deliveryMethod === "postal") {
+    if (order.postalFreeShippingApplied) {
+      return "Livraison postale offerte.";
+    }
+    return "Livraison postale à partir de 15 € d'achat. Elle est offerte à partir de 60 €. Si votre commande est inférieure à 60 €, les frais postaux seront confirmés avec vous après validation.";
+  }
+  return "Livraison locale à partir de 20 € d'achat.";
 }
 
 function orderEmailTitle(order: Order) {

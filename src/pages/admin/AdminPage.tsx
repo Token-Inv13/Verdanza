@@ -1252,6 +1252,10 @@ function AdminOrders({
     orderStatus: string;
     deliveryMethod?: string;
     delivery: string;
+    deliveryMinimumApplied?: number;
+    postalFreeShippingApplied?: boolean;
+    deliveryFeeStatus?: string;
+    deliveryNote?: string;
     trackingNumber?: string;
     paymentReference?: string;
     paymentLinkUrl?: string;
@@ -1518,6 +1522,30 @@ function AdminOrders({
                 </td>
                 <td className="px-4 py-4">
                   <strong className="block text-forest">{order.delivery}</strong>
+                  <span className="mt-1 block text-xs text-ink/55">
+                    Minimum appliqué :{" "}
+                    {order.deliveryMinimumApplied ??
+                      (order.deliveryMethod === "postal" ? 15 : 20)}{" "}
+                    EUR
+                  </span>
+                  {order.deliveryMethod === "postal" && (
+                    <span
+                      className={`mt-2 inline-flex rounded-full border px-2 py-1 text-xs ${
+                        order.postalFreeShippingApplied
+                          ? "border-forest/20 bg-forest text-ivory"
+                          : "border-champagne/40 bg-cream text-forest"
+                      }`}
+                    >
+                      {order.postalFreeShippingApplied
+                        ? "Livraison offerte"
+                        : "Frais postaux à confirmer"}
+                    </span>
+                  )}
+                  {order.deliveryNote && (
+                    <span className="mt-2 block text-xs leading-5 text-ink/60">
+                      {order.deliveryNote}
+                    </span>
+                  )}
                   {order.deliveryAddress && (
                     <span className="mt-1 block text-xs leading-5 text-ink/60">
                       {order.deliveryAddress.line1}

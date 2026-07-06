@@ -7,7 +7,14 @@ import type {
   Product,
   Coupon,
   PreferredPaymentMethod,
+  DeliveryFeeStatus,
 } from "../../src/types/index.js";
+import {
+  effectiveLocalDeliveryMinimum,
+  effectivePostalDeliveryMinimum,
+  isPostalShippingFree,
+  POSTAL_FREE_SHIPPING_THRESHOLD,
+} from "../../src/config/deliveryRules.js";
 
 const preferredPaymentMethods: PreferredPaymentMethod[] = [
   "card_payment_link",
@@ -23,7 +30,7 @@ const fallbackDeliveryZones: DeliveryZone[] = [
     method: "postal",
     isActive: true,
     fee: 0,
-    minimumOrder: 0,
+    minimumOrder: 15,
     estimatedDelay: "Expedition suivie en France",
     slots: ["Expedition suivie"],
   },
@@ -44,7 +51,7 @@ const fallbackDeliveryZones: DeliveryZone[] = [
     method: "local_express",
     isActive: true,
     fee: 0,
-    minimumOrder: 30,
+    minimumOrder: 20,
     estimatedDelay: "Livraison express 7j/7 de 11h00 a 01h00",
     slots: ["11:00-14:00", "14:00-18:00", "18:00-22:00", "22:00-01:00"],
   })),
@@ -84,6 +91,10 @@ export type PricedCheckout = {
   couponCode?: string;
   total: number;
   deliveryZoneName?: string;
+  deliveryMinimumApplied: number;
+  postalFreeShippingApplied: boolean;
+  deliveryFeeStatus: DeliveryFeeStatus;
+  deliveryNote: string;
 };
 
 export function parseCheckoutBody(value: unknown): CheckoutRequestBody {
@@ -177,11 +188,11 @@ export async function priceCheckout(
   const subtotal = roundMoney(
     orderItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
   );
-  const { fee, zoneName } = await resolveDeliveryFee(db, body, subtotal);
+  const delivery = await resolveDeliveryFee(db, body, subtotal);
   const coupon = body.couponCode
-    ? await resolveCoupon(db, body.couponCode, subtotal, fee, orderItems)
+    ? await resolveCoupon(db, body.couponCode, subtotal, delivery.fee, orderItems)
     : null;
-  const beforeDiscount = roundMoney(subtotal + fee);
+  const beforeDiscount = roundMoney(subtotal + delivery.fee);
   const discountAmount = coupon
     ? Math.min(coupon.discountAmount, Math.max(0, beforeDiscount - 0.5))
     : 0;
@@ -190,11 +201,15 @@ export async function priceCheckout(
   return {
     orderItems,
     subtotal,
-    deliveryFee: fee,
+    deliveryFee: delivery.fee,
     discountAmount,
     couponCode: coupon?.code,
     total,
-    deliveryZoneName: zoneName,
+    deliveryZoneName: delivery.zoneName,
+    deliveryMinimumApplied: delivery.minimumApplied,
+    postalFreeShippingApplied: delivery.postalFreeShippingApplied,
+    deliveryFeeStatus: delivery.deliveryFeeStatus,
+    deliveryNote: delivery.deliveryNote,
   };
 }
 
@@ -275,7 +290,14 @@ async function resolveDeliveryFee(
   db: FirebaseFirestore.Firestore,
   body: CheckoutRequestBody,
   subtotal: number,
-) {
+): Promise<{
+  fee: number;
+  zoneName: string;
+  minimumApplied: number;
+  postalFreeShippingApplied: boolean;
+  deliveryFeeStatus: DeliveryFeeStatus;
+  deliveryNote: string;
+}> {
   if (body.deliveryMethod === "postal") {
     const zone = await getDeliveryZone(db, body.deliveryZone ?? "postal-france");
     const fallbackZone = fallbackDeliveryZones.find(
@@ -291,14 +313,24 @@ async function resolveDeliveryFee(
       throw new Error("Livraison postale indisponible pour le moment.");
     }
 
-    const minimumOrder = selectedZone.minimumOrderAmount ?? selectedZone.minimumOrder ?? 0;
-    if (minimumOrder > 0 && subtotal < minimumOrder) {
-      throw new Error(
-        `Livraison postale disponible a partir de ${minimumOrder.toFixed(0)} EUR d'achat.`,
-      );
+    const minimumOrder = effectivePostalDeliveryMinimum(
+      selectedZone.minimumOrderAmount ?? selectedZone.minimumOrder,
+    );
+    if (subtotal < minimumOrder) {
+      throw new Error("Le minimum de commande pour la livraison postale est de 15 €.");
     }
 
-    return { fee: selectedZone.fee, zoneName: selectedZone.name };
+    const freeShipping = isPostalShippingFree(subtotal);
+    return {
+      fee: freeShipping ? 0 : selectedZone.fee,
+      zoneName: selectedZone.name,
+      minimumApplied: minimumOrder,
+      postalFreeShippingApplied: freeShipping,
+      deliveryFeeStatus: freeShipping ? "free" : "to_confirm",
+      deliveryNote: freeShipping
+        ? "Livraison postale offerte."
+        : `Frais postaux confirmés avec le client après validation. Livraison postale offerte à partir de ${POSTAL_FREE_SHIPPING_THRESHOLD} € d'achat.`,
+    };
   }
 
   if (!body.deliveryZone) {
@@ -321,13 +353,20 @@ async function resolveDeliveryFee(
     );
   }
 
-  const minimumOrder = selectedZone.minimumOrderAmount ?? selectedZone.minimumOrder ?? 30;
+  const minimumOrder = effectiveLocalDeliveryMinimum(
+    selectedZone.minimumOrderAmount ?? selectedZone.minimumOrder,
+  );
   if (subtotal < minimumOrder) {
-    throw new Error(
-      `Livraison locale disponible a partir de ${minimumOrder.toFixed(0)} EUR d'achat.`,
-    );
+    throw new Error("Le minimum de commande pour la livraison locale est de 20 €.");
   }
-  return { fee: selectedZone.fee, zoneName: selectedZone.name };
+  return {
+    fee: selectedZone.fee,
+    zoneName: selectedZone.name,
+    minimumApplied: minimumOrder,
+    postalFreeShippingApplied: false,
+    deliveryFeeStatus: selectedZone.fee > 0 ? "configured" : "free",
+    deliveryNote: "Livraison locale Aix-en-Provence et alentours, 7j/7 de 11h à 01h, à partir de 20 € d'achat.",
+  };
 }
 
 function isDeliveryZoneAvailable(zone?: DeliveryZone | null) {
@@ -390,6 +429,10 @@ export function orderPayload(
     deliveryAddress: body.customer.address,
     deliveryZone: priced.deliveryZoneName ?? body.deliveryZone ?? null,
     deliverySlot: body.deliverySlot ?? null,
+    deliveryMinimumApplied: priced.deliveryMinimumApplied,
+    postalFreeShippingApplied: priced.postalFreeShippingApplied,
+    deliveryFeeStatus: priced.deliveryFeeStatus,
+    deliveryNote: priced.deliveryNote,
     trackingNumber: "",
     statusHistory: [
       {

@@ -115,11 +115,14 @@ export default async function handler(
     });
   } catch (error) {
     console.error("create-order failed", error);
+    const message = error instanceof Error ? error.message : "";
+    const safeBusinessError = message.includes("minimum de commande")
+      ? message
+      : "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza au 07 80 81 41 37.";
     sendJson(
       response,
       {
-        error:
-          "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza au 07 80 81 41 37.",
+        error: safeBusinessError,
       },
       400,
     );

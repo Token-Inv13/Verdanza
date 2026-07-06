@@ -1,4 +1,8 @@
 import type { DeliveryZone } from "../types/index.js";
+import {
+  LOCAL_DELIVERY_MINIMUM,
+  POSTAL_DELIVERY_MINIMUM,
+} from "../config/deliveryRules.js";
 
 export const deliveryZones: DeliveryZone[] = [
   {
@@ -9,11 +13,12 @@ export const deliveryZones: DeliveryZone[] = [
     isOpen: true,
     status: "open",
     fee: 0,
-    minimumOrder: 0,
-    minimumOrderAmount: 0,
+    minimumOrder: POSTAL_DELIVERY_MINIMUM,
+    minimumOrderAmount: POSTAL_DELIVERY_MINIMUM,
     estimatedDelay: "Expedition suivie en France",
     slots: ["Expedition suivie"],
-    customerMessage: "Livraison postale en France, frais et delais confirmes avec le client.",
+    customerMessage:
+      "Livraison postale en France a partir de 15 EUR. Livraison offerte a partir de 60 EUR.",
     sortOrder: 0,
   },
   ...[
@@ -35,8 +40,8 @@ export const deliveryZones: DeliveryZone[] = [
     isOpen: true,
     status: "open",
     fee: 0,
-    minimumOrder: 30,
-    minimumOrderAmount: 30,
+    minimumOrder: LOCAL_DELIVERY_MINIMUM,
+    minimumOrderAmount: LOCAL_DELIVERY_MINIMUM,
     estimatedDelay: "Livraison express 7j/7 de 11h00 a 01h00",
     slots: ["11:00-14:00", "14:00-18:00", "18:00-22:00", "22:00-01:00"],
     customerMessage: "Livraison locale selon disponibilite du creneau.",

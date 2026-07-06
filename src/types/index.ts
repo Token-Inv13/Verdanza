@@ -51,6 +51,7 @@ export type PreferredPaymentMethod =
   | "local_delivery_payment"
   | "confirm_with_verdanza";
 export type PaymentLinkChannel = "email" | "whatsapp" | "sms" | "other";
+export type DeliveryFeeStatus = "free" | "to_confirm" | "configured";
 
 export type DeliveryZone = {
   id: string;
@@ -224,6 +225,10 @@ export type Order = {
   deliveryAddress: Address;
   deliveryZone?: string;
   deliverySlot?: string;
+  deliveryMinimumApplied?: number;
+  postalFreeShippingApplied?: boolean;
+  deliveryFeeStatus?: DeliveryFeeStatus;
+  deliveryNote?: string;
   trackingNumber?: string;
   invoiceId?: string;
   invoiceNumber?: string;

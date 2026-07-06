@@ -8,6 +8,12 @@ import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
 import type { DeliveryMethod, DeliveryZone, PreferredPaymentMethod } from "../types";
 import { trackEvent } from "../lib/analytics";
 import { isPreorderActive } from "../lib/preorder";
+import {
+  effectiveLocalDeliveryMinimum,
+  effectivePostalDeliveryMinimum,
+  isPostalShippingFree,
+  POSTAL_FREE_SHIPPING_THRESHOLD,
+} from "../config/deliveryRules";
 
 const contactPhone =
   (import.meta.env.VITE_CONTACT_PHONE as string | undefined) || "07 80 81 41 37";
@@ -68,10 +74,22 @@ export function CheckoutPage() {
   );
   const isLocalDelivery = deliveryMethod === "local_express";
   const localDeliveryUnavailable = openLocalDeliveryZones.length === 0;
-  const localDeliveryMinimum =
-    selectedZone?.minimumOrderAmount ?? selectedZone?.minimumOrder ?? 30;
+  const localDeliveryMinimum = effectiveLocalDeliveryMinimum(
+    selectedZone?.minimumOrderAmount ?? selectedZone?.minimumOrder,
+  );
+  const postalDeliveryMinimum = effectivePostalDeliveryMinimum(
+    postalZone?.minimumOrderAmount ?? postalZone?.minimumOrder,
+  );
   const isBelowLocalMinimum =
     isLocalDelivery && itemCount > 0 && subtotal < localDeliveryMinimum;
+  const isBelowPostalMinimum =
+    !isLocalDelivery && itemCount > 0 && subtotal < postalDeliveryMinimum;
+  const postalShippingFree = isPostalShippingFree(subtotal);
+  const amountUntilPostalMinimum = Math.max(0, postalDeliveryMinimum - subtotal);
+  const amountUntilFreePostalShipping = Math.max(
+    0,
+    POSTAL_FREE_SHIPPING_THRESHOLD - subtotal,
+  );
   const estimatedDeliveryFee = isLocalDelivery
     ? selectedZone?.fee ?? 0
     : postalZone?.fee ?? 0;
@@ -131,9 +149,10 @@ export function CheckoutPage() {
 
     try {
       if (isBelowLocalMinimum) {
-        throw new Error(
-          `Livraison locale disponible à partir de ${localDeliveryMinimum} EUR d'achat.`,
-        );
+        throw new Error("Le minimum de commande pour la livraison locale est de 20 €.");
+      }
+      if (isBelowPostalMinimum) {
+        throw new Error("Le minimum de commande pour la livraison postale est de 15 €.");
       }
       if (deliveryMethod === "local_express" && !selectedZone) {
         throw new Error(
@@ -180,10 +199,11 @@ export function CheckoutPage() {
       });
       const payload = (await response.json().catch(() => ({}))) as {
         orderId?: string;
+        error?: string;
       };
 
       if (!response.ok || !payload.orderId) {
-        throw new Error(checkoutErrorMessage);
+        throw new Error(payload.error || checkoutErrorMessage);
       }
 
       window.sessionStorage.setItem(
@@ -200,6 +220,12 @@ export function CheckoutPage() {
             deliveryMethod === "local_express"
               ? selectedZone?.name || "Livraison locale"
               : "Livraison postale en France",
+          deliveryNote:
+            deliveryMethod === "local_express"
+              ? "Livraison locale à partir de 20 € d'achat."
+              : postalShippingFree
+                ? "Livraison postale offerte."
+                : "Frais postaux confirmés avec vous après validation de la commande.",
           preferredPaymentMethod: paymentMethodLabels[preferredPaymentMethod],
           total: estimatedTotal,
         }),
@@ -214,7 +240,8 @@ export function CheckoutPage() {
       console.error("Checkout submission failed", checkoutError);
       const message =
         checkoutError instanceof Error &&
-        (checkoutError.message.includes("Livraison locale disponible") ||
+        (checkoutError.message.includes("minimum de commande") ||
+          checkoutError.message.includes("Livraison locale disponible") ||
           checkoutError.message.includes("zone de livraison"))
           ? checkoutError.message
           : checkoutErrorMessage;
@@ -331,7 +358,7 @@ export function CheckoutPage() {
                 <DeliveryChoice
                   checked={deliveryMethod === "postal"}
                   title="Livraison postale en France"
-                  text="Livraison postale disponible en France. Les frais et délais sont indiqués avant validation de la commande."
+                  text="Livraison postale disponible en France à partir de 15 € d'achat. Livraison postale offerte à partir de 60 €."
                   onChange={() => setDeliveryMethod("postal")}
                 />
                 <DeliveryChoice
@@ -340,7 +367,7 @@ export function CheckoutPage() {
                   text={
                     localDeliveryUnavailable
                       ? "Livraison locale temporairement indisponible. Vous pouvez choisir la livraison postale."
-                      : "Livraison locale disponible à Aix-en-Provence et alentours selon les zones ouvertes."
+                      : "Livraison locale Aix-en-Provence et alentours, 7j/7 de 11h à 01h, à partir de 20 € d'achat."
                   }
                   disabled={localDeliveryUnavailable}
                   onChange={() => setDeliveryMethod("local_express")}
@@ -374,16 +401,21 @@ export function CheckoutPage() {
 
               {isBelowLocalMinimum && (
                 <p className="mt-4 rounded-md border border-champagne/40 bg-cream p-3 text-sm leading-6 text-forest">
-                  Minimum livraison locale : {localDeliveryMinimum} EUR. Il manque{" "}
+                  Le minimum de commande pour la livraison locale est de 20 €. Il manque{" "}
                   {(localDeliveryMinimum - subtotal).toFixed(2).replace(".", ",")} EUR.
                 </p>
               )}
 
               {!isLocalDelivery && (
                 <p className="mt-4 rounded-md border border-champagne/30 bg-cream p-3 text-sm leading-6 text-forest">
-                  Livraison postale disponible en France. Les délais dépendent du
-                  transporteur. Le règlement et les frais de livraison sont
-                  confirmés directement avec vous après validation.
+                  Livraison postale disponible en France à partir de 15 € d'achat.
+                  Livraison postale offerte à partir de 60 €.
+                  <br />
+                  {isBelowPostalMinimum
+                    ? `Ajoutez ${amountUntilPostalMinimum.toFixed(2).replace(".", ",")} € pour atteindre le minimum de commande postale.`
+                    : postalShippingFree
+                      ? "Livraison postale offerte."
+                      : `Commande postale possible. Ajoutez ${amountUntilFreePostalShipping.toFixed(2).replace(".", ",")} € pour bénéficier de la livraison postale offerte. Frais postaux confirmés avec vous après validation de la commande.`}
                 </p>
               )}
 
@@ -485,8 +517,21 @@ export function CheckoutPage() {
               </p>
               <p className="flex justify-between">
                 <span>Livraison estimée</span>
-                <span>{estimatedDeliveryFee.toFixed(2).replace(".", ",")} EUR</span>
+                <span>
+                  {!isLocalDelivery && postalShippingFree
+                    ? "Offerte"
+                    : !isLocalDelivery
+                      ? "À confirmer"
+                      : `${estimatedDeliveryFee.toFixed(2).replace(".", ",")} EUR`}
+                </span>
               </p>
+              {!isLocalDelivery && (
+                <p className="text-xs leading-5 text-ink/55">
+                  {postalShippingFree
+                    ? "Livraison postale offerte."
+                    : "Frais postaux confirmés avec vous après validation de la commande."}
+                </p>
+              )}
               <label className="grid gap-2 border-t border-forest/10 pt-3 text-sm font-medium text-forest">
                 Code promo
                 <input

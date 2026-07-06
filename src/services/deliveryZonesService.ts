@@ -9,6 +9,10 @@ import {
 import { db } from "../lib/firebase";
 import { deliveryZones as localDeliveryZones } from "../data/deliveryZones";
 import { collections } from "./collections";
+import {
+  effectiveLocalDeliveryMinimum,
+  effectivePostalDeliveryMinimum,
+} from "../config/deliveryRules";
 import type { DeliveryZone } from "../types";
 
 export async function getDeliveryZonesWithFallback() {
@@ -87,7 +91,11 @@ export async function updateDeliveryZoneAdmin(
 
 function normalizeDeliveryZone(zone: DeliveryZone): DeliveryZone {
   const status = zone.status || (zone.isActive ? "open" : "disabled");
-  const minimumOrder = Number(zone.minimumOrderAmount ?? zone.minimumOrder ?? 0);
+  const rawMinimum = Number(zone.minimumOrderAmount ?? zone.minimumOrder ?? 0);
+  const minimumOrder =
+    zone.method === "postal"
+      ? effectivePostalDeliveryMinimum(rawMinimum)
+      : effectiveLocalDeliveryMinimum(rawMinimum);
   return {
     ...zone,
     slug: zone.slug || slugify(zone.name),

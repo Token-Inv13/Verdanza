@@ -74,6 +74,7 @@ export function CheckoutSuccessPage() {
                 </p>
               ))}
               <p>Mode de livraison : {summary.delivery}</p>
+              <p>{summary.deliveryNote}</p>
               <p>
                 Mode de règlement souhaité :{" "}
                 {summary.preferredPaymentMethod || "À confirmer avec Verdanza"}
@@ -110,6 +111,7 @@ function readLastOrderSummary(orderId: string | null) {
       orderType?: string;
       items?: { name: string; quantity: number; total: number }[];
       delivery?: string;
+      deliveryNote?: string;
       preferredPaymentMethod?: string;
       total?: number;
     };
@@ -118,6 +120,7 @@ function readLastOrderSummary(orderId: string | null) {
       orderType: parsed.orderType,
       items: parsed.items,
       delivery: parsed.delivery || "À confirmer",
+      deliveryNote: parsed.deliveryNote || "",
       preferredPaymentMethod: parsed.preferredPaymentMethod || "À confirmer avec Verdanza",
       total: Number(parsed.total || 0),
     };

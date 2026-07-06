@@ -60,7 +60,7 @@ Contact public :
 - verifie le stock ;
 - recalcule les prix cote serveur ;
 - applique les codes promo actifs ;
-- controle le minimum de livraison locale ;
+- controle les minimums de livraison locale et postale ;
 - cree la commande ;
 - decremente le stock ;
 - cree les mouvements de stock ;
@@ -81,14 +81,16 @@ Livraison locale Aix-en-Provence et alentours :
 
 - disponible 7j/7 ;
 - de 11h a 01h ;
-- minimum de commande : 30 EUR ;
+- minimum de commande : 20 EUR ;
 - reglement confirme directement avec le client apres validation.
 
 Livraison postale en France :
 
 - adresse complete requise ;
-- frais, disponibilites et reglement confirmes directement avec le client apres validation ;
-- pas de minimum automatique impose cote client hors configuration Firestore.
+- minimum de commande : 15 EUR ;
+- livraison postale offerte a partir de 60 EUR ;
+- en dessous de 60 EUR, les frais postaux sont confirmes directement avec le client apres validation ;
+- disponibilites et reglement confirmes directement avec le client apres validation.
 
 ## Emails
 
