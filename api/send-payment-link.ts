@@ -18,13 +18,14 @@ export default async function handler(
   if (assertMethod(request, response, "POST")) return;
 
   try {
-    const body = parseBody(request.body);
-    const token = body.authToken || bearerToken(request);
+    const rawBody = parseJsonObject(request.body);
+    const token = rawBody.authToken || bearerToken(request);
     if (!token) {
       sendJson(response, { error: "Token admin requis." }, 401);
       return;
     }
 
+    const body = parseBody(rawBody);
     const paymentLink = findActiveAdminPaymentLink(body.paymentLinkUrl);
     if (!paymentLink) throw new Error("Lien de paiement non autorise.");
 
@@ -64,6 +65,20 @@ export default async function handler(
       error instanceof Error ? error.message : "Envoi du lien de paiement impossible.";
     sendJson(response, { error: message }, message === "Acces admin requis." ? 403 : 400);
   }
+}
+
+function parseJsonObject(value: unknown): {
+  orderId?: string;
+  paymentLinkUrl?: string;
+  authToken?: string;
+} {
+  const body = typeof value === "string" ? JSON.parse(value) : value;
+  if (!body || typeof body !== "object") throw new Error("Payload invalide.");
+  return body as {
+    orderId?: string;
+    paymentLinkUrl?: string;
+    authToken?: string;
+  };
 }
 
 function parseBody(value: unknown): {
