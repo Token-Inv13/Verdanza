@@ -45,6 +45,12 @@ export type PaymentProvider =
   | "bank_transfer"
   | "cash_on_delivery"
   | "future_psp";
+export type PreferredPaymentMethod =
+  | "card_payment_link"
+  | "bank_transfer"
+  | "local_delivery_payment"
+  | "confirm_with_verdanza";
+export type PaymentLinkChannel = "email" | "whatsapp" | "sms" | "other";
 
 export type DeliveryZone = {
   id: string;
@@ -206,6 +212,12 @@ export type Order = {
   paymentStatus: PaymentStatus;
   paymentReference?: string;
   paymentInstructions?: string;
+  preferredPaymentMethod?: PreferredPaymentMethod;
+  paymentLinkUrl?: string;
+  paymentLinkSent?: boolean;
+  paymentLinkSentAt?: string;
+  paymentLinkSentBy?: string;
+  paymentLinkChannel?: PaymentLinkChannel;
   customerMessage?: string;
   orderStatus: OrderStatus;
   deliveryMethod: DeliveryMethod;

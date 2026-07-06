@@ -156,7 +156,7 @@ async function createDraftInvoiceForOrder(
     deliveryFee: Number(order.deliveryFee || 0),
     discountAmount: Number(order.discountAmount || 0),
     total: Number(order.total || 0),
-    paymentMethod: order.paymentInstructions || "Règlement à confirmer",
+    paymentMethod: preferredPaymentMethodLabel(order.preferredPaymentMethod),
     paymentStatus: order.paymentStatus || "to_confirm",
     internalNote: "",
     createdAt: now,
@@ -192,6 +192,15 @@ async function nextInvoiceNumber(db: FirebaseFirestore.Firestore) {
 
 function roundMoney(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function preferredPaymentMethodLabel(method?: Order["preferredPaymentMethod"]) {
+  if (method === "card_payment_link") {
+    return "Carte bancaire via lien de paiement après confirmation";
+  }
+  if (method === "bank_transfer") return "Virement bancaire";
+  if (method === "local_delivery_payment") return "Paiement à la livraison locale";
+  return "À confirmer avec Verdanza";
 }
 
 function emailResultUpdate(prefix: string, result: EmailResult) {

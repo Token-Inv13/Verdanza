@@ -12,7 +12,9 @@ import type {
   OrderItem,
   OrderStatus,
   OrderType,
+  PaymentLinkChannel,
   PaymentProvider,
+  PreferredPaymentMethod,
   PaymentStatus,
   StatusHistoryEntry,
 } from "../types";
@@ -26,11 +28,17 @@ export type AdminOrderRow = {
   deliveryAddress?: Order["deliveryAddress"];
   paymentProvider?: PaymentProvider;
   paymentStatus: PaymentStatus;
+  preferredPaymentMethod?: PreferredPaymentMethod;
   orderStatus: OrderStatus | string;
   deliveryMethod?: Order["deliveryMethod"];
   delivery: string;
   trackingNumber?: string;
   paymentReference?: string;
+  paymentLinkUrl?: string;
+  paymentLinkSent?: boolean;
+  paymentLinkSentAt?: string;
+  paymentLinkSentBy?: string;
+  paymentLinkChannel?: PaymentLinkChannel;
   customerMessage?: string;
   items: OrderItem[];
   total: string;
@@ -51,6 +59,7 @@ export type CustomerOrderRow = {
   total: number;
   paymentProvider?: PaymentProvider;
   paymentStatus: PaymentStatus;
+  preferredPaymentMethod?: PreferredPaymentMethod;
   orderStatus: OrderStatus;
   deliveryMethod: string;
   trackingNumber?: string;
@@ -74,11 +83,17 @@ export async function getAdminOrdersWithFallback() {
         deliveryAddress: order.deliveryAddress,
         paymentProvider: order.paymentProvider,
         paymentStatus: order.paymentStatus,
+        preferredPaymentMethod: order.preferredPaymentMethod,
         orderStatus: order.orderStatus,
         deliveryMethod: order.deliveryMethod,
         delivery: order.deliveryZone || order.deliveryMethod,
         trackingNumber: order.trackingNumber,
         paymentReference: order.paymentReference,
+        paymentLinkUrl: order.paymentLinkUrl,
+        paymentLinkSent: order.paymentLinkSent === true,
+        paymentLinkSentAt: order.paymentLinkSentAt,
+        paymentLinkSentBy: order.paymentLinkSentBy,
+        paymentLinkChannel: order.paymentLinkChannel,
         customerMessage: order.customerMessage,
         items: order.items || [],
         total: `${Number(order.total || 0).toFixed(2).replace(".", ",")} EUR`,
@@ -110,6 +125,9 @@ export async function updateOrderAdminFields(
     internalNote?: string;
     historyNote?: string;
     paymentReference?: string;
+    paymentLinkUrl?: string;
+    paymentLinkSent?: boolean;
+    paymentLinkChannel?: PaymentLinkChannel | "";
     trackingNumber?: string;
     archived?: boolean;
     hidden?: boolean;
@@ -148,6 +166,7 @@ export async function getCustomerOrders(customerId: string) {
         total: Number(order.total || 0),
         paymentProvider: order.paymentProvider,
         paymentStatus: order.paymentStatus,
+        preferredPaymentMethod: order.preferredPaymentMethod,
         orderStatus: order.orderStatus,
         deliveryMethod: order.deliveryZone || order.deliveryMethod,
         trackingNumber: order.trackingNumber,

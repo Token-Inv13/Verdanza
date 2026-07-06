@@ -45,9 +45,20 @@ export function CheckoutSuccessPage() {
         </h1>
         <p className="mt-5 leading-7 text-ink/70">
           {isPreorder
-            ? "Votre précommande a bien été transmise à Verdanza. Nous vous contacterons rapidement pour confirmer les disponibilités, la livraison et le règlement."
-            : "Votre commande a bien été transmise à Verdanza. Nous vous contacterons rapidement au numéro indiqué pour confirmer les disponibilités, la livraison et le règlement."}
+            ? "Votre précommande a bien été transmise à Verdanza."
+            : "Votre commande a bien été transmise à Verdanza."}
         </p>
+        <div className="mt-5 rounded-md border border-champagne/30 bg-ivory p-4 text-sm leading-6 text-forest">
+          <strong className="block text-base">
+            Prochaine étape : confirmation et règlement
+          </strong>
+          <p className="mt-2">
+            Nous allons vérifier les disponibilités, le mode de livraison et le
+            montant final. Si vous souhaitez régler par carte bancaire, un lien
+            de paiement vous sera envoyé par email et/ou message après
+            confirmation de votre commande.
+          </p>
+        </div>
         {orderId && (
           <p className="mt-5 rounded-md border border-forest/10 bg-ivory p-4 text-sm text-forest">
             Numéro de commande : <strong>{orderId.slice(0, 8).toUpperCase()}</strong>
@@ -63,6 +74,10 @@ export function CheckoutSuccessPage() {
                 </p>
               ))}
               <p>Mode de livraison : {summary.delivery}</p>
+              <p>
+                Mode de règlement souhaité :{" "}
+                {summary.preferredPaymentMethod || "À confirmer avec Verdanza"}
+              </p>
               <p>Total estimé : {formatMoney(summary.total)}</p>
             </div>
           )}
@@ -95,6 +110,7 @@ function readLastOrderSummary(orderId: string | null) {
       orderType?: string;
       items?: { name: string; quantity: number; total: number }[];
       delivery?: string;
+      preferredPaymentMethod?: string;
       total?: number;
     };
     if (parsed.orderId !== orderId || !Array.isArray(parsed.items)) return null;
@@ -102,6 +118,7 @@ function readLastOrderSummary(orderId: string | null) {
       orderType: parsed.orderType,
       items: parsed.items,
       delivery: parsed.delivery || "À confirmer",
+      preferredPaymentMethod: parsed.preferredPaymentMethod || "À confirmer avec Verdanza",
       total: Number(parsed.total || 0),
     };
   } catch {

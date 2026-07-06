@@ -6,7 +6,15 @@ import type {
   OrderItem,
   Product,
   Coupon,
+  PreferredPaymentMethod,
 } from "../../src/types/index.js";
+
+const preferredPaymentMethods: PreferredPaymentMethod[] = [
+  "card_payment_link",
+  "bank_transfer",
+  "local_delivery_payment",
+  "confirm_with_verdanza",
+];
 
 const fallbackDeliveryZones: DeliveryZone[] = [
   {
@@ -63,6 +71,7 @@ export type CheckoutRequestBody = {
   couponCode?: string;
   authToken?: string;
   customerMessage?: string;
+  preferredPaymentMethod?: PreferredPaymentMethod;
   complianceAccepted?: boolean;
   customer: CheckoutCustomerInput;
 };
@@ -88,6 +97,18 @@ export function parseCheckoutBody(value: unknown): CheckoutRequestBody {
   }
   if (body.deliveryMethod !== "postal" && body.deliveryMethod !== "local_express") {
     throw new Error("Mode de livraison invalide.");
+  }
+  if (
+    body.preferredPaymentMethod &&
+    !preferredPaymentMethods.includes(body.preferredPaymentMethod)
+  ) {
+    throw new Error("Mode de reglement invalide.");
+  }
+  if (
+    body.deliveryMethod === "postal" &&
+    body.preferredPaymentMethod === "local_delivery_payment"
+  ) {
+    throw new Error("Paiement a la livraison locale indisponible en livraison postale.");
   }
   if (!body.customer?.email || !body.customer.phone) {
     throw new Error("Email et telephone client requis.");
@@ -335,6 +356,9 @@ export function orderPayload(
 ): Record<string, unknown> {
   const paymentProvider = "manual";
   const paymentInstructions = paymentInstructionsFor();
+  const preferredPaymentMethod =
+    body.preferredPaymentMethod ||
+    (body.deliveryMethod === "local_express" ? "confirm_with_verdanza" : "card_payment_link");
   const orderStatus = "contact_required";
   const orderType = isPreorderActive() ? "preorder" : "order";
 
@@ -354,6 +378,12 @@ export function orderPayload(
     paymentStatus: "to_confirm",
     paymentReference: null,
     paymentInstructions,
+    preferredPaymentMethod,
+    paymentLinkUrl: "",
+    paymentLinkSent: false,
+    paymentLinkSentAt: null,
+    paymentLinkSentBy: null,
+    paymentLinkChannel: null,
     customerMessage: body.customerMessage?.trim() || "",
     orderStatus,
     deliveryMethod: body.deliveryMethod,

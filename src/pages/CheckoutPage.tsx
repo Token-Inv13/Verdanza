@@ -5,7 +5,7 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { deliveryZones as fallbackDeliveryZones } from "../data/deliveryZones";
 import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
-import type { DeliveryMethod, DeliveryZone } from "../types";
+import type { DeliveryMethod, DeliveryZone, PreferredPaymentMethod } from "../types";
 import { trackEvent } from "../lib/analytics";
 import { isPreorderActive } from "../lib/preorder";
 
@@ -17,6 +17,13 @@ const contactEmail =
 const checkoutErrorMessage =
   "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza au 07 80 81 41 37.";
 
+const paymentMethodLabels: Record<PreferredPaymentMethod, string> = {
+  card_payment_link: "Carte bancaire via lien de paiement après confirmation",
+  bank_transfer: "Virement bancaire",
+  local_delivery_payment: "Paiement à la livraison locale",
+  confirm_with_verdanza: "À confirmer avec Verdanza",
+};
+
 export function CheckoutPage() {
   const { itemCount, subtotal, items, lines } = useCart();
   const { user, customerProfile } = useAuth();
@@ -26,6 +33,8 @@ export function CheckoutPage() {
   const [deliveryZone, setDeliveryZone] = useState("");
   const [couponCode, setCouponCode] = useState("");
   const [customerMessage, setCustomerMessage] = useState("");
+  const [preferredPaymentMethod, setPreferredPaymentMethod] =
+    useState<PreferredPaymentMethod>("card_payment_link");
   const [complianceAccepted, setComplianceAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -91,6 +100,12 @@ export function CheckoutPage() {
   }, [deliveryMethod, deliveryZone, openLocalDeliveryZones]);
 
   useEffect(() => {
+    if (deliveryMethod === "postal" && preferredPaymentMethod === "local_delivery_payment") {
+      setPreferredPaymentMethod("card_payment_link");
+    }
+  }, [deliveryMethod, preferredPaymentMethod]);
+
+  useEffect(() => {
     if (!user) return;
     setCustomer((current) => ({
       ...current,
@@ -144,6 +159,7 @@ export function CheckoutPage() {
             deliveryMethod === "local_express" ? deliveryZone : "postal-france",
           couponCode: couponCode.trim() || undefined,
           customerMessage: customerMessage.trim() || undefined,
+          preferredPaymentMethod,
           complianceAccepted,
           customer: {
             email: customer.email,
@@ -184,6 +200,7 @@ export function CheckoutPage() {
             deliveryMethod === "local_express"
               ? selectedZone?.name || "Livraison locale"
               : "Livraison postale en France",
+          preferredPaymentMethod: paymentMethodLabels[preferredPaymentMethod],
           total: estimatedTotal,
         }),
       );
@@ -405,10 +422,39 @@ export function CheckoutPage() {
             <div className="rounded-lg border border-forest/10 bg-ivory p-6">
               <h2 className="font-display text-3xl text-forest">Règlement</h2>
               <p className="mt-4 text-sm leading-6 text-ink/70">
-                Le règlement est confirmé directement avec vous après validation
-                de la commande. Aucun paiement en ligne n'est demandé sur le site
-                pour le moment.
+                Le règlement est confirmé après validation de votre commande. Si
+                vous souhaitez payer par carte bancaire, un lien de paiement
+                sécurisé pourra vous être envoyé par email et/ou par message après
+                confirmation de votre commande par l'équipe Verdanza.
               </p>
+              <p className="mt-3 rounded-md border border-champagne/30 bg-cream p-3 text-sm leading-6 text-forest">
+                {isLocalDelivery
+                  ? "Pour la livraison locale, le règlement sera confirmé avec vous après validation de la commande. Vous pourrez régler selon les modalités proposées par Verdanza. Si vous souhaitez payer par carte bancaire, un lien de paiement pourra vous être envoyé."
+                  : "Pour la livraison postale, la commande sera confirmée par Verdanza avant expédition. Si vous souhaitez payer par carte bancaire, un lien de paiement vous sera envoyé par email et/ou message après confirmation du montant final."}
+              </p>
+              <label className="mt-5 block text-sm font-medium text-forest">
+                Mode de règlement souhaité
+                <select
+                  className="input-field mt-2"
+                  value={preferredPaymentMethod}
+                  onChange={(event) =>
+                    setPreferredPaymentMethod(event.target.value as PreferredPaymentMethod)
+                  }
+                >
+                  <option value="card_payment_link">
+                    {paymentMethodLabels.card_payment_link}
+                  </option>
+                  <option value="bank_transfer">{paymentMethodLabels.bank_transfer}</option>
+                  {isLocalDelivery && (
+                    <option value="local_delivery_payment">
+                      {paymentMethodLabels.local_delivery_payment}
+                    </option>
+                  )}
+                  <option value="confirm_with_verdanza">
+                    {paymentMethodLabels.confirm_with_verdanza}
+                  </option>
+                </select>
+              </label>
               <label className="mt-5 block text-sm font-medium text-forest">
                 Message optionnel
                 <textarea
@@ -453,6 +499,11 @@ export function CheckoutPage() {
               <p className="flex justify-between text-lg font-semibold text-forest">
                 <span>Total estimé</span>
                 <span>{estimatedTotal.toFixed(2).replace(".", ",")} EUR</span>
+              </p>
+              <p className="rounded-md border border-forest/10 bg-ivory p-3 text-xs leading-5 text-forest">
+                Paiement : lien envoyé après confirmation si paiement CB souhaité.
+                <br />
+                Souhait indiqué : {paymentMethodLabels[preferredPaymentMethod]}.
               </p>
               {couponCode.trim() && (
                 <p className="text-xs leading-5 text-ink/55">

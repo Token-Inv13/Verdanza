@@ -8,7 +8,12 @@ import {
   type VercelResponseLike,
 } from "./_server/http.js";
 import { sendOrderStatusUpdateEmail } from "./_server/email.js";
-import type { Order, OrderStatus, PaymentStatus } from "../src/types/index.js";
+import type {
+  Order,
+  OrderStatus,
+  PaymentLinkChannel,
+  PaymentStatus,
+} from "../src/types/index.js";
 
 const orderStatuses: OrderStatus[] = [
   "new",
@@ -21,6 +26,7 @@ const orderStatuses: OrderStatus[] = [
   "cancelled",
 ];
 const paymentStatuses: PaymentStatus[] = ["to_confirm", "pending", "paid", "cancelled"];
+const paymentLinkChannels: PaymentLinkChannel[] = ["email", "whatsapp", "sms", "other"];
 
 export default async function handler(
   request: VercelRequestLike,
@@ -62,6 +68,20 @@ export default async function handler(
       }
       if (body.paymentReference !== undefined) {
         update.paymentReference = body.paymentReference;
+      }
+      if (body.paymentLinkUrl !== undefined) {
+        update.paymentLinkUrl = body.paymentLinkUrl.trim();
+      }
+      if (body.paymentLinkChannel !== undefined) {
+        update.paymentLinkChannel = body.paymentLinkChannel || FieldValue.delete();
+      }
+      if (body.paymentLinkSent !== undefined) {
+        update.paymentLinkSent = body.paymentLinkSent;
+        update.paymentLinkSentAt = body.paymentLinkSent
+          ? new Date().toISOString()
+          : FieldValue.delete();
+        update.paymentLinkSentBy = body.paymentLinkSent ? admin.email : FieldValue.delete();
+        if (body.paymentLinkSent && !body.paymentStatus) update.paymentStatus = "pending";
       }
       if (body.trackingNumber !== undefined) {
         update.trackingNumber = body.trackingNumber;
@@ -192,6 +212,9 @@ function parseBody(value: unknown): {
   paymentStatus?: PaymentStatus;
   internalNote?: string;
   paymentReference?: string;
+  paymentLinkUrl?: string;
+  paymentLinkSent?: boolean;
+  paymentLinkChannel?: PaymentLinkChannel | "";
   trackingNumber?: string;
   archived?: boolean;
   hidden?: boolean;
@@ -207,6 +230,9 @@ function parseBody(value: unknown): {
     paymentStatus?: PaymentStatus;
     internalNote?: string;
     paymentReference?: string;
+    paymentLinkUrl?: string;
+    paymentLinkSent?: boolean;
+    paymentLinkChannel?: PaymentLinkChannel | "";
     trackingNumber?: string;
     archived?: boolean;
     hidden?: boolean;
@@ -221,6 +247,12 @@ function parseBody(value: unknown): {
   if (payload.paymentStatus && !paymentStatuses.includes(payload.paymentStatus)) {
     throw new Error("Statut reglement invalide.");
   }
+  if (
+    payload.paymentLinkChannel &&
+    !paymentLinkChannels.includes(payload.paymentLinkChannel)
+  ) {
+    throw new Error("Canal lien paiement invalide.");
+  }
   return {
     ...payload,
     orderId: payload.orderId,
@@ -233,6 +265,9 @@ function parseJsonObject(value: unknown): {
   paymentStatus?: PaymentStatus;
   internalNote?: string;
   paymentReference?: string;
+  paymentLinkUrl?: string;
+  paymentLinkSent?: boolean;
+  paymentLinkChannel?: PaymentLinkChannel | "";
   trackingNumber?: string;
   archived?: boolean;
   hidden?: boolean;
@@ -248,6 +283,9 @@ function parseJsonObject(value: unknown): {
     paymentStatus?: PaymentStatus;
     internalNote?: string;
     paymentReference?: string;
+    paymentLinkUrl?: string;
+    paymentLinkSent?: boolean;
+    paymentLinkChannel?: PaymentLinkChannel | "";
     trackingNumber?: string;
     archived?: boolean;
     hidden?: boolean;

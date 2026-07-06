@@ -38,6 +38,8 @@ import type {
   InvoiceStatus,
   OrderStatus,
   PaymentProvider,
+  PreferredPaymentMethod,
+  PaymentLinkChannel,
   PaymentStatus,
   Product,
   ProductCategory,
@@ -1246,11 +1248,17 @@ function AdminOrders({
     };
     paymentProvider?: PaymentProvider;
     paymentStatus: string;
+    preferredPaymentMethod?: PreferredPaymentMethod;
     orderStatus: string;
     deliveryMethod?: string;
     delivery: string;
     trackingNumber?: string;
     paymentReference?: string;
+    paymentLinkUrl?: string;
+    paymentLinkSent?: boolean;
+    paymentLinkSentAt?: string;
+    paymentLinkSentBy?: string;
+    paymentLinkChannel?: PaymentLinkChannel;
     customerMessage?: string;
     items: { name: string; quantity: number }[];
     total: string;
@@ -1277,6 +1285,9 @@ function AdminOrders({
       internalNote?: string;
       historyNote?: string;
       paymentReference?: string;
+      paymentLinkUrl?: string;
+      paymentLinkSent?: boolean;
+      paymentLinkChannel?: PaymentLinkChannel | "";
       trackingNumber?: string;
       archived?: boolean;
       hidden?: boolean;
@@ -1395,6 +1406,9 @@ function AdminOrders({
                   <span className="block text-xs text-ink/55">
                     {paymentProviderLabel(order.paymentProvider)}
                   </span>
+                  <strong className="mt-1 block text-xs leading-5 text-forest">
+                    {preferredPaymentMethodLabel(order.preferredPaymentMethod)}
+                  </strong>
                   <select
                     className="input-field mt-2"
                     value={order.paymentStatus}
@@ -1411,6 +1425,66 @@ function AdminOrders({
                       </option>
                     ))}
                   </select>
+                  <input
+                    className="input-field mt-2"
+                    defaultValue={order.paymentLinkUrl || ""}
+                    placeholder="Lien de paiement"
+                    disabled={orderSource !== "firestore"}
+                    onBlur={(event) =>
+                      void onUpdate(order.id, {
+                        paymentLinkUrl: event.currentTarget.value,
+                      })
+                    }
+                  />
+                  <select
+                    className="input-field mt-2"
+                    value={order.paymentLinkChannel || ""}
+                    disabled={orderSource !== "firestore"}
+                    onChange={(event) =>
+                      void onUpdate(order.id, {
+                        paymentLinkChannel: event.target.value as PaymentLinkChannel | "",
+                      })
+                    }
+                  >
+                    <option value="">Canal lien</option>
+                    <option value="email">Email</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="sms">SMS</option>
+                    <option value="other">Autre</option>
+                  </select>
+                  <span className="mt-2 block text-xs text-ink/55">
+                    Lien envoyé : {order.paymentLinkSent ? "oui" : "non"}
+                    {order.paymentLinkSentAt ? ` - ${order.paymentLinkSentAt}` : ""}
+                  </span>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      className="btn-secondary min-h-8 px-2 py-1 text-xs"
+                      disabled={!order.paymentLinkUrl}
+                      onClick={() => void copyPaymentLinkMessage(order)}
+                    >
+                      Copier message
+                    </button>
+                    <a
+                      className="btn-secondary min-h-8 px-2 py-1 text-xs"
+                      href={whatsappPaymentLink(order)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      WhatsApp lien
+                    </a>
+                    <button
+                      className="btn-secondary min-h-8 px-2 py-1 text-xs"
+                      disabled={orderSource !== "firestore" || !order.paymentLinkUrl}
+                      onClick={() =>
+                        void onUpdate(order.id, {
+                          paymentLinkSent: true,
+                          paymentLinkChannel: order.paymentLinkChannel || "email",
+                        })
+                      }
+                    >
+                      Marquer envoyé
+                    </button>
+                  </div>
                 </td>
                 <td className="px-4 py-4">
                   <select
@@ -1820,6 +1894,18 @@ function smsLink(order: {
   return `sms:${normalizePhone(order.customerPhone)}?body=${encodeURIComponent(orderMessage(order))}`;
 }
 
+function whatsappPaymentLink(order: {
+  customerPhone?: string;
+  customer: string;
+  id: string;
+  deliveryMethod?: string;
+  paymentLinkUrl?: string;
+}) {
+  if (!order.customerPhone || !order.paymentLinkUrl) return "#";
+  const phone = normalizePhone(order.customerPhone).replace("+", "");
+  return `https://wa.me/${phone}?text=${encodeURIComponent(paymentLinkMessage(order))}`;
+}
+
 async function copyOrderMessage(order: {
   customerPhone?: string;
   customer: string;
@@ -1831,6 +1917,30 @@ async function copyOrderMessage(order: {
   trackingNumber?: string;
 }) {
   await navigator.clipboard.writeText(orderMessage(order));
+}
+
+async function copyPaymentLinkMessage(order: {
+  customer: string;
+  id: string;
+  deliveryMethod?: string;
+  paymentLinkUrl?: string;
+}) {
+  await navigator.clipboard.writeText(paymentLinkMessage(order));
+}
+
+function paymentLinkMessage(order: {
+  customer: string;
+  id: string;
+  deliveryMethod?: string;
+  paymentLinkUrl?: string;
+}) {
+  const firstName = order.customer.split(" ")[0] || "Bonjour";
+  const shortId = order.id.slice(0, 8).toUpperCase();
+  const link = order.paymentLinkUrl || "[LIEN_DE_PAIEMENT]";
+  if (order.deliveryMethod === "postal") {
+    return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée. Pour finaliser l'expédition, vous pouvez régler par carte bancaire via ce lien : ${link}`;
+  }
+  return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée. Vous pouvez effectuer le règlement par carte bancaire via ce lien : ${link}. Dès réception du paiement, nous préparerons votre commande.`;
 }
 
 function orderMessage(order: {
@@ -1868,6 +1978,16 @@ function orderMessage(order: {
   }
   return `${common} a bien été reçue. Nous vérifions les disponibilités et revenons vers vous rapidement. Total estimé : ${order.total}.`;
 }
+
+function preferredPaymentMethodLabel(method?: PreferredPaymentMethod) {
+  if (method === "card_payment_link") {
+    return "Carte bancaire via lien de paiement après confirmation";
+  }
+  if (method === "bank_transfer") return "Virement bancaire";
+  if (method === "local_delivery_payment") return "Paiement à la livraison locale";
+  return "À confirmer avec Verdanza";
+}
+
 function Input({
   label,
   value,
