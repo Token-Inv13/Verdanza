@@ -8,7 +8,7 @@ const contactPhone =
   (import.meta.env.VITE_CONTACT_PHONE as string | undefined) || "07 80 81 41 37";
 const contactEmail =
   (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
-  "contacte@verdanza.fr";
+  "contact@verdanza.fr";
 
 export function CheckoutSuccessPage() {
   const [params] = useSearchParams();

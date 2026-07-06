@@ -1,9 +1,15 @@
 import type { BillingSettings, Invoice, Order, OrderStatus } from "../../src/types/index.js";
 
 export type EmailResult =
-  | { status: "sent"; id?: string }
-  | { status: "skipped"; reason: string }
-  | { status: "failed"; reason: string; statusCode?: number };
+  | { status: "sent"; id?: string; recipients?: EmailRecipientResults }
+  | { status: "partial"; reason: string; recipients: EmailRecipientResults }
+  | { status: "skipped"; reason: string; recipients?: EmailRecipientResults }
+  | { status: "failed"; reason: string; statusCode?: number; recipients?: EmailRecipientResults };
+
+type EmailRecipientResults = Record<
+  string,
+  { status: "sent" | "skipped" | "failed"; reason?: string; providerId?: string }
+>;
 
 type TransactionalEmailKind =
   | "order_confirmation"
@@ -40,7 +46,7 @@ export async function sendAdminNewOrderEmail(order: Order) {
   const adminEmails = adminNotificationEmails();
   if (!adminEmails.length) return { status: "skipped", reason: "ADMIN_NOTIFICATION_EMAILS absent" } satisfies EmailResult;
 
-  return sendTransactionalEmail({
+  return sendAdminNotificationEmails({
     kind: "admin_new_order",
     orderId: order.id,
     to: adminEmails,
@@ -79,7 +85,7 @@ export async function sendAdminManualOrderEmail(order: Order) {
   const adminEmails = adminNotificationEmails();
   if (!adminEmails.length) return { status: "skipped", reason: "ADMIN_NOTIFICATION_EMAILS absent" } satisfies EmailResult;
 
-  return sendTransactionalEmail({
+  return sendAdminNotificationEmails({
     kind: "admin_new_order",
     orderId: order.id,
     to: adminEmails,
@@ -88,6 +94,69 @@ export async function sendAdminManualOrderEmail(order: Order) {
     text: adminOrderEmailText(order),
     idempotencyKey: `admin-manual-order-${order.id}`,
   });
+}
+
+async function sendAdminNotificationEmails(input: {
+  kind: TransactionalEmailKind;
+  orderId: string;
+  to: string[];
+  subject: string;
+  html: string;
+  text: string;
+  idempotencyKey: string;
+}): Promise<EmailResult> {
+  const recipients: EmailRecipientResults = {};
+  const validRecipients = input.to.filter(isValidEmail);
+
+  for (const email of input.to) {
+    if (!isValidEmail(email)) {
+      recipients[email] = { status: "skipped", reason: "invalid_email" };
+      console.warn("Email admin ignore: adresse invalide", {
+        orderId: input.orderId,
+        to: redactEmail(email),
+      });
+    }
+  }
+
+  await Promise.all(
+    validRecipients.map(async (email) => {
+      const result = await sendTransactionalEmail({
+        ...input,
+        to: email,
+        idempotencyKey: `${input.idempotencyKey}-${email.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
+      });
+      if (result.status === "sent") {
+        recipients[email] = { status: "sent", providerId: result.id };
+        return;
+      }
+      recipients[email] = {
+        status: result.status === "skipped" ? "skipped" : "failed",
+        reason: result.reason,
+      };
+    }),
+  );
+
+  const values = Object.values(recipients);
+  const sentCount = values.filter((entry) => entry.status === "sent").length;
+  const failedCount = values.filter((entry) => entry.status === "failed").length;
+  const skippedCount = values.filter((entry) => entry.status === "skipped").length;
+  console.info("Synthese notification admin", {
+    orderId: input.orderId,
+    sentCount,
+    failedCount,
+    skippedCount,
+  });
+
+  if (sentCount === validRecipients.length && failedCount === 0 && skippedCount === 0) {
+    return { status: "sent", recipients };
+  }
+  if (sentCount > 0) {
+    return { status: "partial", reason: "admin_notification_partial", recipients };
+  }
+  if (skippedCount > 0 && failedCount === 0) {
+    return { status: "skipped", reason: "admin_notification_skipped", recipients };
+  }
+  return { status: "failed", reason: "admin_notification_failed", recipients };
 }
 
 export async function sendOrderStatusUpdateEmail(
@@ -258,11 +327,16 @@ function adminNotificationEmails() {
   const raw =
     process.env.ADMIN_NOTIFICATION_EMAILS ||
     process.env.ADMIN_NOTIFICATION_EMAIL ||
-    "contacte@verdanza.fr,verdanza.1@gmail.com";
-  return raw
+    "contact@verdanza.fr,verdanza.1@gmail.com";
+  return Array.from(new Set(raw
     .split(",")
     .map((email) => email.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((email) => email.toLowerCase())));
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function orderEmailHtml(order: Order, intro: string) {
@@ -484,7 +558,7 @@ function contactPhone() {
 }
 
 function contactEmail() {
-  return process.env.VITE_CONTACT_EMAIL || "contacte@verdanza.fr";
+  return process.env.VITE_CONTACT_EMAIL || "contact@verdanza.fr";
 }
 
 function orderTypeLabel(order: Order) {

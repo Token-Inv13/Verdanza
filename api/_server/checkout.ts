@@ -260,13 +260,17 @@ async function resolveDeliveryFee(
     const fallbackZone = fallbackDeliveryZones.find(
       (entry) => entry.id === (body.deliveryZone ?? "postal-france"),
     );
-    const selectedZone = zone?.isActive ? zone : fallbackZone;
+    const selectedZone = isDeliveryZoneAvailable(zone) ? zone : fallbackZone;
 
-    if (!selectedZone || selectedZone.method !== "postal" || !selectedZone.isActive) {
+    if (
+      !selectedZone ||
+      selectedZone.method !== "postal" ||
+      !isDeliveryZoneAvailable(selectedZone)
+    ) {
       throw new Error("Livraison postale indisponible pour le moment.");
     }
 
-    const minimumOrder = selectedZone.minimumOrder ?? 0;
+    const minimumOrder = selectedZone.minimumOrderAmount ?? selectedZone.minimumOrder ?? 0;
     if (minimumOrder > 0 && subtotal < minimumOrder) {
       throw new Error(
         `Livraison postale disponible a partir de ${minimumOrder.toFixed(0)} EUR d'achat.`,
@@ -286,17 +290,33 @@ async function resolveDeliveryFee(
   );
   const selectedZone = zone ?? fallbackZone;
 
-  if (!selectedZone || selectedZone.method !== "local_express" || !selectedZone.isActive) {
-    throw new Error("Zone de livraison locale indisponible.");
+  if (
+    !selectedZone ||
+    selectedZone.method !== "local_express" ||
+    !isDeliveryZoneAvailable(selectedZone)
+  ) {
+    throw new Error(
+      "La zone de livraison sélectionnée n’est actuellement pas disponible. Veuillez choisir une autre zone ou contacter Verdanza.",
+    );
   }
 
-  const minimumOrder = selectedZone.minimumOrder ?? 30;
+  const minimumOrder = selectedZone.minimumOrderAmount ?? selectedZone.minimumOrder ?? 30;
   if (subtotal < minimumOrder) {
     throw new Error(
       `Livraison locale disponible a partir de ${minimumOrder.toFixed(0)} EUR d'achat.`,
     );
   }
   return { fee: selectedZone.fee, zoneName: selectedZone.name };
+}
+
+function isDeliveryZoneAvailable(zone?: DeliveryZone | null) {
+  if (!zone) return false;
+  return (
+    zone.isActive !== false &&
+    zone.isOpen !== false &&
+    (zone.status || "open") === "open" &&
+    zone.isArchived !== true
+  );
 }
 
 async function getDeliveryZone(

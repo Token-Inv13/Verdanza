@@ -198,6 +198,9 @@ function emailResultUpdate(prefix: string, result: EmailResult) {
   const update: Record<string, unknown> = {
     [`emails.${prefix}Status`]: result.status,
   };
+  if (result.recipients) {
+    update[`emails.${prefix}Recipients`] = result.recipients;
+  }
 
   if (result.status === "sent") {
     update[`emails.${prefix}SentAt`] = FieldValue.serverTimestamp();
@@ -205,6 +208,12 @@ function emailResultUpdate(prefix: string, result: EmailResult) {
     update[`emails.${prefix}Error`] = FieldValue.delete();
     update[`emails.${prefix}FailedAt`] = FieldValue.delete();
     update[`emails.${prefix}SkippedAt`] = FieldValue.delete();
+    return update;
+  }
+
+  if (result.status === "partial") {
+    update[`emails.${prefix}FailedAt`] = FieldValue.serverTimestamp();
+    update[`emails.${prefix}Error`] = result.reason;
     return update;
   }
 

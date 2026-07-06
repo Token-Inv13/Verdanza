@@ -22,7 +22,7 @@ export function MainLayout() {
   const { user } = useAuth();
   const contactEmail =
     (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
-    "contacte@verdanza.fr";
+    "contact@verdanza.fr";
 
   return (
     <div className="min-h-screen bg-ivory text-ink">

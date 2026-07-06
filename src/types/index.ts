@@ -34,6 +34,11 @@ export type Product = {
 };
 
 export type DeliveryMethod = "postal" | "local_express";
+export type DeliveryZoneStatus =
+  | "open"
+  | "temporarily_closed"
+  | "disabled"
+  | "coming_soon";
 export type OrderType = "order" | "preorder";
 export type PaymentProvider =
   | "manual"
@@ -44,12 +49,22 @@ export type PaymentProvider =
 export type DeliveryZone = {
   id: string;
   name: string;
+  slug?: string;
   method: DeliveryMethod;
   isActive: boolean;
+  isOpen?: boolean;
+  status?: DeliveryZoneStatus;
   fee: number;
   minimumOrder: number;
+  minimumOrderAmount?: number;
   estimatedDelay: string;
   slots: string[];
+  customerMessage?: string;
+  adminNote?: string;
+  sortOrder?: number;
+  isArchived?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type CouponDiscountType = "percent" | "fixed" | "free_shipping";
@@ -144,11 +159,15 @@ export type OrderEmails = {
   orderConfirmationError?: string;
   orderConfirmationProviderId?: string;
   adminNotificationSentAt?: string;
-  adminNotificationStatus?: "sent" | "skipped" | "failed";
+  adminNotificationStatus?: "sent" | "skipped" | "failed" | "partial";
   adminNotificationFailedAt?: string;
   adminNotificationSkippedAt?: string;
   adminNotificationError?: string;
   adminNotificationProviderId?: string;
+  adminNotificationRecipients?: Record<
+    string,
+    { status: "sent" | "skipped" | "failed"; reason?: string; providerId?: string }
+  >;
   lastAttemptedAt?: string;
   statusUpdateSentAt?: Partial<Record<OrderStatus, string>>;
   refundNotificationSentAt?: string;
@@ -200,6 +219,14 @@ export type Order = {
   emails?: OrderEmails;
   alerts?: OrderAlerts;
   internalNote?: string;
+  archived?: boolean;
+  hidden?: boolean;
+  archivedAt?: string;
+  archivedBy?: string;
+  hiddenAt?: string;
+  hiddenBy?: string;
+  deletedAt?: string;
+  deletedBy?: string;
   paidAt?: string;
   cancelledAt?: string;
   stockRestoredAt?: string;

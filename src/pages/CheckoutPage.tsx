@@ -3,8 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
-import { deliveryZones, localDeliveryZones } from "../data/deliveryZones";
-import type { DeliveryMethod } from "../types";
+import { deliveryZones as fallbackDeliveryZones } from "../data/deliveryZones";
+import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
+import type { DeliveryMethod, DeliveryZone } from "../types";
 import { trackEvent } from "../lib/analytics";
 import { isPreorderActive } from "../lib/preorder";
 
@@ -12,7 +13,7 @@ const contactPhone =
   (import.meta.env.VITE_CONTACT_PHONE as string | undefined) || "07 80 81 41 37";
 const contactEmail =
   (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
-  "contacte@verdanza.fr";
+  "contact@verdanza.fr";
 const checkoutErrorMessage =
   "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza au 07 80 81 41 37.";
 
@@ -20,8 +21,9 @@ export function CheckoutPage() {
   const { itemCount, subtotal, items, lines } = useCart();
   const { user, customerProfile } = useAuth();
   const navigate = useNavigate();
+  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>(fallbackDeliveryZones);
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("postal");
-  const [deliveryZone, setDeliveryZone] = useState(localDeliveryZones[0]?.id ?? "");
+  const [deliveryZone, setDeliveryZone] = useState("");
   const [couponCode, setCouponCode] = useState("");
   const [customerMessage, setCustomerMessage] = useState("");
   const [complianceAccepted, setComplianceAccepted] = useState(false);
@@ -39,16 +41,26 @@ export function CheckoutPage() {
     country: "France",
   });
 
+  const openLocalDeliveryZones = useMemo(
+    () =>
+      deliveryZones
+        .filter((zone) => zone.method === "local_express")
+        .filter(isZoneAvailableForCheckout)
+        .sort((left, right) => Number(left.sortOrder || 0) - Number(right.sortOrder || 0)),
+    [deliveryZones],
+  );
   const selectedZone = useMemo(
-    () => localDeliveryZones.find((zone) => zone.id === deliveryZone),
-    [deliveryZone],
+    () => openLocalDeliveryZones.find((zone) => zone.id === deliveryZone),
+    [deliveryZone, openLocalDeliveryZones],
   );
   const postalZone = useMemo(
-    () => deliveryZones.find((zone) => zone.id === "postal-france"),
-    [],
+    () => deliveryZones.find((zone) => zone.id === "postal-france" && zone.isActive !== false),
+    [deliveryZones],
   );
   const isLocalDelivery = deliveryMethod === "local_express";
-  const localDeliveryMinimum = selectedZone?.minimumOrder ?? 30;
+  const localDeliveryUnavailable = openLocalDeliveryZones.length === 0;
+  const localDeliveryMinimum =
+    selectedZone?.minimumOrderAmount ?? selectedZone?.minimumOrder ?? 30;
   const isBelowLocalMinimum =
     isLocalDelivery && itemCount > 0 && subtotal < localDeliveryMinimum;
   const estimatedDeliveryFee = isLocalDelivery
@@ -56,6 +68,27 @@ export function CheckoutPage() {
     : postalZone?.fee ?? 0;
   const estimatedTotal = subtotal + estimatedDeliveryFee;
   const preorderActive = isPreorderActive();
+
+  useEffect(() => {
+    let cancelled = false;
+    getDeliveryZonesWithFallback().then((result) => {
+      if (!cancelled) setDeliveryZones(result.zones);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!openLocalDeliveryZones.length) {
+      if (deliveryMethod === "local_express") setDeliveryMethod("postal");
+      setDeliveryZone("");
+      return;
+    }
+    if (!deliveryZone || !openLocalDeliveryZones.some((zone) => zone.id === deliveryZone)) {
+      setDeliveryZone(openLocalDeliveryZones[0].id);
+    }
+  }, [deliveryMethod, deliveryZone, openLocalDeliveryZones]);
 
   useEffect(() => {
     if (!user) return;
@@ -85,6 +118,11 @@ export function CheckoutPage() {
       if (isBelowLocalMinimum) {
         throw new Error(
           `Livraison locale disponible à partir de ${localDeliveryMinimum} EUR d'achat.`,
+        );
+      }
+      if (deliveryMethod === "local_express" && !selectedZone) {
+        throw new Error(
+          "La zone de livraison sélectionnée n’est actuellement pas disponible. Veuillez choisir une autre zone ou contacter Verdanza.",
         );
       }
 
@@ -159,7 +197,8 @@ export function CheckoutPage() {
       console.error("Checkout submission failed", checkoutError);
       const message =
         checkoutError instanceof Error &&
-        checkoutError.message.includes("Livraison locale disponible")
+        (checkoutError.message.includes("Livraison locale disponible") ||
+          checkoutError.message.includes("zone de livraison"))
           ? checkoutError.message
           : checkoutErrorMessage;
       setError(message);
@@ -281,10 +320,22 @@ export function CheckoutPage() {
                 <DeliveryChoice
                   checked={deliveryMethod === "local_express"}
                   title="Livraison locale Aix-en-Provence"
-                  text="Livraison locale disponible à Aix-en-Provence et alentours, 7j/7 de 11h à 01h, à partir de 30 EUR d'achat."
+                  text={
+                    localDeliveryUnavailable
+                      ? "Livraison locale temporairement indisponible. Vous pouvez choisir la livraison postale."
+                      : "Livraison locale disponible à Aix-en-Provence et alentours selon les zones ouvertes."
+                  }
+                  disabled={localDeliveryUnavailable}
                   onChange={() => setDeliveryMethod("local_express")}
                 />
               </div>
+
+              {localDeliveryUnavailable && (
+                <p className="mt-4 rounded-md border border-champagne/40 bg-cream p-3 text-sm leading-6 text-forest">
+                  Livraison locale temporairement indisponible. Vous pouvez choisir
+                  la livraison postale ou contacter Verdanza au 07 80 81 41 37.
+                </p>
+              )}
 
               {isLocalDelivery && (
                 <label className="mt-5 block text-sm font-medium text-forest">
@@ -294,9 +345,10 @@ export function CheckoutPage() {
                     value={deliveryZone}
                     onChange={(event) => setDeliveryZone(event.target.value)}
                   >
-                    {localDeliveryZones.map((zone) => (
+                    {openLocalDeliveryZones.map((zone) => (
                       <option key={zone.id} value={zone.id}>
                         {zone.name}
+                        {zone.customerMessage ? ` - ${zone.customerMessage}` : ""}
                       </option>
                     ))}
                   </select>
@@ -438,20 +490,27 @@ function DeliveryChoice({
   checked,
   title,
   text,
+  disabled = false,
   onChange,
 }: {
   checked: boolean;
   title: string;
   text: string;
+  disabled?: boolean;
   onChange: () => void;
 }) {
   return (
-    <label className="flex cursor-pointer gap-3 rounded-md border border-forest/10 bg-cream p-4 text-sm leading-6 text-forest has-[:checked]:border-champagne">
+    <label
+      className={`flex gap-3 rounded-md border border-forest/10 bg-cream p-4 text-sm leading-6 text-forest has-[:checked]:border-champagne ${
+        disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+      }`}
+    >
       <input
         type="radio"
         name="deliveryMethod"
         className="mt-1"
         checked={checked}
+        disabled={disabled}
         onChange={onChange}
       />
       <span>
@@ -459,6 +518,15 @@ function DeliveryChoice({
         <span className="text-ink/65">{text}</span>
       </span>
     </label>
+  );
+}
+
+function isZoneAvailableForCheckout(zone: DeliveryZone) {
+  return (
+    zone.isActive !== false &&
+    zone.isOpen !== false &&
+    (zone.status || "open") === "open" &&
+    zone.isArchived !== true
   );
 }
 

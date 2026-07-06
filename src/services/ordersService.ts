@@ -36,6 +36,12 @@ export type AdminOrderRow = {
   total: string;
   internalNote?: string;
   statusHistory?: StatusHistoryEntry[];
+  archived?: boolean;
+  hidden?: boolean;
+  deletedAt?: string;
+  archivedAt?: string;
+  hiddenAt?: string;
+  emails?: Order["emails"];
 };
 
 export type CustomerOrderRow = {
@@ -78,6 +84,12 @@ export async function getAdminOrdersWithFallback() {
         total: `${Number(order.total || 0).toFixed(2).replace(".", ",")} EUR`,
         internalNote: order.internalNote,
         statusHistory: order.statusHistory || [],
+        archived: order.archived === true,
+        hidden: order.hidden === true,
+        deletedAt: order.deletedAt,
+        archivedAt: order.archivedAt,
+        hiddenAt: order.hiddenAt,
+        emails: order.emails,
       };
     });
     return {
@@ -99,6 +111,9 @@ export async function updateOrderAdminFields(
     historyNote?: string;
     paymentReference?: string;
     trackingNumber?: string;
+    archived?: boolean;
+    hidden?: boolean;
+    restore?: boolean;
   },
 ) {
   const token = await auth?.currentUser?.getIdToken();

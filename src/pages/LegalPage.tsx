@@ -3,7 +3,7 @@ import { Seo } from "../components/Seo";
 export function LegalPage({ title }: { title: string }) {
   const contactEmail =
     (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
-    "contacte@verdanza.fr";
+    "contact@verdanza.fr";
   const sections = legalSections(title, contactEmail);
   return (
     <main className="container-page py-12">

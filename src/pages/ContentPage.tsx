@@ -50,7 +50,7 @@ export function ContentPage({ variant }: { variant: keyof typeof content }) {
   const page = content[variant];
   const contactEmail =
     (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
-    "contacte@verdanza.fr";
+    "contact@verdanza.fr";
   return (
     <main className="container-page py-12">
       <Seo title={`${page.title} - Verdanza CBD`} description={page.text} />
@@ -84,7 +84,7 @@ export function ContentPage({ variant }: { variant: keyof typeof content }) {
 function QualityTrustSection() {
   const contactEmail =
     (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
-    "contacte@verdanza.fr";
+    "contact@verdanza.fr";
 
   const sections = [
     {

@@ -66,6 +66,24 @@ export default async function handler(
       if (body.trackingNumber !== undefined) {
         update.trackingNumber = body.trackingNumber;
       }
+      if (body.archived !== undefined) {
+        update.archived = body.archived;
+        update.archivedAt = body.archived ? new Date().toISOString() : FieldValue.delete();
+        update.archivedBy = body.archived ? admin.email : FieldValue.delete();
+      }
+      if (body.hidden !== undefined) {
+        update.hidden = body.hidden;
+        update.hiddenAt = body.hidden ? new Date().toISOString() : FieldValue.delete();
+        update.hiddenBy = body.hidden ? admin.email : FieldValue.delete();
+      }
+      if (body.restore) {
+        update.archived = false;
+        update.hidden = false;
+        update.archivedAt = FieldValue.delete();
+        update.archivedBy = FieldValue.delete();
+        update.hiddenAt = FieldValue.delete();
+        update.hiddenBy = FieldValue.delete();
+      }
 
       if (body.orderStatus && body.orderStatus !== order.orderStatus) {
         update.orderStatus = body.orderStatus;
@@ -175,6 +193,9 @@ function parseBody(value: unknown): {
   internalNote?: string;
   paymentReference?: string;
   trackingNumber?: string;
+  archived?: boolean;
+  hidden?: boolean;
+  restore?: boolean;
   historyNote?: string;
   authToken?: string;
 } {
@@ -187,6 +208,9 @@ function parseBody(value: unknown): {
     internalNote?: string;
     paymentReference?: string;
     trackingNumber?: string;
+    archived?: boolean;
+    hidden?: boolean;
+    restore?: boolean;
     historyNote?: string;
     authToken?: string;
   };
@@ -210,6 +234,9 @@ function parseJsonObject(value: unknown): {
   internalNote?: string;
   paymentReference?: string;
   trackingNumber?: string;
+  archived?: boolean;
+  hidden?: boolean;
+  restore?: boolean;
   historyNote?: string;
   authToken?: string;
 } {
@@ -222,6 +249,9 @@ function parseJsonObject(value: unknown): {
     internalNote?: string;
     paymentReference?: string;
     trackingNumber?: string;
+    archived?: boolean;
+    hidden?: boolean;
+    restore?: boolean;
     historyNote?: string;
     authToken?: string;
   };

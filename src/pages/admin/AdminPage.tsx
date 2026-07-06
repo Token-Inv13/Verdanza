@@ -33,6 +33,7 @@ import type {
   Coupon,
   CustomerProfile,
   DeliveryZone,
+  DeliveryZoneStatus,
   Invoice,
   InvoiceLine,
   InvoiceStatus,
@@ -172,7 +173,20 @@ export function AdminPage({ section }: { section: string }) {
 
   async function handleDeliveryZoneSave(
     zone: DeliveryZone,
-    data: Pick<DeliveryZone, "isActive" | "fee" | "minimumOrder" | "estimatedDelay">,
+    data: Pick<
+      DeliveryZone,
+      | "name"
+      | "isActive"
+      | "isOpen"
+      | "status"
+      | "fee"
+      | "minimumOrder"
+      | "minimumOrderAmount"
+      | "estimatedDelay"
+      | "customerMessage"
+      | "adminNote"
+      | "sortOrder"
+    >,
   ) {
     await updateDeliveryZoneAdmin(zone.id, data);
     setMessage(`Zone ${zone.name} mise a jour.`);
@@ -674,7 +688,20 @@ function DeliveryZonesPanel({
   zones: DeliveryZone[];
   onSave: (
     zone: DeliveryZone,
-    data: Pick<DeliveryZone, "isActive" | "fee" | "minimumOrder" | "estimatedDelay">,
+    data: Pick<
+      DeliveryZone,
+      | "name"
+      | "isActive"
+      | "isOpen"
+      | "status"
+      | "fee"
+      | "minimumOrder"
+      | "minimumOrderAmount"
+      | "estimatedDelay"
+      | "customerMessage"
+      | "adminNote"
+      | "sortOrder"
+    >,
   ) => Promise<void>;
 }) {
   return (
@@ -693,27 +720,51 @@ function DeliveryZoneRow({
   zone: DeliveryZone;
   onSave: (
     zone: DeliveryZone,
-    data: Pick<DeliveryZone, "isActive" | "fee" | "minimumOrder" | "estimatedDelay">,
+    data: Pick<
+      DeliveryZone,
+      | "name"
+      | "isActive"
+      | "isOpen"
+      | "status"
+      | "fee"
+      | "minimumOrder"
+      | "minimumOrderAmount"
+      | "estimatedDelay"
+      | "customerMessage"
+      | "adminNote"
+      | "sortOrder"
+    >,
   ) => Promise<void>;
 }) {
+  const [name, setName] = useState(zone.name);
   const [isActive, setIsActive] = useState(zone.isActive);
+  const [status, setStatus] = useState<DeliveryZoneStatus>(
+    zone.status || (zone.isActive ? "open" : "disabled"),
+  );
   const [fee, setFee] = useState(zone.fee);
-  const [minimumOrder, setMinimumOrder] = useState(zone.minimumOrder);
+  const [minimumOrder, setMinimumOrder] = useState(
+    zone.minimumOrderAmount ?? zone.minimumOrder,
+  );
   const [estimatedDelay, setEstimatedDelay] = useState(zone.estimatedDelay);
+  const [customerMessage, setCustomerMessage] = useState(zone.customerMessage || "");
+  const [adminNote, setAdminNote] = useState(zone.adminNote || "");
+  const [sortOrder, setSortOrder] = useState(zone.sortOrder || 0);
+  const isOpen = status === "open" && isActive;
 
   return (
-    <article className="admin-card grid gap-4 xl:grid-cols-[1fr_120px_140px_1.2fr_110px_auto] xl:items-end">
+    <article className="admin-card grid gap-4 xl:grid-cols-[1fr_120px_140px_120px_1.2fr_auto] xl:items-end">
       <div>
         <p className="text-xs uppercase tracking-[0.14em] text-champagne">
           {zone.method === "postal" ? "Postale" : "Locale"}
         </p>
-        <h2 className="font-display text-2xl text-forest">{zone.name}</h2>
+        <Input label="Nom" value={name} onChange={setName} />
       </div>
       <NumberInput label="Frais" value={fee} onChange={setFee} />
       <NumberInput label="Minimum" value={minimumOrder} onChange={setMinimumOrder} />
-      <Input label="Delai" value={estimatedDelay} onChange={setEstimatedDelay} />
+      <NumberInput label="Ordre" value={sortOrder} onChange={setSortOrder} />
+      <Input label="Délai" value={estimatedDelay} onChange={setEstimatedDelay} />
       <label className="text-sm font-medium text-forest">
-        Statut
+        Visibilité
         <select
           className="input-field mt-2"
           value={isActive ? "active" : "inactive"}
@@ -723,14 +774,36 @@ function DeliveryZoneRow({
           <option value="inactive">Inactif</option>
         </select>
       </label>
+      <label className="text-sm font-medium text-forest xl:col-span-2">
+        Statut client
+        <select
+          className="input-field mt-2"
+          value={status}
+          onChange={(event) => setStatus(event.target.value as DeliveryZoneStatus)}
+        >
+          <option value="open">Ouverte</option>
+          <option value="temporarily_closed">Temporairement fermée</option>
+          <option value="coming_soon">Bientôt disponible</option>
+          <option value="disabled">Désactivée</option>
+        </select>
+      </label>
+      <Input label="Message client" value={customerMessage} onChange={setCustomerMessage} />
+      <Input label="Note interne" value={adminNote} onChange={setAdminNote} />
       <button
-        className="btn-primary"
+        className="btn-primary xl:col-start-6"
         onClick={() =>
           void onSave(zone, {
+            name,
             isActive,
+            isOpen,
+            status,
             fee,
             minimumOrder,
+            minimumOrderAmount: minimumOrder,
             estimatedDelay,
+            customerMessage,
+            adminNote,
+            sortOrder,
           })
         }
       >
@@ -1200,6 +1273,15 @@ function AdminOrders({
     total: string;
     internalNote?: string;
     statusHistory?: StatusHistoryEntry[];
+    archived?: boolean;
+    hidden?: boolean;
+    deletedAt?: string;
+    archivedAt?: string;
+    hiddenAt?: string;
+    emails?: {
+      adminNotificationStatus?: string;
+      adminNotificationRecipients?: Record<string, { status: string; reason?: string }>;
+    };
   }[];
   invoices?: Invoice[];
   orderSource: "firestore" | "empty";
@@ -1213,23 +1295,31 @@ function AdminOrders({
       historyNote?: string;
       paymentReference?: string;
       trackingNumber?: string;
+      archived?: boolean;
+      hidden?: boolean;
+      restore?: boolean;
     },
   ) => Promise<void>;
 }) {
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState("active");
   const invoiceByOrderId = new Map(invoices.map((invoice) => [invoice.orderId, invoice]));
   const filteredOrders = orders.filter((order) => orderMatchesAdminFilter(order, filter));
   const filters = [
-    ["all", "Toutes"],
-    ["preorder", "Précommandes"],
-    ["local", "Commandes locales"],
-    ["postal", "Commandes postales"],
-    ["contact_required", "ì contacter"],
+    ["active", "Commandes actives"],
+    ["new", "Nouvelles"],
+    ["contact_required", "À contacter"],
     ["confirmed", "Confirmées"],
     ["preparing", "En préparation"],
     ["out_for_delivery", "En livraison"],
+    ["shipped", "Expédiées"],
     ["delivered", "Livrées"],
     ["cancelled", "Annulées"],
+    ["finished", "Terminées"],
+    ["preorder", "Précommandes"],
+    ["local", "Commandes locales"],
+    ["postal", "Commandes postales"],
+    ["archived", "Archivées"],
+    ["all", "Toutes"],
   ];
 
   return (
@@ -1273,8 +1363,10 @@ function AdminOrders({
                 "Total",
                 "Reference / suivi",
                 "Facture",
+                "Notification",
                 "Note interne",
                 "Historique",
+                "Actions",
               ].map((header) => (
                 <th key={header} className="px-4 py-3 font-medium">{header}</th>
               ))}
@@ -1433,6 +1525,9 @@ function AdminOrders({
                     </button>
                   )}
                 </td>
+                <td className="px-4 py-4 text-xs text-ink/60">
+                  <NotificationStatus order={order} />
+                </td>
                 <td className="px-4 py-4">
                   <input
                     className="input-field"
@@ -1454,6 +1549,46 @@ function AdminOrders({
                         .join(" -> ")
                     : "Aucun historique"}
                 </td>
+                <td className="px-4 py-4">
+                  <div className="flex min-w-36 flex-col gap-2">
+                    {order.archived || order.hidden ? (
+                      <button
+                        className="btn-secondary min-h-8 px-2 py-1 text-xs"
+                        disabled={orderSource !== "firestore"}
+                        onClick={() => void onUpdate(order.id, { restore: true })}
+                      >
+                        Restaurer
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          className="btn-secondary min-h-8 px-2 py-1 text-xs"
+                          disabled={orderSource !== "firestore"}
+                          onClick={() => {
+                            const confirmed = window.confirm(
+                              "Cette action masquera la commande de la vue principale. Elle restera consultable dans les archives.",
+                            );
+                            if (confirmed) void onUpdate(order.id, { archived: true });
+                          }}
+                        >
+                          Archiver
+                        </button>
+                        <button
+                          className="btn-secondary min-h-8 px-2 py-1 text-xs"
+                          disabled={orderSource !== "firestore"}
+                          onClick={() => {
+                            const confirmed = window.confirm(
+                              "Cette action masquera la commande de la vue principale. Elle restera consultable dans les archives.",
+                            );
+                            if (confirmed) void onUpdate(order.id, { hidden: true });
+                          }}
+                        >
+                          Masquer
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -1468,14 +1603,61 @@ function orderMatchesAdminFilter(
     orderType?: string;
     deliveryMethod?: string;
     orderStatus: string;
+    archived?: boolean;
+    hidden?: boolean;
+    deletedAt?: string;
   },
   filter: string,
 ) {
+  const removedFromMainView = order.archived === true || order.hidden === true || Boolean(order.deletedAt);
+  if (filter === "active") {
+    return (
+      !removedFromMainView &&
+      !["delivered", "cancelled"].includes(order.orderStatus)
+    );
+  }
+  if (filter === "archived") return removedFromMainView;
+  if (filter === "finished") return ["delivered", "cancelled"].includes(order.orderStatus);
   if (filter === "all") return true;
   if (filter === "preorder") return order.orderType === "preorder";
   if (filter === "local") return order.deliveryMethod === "local_express";
   if (filter === "postal") return order.deliveryMethod === "postal";
+  if (removedFromMainView) return false;
   return order.orderStatus === filter;
+}
+
+function NotificationStatus({
+  order,
+}: {
+  order: {
+    emails?: {
+      adminNotificationStatus?: string;
+      adminNotificationRecipients?: Record<string, { status: string; reason?: string }>;
+    };
+  };
+}) {
+  const status = order.emails?.adminNotificationStatus;
+  const recipients = order.emails?.adminNotificationRecipients || {};
+  if (!status) return <span>Aucune donnée</span>;
+  const label =
+    status === "sent"
+      ? "Envoyée"
+      : status === "partial"
+        ? "Partielle"
+        : status === "failed"
+          ? "Échouée"
+          : "Ignorée";
+  return (
+    <div className="grid gap-1">
+      <strong className="text-forest">{label}</strong>
+      {Object.entries(recipients).map(([email, result]) => (
+        <span key={email}>
+          {email} : {result.status}
+          {result.reason ? ` (${result.reason})` : ""}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function SourceCard({

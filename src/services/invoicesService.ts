@@ -36,7 +36,7 @@ export const defaultBillingSettings: BillingSettings = {
   vatMention: "",
   address: "",
   phone: "07 80 81 41 37",
-  email: "contacte@verdanza.fr",
+  email: "contact@verdanza.fr",
   paymentTerms: "Règlement à confirmer directement avec le client.",
   legalMentions: "",
   logoUrl: "/verdanza-logo.png",
