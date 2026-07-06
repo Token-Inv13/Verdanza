@@ -32,6 +32,9 @@ export async function getAdminPaymentLinks() {
 export async function sendOrderPaymentLinkEmail(input: {
   orderId: string;
   paymentLinkUrl: string;
+  paymentLinkLabel: string;
+  paymentLinkAmount: number;
+  paymentLinkCurrency: "EUR";
 }) {
   const token = await auth?.currentUser?.getIdToken();
   if (!token) throw new Error("Connexion admin requise.");

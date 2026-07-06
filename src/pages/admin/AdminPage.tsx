@@ -1622,11 +1622,17 @@ function AdminOrders({
     };
   }, []);
 
-  async function handleSendPaymentLinkEmail(orderId: string, paymentLinkUrl: string) {
+  async function handleSendPaymentLinkEmail(input: {
+    orderId: string;
+    paymentLinkUrl: string;
+    paymentLinkLabel: string;
+    paymentLinkAmount: number;
+    paymentLinkCurrency: "EUR";
+  }) {
     try {
-      await sendOrderPaymentLinkEmail({ orderId, paymentLinkUrl });
+      await sendOrderPaymentLinkEmail(input);
       setPaymentLinkMessage("Lien de paiement envoyé au client.");
-      await onUpdate(orderId, {});
+      await onUpdate(input.orderId, {});
     } catch (error) {
       setPaymentLinkMessage(
         error instanceof Error
@@ -2209,29 +2215,50 @@ function PaymentLinkActions({
       paymentStatus?: PaymentStatus;
     },
   ) => Promise<void>;
-  onSendEmail: (orderId: string, paymentLinkUrl: string) => Promise<void>;
+  onSendEmail: (input: {
+    orderId: string;
+    paymentLinkUrl: string;
+    paymentLinkLabel: string;
+    paymentLinkAmount: number;
+    paymentLinkCurrency: "EUR";
+  }) => Promise<void>;
 }) {
   const matchingLink = paymentLinks.find((link) => link.amount === parseEuro(order.total));
-  const initialUrl = order.paymentLinkUrl || matchingLink?.url || "";
+  const savedKnownLink = paymentLinks.find((link) => link.url === order.paymentLinkUrl);
+  const initialUrl = order.paymentLinkUrl
+    ? savedKnownLink?.url || "custom"
+    : matchingLink?.url || "";
   const [selectedUrl, setSelectedUrl] = useState(initialUrl);
+  const [customUrl, setCustomUrl] = useState(savedKnownLink ? "" : order.paymentLinkUrl || "");
+  const [customAmount, setCustomAmount] = useState(order.paymentLinkAmount || parseEuro(order.total));
   const selectedLink = paymentLinks.find((link) => link.url === selectedUrl);
-  const disabled = orderSource !== "firestore" || !selectedLink;
+  const customLink =
+    selectedUrl === "custom" && customUrl.trim() && customAmount > 0
+      ? {
+          label: `Paiement CB ${formatEuro(customAmount)} EUR`,
+          url: customUrl.trim(),
+          amount: customAmount,
+          currency: "EUR" as const,
+        }
+      : null;
+  const activeLink = selectedLink || customLink;
+  const disabled = orderSource !== "firestore" || !activeLink;
   const exactMatchMissing = Boolean(paymentLinks.length && !order.paymentLinkUrl && !matchingLink);
 
   useEffect(() => {
-    const nextMatch = order.paymentLinkUrl || paymentLinks.find((link) => link.amount === parseEuro(order.total))?.url || "";
-    if (selectedUrl !== nextMatch) {
-      setSelectedUrl(nextMatch);
-    }
-  }, [order.paymentLinkUrl, order.total, paymentLinks, selectedUrl]);
+    const knownLink = paymentLinks.find((link) => link.url === order.paymentLinkUrl);
+    setSelectedUrl(order.paymentLinkUrl ? knownLink?.url || "custom" : matchingLink?.url || "");
+    setCustomUrl(knownLink ? "" : order.paymentLinkUrl || "");
+    setCustomAmount(order.paymentLinkAmount || parseEuro(order.total));
+  }, [order.id, order.paymentLinkAmount, order.paymentLinkUrl, order.total, matchingLink?.url, paymentLinks]);
 
   async function markSent(channel: PaymentLinkChannel) {
-    if (!selectedLink) return;
+    if (!activeLink) return;
     await onUpdate(order.id, {
-      paymentLinkUrl: selectedLink.url,
-      paymentLinkLabel: selectedLink.label,
-      paymentLinkAmount: selectedLink.amount,
-      paymentLinkCurrency: selectedLink.currency,
+      paymentLinkUrl: activeLink.url,
+      paymentLinkLabel: activeLink.label,
+      paymentLinkAmount: activeLink.amount,
+      paymentLinkCurrency: activeLink.currency,
       paymentLinkSent: true,
       paymentLinkChannel: channel,
       paymentStatus: "payment_link_sent",
@@ -2265,15 +2292,37 @@ function PaymentLinkActions({
             {link.label}
           </option>
         ))}
+        <option value="custom">Lien montant exact personnalisé</option>
       </select>
+      {selectedUrl === "custom" && (
+        <div className="mt-3 grid gap-2">
+          <input
+            className="input-field"
+            value={customUrl}
+            onChange={(event) => setCustomUrl(event.target.value)}
+            placeholder="Coller le lien de paiement exact"
+          />
+          <label className="text-[11px] text-ink/60">
+            Montant du lien personnalisé
+            <input
+              className="input-field mt-1"
+              min="0"
+              step="0.01"
+              type="number"
+              value={customAmount}
+              onChange={(event) => setCustomAmount(Number(event.target.value))}
+            />
+          </label>
+        </div>
+      )}
       {exactMatchMissing && (
         <p className="mt-2 text-[11px] leading-5 text-amber-800">
-          Aucun lien ne correspond exactement au total. Choisissez le lien à envoyer manuellement.
+          Aucun lien ne correspond exactement au total. Choisissez un lien existant ou collez un lien au montant exact.
         </p>
       )}
       <p className="mt-2 break-all text-[11px] text-ink/55">
-        {selectedLink
-          ? `${selectedLink.label} - ${selectedLink.amount} ${selectedLink.currency}`
+        {activeLink
+          ? `${activeLink.label} - ${activeLink.amount} ${activeLink.currency}`
           : order.paymentLinkLabel || "Aucun lien sélectionné"}
       </p>
       {order.paymentLinkSent && (
@@ -2290,7 +2339,7 @@ function PaymentLinkActions({
         <button
           className="btn-secondary min-h-8 px-2 py-1 text-xs"
           disabled={disabled}
-          onClick={() => selectedLink && void navigator.clipboard.writeText(selectedLink.url)}
+          onClick={() => activeLink && void navigator.clipboard.writeText(activeLink.url)}
           type="button"
         >
           Copier lien
@@ -2299,13 +2348,13 @@ function PaymentLinkActions({
           className="btn-secondary min-h-8 px-2 py-1 text-xs"
           disabled={disabled}
           onClick={() =>
-            selectedLink &&
+            activeLink &&
             void navigator.clipboard.writeText(
               paymentLinkMessage({
                 ...order,
-                paymentLinkUrl: selectedLink.url,
-                paymentLinkAmount: selectedLink.amount,
-                paymentLinkCurrency: selectedLink.currency,
+                paymentLinkUrl: activeLink.url,
+                paymentLinkAmount: activeLink.amount,
+                paymentLinkCurrency: activeLink.currency,
               }),
             )
           }
@@ -2320,18 +2369,18 @@ function PaymentLinkActions({
               : "btn-secondary min-h-8 px-2 py-1 text-xs"
           }
           href={
-            selectedLink
+            activeLink
               ? whatsappPaymentLink({
                   ...order,
-                  paymentLinkUrl: selectedLink.url,
-                  paymentLinkAmount: selectedLink.amount,
-                  paymentLinkCurrency: selectedLink.currency,
+                  paymentLinkUrl: activeLink.url,
+                  paymentLinkAmount: activeLink.amount,
+                  paymentLinkCurrency: activeLink.currency,
                 })
               : "#"
           }
           target="_blank"
           rel="noreferrer"
-          onClick={() => selectedLink && void markSent("whatsapp")}
+          onClick={() => activeLink && void markSent("whatsapp")}
         >
           WhatsApp
         </a>
@@ -2342,23 +2391,32 @@ function PaymentLinkActions({
               : "btn-secondary min-h-8 px-2 py-1 text-xs"
           }
           href={
-            selectedLink
+            activeLink
               ? smsPaymentLink({
                   ...order,
-                  paymentLinkUrl: selectedLink.url,
-                  paymentLinkAmount: selectedLink.amount,
-                  paymentLinkCurrency: selectedLink.currency,
+                  paymentLinkUrl: activeLink.url,
+                  paymentLinkAmount: activeLink.amount,
+                  paymentLinkCurrency: activeLink.currency,
                 })
               : "#"
           }
-          onClick={() => selectedLink && void markSent("sms")}
+          onClick={() => activeLink && void markSent("sms")}
         >
           SMS
         </a>
         <button
           className="btn-secondary min-h-8 px-2 py-1 text-xs"
           disabled={disabled || !order.customerEmail}
-          onClick={() => selectedLink && void onSendEmail(order.id, selectedLink.url)}
+          onClick={() =>
+            activeLink &&
+            void onSendEmail({
+              orderId: order.id,
+              paymentLinkUrl: activeLink.url,
+              paymentLinkLabel: activeLink.label,
+              paymentLinkAmount: activeLink.amount,
+              paymentLinkCurrency: activeLink.currency,
+            })
+          }
           type="button"
         >
           Email

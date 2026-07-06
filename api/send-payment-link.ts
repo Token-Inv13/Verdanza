@@ -26,8 +26,7 @@ export default async function handler(
     }
 
     const body = parseBody(rawBody);
-    const paymentLink = findActiveAdminPaymentLink(body.paymentLinkUrl);
-    if (!paymentLink) throw new Error("Lien de paiement non autorise.");
+    const paymentLink = resolvePaymentLink(body);
 
     const db = getAdminDb();
     const admin = await assertAdminUser(db, token);
@@ -74,6 +73,9 @@ export default async function handler(
 function parseJsonObject(value: unknown): {
   orderId?: string;
   paymentLinkUrl?: string;
+  paymentLinkLabel?: string;
+  paymentLinkAmount?: number;
+  paymentLinkCurrency?: "EUR";
   authToken?: string;
 } {
   const body = typeof value === "string" ? JSON.parse(value) : value;
@@ -81,6 +83,9 @@ function parseJsonObject(value: unknown): {
   return body as {
     orderId?: string;
     paymentLinkUrl?: string;
+    paymentLinkLabel?: string;
+    paymentLinkAmount?: number;
+    paymentLinkCurrency?: "EUR";
     authToken?: string;
   };
 }
@@ -88,6 +93,9 @@ function parseJsonObject(value: unknown): {
 function parseBody(value: unknown): {
   orderId: string;
   paymentLinkUrl: string;
+  paymentLinkLabel?: string;
+  paymentLinkAmount?: number;
+  paymentLinkCurrency?: "EUR";
   authToken?: string;
 } {
   const body = typeof value === "string" ? JSON.parse(value) : value;
@@ -95,6 +103,9 @@ function parseBody(value: unknown): {
   const payload = body as {
     orderId?: string;
     paymentLinkUrl?: string;
+    paymentLinkLabel?: string;
+    paymentLinkAmount?: number;
+    paymentLinkCurrency?: "EUR";
     authToken?: string;
   };
   if (!payload.orderId) throw new Error("orderId requis.");
@@ -102,7 +113,37 @@ function parseBody(value: unknown): {
   return {
     orderId: payload.orderId,
     paymentLinkUrl: payload.paymentLinkUrl,
+    paymentLinkLabel: payload.paymentLinkLabel,
+    paymentLinkAmount: payload.paymentLinkAmount,
+    paymentLinkCurrency: payload.paymentLinkCurrency,
     authToken: payload.authToken,
+  };
+}
+
+function resolvePaymentLink(body: {
+  paymentLinkUrl: string;
+  paymentLinkLabel?: string;
+  paymentLinkAmount?: number;
+  paymentLinkCurrency?: "EUR";
+}) {
+  const configured = findActiveAdminPaymentLink(body.paymentLinkUrl);
+  if (configured) return configured;
+
+  if (!body.paymentLinkUrl.startsWith("https://buy.stripe.com/")) {
+    throw new Error("Lien de paiement non autorise.");
+  }
+  const amount = Number(body.paymentLinkAmount || 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Montant du lien de paiement requis.");
+  }
+  return {
+    id: "custom",
+    label: body.paymentLinkLabel || `Paiement CB ${amount} €`,
+    amount,
+    currency: body.paymentLinkCurrency || ("EUR" as const),
+    url: body.paymentLinkUrl,
+    active: true,
+    sortOrder: amount,
   };
 }
 
