@@ -234,7 +234,12 @@ export async function sendInvoiceToCustomerEmail(
 
 export async function sendPaymentLinkEmail(
   order: Order,
-  input: { paymentLinkUrl: string; paymentLinkLabel: string },
+  input: {
+    paymentLinkUrl: string;
+    paymentLinkLabel: string;
+    paymentLinkAmount: number;
+    paymentLinkCurrency: "EUR";
+  },
 ) {
   if (!order.customerEmail) {
     return { status: "skipped", reason: "customer_email_absent" } satisfies EmailResult;
@@ -568,14 +573,20 @@ function invoiceEmailText(invoice: Invoice, settings: BillingSettings) {
 
 function paymentLinkEmailHtml(
   order: Order,
-  input: { paymentLinkUrl: string; paymentLinkLabel: string },
+  input: {
+    paymentLinkUrl: string;
+    paymentLinkLabel: string;
+    paymentLinkAmount: number;
+    paymentLinkCurrency: "EUR";
+  },
 ) {
+  const amount = `${input.paymentLinkAmount.toFixed(2).replace(".", ",")} ${input.paymentLinkCurrency}`;
   return `
     <div style="font-family:Arial,sans-serif;color:#183c2f;line-height:1.5">
       <h1>Lien de paiement Verdanza</h1>
       <p>Bonjour ${escapeHtml(customerFirstName(order))},</p>
       <p>Votre commande Verdanza ${escapeHtml(shortOrderId(order.id))} est confirmée.</p>
-      <p>Vous pouvez effectuer le règlement par carte bancaire via le lien suivant :</p>
+      <p>Vous pouvez régler ${escapeHtml(amount)} par carte bancaire via le lien suivant :</p>
       <p><a href="${escapeHtml(input.paymentLinkUrl)}">${escapeHtml(input.paymentLinkUrl)}</a></p>
       <p><strong>Total estimé / confirmé :</strong> ${formatMoney(Number(order.total || 0))}</p>
       <p><strong>Mode de livraison :</strong> ${escapeHtml(order.deliveryZone || order.deliveryMethod)}</p>
@@ -588,14 +599,20 @@ function paymentLinkEmailHtml(
 
 function paymentLinkEmailText(
   order: Order,
-  input: { paymentLinkUrl: string; paymentLinkLabel: string },
+  input: {
+    paymentLinkUrl: string;
+    paymentLinkLabel: string;
+    paymentLinkAmount: number;
+    paymentLinkCurrency: "EUR";
+  },
 ) {
+  const amount = `${input.paymentLinkAmount.toFixed(2).replace(".", ",")} ${input.paymentLinkCurrency}`;
   return [
     `Bonjour ${customerFirstName(order)},`,
     "",
     `Votre commande Verdanza ${shortOrderId(order.id)} est confirmee.`,
     "",
-    "Vous pouvez effectuer le reglement par carte bancaire via le lien suivant :",
+    `Vous pouvez regler ${amount} par carte bancaire via le lien suivant :`,
     input.paymentLinkUrl,
     "",
     "Resume :",

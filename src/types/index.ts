@@ -225,6 +225,8 @@ export type Order = {
   preferredPaymentMethod?: PreferredPaymentMethod;
   paymentLinkUrl?: string;
   paymentLinkLabel?: string;
+  paymentLinkAmount?: number;
+  paymentLinkCurrency?: "EUR";
   paymentLinkSent?: boolean;
   paymentLinkSentAt?: string;
   paymentLinkSentBy?: string;

@@ -1,6 +1,8 @@
 export type AdminPaymentLink = {
   id: string;
   label: string;
+  amount: number;
+  currency: "EUR";
   url: string;
   active: boolean;
   note?: string;
@@ -9,32 +11,40 @@ export type AdminPaymentLink = {
 
 export const adminPaymentLinks: AdminPaymentLink[] = [
   {
-    id: "cb-link-1",
-    label: "Lien CB 1",
+    id: "cb-10",
+    label: "Paiement CB 10 €",
+    amount: 10,
+    currency: "EUR",
     url: "https://buy.stripe.com/9B65kFgpB62UciT2MW7N601",
     active: true,
-    sortOrder: 1,
+    sortOrder: 10,
   },
   {
-    id: "cb-link-2",
-    label: "Lien CB 2",
-    url: "https://buy.stripe.com/cNibJ3ddpdvm2Ij5Z87N602",
-    active: true,
-    sortOrder: 2,
-  },
-  {
-    id: "cb-link-3",
-    label: "Lien CB 3",
+    id: "cb-20",
+    label: "Paiement CB 20 €",
+    amount: 20,
+    currency: "EUR",
     url: "https://buy.stripe.com/cNi8wR0qD8b2dmX2MW7N603",
     active: true,
-    sortOrder: 3,
+    sortOrder: 20,
   },
   {
-    id: "cb-link-4",
-    label: "Lien CB 4",
+    id: "cb-30",
+    label: "Paiement CB 30 €",
+    amount: 30,
+    currency: "EUR",
     url: "https://buy.stripe.com/fZu28tb5h9f63MnfzI7N604",
     active: true,
-    sortOrder: 4,
+    sortOrder: 30,
+  },
+  {
+    id: "cb-50",
+    label: "Paiement CB 50 €",
+    amount: 50,
+    currency: "EUR",
+    url: "https://buy.stripe.com/cNibJ3ddpdvm2Ij5Z87N602",
+    active: true,
+    sortOrder: 50,
   },
 ];
 

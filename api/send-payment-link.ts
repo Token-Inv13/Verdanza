@@ -39,6 +39,8 @@ export default async function handler(
     const result = await sendPaymentLinkEmail(order, {
       paymentLinkUrl: paymentLink.url,
       paymentLinkLabel: paymentLink.label,
+      paymentLinkAmount: paymentLink.amount,
+      paymentLinkCurrency: paymentLink.currency,
     });
 
     if (result.status !== "sent") {
@@ -48,6 +50,8 @@ export default async function handler(
     await orderRef.update({
       paymentLinkUrl: paymentLink.url,
       paymentLinkLabel: paymentLink.label,
+      paymentLinkAmount: paymentLink.amount,
+      paymentLinkCurrency: paymentLink.currency,
       paymentLinkSent: true,
       paymentLinkSentAt: FieldValue.serverTimestamp(),
       paymentLinkSentBy: admin.email,

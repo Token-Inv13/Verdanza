@@ -1514,6 +1514,8 @@ function AdminOrders({
     paymentReference?: string;
     paymentLinkUrl?: string;
     paymentLinkLabel?: string;
+    paymentLinkAmount?: number;
+    paymentLinkCurrency?: "EUR";
     paymentLinkSent?: boolean;
     paymentLinkSentAt?: string;
     paymentLinkSentBy?: string;
@@ -1553,6 +1555,8 @@ function AdminOrders({
       paymentReference?: string;
       paymentLinkUrl?: string;
       paymentLinkLabel?: string;
+      paymentLinkAmount?: number;
+      paymentLinkCurrency?: "EUR";
       paymentLinkSent?: boolean;
       paymentLinkChannel?: PaymentLinkChannel | "";
       trackingNumber?: string;
@@ -2185,6 +2189,8 @@ function PaymentLinkActions({
     total: string;
     paymentLinkUrl?: string;
     paymentLinkLabel?: string;
+    paymentLinkAmount?: number;
+    paymentLinkCurrency?: "EUR";
     paymentLinkSent?: boolean;
     paymentLinkSentAt?: string;
     paymentLinkChannel?: PaymentLinkChannel;
@@ -2196,6 +2202,8 @@ function PaymentLinkActions({
     data: {
       paymentLinkUrl?: string;
       paymentLinkLabel?: string;
+      paymentLinkAmount?: number;
+      paymentLinkCurrency?: "EUR";
       paymentLinkSent?: boolean;
       paymentLinkChannel?: PaymentLinkChannel | "";
       paymentStatus?: PaymentStatus;
@@ -2203,22 +2211,27 @@ function PaymentLinkActions({
   ) => Promise<void>;
   onSendEmail: (orderId: string, paymentLinkUrl: string) => Promise<void>;
 }) {
-  const initialUrl = order.paymentLinkUrl || paymentLinks[0]?.url || "";
+  const matchingLink = paymentLinks.find((link) => link.amount === parseEuro(order.total));
+  const initialUrl = order.paymentLinkUrl || matchingLink?.url || "";
   const [selectedUrl, setSelectedUrl] = useState(initialUrl);
   const selectedLink = paymentLinks.find((link) => link.url === selectedUrl);
   const disabled = orderSource !== "firestore" || !selectedLink;
+  const exactMatchMissing = Boolean(paymentLinks.length && !order.paymentLinkUrl && !matchingLink);
 
   useEffect(() => {
-    if (!selectedUrl && paymentLinks[0]?.url) {
-      setSelectedUrl(paymentLinks[0].url);
+    const nextMatch = order.paymentLinkUrl || paymentLinks.find((link) => link.amount === parseEuro(order.total))?.url || "";
+    if (selectedUrl !== nextMatch) {
+      setSelectedUrl(nextMatch);
     }
-  }, [paymentLinks, selectedUrl]);
+  }, [order.paymentLinkUrl, order.total, paymentLinks, selectedUrl]);
 
   async function markSent(channel: PaymentLinkChannel) {
     if (!selectedLink) return;
     await onUpdate(order.id, {
       paymentLinkUrl: selectedLink.url,
       paymentLinkLabel: selectedLink.label,
+      paymentLinkAmount: selectedLink.amount,
+      paymentLinkCurrency: selectedLink.currency,
       paymentLinkSent: true,
       paymentLinkChannel: channel,
       paymentStatus: "payment_link_sent",
@@ -2233,6 +2246,12 @@ function PaymentLinkActions({
           {order.paymentLinkSent ? "Lien CB envoyé" : "Lien CB non envoyé"}
         </AdminBadge>
       </div>
+      <p className="mt-2 text-[11px] text-ink/60">
+        Montant recommandé de la commande : {order.total}
+      </p>
+      <p className="mt-1 text-[11px] text-ink/60">
+        Choisissez le lien correspondant au montant à demander au client.
+      </p>
       <select
         className="input-field mt-2"
         value={selectedUrl}
@@ -2240,17 +2259,29 @@ function PaymentLinkActions({
         onChange={(event) => setSelectedUrl(event.target.value)}
       >
         {!paymentLinks.length && <option value="">Aucun lien disponible</option>}
+        {!!paymentLinks.length && <option value="">Choisir manuellement</option>}
         {paymentLinks.map((link) => (
           <option key={link.id} value={link.url}>
             {link.label}
           </option>
         ))}
       </select>
+      {exactMatchMissing && (
+        <p className="mt-2 text-[11px] leading-5 text-amber-800">
+          Aucun lien ne correspond exactement au total. Choisissez le lien à envoyer manuellement.
+        </p>
+      )}
       <p className="mt-2 break-all text-[11px] text-ink/55">
-        {selectedLink?.label || order.paymentLinkLabel || "Aucun lien sélectionné"}
+        {selectedLink
+          ? `${selectedLink.label} - ${selectedLink.amount} ${selectedLink.currency}`
+          : order.paymentLinkLabel || "Aucun lien sélectionné"}
       </p>
       {order.paymentLinkSent && (
         <p className="mt-1 text-[11px] text-ink/55">
+          Montant du lien envoyé :{" "}
+          {order.paymentLinkAmount
+            ? `${order.paymentLinkAmount} ${order.paymentLinkCurrency || "EUR"} - `
+            : ""}
           Envoyé via {paymentChannelLabel(order.paymentLinkChannel)}
           {order.paymentLinkSentAt ? ` - ${order.paymentLinkSentAt}` : ""}
         </p>
@@ -2270,7 +2301,12 @@ function PaymentLinkActions({
           onClick={() =>
             selectedLink &&
             void navigator.clipboard.writeText(
-              paymentLinkMessage({ ...order, paymentLinkUrl: selectedLink.url }),
+              paymentLinkMessage({
+                ...order,
+                paymentLinkUrl: selectedLink.url,
+                paymentLinkAmount: selectedLink.amount,
+                paymentLinkCurrency: selectedLink.currency,
+              }),
             )
           }
           type="button"
@@ -2283,7 +2319,16 @@ function PaymentLinkActions({
               ? "btn-secondary pointer-events-none min-h-8 px-2 py-1 text-xs opacity-50"
               : "btn-secondary min-h-8 px-2 py-1 text-xs"
           }
-          href={selectedLink ? whatsappPaymentLink({ ...order, paymentLinkUrl: selectedLink.url }) : "#"}
+          href={
+            selectedLink
+              ? whatsappPaymentLink({
+                  ...order,
+                  paymentLinkUrl: selectedLink.url,
+                  paymentLinkAmount: selectedLink.amount,
+                  paymentLinkCurrency: selectedLink.currency,
+                })
+              : "#"
+          }
           target="_blank"
           rel="noreferrer"
           onClick={() => selectedLink && void markSent("whatsapp")}
@@ -2296,7 +2341,16 @@ function PaymentLinkActions({
               ? "btn-secondary pointer-events-none min-h-8 px-2 py-1 text-xs opacity-50"
               : "btn-secondary min-h-8 px-2 py-1 text-xs"
           }
-          href={selectedLink ? smsPaymentLink({ ...order, paymentLinkUrl: selectedLink.url }) : "#"}
+          href={
+            selectedLink
+              ? smsPaymentLink({
+                  ...order,
+                  paymentLinkUrl: selectedLink.url,
+                  paymentLinkAmount: selectedLink.amount,
+                  paymentLinkCurrency: selectedLink.currency,
+                })
+              : "#"
+          }
           onClick={() => selectedLink && void markSent("sms")}
         >
           SMS
@@ -2622,6 +2676,8 @@ function whatsappPaymentLink(order: {
   deliveryMethod?: string;
   paymentLinkUrl?: string;
   total?: string;
+  paymentLinkAmount?: number;
+  paymentLinkCurrency?: "EUR";
 }) {
   if (!order.customerPhone || !order.paymentLinkUrl) return "#";
   const phone = normalizePhone(order.customerPhone).replace("+", "");
@@ -2635,6 +2691,8 @@ function smsPaymentLink(order: {
   deliveryMethod?: string;
   paymentLinkUrl?: string;
   total?: string;
+  paymentLinkAmount?: number;
+  paymentLinkCurrency?: "EUR";
 }) {
   return `sms:${normalizePhone(order.customerPhone)}?body=${encodeURIComponent(paymentLinkMessage(order))}`;
 }
@@ -2658,18 +2716,22 @@ function paymentLinkMessage(order: {
   deliveryMethod?: string;
   paymentLinkUrl?: string;
   total?: string;
+  paymentLinkAmount?: number;
+  paymentLinkCurrency?: "EUR";
 }) {
   const firstName = order.customer.split(" ")[0] || "Bonjour";
   const shortId = order.id.slice(0, 8).toUpperCase();
   const link = order.paymentLinkUrl || "[LIEN_DE_PAIEMENT]";
-  const total = order.total ? ` Montant estime : ${order.total}.` : "";
+  const amount = order.paymentLinkAmount
+    ? `${order.paymentLinkAmount} ${order.paymentLinkCurrency || "EUR"}`
+    : order.total || "le montant confirme";
   if (order.deliveryMethod === "postal") {
-    return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée.${total} Pour finaliser l'expédition, vous pouvez régler par carte bancaire via ce lien : ${link}. Dès réception du paiement, votre commande sera préparée.`;
+    return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée. Pour finaliser l'expédition, vous pouvez régler ${amount} par carte bancaire via ce lien : ${link}. Dès réception du paiement, votre commande sera préparée.`;
   }
   if (order.deliveryMethod === "local_express") {
-    return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée.${total} Vous pouvez régler par carte bancaire via ce lien : ${link}, ou confirmer avec nous le mode de règlement souhaité.`;
+    return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée. Vous pouvez régler ${amount} par carte bancaire via ce lien : ${link}, ou confirmer avec nous le mode de règlement souhaité.`;
   }
-  return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée.${total} Vous pouvez régler par carte bancaire via ce lien : ${link}. Dès réception du paiement, nous préparerons votre commande. Merci, Verdanza.`;
+  return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée. Vous pouvez régler ${amount} par carte bancaire via ce lien : ${link}. Dès réception du paiement, nous préparerons votre commande. Merci, Verdanza.`;
 }
 
 function paymentChannelLabel(channel?: PaymentLinkChannel) {

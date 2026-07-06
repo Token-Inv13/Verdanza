@@ -3,6 +3,8 @@ import { auth } from "../lib/firebase";
 export type AdminPaymentLink = {
   id: string;
   label: string;
+  amount: number;
+  currency: "EUR";
   url: string;
   active: boolean;
   note?: string;

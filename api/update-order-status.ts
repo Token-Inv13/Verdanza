@@ -81,6 +81,12 @@ export default async function handler(
       if (body.paymentLinkLabel !== undefined) {
         update.paymentLinkLabel = body.paymentLinkLabel.trim() || FieldValue.delete();
       }
+      if (body.paymentLinkAmount !== undefined) {
+        update.paymentLinkAmount = Number(body.paymentLinkAmount) || FieldValue.delete();
+      }
+      if (body.paymentLinkCurrency !== undefined) {
+        update.paymentLinkCurrency = body.paymentLinkCurrency || FieldValue.delete();
+      }
       if (body.paymentLinkChannel !== undefined) {
         update.paymentLinkChannel = body.paymentLinkChannel || FieldValue.delete();
       }
@@ -224,6 +230,8 @@ function parseBody(value: unknown): {
   paymentReference?: string;
   paymentLinkUrl?: string;
   paymentLinkLabel?: string;
+  paymentLinkAmount?: number;
+  paymentLinkCurrency?: "EUR";
   paymentLinkSent?: boolean;
   paymentLinkChannel?: PaymentLinkChannel | "";
   trackingNumber?: string;
@@ -243,6 +251,8 @@ function parseBody(value: unknown): {
     paymentReference?: string;
     paymentLinkUrl?: string;
     paymentLinkLabel?: string;
+    paymentLinkAmount?: number;
+    paymentLinkCurrency?: "EUR";
     paymentLinkSent?: boolean;
     paymentLinkChannel?: PaymentLinkChannel | "";
     trackingNumber?: string;
@@ -279,6 +289,8 @@ function parseJsonObject(value: unknown): {
   paymentReference?: string;
   paymentLinkUrl?: string;
   paymentLinkLabel?: string;
+  paymentLinkAmount?: number;
+  paymentLinkCurrency?: "EUR";
   paymentLinkSent?: boolean;
   paymentLinkChannel?: PaymentLinkChannel | "";
   trackingNumber?: string;
@@ -298,6 +310,8 @@ function parseJsonObject(value: unknown): {
     paymentReference?: string;
     paymentLinkUrl?: string;
     paymentLinkLabel?: string;
+    paymentLinkAmount?: number;
+    paymentLinkCurrency?: "EUR";
     paymentLinkSent?: boolean;
     paymentLinkChannel?: PaymentLinkChannel | "";
     trackingNumber?: string;
