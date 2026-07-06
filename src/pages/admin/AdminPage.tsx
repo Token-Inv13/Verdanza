@@ -1220,7 +1220,71 @@ function CustomersTable({
           Aucun client pour le moment.
         </p>
       )}
-      <div className="overflow-x-auto">
+      {!!customers.length && (
+        <div className="hidden gap-4 p-4 lg:grid xl:grid-cols-2 2xl:grid-cols-3">
+          {customers.map((customer) => (
+            <article
+              key={customer.id}
+              className="rounded-lg border border-forest/10 bg-cream p-4"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <strong className="block truncate text-forest">
+                    {customer.displayName || "Client"}
+                  </strong>
+                  <span className="mt-1 block break-all text-xs text-ink/60">
+                    {customer.email || "Email non renseigne"}
+                  </span>
+                  <span className="block text-xs text-ink/60">
+                    {customer.phone || "Telephone non renseigne"}
+                  </span>
+                </div>
+                <AdminBadge tone={customer.orderCount ? "success" : "muted"}>
+                  {`${customer.orderCount || 0} commande(s)`}
+                </AdminBadge>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-md border border-forest/10 bg-ivory p-3">
+                  <span className="block text-[11px] uppercase tracking-[0.12em] text-forest/50">
+                    Total
+                  </span>
+                  <strong className="mt-1 block text-forest">
+                    {formatEuro(Number(customer.totalSpent || 0))} EUR
+                  </strong>
+                </div>
+                <div className="rounded-md border border-forest/10 bg-ivory p-3">
+                  <span className="block text-[11px] uppercase tracking-[0.12em] text-forest/50">
+                    Fidelite
+                  </span>
+                  <strong className="mt-1 block text-forest">
+                    {customer.loyaltyPoints || 0} point(s)
+                  </strong>
+                </div>
+              </div>
+
+              <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.12em] text-forest/60">
+                Note interne
+                <input
+                  className="input-field mt-2"
+                  defaultValue={customer.internalNote || ""}
+                  placeholder="Note"
+                  onBlur={(event) => void onNote(customer, event.currentTarget.value)}
+                />
+              </label>
+
+              <button
+                className="btn-secondary mt-4 min-h-10 px-3 py-2 text-xs"
+                onClick={() => void onAdjustPoints(customer)}
+                type="button"
+              >
+                Ajuster points
+              </button>
+            </article>
+          ))}
+        </div>
+      )}
+      <div className="overflow-x-auto lg:hidden">
         <table className="w-full min-w-[980px] text-left text-sm">
           <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
             <tr>
@@ -1480,6 +1544,80 @@ function InvoicesPanel({
   );
 }
 
+type AdminOrderListItem = {
+  id: string;
+  orderType?: string;
+  customer: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  deliveryAddress?: {
+    line1: string;
+    line2?: string;
+    postalCode: string;
+    city: string;
+    country: string;
+  };
+  paymentProvider?: PaymentProvider;
+  paymentStatus: string;
+  preferredPaymentMethod?: PreferredPaymentMethod;
+  orderStatus: string;
+  deliveryMethod?: string;
+  delivery: string;
+  deliveryMinimumApplied?: number;
+  postalFreeShippingApplied?: boolean;
+  deliveryFeeStatus?: string;
+  deliveryNote?: string;
+  trackingNumber?: string;
+  paymentReference?: string;
+  paymentLinkUrl?: string;
+  paymentLinkLabel?: string;
+  paymentLinkAmount?: number;
+  paymentLinkCurrency?: "EUR";
+  paymentLinkSent?: boolean;
+  paymentLinkSentAt?: string;
+  paymentLinkSentBy?: string;
+  paymentLinkChannel?: PaymentLinkChannel;
+  customerMessage?: string;
+  items: { name: string; quantity: number }[];
+  subtotal?: number;
+  subtotalBeforeDiscount?: number;
+  discountAmount?: number;
+  couponCode?: string;
+  promoApplied?: boolean;
+  discountType?: Coupon["discountType"];
+  discountValue?: number;
+  total: string;
+  internalNote?: string;
+  statusHistory?: StatusHistoryEntry[];
+  archived?: boolean;
+  hidden?: boolean;
+  deletedAt?: string;
+  archivedAt?: string;
+  hiddenAt?: string;
+  emails?: {
+    adminNotificationStatus?: string;
+    adminNotificationRecipients?: Record<string, { status: string; reason?: string }>;
+  };
+};
+
+type AdminOrderUpdateInput = {
+  orderStatus?: OrderStatus;
+  paymentStatus?: PaymentStatus;
+  internalNote?: string;
+  historyNote?: string;
+  paymentReference?: string;
+  paymentLinkUrl?: string;
+  paymentLinkLabel?: string;
+  paymentLinkAmount?: number;
+  paymentLinkCurrency?: "EUR";
+  paymentLinkSent?: boolean;
+  paymentLinkChannel?: PaymentLinkChannel | "";
+  trackingNumber?: string;
+  archived?: boolean;
+  hidden?: boolean;
+  restore?: boolean;
+};
+
 function AdminOrders({
   orders,
   invoices = [],
@@ -1487,84 +1625,11 @@ function AdminOrders({
   onCreateInvoice,
   onUpdate,
 }: {
-  orders: {
-    id: string;
-    orderType?: string;
-    customer: string;
-    customerEmail?: string;
-    customerPhone?: string;
-    deliveryAddress?: {
-      line1: string;
-      line2?: string;
-      postalCode: string;
-      city: string;
-      country: string;
-    };
-    paymentProvider?: PaymentProvider;
-    paymentStatus: string;
-    preferredPaymentMethod?: PreferredPaymentMethod;
-    orderStatus: string;
-    deliveryMethod?: string;
-    delivery: string;
-    deliveryMinimumApplied?: number;
-    postalFreeShippingApplied?: boolean;
-    deliveryFeeStatus?: string;
-    deliveryNote?: string;
-    trackingNumber?: string;
-    paymentReference?: string;
-    paymentLinkUrl?: string;
-    paymentLinkLabel?: string;
-    paymentLinkAmount?: number;
-    paymentLinkCurrency?: "EUR";
-    paymentLinkSent?: boolean;
-    paymentLinkSentAt?: string;
-    paymentLinkSentBy?: string;
-    paymentLinkChannel?: PaymentLinkChannel;
-    customerMessage?: string;
-    items: { name: string; quantity: number }[];
-    subtotal?: number;
-    subtotalBeforeDiscount?: number;
-    discountAmount?: number;
-    couponCode?: string;
-    promoApplied?: boolean;
-    discountType?: Coupon["discountType"];
-    discountValue?: number;
-    total: string;
-    internalNote?: string;
-    statusHistory?: StatusHistoryEntry[];
-    archived?: boolean;
-    hidden?: boolean;
-    deletedAt?: string;
-    archivedAt?: string;
-    hiddenAt?: string;
-    emails?: {
-      adminNotificationStatus?: string;
-      adminNotificationRecipients?: Record<string, { status: string; reason?: string }>;
-    };
-  }[];
+  orders: AdminOrderListItem[];
   invoices?: Invoice[];
   orderSource: "firestore" | "empty";
   onCreateInvoice?: (orderId: string) => Promise<void>;
-  onUpdate: (
-    orderId: string,
-    data: {
-      orderStatus?: OrderStatus;
-      paymentStatus?: PaymentStatus;
-      internalNote?: string;
-      historyNote?: string;
-      paymentReference?: string;
-      paymentLinkUrl?: string;
-      paymentLinkLabel?: string;
-      paymentLinkAmount?: number;
-      paymentLinkCurrency?: "EUR";
-      paymentLinkSent?: boolean;
-      paymentLinkChannel?: PaymentLinkChannel | "";
-      trackingNumber?: string;
-      archived?: boolean;
-      hidden?: boolean;
-      restore?: boolean;
-    },
-  ) => Promise<void>;
+  onUpdate: (orderId: string, data: AdminOrderUpdateInput) => Promise<void>;
 }) {
   const [filter, setFilter] = useState("active");
   const [paymentLinks, setPaymentLinks] = useState<AdminPaymentLink[]>([]);
@@ -1842,7 +1907,23 @@ function AdminOrders({
           ))}
         </div>
       )}
-      <div className="hidden overflow-x-auto lg:block">
+      {!!filteredOrders.length && (
+        <div className="hidden gap-4 p-4 lg:grid">
+          {filteredOrders.map((order) => (
+            <DesktopOrderCard
+              key={order.id}
+              order={order}
+              invoice={invoiceByOrderId.get(order.id)}
+              orderSource={orderSource}
+              paymentLinks={paymentLinks}
+              onCreateInvoice={onCreateInvoice}
+              onUpdate={onUpdate}
+              onSendEmail={handleSendPaymentLinkEmail}
+            />
+          ))}
+        </div>
+      )}
+      <div className="hidden">
         <table className="w-full min-w-[1380px] text-left text-sm">
           <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
             <tr>
@@ -2147,6 +2228,321 @@ function AdminOrders({
         </table>
       </div>
     </section>
+  );
+}
+
+function DesktopOrderCard({
+  order,
+  invoice,
+  orderSource,
+  paymentLinks,
+  onCreateInvoice,
+  onUpdate,
+  onSendEmail,
+}: {
+  order: AdminOrderListItem;
+  invoice?: Invoice;
+  orderSource: "firestore" | "empty";
+  paymentLinks: AdminPaymentLink[];
+  onCreateInvoice?: (orderId: string) => Promise<void>;
+  onUpdate: (orderId: string, data: AdminOrderUpdateInput) => Promise<void>;
+  onSendEmail: (input: {
+    orderId: string;
+    paymentLinkUrl: string;
+    paymentLinkLabel: string;
+    paymentLinkAmount: number;
+    paymentLinkCurrency: "EUR";
+  }) => Promise<void>;
+}) {
+  const isArchived = order.archived || order.hidden;
+
+  return (
+    <article className="rounded-lg border border-forest/10 bg-ivory p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-forest/10 pb-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap gap-2">
+            <AdminBadge tone={order.orderType === "preorder" ? "gold" : "neutral"}>
+              {order.orderType === "preorder" ? "Precommande" : "Commande"}
+            </AdminBadge>
+            <AdminBadge tone={order.deliveryMethod === "postal" ? "neutral" : "gold"}>
+              {order.deliveryMethod === "postal" ? "Postale" : "Locale"}
+            </AdminBadge>
+            <AdminBadge tone={orderStatusTone(order.orderStatus)}>
+              {orderStatusLabel(order.orderStatus)}
+            </AdminBadge>
+            <AdminBadge tone={paymentStatusTone(order.paymentStatus)}>
+              {paymentStatusLabel(order.paymentStatus)}
+            </AdminBadge>
+          </div>
+          <strong className="mt-3 block break-all text-base text-forest">{order.id}</strong>
+          <p className="mt-1 text-sm text-ink/55">
+            {order.customerEmail || "Email non renseigne"}
+          </p>
+        </div>
+        <div className="text-right">
+          <span className="block text-xs uppercase tracking-[0.14em] text-forest/50">
+            Total
+          </span>
+          <strong className="font-display text-4xl leading-none text-forest">
+            {order.total}
+          </strong>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(220px,0.9fr)_minmax(280px,1.1fr)_minmax(320px,1.2fr)]">
+        <section className="rounded-md bg-cream p-4">
+          <p className="text-xs uppercase tracking-[0.14em] text-forest/55">Client</p>
+          <strong className="mt-2 block text-forest">{order.customer}</strong>
+          <span className="block text-sm text-ink/60">{order.customerPhone || "Telephone absent"}</span>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <a className="btn-secondary min-h-9 px-3 py-1.5 text-xs" href={telLink(order.customerPhone)}>
+              Appeler
+            </a>
+            <a
+              className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+              href={whatsappLink(order)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              WhatsApp
+            </a>
+            <a className="btn-secondary min-h-9 px-3 py-1.5 text-xs" href={smsLink(order)}>
+              SMS
+            </a>
+            <button
+              className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+              onClick={() => void copyOrderMessage(order)}
+              type="button"
+            >
+              Copier
+            </button>
+          </div>
+        </section>
+
+        <section className="grid gap-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-forest/60">
+              Statut commande
+              <select
+                className="input-field mt-2"
+                value={order.orderStatus}
+                disabled={orderSource !== "firestore"}
+                onChange={(event) => {
+                  const historyNote = window.prompt("Note historique optionnelle", "") || "";
+                  void onUpdate(order.id, {
+                    orderStatus: event.target.value as OrderStatus,
+                    historyNote,
+                  });
+                }}
+              >
+                {[
+                  "new",
+                  "contact_required",
+                  "confirmed",
+                  "preparing",
+                  "out_for_delivery",
+                  "shipped",
+                  "delivered",
+                  "cancelled",
+                ].map((status) => (
+                  <option key={status} value={status}>
+                    {orderStatusLabel(status)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-forest/60">
+              Reglement
+              <select
+                className="input-field mt-2"
+                value={order.paymentStatus}
+                disabled={orderSource !== "firestore"}
+                onChange={(event) =>
+                  void onUpdate(order.id, {
+                    paymentStatus: event.target.value as PaymentStatus,
+                  })
+                }
+              >
+                {paymentStatusOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {paymentStatusLabel(status)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="rounded-md border border-forest/10 p-3 text-sm leading-6 text-ink/70">
+            <strong className="block text-forest">{order.delivery}</strong>
+            <span className="text-xs text-ink/55">
+              Minimum applique :{" "}
+              {order.deliveryMinimumApplied ??
+                (order.deliveryMethod === "postal" ? 15 : 20)}{" "}
+              EUR
+            </span>
+            {order.deliveryMethod === "postal" && (
+              <span
+                className={`mt-2 inline-flex rounded-full border px-2 py-1 text-xs ${
+                  order.postalFreeShippingApplied
+                    ? "border-forest/20 bg-forest text-ivory"
+                    : "border-champagne/40 bg-cream text-forest"
+                }`}
+              >
+                {order.postalFreeShippingApplied
+                  ? "Livraison offerte"
+                  : "Frais postaux a confirmer"}
+              </span>
+            )}
+            {order.deliveryAddress && (
+              <span className="mt-2 block text-xs leading-5 text-ink/60">
+                {order.deliveryAddress.line1}
+                {order.deliveryAddress.line2 ? `, ${order.deliveryAddress.line2}` : ""}
+                <br />
+                {order.deliveryAddress.postalCode} {order.deliveryAddress.city}
+              </span>
+            )}
+            {order.customerMessage && (
+              <span className="mt-2 block text-xs text-forest">
+                Message : {order.customerMessage}
+              </span>
+            )}
+          </div>
+        </section>
+
+        <section className="grid gap-3">
+          <div className="rounded-md bg-cream p-4 text-sm leading-6 text-ink/70">
+            <p className="text-xs uppercase tracking-[0.14em] text-forest/55">Produits</p>
+            <strong className="mt-2 block text-forest">
+              {order.items.length
+                ? order.items.map((item) => `${item.name} x${item.quantity} g`).join(", ")
+                : "A renseigner"}
+            </strong>
+            {order.promoApplied && (
+              <span className="mt-2 block text-xs text-forest">
+                Code promo {order.couponCode} : -{formatEuro(Number(order.discountAmount || 0))} EUR
+                <br />
+                Avant remise : {formatEuro(Number(order.subtotalBeforeDiscount || order.subtotal || 0))} EUR
+              </span>
+            )}
+          </div>
+          <PaymentLinkActions
+            order={order}
+            orderSource={orderSource}
+            paymentLinks={paymentLinks}
+            onUpdate={onUpdate}
+            onSendEmail={onSendEmail}
+          />
+        </section>
+      </div>
+
+      <div className="mt-5 grid gap-3 border-t border-forest/10 pt-4 xl:grid-cols-[1fr_1fr_1fr_auto]">
+        <input
+          className="input-field"
+          defaultValue={order.paymentReference || ""}
+          placeholder="Reference reglement"
+          disabled={orderSource !== "firestore"}
+          onBlur={(event) =>
+            void onUpdate(order.id, {
+              paymentReference: event.currentTarget.value,
+            })
+          }
+        />
+        <input
+          className="input-field"
+          defaultValue={order.trackingNumber || ""}
+          placeholder="Suivi postal"
+          disabled={orderSource !== "firestore"}
+          onBlur={(event) =>
+            void onUpdate(order.id, {
+              trackingNumber: event.currentTarget.value,
+            })
+          }
+        />
+        <input
+          className="input-field"
+          defaultValue={order.internalNote || ""}
+          placeholder="Note interne"
+          disabled={orderSource !== "firestore"}
+          onBlur={(event) =>
+            void onUpdate(order.id, {
+              internalNote: event.currentTarget.value,
+            })
+          }
+        />
+        <div className="flex flex-wrap gap-2 xl:justify-end">
+          {invoice ? (
+            <div className="rounded-md border border-forest/10 px-3 py-2 text-xs text-ink/60">
+              <strong className="block text-forest">{invoice.invoiceNumber}</strong>
+              {invoiceStatusLabel(invoice.status)}
+            </div>
+          ) : (
+            <button
+              className="btn-secondary min-h-10 whitespace-nowrap px-3 py-2 text-xs"
+              disabled={!onCreateInvoice || orderSource !== "firestore"}
+              onClick={() => void onCreateInvoice?.(order.id)}
+              type="button"
+            >
+              Creer facture
+            </button>
+          )}
+          {isArchived ? (
+            <button
+              className="btn-secondary min-h-10 px-3 py-2 text-xs"
+              disabled={orderSource !== "firestore"}
+              onClick={() => void onUpdate(order.id, { restore: true })}
+              type="button"
+            >
+              Restaurer
+            </button>
+          ) : (
+            <>
+              <button
+                className="btn-secondary min-h-10 px-3 py-2 text-xs"
+                disabled={orderSource !== "firestore"}
+                onClick={() => {
+                  const confirmed = window.confirm(
+                    "Cette action masquera la commande de la vue principale. Elle restera consultable dans les archives.",
+                  );
+                  if (confirmed) void onUpdate(order.id, { archived: true });
+                }}
+                type="button"
+              >
+                Archiver
+              </button>
+              <button
+                className="btn-secondary min-h-10 px-3 py-2 text-xs"
+                disabled={orderSource !== "firestore"}
+                onClick={() => {
+                  const confirmed = window.confirm(
+                    "Cette action masquera la commande de la vue principale. Elle restera consultable dans les archives.",
+                  );
+                  if (confirmed) void onUpdate(order.id, { hidden: true });
+                }}
+                type="button"
+              >
+                Masquer
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 text-xs text-ink/60 xl:grid-cols-2">
+        <div>
+          <strong className="block text-forest">Notifications</strong>
+          <NotificationStatus order={order} />
+        </div>
+        <div>
+          <strong className="block text-forest">Historique</strong>
+          {order.statusHistory?.length
+            ? order.statusHistory
+                .slice(-4)
+                .map((entry) => orderStatusLabel(entry.status))
+                .join(" -> ")
+            : "Aucun historique"}
+        </div>
+      </div>
+    </article>
   );
 }
 
