@@ -25,7 +25,13 @@ const orderStatuses: OrderStatus[] = [
   "delivered",
   "cancelled",
 ];
-const paymentStatuses: PaymentStatus[] = ["to_confirm", "pending", "paid", "cancelled"];
+const paymentStatuses: PaymentStatus[] = [
+  "to_confirm",
+  "payment_link_sent",
+  "pending",
+  "paid",
+  "cancelled",
+];
 const paymentLinkChannels: PaymentLinkChannel[] = ["email", "whatsapp", "sms", "other"];
 
 export default async function handler(
@@ -72,6 +78,9 @@ export default async function handler(
       if (body.paymentLinkUrl !== undefined) {
         update.paymentLinkUrl = body.paymentLinkUrl.trim();
       }
+      if (body.paymentLinkLabel !== undefined) {
+        update.paymentLinkLabel = body.paymentLinkLabel.trim() || FieldValue.delete();
+      }
       if (body.paymentLinkChannel !== undefined) {
         update.paymentLinkChannel = body.paymentLinkChannel || FieldValue.delete();
       }
@@ -81,7 +90,7 @@ export default async function handler(
           ? new Date().toISOString()
           : FieldValue.delete();
         update.paymentLinkSentBy = body.paymentLinkSent ? admin.email : FieldValue.delete();
-        if (body.paymentLinkSent && !body.paymentStatus) update.paymentStatus = "pending";
+        if (body.paymentLinkSent && !body.paymentStatus) update.paymentStatus = "payment_link_sent";
       }
       if (body.trackingNumber !== undefined) {
         update.trackingNumber = body.trackingNumber;
@@ -214,6 +223,7 @@ function parseBody(value: unknown): {
   internalNote?: string;
   paymentReference?: string;
   paymentLinkUrl?: string;
+  paymentLinkLabel?: string;
   paymentLinkSent?: boolean;
   paymentLinkChannel?: PaymentLinkChannel | "";
   trackingNumber?: string;
@@ -232,6 +242,7 @@ function parseBody(value: unknown): {
     internalNote?: string;
     paymentReference?: string;
     paymentLinkUrl?: string;
+    paymentLinkLabel?: string;
     paymentLinkSent?: boolean;
     paymentLinkChannel?: PaymentLinkChannel | "";
     trackingNumber?: string;
@@ -267,6 +278,7 @@ function parseJsonObject(value: unknown): {
   internalNote?: string;
   paymentReference?: string;
   paymentLinkUrl?: string;
+  paymentLinkLabel?: string;
   paymentLinkSent?: boolean;
   paymentLinkChannel?: PaymentLinkChannel | "";
   trackingNumber?: string;
@@ -285,6 +297,7 @@ function parseJsonObject(value: unknown): {
     internalNote?: string;
     paymentReference?: string;
     paymentLinkUrl?: string;
+    paymentLinkLabel?: string;
     paymentLinkSent?: boolean;
     paymentLinkChannel?: PaymentLinkChannel | "";
     trackingNumber?: string;

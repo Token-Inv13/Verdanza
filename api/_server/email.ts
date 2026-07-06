@@ -16,7 +16,8 @@ type TransactionalEmailKind =
   | "admin_new_order"
   | "order_status_update"
   | "contact_message"
-  | "invoice";
+  | "invoice"
+  | "payment_link";
 
 const statusLabels: Record<OrderStatus, string> = {
   new: "Nouvelle commande",
@@ -228,6 +229,24 @@ export async function sendInvoiceToCustomerEmail(
         content: pdfBuffer.toString("base64"),
       },
     ],
+  });
+}
+
+export async function sendPaymentLinkEmail(
+  order: Order,
+  input: { paymentLinkUrl: string; paymentLinkLabel: string },
+) {
+  if (!order.customerEmail) {
+    return { status: "skipped", reason: "customer_email_absent" } satisfies EmailResult;
+  }
+  return sendTransactionalEmail({
+    kind: "payment_link",
+    orderId: order.id,
+    to: order.customerEmail,
+    subject: `Lien de paiement Verdanza pour votre commande ${shortOrderId(order.id)}`,
+    html: paymentLinkEmailHtml(order, input),
+    text: paymentLinkEmailText(order, input),
+    idempotencyKey: `payment-link-${order.id}-${input.paymentLinkLabel}-${Date.now()}`,
   });
 }
 
@@ -547,6 +566,53 @@ function invoiceEmailText(invoice: Invoice, settings: BillingSettings) {
   ].filter(Boolean).join("\n");
 }
 
+function paymentLinkEmailHtml(
+  order: Order,
+  input: { paymentLinkUrl: string; paymentLinkLabel: string },
+) {
+  return `
+    <div style="font-family:Arial,sans-serif;color:#183c2f;line-height:1.5">
+      <h1>Lien de paiement Verdanza</h1>
+      <p>Bonjour ${escapeHtml(customerFirstName(order))},</p>
+      <p>Votre commande Verdanza ${escapeHtml(shortOrderId(order.id))} est confirmée.</p>
+      <p>Vous pouvez effectuer le règlement par carte bancaire via le lien suivant :</p>
+      <p><a href="${escapeHtml(input.paymentLinkUrl)}">${escapeHtml(input.paymentLinkUrl)}</a></p>
+      <p><strong>Total estimé / confirmé :</strong> ${formatMoney(Number(order.total || 0))}</p>
+      <p><strong>Mode de livraison :</strong> ${escapeHtml(order.deliveryZone || order.deliveryMethod)}</p>
+      <p>Dès réception du règlement, nous préparerons votre commande.</p>
+      <p>Pour toute question :<br>Téléphone : ${escapeHtml(contactPhone())}<br>Email : ${escapeHtml(contactEmail())}</p>
+      <p>Merci,<br>Verdanza</p>
+    </div>
+  `;
+}
+
+function paymentLinkEmailText(
+  order: Order,
+  input: { paymentLinkUrl: string; paymentLinkLabel: string },
+) {
+  return [
+    `Bonjour ${customerFirstName(order)},`,
+    "",
+    `Votre commande Verdanza ${shortOrderId(order.id)} est confirmee.`,
+    "",
+    "Vous pouvez effectuer le reglement par carte bancaire via le lien suivant :",
+    input.paymentLinkUrl,
+    "",
+    "Resume :",
+    `Total estime / confirme : ${formatMoney(Number(order.total || 0))}`,
+    `Mode de livraison : ${order.deliveryZone || order.deliveryMethod}`,
+    "",
+    "Des reception du reglement, nous preparerons votre commande.",
+    "",
+    "Pour toute question :",
+    `Telephone : ${contactPhone()}`,
+    `Email : ${contactEmail()}`,
+    "",
+    "Merci,",
+    "Verdanza",
+  ].join("\n");
+}
+
 function contactEmailHtml(input: {
   name: string;
   email: string;
@@ -613,6 +679,10 @@ function contactPhone() {
 
 function contactEmail() {
   return process.env.VITE_CONTACT_EMAIL || "contact@verdanza.fr";
+}
+
+function customerFirstName(order: Order) {
+  return (order.customerName || order.customerEmail || "Bonjour").split(" ")[0] || "Bonjour";
 }
 
 function orderTypeLabel(order: Order) {

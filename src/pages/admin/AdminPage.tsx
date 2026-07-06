@@ -27,6 +27,11 @@ import {
   updateInvoiceStatus,
   type ManualInvoiceInput,
 } from "../../services/invoicesService";
+import {
+  getAdminPaymentLinks,
+  sendOrderPaymentLinkEmail,
+  type AdminPaymentLink,
+} from "../../services/paymentLinksService";
 import type {
   AdminMetric,
   BillingSettings,
@@ -91,6 +96,14 @@ const emptyCoupon: CouponInput = {
   productIds: [],
   categories: [],
 };
+
+const paymentStatusOptions: PaymentStatus[] = [
+  "to_confirm",
+  "payment_link_sent",
+  "pending",
+  "paid",
+  "cancelled",
+];
 
 export function AdminPage({ section }: { section: string }) {
   const {
@@ -1500,6 +1513,7 @@ function AdminOrders({
     trackingNumber?: string;
     paymentReference?: string;
     paymentLinkUrl?: string;
+    paymentLinkLabel?: string;
     paymentLinkSent?: boolean;
     paymentLinkSentAt?: string;
     paymentLinkSentBy?: string;
@@ -1538,6 +1552,7 @@ function AdminOrders({
       historyNote?: string;
       paymentReference?: string;
       paymentLinkUrl?: string;
+      paymentLinkLabel?: string;
       paymentLinkSent?: boolean;
       paymentLinkChannel?: PaymentLinkChannel | "";
       trackingNumber?: string;
@@ -1548,6 +1563,8 @@ function AdminOrders({
   ) => Promise<void>;
 }) {
   const [filter, setFilter] = useState("active");
+  const [paymentLinks, setPaymentLinks] = useState<AdminPaymentLink[]>([]);
+  const [paymentLinkMessage, setPaymentLinkMessage] = useState("");
   const invoiceByOrderId = new Map(invoices.map((invoice) => [invoice.orderId, invoice]));
   const filteredOrders = orders.filter((order) => orderMatchesAdminFilter(order, filter));
   const filterGroups = [
@@ -1583,6 +1600,38 @@ function AdminOrders({
     },
   ];
 
+  useEffect(() => {
+    let active = true;
+    getAdminPaymentLinks()
+      .then((links) => {
+        if (active) setPaymentLinks(links);
+      })
+      .catch((error) => {
+        if (active) {
+          setPaymentLinkMessage(
+            error instanceof Error ? error.message : "Liens de paiement indisponibles.",
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function handleSendPaymentLinkEmail(orderId: string, paymentLinkUrl: string) {
+    try {
+      await sendOrderPaymentLinkEmail({ orderId, paymentLinkUrl });
+      setPaymentLinkMessage("Lien de paiement envoyé au client.");
+      await onUpdate(orderId, {});
+    } catch (error) {
+      setPaymentLinkMessage(
+        error instanceof Error
+          ? error.message
+          : "Envoi email impossible. Copiez le message manuellement.",
+      );
+    }
+  }
+
   return (
     <section className="mt-8 overflow-hidden rounded-lg border border-forest/10 bg-ivory">
       {!orders.length && (
@@ -1617,6 +1666,11 @@ function AdminOrders({
             </div>
           ))}
         </div>
+      )}
+      {paymentLinkMessage && (
+        <p className="border-b border-forest/10 bg-cream px-4 py-3 text-sm text-forest">
+          {paymentLinkMessage}
+        </p>
       )}
       {!!orders.length && !filteredOrders.length && (
         <AdminEmptyState
@@ -1704,7 +1758,7 @@ function AdminOrders({
                       })
                     }
                   >
-                    {["to_confirm", "pending", "paid", "cancelled"].map((status) => (
+                    {paymentStatusOptions.map((status) => (
                       <option key={status} value={status}>
                         {paymentStatusLabel(status)}
                       </option>
@@ -1723,6 +1777,13 @@ function AdminOrders({
                   </span>
                 )}
               </div>
+              <PaymentLinkActions
+                order={order}
+                orderSource={orderSource}
+                paymentLinks={paymentLinks}
+                onUpdate={onUpdate}
+                onSendEmail={handleSendPaymentLinkEmail}
+              />
               <div className="mt-4 flex flex-wrap gap-2">
                 <a className="btn-secondary min-h-9 px-3 py-1.5 text-xs" href={telLink(order.customerPhone)}>
                   Appeler
@@ -1853,72 +1914,19 @@ function AdminOrders({
                       })
                     }
                   >
-                    {["to_confirm", "pending", "paid", "cancelled"].map((status) => (
+                    {paymentStatusOptions.map((status) => (
                       <option key={status} value={status}>
                         {paymentStatusLabel(status)}
                       </option>
                     ))}
                   </select>
-                  <input
-                    className="input-field mt-2"
-                    defaultValue={order.paymentLinkUrl || ""}
-                    placeholder="Lien de paiement"
-                    disabled={orderSource !== "firestore"}
-                    onBlur={(event) =>
-                      void onUpdate(order.id, {
-                        paymentLinkUrl: event.currentTarget.value,
-                      })
-                    }
+                  <PaymentLinkActions
+                    order={order}
+                    orderSource={orderSource}
+                    paymentLinks={paymentLinks}
+                    onUpdate={onUpdate}
+                    onSendEmail={handleSendPaymentLinkEmail}
                   />
-                  <select
-                    className="input-field mt-2"
-                    value={order.paymentLinkChannel || ""}
-                    disabled={orderSource !== "firestore"}
-                    onChange={(event) =>
-                      void onUpdate(order.id, {
-                        paymentLinkChannel: event.target.value as PaymentLinkChannel | "",
-                      })
-                    }
-                  >
-                    <option value="">Canal lien</option>
-                    <option value="email">Email</option>
-                    <option value="whatsapp">WhatsApp</option>
-                    <option value="sms">SMS</option>
-                    <option value="other">Autre</option>
-                  </select>
-                  <span className="mt-2 block text-xs text-ink/55">
-                    Lien envoyé : {order.paymentLinkSent ? "oui" : "non"}
-                    {order.paymentLinkSentAt ? ` - ${order.paymentLinkSentAt}` : ""}
-                  </span>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      className="btn-secondary min-h-8 px-2 py-1 text-xs"
-                      disabled={!order.paymentLinkUrl}
-                      onClick={() => void copyPaymentLinkMessage(order)}
-                    >
-                      Copier message
-                    </button>
-                    <a
-                      className="btn-secondary min-h-8 px-2 py-1 text-xs"
-                      href={whatsappPaymentLink(order)}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      WhatsApp lien
-                    </a>
-                    <button
-                      className="btn-secondary min-h-8 px-2 py-1 text-xs"
-                      disabled={orderSource !== "firestore" || !order.paymentLinkUrl}
-                      onClick={() =>
-                        void onUpdate(order.id, {
-                          paymentLinkSent: true,
-                          paymentLinkChannel: order.paymentLinkChannel || "email",
-                        })
-                      }
-                    >
-                      Marquer envoyé
-                    </button>
-                  </div>
                 </td>
                 <td className="px-4 py-4">
                   <div className="mb-2">
@@ -2160,6 +2168,160 @@ function orderMatchesAdminFilter(
   return order.orderStatus === filter;
 }
 
+function PaymentLinkActions({
+  order,
+  orderSource,
+  paymentLinks,
+  onUpdate,
+  onSendEmail,
+}: {
+  order: {
+    id: string;
+    customer: string;
+    customerPhone?: string;
+    customerEmail?: string;
+    deliveryMethod?: string;
+    delivery: string;
+    total: string;
+    paymentLinkUrl?: string;
+    paymentLinkLabel?: string;
+    paymentLinkSent?: boolean;
+    paymentLinkSentAt?: string;
+    paymentLinkChannel?: PaymentLinkChannel;
+  };
+  orderSource: "firestore" | "empty";
+  paymentLinks: AdminPaymentLink[];
+  onUpdate: (
+    orderId: string,
+    data: {
+      paymentLinkUrl?: string;
+      paymentLinkLabel?: string;
+      paymentLinkSent?: boolean;
+      paymentLinkChannel?: PaymentLinkChannel | "";
+      paymentStatus?: PaymentStatus;
+    },
+  ) => Promise<void>;
+  onSendEmail: (orderId: string, paymentLinkUrl: string) => Promise<void>;
+}) {
+  const initialUrl = order.paymentLinkUrl || paymentLinks[0]?.url || "";
+  const [selectedUrl, setSelectedUrl] = useState(initialUrl);
+  const selectedLink = paymentLinks.find((link) => link.url === selectedUrl);
+  const disabled = orderSource !== "firestore" || !selectedLink;
+
+  useEffect(() => {
+    if (!selectedUrl && paymentLinks[0]?.url) {
+      setSelectedUrl(paymentLinks[0].url);
+    }
+  }, [paymentLinks, selectedUrl]);
+
+  async function markSent(channel: PaymentLinkChannel) {
+    if (!selectedLink) return;
+    await onUpdate(order.id, {
+      paymentLinkUrl: selectedLink.url,
+      paymentLinkLabel: selectedLink.label,
+      paymentLinkSent: true,
+      paymentLinkChannel: channel,
+      paymentStatus: "payment_link_sent",
+    });
+  }
+
+  return (
+    <div className="mt-3 rounded-md border border-forest/10 bg-cream p-3 text-xs text-forest">
+      <div className="flex items-center justify-between gap-2">
+        <strong>Lien de paiement CB</strong>
+        <AdminBadge tone={order.paymentLinkSent ? "success" : "warning"}>
+          {order.paymentLinkSent ? "Lien CB envoyé" : "Lien CB non envoyé"}
+        </AdminBadge>
+      </div>
+      <select
+        className="input-field mt-2"
+        value={selectedUrl}
+        disabled={orderSource !== "firestore" || !paymentLinks.length}
+        onChange={(event) => setSelectedUrl(event.target.value)}
+      >
+        {!paymentLinks.length && <option value="">Aucun lien disponible</option>}
+        {paymentLinks.map((link) => (
+          <option key={link.id} value={link.url}>
+            {link.label}
+          </option>
+        ))}
+      </select>
+      <p className="mt-2 break-all text-[11px] text-ink/55">
+        {selectedLink?.label || order.paymentLinkLabel || "Aucun lien sélectionné"}
+      </p>
+      {order.paymentLinkSent && (
+        <p className="mt-1 text-[11px] text-ink/55">
+          Envoyé via {paymentChannelLabel(order.paymentLinkChannel)}
+          {order.paymentLinkSentAt ? ` - ${order.paymentLinkSentAt}` : ""}
+        </p>
+      )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          className="btn-secondary min-h-8 px-2 py-1 text-xs"
+          disabled={disabled}
+          onClick={() => selectedLink && void navigator.clipboard.writeText(selectedLink.url)}
+          type="button"
+        >
+          Copier lien
+        </button>
+        <button
+          className="btn-secondary min-h-8 px-2 py-1 text-xs"
+          disabled={disabled}
+          onClick={() =>
+            selectedLink &&
+            void navigator.clipboard.writeText(
+              paymentLinkMessage({ ...order, paymentLinkUrl: selectedLink.url }),
+            )
+          }
+          type="button"
+        >
+          Copier message
+        </button>
+        <a
+          className={
+            disabled
+              ? "btn-secondary pointer-events-none min-h-8 px-2 py-1 text-xs opacity-50"
+              : "btn-secondary min-h-8 px-2 py-1 text-xs"
+          }
+          href={selectedLink ? whatsappPaymentLink({ ...order, paymentLinkUrl: selectedLink.url }) : "#"}
+          target="_blank"
+          rel="noreferrer"
+          onClick={() => selectedLink && void markSent("whatsapp")}
+        >
+          WhatsApp
+        </a>
+        <a
+          className={
+            disabled
+              ? "btn-secondary pointer-events-none min-h-8 px-2 py-1 text-xs opacity-50"
+              : "btn-secondary min-h-8 px-2 py-1 text-xs"
+          }
+          href={selectedLink ? smsPaymentLink({ ...order, paymentLinkUrl: selectedLink.url }) : "#"}
+          onClick={() => selectedLink && void markSent("sms")}
+        >
+          SMS
+        </a>
+        <button
+          className="btn-secondary min-h-8 px-2 py-1 text-xs"
+          disabled={disabled || !order.customerEmail}
+          onClick={() => selectedLink && void onSendEmail(order.id, selectedLink.url)}
+          type="button"
+        >
+          Email
+        </button>
+        <button
+          className="btn-secondary min-h-8 px-2 py-1 text-xs"
+          disabled={disabled}
+          onClick={() => void markSent("other")}
+          type="button"
+        >
+          Marquer envoyé
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function NotificationStatus({
   order,
 }: {
@@ -2255,6 +2417,7 @@ function paymentStatusTone(
 ): "success" | "warning" | "danger" | "neutral" | "gold" | "muted" {
   if (status === "paid") return "success";
   if (status === "cancelled") return "danger";
+  if (status === "payment_link_sent") return "gold";
   if (["to_confirm", "pending"].includes(status)) return "warning";
   return "neutral";
 }
@@ -2272,7 +2435,7 @@ function buildDashboardMetrics(
   const estimatedTotal = activeOrders.reduce((sum, order) => sum + parseEuro(order.total), 0);
   const paidOrders = activeOrders.filter((order) => order.paymentStatus === "paid");
   const paymentToConfirm = activeOrders.filter((order) =>
-    ["to_confirm", "pending"].includes(order.paymentStatus),
+    ["to_confirm", "payment_link_sent", "pending"].includes(order.paymentStatus),
   );
   const preparingOrders = activeOrders.filter((order) =>
     [
@@ -2458,10 +2621,22 @@ function whatsappPaymentLink(order: {
   id: string;
   deliveryMethod?: string;
   paymentLinkUrl?: string;
+  total?: string;
 }) {
   if (!order.customerPhone || !order.paymentLinkUrl) return "#";
   const phone = normalizePhone(order.customerPhone).replace("+", "");
   return `https://wa.me/${phone}?text=${encodeURIComponent(paymentLinkMessage(order))}`;
+}
+
+function smsPaymentLink(order: {
+  customerPhone?: string;
+  customer: string;
+  id: string;
+  deliveryMethod?: string;
+  paymentLinkUrl?: string;
+  total?: string;
+}) {
+  return `sms:${normalizePhone(order.customerPhone)}?body=${encodeURIComponent(paymentLinkMessage(order))}`;
 }
 
 async function copyOrderMessage(order: {
@@ -2477,28 +2652,32 @@ async function copyOrderMessage(order: {
   await navigator.clipboard.writeText(orderMessage(order));
 }
 
-async function copyPaymentLinkMessage(order: {
-  customer: string;
-  id: string;
-  deliveryMethod?: string;
-  paymentLinkUrl?: string;
-}) {
-  await navigator.clipboard.writeText(paymentLinkMessage(order));
-}
-
 function paymentLinkMessage(order: {
   customer: string;
   id: string;
   deliveryMethod?: string;
   paymentLinkUrl?: string;
+  total?: string;
 }) {
   const firstName = order.customer.split(" ")[0] || "Bonjour";
   const shortId = order.id.slice(0, 8).toUpperCase();
   const link = order.paymentLinkUrl || "[LIEN_DE_PAIEMENT]";
+  const total = order.total ? ` Montant estime : ${order.total}.` : "";
   if (order.deliveryMethod === "postal") {
-    return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée. Pour finaliser l'expédition, vous pouvez régler par carte bancaire via ce lien : ${link}`;
+    return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée.${total} Pour finaliser l'expédition, vous pouvez régler par carte bancaire via ce lien : ${link}. Dès réception du paiement, votre commande sera préparée.`;
   }
-  return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée. Vous pouvez effectuer le règlement par carte bancaire via ce lien : ${link}. Dès réception du paiement, nous préparerons votre commande.`;
+  if (order.deliveryMethod === "local_express") {
+    return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée.${total} Vous pouvez régler par carte bancaire via ce lien : ${link}, ou confirmer avec nous le mode de règlement souhaité.`;
+  }
+  return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée.${total} Vous pouvez régler par carte bancaire via ce lien : ${link}. Dès réception du paiement, nous préparerons votre commande. Merci, Verdanza.`;
+}
+
+function paymentChannelLabel(channel?: PaymentLinkChannel) {
+  if (channel === "email") return "email";
+  if (channel === "whatsapp") return "WhatsApp";
+  if (channel === "sms") return "SMS";
+  if (channel === "other") return "autre canal";
+  return "canal non renseigné";
 }
 
 function orderMessage(order: {

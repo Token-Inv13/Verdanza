@@ -13,6 +13,7 @@ export const orderStatusLabels: Record<OrderStatus, string> = {
 
 export const paymentStatusLabels: Record<PaymentStatus, string> = {
   to_confirm: "À confirmer",
+  payment_link_sent: "Lien CB envoyé",
   pending: "En attente",
   paid: "Réglé",
   cancelled: "Annulé",

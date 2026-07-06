@@ -39,6 +39,7 @@ export type AdminOrderRow = {
   trackingNumber?: string;
   paymentReference?: string;
   paymentLinkUrl?: string;
+  paymentLinkLabel?: string;
   paymentLinkSent?: boolean;
   paymentLinkSentAt?: string;
   paymentLinkSentBy?: string;
@@ -105,6 +106,7 @@ export async function getAdminOrdersWithFallback() {
         trackingNumber: order.trackingNumber,
         paymentReference: order.paymentReference,
         paymentLinkUrl: order.paymentLinkUrl,
+        paymentLinkLabel: order.paymentLinkLabel,
         paymentLinkSent: order.paymentLinkSent === true,
         paymentLinkSentAt: order.paymentLinkSentAt,
         paymentLinkSentBy: order.paymentLinkSentBy,
@@ -148,6 +150,7 @@ export async function updateOrderAdminFields(
     historyNote?: string;
     paymentReference?: string;
     paymentLinkUrl?: string;
+    paymentLinkLabel?: string;
     paymentLinkSent?: boolean;
     paymentLinkChannel?: PaymentLinkChannel | "";
     trackingNumber?: string;

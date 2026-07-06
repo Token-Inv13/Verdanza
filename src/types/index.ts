@@ -142,7 +142,7 @@ export type OrderStatus =
   | "delivered"
   | "cancelled";
 
-export type PaymentStatus = "to_confirm" | "pending" | "paid" | "cancelled";
+export type PaymentStatus = "to_confirm" | "payment_link_sent" | "pending" | "paid" | "cancelled";
 
 export type OrderItem = {
   productId: string;
@@ -224,6 +224,7 @@ export type Order = {
   paymentInstructions?: string;
   preferredPaymentMethod?: PreferredPaymentMethod;
   paymentLinkUrl?: string;
+  paymentLinkLabel?: string;
   paymentLinkSent?: boolean;
   paymentLinkSentAt?: string;
   paymentLinkSentBy?: string;
