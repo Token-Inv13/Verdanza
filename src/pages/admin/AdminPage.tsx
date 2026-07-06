@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAdminData } from "../../hooks/useAdminData";
 import {
   updateProductFlags,
@@ -50,6 +50,11 @@ import {
   paymentProviderLabel,
   paymentStatusLabel,
 } from "../../utils/orderStatus";
+import {
+  LOCAL_DELIVERY_MINIMUM,
+  POSTAL_DELIVERY_MINIMUM,
+  POSTAL_FREE_SHIPPING_THRESHOLD,
+} from "../../config/deliveryRules";
 
 const emptyProduct: ProductInput = {
   slug: "",
@@ -208,13 +213,15 @@ export function AdminPage({ section }: { section: string }) {
   }
 
   return (
-    <div className="p-5 md:p-8">
-      <div className="flex flex-col justify-between gap-4 border-b border-forest/10 pb-6 md:flex-row md:items-end">
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="flex flex-col justify-between gap-4 rounded-lg border border-forest/10 bg-ivory px-4 py-5 shadow-sm sm:px-6 md:flex-row md:items-end">
         <div>
           <p className="text-xs uppercase tracking-[0.18em] text-champagne">
             Verdanza
           </p>
-          <h1 className="font-display text-5xl text-forest">{section}</h1>
+          <h1 className="font-display text-4xl leading-none text-forest sm:text-5xl">
+            {section}
+          </h1>
         </div>
         <div className="flex flex-wrap gap-2 text-sm">
           <button className="btn-secondary" onClick={() => void refresh()}>
@@ -233,9 +240,16 @@ export function AdminPage({ section }: { section: string }) {
 
       {section === "Dashboard" && (
         <>
-          <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <section className="mt-6">
+            <p className="text-xs uppercase tracking-[0.18em] text-champagne">
+              Vue rapide
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {dashboardMetrics.map((metric) => (
-              <article key={metric.label} className="admin-card">
+              <article
+                key={metric.label}
+                className="admin-card min-h-32 border-forest/10 bg-ivory/95"
+              >
                 <p className="text-sm text-ink/55">{metric.label}</p>
                 <strong className="mt-2 block font-display text-4xl text-forest">
                   {metric.value}
@@ -243,8 +257,9 @@ export function AdminPage({ section }: { section: string }) {
                 <span className="text-xs text-ink/50">{metric.detail}</span>
               </article>
             ))}
+            </div>
           </section>
-          <section className="mt-6 grid gap-4 md:grid-cols-3">
+          <section className="mt-6 grid gap-3 md:grid-cols-3">
             <SourceCard label="Produits" value={productSource} count={products.length} />
             <SourceCard label="Commandes" value={orderSource} count={orders.length} />
             <SourceCard
@@ -330,6 +345,7 @@ export function AdminPage({ section }: { section: string }) {
       {section === "Livraisons locales" && (
         <>
           <SourceLine source={deliverySource} />
+          <DeliveryRulesSummary />
           <DeliveryZonesPanel zones={deliveryZones} onSave={handleDeliveryZoneSave} />
         </>
       )}
@@ -548,6 +564,48 @@ function ProductForm({
   );
 }
 
+function AdminBadge({
+  children,
+  tone = "neutral",
+}: {
+  children: string | number;
+  tone?: "neutral" | "success" | "warning" | "danger" | "muted" | "gold";
+}) {
+  const styles = {
+    neutral: "border-forest/15 bg-ivory text-forest",
+    success: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    warning: "border-amber-200 bg-amber-50 text-amber-900",
+    danger: "border-red-200 bg-red-50 text-red-900",
+    muted: "border-forest/10 bg-cream text-ink/60",
+    gold: "border-champagne/40 bg-cream text-forest",
+  };
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${styles[tone]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function AdminEmptyState({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="border-b border-forest/10 bg-cream px-4 py-5 text-sm text-forest">
+      <strong className="block">{title}</strong>
+      <span className="mt-1 block text-ink/60">{description}</span>
+      {action && <div className="mt-3">{action}</div>}
+    </div>
+  );
+}
+
 function ProductTable({
   products,
   onEdit,
@@ -559,6 +617,12 @@ function ProductTable({
 }) {
   return (
     <section className="overflow-hidden rounded-lg border border-forest/10 bg-ivory">
+      {!products.length && (
+        <AdminEmptyState
+          title="Aucun produit pour le moment."
+          description="Ajoutez un produit ou rafraichissez les donnees connectees."
+        />
+      )}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[960px] text-left text-sm">
           <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
@@ -585,17 +649,28 @@ function ProductTable({
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-4">{product.category}</td>
-                <td className="px-4 py-4">{product.price.toFixed(2)} EUR/g</td>
-                <td className="px-4 py-4">{product.stock} g</td>
                 <td className="px-4 py-4">
-                  <button className="tag" onClick={() => void onFlagChange(product, "isActive")}>
+                  <AdminBadge tone="neutral">{product.category}</AdminBadge>
+                </td>
+                <td className="px-4 py-4">{product.price.toFixed(2)} EUR/g</td>
+                <td className="px-4 py-4">
+                  <span className="block font-semibold text-forest">{product.stock} g</span>
+                  <AdminBadge tone={stockTone(product)}>
+                    {stockLabel(product)}
+                  </AdminBadge>
+                </td>
+                <td className="px-4 py-4">
+                  <button onClick={() => void onFlagChange(product, "isActive")}>
+                    <AdminBadge tone={product.isActive ? "success" : "muted"}>
                     {product.isActive ? "Actif" : "Inactif"}
+                    </AdminBadge>
                   </button>
                 </td>
                 <td className="px-4 py-4">
-                  <button className="tag" onClick={() => void onFlagChange(product, "isFeatured")}>
+                  <button onClick={() => void onFlagChange(product, "isFeatured")}>
+                    <AdminBadge tone={product.isFeatured ? "gold" : "muted"}>
                     {product.isFeatured ? "Oui" : "Non"}
+                    </AdminBadge>
                   </button>
                 </td>
                 <td className="px-4 py-4">
@@ -648,11 +723,22 @@ function StockRow({
 
   return (
     <article className="admin-card grid gap-4 md:grid-cols-[1fr_120px_140px_auto] md:items-end">
-      <div>
-        <h2 className="font-display text-2xl text-forest">{product.name}</h2>
-        <p className="text-sm text-ink/55">
-          {product.stock <= product.lowStockThreshold ? "Stock faible" : "Stock OK"}
-        </p>
+      <div className="flex items-center gap-3">
+        <img
+          src={product.image || "/verdanza-label.png"}
+          alt=""
+          className="h-16 w-16 rounded-md border border-forest/10 object-cover"
+          loading="lazy"
+        />
+        <div>
+          <h2 className="font-display text-2xl leading-tight text-forest">{product.name}</h2>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <AdminBadge tone={product.isActive ? "success" : "muted"}>
+              {product.isActive ? "Actif" : "Inactif"}
+            </AdminBadge>
+            <AdminBadge tone={stockTone(product)}>{stockLabel(product)}</AdminBadge>
+          </div>
+        </div>
       </div>
       <NumberInput label="Stock" value={stock} onChange={setStock} />
       <NumberInput label="Seuil" value={threshold} onChange={setThreshold} />
@@ -663,6 +749,34 @@ function StockRow({
         Enregistrer
       </button>
     </article>
+  );
+}
+
+function DeliveryRulesSummary() {
+  return (
+    <section className="mt-6 grid gap-3 md:grid-cols-3">
+      <article className="admin-card">
+        <p className="text-xs uppercase tracking-[0.16em] text-champagne">Locale</p>
+        <strong className="mt-2 block font-display text-3xl text-forest">
+          {LOCAL_DELIVERY_MINIMUM} EUR
+        </strong>
+        <span className="text-xs text-ink/55">Minimum Aix-en-Provence et alentours</span>
+      </article>
+      <article className="admin-card">
+        <p className="text-xs uppercase tracking-[0.16em] text-champagne">Postale</p>
+        <strong className="mt-2 block font-display text-3xl text-forest">
+          {POSTAL_DELIVERY_MINIMUM} EUR
+        </strong>
+        <span className="text-xs text-ink/55">Minimum France</span>
+      </article>
+      <article className="admin-card">
+        <p className="text-xs uppercase tracking-[0.16em] text-champagne">Offerte</p>
+        <strong className="mt-2 block font-display text-3xl text-forest">
+          {POSTAL_FREE_SHIPPING_THRESHOLD} EUR
+        </strong>
+        <span className="text-xs text-ink/55">Seuil livraison postale offerte</span>
+      </article>
+    </section>
   );
 }
 
@@ -1302,51 +1416,223 @@ function AdminOrders({
   const [filter, setFilter] = useState("active");
   const invoiceByOrderId = new Map(invoices.map((invoice) => [invoice.orderId, invoice]));
   const filteredOrders = orders.filter((order) => orderMatchesAdminFilter(order, filter));
-  const filters = [
-    ["active", "Commandes actives"],
-    ["new", "Nouvelles"],
-    ["contact_required", "À contacter"],
-    ["confirmed", "Confirmées"],
-    ["preparing", "En préparation"],
-    ["out_for_delivery", "En livraison"],
-    ["shipped", "Expédiées"],
-    ["delivered", "Livrées"],
-    ["cancelled", "Annulées"],
-    ["finished", "Terminées"],
-    ["preorder", "Précommandes"],
-    ["local", "Commandes locales"],
-    ["postal", "Commandes postales"],
-    ["archived", "Archivées"],
-    ["all", "Toutes"],
+  const filterGroups = [
+    {
+      label: "Traitement",
+      items: [
+        ["active", "Commandes actives"],
+        ["new", "Nouvelles"],
+        ["contact_required", "À contacter"],
+        ["confirmed", "Confirmées"],
+        ["preparing", "En préparation"],
+        ["out_for_delivery", "En livraison"],
+        ["shipped", "Expédiées"],
+      ],
+    },
+    {
+      label: "Finalisées",
+      items: [
+        ["delivered", "Livrées"],
+        ["cancelled", "Annulées"],
+        ["finished", "Terminées"],
+        ["archived", "Archivées"],
+      ],
+    },
+    {
+      label: "Type",
+      items: [
+        ["preorder", "Précommandes"],
+        ["local", "Commandes locales"],
+        ["postal", "Commandes postales"],
+        ["all", "Toutes"],
+      ],
+    },
   ];
 
   return (
     <section className="mt-8 overflow-hidden rounded-lg border border-forest/10 bg-ivory">
       {!orders.length && (
-        <p className="border-b border-forest/10 bg-cream px-4 py-4 text-sm text-forest">
-          Aucune commande pour le moment.
-        </p>
+        <AdminEmptyState
+          title="Aucune commande pour le moment."
+          description="Les nouvelles commandes apparaitront ici des leur creation."
+        />
       )}
       {!!orders.length && (
-        <div className="flex flex-wrap gap-2 border-b border-forest/10 bg-cream px-4 py-4">
-          {filters.map(([value, label]) => (
-            <button
-              key={value}
-              className={filter === value ? "btn-primary min-h-8 px-3 py-1 text-xs" : "btn-secondary min-h-8 px-3 py-1 text-xs"}
-              onClick={() => setFilter(value)}
-              type="button"
-            >
-              {label}
-            </button>
+        <div className="grid gap-4 border-b border-forest/10 bg-cream px-4 py-4">
+          {filterGroups.map((group) => (
+            <div key={group.label}>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-forest/55">
+                {group.label}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {group.items.map(([value, label]) => (
+                  <button
+                    key={value}
+                    className={
+                      filter === value
+                        ? "btn-primary min-h-9 px-3 py-1.5 text-xs"
+                        : "btn-secondary min-h-9 px-3 py-1.5 text-xs"
+                    }
+                    onClick={() => setFilter(value)}
+                    type="button"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}
       {!!orders.length && !filteredOrders.length && (
-        <p className="border-b border-forest/10 px-4 py-4 text-sm text-forest">
-          Aucune commande pour ce filtre.
-        </p>
+        <AdminEmptyState
+          title="Aucune commande pour ce filtre."
+          description="Changez de filtre ou consultez toutes les commandes."
+          action={
+            <button
+              className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+              type="button"
+              onClick={() => setFilter("all")}
+            >
+              Voir toutes les commandes
+            </button>
+          }
+        />
       )}
-      <div className="overflow-x-auto">
+      {!!filteredOrders.length && (
+        <div className="grid gap-3 p-3 lg:hidden">
+          {filteredOrders.map((order) => (
+            <article
+              key={order.id}
+              className="rounded-lg border border-forest/10 bg-ivory p-4 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap gap-2">
+                    <AdminBadge tone={order.orderType === "preorder" ? "gold" : "neutral"}>
+                      {order.orderType === "preorder" ? "Précommande" : "Commande"}
+                    </AdminBadge>
+                    <AdminBadge tone={order.deliveryMethod === "postal" ? "neutral" : "gold"}>
+                      {order.deliveryMethod === "postal" ? "Postale" : "Locale"}
+                    </AdminBadge>
+                  </div>
+                  <strong className="mt-3 block break-all text-sm text-forest">
+                    {order.id}
+                  </strong>
+                  <p className="mt-1 text-sm font-semibold text-forest">{order.customer}</p>
+                  <p className="text-xs text-ink/55">{order.customerPhone}</p>
+                </div>
+                <strong className="whitespace-nowrap font-display text-2xl text-forest">
+                  {order.total}
+                </strong>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.12em] text-forest/60">
+                  Statut
+                  <select
+                    className="input-field mt-2"
+                    value={order.orderStatus}
+                    disabled={orderSource !== "firestore"}
+                    onChange={(event) => {
+                      const historyNote =
+                        window.prompt("Note historique optionnelle", "") || "";
+                      void onUpdate(order.id, {
+                        orderStatus: event.target.value as OrderStatus,
+                        historyNote,
+                      });
+                    }}
+                  >
+                    {[
+                      "new",
+                      "contact_required",
+                      "confirmed",
+                      "preparing",
+                      "out_for_delivery",
+                      "shipped",
+                      "delivered",
+                      "cancelled",
+                    ].map((status) => (
+                      <option key={status} value={status}>
+                        {orderStatusLabel(status)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-[0.12em] text-forest/60">
+                  Règlement
+                  <select
+                    className="input-field mt-2"
+                    value={order.paymentStatus}
+                    disabled={orderSource !== "firestore"}
+                    onChange={(event) =>
+                      void onUpdate(order.id, {
+                        paymentStatus: event.target.value as PaymentStatus,
+                      })
+                    }
+                  >
+                    {["to_confirm", "pending", "paid", "cancelled"].map((status) => (
+                      <option key={status} value={status}>
+                        {paymentStatusLabel(status)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="mt-4 rounded-md bg-cream p-3 text-xs leading-5 text-ink/65">
+                <strong className="block text-forest">{order.delivery}</strong>
+                {order.items.length
+                  ? order.items.map((item) => `${item.name} x${item.quantity} g`).join(", ")
+                  : "Produits a renseigner"}
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <a className="btn-secondary min-h-9 px-3 py-1.5 text-xs" href={telLink(order.customerPhone)}>
+                  Appeler
+                </a>
+                <a
+                  className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+                  href={whatsappLink(order)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  WhatsApp
+                </a>
+                <a className="btn-secondary min-h-9 px-3 py-1.5 text-xs" href={smsLink(order)}>
+                  SMS
+                </a>
+                <button
+                  className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+                  onClick={() => void copyOrderMessage(order)}
+                >
+                  Copier
+                </button>
+                {order.archived || order.hidden ? (
+                  <button
+                    className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+                    disabled={orderSource !== "firestore"}
+                    onClick={() => void onUpdate(order.id, { restore: true })}
+                  >
+                    Restaurer
+                  </button>
+                ) : (
+                  <button
+                    className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+                    disabled={orderSource !== "firestore"}
+                    onClick={() => {
+                      const confirmed = window.confirm(
+                        "Cette action masquera la commande de la vue principale. Elle restera consultable dans les archives.",
+                      );
+                      if (confirmed) void onUpdate(order.id, { archived: true });
+                    }}
+                  >
+                    Archiver
+                  </button>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+      <div className="hidden overflow-x-auto lg:block">
         <table className="w-full min-w-[1380px] text-left text-sm">
           <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
             <tr>
@@ -1374,9 +1660,9 @@ function AdminOrders({
             {filteredOrders.map((order) => (
               <tr key={order.id} className="border-t border-forest/10">
                 <td className="px-4 py-4">
-                  <span className="rounded-full border border-champagne/40 px-2 py-1 text-xs text-forest">
+                  <AdminBadge tone={order.orderType === "preorder" ? "gold" : "neutral"}>
                     {order.orderType === "preorder" ? "Précommande" : "Commande"}
-                  </span>
+                  </AdminBadge>
                 </td>
                 <td className="px-4 py-4">{order.id}</td>
                 <td className="px-4 py-4">
@@ -1413,6 +1699,11 @@ function AdminOrders({
                   <strong className="mt-1 block text-xs leading-5 text-forest">
                     {preferredPaymentMethodLabel(order.preferredPaymentMethod)}
                   </strong>
+                  <div className="mt-2">
+                    <AdminBadge tone={paymentStatusTone(order.paymentStatus)}>
+                      {paymentStatusLabel(order.paymentStatus)}
+                    </AdminBadge>
+                  </div>
                   <select
                     className="input-field mt-2"
                     value={order.paymentStatus}
@@ -1491,6 +1782,11 @@ function AdminOrders({
                   </div>
                 </td>
                 <td className="px-4 py-4">
+                  <div className="mb-2">
+                    <AdminBadge tone={orderStatusTone(order.orderStatus)}>
+                      {orderStatusLabel(order.orderStatus)}
+                    </AdminBadge>
+                  </div>
                   <select
                     className="input-field"
                     value={order.orderStatus}
@@ -1522,6 +1818,11 @@ function AdminOrders({
                 </td>
                 <td className="px-4 py-4">
                   <strong className="block text-forest">{order.delivery}</strong>
+                  <div className="mt-2">
+                    <AdminBadge tone={order.deliveryMethod === "postal" ? "neutral" : "gold"}>
+                      {order.deliveryMethod === "postal" ? "Postale" : "Locale"}
+                    </AdminBadge>
+                  </div>
                   <span className="mt-1 block text-xs text-ink/55">
                     Minimum appliqué :{" "}
                     {order.deliveryMinimumApplied ??
@@ -1777,6 +2078,37 @@ function sourceLabel(source: string) {
   if (source === "local") return "secours local";
   if (source === "empty") return "aucune donnée";
   return source;
+}
+
+function stockLabel(product: Product) {
+  if (product.stock <= 0) return "Rupture";
+  if (product.stock <= product.lowStockThreshold) return "Stock bas";
+  return "Stock OK";
+}
+
+function stockTone(product: Product): "success" | "warning" | "danger" {
+  if (product.stock <= 0) return "danger";
+  if (product.stock <= product.lowStockThreshold) return "warning";
+  return "success";
+}
+
+function orderStatusTone(
+  status: string,
+): "success" | "warning" | "danger" | "neutral" | "gold" | "muted" {
+  if (["delivered", "finished"].includes(status)) return "success";
+  if (status === "cancelled") return "danger";
+  if (["new", "contact_required"].includes(status)) return "warning";
+  if (["out_for_delivery", "shipped"].includes(status)) return "gold";
+  return "neutral";
+}
+
+function paymentStatusTone(
+  status: string,
+): "success" | "warning" | "danger" | "neutral" | "gold" | "muted" {
+  if (status === "paid") return "success";
+  if (status === "cancelled") return "danger";
+  if (["to_confirm", "pending"].includes(status)) return "warning";
+  return "neutral";
 }
 
 function buildDashboardMetrics(
