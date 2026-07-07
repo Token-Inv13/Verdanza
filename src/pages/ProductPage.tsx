@@ -6,6 +6,12 @@ import { useCart } from "../context/CartContext";
 import { useProducts } from "../hooks/useProducts";
 import { trackEvent } from "../lib/analytics";
 
+function productImageAlt(product: { name: string; category: string }) {
+  return `${product.name} - ${
+    product.category === "flowers" ? "Fleur CBD" : "Résine CBD"
+  } Verdanza`;
+}
+
 export function ProductPage() {
   const { slug } = useParams();
   const { products, isLoading } = useProducts();
@@ -45,7 +51,11 @@ export function ProductPage() {
       <Seo title={product.seoTitle} description={product.seoDescription} />
       <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-lg border border-champagne/30 bg-cream p-8">
-          <img src={product.image} alt="" className="mx-auto max-h-[520px] object-contain" />
+          <img
+            src={product.image}
+            alt={productImageAlt(product)}
+            className="mx-auto max-h-[520px] object-contain"
+          />
         </div>
         <section>
           <p className="text-sm uppercase tracking-[0.18em] text-champagne">

@@ -4,6 +4,12 @@ import { useCart } from "../context/CartContext";
 import type { Product } from "../types";
 import { trackEvent } from "../lib/analytics";
 
+function productImageAlt(product: Product) {
+  return `${product.name} - ${
+    product.category === "flowers" ? "Fleur CBD" : "Résine CBD"
+  } Verdanza`;
+}
+
 export function ProductCard({ product }: { product: Product }) {
   const { addItem } = useCart();
 
@@ -12,7 +18,7 @@ export function ProductCard({ product }: { product: Product }) {
       <Link to={`/produits/${product.slug}`} className="block bg-cream p-6">
         <img
           src={product.image}
-          alt=""
+          alt={productImageAlt(product)}
           className="mx-auto h-48 w-full object-contain transition group-hover:scale-105"
         />
       </Link>

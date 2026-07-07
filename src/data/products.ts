@@ -131,6 +131,32 @@ export const products: Product[] = [
     seoDescription:
       "Harlequin Greenhouse Verdanza, fleur CBD sous serre italienne au profil naturel et boisé.",
   },
+  {
+    id: "resin-la-mousse",
+    slug: "la-mousse",
+    name: "La Mousse",
+    category: "resins",
+    price: 3,
+    shortDescription:
+      "Mousse CBD francaise souple, legere et naturelle, issue de fleurs de CBD selectionnees.",
+    longDescription:
+      "La Mousse est une resine CBD francaise issue d'un travail de selection, de tamisage et de separation mecanique des trichomes. Sa texture souple, legere et compacte lui donne une presentation naturelle et authentique.",
+    image: "/Fiche produit/La%20mousse/mousse1.webp",
+    cbdRate: "Variable selon le lot",
+    cbgRate: "Non communique",
+    thcRate: "< 0,3 %",
+    origin: "France",
+    cultureType: "Autre",
+    aromas: ["Chanvre naturel", "Vegetal", "Intense", "Authentique"],
+    tags: ["resine", "mousse cbd", "france", "tamisage", "trichomes"],
+    stock: 40,
+    lowStockThreshold: 10,
+    isActive: true,
+    isFeatured: false,
+    seoTitle: "La Mousse - Resine CBD francaise Verdanza",
+    seoDescription:
+      "La Mousse Verdanza, resine CBD francaise issue de fleurs de CBD selectionnees, vendue au gramme.",
+  },
 ];
 
 export const featuredProducts = products.filter((product) => product.isFeatured);
