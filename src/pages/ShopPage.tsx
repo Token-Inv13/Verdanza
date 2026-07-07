@@ -1,4 +1,5 @@
 import { ProductCard } from "../components/ProductCard";
+import { CatalogNotice } from "../components/CatalogNotice";
 import { Seo } from "../components/Seo";
 import { useProducts } from "../hooks/useProducts";
 
@@ -21,6 +22,7 @@ export function ShopPage() {
           Catalogue : {source === "firestore" ? "stock en ligne" : "selection locale"}.
         </p>
       </div>
+      <CatalogNotice />
       {isLoading ? (
         <p className="mt-10 text-forest/70">Chargement du catalogue...</p>
       ) : (

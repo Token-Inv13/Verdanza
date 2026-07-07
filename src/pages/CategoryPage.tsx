@@ -1,4 +1,5 @@
 import { ProductCard } from "../components/ProductCard";
+import { CatalogNotice } from "../components/CatalogNotice";
 import { Seo } from "../components/Seo";
 import { useProducts } from "../hooks/useProducts";
 import type { ProductCategory } from "../types";
@@ -26,6 +27,7 @@ export function CategoryPage({
           actuellement disponibles chez Verdanza.
         </p>
       </div>
+      <CatalogNotice variant={category === "flowers" ? "flowers" : "resins"} />
       {isLoading ? (
         <p className="mt-10 text-forest/70">Chargement des produits...</p>
       ) : (
