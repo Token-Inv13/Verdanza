@@ -28,6 +28,8 @@ export type Product = {
   tags: string[];
   productTier?: "Premium";
   experienceDescription?: string;
+  whyChooseDescription?: string;
+  advisedProfile?: string;
   comingSoon?: boolean;
   stockStatus?: ProductStockStatus;
   stockLabel?: string;

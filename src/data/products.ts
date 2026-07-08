@@ -176,6 +176,10 @@ export const products: Product[] = [
     aromas: ["Sucré", "Fruité", "Acidulé", "Exotique", "Gourmand"],
     tags: ["fleur", "premium", "hydroponique", "suisse", "fruité"],
     productTier: "Premium",
+    whyChooseDescription:
+      "Mango Haze est pensée pour les amateurs de fleurs fruitées et gourmandes. Son profil sucré, exotique et acidulé en fait une référence idéale pour découvrir une fleur premium hydroponique au caractère doux, aromatique et accessible.",
+    advisedProfile:
+      "Pour les amateurs de goûts sucrés, fruités et exotiques.",
     experienceDescription:
       "La Mango Haze est une référence idéale pour les clients qui recherchent une fleur premium au goût fruité et sucré. Elle se positionne comme l'une des fleurs les plus gourmandes de la gamme Verdanza, avec un profil accessible mais haut de gamme.",
     comingSoon: true,
@@ -208,6 +212,10 @@ export const products: Product[] = [
     aromas: ["Mandarine", "Agrumes", "Citron", "Pin", "Fruit doux", "Fraîcheur acidulée"],
     tags: ["fleur", "premium", "hydroponique", "italie", "agrumes"],
     productTier: "Premium",
+    whyChooseDescription:
+      "Mandarine est idéale pour les clients qui recherchent une fleur fraîche, lumineuse et fruitée. Son profil agrume, citronné et légèrement acidulé lui donne une identité aromatique simple à comprendre et agréable à conseiller.",
+    advisedProfile:
+      "Pour ceux qui aiment les arômes frais, citronnés et agrumes.",
     experienceDescription:
       "La Mandarine est une fleur parfaite pour les clients qui recherchent un produit frais, fruité et premium. Elle apporte une vraie identité aromatique à la gamme Verdanza et se distingue par son côté agrume naturel, facile à comprendre et à conseiller.",
     comingSoon: true,
@@ -240,6 +248,10 @@ export const products: Product[] = [
     aromas: ["Tonique", "Résineux", "Boisé", "Intense", "Authentique"],
     tags: ["fleur", "premium", "hydroponique", "italie", "amnesia"],
     productTier: "Premium",
+    whyChooseDescription:
+      "Amnesia est une valeur sûre pour les amateurs de fleurs CBD au profil plus classique, intense et résineux. Elle convient aux clients qui recherchent une fleur premium de caractère, avec une identité aromatique plus profonde que les profils fruités.",
+    advisedProfile:
+      "Pour les amateurs de fleurs classiques, intenses et résineuses.",
     experienceDescription:
       "L'Amnesia CBD est une valeur sûre pour les clients qui connaissent déjà les fleurs CBD et recherchent un profil plus classique, profond et aromatique. Elle sert de référence premium incontournable dans une sélection Verdanza sérieuse.",
     comingSoon: true,
@@ -272,6 +284,10 @@ export const products: Product[] = [
     aromas: ["Citron", "Pin", "Fruit doux", "Fraîcheur végétale", "Équilibré"],
     tags: ["fleur", "premium", "hydroponique", "italie", "citron"],
     productTier: "Premium",
+    whyChooseDescription:
+      "Blue Dream offre un bon équilibre entre fraîcheur, fruit doux et notes végétales. C'est une fleur premium polyvalente, adaptée aux clients qui veulent une référence aromatique sans profil trop sucré ni trop lourd.",
+    advisedProfile:
+      "Pour ceux qui veulent une fleur équilibrée, fraîche et légèrement fruitée.",
     experienceDescription:
       "La Blue Dream est une fleur premium polyvalente : fraîche, fruitée, mais moins sucrée que Mango Haze. Elle convient bien aux clients qui veulent une fleur aromatique, propre et équilibrée, sans profil trop lourd.",
     comingSoon: true,
@@ -304,6 +320,10 @@ export const products: Product[] = [
     aromas: ["Boisé", "Terreux", "Épicé", "Chaleureux", "Profond"],
     tags: ["fleur", "premium", "hydroponique", "suisse", "boisé"],
     productTier: "Premium",
+    whyChooseDescription:
+      "Plutonium s'adresse aux clients qui apprécient les fleurs plus profondes, boisées et terreuses. Son profil plus sombre et épicé en fait une référence de caractère, pensée pour les amateurs de produits plus marqués.",
+    advisedProfile:
+      "Pour les clients qui préfèrent les profils boisés, terreux et plus profonds.",
     experienceDescription:
       "La Plutonium est la fleur la plus connaisseur de cette sélection. Elle complète les profils fruités comme Mango Haze et Mandarine avec une signature plus sombre, boisée et puissante en bouche.",
     comingSoon: true,
