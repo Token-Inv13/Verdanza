@@ -5,7 +5,6 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { AgeGate } from "../components/AgeGate";
 import { ComplianceNote } from "../components/ComplianceNote";
-import { PreorderModal } from "../components/PreorderModal";
 
 const navItems = [
   { label: "Accueil", to: "/" },
@@ -27,7 +26,6 @@ export function MainLayout() {
   return (
     <div className="min-h-screen bg-ivory text-ink">
       <AgeGate />
-      <PreorderModal />
       <header className="sticky top-0 z-40 border-b border-forest/10 bg-ivory/95 backdrop-blur">
         <div className="container-page flex min-h-20 items-center justify-between gap-4">
           <NavLink to="/" className="flex items-center gap-3">

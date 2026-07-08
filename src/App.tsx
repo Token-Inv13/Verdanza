@@ -20,6 +20,7 @@ import { AccountLayout } from "./pages/account/AccountLayout";
 import { AccountOverviewPage } from "./pages/account/AccountOverviewPage";
 import { AccountOrdersPage } from "./pages/account/AccountOrdersPage";
 import { AccountProfilePage } from "./pages/account/AccountProfilePage";
+import { AccountFavoritesPage } from "./pages/account/AccountFavoritesPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
 export function App() {
@@ -59,6 +60,7 @@ export function App() {
           <Route path="compte" element={<AccountLayout />}>
             <Route index element={<AccountOverviewPage />} />
             <Route path="commandes" element={<AccountOrdersPage />} />
+            <Route path="favoris" element={<AccountFavoritesPage />} />
             <Route path="profil" element={<AccountProfilePage />} />
           </Route>
         </Route>
@@ -84,6 +86,8 @@ export function App() {
             element={<AdminPage section="Livraisons locales" />}
           />
           <Route path="clients" element={<AdminPage section="Clients" />} />
+          <Route path="favoris" element={<AdminPage section="Favoris produits" />} />
+          <Route path="avis" element={<AdminPage section="Avis clients" />} />
           <Route path="coupons" element={<AdminPage section="Coupons" />} />
           <Route path="factures" element={<AdminPage section="Factures" />} />
           <Route path="facturation" element={<AdminPage section="Paramètres de facturation" />} />

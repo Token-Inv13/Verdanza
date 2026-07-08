@@ -7,7 +7,6 @@ import { deliveryZones as fallbackDeliveryZones } from "../data/deliveryZones";
 import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
 import type { DeliveryMethod, DeliveryZone, PreferredPaymentMethod } from "../types";
 import { trackEvent } from "../lib/analytics";
-import { isPreorderActive } from "../lib/preorder";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
 import {
   effectiveLocalDeliveryMinimum,
@@ -100,7 +99,6 @@ export function CheckoutPage() {
     : postalZone?.fee ?? 0;
   const discountAmount = quote?.promoApplied ? quote.discountAmount : 0;
   const estimatedTotal = Math.max(0, subtotal + estimatedDeliveryFee - discountAmount);
-  const preorderActive = isPreorderActive();
 
   useEffect(() => {
     let cancelled = false;
@@ -260,7 +258,7 @@ export function CheckoutPage() {
         "verdanza:lastOrderSummary",
         JSON.stringify({
           orderId: payload.orderId,
-          orderType: preorderActive ? "preorder" : "order",
+          orderType: "order",
           items: lines.map((line) => ({
             name: line.product.name,
             quantity: line.quantity,
@@ -283,11 +281,7 @@ export function CheckoutPage() {
         }),
       );
 
-      navigate(
-        `/checkout/success?order_id=${encodeURIComponent(payload.orderId)}${
-          preorderActive ? "&type=preorder" : ""
-        }`,
-      );
+      navigate(`/checkout/success?order_id=${encodeURIComponent(payload.orderId)}`);
     } catch (checkoutError) {
       console.error("Checkout submission failed", checkoutError);
       const message =
@@ -308,31 +302,17 @@ export function CheckoutPage() {
   return (
     <main className="container-page py-12">
       <Seo
-        title={
-          preorderActive
-            ? "Finaliser ma précommande - Verdanza CBD"
-            : "Finaliser ma commande - Verdanza CBD"
-        }
+        title="Finaliser ma commande - Verdanza CBD"
         description="Finalisation de commande Verdanza CBD avec vérification des disponibilités."
       />
       <div className="page-intro">
-        <h1>{preorderActive ? "Finaliser ma précommande" : "Finaliser ma commande"}</h1>
+        <h1>Finaliser ma commande</h1>
         <p>
-          {preorderActive
-            ? "Votre précommande sera transmise à Verdanza. Nous vous contacterons rapidement pour confirmer les disponibilités, la livraison et le règlement."
-            : "Votre commande sera transmise à Verdanza. Nous vous contacterons rapidement si nécessaire pour confirmer les disponibilités, la livraison et le règlement."}
+          Votre commande sera transmise à Verdanza. Nous vous contacterons
+          rapidement si nécessaire pour confirmer les disponibilités, la
+          livraison et le règlement.
         </p>
       </div>
-
-      {preorderActive && (
-        <section className="mt-8 rounded-lg border border-champagne/40 bg-cream p-5 text-sm leading-6 text-forest">
-          <strong className="block text-base">Précommande</strong>
-          <span>
-            L'ouverture officielle est prévue le jeudi 9 juillet. Votre panier
-            peut être validé dès maintenant, sans paiement en ligne.
-          </span>
-        </section>
-      )}
 
       <section className="mt-8 rounded-lg border border-champagne/30 bg-cream p-5 text-sm leading-6 text-forest">
         <p>
@@ -659,11 +639,7 @@ export function CheckoutPage() {
             </label>
             {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
             <button className="btn-primary mt-6 w-full" disabled={isSubmitting}>
-              {isSubmitting
-                ? "Validation..."
-                : preorderActive
-                  ? "Valider ma précommande"
-                  : "Valider ma commande"}
+              {isSubmitting ? "Validation..." : "Valider ma commande"}
             </button>
           </aside>
         </form>

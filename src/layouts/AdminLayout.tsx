@@ -6,6 +6,8 @@ import {
   Boxes,
   FileText,
   LogOut,
+  Heart,
+  MessageSquare,
   Menu,
   Package,
   Settings,
@@ -27,6 +29,8 @@ const adminNav = [
   { label: "Factures", to: "/admin/factures", icon: FileText },
   { label: "Facturation", to: "/admin/facturation", icon: Settings },
   { label: "Clients", to: "/admin/clients", icon: Users },
+  { label: "Favoris", to: "/admin/favoris", icon: Heart },
+  { label: "Avis clients", to: "/admin/avis", icon: MessageSquare },
 ];
 
 export function AdminLayout() {

@@ -12,39 +12,31 @@ export function CheckoutSuccessPage() {
   const [params] = useSearchParams();
   const { clearCart } = useCart();
   const orderId = params.get("order_id");
-  const queryType = params.get("type");
   const summary = readLastOrderSummary(orderId);
-  const isPreorder = queryType === "preorder" || summary?.orderType === "preorder";
 
   useEffect(() => {
     clearCart();
     trackEvent("purchase", {
       hasOrderId: Boolean(orderId),
-      orderType: isPreorder ? "preorder" : "order",
+      orderType: "order",
     });
-  }, [clearCart, isPreorder, orderId]);
+  }, [clearCart, orderId]);
 
   return (
     <main className="container-page py-16">
       <Seo
-        title={
-          isPreorder
-            ? "Précommande reçue - Verdanza CBD"
-            : "Commande reçue - Verdanza CBD"
-        }
+        title="Commande reçue - Verdanza CBD"
         description="Confirmation de commande Verdanza."
       />
       <section className="max-w-2xl rounded-lg border border-champagne/30 bg-cream p-8">
         <p className="text-xs uppercase tracking-[0.2em] text-champagne">
-          {isPreorder ? "Précommande" : "Commande"}
+          Commande
         </p>
         <h1 className="mt-3 font-display text-5xl text-forest">
-          {isPreorder ? "Précommande envoyée" : "Commande envoyée"}
+          Commande envoyée
         </h1>
         <p className="mt-5 leading-7 text-ink/70">
-          {isPreorder
-            ? "Votre précommande a bien été transmise à Verdanza."
-            : "Votre commande a bien été transmise à Verdanza."}
+          Votre commande a bien été transmise à Verdanza.
         </p>
         <div className="mt-5 rounded-md border border-champagne/30 bg-ivory p-4 text-sm leading-6 text-forest">
           <strong className="block text-base">
@@ -105,7 +97,6 @@ function readLastOrderSummary(orderId: string | null) {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as {
       orderId?: string;
-      orderType?: string;
       items?: { name: string; quantity: number; total: number }[];
       delivery?: string;
       deliveryNote?: string;
@@ -114,7 +105,6 @@ function readLastOrderSummary(orderId: string | null) {
     };
     if (parsed.orderId !== orderId || !Array.isArray(parsed.items)) return null;
     return {
-      orderType: parsed.orderType,
       items: parsed.items,
       delivery: parsed.delivery || "À confirmer",
       deliveryNote: parsed.deliveryNote || "",

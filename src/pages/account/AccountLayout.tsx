@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 const accountLinks = [
   { to: "/compte", label: "Tableau de bord", end: true },
   { to: "/compte/commandes", label: "Commandes" },
+  { to: "/compte/favoris", label: "Mes favoris" },
   { to: "/compte/profil", label: "Profil" },
 ];
 

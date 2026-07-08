@@ -41,6 +41,32 @@ export type Product = {
   seoDescription: string;
 };
 
+export type ProductFavorite = {
+  id: string;
+  userId: string;
+  productId: string;
+  productName: string;
+  productCategory: ProductCategory;
+  productImage: string;
+  createdAt?: unknown;
+};
+
+export type ReviewStatus = "pending" | "internal" | "approved" | "rejected";
+
+export type ProductReview = {
+  id: string;
+  rating: number;
+  comment: string;
+  productId: string;
+  productName: string;
+  orderId: string;
+  userId: string;
+  customerEmail?: string;
+  createdAt?: unknown;
+  status: ReviewStatus;
+  publicVisible: false;
+};
+
 export type DeliveryMethod = "postal" | "local_express";
 export type DeliveryZoneStatus =
   | "open"

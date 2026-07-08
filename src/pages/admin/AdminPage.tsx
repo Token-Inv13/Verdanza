@@ -32,6 +32,14 @@ import {
   sendOrderPaymentLinkEmail,
   type AdminPaymentLink,
 } from "../../services/paymentLinksService";
+import {
+  getAdminFavoriteStats,
+  type FavoriteProductStat,
+} from "../../services/favoritesService";
+import {
+  getAdminProductReviews,
+  updateReviewStatus,
+} from "../../services/reviewsService";
 import type {
   AdminMetric,
   BillingSettings,
@@ -49,6 +57,8 @@ import type {
   PaymentStatus,
   Product,
   ProductCategory,
+  ProductReview,
+  ReviewStatus,
   StatusHistoryEntry,
 } from "../../types";
 import {
@@ -406,6 +416,12 @@ export function AdminPage({ section }: { section: string }) {
           />
         </>
       )}
+
+      {section === "Favoris produits" && (
+        <AdminFavoritesPanel products={products} />
+      )}
+
+      {section === "Avis clients" && <AdminReviewsPanel />}
 
       {section === "Factures" && (
         <>
@@ -2896,6 +2912,182 @@ function sourceLabel(source: string) {
   if (source === "local") return "secours local";
   if (source === "empty") return "aucune donnée";
   return source;
+}
+
+function AdminFavoritesPanel({ products }: { products: Product[] }) {
+  const [stats, setStats] = useState<FavoriteProductStat[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    getAdminFavoriteStats()
+      .then(setStats)
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  if (isLoading) {
+    return <p className="mt-8 text-forest/70">Chargement des favoris...</p>;
+  }
+
+  return (
+    <section className="mt-8">
+      <p className="text-sm text-ink/60">
+        Statistiques agrégées, sans données personnelles client.
+      </p>
+      {!stats.length && (
+        <AdminEmptyState
+          title="Aucun favori enregistré."
+          description="Les produits ajoutés aux favoris apparaîtront ici."
+        />
+      )}
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {stats.map((stat) => {
+          const product = products.find((entry) => entry.id === stat.productId);
+          return (
+            <article key={stat.productId} className="admin-card">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.14em] text-champagne">
+                    {stat.productCategory === "flowers" ? "Fleur CBD" : "Résine CBD"}
+                  </p>
+                  <h2 className="mt-1 font-display text-2xl text-forest">
+                    {stat.productName}
+                  </h2>
+                </div>
+                <AdminBadge tone="gold">{`${stat.count} favori(s)`}</AdminBadge>
+              </div>
+              {product && (
+                <div className="mt-4 grid grid-cols-3 gap-2 text-sm text-ink/65">
+                  <span>{product.price.toFixed(2).replace(".", ",")} EUR/g</span>
+                  <span>{product.stock} g</span>
+                  <span>{product.isActive ? "Actif" : "Inactif"}</span>
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function AdminReviewsPanel() {
+  const [reviews, setReviews] = useState<ProductReview[]>([]);
+  const [filter, setFilter] = useState<"all" | ReviewStatus>("all");
+  const [isLoading, setIsLoading] = useState(true);
+
+  async function loadReviews() {
+    setIsLoading(true);
+    setReviews(await getAdminProductReviews());
+    setIsLoading(false);
+  }
+
+  useEffect(() => {
+    void loadReviews();
+  }, []);
+
+  const visibleReviews = reviews.filter(
+    (review) => filter === "all" || review.status === filter,
+  );
+
+  if (isLoading) {
+    return <p className="mt-8 text-forest/70">Chargement des avis...</p>;
+  }
+
+  return (
+    <section className="mt-8">
+      <div className="flex flex-wrap gap-2">
+        {[
+          ["all", "Tous"],
+          ["pending", "Nouveaux"],
+          ["internal", "Lus"],
+          ["approved", "Validés en interne"],
+          ["rejected", "Rejetés"],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            className={filter === value ? "btn-primary" : "btn-secondary"}
+            onClick={() => setFilter(value as "all" | ReviewStatus)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {!visibleReviews.length && (
+        <AdminEmptyState
+          title="Aucun avis pour ce filtre."
+          description="Les avis déposés après une commande livrée apparaîtront ici."
+        />
+      )}
+      <div className="mt-5 grid gap-4 xl:grid-cols-2">
+        {visibleReviews.map((review) => (
+          <article key={review.id} className="admin-card">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-display text-2xl text-forest">
+                  {review.productName}
+                </h2>
+                <p className="mt-1 text-sm text-ink/55">
+                  Commande {review.orderId.slice(0, 8).toUpperCase()}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <AdminBadge tone="gold">{`${review.rating}/5`}</AdminBadge>
+                <AdminBadge tone="neutral">Interne</AdminBadge>
+              </div>
+            </div>
+            <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-ink/75">
+              {review.comment}
+            </p>
+            <p className="mt-3 text-xs text-ink/50">
+              Statut : {reviewStatusLabel(review.status)} · Visible publiquement : non
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {review.status === "pending" && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={async () => {
+                    await updateReviewStatus(review.id, "internal");
+                    await loadReviews();
+                  }}
+                >
+                  Marquer comme lu
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={async () => {
+                  await updateReviewStatus(review.id, "approved");
+                  await loadReviews();
+                }}
+              >
+                Valider en interne
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={async () => {
+                  await updateReviewStatus(review.id, "rejected");
+                  await loadReviews();
+                }}
+              >
+                Rejeter
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function reviewStatusLabel(status: ReviewStatus) {
+  if (status === "pending") return "Nouveau";
+  if (status === "internal") return "Lu";
+  if (status === "approved") return "Validé en interne";
+  return "Rejeté";
 }
 
 function stockLabel(product: Product) {

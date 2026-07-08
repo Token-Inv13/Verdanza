@@ -3,6 +3,7 @@ import { ShoppingBag } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import type { Product } from "../types";
 import { trackEvent } from "../lib/analytics";
+import { FavoriteButton } from "./FavoriteButton";
 
 function productImageAlt(product: Product) {
   return `${product.name} - ${
@@ -15,7 +16,8 @@ export function ProductCard({ product }: { product: Product }) {
   const isComingSoon = product.comingSoon || product.stockStatus === "coming_soon";
 
   return (
-    <article className="group overflow-hidden rounded-lg border border-forest/10 bg-ivory shadow-sm transition hover:-translate-y-1 hover:shadow-soft">
+    <article className="group relative overflow-hidden rounded-lg border border-forest/10 bg-ivory shadow-sm transition hover:-translate-y-1 hover:shadow-soft">
+      <FavoriteButton product={product} className="absolute right-3 top-3 z-10" />
       <Link to={`/produits/${product.slug}`} className="block bg-cream p-6">
         <img
           src={product.image}

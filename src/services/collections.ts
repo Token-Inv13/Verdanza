@@ -13,4 +13,6 @@ export const collections = {
   adminUsers: "adminUsers",
   supplierProducts: "supplierProducts",
   labReports: "labReports",
+  favorites: "favorites",
+  productReviews: "productReviews",
 } as const;

@@ -51,7 +51,7 @@ export async function sendAdminNewOrderEmail(order: Order) {
     kind: "admin_new_order",
     orderId: order.id,
     to: adminEmails,
-    subject: `${orderEmailTitle(order)} Verdanza #${shortOrderId(order.id)}`,
+    subject: `${orderEmailTitle()} Verdanza #${shortOrderId(order.id)}`,
     html: adminOrderEmailHtml(order),
     text: adminOrderEmailText(order),
     idempotencyKey: `admin-new-order-${order.id}`,
@@ -72,10 +72,7 @@ export async function sendManualOrderConfirmationEmail(order: Order) {
     kind: "order_confirmation",
     orderId: order.id,
     to: order.customerEmail,
-    subject:
-      order.orderType === "preorder"
-        ? "Votre précommande Verdanza a bien été reçue"
-        : "Votre commande Verdanza a bien été reçue",
+    subject: "Votre commande Verdanza a bien été reçue",
     html: customerManualOrderEmailHtml(order),
     text: customerManualOrderEmailText(order),
     idempotencyKey: `manual-order-confirmation-${order.id}`,
@@ -90,7 +87,7 @@ export async function sendAdminManualOrderEmail(order: Order) {
     kind: "admin_new_order",
     orderId: order.id,
     to: adminEmails,
-    subject: `${orderEmailTitle(order)} Verdanza #${shortOrderId(order.id)}`,
+    subject: `${orderEmailTitle()} Verdanza #${shortOrderId(order.id)}`,
     html: adminOrderEmailHtml(order),
     text: adminOrderEmailText(order),
     idempotencyKey: `admin-manual-order-${order.id}`,
@@ -379,7 +376,7 @@ function orderEmailHtml(order: Order, intro: string) {
     <div style="font-family:Arial,sans-serif;color:#183c2f;line-height:1.5">
       <h1>Verdanza</h1>
       <p>${escapeHtml(intro)}</p>
-      <p><strong>Type :</strong> ${escapeHtml(orderTypeLabel(order))}</p>
+      <p><strong>Type :</strong> ${escapeHtml(orderTypeLabel())}</p>
       <p><strong>Commande :</strong> ${escapeHtml(shortOrderId(order.id))}</p>
       <ul>${rows}</ul>
       ${promoEmailHtml(order)}
@@ -401,7 +398,7 @@ function orderEmailText(order: Order, intro: string) {
   return [
     "Verdanza",
     intro,
-    `Type: ${orderTypeLabel(order)}`,
+    `Type: ${orderTypeLabel()}`,
     `Commande: ${shortOrderId(order.id)}`,
     items,
     ...promoEmailTextLines(order),
@@ -449,9 +446,7 @@ function promoEmailTextLines(order: Order) {
 function customerManualOrderEmailHtml(order: Order) {
   return orderEmailHtml(
     order,
-    order.orderType === "preorder"
-      ? "Votre précommande a bien été transmise à Verdanza. Nous vous contacterons rapidement afin de confirmer les disponibilités, la livraison et le règlement."
-      : "Votre commande a bien été transmise à Verdanza. Nous vous contacterons rapidement si nécessaire afin de confirmer les disponibilités, la livraison et le règlement.",
+    "Votre commande a bien été transmise à Verdanza. Nous vous contacterons rapidement si nécessaire afin de confirmer les disponibilités, la livraison et le règlement.",
   );
 }
 
@@ -459,16 +454,14 @@ function customerManualOrderEmailText(order: Order) {
   return [
     "Bonjour,",
     "",
-    order.orderType === "preorder"
-      ? "Votre précommande a bien été transmise à Verdanza."
-      : "Votre commande a bien été transmise à Verdanza.",
+    "Votre commande a bien été transmise à Verdanza.",
     "",
     "Votre commande est en attente de confirmation par l'equipe Verdanza. Apres verification des disponibilites et du mode de livraison, nous vous confirmerons le montant final. Si vous avez choisi ou souhaitez un paiement par carte bancaire, un lien de paiement vous sera envoye par email et/ou message.",
     "",
     "Contact Verdanza:",
     `Email: ${contactEmail()}`,
     "",
-    `Type: ${orderTypeLabel(order)}`,
+    `Type: ${orderTypeLabel()}`,
     `Mode de reglement souhaite: ${preferredPaymentMethodLabel(order.preferredPaymentMethod)}`,
     "Résumé de votre commande:",
     order.items
@@ -486,8 +479,8 @@ function adminOrderEmailHtml(order: Order) {
   const address = order.deliveryAddress;
   return `
     <div style="font-family:Arial,sans-serif;color:#183c2f;line-height:1.5">
-      <h1>${escapeHtml(orderEmailTitle(order))} Verdanza</h1>
-      <p><strong>Type :</strong> ${escapeHtml(orderTypeLabel(order))}</p>
+      <h1>${escapeHtml(orderEmailTitle())} Verdanza</h1>
+      <p><strong>Type :</strong> ${escapeHtml(orderTypeLabel())}</p>
       <p><strong>Commande :</strong> ${escapeHtml(shortOrderId(order.id))}</p>
       <p><strong>Client :</strong> ${escapeHtml(order.customerName || "Client")}</p>
       <p><strong>Téléphone :</strong> ${escapeHtml(order.customerPhone || "")}</p>
@@ -513,8 +506,8 @@ function adminOrderEmailHtml(order: Order) {
 
 function adminOrderEmailText(order: Order) {
   return [
-    `${orderEmailTitle(order)} Verdanza`,
-    `Type: ${orderTypeLabel(order)}`,
+    `${orderEmailTitle()} Verdanza`,
+    `Type: ${orderTypeLabel()}`,
     `Commande: ${shortOrderId(order.id)}`,
     `Client: ${order.customerName || "Client"}`,
     `Téléphone: ${order.customerPhone || ""}`,
@@ -701,8 +694,8 @@ function customerFirstName(order: Order) {
   return (order.customerName || order.customerEmail || "Bonjour").split(" ")[0] || "Bonjour";
 }
 
-function orderTypeLabel(order: Order) {
-  return order.orderType === "preorder" ? "Précommande" : "Commande";
+function orderTypeLabel() {
+  return "Commande";
 }
 
 function preferredPaymentMethodLabel(method?: Order["preferredPaymentMethod"]) {
@@ -724,8 +717,8 @@ function deliveryInfoText(order: Order) {
   return "Livraison locale à partir de 20 € d'achat.";
 }
 
-function orderEmailTitle(order: Order) {
-  return order.orderType === "preorder" ? "Nouvelle précommande" : "Nouvelle commande";
+function orderEmailTitle() {
+  return "Nouvelle commande";
 }
 
 function adminUrl() {

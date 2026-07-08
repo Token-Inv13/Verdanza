@@ -5,6 +5,7 @@ import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
 import { useProducts } from "../hooks/useProducts";
 import { trackEvent } from "../lib/analytics";
+import { FavoriteButton } from "../components/FavoriteButton";
 
 function productImageAlt(product: { name: string; category: string }) {
   return `${product.name} - ${
@@ -98,7 +99,10 @@ export function ProductPage() {
           <p className="text-sm uppercase tracking-[0.18em] text-champagne">
             {product.category === "flowers" ? "Fleur CBD" : "Resine CBD"}
           </p>
-          <h1 className="mt-3 font-display text-5xl text-forest">{product.name}</h1>
+          <div className="mt-3 flex items-start justify-between gap-4">
+            <h1 className="font-display text-5xl text-forest">{product.name}</h1>
+            <FavoriteButton product={product} className="shrink-0" />
+          </div>
           <p className="mt-5 text-lg leading-8 text-ink/70">{product.longDescription}</p>
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
             {keyFacts.map(([label, value]) => (

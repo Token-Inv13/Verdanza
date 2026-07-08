@@ -102,6 +102,35 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /favorites/{favoriteId} {
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && favoriteId == request.auth.uid + "_" + request.resource.data.productId
+        && request.resource.data.productId is string
+        && request.resource.data.productName is string
+        && request.resource.data.productCategory is string
+        && request.resource.data.productImage is string;
+      allow delete: if isAdmin()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+      allow update: if false;
+    }
+
+    match /productReviews/{reviewId} {
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if false;
+      allow update: if isAdmin()
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.orderId == resource.data.orderId
+        && request.resource.data.productId == resource.data.productId
+        && request.resource.data.rating == resource.data.rating
+        && request.resource.data.comment == resource.data.comment
+        && request.resource.data.publicVisible == false;
+      allow delete: if isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
