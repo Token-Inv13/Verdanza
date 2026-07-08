@@ -4,7 +4,7 @@ import { Seo } from "../components/Seo";
 import { useProducts } from "../hooks/useProducts";
 
 export function ShopPage() {
-  const { products, source, isLoading } = useProducts();
+  const { products, isLoading } = useProducts();
 
   return (
     <main className="container-page py-12">
@@ -18,15 +18,12 @@ export function ShopPage() {
           Selection réelle Verdanza : fleurs et résines CBD premium disponibles
           au gramme, avec livraison express locale à Aix-en-Provence et alentours.
         </p>
-        <p className="mt-3 text-sm text-forest/65">
-          Catalogue : {source === "firestore" ? "stock en ligne" : "selection locale"}.
-        </p>
       </div>
       <CatalogNotice />
       {isLoading ? (
-        <p className="mt-10 text-forest/70">Chargement du catalogue...</p>
+        <p className="mt-6 text-forest/70">Chargement du catalogue...</p>
       ) : (
-        <div className="product-grid mt-10">
+        <div className="product-grid mt-6">
           {products.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}

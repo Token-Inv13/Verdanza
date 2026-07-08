@@ -29,9 +29,9 @@ export function CategoryPage({
       </div>
       <CatalogNotice variant={category === "flowers" ? "flowers" : "resins"} />
       {isLoading ? (
-        <p className="mt-10 text-forest/70">Chargement des produits...</p>
+        <p className="mt-6 text-forest/70">Chargement des produits...</p>
       ) : (
-        <div className="product-grid mt-10">
+        <div className="product-grid mt-6">
           {categoryProducts.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
