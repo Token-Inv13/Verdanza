@@ -17,8 +17,8 @@ export function HomePage() {
       <main>
         <section className="hero-section relative overflow-hidden">
           <img
-            src="/Fiche produit/Golden static/DSC02266copie.webp"
-            alt="Golden Static Verdanza"
+            src="/images/verdanza-hero-premium.webp"
+            alt="Sélection CBD premium Verdanza"
             className="absolute inset-0 h-full w-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-forest/95 via-forest/78 to-forest/25" />
@@ -28,12 +28,12 @@ export function HomePage() {
                 <Leaf size={14} /> Verdanza CBD
               </p>
               <h1 className="mt-5 font-display text-4xl leading-tight sm:text-5xl md:text-7xl">
-                Fleurs et résines CBD premium en ligne
+                CBD premium, sélectionné avec exigence
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-ivory/82 md:mt-6 md:text-lg md:leading-8">
-                Une sélection courte, exigeante et conforme, disponible au
-                gramme avec livraison postale en France et express local selon
-                zone disponible.
+                Fleurs et résines CBD sélectionnées avec soin, disponibles en
+                livraison postale en France et en livraison locale selon les
+                zones ouvertes.
               </p>
               <div className="mt-6 flex flex-col gap-3 sm:flex-row md:mt-8">
                 <Link to="/boutique" className="btn-primary bg-champagne text-forest hover:bg-[#d7b66e]">
