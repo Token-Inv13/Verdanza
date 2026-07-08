@@ -91,7 +91,7 @@ export async function renderInvoicePdf(invoice: Invoice, settings: BillingSettin
     y -= 32;
   }
   drawMultiline([
-    "Produits réservés aux adultes. Taux de THC conforme selon analyse fournisseur.",
+    "Produits réservés aux adultes. Taux de THC conforme selon analyse producteur.",
     settings.legalMentions || "",
     settings.paymentTerms || "",
   ].filter(Boolean), 40, Math.max(y, 70), 8, font, muted);

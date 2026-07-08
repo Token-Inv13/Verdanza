@@ -7,7 +7,7 @@ const content = {
     text: "Verdanza sélectionne une gamme courte de produits CBD, avec une attention particulière portée à la conformité, à la traçabilité et à la clarté des informations transmises aux clients.",
     points: [
       "Sélection contrôlée",
-      "THC conforme selon analyses fournisseur",
+      "THC conforme selon analyses producteur",
       "Produits réservés aux adultes",
       "Aucune promesse médicale",
       "Traçabilité et transparence",
@@ -92,8 +92,8 @@ function QualityTrustSection() {
       text: "La sélection Verdanza reste volontairement courte afin de mieux suivre les références proposées, leur présentation, leur fraîcheur et leur cohérence avec les attentes clients.",
     },
     {
-      title: "THC conforme selon analyses fournisseur",
-      text: "Les fleurs et résines CBD sont proposées sur la base des informations et analyses transmises par les fournisseurs. Les taux de THC annoncés doivent rester conformes au cadre applicable.",
+      title: "THC conforme selon analyses producteur",
+      text: "Les fleurs et résines CBD sont proposées sur la base des informations et analyses transmises par les producteurs. Les taux de THC annoncés doivent rester conformes au cadre applicable.",
     },
     {
       title: "Produits réservés aux adultes",
@@ -105,7 +105,7 @@ function QualityTrustSection() {
     },
     {
       title: "Traçabilité et transparence",
-      text: "Verdanza conserve les informations fournisseur disponibles et peut répondre aux questions produit avant commande : origine, culture, taux annoncés, profil aromatique ou disponibilité.",
+      text: "Verdanza conserve les informations producteur disponibles et peut répondre aux questions avant commande : origine, culture, taux annoncés, profil aromatique ou disponibilité.",
     },
     {
       title: "Contrôle visuel avant mise en vente",

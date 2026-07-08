@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Navigate, Outlet } from "react-router-dom";
-import { LockKeyhole } from "lucide-react";
+import { Eye, EyeOff, LockKeyhole } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { Seo } from "./Seo";
 
@@ -8,6 +8,7 @@ export function AdminAuthGate() {
   const { isLoading, isAdmin, user, isFirebaseConfigured, signIn, resetPassword } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -95,13 +96,25 @@ export function AdminAuthGate() {
         </label>
         <label className="mt-4 block text-sm font-medium text-forest">
           Mot de passe
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className="input-field mt-2"
-            required
-          />
+          <span className="relative mt-2 block">
+            <input
+              type={isPasswordVisible ? "text" : "password"}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className="input-field pr-12"
+              autoComplete="current-password"
+              required
+            />
+            <button
+              type="button"
+              className="absolute inset-y-0 right-0 grid w-12 place-items-center text-forest/65 transition hover:text-forest focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-champagne"
+              onClick={() => setIsPasswordVisible((visible) => !visible)}
+              aria-label={isPasswordVisible ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+              aria-pressed={isPasswordVisible}
+            >
+              {isPasswordVisible ? <EyeOff size={19} /> : <Eye size={19} />}
+            </button>
+          </span>
         </label>
         {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
         {message && <p className="mt-4 text-sm text-forest">{message}</p>}

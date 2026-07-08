@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import { Seo } from "../components/Seo";
 import { useAuth } from "../context/AuthContext";
 import { trackEvent } from "../lib/analytics";
@@ -166,16 +167,33 @@ function AuthInput({
   onChange: (value: string) => void;
   type?: string;
 }) {
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const isPassword = type === "password";
+
   return (
     <label className="text-sm font-medium text-forest">
       {label}
-      <input
-        className="input-field mt-2"
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        required
-      />
+      <span className="relative mt-2 block">
+        <input
+          className={`input-field ${isPassword ? "pr-12" : ""}`}
+          type={isPassword && isPasswordVisible ? "text" : type}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          autoComplete={isPassword ? "current-password" : undefined}
+          required
+        />
+        {isPassword && (
+          <button
+            type="button"
+            className="absolute inset-y-0 right-0 grid w-12 place-items-center text-forest/65 transition hover:text-forest focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-champagne"
+            onClick={() => setIsPasswordVisible((visible) => !visible)}
+            aria-label={isPasswordVisible ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+            aria-pressed={isPasswordVisible}
+          >
+            {isPasswordVisible ? <EyeOff size={19} /> : <Eye size={19} />}
+          </button>
+        )}
+      </span>
     </label>
   );
 }
