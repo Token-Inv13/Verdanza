@@ -46,6 +46,8 @@ export function ProductPage() {
     );
   }
 
+  const isComingSoon = product.comingSoon || product.stockStatus === "coming_soon";
+
   return (
     <main className="container-page py-12">
       <Seo title={product.seoTitle} description={product.seoDescription} />
@@ -70,7 +72,14 @@ export function ProductPage() {
               ["THC", product.thcRate],
               ["Origine", product.origin],
               ["Culture", product.cultureType],
-              ["Stock", product.stock > 0 ? "Disponible" : "Indisponible"],
+              [
+                "Statut",
+                isComingSoon
+                  ? product.stockLabel || "En arrivage chez Verdanza"
+                  : product.stock > 0
+                    ? "Disponible"
+                    : "Stock à confirmer",
+              ],
             ].map(([label, value]) => (
               <div key={label} className="rounded-md border border-forest/10 bg-ivory p-4">
                 <dt className="text-xs uppercase tracking-[0.14em] text-ink/45">
@@ -90,29 +99,57 @@ export function ProductPage() {
               ))}
             </div>
           </div>
+          {product.experienceDescription && (
+            <div className="mt-7 border-l-2 border-champagne pl-5">
+              <h2 className="font-display text-2xl text-forest">
+                Expérience Verdanza
+              </h2>
+              <p className="mt-2 leading-7 text-ink/70">
+                {product.experienceDescription}
+              </p>
+            </div>
+          )}
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
             <span className="font-display text-4xl text-forest">
               {product.price.toFixed(2).replace(".", ",")} EUR/g
             </span>
-            <button
-              className="btn-primary"
-              onClick={() => {
-                addItem(product.id);
-                trackEvent("add_to_cart", {
-                  productId: product.id,
-                  productName: product.name,
-                  price: product.price,
-                });
-              }}
-            >
-              <ShoppingBag size={18} /> Ajouter 1 g au panier
-            </button>
+            {isComingSoon ? (
+              <span className="rounded-md border border-champagne/40 bg-cream px-5 py-3 font-semibold text-forest">
+                {product.stockLabel || "En arrivage chez Verdanza"}
+              </span>
+            ) : (
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  addItem(product.id);
+                  trackEvent("add_to_cart", {
+                    productId: product.id,
+                    productName: product.name,
+                    price: product.price,
+                  });
+                }}
+              >
+                <ShoppingBag size={18} /> Ajouter 1 g au panier
+              </button>
+            )}
           </div>
-          <p className="mt-6 text-sm leading-6 text-ink/60">
-            Produit réservé aux personnes majeures. Tenir hors de portée des
-            enfants. Ce produit n'est pas destiné à remplacer un traitement
-            médical.
-          </p>
+          {isComingSoon && (
+            <p className="mt-6 text-sm leading-6 text-ink/60">
+              Produit réservé aux adultes. Vente interdite aux mineurs. Produit
+              CBD conforme à la réglementation en vigueur selon analyse
+              fournisseur. THC inférieur au seuil légal. Ne pas ingérer. Tenir
+              hors de portée des enfants. Déconseillé aux femmes enceintes ou
+              allaitantes. Consultez un professionnel de santé en cas de
+              traitement médical.
+            </p>
+          )}
+          {!isComingSoon && (
+            <p className="mt-6 text-sm leading-6 text-ink/60">
+              Produit réservé aux personnes majeures. Tenir hors de portée des
+              enfants. Ce produit n'est pas destiné à remplacer un traitement
+              médical.
+            </p>
+          )}
         </section>
       </div>
     </main>

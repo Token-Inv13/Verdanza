@@ -1,4 +1,5 @@
 export type ProductCategory = "flowers" | "resins" | "oils" | "packs";
+export type ProductStockStatus = "available" | "coming_soon";
 
 export type CultureType =
   | "Indoor"
@@ -25,6 +26,11 @@ export type Product = {
   cultureType: CultureType;
   aromas: string[];
   tags: string[];
+  productTier?: "Premium";
+  experienceDescription?: string;
+  comingSoon?: boolean;
+  stockStatus?: ProductStockStatus;
+  stockLabel?: string;
   stock: number;
   lowStockThreshold: number;
   isActive: boolean;

@@ -12,6 +12,7 @@ function productImageAlt(product: Product) {
 
 export function ProductCard({ product }: { product: Product }) {
   const { addItem } = useCart();
+  const isComingSoon = product.comingSoon || product.stockStatus === "coming_soon";
 
   return (
     <article className="group overflow-hidden rounded-lg border border-forest/10 bg-ivory shadow-sm transition hover:-translate-y-1 hover:shadow-soft">
@@ -24,9 +25,15 @@ export function ProductCard({ product }: { product: Product }) {
       </Link>
       <div className="space-y-4 p-5">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-champagne">
-            {product.category === "flowers" ? "Fleur CBD" : "Resine CBD"}
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs uppercase tracking-[0.18em] text-champagne">
+              {product.category === "flowers" ? "Fleur CBD" : "Resine CBD"}
+            </span>
+            {product.productTier && <span className="tag">{product.productTier}</span>}
+            {product.cultureType === "Hydroponique" && (
+              <span className="tag">Hydroponique</span>
+            )}
+          </div>
           <Link
             to={`/produits/${product.slug}`}
             className="mt-1 block font-display text-2xl text-forest"
@@ -55,22 +62,29 @@ export function ProductCard({ product }: { product: Product }) {
           <span className="font-display text-2xl text-forest">
             {product.price.toFixed(2).replace(".", ",")} EUR/g
           </span>
-          <button
-            className="icon-button"
-            aria-label={`Ajouter ${product.name} au panier`}
-            onClick={() => {
-              addItem(product.id);
-              trackEvent("add_to_cart", {
-                productId: product.id,
-                productName: product.name,
-                price: product.price,
-              });
-            }}
-            title="Ajouter au panier"
-          >
-            <ShoppingBag size={18} />
-          </button>
+          {!isComingSoon && (
+            <button
+              className="icon-button"
+              aria-label={`Ajouter ${product.name} au panier`}
+              onClick={() => {
+                addItem(product.id);
+                trackEvent("add_to_cart", {
+                  productId: product.id,
+                  productName: product.name,
+                  price: product.price,
+                });
+              }}
+              title="Ajouter au panier"
+            >
+              <ShoppingBag size={18} />
+            </button>
+          )}
         </div>
+        {isComingSoon && (
+          <p className="rounded-md border border-champagne/35 bg-cream px-3 py-2 text-sm font-semibold text-forest">
+            {product.stockLabel || "En arrivage chez Verdanza"}
+          </p>
+        )}
       </div>
     </article>
   );
