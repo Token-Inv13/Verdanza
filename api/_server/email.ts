@@ -388,7 +388,7 @@ function orderEmailHtml(order: Order, intro: string) {
       <p><strong>Information livraison :</strong> ${escapeHtml(deliveryInfoText(order))}</p>
       <p><strong>Mode de règlement souhaité :</strong> ${escapeHtml(preferredPaymentMethodLabel(order.preferredPaymentMethod))}</p>
       <p>Votre commande est en attente de confirmation par l'équipe Verdanza. Après vérification des disponibilités et du mode de livraison, nous vous confirmerons le montant final. Si vous avez choisi ou souhaitez un paiement par carte bancaire, un lien de paiement vous sera envoyé par email et/ou message.</p>
-      <p><strong>Contact Verdanza :</strong> ${escapeHtml(contactPhone())} - ${escapeHtml(contactEmail())}</p>
+      <p><strong>Contact Verdanza :</strong> ${escapeHtml(contactEmail())}</p>
       ${accountUrl ? `<p><a href="${accountUrl}">Voir mes commandes</a></p>` : ""}
     </div>
   `;
@@ -410,7 +410,7 @@ function orderEmailText(order: Order, intro: string) {
     `Information livraison: ${deliveryInfoText(order)}`,
     `Mode de reglement souhaite: ${preferredPaymentMethodLabel(order.preferredPaymentMethod)}`,
     "Votre commande est en attente de confirmation par l'equipe Verdanza. Apres verification des disponibilites et du mode de livraison, nous vous confirmerons le montant final. Si vous avez choisi ou souhaitez un paiement par carte bancaire, un lien de paiement vous sera envoye par email et/ou message.",
-    `Contact Verdanza: ${contactPhone()} - ${contactEmail()}`,
+    `Contact Verdanza: ${contactEmail()}`,
   ].join("\n");
 }
 
@@ -451,7 +451,7 @@ function customerManualOrderEmailHtml(order: Order) {
     order,
     order.orderType === "preorder"
       ? "Votre précommande a bien été transmise à Verdanza. Nous vous contacterons rapidement afin de confirmer les disponibilités, la livraison et le règlement."
-      : "Votre commande a bien été transmise à Verdanza. Nous vous contacterons rapidement par téléphone ou par email afin de confirmer les disponibilités, la livraison et le règlement.",
+      : "Votre commande a bien été transmise à Verdanza. Nous vous contacterons rapidement si nécessaire afin de confirmer les disponibilités, la livraison et le règlement.",
   );
 }
 
@@ -466,7 +466,6 @@ function customerManualOrderEmailText(order: Order) {
     "Votre commande est en attente de confirmation par l'equipe Verdanza. Apres verification des disponibilites et du mode de livraison, nous vous confirmerons le montant final. Si vous avez choisi ou souhaitez un paiement par carte bancaire, un lien de paiement vous sera envoye par email et/ou message.",
     "",
     "Contact Verdanza:",
-    `Téléphone: ${contactPhone()}`,
     `Email: ${contactEmail()}`,
     "",
     `Type: ${orderTypeLabel(order)}`,

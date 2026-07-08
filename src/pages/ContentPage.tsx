@@ -139,7 +139,7 @@ function QualityTrustSection() {
         </h2>
         <p className="mt-4 leading-7 text-ink/70">
           Pour toute question sur un produit ou une commande, vous pouvez
-          contacter Verdanza au 07 80 81 41 37 ou par email à{" "}
+          contacter Verdanza par email à{" "}
           <a className="underline decoration-champagne" href={`mailto:${contactEmail}`}>
             {contactEmail}
           </a>

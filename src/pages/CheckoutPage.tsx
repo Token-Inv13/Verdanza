@@ -16,13 +16,11 @@ import {
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../config/deliveryRules";
 
-const contactPhone =
-  (import.meta.env.VITE_CONTACT_PHONE as string | undefined) || "07 80 81 41 37";
 const contactEmail =
   (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
   "contact@verdanza.fr";
 const checkoutErrorMessage =
-  "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza au 07 80 81 41 37.";
+  "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza par email.";
 const promoStorageKey = "verdanza-coupon-code";
 
 const paymentMethodLabels: Record<PreferredPaymentMethod, string> = {
@@ -322,7 +320,7 @@ export function CheckoutPage() {
         <p>
           {preorderActive
             ? "Votre précommande sera transmise à Verdanza. Nous vous contacterons rapidement pour confirmer les disponibilités, la livraison et le règlement."
-            : "Votre commande sera transmise à Verdanza. Nous vous contacterons rapidement par téléphone ou par email pour confirmer les disponibilités, la livraison et le règlement."}
+            : "Votre commande sera transmise à Verdanza. Nous vous contacterons rapidement si nécessaire pour confirmer les disponibilités, la livraison et le règlement."}
         </p>
       </div>
 
@@ -337,9 +335,8 @@ export function CheckoutPage() {
       )}
 
       <section className="mt-8 rounded-lg border border-champagne/30 bg-cream p-5 text-sm leading-6 text-forest">
-        <p>Contact direct : {contactPhone}</p>
         <p>
-          Email :{" "}
+          Contact :{" "}
           <a className="underline decoration-champagne" href={`mailto:${contactEmail}`}>
             {contactEmail}
           </a>
@@ -434,7 +431,11 @@ export function CheckoutPage() {
               {localDeliveryUnavailable && (
                 <p className="mt-4 rounded-md border border-champagne/40 bg-cream p-3 text-sm leading-6 text-forest">
                   Livraison locale temporairement indisponible. Vous pouvez choisir
-                  la livraison postale ou contacter Verdanza au 07 80 81 41 37.
+                  la livraison postale ou contacter Verdanza par email à{" "}
+                  <a className="underline decoration-champagne" href={`mailto:${contactEmail}`}>
+                    {contactEmail}
+                  </a>
+                  .
                 </p>
               )}
 

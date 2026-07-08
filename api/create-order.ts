@@ -135,7 +135,7 @@ export default async function handler(
       message.includes("code promo") ||
       message.includes("livraison postale")
       ? message
-      : "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza au 07 80 81 41 37.";
+      : "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza par email à contact@verdanza.fr.";
     sendJson(
       response,
       {

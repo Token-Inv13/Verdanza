@@ -4,8 +4,6 @@ import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
 import { trackEvent } from "../lib/analytics";
 
-const contactPhone =
-  (import.meta.env.VITE_CONTACT_PHONE as string | undefined) || "07 80 81 41 37";
 const contactEmail =
   (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
   "contact@verdanza.fr";
@@ -82,7 +80,6 @@ export function CheckoutSuccessPage() {
               <p>Total estimé : {formatMoney(summary.total)}</p>
             </div>
           )}
-          <p>Téléphone Verdanza : {contactPhone}</p>
           <p>
             Email :{" "}
             <a className="underline decoration-champagne" href={`mailto:${contactEmail}`}>
