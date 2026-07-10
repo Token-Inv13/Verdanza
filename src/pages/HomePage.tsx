@@ -1,12 +1,17 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Leaf, PackageCheck, ShieldCheck, Truck } from "lucide-react";
 import { ProductCard } from "../components/ProductCard";
+import { JsonLd } from "../components/JsonLd";
 import { Seo } from "../components/Seo";
 import { useProducts } from "../hooks/useProducts";
+import { buildHomeJsonLd } from "../lib/structuredData";
 
 export function HomePage() {
   const { products } = useProducts();
   const featuredProducts = products.filter((product) => product.isFeatured);
+  const contactEmail =
+    (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
+    "contact@verdanza.fr";
 
   return (
     <>
@@ -16,6 +21,7 @@ export function HomePage() {
         path="/"
         image="/images/verdanza-hero-premium.webp"
       />
+      <JsonLd id="site-identity" data={buildHomeJsonLd(contactEmail)} />
       <main>
         <section className="hero-section relative overflow-hidden">
           <img

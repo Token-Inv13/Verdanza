@@ -1,3 +1,4 @@
+import { Breadcrumbs, type BreadcrumbLink } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 
 export function LegalPage({ title }: { title: string }) {
@@ -6,6 +7,7 @@ export function LegalPage({ title }: { title: string }) {
     "contact@verdanza.fr";
   const sections = legalSections(title, contactEmail);
   const path = legalPath(title);
+  const breadcrumbs = legalBreadcrumbs(title, path);
   return (
     <main className="container-page py-12">
       <Seo
@@ -13,6 +15,7 @@ export function LegalPage({ title }: { title: string }) {
         description={`${title} Verdanza.`}
         path={path}
       />
+      <Breadcrumbs items={breadcrumbs} />
       <div className="page-intro">
         <h1>{title}</h1>
         <p>
@@ -37,6 +40,21 @@ export function LegalPage({ title }: { title: string }) {
       </div>
     </main>
   );
+}
+
+function legalBreadcrumbs(title: string, path: string): BreadcrumbLink[] {
+  if (path === "/mentions-legales") {
+    return [
+      { name: "Accueil", path: "/" },
+      { name: "Informations legales", path, current: true },
+    ];
+  }
+
+  return [
+    { name: "Accueil", path: "/" },
+    { name: "Informations legales", path: "/mentions-legales" },
+    { name: title, path, current: true },
+  ];
 }
 
 function legalPath(title: string) {

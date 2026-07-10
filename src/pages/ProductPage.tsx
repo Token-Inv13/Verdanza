@@ -2,10 +2,17 @@ import { Link, useParams } from "react-router-dom";
 import { ShoppingBag } from "lucide-react";
 import { useEffect } from "react";
 import { Seo } from "../components/Seo";
+import { Breadcrumbs } from "../components/Breadcrumbs";
+import { JsonLd } from "../components/JsonLd";
 import { useCart } from "../context/CartContext";
 import { useProducts } from "../hooks/useProducts";
 import { trackEvent } from "../lib/analytics";
 import { FavoriteButton } from "../components/FavoriteButton";
+import {
+  buildProductJsonLd,
+  productCategoryLabel,
+  productPath,
+} from "../lib/structuredData";
 
 function productImageAlt(product: { name: string; category: string }) {
   return `${product.name} - ${
@@ -44,6 +51,14 @@ export function ProductPage() {
           description="Ce produit Verdanza n'est pas disponible."
           noindex
         />
+        <Breadcrumbs
+          structuredData={false}
+          items={[
+            { name: "Accueil", path: "/" },
+            { name: "Boutique", path: "/boutique" },
+            { name: "Produit introuvable", path: slug ? `/produits/${slug}` : "/produits", current: true },
+          ]}
+        />
         <h1 className="font-display text-4xl text-forest">Produit introuvable</h1>
         <Link to="/boutique" className="mt-6 inline-flex text-forest underline">
           Retour boutique
@@ -53,6 +68,9 @@ export function ProductPage() {
   }
 
   const isComingSoon = product.comingSoon || product.stockStatus === "coming_soon";
+  const path = productPath(product);
+  const categoryName = productCategoryLabel(product);
+  const categoryPath = product.category === "flowers" ? "/fleurs-cbd" : "/resines-cbd";
   const isPremiumHydroponic =
     product.productTier === "Premium" &&
     product.cultureType === "Hydroponique";
@@ -79,9 +97,17 @@ export function ProductPage() {
       <Seo
         title={product.seoTitle}
         description={product.seoDescription}
-        path={`/produits/${product.slug}`}
+        path={path}
         ogType="product"
         image={product.image}
+      />
+      <JsonLd id="product" data={buildProductJsonLd(product)} />
+      <Breadcrumbs
+        items={[
+          { name: "Accueil", path: "/" },
+          { name: categoryName, path: categoryPath },
+          { name: product.name, path, current: true },
+        ]}
       />
       <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-4">

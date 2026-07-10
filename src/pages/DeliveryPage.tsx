@@ -1,4 +1,5 @@
 import { localDeliveryZones } from "../data/deliveryZones";
+import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 import {
   LOCAL_DELIVERY_MINIMUM,
@@ -8,6 +9,8 @@ import {
 
 export function DeliveryPage({ mode }: { mode: "local" | "postal" }) {
   const isLocal = mode === "local";
+  const path = isLocal ? "/livraison-express-aix" : "/livraison-postale";
+  const title = isLocal ? "Livraison express Aix" : "Livraison postale";
   return (
     <main className="container-page py-12">
       <Seo
@@ -21,7 +24,13 @@ export function DeliveryPage({ mode }: { mode: "local" | "postal" }) {
             ? "Livraison Verdanza : express locale a Aix-en-Provence et alentours, 7j/7 de 11h a 01h."
             : "Livraison postale Verdanza disponible en France, avec minimum de commande et frais confirmes avant expedition."
         }
-        path={isLocal ? "/livraison-express-aix" : "/livraison-postale"}
+        path={path}
+      />
+      <Breadcrumbs
+        items={[
+          { name: "Accueil", path: "/" },
+          { name: title, path, current: true },
+        ]}
       />
       <div className="page-intro">
         <h1>{isLocal ? "Livraison express Aix" : "Livraison hors zone"}</h1>

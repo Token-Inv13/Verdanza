@@ -1,5 +1,6 @@
 import { ProductCard } from "../components/ProductCard";
 import { CatalogNotice } from "../components/CatalogNotice";
+import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 import { useProducts } from "../hooks/useProducts";
 import type { ProductCategory } from "../types";
@@ -13,13 +14,20 @@ export function CategoryPage({
 }) {
   const { products, isLoading } = useProducts();
   const categoryProducts = products.filter((product) => product.category === category);
+  const path = category === "flowers" ? "/fleurs-cbd" : "/resines-cbd";
 
   return (
     <main className="container-page py-12">
       <Seo
         title={`${title} - Verdanza CBD`}
         description={`${title} Verdanza, produits CBD premium au gramme avec livraison express Aix-en-Provence et alentours.`}
-        path={category === "flowers" ? "/fleurs-cbd" : "/resines-cbd"}
+        path={path}
+      />
+      <Breadcrumbs
+        items={[
+          { name: "Accueil", path: "/" },
+          { name: title, path, current: true },
+        ]}
       />
       <div className="page-intro">
         <h1>{title}</h1>

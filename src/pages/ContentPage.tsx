@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 
 const content = {
@@ -64,6 +65,12 @@ export function ContentPage({ variant }: { variant: keyof typeof content }) {
         title={`${page.title} - Verdanza CBD`}
         description={page.text}
         path={contentPaths[variant]}
+      />
+      <Breadcrumbs
+        items={[
+          { name: "Accueil", path: "/" },
+          { name: page.title, path: contentPaths[variant], current: true },
+        ]}
       />
       <div className="page-intro">
         <h1>{page.title}</h1>

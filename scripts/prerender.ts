@@ -13,12 +13,14 @@ import {
 const distDir = resolve("dist");
 const indexPath = join(distDir, "index.html");
 const port = await findOpenPort(5180);
-const server = createStaticServer(distDir, indexPath);
 const outputFiles = new Map<string, string>();
 
 if (!existsSync(indexPath)) {
   throw new Error("dist/index.html is missing. Run vite build before prerender.");
 }
+
+const indexHtmlShell = readFileSync(indexPath);
+const server = createStaticServer(distDir, indexPath, indexHtmlShell);
 
 await new Promise<void>((resolveServer) => {
   server.listen(port, "127.0.0.1", resolveServer);
@@ -221,13 +223,13 @@ async function blockExternalServices(context: import("playwright").BrowserContex
   });
 }
 
-function createStaticServer(root: string, fallback: string) {
+function createStaticServer(root: string, fallback: string, fallbackContent: Buffer) {
   return createServer((request: IncomingMessage, response: ServerResponse) => {
     try {
       const url = new URL(request.url || "/", "http://127.0.0.1");
       const pathname = decodeURIComponent(url.pathname);
       const filePath = resolveStaticPath(root, pathname, fallback);
-      const content = readFileSync(filePath);
+      const content = filePath === fallback ? fallbackContent : readFileSync(filePath);
       response.writeHead(200, { "content-type": contentType(filePath) });
       response.end(content);
     } catch (error) {
