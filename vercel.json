@@ -1,5 +1,5 @@
 {
-  "installCommand": "npm install && npx playwright install --with-deps chromium",
+  "installCommand": "npm install && dnf install -y nspr nss && npx playwright install chromium",
   "buildCommand": "npm run build",
   "devCommand": "npm run dev -- --host 127.0.0.1",
   "outputDirectory": "dist",
