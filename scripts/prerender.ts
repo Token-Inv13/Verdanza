@@ -152,8 +152,13 @@ async function renderRoute(
   if (containsPrivateData(checks.bodyText)) {
     throw new Error(`Potential private data marker found in prerendered ${route.path}.`);
   }
-  if (consoleErrors.length) {
-    throw new Error(`Console errors while prerendering ${route.path}: ${consoleErrors.join(" | ")}`);
+  const unexpectedConsoleErrors = consoleErrors.filter(
+    (error) => !isExpectedPrerenderNetworkError(error),
+  );
+  if (unexpectedConsoleErrors.length) {
+    throw new Error(
+      `Console errors while prerendering ${route.path}: ${unexpectedConsoleErrors.join(" | ")}`,
+    );
   }
 
   mkdirSync(dirname(outputPath), { recursive: true });
@@ -189,6 +194,14 @@ function containsPrivateData(text: string) {
     "apiKey",
     "firebase-adminsdk",
   ].some((marker) => text.includes(marker));
+}
+
+function isExpectedPrerenderNetworkError(message: string) {
+  return (
+    message === "Failed to load resource: net::ERR_FAILED" ||
+    (message.includes("@firebase/firestore") &&
+      message.includes("Could not reach Cloud Firestore backend"))
+  );
 }
 
 async function blockExternalServices(context: import("playwright").BrowserContext) {
