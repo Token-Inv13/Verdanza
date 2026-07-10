@@ -7,6 +7,8 @@ export function CheckoutCancelPage() {
       <Seo
         title="Commande non finalisee - Verdanza CBD"
         description="Commande non finalisee, panier conserve."
+        path="/checkout/cancel"
+        noindex
       />
       <section className="max-w-2xl rounded-lg border border-forest/10 bg-cream p-8">
         <h1 className="font-display text-5xl text-forest">Commande non finalisee</h1>

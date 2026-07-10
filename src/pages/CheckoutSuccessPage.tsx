@@ -27,6 +27,8 @@ export function CheckoutSuccessPage() {
       <Seo
         title="Commande reçue - Verdanza CBD"
         description="Confirmation de commande Verdanza."
+        path="/checkout/success"
+        noindex
       />
       <section className="max-w-2xl rounded-lg border border-champagne/30 bg-cream p-8">
         <p className="text-xs uppercase tracking-[0.2em] text-champagne">

@@ -87,6 +87,8 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
       <Seo
         title={mode === "register" ? "Inscription - Verdanza CBD" : "Connexion - Verdanza CBD"}
         description="Connexion client Verdanza CBD."
+        path={mode === "register" ? "/inscription" : "/connexion"}
+        noindex
       />
       <section className="mx-auto max-w-lg rounded-lg border border-forest/10 bg-ivory p-8 shadow-soft">
         <h1 className="font-display text-5xl text-forest">

@@ -17,6 +17,8 @@ export function AccountLayout() {
       <Seo
         title="Mon compte - Verdanza CBD"
         description="Espace client Verdanza CBD."
+        path="/compte"
+        noindex
       />
       <div className="page-intro">
         <h1>Mon compte</h1>

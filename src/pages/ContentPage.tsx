@@ -46,6 +46,13 @@ const content = {
   },
 } as const;
 
+const contentPaths: Record<keyof typeof content, string> = {
+  quality: "/qualite-conformite",
+  about: "/a-propos",
+  faq: "/faq",
+  contact: "/contact",
+};
+
 export function ContentPage({ variant }: { variant: keyof typeof content }) {
   const page = content[variant];
   const contactEmail =
@@ -53,7 +60,11 @@ export function ContentPage({ variant }: { variant: keyof typeof content }) {
     "contact@verdanza.fr";
   return (
     <main className="container-page py-12">
-      <Seo title={`${page.title} - Verdanza CBD`} description={page.text} />
+      <Seo
+        title={`${page.title} - Verdanza CBD`}
+        description={page.text}
+        path={contentPaths[variant]}
+      />
       <div className="page-intro">
         <h1>{page.title}</h1>
         <p>{page.text}</p>

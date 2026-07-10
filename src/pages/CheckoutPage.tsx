@@ -304,6 +304,8 @@ export function CheckoutPage() {
       <Seo
         title="Finaliser ma commande - Verdanza CBD"
         description="Finalisation de commande Verdanza CBD avec vérification des disponibilités."
+        path="/checkout"
+        noindex
       />
       <div className="page-intro">
         <h1>Finaliser ma commande</h1>

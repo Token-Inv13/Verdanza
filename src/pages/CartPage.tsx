@@ -56,7 +56,12 @@ export function CartPage() {
 
   return (
     <main className="container-page py-12">
-      <Seo title="Panier - Verdanza CBD" description="Panier local Verdanza CBD." />
+      <Seo
+        title="Panier - Verdanza CBD"
+        description="Panier local Verdanza CBD."
+        path="/panier"
+        noindex
+      />
       <div className="page-intro">
         <h1>Panier</h1>
         <p>

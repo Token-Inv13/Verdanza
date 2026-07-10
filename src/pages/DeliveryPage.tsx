@@ -16,7 +16,12 @@ export function DeliveryPage({ mode }: { mode: "local" | "postal" }) {
             ? "Livraison CBD express Aix-en-Provence - Verdanza"
             : "Livraison hors zone - Verdanza"
         }
-        description="Livraison Verdanza : express locale a Aix-en-Provence et alentours, 7j/7 de 11h a 01h."
+        description={
+          isLocal
+            ? "Livraison Verdanza : express locale a Aix-en-Provence et alentours, 7j/7 de 11h a 01h."
+            : "Livraison postale Verdanza disponible en France, avec minimum de commande et frais confirmes avant expedition."
+        }
+        path={isLocal ? "/livraison-express-aix" : "/livraison-postale"}
       />
       <div className="page-intro">
         <h1>{isLocal ? "Livraison express Aix" : "Livraison hors zone"}</h1>

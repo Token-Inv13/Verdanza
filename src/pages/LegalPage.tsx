@@ -5,9 +5,14 @@ export function LegalPage({ title }: { title: string }) {
     (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
     "contact@verdanza.fr";
   const sections = legalSections(title, contactEmail);
+  const path = legalPath(title);
   return (
     <main className="container-page py-12">
-      <Seo title={`${title} - Verdanza CBD`} description={`${title} Verdanza.`} />
+      <Seo
+        title={`${title} - Verdanza CBD`}
+        description={`${title} Verdanza.`}
+        path={path}
+      />
       <div className="page-intro">
         <h1>{title}</h1>
         <p>
@@ -32,6 +37,19 @@ export function LegalPage({ title }: { title: string }) {
       </div>
     </main>
   );
+}
+
+function legalPath(title: string) {
+  const normalizedTitle = title.toLowerCase();
+  if (title.includes("Mentions")) return "/mentions-legales";
+  if (title.includes("Conditions")) return "/cgv";
+  if (
+    normalizedTitle.includes("confidentialité") ||
+    normalizedTitle.includes("confidentialite")
+  ) {
+    return "/confidentialite";
+  }
+  return "/retours";
 }
 
 function legalSections(title: string, contactEmail?: string) {

@@ -39,6 +39,11 @@ export function ProductPage() {
   if (!product) {
     return (
       <main className="container-page py-16">
+        <Seo
+          title="Produit introuvable - Verdanza CBD"
+          description="Ce produit Verdanza n'est pas disponible."
+          noindex
+        />
         <h1 className="font-display text-4xl text-forest">Produit introuvable</h1>
         <Link to="/boutique" className="mt-6 inline-flex text-forest underline">
           Retour boutique
@@ -71,7 +76,13 @@ export function ProductPage() {
 
   return (
     <main className="container-page py-12">
-      <Seo title={product.seoTitle} description={product.seoDescription} />
+      <Seo
+        title={product.seoTitle}
+        description={product.seoDescription}
+        path={`/produits/${product.slug}`}
+        ogType="product"
+        image={product.image}
+      />
       <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-4">
           <div className="rounded-lg border border-champagne/30 bg-cream p-8">

@@ -13,6 +13,8 @@ export function HomePage() {
       <Seo
         title="Verdanza CBD - Fleurs et résines CBD premium en ligne"
         description="Boutique en ligne de fleurs et résines CBD premium, avec livraison postale en France et livraison locale selon zone disponible."
+        path="/"
+        image="/images/verdanza-hero-premium.webp"
       />
       <main>
         <section className="hero-section relative overflow-hidden">

@@ -42,6 +42,7 @@ export function AdminLayout() {
       <Seo
         title="Administration - Verdanza CBD"
         description="Espace administration Verdanza."
+        path="/admin"
         noindex
       />
       <div className="sticky top-0 z-30 flex items-center justify-between border-b border-forest/10 bg-ivory/95 px-4 py-3 backdrop-blur lg:hidden">

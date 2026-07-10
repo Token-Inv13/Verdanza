@@ -11,6 +11,7 @@ export function ShopPage() {
       <Seo
         title="Boutique Verdanza CBD"
         description="Catalogue Verdanza CBD : fleurs et resines premium disponibles au gramme, livraison express Aix-en-Provence et alentours."
+        path="/boutique"
       />
       <div className="page-intro">
         <h1>Boutique CBD premium</h1>

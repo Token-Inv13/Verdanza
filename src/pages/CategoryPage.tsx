@@ -19,6 +19,7 @@ export function CategoryPage({
       <Seo
         title={`${title} - Verdanza CBD`}
         description={`${title} Verdanza, produits CBD premium au gramme avec livraison express Aix-en-Provence et alentours.`}
+        path={category === "flowers" ? "/fleurs-cbd" : "/resines-cbd"}
       />
       <div className="page-intro">
         <h1>{title}</h1>
