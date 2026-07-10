@@ -3,10 +3,5 @@
   "buildCommand": "npm run build",
   "devCommand": "npm run dev -- --host 127.0.0.1",
   "outputDirectory": "dist",
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ]
+  "cleanUrls": true
 }

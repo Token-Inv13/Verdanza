@@ -181,6 +181,20 @@ export function allSeoRoutes() {
   ];
 }
 
+export function prerenderSeoRoutes() {
+  return allSeoRoutes().filter((route) => route.kind !== "fallback");
+}
+
+export function fallbackSeoRoute() {
+  const route = staticSeoRoutes.find((entry) => entry.path === "/route-introuvable-test");
+  if (!route) throw new Error("Missing fallback route definition.");
+  return route;
+}
+
+export function prerenderFallbackSeoRoutes() {
+  return staticSeoRoutes.filter((route) => route.kind === "fallback");
+}
+
 export function sitemapUrls() {
   const paths = allSeoRoutes()
     .filter((route) => route.indexable)
