@@ -1,0 +1,452 @@
+{
+  "generatedAt": "2026-07-11T18:20:07.784Z",
+  "productImages": [
+    {
+      "productId": "resin-golden-static",
+      "productName": "Golden Static",
+      "sourceUrl": "/Fiche produit/Golden static/goldenstatic.webp",
+      "sourceFile": "public/Fiche produit/Golden static/goldenstatic.webp",
+      "sourceBytes": 257152,
+      "sourceWidth": 713,
+      "sourceHeight": 713,
+      "format": "webp",
+      "hasAlpha": false,
+      "card": [
+        {
+          "src": "/images/products/golden-static-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 38966
+        },
+        {
+          "src": "/images/products/golden-static-card-640.webp",
+          "width": 640,
+          "height": 640,
+          "bytes": 140848
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/golden-static-detail.webp",
+          "width": 713,
+          "height": 713,
+          "bytes": 212306
+        }
+      ]
+    },
+    {
+      "productId": "resin-supreme-purple-cbd",
+      "productName": "Suprême Purple CBD",
+      "sourceUrl": "/Fiche produit/Supreme Purple CBD/SUPREMEPURPLEcopieffff.webp",
+      "sourceFile": "public/Fiche produit/Supreme Purple CBD/SUPREMEPURPLEcopieffff.webp",
+      "sourceBytes": 77186,
+      "sourceWidth": 713,
+      "sourceHeight": 713,
+      "format": "webp",
+      "hasAlpha": false,
+      "card": [
+        {
+          "src": "/images/products/supreme-purple-cbd-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 10236
+        },
+        {
+          "src": "/images/products/supreme-purple-cbd-card-640.webp",
+          "width": 640,
+          "height": 640,
+          "bytes": 39506
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/supreme-purple-cbd-detail.webp",
+          "width": 713,
+          "height": 713,
+          "bytes": 60928
+        }
+      ]
+    },
+    {
+      "productId": "flower-cookie-kush-indoor",
+      "productName": "Cookie Kush Indoor",
+      "sourceUrl": "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
+      "sourceFile": "public/Fiche produit/Cookie Kush (intérieur)/cookie-zoom.webp",
+      "sourceBytes": 206580,
+      "sourceWidth": 713,
+      "sourceHeight": 713,
+      "format": "webp",
+      "hasAlpha": true,
+      "card": [
+        {
+          "src": "/images/products/cookie-kush-indoor-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 34716
+        },
+        {
+          "src": "/images/products/cookie-kush-indoor-card-640.webp",
+          "width": 640,
+          "height": 640,
+          "bytes": 107764
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/cookie-kush-indoor-detail.webp",
+          "width": 713,
+          "height": 713,
+          "bytes": 164838
+        }
+      ]
+    },
+    {
+      "productId": "flower-petites-tetes-og-kush",
+      "productName": "Petites Têtes OG Kush",
+      "sourceUrl": "/Fiche produit/Petite tetes OG Kush ( sous serre)/PTOGKush_zoom.webp",
+      "sourceFile": "public/Fiche produit/Petite tetes OG Kush ( sous serre)/PTOGKush_zoom.webp",
+      "sourceBytes": 251988,
+      "sourceWidth": 713,
+      "sourceHeight": 713,
+      "format": "webp",
+      "hasAlpha": true,
+      "card": [
+        {
+          "src": "/images/products/petites-tetes-og-kush-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 38660
+        },
+        {
+          "src": "/images/products/petites-tetes-og-kush-card-640.webp",
+          "width": 640,
+          "height": 640,
+          "bytes": 132038
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/petites-tetes-og-kush-detail.webp",
+          "width": 713,
+          "height": 713,
+          "bytes": 199636
+        }
+      ]
+    },
+    {
+      "productId": "flower-harlequin-greenhouse",
+      "productName": "Harlequin Greenhouse",
+      "sourceUrl": "/Fiche produit/Harlequin (sous-serre)/harlequin_zoom.webp",
+      "sourceFile": "public/Fiche produit/Harlequin (sous-serre)/harlequin_zoom.webp",
+      "sourceBytes": 234702,
+      "sourceWidth": 713,
+      "sourceHeight": 713,
+      "format": "webp",
+      "hasAlpha": false,
+      "card": [
+        {
+          "src": "/images/products/harlequin-greenhouse-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 35322
+        },
+        {
+          "src": "/images/products/harlequin-greenhouse-card-640.webp",
+          "width": 640,
+          "height": 640,
+          "bytes": 122464
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/harlequin-greenhouse-detail.webp",
+          "width": 713,
+          "height": 713,
+          "bytes": 188968
+        }
+      ]
+    },
+    {
+      "productId": "resin-la-mousse",
+      "productName": "La Mousse",
+      "sourceUrl": "/Fiche produit/La%20mousse/mousse1.webp",
+      "sourceFile": "public/Fiche produit/La mousse/mousse1.webp",
+      "sourceBytes": 44738,
+      "sourceWidth": 713,
+      "sourceHeight": 475,
+      "format": "webp",
+      "hasAlpha": false,
+      "card": [
+        {
+          "src": "/images/products/la-mousse-card-320.webp",
+          "width": 320,
+          "height": 213,
+          "bytes": 5990
+        },
+        {
+          "src": "/images/products/la-mousse-card-640.webp",
+          "width": 640,
+          "height": 426,
+          "bytes": 21124
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/la-mousse-detail.webp",
+          "width": 713,
+          "height": 475,
+          "bytes": 32770
+        }
+      ]
+    },
+    {
+      "productId": "flower-mango-haze-cbd",
+      "productName": "Mango Haze CBD",
+      "sourceUrl": "/Fiche produit/Mango%20Haze/MangoHaze.webp",
+      "sourceFile": "public/Fiche produit/Mango Haze/MangoHaze.webp",
+      "sourceBytes": 166436,
+      "sourceWidth": 713,
+      "sourceHeight": 713,
+      "format": "webp",
+      "hasAlpha": false,
+      "card": [
+        {
+          "src": "/images/products/mango-haze-cbd-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 26860
+        },
+        {
+          "src": "/images/products/mango-haze-cbd-card-640.webp",
+          "width": 640,
+          "height": 640,
+          "bytes": 80802
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/mango-haze-cbd-detail.webp",
+          "width": 713,
+          "height": 713,
+          "bytes": 126962
+        }
+      ]
+    },
+    {
+      "productId": "flower-mandarine-cbd",
+      "productName": "Mandarine CBD",
+      "sourceUrl": "/Fiche produit/Mandarine/mandarine_zoom.webp",
+      "sourceFile": "public/Fiche produit/Mandarine/mandarine_zoom.webp",
+      "sourceBytes": 229500,
+      "sourceWidth": 713,
+      "sourceHeight": 713,
+      "format": "webp",
+      "hasAlpha": true,
+      "card": [
+        {
+          "src": "/images/products/mandarine-cbd-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 36742
+        },
+        {
+          "src": "/images/products/mandarine-cbd-card-640.webp",
+          "width": 640,
+          "height": 640,
+          "bytes": 123068
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/mandarine-cbd-detail.webp",
+          "width": 713,
+          "height": 713,
+          "bytes": 185918
+        }
+      ]
+    },
+    {
+      "productId": "flower-amnesia-cbd-hydroponique",
+      "productName": "Amnesia CBD Hydroponique",
+      "sourceUrl": "/Fiche produit/Amnesia/amnesia_hydro_zoom.webp",
+      "sourceFile": "public/Fiche produit/Amnesia/amnesia_hydro_zoom.webp",
+      "sourceBytes": 228832,
+      "sourceWidth": 713,
+      "sourceHeight": 713,
+      "format": "webp",
+      "hasAlpha": false,
+      "card": [
+        {
+          "src": "/images/products/amnesia-cbd-hydroponique-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 34346
+        },
+        {
+          "src": "/images/products/amnesia-cbd-hydroponique-card-640.webp",
+          "width": 640,
+          "height": 640,
+          "bytes": 118256
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/amnesia-cbd-hydroponique-detail.webp",
+          "width": 713,
+          "height": 713,
+          "bytes": 188304
+        }
+      ]
+    },
+    {
+      "productId": "flower-blue-dream-cbd",
+      "productName": "Blue Dream CBD",
+      "sourceUrl": "/Fiche produit/Blue%20Dream/BlueDream.webp",
+      "sourceFile": "public/Fiche produit/Blue Dream/BlueDream.webp",
+      "sourceBytes": 177168,
+      "sourceWidth": 713,
+      "sourceHeight": 713,
+      "format": "webp",
+      "hasAlpha": true,
+      "card": [
+        {
+          "src": "/images/products/blue-dream-cbd-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 31822
+        },
+        {
+          "src": "/images/products/blue-dream-cbd-card-640.webp",
+          "width": 640,
+          "height": 640,
+          "bytes": 94234
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/blue-dream-cbd-detail.webp",
+          "width": 713,
+          "height": 713,
+          "bytes": 141648
+        }
+      ]
+    },
+    {
+      "productId": "flower-plutonium-cbd-hydroponique",
+      "productName": "Plutonium CBD Hydroponique",
+      "sourceUrl": "/Fiche produit/Plutonium/zoom.webp",
+      "sourceFile": "public/Fiche produit/Plutonium/zoom.webp",
+      "sourceBytes": 161880,
+      "sourceWidth": 600,
+      "sourceHeight": 600,
+      "format": "webp",
+      "hasAlpha": true,
+      "card": [
+        {
+          "src": "/images/products/plutonium-cbd-hydroponique-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 32460
+        },
+        {
+          "src": "/images/products/plutonium-cbd-hydroponique-card-640.webp",
+          "width": 600,
+          "height": 600,
+          "bytes": 115686
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/plutonium-cbd-hydroponique-detail.webp",
+          "width": 600,
+          "height": 600,
+          "bytes": 124958
+        }
+      ]
+    }
+  ],
+  "staticImages": [
+    {
+      "sourceUrl": "/images/verdanza-hero-premium.webp",
+      "sourceFile": "public/images/verdanza-hero-premium.webp",
+      "sourceBytes": 137338,
+      "sourceWidth": 1672,
+      "sourceHeight": 941,
+      "format": "webp",
+      "hasAlpha": false,
+      "variants": [
+        {
+          "src": "/images/verdanza-hero-premium-768.webp",
+          "width": 768,
+          "height": 432,
+          "bytes": 25660
+        },
+        {
+          "src": "/images/verdanza-hero-premium-1280.webp",
+          "width": 1280,
+          "height": 720,
+          "bytes": 58044
+        },
+        {
+          "src": "/images/verdanza-hero-premium-1672.webp",
+          "width": 1672,
+          "height": 941,
+          "bytes": 102118
+        }
+      ]
+    },
+    {
+      "sourceUrl": "/verdanza-badge.png",
+      "sourceFile": "public/verdanza-badge.png",
+      "sourceBytes": 1098904,
+      "sourceWidth": 1254,
+      "sourceHeight": 1254,
+      "format": "png",
+      "hasAlpha": false,
+      "variants": [
+        {
+          "src": "/images/brand/verdanza-badge-age-112.webp",
+          "width": 112,
+          "height": 112,
+          "bytes": 2572
+        },
+        {
+          "src": "/images/brand/verdanza-badge-age-224.webp",
+          "width": 224,
+          "height": 224,
+          "bytes": 7244
+        }
+      ]
+    },
+    {
+      "sourceUrl": "/verdanza-logo.png",
+      "sourceFile": "public/verdanza-logo.png",
+      "sourceBytes": 961345,
+      "sourceWidth": 1672,
+      "sourceHeight": 941,
+      "format": "png",
+      "hasAlpha": false,
+      "variants": [
+        {
+          "src": "/images/brand/verdanza-logo-180.webp",
+          "width": 180,
+          "height": 101,
+          "bytes": 1756
+        },
+        {
+          "src": "/images/brand/verdanza-logo-320.webp",
+          "width": 320,
+          "height": 180,
+          "bytes": 5330
+        }
+      ]
+    }
+  ],
+  "totals": {
+    "productSourceBytes": 2036162,
+    "productCardLargestBytes": 1095790,
+    "productDetailBytes": 1627236,
+    "staticSourceBytes": 2197587,
+    "staticLargestBytes": 114692
+  }
+}

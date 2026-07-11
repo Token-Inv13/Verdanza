@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { Seo } from "../components/Seo";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { JsonLd } from "../components/JsonLd";
+import { ProductImage } from "../components/ProductImage";
 import { useCart } from "../context/CartContext";
 import { useProducts } from "../hooks/useProducts";
 import { trackEvent } from "../lib/analytics";
@@ -112,12 +113,12 @@ export function ProductPage() {
       <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-4">
           <div className="aspect-square rounded-lg border border-champagne/30 bg-cream p-8">
-            <img
+            <ProductImage
+              variant="detail"
               src={product.image}
               alt={productImageAlt(product)}
-              width={713}
-              height={713}
-              decoding="async"
+              loading="eager"
+              fetchPriority="high"
               className="mx-auto h-full w-full object-contain"
             />
           </div>

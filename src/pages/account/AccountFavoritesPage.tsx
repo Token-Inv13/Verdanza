@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { ShoppingBag, Trash2 } from "lucide-react";
+import { ProductImage } from "../../components/ProductImage";
 import { useCart } from "../../context/CartContext";
 import { useFavorites } from "../../context/FavoritesContext";
 import { useProducts } from "../../hooks/useProducts";
@@ -39,9 +40,11 @@ export function AccountFavoritesPage() {
               key={favorite.id}
               className="rounded-lg border border-forest/10 bg-cream p-4"
             >
-              <img
+              <ProductImage
+                variant="card"
                 src={product?.image || favorite.productImage}
                 alt={favorite.productName}
+                loading="lazy"
                 className="h-36 w-full object-contain"
               />
               <p className="mt-3 text-xs uppercase tracking-[0.14em] text-champagne">

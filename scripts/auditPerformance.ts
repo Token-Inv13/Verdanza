@@ -39,17 +39,18 @@ if (publicInitialText.includes("pdf-lib")) failures.push("pdf-lib found in publi
 if (!hasChunkMatch(/Admin|adminUsers|invoice|coupon/i)) failures.push("admin chunk not detected");
 if (!hasChunkMatch(/Account|customerProfile|favorites/i)) failures.push("account chunk not detected");
 if (!hasChunkMatch(/Checkout|lastOrderSummary|quote-order|payment/i)) failures.push("checkout chunk not detected");
-if (!/verdanza-hero-premium\.webp/.test(homeHtml)) failures.push("home hero image missing");
+const heroPattern = /verdanza-hero-premium(?:-\d+)?\.webp/;
+if (!heroPattern.test(homeHtml)) failures.push("home hero image missing");
 if (!/fetchpriority="high"|fetchPriority="high"/i.test(homeHtml)) {
   failures.push("home LCP image is not high priority");
 }
-if (/verdanza-hero-premium\.webp[\s\S]{0,250}loading="lazy"/i.test(homeHtml)) {
+if (/verdanza-hero-premium(?:-\d+)?\.webp[\s\S]{0,250}loading="lazy"/i.test(homeHtml)) {
   failures.push("home LCP image is lazy loaded");
 }
-if (!/verdanza-hero-premium\.webp[\s\S]{0,300}width="1672"/i.test(homeHtml)) {
+if (!/verdanza-hero-premium(?:-\d+)?\.webp[\s\S]{0,300}width="1672"/i.test(homeHtml)) {
   failures.push("home LCP image width missing");
 }
-if (!/verdanza-hero-premium\.webp[\s\S]{0,350}height="941"/i.test(homeHtml)) {
+if (!/verdanza-hero-premium(?:-\d+)?\.webp[\s\S]{0,350}height="941"/i.test(homeHtml)) {
   failures.push("home LCP image height missing");
 }
 const expectedPrerenderRoutes =

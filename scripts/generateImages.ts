@@ -1,0 +1,298 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
+import sharp from "sharp";
+import { products } from "../src/data/products";
+
+type Variant = {
+  name: string;
+  width: number;
+  quality: number;
+};
+
+type GeneratedVariant = {
+  src: string;
+  width: number;
+  height: number;
+  bytes: number;
+};
+
+type ProductReport = {
+  productId: string;
+  productName: string;
+  sourceUrl: string;
+  sourceFile: string;
+  sourceBytes: number;
+  sourceWidth: number;
+  sourceHeight: number;
+  format?: string;
+  hasAlpha?: boolean;
+  card: GeneratedVariant[];
+  detail: GeneratedVariant[];
+};
+
+const publicDir = resolve("public");
+const productOutputDir = resolve(publicDir, "images/products");
+const brandOutputDir = resolve(publicDir, "images/brand");
+const reportPath = resolve("reports/performance/images-latest.json");
+const manifestPath = resolve("src/lib/generatedImageVariants.ts");
+const productCardVariants: Variant[] = [
+  { name: "card-320", width: 320, quality: 78 },
+  { name: "card-640", width: 640, quality: 80 },
+];
+const productDetailVariants: Variant[] = [{ name: "detail", width: 713, quality: 82 }];
+const staticTargets = [
+  {
+    key: "/images/verdanza-hero-premium.webp",
+    sourceUrl: "/images/verdanza-hero-premium.webp",
+    outputBase: "/images/verdanza-hero-premium",
+    variants: [
+      { name: "768", width: 768, quality: 78 },
+      { name: "1280", width: 1280, quality: 80 },
+      { name: "1672", width: 1672, quality: 82 },
+    ],
+    sizes: "100vw",
+  },
+  {
+    key: "/verdanza-badge.png",
+    sourceUrl: "/verdanza-badge.png",
+    outputBase: "/images/brand/verdanza-badge-age",
+    variants: [
+      { name: "112", width: 112, quality: 82 },
+      { name: "224", width: 224, quality: 84 },
+    ],
+    sizes: "112px",
+  },
+  {
+    key: "/verdanza-logo.png",
+    sourceUrl: "/verdanza-logo.png",
+    outputBase: "/images/brand/verdanza-logo",
+    variants: [
+      { name: "180", width: 180, quality: 82 },
+      { name: "320", width: 320, quality: 84 },
+    ],
+    sizes: "180px",
+  },
+];
+
+mkdirSync(productOutputDir, { recursive: true });
+mkdirSync(brandOutputDir, { recursive: true });
+mkdirSync(dirname(reportPath), { recursive: true });
+
+const productReports: ProductReport[] = [];
+const productManifestEntries: string[] = [];
+
+for (const product of products) {
+  const sourceFile = publicPath(product.image);
+  if (!existsSync(sourceFile)) throw new Error(`Missing product image for ${product.slug}: ${product.image}`);
+
+  const sourceBuffer = readFileSync(sourceFile);
+  const sourceMetadata = await sharp(sourceBuffer).metadata();
+  const sourceWidth = sourceMetadata.width || 0;
+  const sourceHeight = sourceMetadata.height || 0;
+  const sourceBytes = sourceBuffer.length;
+  const card = await generateProductVariants(product.slug, sourceBuffer, sourceWidth, sourceHeight, productCardVariants);
+  const detail = await generateProductVariants(product.slug, sourceBuffer, sourceWidth, sourceHeight, productDetailVariants);
+
+  productReports.push({
+    productId: product.id,
+    productName: product.name,
+    sourceUrl: product.image,
+    sourceFile: normalize(sourceFile),
+    sourceBytes,
+    sourceWidth,
+    sourceHeight,
+    format: sourceMetadata.format,
+    hasAlpha: Boolean(sourceMetadata.hasAlpha),
+    card,
+    detail,
+  });
+
+  const cardLargest = card[card.length - 1];
+  const detailLargest = detail[detail.length - 1];
+  productManifestEntries.push(`  ${JSON.stringify(product.image)}: {
+    card: {
+      src: ${JSON.stringify(cardLargest.src)},
+      srcSet: ${JSON.stringify(srcSet(card))},
+      sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
+      width: ${cardLargest.width},
+      height: ${cardLargest.height},
+    },
+    detail: {
+      src: ${JSON.stringify(detailLargest.src)},
+      srcSet: ${JSON.stringify(srcSet(detail))},
+      sizes: "(min-width: 1024px) 45vw, 92vw",
+      width: ${detailLargest.width},
+      height: ${detailLargest.height},
+    },
+  }`);
+}
+
+const staticReport = [];
+const staticManifestEntries: string[] = [];
+for (const target of staticTargets) {
+  const sourceFile = publicPath(target.sourceUrl);
+  if (!existsSync(sourceFile)) throw new Error(`Missing static image: ${target.sourceUrl}`);
+  const sourceBuffer = readFileSync(sourceFile);
+  const sourceMetadata = await sharp(sourceBuffer).metadata();
+  const generated = await Promise.all(
+    target.variants.map((variant) =>
+      generateVariant(
+        sourceBuffer,
+        sourceMetadata.width || variant.width,
+        sourceMetadata.height || variant.width,
+        `${target.outputBase}-${variant.name}.webp`,
+        variant,
+      ),
+    ),
+  );
+  const largest = generated[generated.length - 1];
+  staticReport.push({
+    sourceUrl: target.sourceUrl,
+    sourceFile: normalize(sourceFile),
+    sourceBytes: sourceBuffer.length,
+    sourceWidth: sourceMetadata.width || 0,
+    sourceHeight: sourceMetadata.height || 0,
+    format: sourceMetadata.format,
+    hasAlpha: Boolean(sourceMetadata.hasAlpha),
+    variants: generated,
+  });
+  staticManifestEntries.push(`  ${JSON.stringify(target.key)}: {
+    src: ${JSON.stringify(largest.src)},
+    srcSet: ${JSON.stringify(srcSet(generated))},
+    sizes: ${JSON.stringify(target.sizes)},
+    width: ${largest.width},
+    height: ${largest.height},
+  }`);
+}
+
+const report = {
+  generatedAt: new Date().toISOString(),
+  productImages: productReports,
+  staticImages: staticReport,
+  totals: {
+    productSourceBytes: sum(productReports.map((item) => item.sourceBytes)),
+    productCardLargestBytes: sum(productReports.map((item) => item.card.at(-1)?.bytes || 0)),
+    productDetailBytes: sum(productReports.map((item) => item.detail.at(-1)?.bytes || 0)),
+    staticSourceBytes: sum(staticReport.map((item) => item.sourceBytes)),
+    staticLargestBytes: sum(staticReport.map((item) => item.variants.at(-1)?.bytes || 0)),
+  },
+};
+
+writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+writeFileSync(
+  manifestPath,
+  `export type ResponsiveImageVariant = {
+  src: string;
+  srcSet: string;
+  sizes: string;
+  width: number;
+  height: number;
+};
+
+export type ProductImageVariantSet = {
+  card: ResponsiveImageVariant;
+  detail: ResponsiveImageVariant;
+};
+
+export const productImageVariants: Record<string, ProductImageVariantSet> = {
+${productManifestEntries.join(",\n")}
+};
+
+export const staticImageVariants: Record<string, ResponsiveImageVariant> = {
+${staticManifestEntries.join(",\n")}
+};
+`,
+);
+
+console.log(`Image report written to ${relative(process.cwd(), reportPath)}`);
+console.table(
+  productReports.map((item) => ({
+    product: item.productName,
+    sourceKB: kb(item.sourceBytes),
+    card640KB: kb(item.card.at(-1)?.bytes || 0),
+    detailKB: kb(item.detail.at(-1)?.bytes || 0),
+    reductionCard: percent(item.sourceBytes, item.card.at(-1)?.bytes || 0),
+    reductionDetail: percent(item.sourceBytes, item.detail.at(-1)?.bytes || 0),
+  })),
+);
+console.table(
+  staticReport.map((item) => ({
+    source: item.sourceUrl,
+    sourceKB: kb(item.sourceBytes),
+    largestKB: kb(item.variants.at(-1)?.bytes || 0),
+    reduction: percent(item.sourceBytes, item.variants.at(-1)?.bytes || 0),
+  })),
+);
+
+async function generateProductVariants(
+  slug: string,
+  sourceBuffer: Buffer,
+  sourceWidth: number,
+  sourceHeight: number,
+  variants: Variant[],
+) {
+  return Promise.all(
+    variants.map((variant) =>
+      generateVariant(
+        sourceBuffer,
+        sourceWidth,
+        sourceHeight,
+        `/images/products/${slug}-${variant.name}.webp`,
+        variant,
+      ),
+    ),
+  );
+}
+
+async function generateVariant(
+  sourceBuffer: Buffer,
+  sourceWidth: number,
+  sourceHeight: number,
+  outputUrl: string,
+  variant: Variant,
+): Promise<GeneratedVariant> {
+  const width = Math.min(variant.width, sourceWidth);
+  const height = Math.round((sourceHeight / sourceWidth) * width);
+  const outputFile = publicPath(outputUrl);
+  mkdirSync(dirname(outputFile), { recursive: true });
+  const output = await sharp(sourceBuffer)
+    .resize({ width, withoutEnlargement: true })
+    .webp({ quality: variant.quality, effort: 5 })
+    .toBuffer();
+  writeIfChanged(outputFile, output);
+  return {
+    src: outputUrl,
+    width,
+    height,
+    bytes: output.length,
+  };
+}
+
+function publicPath(url: string) {
+  return resolve(publicDir, decodeURIComponent(url).replace(/^\/+/, ""));
+}
+
+function writeIfChanged(file: string, buffer: Buffer) {
+  if (existsSync(file) && readFileSync(file).equals(buffer)) return;
+  writeFileSync(file, buffer);
+}
+
+function srcSet(variants: GeneratedVariant[]) {
+  return variants.map((variant) => `${variant.src} ${variant.width}w`).join(", ");
+}
+
+function normalize(file: string) {
+  return relative(process.cwd(), file).replace(/\\/g, "/");
+}
+
+function kb(bytes: number) {
+  return Math.round(bytes / 1024);
+}
+
+function sum(values: number[]) {
+  return values.reduce((total, value) => total + value, 0);
+}
+
+function percent(before: number, after: number) {
+  return before > 0 ? `${Math.round(((before - after) / before) * 100)}%` : "0%";
+}

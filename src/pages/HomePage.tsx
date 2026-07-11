@@ -4,11 +4,13 @@ import { ProductCard } from "../components/ProductCard";
 import { JsonLd } from "../components/JsonLd";
 import { Seo } from "../components/Seo";
 import { useProducts } from "../hooks/useProducts";
+import { staticImageVariants } from "../lib/generatedImageVariants";
 import { buildHomeJsonLd } from "../lib/structuredData";
 
 export function HomePage() {
   const { products } = useProducts();
   const featuredProducts = products.filter((product) => product.isFeatured);
+  const heroImage = staticImageVariants["/images/verdanza-hero-premium.webp"];
   const contactEmail =
     (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
     "contact@verdanza.fr";
@@ -25,10 +27,12 @@ export function HomePage() {
       <main>
         <section className="hero-section relative overflow-hidden">
           <img
-            src="/images/verdanza-hero-premium.webp"
+            src={heroImage?.src || "/images/verdanza-hero-premium.webp"}
+            srcSet={heroImage?.srcSet}
+            sizes={heroImage?.sizes || "100vw"}
             alt="Sélection CBD premium Verdanza"
-            width={1672}
-            height={941}
+            width={heroImage?.width || 1672}
+            height={heroImage?.height || 941}
             fetchPriority="high"
             decoding="async"
             className="absolute inset-0 h-full w-full object-cover"

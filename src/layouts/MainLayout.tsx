@@ -5,6 +5,7 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { AgeGate } from "../components/AgeGate";
 import { ComplianceNote } from "../components/ComplianceNote";
+import { staticImageVariants } from "../lib/generatedImageVariants";
 
 const navItems = [
   { label: "Accueil", to: "/" },
@@ -19,6 +20,7 @@ export function MainLayout() {
   const [open, setOpen] = useState(false);
   const { itemCount } = useCart();
   const { user } = useAuth();
+  const logoImage = staticImageVariants["/verdanza-logo.png"];
   const contactEmail =
     (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
     "contact@verdanza.fr";
@@ -29,7 +31,16 @@ export function MainLayout() {
       <header className="sticky top-0 z-40 border-b border-forest/10 bg-ivory/95 backdrop-blur">
         <div className="container-page flex min-h-20 items-center justify-between gap-4">
           <NavLink to="/" className="flex items-center gap-3">
-            <img src="/verdanza-logo.png" alt="Verdanza" className="h-14 w-auto" />
+            <img
+              src={logoImage?.src || "/verdanza-logo.png"}
+              srcSet={logoImage?.srcSet}
+              sizes={logoImage?.sizes || "180px"}
+              alt="Verdanza"
+              width={logoImage?.width || 180}
+              height={logoImage?.height || 82}
+              decoding="async"
+              className="h-14 w-auto"
+            />
           </NavLink>
           <nav className="hidden items-center gap-6 text-sm text-forest/80 lg:flex">
             {navItems.map((item) => (
@@ -86,7 +97,17 @@ export function MainLayout() {
       <footer className="bg-cream py-12">
         <div className="container-page grid gap-8 md:grid-cols-[1.4fr_1fr_1fr]">
           <div>
-            <img src="/verdanza-logo.png" alt="Verdanza" className="h-16 w-auto" />
+            <img
+              src={logoImage?.src || "/verdanza-logo.png"}
+              srcSet={logoImage?.srcSet}
+              sizes={logoImage?.sizes || "180px"}
+              alt="Verdanza"
+              width={logoImage?.width || 180}
+              height={logoImage?.height || 82}
+              loading="lazy"
+              decoding="async"
+              className="h-16 w-auto"
+            />
             <p className="mt-4 max-w-md text-sm leading-6 text-ink/70">
               Verdanza sélectionne des produits CBD premium, conformes et
               contrôlés, avec livraison postale en France et livraison locale

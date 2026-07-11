@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Minus, Plus, Trash2 } from "lucide-react";
+import { ProductImage } from "../components/ProductImage";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
@@ -88,9 +89,11 @@ export function CartPage() {
                 key={line.productId}
                 className="grid gap-4 rounded-lg border border-forest/10 bg-ivory p-4 sm:grid-cols-[120px_1fr_auto]"
               >
-                <img
+                <ProductImage
+                  variant="card"
                   src={line.product.image}
                   alt=""
+                  loading="lazy"
                   className="h-28 w-full rounded-md bg-cream object-contain"
                 />
                 <div>

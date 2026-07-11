@@ -4,6 +4,7 @@ import { useCart } from "../context/CartContext";
 import type { Product } from "../types";
 import { trackEvent } from "../lib/analytics";
 import { FavoriteButton } from "./FavoriteButton";
+import { ProductImage } from "./ProductImage";
 
 function productImageAlt(product: Product) {
   return `${product.name} - ${
@@ -25,13 +26,12 @@ export function ProductCard({
     <article className="group relative overflow-hidden rounded-lg border border-forest/10 bg-ivory shadow-sm transition hover:-translate-y-1 hover:shadow-soft">
       <FavoriteButton product={product} className="absolute right-3 top-3 z-10" />
       <Link to={`/produits/${product.slug}`} className="block bg-cream p-6">
-        <img
+        <ProductImage
+          variant="card"
           src={product.image}
           alt={productImageAlt(product)}
-          width={713}
-          height={713}
           loading={priorityImage ? "eager" : "lazy"}
-          decoding="async"
+          fetchPriority={priorityImage ? "high" : "auto"}
           className="mx-auto h-48 w-full object-contain transition group-hover:scale-105"
         />
       </Link>
