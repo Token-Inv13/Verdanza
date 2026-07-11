@@ -14,110 +14,110 @@ const categoryContent = {
     breadcrumb: "Fleurs CBD",
     seoTitle: "Fleurs CBD premium : indoor, greenhouse et hydroponique | Verdanza",
     seoDescription:
-      "Selection de fleurs CBD Verdanza : indoor, greenhouse et hydroponique selon les references, avec livraison a Aix-en-Provence et livraison postale.",
+      "Sélection de fleurs CBD Verdanza : indoor, greenhouse et hydroponique selon les références, avec livraison à Aix-en-Provence et livraison postale.",
     intro:
-      "Verdanza propose une selection de fleurs CBD aux profils aromatiques et modes de culture varies. Les informations affichees reprennent les fiches produits et analyses producteurs disponibles, avec une disponibilite indiquee sur chaque reference.",
-    guideTitle: "Comprendre les methodes de culture",
+      "Verdanza propose une sélection de fleurs CBD aux profils aromatiques et modes de culture variés. Les informations affichées reprennent les fiches produits et analyses producteurs disponibles, avec une disponibilité indiquée sur chaque référence.",
+    guideTitle: "Comprendre les méthodes de culture",
     guideText:
-      "La selection reunit des fleurs indoor, sous serre et hydroponiques. L'indoor permet un controle fin de l'environnement, la greenhouse s'appuie sur une culture sous serre, et l'hydroponique repose sur une culture controlee hors sol. Chaque methode peut influencer la structure, la presentation et l'expression aromatique sans etre systematiquement superieure aux autres.",
+      "La sélection réunit des fleurs indoor, sous serre et hydroponiques. L'indoor permet un contrôle fin de l'environnement, la greenhouse s'appuie sur une culture sous serre, et l'hydroponique repose sur une culture contrôlée hors sol. Chaque méthode peut influencer la structure, la présentation et l'expression aromatique sans être systématiquement supérieure aux autres.",
     compareTitle: "Comment comparer les fleurs CBD",
     compareItems: [
-      "Profil aromatique indique sur la fiche produit.",
-      "Mode de culture : indoor, sous serre ou hydroponique selon la reference.",
+      "Profil aromatique indiqué sur la fiche produit.",
+      "Mode de culture : indoor, sous serre ou hydroponique selon la référence.",
       "Origine lorsqu'elle est connue.",
       "Aspect, structure et informations fournisseur disponibles.",
-      "Disponibilite, statut en arrivage et prix au gramme.",
+      "Disponibilité, statut en arrivage et prix au gramme.",
     ],
-    selectionTitle: "La selection Verdanza",
+    selectionTitle: "La sélection Verdanza",
     selectionText:
-      "La selection privilegie des references distinctes, des informations lisibles et une presentation claire de la tracabilite lorsque les donnees sont disponibles. Les fiches restent factuelles et ne formulent aucune promesse therapeutique.",
-    featuredTitle: "Fleurs a comparer",
+      "La sélection privilégie des références distinctes, des informations lisibles et une présentation claire de la traçabilité lorsque les données sont disponibles. Les fiches restent factuelles et ne formulent aucune promesse thérapeutique.",
+    featuredTitle: "Fleurs à comparer",
     featuredIntro:
-      "Ces liens permettent d'ouvrir rapidement plusieurs fiches fleurs sans dupliquer les informations detaillees de chaque produit.",
+      "Ces liens permettent d'ouvrir rapidement plusieurs fiches fleurs sans dupliquer les informations détaillées de chaque produit.",
     faq: [
       {
-        question: "Quelle difference entre indoor, greenhouse et hydroponique ?",
+        question: "Quelle différence entre indoor, greenhouse et hydroponique ?",
         answer:
-          "Ces termes decrivent des methodes de culture. Indoor signifie culture en interieur, greenhouse correspond aux cultures sous serre, et hydroponique designe une culture controlee hors sol.",
+          "Ces termes décrivent des méthodes de culture. Indoor signifie culture en intérieur, greenhouse correspond aux cultures sous serre, et hydroponique désigne une culture contrôlée hors sol.",
       },
       {
         question: "Comment choisir une fleur selon son profil aromatique ?",
         answer:
-          "Comparez les aromes affiches, l'origine lorsqu'elle est connue, le mode de culture et le prix au gramme. La fiche produit reste la source principale.",
+          "Comparez les arômes affichés, l'origine lorsqu'elle est connue, le mode de culture et le prix au gramme. La fiche produit reste la source principale.",
       },
       {
-        question: "Les fleurs en arrivage peuvent-elles etre commandees ?",
+        question: "Les fleurs en arrivage peuvent-elles être commandées ?",
         answer:
-          "Les produits marques en arrivage conservent leur statut reel et ne peuvent pas etre ajoutes au panier tant que la disponibilite n'est pas ouverte.",
+          "Les produits marqués en arrivage conservent leur statut réel et ne peuvent pas être ajoutés au panier tant que la disponibilité n'est pas ouverte.",
       },
       {
         question: "La livraison est-elle disponible hors d'Aix-en-Provence ?",
         answer:
-          "La livraison locale couvre les zones configurees autour d'Aix-en-Provence. La livraison postale permet aussi une expedition en France selon les conditions affichees.",
+          "La livraison locale couvre les zones configurées autour d'Aix-en-Provence. La livraison postale permet aussi une expédition en France selon les conditions affichées.",
       },
     ],
     links: [
-      { to: "/resines-cbd", label: "Comparer avec les resines CBD" },
-      { to: "/livraison-express-aix", label: "Voir la livraison a Aix-en-Provence" },
-      { to: "/livraison-postale", label: "Verifier la livraison postale" },
-      { to: "/qualite-conformite", label: "Consulter les engagements qualite" },
-      { to: "/boutique", label: "Retourner a la boutique" },
+      { to: "/resines-cbd", label: "Comparer avec les résines CBD" },
+      { to: "/livraison-express-aix", label: "Voir la livraison à Aix-en-Provence" },
+      { to: "/livraison-postale", label: "Vérifier la livraison postale" },
+      { to: "/qualite-conformite", label: "Consulter les engagements qualité" },
+      { to: "/boutique", label: "Retourner à la boutique" },
     ],
   },
   resins: {
     path: "/resines-cbd",
-    title: "Resines CBD premium",
+    title: "Résines CBD premium",
     breadcrumb: "Résines CBD",
-    seoTitle: "Resines CBD premium : selection et profils | Verdanza",
+    seoTitle: "Résines CBD premium : sélection et profils | Verdanza",
     seoDescription:
-      "Selection de resines CBD Verdanza avec textures, taux declares et profils disponibles, livraison locale a Aix-en-Provence et livraison postale.",
+      "Sélection de résines CBD Verdanza avec textures, taux déclarés et profils disponibles, livraison locale à Aix-en-Provence et livraison postale.",
     intro:
-      "Les resines CBD Verdanza regroupent des references dont la texture, la composition declaree et le profil aromatique peuvent varier selon les fiches. Les produits sont reserves aux adultes et les donnees affichees restent propres a chaque reference.",
+      "Les résines CBD Verdanza regroupent des références dont la texture, la composition déclarée et le profil aromatique peuvent varier selon les fiches. Les produits sont réservés aux adultes et les données affichées restent propres à chaque référence.",
     guideTitle: "Comprendre CBD, CBG et autres indications",
     guideText:
-      "CBD, CBG ou CBN designent des cannabinoides mentionnes lorsqu'ils sont indiques sur une fiche produit. Leur presence ou leur taux depend de chaque reference et ne doit pas etre interprete comme une indication medicale.",
-    compareTitle: "Comment comparer les resines CBD",
+      "CBD, CBG ou CBN désignent des cannabinoïdes mentionnés lorsqu'ils sont indiqués sur une fiche produit. Leur présence ou leur taux dépend de chaque référence et ne doit pas être interprété comme une indication médicale.",
+    compareTitle: "Comment comparer les résines CBD",
     compareItems: [
-      "Texture decrite sur la fiche : compacte, friable, souple ou cremeuse.",
-      "Profil aromatique et origine lorsqu'ils sont renseignes.",
-      "Taux de CBD et presence declaree de CBG, CBN ou autres cannabinoides.",
-      "Methode de fabrication ou culture lorsqu'elle est connue.",
-      "Prix au gramme et disponibilite reelle.",
+      "Texture décrite sur la fiche : compacte, friable, souple ou crémeuse.",
+      "Profil aromatique et origine lorsqu'ils sont renseignés.",
+      "Taux de CBD et présence déclarée de CBG, CBN ou autres cannabinoïdes.",
+      "Méthode de fabrication ou culture lorsqu'elle est connue.",
+      "Prix au gramme et disponibilité réelle.",
     ],
-    selectionTitle: "La selection Verdanza",
+    selectionTitle: "La sélection Verdanza",
     selectionText:
-      "La selection met en avant des references lisibles, des prix clairs et les informations disponibles sans extrapoler d'effets a partir des cannabinoides. Chaque fiche doit etre consultee pour les details exacts.",
-    featuredTitle: "Resines a decouvrir",
+      "La sélection met en avant des références lisibles, des prix clairs et les informations disponibles sans extrapoler d'effets à partir des cannabinoïdes. Chaque fiche doit être consultée pour les détails exacts.",
+    featuredTitle: "Résines à découvrir",
     featuredIntro:
-      "Ces liens ouvrent directement les fiches des resines actives pour comparer les profils disponibles.",
+      "Ces liens ouvrent directement les fiches des résines actives pour comparer les profils disponibles.",
     faq: [
       {
-        question: "Quelle difference entre une fleur et une resine CBD ?",
+        question: "Quelle différence entre une fleur et une résine CBD ?",
         answer:
-          "Une fleur correspond a la matiere vegetale issue de la plante. Une resine est une preparation dont la texture et la composition declaree dependent de la reference.",
+          "Une fleur correspond à la matière végétale issue de la plante. Une résine est une préparation dont la texture et la composition déclarée dépendent de la référence.",
       },
       {
-        question: "Comment comparer les textures de resine ?",
+        question: "Comment comparer les textures de résine ?",
         answer:
-          "Appuyez-vous sur les descriptions disponibles : compact, friable, souple, cremeux ou mousseux lorsque ces indications sont presentes.",
+          "Appuyez-vous sur les descriptions disponibles : compact, friable, souple, crémeux ou mousseux lorsque ces indications sont présentes.",
       },
       {
         question: "Que signifient CBD et CBG sur une fiche produit ?",
         answer:
-          "Ce sont des cannabinoides. Les taux ou mentions affiches sont propres a chaque fiche produit et ne constituent pas une promesse d'effet.",
+          "Ce sont des cannabinoïdes. Les taux ou mentions affichés sont propres à chaque fiche produit et ne constituent pas une promesse d'effet.",
       },
       {
         question: "Quels sont les modes de livraison ?",
         answer:
-          "Verdanza propose la livraison locale dans les zones configurees autour d'Aix-en-Provence et la livraison postale en France selon les conditions affichees.",
+          "Verdanza propose la livraison locale dans les zones configurées autour d'Aix-en-Provence et la livraison postale en France selon les conditions affichées.",
       },
     ],
     links: [
       { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
-      { to: "/livraison-express-aix", label: "Voir la livraison a Aix-en-Provence" },
-      { to: "/livraison-postale", label: "Verifier la livraison postale" },
-      { to: "/qualite-conformite", label: "Consulter les engagements qualite" },
-      { to: "/boutique", label: "Retourner a la boutique" },
+      { to: "/livraison-express-aix", label: "Voir la livraison à Aix-en-Provence" },
+      { to: "/livraison-postale", label: "Vérifier la livraison postale" },
+      { to: "/qualite-conformite", label: "Consulter les engagements qualité" },
+      { to: "/boutique", label: "Retourner à la boutique" },
     ],
   },
 } satisfies Record<string, CategoryContent>;
@@ -236,7 +236,7 @@ function CategoryGuide({
               to={`/produits/${product.slug}`}
               className="rounded-md border border-forest/10 bg-ivory p-4 text-sm font-semibold text-forest transition hover:border-champagne hover:bg-cream"
             >
-              {product.category === "flowers" ? "Decouvrir" : "Consulter"} {product.name}
+              {product.category === "flowers" ? "Découvrir" : "Consulter"} {product.name}
               {product.comingSoon || product.stockStatus === "coming_soon" ? (
                 <span className="mt-2 block text-xs font-medium text-ink/55">
                   {product.stockLabel || "En arrivage"}
@@ -263,7 +263,7 @@ function CategoryGuide({
       </section>
 
       <section>
-        <h2 className="font-display text-3xl text-forest">Questions frequentes</h2>
+        <h2 className="font-display text-3xl text-forest">Questions fréquentes</h2>
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           {content.faq.map((item) => (
             <article key={item.question} className="rounded-lg border border-forest/10 bg-ivory p-5">

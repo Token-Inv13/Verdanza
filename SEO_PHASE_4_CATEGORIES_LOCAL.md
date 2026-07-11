@@ -1,85 +1,85 @@
-# Phase 4 SEO - Categories et page locale Aix
+# Phase 4 SEO - Catégories et page locale Aix
 
 Date : 2026-07-11  
 Branche : `main`  
-Etat initial : `7f686d3 seo: add controlled indexnow submissions`  
-Perimetre : `/fleurs-cbd`, `/resines-cbd`, `/livraison-express-aix`
+État initial : `7f686d3 seo: add controlled indexnow submissions`  
+Périmètre : `/fleurs-cbd`, `/resines-cbd`, `/livraison-express-aix`
 
-## Etat initial
+## État initial
 
-- La branche locale et `origin/main` etaient alignees sur `7f686d3`.
-- Les trois pages etaient deja indexables, canonicals, pre-rendues et presentes dans le sitemap.
-- Les pages categories affichaient une introduction courte, une notice catalogue et la grille produit.
-- La page locale affichait les zones configurees mais peu d'informations editoriales.
-- Les fichiers non suivis preexistants sont restes hors perimetre.
+- La branche locale et `origin/main` étaient alignées sur `7f686d3`.
+- Les trois pages étaient déjà indexables, canonicals, pré-rendues et présentes dans le sitemap.
+- Les pages catégories affichaient une introduction courte, une notice catalogue et la grille produit.
+- La page locale affichait les zones configurées mais peu d'informations éditoriales.
+- Les fichiers non suivis préexistants sont restés hors périmètre.
 
 ## Analyse des pages
 
 ### /fleurs-cbd
 
-Intention retenue : presenter la selection de fleurs CBD et aider a comparer les references selon culture, profil, origine connue, disponibilite et prix.
+Intention retenue : présenter la sélection de fleurs CBD et aider à comparer les références selon culture, profil, origine connue, disponibilité et prix.
 
 Avant :
 - title : `Fleurs CBD - Verdanza CBD`
-- description : generique, commune au modele categorie.
+- description : générique, commune au modèle catégorie.
 
-Apres :
+Après :
 - title : `Fleurs CBD premium : indoor, greenhouse et hydroponique | Verdanza`
-- description : selection fleurs CBD, methodes de culture presentes, livraison locale et postale.
+- description : sélection fleurs CBD, méthodes de culture présentes, livraison locale et postale.
 
-Sections ajoutees :
-- comprendre les methodes de culture ;
+Sections ajoutées :
+- comprendre les méthodes de culture ;
 - comment comparer les fleurs CBD ;
-- la selection Verdanza ;
-- fleurs a comparer ;
+- la sélection Verdanza ;
+- fleurs à comparer ;
 - liens utiles ;
 - FAQ visible.
 
 ### /resines-cbd
 
-Intention retenue : presenter les resines CBD et distinguer les references selon texture, composition declaree, profil et disponibilite.
+Intention retenue : présenter les résines CBD et distinguer les références selon texture, composition déclarée, profil et disponibilité.
 
 Avant :
-- title : `Resines CBD - Verdanza CBD`
-- description : generique, commune au modele categorie.
+- title : `Résines CBD - Verdanza CBD`
+- description : générique, commune au modèle catégorie.
 
-Apres :
-- title : `Resines CBD premium : selection et profils | Verdanza`
-- description : resines disponibles, caracteristiques affichees, livraison locale et postale.
+Après :
+- title : `Résines CBD premium : sélection et profils | Verdanza`
+- description : résines disponibles, caractéristiques affichées, livraison locale et postale.
 
-Sections ajoutees :
+Sections ajoutées :
 - comprendre CBD, CBG et autres indications ;
-- comment comparer les resines CBD ;
-- la selection Verdanza ;
-- resines a decouvrir ;
+- comment comparer les résines CBD ;
+- la sélection Verdanza ;
+- résines à découvrir ;
 - liens utiles ;
 - FAQ visible.
 
 ### /livraison-express-aix
 
-Intention retenue : presenter clairement la livraison locale autour d'Aix-en-Provence avec les conditions configurees.
+Intention retenue : présenter clairement la livraison locale autour d'Aix-en-Provence avec les conditions configurées.
 
 Avant :
 - title : `Livraison CBD express Aix-en-Provence - Verdanza`
 - H1 : `Livraison express Aix`
-- contenu limite aux cartes de zones.
+- contenu limité aux cartes de zones.
 
-Apres :
-- title : `Livraison CBD a Aix-en-Provence et alentours | Verdanza`
-- description : livraison locale, zones configurees, minimum, horaires et creneaux.
-- H1 : `Livraison de CBD a Aix-en-Provence et alentours`
+Après :
+- title : `Livraison CBD à Aix-en-Provence et alentours | Verdanza`
+- description : livraison locale, zones configurées, minimum, horaires et créneaux.
+- H1 : `Livraison de CBD à Aix-en-Provence et alentours`
 
-Sections ajoutees :
-- modalites essentielles ;
+Sections ajoutées :
+- modalités essentielles ;
 - zones desservies ;
 - comment commander ;
 - livraison locale ou postale ;
 - liens utiles ;
 - FAQ locale.
 
-## Composants et donnees
+## Composants et données
 
-Composants reutilises :
+Composants réutilisés :
 - `Seo`
 - `Breadcrumbs`
 - `CatalogNotice`
@@ -90,7 +90,7 @@ Nouveaux composants locaux :
 - `CategoryGuide`
 - `LocalDeliveryPage`
 
-Donnees utilisees :
+Données utilisées :
 - `getProductsByCategory()` depuis `src/data/products.ts`
 - `localDeliveryZones` depuis `src/data/deliveryZones.ts`
 - `LOCAL_DELIVERY_MINIMUM`, `POSTAL_DELIVERY_MINIMUM`, `POSTAL_FREE_SHIPPING_THRESHOLD`
@@ -101,29 +101,29 @@ Informations volontairement exclues :
 - LocalBusiness / Store ;
 - FAQPage ;
 - ItemList ;
-- Product sur les pages categories ;
+- Product sur les pages catégories ;
 - avis, AggregateRating ou Review ;
-- promesses medicales ;
-- delais garantis non configures ;
+- promesses médicales ;
+- délais garantis non configurés ;
 - nouvelles pages locales.
 
 ## Maillage interne
 
-Ajoute depuis `/fleurs-cbd` :
+Ajouté depuis `/fleurs-cbd` :
 - `/resines-cbd`
 - `/livraison-express-aix`
 - `/livraison-postale`
 - `/qualite-conformite`
 - `/boutique`
 
-Ajoute depuis `/resines-cbd` :
+Ajouté depuis `/resines-cbd` :
 - `/fleurs-cbd`
 - `/livraison-express-aix`
 - `/livraison-postale`
 - `/qualite-conformite`
 - `/boutique`
 
-Ajoute depuis `/livraison-express-aix` :
+Ajouté depuis `/livraison-express-aix` :
 - `/fleurs-cbd`
 - `/resines-cbd`
 - `/boutique`
@@ -132,7 +132,7 @@ Ajoute depuis `/livraison-express-aix` :
 - `/faq`
 - `/contact`
 
-## Audit automatise
+## Audit automatisé
 
 Nouveau script :
 
@@ -140,28 +140,30 @@ Nouveau script :
 npm run audit:seo-landing-pages
 ```
 
-Controle :
+Contrôle :
 - route indexable ;
-- title specifique ;
-- description specifique ;
+- title spécifique ;
+- description spécifique ;
 - canonical ;
 - robots `index,follow` ;
 - un seul H1 ;
 - H2 attendus ;
 - contenu principal ;
 - liens internes obligatoires ;
-- absence de liens prives dans le contenu principal ;
+- absence de liens privés dans le contenu principal ;
 - BreadcrumbList ;
 - absence de Product, Review, AggregateRating, FAQPage, LocalBusiness ;
-- absence d'expressions medicales interdites ;
-- contenu fleurs et resines distinct.
+- absence d'expressions médicales interdites ;
+- absence des formes françaises non accentuées introduites pendant la phase 4 ;
+- absence de caractères UTF-8 corrompus ;
+- contenu fleurs et résines distinct.
 
-## Resultats locaux
+## Résultats locaux
 
-Commandes executees :
+Commandes exécutées :
 - `npm run sitemap` : OK, 25 URL.
 - `npm run lint` : OK.
-- `npm run build` : OK, 50 fichiers HTML pre-rendus.
+- `npm run build` : OK, 50 fichiers HTML pré-rendus.
 - `npm run typecheck:api` : OK.
 - `npm run audit:prerender` : OK.
 - `npm run audit:structured-data` : OK.
@@ -172,14 +174,14 @@ Commandes executees :
 Smoke Playwright :
 - mobile 390 px : OK.
 - desktop 1280 px : OK.
-- pages testees : `/fleurs-cbd`, `/resines-cbd`, `/livraison-express-aix`.
+- pages testées : `/fleurs-cbd`, `/resines-cbd`, `/livraison-express-aix`.
 - liens internes, cartes produits, cartes de zones, age gate, navigation produit, panier et favoris : OK.
 
-## Validation HTML pre-rendu
+## Validation HTML pré-rendu
 
 Les trois pages contiennent dans le HTML initial :
-- title specifique ;
-- meta description specifique ;
+- title spécifique ;
+- meta description spécifique ;
 - canonical correcte ;
 - robots `index,follow` ;
 - un seul H1 ;
@@ -188,19 +190,19 @@ Les trois pages contiennent dans le HTML initial :
 - liens internes ;
 - BreadcrumbList ;
 - aucun Product JSON-LD ;
-- aucun contenu prive.
+- aucun contenu privé.
 
 ## Limites
 
 - Pas de nouvelle page locale.
 - Pas de blog.
 - Pas de travail performance.
-- Pas de nouvelle donnee structuree locale.
-- Les contenus restent limites aux donnees deja disponibles dans le projet.
+- Pas de nouvelle donnée structurée locale.
+- Les contenus restent limités aux données déjà disponibles dans le projet.
 
 ## IndexNow
 
-URL a notifier apres deploiement :
+URL à notifier après déploiement :
 - `https://verdanza.fr/fleurs-cbd`
 - `https://verdanza.fr/resines-cbd`
 - `https://verdanza.fr/livraison-express-aix`
@@ -209,7 +211,7 @@ Ne pas utiliser `--all-indexable` pour cette phase.
 
 ## Google Search Console
 
-URL a reinspecter manuellement apres deploiement :
+URL à réinspecter manuellement après déploiement :
 - `https://verdanza.fr/fleurs-cbd`
 - `https://verdanza.fr/resines-cbd`
 - `https://verdanza.fr/livraison-express-aix`

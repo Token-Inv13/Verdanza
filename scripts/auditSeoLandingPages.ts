@@ -15,37 +15,37 @@ const pages = [
   {
     path: "/fleurs-cbd",
     titleIncludes: ["Fleurs CBD premium", "Verdanza"],
-    descriptionIncludes: ["fleurs CBD", "livraison"],
+    descriptionIncludes: ["Sélection de fleurs CBD", "livraison"],
     h2: [
-      "Comprendre les methodes de culture",
+      "Comprendre les méthodes de culture",
       "Comment comparer les fleurs CBD",
-      "La selection Verdanza",
-      "Fleurs a comparer",
+      "La sélection Verdanza",
+      "Fleurs à comparer",
       "Liens utiles",
-      "Questions frequentes",
+      "Questions fréquentes",
     ],
     links: ["/resines-cbd", "/livraison-express-aix", "/livraison-postale", "/qualite-conformite"],
     textMarkers: ["indoor", "greenhouse", "hydroponique", "prix au gramme"],
   },
   {
     path: "/resines-cbd",
-    titleIncludes: ["Resines CBD premium", "Verdanza"],
-    descriptionIncludes: ["resines CBD", "livraison"],
+    titleIncludes: ["Résines CBD premium", "Verdanza"],
+    descriptionIncludes: ["résines CBD", "livraison"],
     h2: [
       "Comprendre CBD, CBG et autres indications",
-      "Comment comparer les resines CBD",
-      "La selection Verdanza",
-      "Resines a decouvrir",
+      "Comment comparer les résines CBD",
+      "La sélection Verdanza",
+      "Résines à découvrir",
       "Liens utiles",
-      "Questions frequentes",
+      "Questions fréquentes",
     ],
     links: ["/fleurs-cbd", "/livraison-express-aix", "/livraison-postale", "/qualite-conformite"],
-    textMarkers: ["texture", "CBG", "cannabinoides", "prix au gramme"],
+    textMarkers: ["texture", "CBG", "cannabinoïdes", "prix au gramme"],
   },
   {
     path: "/livraison-express-aix",
-    titleIncludes: ["Livraison CBD a Aix-en-Provence", "Verdanza"],
-    descriptionIncludes: ["Livraison locale", "Aix-en-Provence"],
+    titleIncludes: ["Livraison CBD à Aix-en-Provence", "Verdanza"],
+    descriptionIncludes: ["Livraison locale", "Aix-en-Provence", "créneaux"],
     h2: [
       "Minimum",
       "Horaires",
@@ -55,7 +55,7 @@ const pages = [
       "Comment commander",
       "Livraison locale ou postale",
       "Liens utiles",
-      "Questions frequentes",
+      "Questions fréquentes",
     ],
     links: ["/fleurs-cbd", "/resines-cbd", "/boutique", "/livraison-postale", "/qualite-conformite"],
     textMarkers: ["Aix-en-Provence centre", "Puyricard", "Gardanne", "Le Tholonet"],
@@ -80,6 +80,16 @@ const forbiddenMedicalExpressions = [
   /therapeutique garanti/i,
   /effet relaxant garanti/i,
 ];
+const forbiddenAsciiUserText = [
+  "Resines CBD",
+  "selection",
+  "a Aix-en-Provence",
+  "Questions frequentes",
+  "Verifier la livraison",
+  "Decouvrir les resines",
+  "disponibilite des creneaux",
+];
+const corruptedCharacterPattern = /Ã|â€™|�/;
 
 const audits = pages.map(auditPage);
 const failures = audits.filter((audit) => audit.failures.length);
@@ -119,6 +129,7 @@ function auditPage(page: (typeof pages)[number]): LandingAudit {
   const h1Count = [...html.matchAll(/<h1[\s>]/gi)].length;
   const mainHtml = html.match(/<main[\s\S]*?<\/main>/i)?.[0] || "";
   const mainText = stripTags(mainHtml);
+  const userFacingText = [title, description, mainText].join(" ");
   const jsonLdNodes = extractJsonLdNodes(html, failures);
   const schemaTypes = jsonLdNodes.flatMap((node) => {
     const type = node["@type"];
@@ -154,6 +165,12 @@ function auditPage(page: (typeof pages)[number]): LandingAudit {
   privateRoutePatterns.forEach((pattern) => {
     if (pattern.test(mainHtml)) failures.push(`private link present: ${pattern}`);
   });
+  forbiddenAsciiUserText.forEach((text) => {
+    if (userFacingText.includes(text)) failures.push(`unaccented French text present: ${text}`);
+  });
+  if (corruptedCharacterPattern.test(userFacingText)) {
+    failures.push("corrupted UTF-8 character present");
+  }
 
   if (!schemaTypes.includes("BreadcrumbList")) failures.push("BreadcrumbList missing");
   forbiddenSchemaTypes.forEach((type) => {

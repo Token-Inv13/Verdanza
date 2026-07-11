@@ -134,7 +134,7 @@ export function ProductPage() {
         </div>
         <section>
           <p className="text-sm uppercase tracking-[0.18em] text-champagne">
-            {product.category === "flowers" ? "Fleur CBD" : "Resine CBD"}
+            {product.category === "flowers" ? "Fleur CBD" : "Résine CBD"}
           </p>
           <div className="mt-3 flex items-start justify-between gap-4">
             <h1 className="font-display text-5xl text-forest">{product.name}</h1>
@@ -152,7 +152,7 @@ export function ProductPage() {
             ))}
           </div>
           <div className="mt-6">
-            <h2 className="font-display text-2xl text-forest">Aromes</h2>
+            <h2 className="font-display text-2xl text-forest">Arômes</h2>
             <div className="mt-3 flex flex-wrap gap-2">
               {product.aromas.map((aroma) => (
                 <span key={aroma} className="tag">

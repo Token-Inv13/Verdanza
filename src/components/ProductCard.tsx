@@ -29,7 +29,7 @@ export function ProductCard({ product }: { product: Product }) {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs uppercase tracking-[0.18em] text-champagne">
-              {product.category === "flowers" ? "Fleur CBD" : "Resine CBD"}
+              {product.category === "flowers" ? "Fleur CBD" : "Résine CBD"}
             </span>
             {product.productTier && <span className="tag">{product.productTier}</span>}
             {product.cultureType === "Hydroponique" && (
