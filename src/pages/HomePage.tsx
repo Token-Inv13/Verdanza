@@ -27,6 +27,10 @@ export function HomePage() {
           <img
             src="/images/verdanza-hero-premium.webp"
             alt="Sélection CBD premium Verdanza"
+            width={1672}
+            height={941}
+            fetchPriority="high"
+            decoding="async"
             className="absolute inset-0 h-full w-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-forest/95 via-forest/78 to-forest/25" />

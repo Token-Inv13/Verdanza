@@ -1,0 +1,784 @@
+{
+  "generatedAt": "2026-07-11T14:51:26.910Z",
+  "commit": "afab586",
+  "method": "Local Vite preview, Lighthouse first visit medians and Playwright age-confirmed medians, 3 runs per route/profile.",
+  "firstVisit": [
+    {
+      "scenario": "first-visit",
+      "route": "/livraison-express-aix",
+      "profile": "desktop",
+      "runs": 3,
+      "score": 86,
+      "fcpMs": 800,
+      "lcpMs": 2292,
+      "cls": 0,
+      "tbtMs": 128,
+      "speedIndexMs": 812,
+      "interactiveMs": 2339,
+      "totalBytes": 2396014,
+      "jsBytes": 236935,
+      "unusedJsBytes": 80,
+      "requestCount": 9,
+      "mainThreadMs": 463,
+      "lcpElement": "",
+      "clsSources": [],
+      "longTasks": [
+        {
+          "duration": 178,
+          "url": "http://127.0.0.1:4173/assets/index-B02_s4WF.js"
+        }
+      ],
+      "renderBlocking": []
+    },
+    {
+      "scenario": "first-visit",
+      "route": "/livraison-express-aix",
+      "profile": "mobile",
+      "runs": 3,
+      "score": 65,
+      "fcpMs": 3365,
+      "lcpMs": 13756,
+      "cls": 0,
+      "tbtMs": 168,
+      "speedIndexMs": 3365,
+      "interactiveMs": 13756,
+      "totalBytes": 2396014,
+      "jsBytes": 236935,
+      "unusedJsBytes": 600,
+      "requestCount": 9,
+      "mainThreadMs": 1271,
+      "lcpElement": "",
+      "clsSources": [],
+      "longTasks": [
+        {
+          "duration": 229,
+          "url": "http://127.0.0.1:4173/assets/index-B02_s4WF.js"
+        },
+        {
+          "duration": 164,
+          "url": "http://127.0.0.1:4173/livraison-express-aix"
+        },
+        {
+          "duration": 139.9999999999999,
+          "url": "Unattributable"
+        },
+        {
+          "duration": 88,
+          "url": "Unattributable"
+        },
+        {
+          "duration": 75,
+          "url": "Unattributable"
+        }
+      ],
+      "renderBlocking": []
+    },
+    {
+      "scenario": "first-visit",
+      "route": "/fleurs-cbd",
+      "profile": "desktop",
+      "runs": 3,
+      "score": 81,
+      "fcpMs": 829,
+      "lcpMs": 3349,
+      "cls": 0,
+      "tbtMs": 16,
+      "speedIndexMs": 988,
+      "interactiveMs": 3384,
+      "totalBytes": 4056807,
+      "jsBytes": 236935,
+      "unusedJsBytes": 120,
+      "requestCount": 17,
+      "mainThreadMs": 504,
+      "lcpElement": "",
+      "clsSources": [],
+      "longTasks": [
+        {
+          "duration": 55,
+          "url": "http://127.0.0.1:4173/fleurs-cbd"
+        }
+      ],
+      "renderBlocking": []
+    },
+    {
+      "scenario": "first-visit",
+      "route": "/fleurs-cbd",
+      "profile": "mobile",
+      "runs": 3,
+      "score": 67,
+      "fcpMs": 3409,
+      "lcpMs": 21161,
+      "cls": 0.106,
+      "tbtMs": 88,
+      "speedIndexMs": 3409,
+      "interactiveMs": 21457,
+      "totalBytes": 4056807,
+      "jsBytes": 236935,
+      "unusedJsBytes": 1070,
+      "requestCount": 17,
+      "mainThreadMs": 1466,
+      "lcpElement": "",
+      "clsSources": [],
+      "longTasks": [
+        {
+          "duration": 189,
+          "url": "http://127.0.0.1:4173/fleurs-cbd"
+        },
+        {
+          "duration": 118.99999999999989,
+          "url": "Unattributable"
+        },
+        {
+          "duration": 112,
+          "url": "http://127.0.0.1:4173/assets/index-B02_s4WF.js"
+        },
+        {
+          "duration": 89,
+          "url": "Unattributable"
+        },
+        {
+          "duration": 76,
+          "url": "http://127.0.0.1:4173/assets/index-B02_s4WF.js"
+        }
+      ],
+      "renderBlocking": []
+    },
+    {
+      "scenario": "first-visit",
+      "route": "/produits/golden-static",
+      "profile": "desktop",
+      "runs": 3,
+      "score": 86,
+      "fcpMs": 795,
+      "lcpMs": 2504,
+      "cls": 0,
+      "tbtMs": 0,
+      "speedIndexMs": 802,
+      "interactiveMs": 2504,
+      "totalBytes": 2652912,
+      "jsBytes": 236935,
+      "unusedJsBytes": 120,
+      "requestCount": 10,
+      "mainThreadMs": 357,
+      "lcpElement": "",
+      "clsSources": [],
+      "longTasks": [
+        {
+          "duration": 54,
+          "url": "http://127.0.0.1:4173/assets/index-B02_s4WF.js"
+        }
+      ],
+      "renderBlocking": []
+    },
+    {
+      "scenario": "first-visit",
+      "route": "/produits/golden-static",
+      "profile": "mobile",
+      "runs": 3,
+      "score": 67,
+      "fcpMs": 3388,
+      "lcpMs": 15266,
+      "cls": 0,
+      "tbtMs": 116,
+      "speedIndexMs": 3388,
+      "interactiveMs": 15266,
+      "totalBytes": 2652912,
+      "jsBytes": 236935,
+      "unusedJsBytes": 760,
+      "requestCount": 10,
+      "mainThreadMs": 1462,
+      "lcpElement": "",
+      "clsSources": [],
+      "longTasks": [
+        {
+          "duration": 190,
+          "url": "http://127.0.0.1:4173/produits/golden-static"
+        },
+        {
+          "duration": 166,
+          "url": "http://127.0.0.1:4173/assets/index-B02_s4WF.js"
+        },
+        {
+          "duration": 136,
+          "url": "Unattributable"
+        },
+        {
+          "duration": 122,
+          "url": "Unattributable"
+        },
+        {
+          "duration": 110,
+          "url": "Unattributable"
+        }
+      ],
+      "renderBlocking": []
+    },
+    {
+      "scenario": "first-visit",
+      "route": "/",
+      "profile": "desktop",
+      "runs": 3,
+      "score": 83,
+      "fcpMs": 787,
+      "lcpMs": 2895,
+      "cls": 0.007,
+      "tbtMs": 12,
+      "speedIndexMs": 978,
+      "interactiveMs": 2914,
+      "totalBytes": 3328220,
+      "jsBytes": 236935,
+      "unusedJsBytes": 120,
+      "requestCount": 14,
+      "mainThreadMs": 488,
+      "lcpElement": "",
+      "clsSources": [
+        "<div class=\"max-w-3xl text-ivory\">"
+      ],
+      "longTasks": [
+        {
+          "duration": 66,
+          "url": "http://127.0.0.1:4173/"
+        },
+        {
+          "duration": 57,
+          "url": "http://127.0.0.1:4173/assets/index-B02_s4WF.js"
+        },
+        {
+          "duration": 55,
+          "url": "http://127.0.0.1:4173/assets/index-B02_s4WF.js"
+        }
+      ],
+      "renderBlocking": []
+    },
+    {
+      "scenario": "first-visit",
+      "route": "/",
+      "profile": "mobile",
+      "runs": 3,
+      "score": 61,
+      "fcpMs": 3409,
+      "lcpMs": 18105,
+      "cls": 0,
+      "tbtMs": 308,
+      "speedIndexMs": 3526,
+      "interactiveMs": 18249,
+      "totalBytes": 3328220,
+      "jsBytes": 236935,
+      "unusedJsBytes": 760,
+      "requestCount": 14,
+      "mainThreadMs": 1492,
+      "lcpElement": "",
+      "clsSources": [
+        "<div class=\"max-w-xl rounded-lg border border-champagne/40 bg-ivory p-8 text-forest sh…\">"
+      ],
+      "longTasks": [
+        {
+          "duration": 294,
+          "url": "http://127.0.0.1:4173/assets/index-B02_s4WF.js"
+        },
+        {
+          "duration": 140,
+          "url": "http://127.0.0.1:4173/"
+        },
+        {
+          "duration": 117,
+          "url": "Unattributable"
+        },
+        {
+          "duration": 114,
+          "url": "http://127.0.0.1:4173/assets/index-B02_s4WF.js"
+        },
+        {
+          "duration": 91,
+          "url": "http://127.0.0.1:4173/"
+        }
+      ],
+      "renderBlocking": []
+    },
+    {
+      "scenario": "first-visit",
+      "route": "/boutique",
+      "profile": "desktop",
+      "runs": 3,
+      "score": 56,
+      "fcpMs": 792,
+      "lcpMs": 3524,
+      "cls": 0.975,
+      "tbtMs": 3,
+      "speedIndexMs": 933,
+      "interactiveMs": 3590,
+      "totalBytes": 4435767,
+      "jsBytes": 236935,
+      "unusedJsBytes": 120,
+      "requestCount": 20,
+      "mainThreadMs": 419,
+      "lcpElement": "",
+      "clsSources": [
+        "<main class=\"container-page py-12\">",
+        "<nav class=\"hidden items-center gap-6 text-sm text-forest/80 lg:flex\">"
+      ],
+      "longTasks": [
+        {
+          "duration": 57,
+          "url": "http://127.0.0.1:4173/assets/index-B02_s4WF.js"
+        }
+      ],
+      "renderBlocking": []
+    },
+    {
+      "scenario": "first-visit",
+      "route": "/boutique",
+      "profile": "mobile",
+      "runs": 3,
+      "score": 59,
+      "fcpMs": 3428,
+      "lcpMs": 21744,
+      "cls": 0.186,
+      "tbtMs": 64,
+      "speedIndexMs": 3428,
+      "interactiveMs": 22206,
+      "totalBytes": 4435767,
+      "jsBytes": 236935,
+      "unusedJsBytes": 760,
+      "requestCount": 20,
+      "mainThreadMs": 1467,
+      "lcpElement": "",
+      "clsSources": [
+        "<section class=\"border-y border-champagne/30 bg-forest py-5 text-ivory\">",
+        0.03758169922929855
+      ],
+      "longTasks": [
+        {
+          "duration": 213,
+          "url": "http://127.0.0.1:4173/boutique"
+        },
+        {
+          "duration": 126.00000000000011,
+          "url": "Unattributable"
+        },
+        {
+          "duration": 114,
+          "url": "Unattributable"
+        },
+        {
+          "duration": 93,
+          "url": "http://127.0.0.1:4173/assets/index-B02_s4WF.js"
+        },
+        {
+          "duration": 71,
+          "url": "http://127.0.0.1:4173/assets/index-B02_s4WF.js"
+        }
+      ],
+      "renderBlocking": []
+    }
+  ],
+  "ageConfirmed": [
+    {
+      "scenario": "age-confirmed",
+      "route": "/",
+      "profile": "mobile",
+      "runs": 3,
+      "fcpMs": 324,
+      "lcpMs": 332,
+      "cls": 0.012,
+      "tbtMs": 12,
+      "totalBytes": 3236858,
+      "jsBytes": 236688,
+      "requestCount": 11,
+      "mainThreadLongTaskMs": 62,
+      "lcpElement": "<img src=\"/images/verdanza-hero-premium.webp\" alt=\"Sélection CBD premium Verdanza\" class=\"absolute inset-0 h-full w-full object-cover\">"
+    },
+    {
+      "scenario": "age-confirmed",
+      "route": "/boutique",
+      "profile": "mobile",
+      "runs": 3,
+      "fcpMs": 244,
+      "lcpMs": 272,
+      "cls": 0.174,
+      "tbtMs": 16,
+      "totalBytes": 4344576,
+      "jsBytes": 236688,
+      "requestCount": 17,
+      "mainThreadLongTaskMs": 66,
+      "lcpElement": "<p>Selection réelle Verdanza : fleurs et résines CBD premium disponibles au gramme, avec livraison express locale à Aix-en-Provence et alentours.</p>"
+    },
+    {
+      "scenario": "age-confirmed",
+      "route": "/fleurs-cbd",
+      "profile": "mobile",
+      "runs": 3,
+      "fcpMs": 452,
+      "lcpMs": 468,
+      "cls": 0.296,
+      "tbtMs": 85,
+      "totalBytes": 3964600,
+      "jsBytes": 236688,
+      "requestCount": 14,
+      "mainThreadLongTaskMs": 135,
+      "lcpElement": "<p>Verdanza propose une sélection de fleurs CBD aux profils aromatiques et modes de culture variés. Les informations affichées reprennent les fiches produits et analyses producteurs disponibles, avec une disponibilité in"
+    },
+    {
+      "scenario": "age-confirmed",
+      "route": "/livraison-express-aix",
+      "profile": "mobile",
+      "runs": 3,
+      "fcpMs": 264,
+      "lcpMs": 316,
+      "cls": 0.062,
+      "tbtMs": 41,
+      "totalBytes": 2305114,
+      "jsBytes": 236688,
+      "requestCount": 6,
+      "mainThreadLongTaskMs": 91,
+      "lcpElement": "<h1>Livraison de CBD à Aix-en-Provence et alentours</h1>"
+    },
+    {
+      "scenario": "age-confirmed",
+      "route": "/produits/golden-static",
+      "profile": "mobile",
+      "runs": 3,
+      "fcpMs": 312,
+      "lcpMs": 356,
+      "cls": 0.724,
+      "tbtMs": 41,
+      "totalBytes": 2562566,
+      "jsBytes": 236688,
+      "requestCount": 7,
+      "mainThreadLongTaskMs": 141,
+      "lcpElement": "<img src=\"/Fiche produit/Golden static/goldenstatic.webp\" alt=\"Golden Static - Résine CBD Verdanza\" class=\"mx-auto max-h-[520px] object-contain\">"
+    },
+    {
+      "scenario": "age-confirmed",
+      "route": "/",
+      "profile": "desktop",
+      "runs": 3,
+      "fcpMs": 352,
+      "lcpMs": 388,
+      "cls": 0.008,
+      "tbtMs": 36,
+      "totalBytes": 3236858,
+      "jsBytes": 236688,
+      "requestCount": 11,
+      "mainThreadLongTaskMs": 86,
+      "lcpElement": "<img src=\"/images/verdanza-hero-premium.webp\" alt=\"Sélection CBD premium Verdanza\" class=\"absolute inset-0 h-full w-full object-cover\">"
+    },
+    {
+      "scenario": "age-confirmed",
+      "route": "/boutique",
+      "profile": "desktop",
+      "runs": 3,
+      "fcpMs": 368,
+      "lcpMs": 404,
+      "cls": 0.374,
+      "tbtMs": 55,
+      "totalBytes": 4344576,
+      "jsBytes": 236688,
+      "requestCount": 17,
+      "mainThreadLongTaskMs": 105,
+      "lcpElement": "<h1>Boutique CBD premium</h1>"
+    },
+    {
+      "scenario": "age-confirmed",
+      "route": "/fleurs-cbd",
+      "profile": "desktop",
+      "runs": 3,
+      "fcpMs": 372,
+      "lcpMs": 388,
+      "cls": 0.373,
+      "tbtMs": 72,
+      "totalBytes": 3964600,
+      "jsBytes": 236688,
+      "requestCount": 14,
+      "mainThreadLongTaskMs": 122,
+      "lcpElement": "<p>Verdanza propose une sélection de fleurs CBD aux profils aromatiques et modes de culture variés. Les informations affichées reprennent les fiches produits et analyses producteurs disponibles, avec une disponibilité in"
+    },
+    {
+      "scenario": "age-confirmed",
+      "route": "/livraison-express-aix",
+      "profile": "desktop",
+      "runs": 3,
+      "fcpMs": 268,
+      "lcpMs": 316,
+      "cls": 0.033,
+      "tbtMs": 49,
+      "totalBytes": 2305114,
+      "jsBytes": 236688,
+      "requestCount": 6,
+      "mainThreadLongTaskMs": 99,
+      "lcpElement": "<h1>Livraison de CBD à Aix-en-Provence et alentours</h1>"
+    },
+    {
+      "scenario": "age-confirmed",
+      "route": "/produits/golden-static",
+      "profile": "desktop",
+      "runs": 3,
+      "fcpMs": 340,
+      "lcpMs": 372,
+      "cls": 0.201,
+      "tbtMs": 38,
+      "totalBytes": 2562566,
+      "jsBytes": 236688,
+      "requestCount": 7,
+      "mainThreadLongTaskMs": 122,
+      "lcpElement": "<img src=\"/Fiche produit/Golden static/goldenstatic.webp\" alt=\"Golden Static - Résine CBD Verdanza\" class=\"mx-auto max-h-[520px] object-contain\">"
+    }
+  ],
+  "bundle": {
+    "js": [
+      {
+        "file": "dist\\assets\\index-B02_s4WF.js",
+        "raw": 935215,
+        "gzip": 236388,
+        "brotli": 198044
+      }
+    ],
+    "css": [
+      {
+        "file": "dist\\assets\\index-BzCiXSjl.css",
+        "raw": 30662,
+        "gzip": 6059,
+        "brotli": 5221
+      }
+    ],
+    "images": [
+      {
+        "file": "dist\\Fiche produit\\Blue Dream\\fiche.png",
+        "raw": 2086035
+      },
+      {
+        "file": "dist\\Fiche produit\\Amnesia\\fiche.png",
+        "raw": 2054914
+      },
+      {
+        "file": "dist\\Fiche produit\\Plutonium\\fiche.png",
+        "raw": 2011367
+      },
+      {
+        "file": "dist\\Fiche produit\\Mandarine\\fiche.png",
+        "raw": 1943155
+      },
+      {
+        "file": "dist\\Fiche produit\\Petite tetes OG Kush ( sous serre)\\fiche1.png",
+        "raw": 1921231
+      },
+      {
+        "file": "dist\\Fiche produit\\Mango Haze\\fiche.png",
+        "raw": 1911854
+      },
+      {
+        "file": "dist\\Fiche produit\\La mousse\\fiche.png",
+        "raw": 1909914
+      },
+      {
+        "file": "dist\\Fiche produit\\Harlequin (sous-serre)\\fiche2.png",
+        "raw": 1880762
+      },
+      {
+        "file": "dist\\QRcode.png",
+        "raw": 1704570
+      },
+      {
+        "file": "dist\\Fiche produit\\Harlequin (sous-serre)\\harlequin_20-02-25-ezgif.com-optimize.webp",
+        "raw": 1674244
+      },
+      {
+        "file": "dist\\Fiche produit\\Supreme Purple CBD\\fiche.png",
+        "raw": 1671344
+      },
+      {
+        "file": "dist\\Fiche produit\\Harlequin (sous-serre)\\fiche.png",
+        "raw": 1661921
+      },
+      {
+        "file": "dist\\Fiche produit\\Cookie Kush (intérieur)\\fiche.png",
+        "raw": 1658076
+      },
+      {
+        "file": "dist\\Fiche produit\\Golden static\\fiche.png",
+        "raw": 1596860
+      },
+      {
+        "file": "dist\\Fiche produit\\Petite tetes OG Kush ( sous serre)\\fiche2.png",
+        "raw": 1530801
+      },
+      {
+        "file": "dist\\Fiche produit\\Cookie Kush (intérieur)\\cookie_04-02-25-ezgif.com-optimize.webp",
+        "raw": 1436090
+      },
+      {
+        "file": "dist\\verdanza-label.png",
+        "raw": 1293102
+      },
+      {
+        "file": "dist\\verdanza-badge.png",
+        "raw": 1098904
+      },
+      {
+        "file": "dist\\verdanza-logo.png",
+        "raw": 961345
+      },
+      {
+        "file": "dist\\Fiche produit\\Golden static\\Composition-ezgif.com-resize.webp",
+        "raw": 361200
+      }
+    ],
+    "homeChunks": [
+      "/assets/index-B02_s4WF.js",
+      "/assets/index-BzCiXSjl.css"
+    ],
+    "markerHits": {
+      "firebase-admin": false,
+      "pdf-lib": false,
+      "AdminLayout": false,
+      "AdminPage": false,
+      "CheckoutPage": false,
+      "AccountLayout": false,
+      "firebase/auth": true,
+      "firebase/firestore": true,
+      "lucide-react": true
+    }
+  },
+  "fieldData": [
+    {
+      "url": "https://verdanza.fr/",
+      "strategy": "mobile",
+      "fieldAvailable": false,
+      "urlFieldAvailable": false,
+      "originFieldAvailable": false,
+      "fieldLcpMs": null,
+      "fieldInpMs": null,
+      "fieldCls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null,
+      "lighthouseScore": null
+    },
+    {
+      "url": "https://verdanza.fr/",
+      "strategy": "desktop",
+      "fieldAvailable": false,
+      "urlFieldAvailable": false,
+      "originFieldAvailable": false,
+      "fieldLcpMs": null,
+      "fieldInpMs": null,
+      "fieldCls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null,
+      "lighthouseScore": null
+    },
+    {
+      "url": "https://verdanza.fr/boutique",
+      "strategy": "mobile",
+      "fieldAvailable": false,
+      "urlFieldAvailable": false,
+      "originFieldAvailable": false,
+      "fieldLcpMs": null,
+      "fieldInpMs": null,
+      "fieldCls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null,
+      "lighthouseScore": null
+    },
+    {
+      "url": "https://verdanza.fr/boutique",
+      "strategy": "desktop",
+      "fieldAvailable": false,
+      "urlFieldAvailable": false,
+      "originFieldAvailable": false,
+      "fieldLcpMs": null,
+      "fieldInpMs": null,
+      "fieldCls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null,
+      "lighthouseScore": null
+    },
+    {
+      "url": "https://verdanza.fr/fleurs-cbd",
+      "strategy": "mobile",
+      "fieldAvailable": false,
+      "urlFieldAvailable": false,
+      "originFieldAvailable": false,
+      "fieldLcpMs": null,
+      "fieldInpMs": null,
+      "fieldCls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null,
+      "lighthouseScore": null
+    },
+    {
+      "url": "https://verdanza.fr/fleurs-cbd",
+      "strategy": "desktop",
+      "fieldAvailable": false,
+      "urlFieldAvailable": false,
+      "originFieldAvailable": false,
+      "fieldLcpMs": null,
+      "fieldInpMs": null,
+      "fieldCls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null,
+      "lighthouseScore": null
+    },
+    {
+      "url": "https://verdanza.fr/livraison-express-aix",
+      "strategy": "mobile",
+      "fieldAvailable": false,
+      "urlFieldAvailable": false,
+      "originFieldAvailable": false,
+      "fieldLcpMs": null,
+      "fieldInpMs": null,
+      "fieldCls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null,
+      "lighthouseScore": null
+    },
+    {
+      "url": "https://verdanza.fr/livraison-express-aix",
+      "strategy": "desktop",
+      "fieldAvailable": false,
+      "urlFieldAvailable": false,
+      "originFieldAvailable": false,
+      "fieldLcpMs": null,
+      "fieldInpMs": null,
+      "fieldCls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null,
+      "lighthouseScore": null
+    },
+    {
+      "url": "https://verdanza.fr/produits/golden-static",
+      "strategy": "mobile",
+      "fieldAvailable": false,
+      "urlFieldAvailable": false,
+      "originFieldAvailable": false,
+      "fieldLcpMs": null,
+      "fieldInpMs": null,
+      "fieldCls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null,
+      "lighthouseScore": null
+    },
+    {
+      "url": "https://verdanza.fr/produits/golden-static",
+      "strategy": "desktop",
+      "fieldAvailable": false,
+      "urlFieldAvailable": false,
+      "originFieldAvailable": false,
+      "fieldLcpMs": null,
+      "fieldInpMs": null,
+      "fieldCls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null,
+      "lighthouseScore": null
+    }
+  ]
+}

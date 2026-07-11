@@ -1,0 +1,754 @@
+{
+  "generatedAt": "2026-07-11T14:51:26.912Z",
+  "method": "Local Vite preview after Phase 5 optimizations, same route/profile matrix; PageSpeed after endpoint returned 429.",
+  "firstVisit": [
+    {
+      "route": "/",
+      "profile": "desktop",
+      "score": 84,
+      "fcpMs": 772,
+      "lcpMs": 2758,
+      "cls": 0.007,
+      "tbtMs": 0,
+      "speedIndexMs": 772,
+      "totalKB": 3224,
+      "jsKB": 205,
+      "requestCount": 16,
+      "lcpElement": ""
+    },
+    {
+      "route": "/",
+      "profile": "mobile",
+      "score": 56,
+      "fcpMs": 3110,
+      "lcpMs": 16822,
+      "cls": 0,
+      "tbtMs": 514,
+      "speedIndexMs": 3110,
+      "totalKB": 3224,
+      "jsKB": 205,
+      "requestCount": 16,
+      "lcpElement": ""
+    },
+    {
+      "route": "/boutique",
+      "profile": "desktop",
+      "score": 81,
+      "fcpMs": 778,
+      "lcpMs": 3355,
+      "cls": 0.001,
+      "tbtMs": 29,
+      "speedIndexMs": 793,
+      "totalKB": 4305,
+      "jsKB": 205,
+      "requestCount": 22,
+      "lcpElement": ""
+    },
+    {
+      "route": "/boutique",
+      "profile": "mobile",
+      "score": 65,
+      "fcpMs": 3123,
+      "lcpMs": 21400,
+      "cls": 0.038,
+      "tbtMs": 216,
+      "speedIndexMs": 3123,
+      "totalKB": 4305,
+      "jsKB": 205,
+      "requestCount": 22,
+      "lcpElement": ""
+    },
+    {
+      "route": "/fleurs-cbd",
+      "profile": "desktop",
+      "score": 82,
+      "fcpMs": 788,
+      "lcpMs": 3285,
+      "cls": 0,
+      "tbtMs": 21,
+      "speedIndexMs": 788,
+      "totalKB": 3935,
+      "jsKB": 205,
+      "requestCount": 19,
+      "lcpElement": ""
+    },
+    {
+      "route": "/fleurs-cbd",
+      "profile": "mobile",
+      "score": 65,
+      "fcpMs": 3103,
+      "lcpMs": 21059,
+      "cls": 0.015,
+      "tbtMs": 213,
+      "speedIndexMs": 3103,
+      "totalKB": 3935,
+      "jsKB": 205,
+      "requestCount": 19,
+      "lcpElement": ""
+    },
+    {
+      "route": "/livraison-express-aix",
+      "profile": "desktop",
+      "score": 88,
+      "fcpMs": 767,
+      "lcpMs": 2320,
+      "cls": 0,
+      "tbtMs": 0,
+      "speedIndexMs": 767,
+      "totalKB": 2313,
+      "jsKB": 205,
+      "requestCount": 11,
+      "lcpElement": ""
+    },
+    {
+      "route": "/livraison-express-aix",
+      "profile": "mobile",
+      "score": 54,
+      "fcpMs": 3096,
+      "lcpMs": 13810,
+      "cls": 0.288,
+      "tbtMs": 113,
+      "speedIndexMs": 3096,
+      "totalKB": 2313,
+      "jsKB": 205,
+      "requestCount": 11,
+      "lcpElement": ""
+    },
+    {
+      "route": "/produits/golden-static",
+      "profile": "desktop",
+      "score": 86,
+      "fcpMs": 796,
+      "lcpMs": 2536,
+      "cls": 0.001,
+      "tbtMs": 0,
+      "speedIndexMs": 796,
+      "totalKB": 2564,
+      "jsKB": 205,
+      "requestCount": 12,
+      "lcpElement": ""
+    },
+    {
+      "route": "/produits/golden-static",
+      "profile": "mobile",
+      "score": 68,
+      "fcpMs": 3087,
+      "lcpMs": 14862,
+      "cls": 0.015,
+      "tbtMs": 102,
+      "speedIndexMs": 3087,
+      "totalKB": 2564,
+      "jsKB": 205,
+      "requestCount": 12,
+      "lcpElement": ""
+    }
+  ],
+  "ageConfirmed": [
+    {
+      "route": "/",
+      "profile": "mobile",
+      "fcpMs": 240,
+      "lcpMs": 280,
+      "cls": 0,
+      "tbtMs": 12,
+      "totalKB": 3134,
+      "jsKB": 204,
+      "requestCount": 13
+    },
+    {
+      "route": "/boutique",
+      "profile": "mobile",
+      "fcpMs": 300,
+      "lcpMs": 348,
+      "cls": 0,
+      "tbtMs": 60,
+      "totalKB": 4216,
+      "jsKB": 204,
+      "requestCount": 19
+    },
+    {
+      "route": "/fleurs-cbd",
+      "profile": "mobile",
+      "fcpMs": 288,
+      "lcpMs": 324,
+      "cls": 0,
+      "tbtMs": 63,
+      "totalKB": 3845,
+      "jsKB": 204,
+      "requestCount": 16
+    },
+    {
+      "route": "/livraison-express-aix",
+      "profile": "mobile",
+      "fcpMs": 268,
+      "lcpMs": 300,
+      "cls": 0,
+      "tbtMs": 59,
+      "totalKB": 2224,
+      "jsKB": 204,
+      "requestCount": 8
+    },
+    {
+      "route": "/produits/golden-static",
+      "profile": "mobile",
+      "fcpMs": 284,
+      "lcpMs": 312,
+      "cls": 0,
+      "tbtMs": 81,
+      "totalKB": 2476,
+      "jsKB": 204,
+      "requestCount": 9
+    },
+    {
+      "route": "/",
+      "profile": "desktop",
+      "fcpMs": 264,
+      "lcpMs": 300,
+      "cls": 0.008,
+      "tbtMs": 17,
+      "totalKB": 3134,
+      "jsKB": 204,
+      "requestCount": 13
+    },
+    {
+      "route": "/boutique",
+      "profile": "desktop",
+      "fcpMs": 304,
+      "lcpMs": 320,
+      "cls": 0,
+      "tbtMs": 53,
+      "totalKB": 4216,
+      "jsKB": 204,
+      "requestCount": 19
+    },
+    {
+      "route": "/fleurs-cbd",
+      "profile": "desktop",
+      "fcpMs": 292,
+      "lcpMs": 324,
+      "cls": 0,
+      "tbtMs": 79,
+      "totalKB": 3845,
+      "jsKB": 204,
+      "requestCount": 16
+    },
+    {
+      "route": "/livraison-express-aix",
+      "profile": "desktop",
+      "fcpMs": 288,
+      "lcpMs": 320,
+      "cls": 0.033,
+      "tbtMs": 44,
+      "totalKB": 2224,
+      "jsKB": 204,
+      "requestCount": 8
+    },
+    {
+      "route": "/produits/golden-static",
+      "profile": "desktop",
+      "fcpMs": 280,
+      "lcpMs": 308,
+      "cls": 0.001,
+      "tbtMs": 39,
+      "totalKB": 2476,
+      "jsKB": 204,
+      "requestCount": 9
+    }
+  ],
+  "bundle": {
+    "jsFiles": [
+      {
+        "file": "dist/assets/vendor-firebase-_LTHlUTX.js",
+        "rawBytes": 529042,
+        "gzipBytes": 123309,
+        "brotliBytes": 103031
+      },
+      {
+        "file": "dist/assets/vendor-react-B4BaZa-h.js",
+        "rawBytes": 194983,
+        "gzipBytes": 63078,
+        "brotliBytes": 55151
+      },
+      {
+        "file": "dist/assets/index-0WO00OGW.js",
+        "rawBytes": 81019,
+        "gzipBytes": 21883,
+        "brotliBytes": 19215
+      },
+      {
+        "file": "dist/assets/AdminPage-NohPi2oI.js",
+        "rawBytes": 78062,
+        "gzipBytes": 17548,
+        "brotliBytes": 15104
+      },
+      {
+        "file": "dist/assets/CheckoutPage-DUqQvmkL.js",
+        "rawBytes": 16117,
+        "gzipBytes": 4932,
+        "brotliBytes": 4456
+      },
+      {
+        "file": "dist/assets/AccountOrdersPage-BGHO17vk.js",
+        "rawBytes": 5387,
+        "gzipBytes": 2101,
+        "brotliBytes": 1875
+      },
+      {
+        "file": "dist/assets/orderStatus-BY0QhEbW.js",
+        "rawBytes": 5018,
+        "gzipBytes": 1936,
+        "brotliBytes": 1676
+      },
+      {
+        "file": "dist/assets/CartPage-HaZUxO0d.js",
+        "rawBytes": 4546,
+        "gzipBytes": 1796,
+        "brotliBytes": 1589
+      },
+      {
+        "file": "dist/assets/AuthPage-Bc7YV9Zp.js",
+        "rawBytes": 4088,
+        "gzipBytes": 1701,
+        "brotliBytes": 1494
+      },
+      {
+        "file": "dist/assets/LegalPage-cXddPNHz.js",
+        "rawBytes": 3793,
+        "gzipBytes": 1700,
+        "brotliBytes": 1537
+      },
+      {
+        "file": "dist/assets/AdminAuthGate-Brr5a-J7.js",
+        "rawBytes": 3684,
+        "gzipBytes": 1420,
+        "brotliBytes": 1223
+      },
+      {
+        "file": "dist/assets/AdminLayout-zrhkP2Hv.js",
+        "rawBytes": 3333,
+        "gzipBytes": 1341,
+        "brotliBytes": 1193
+      },
+      {
+        "file": "dist/assets/CheckoutSuccessPage-BQshOtRO.js",
+        "rawBytes": 3123,
+        "gzipBytes": 1393,
+        "brotliBytes": 1267
+      },
+      {
+        "file": "dist/assets/AccountFavoritesPage-DNImxldD.js",
+        "rawBytes": 2059,
+        "gzipBytes": 990,
+        "brotliBytes": 864
+      },
+      {
+        "file": "dist/assets/AccountProfilePage-BZBwdb9c.js",
+        "rawBytes": 1558,
+        "gzipBytes": 735,
+        "brotliBytes": 620
+      },
+      {
+        "file": "dist/assets/deliveryZonesService-BOhPovm4.js",
+        "rawBytes": 1488,
+        "gzipBytes": 720,
+        "brotliBytes": 619
+      },
+      {
+        "file": "dist/assets/AccountOverviewPage-k2J76VOY.js",
+        "rawBytes": 1417,
+        "gzipBytes": 670,
+        "brotliBytes": 574
+      },
+      {
+        "file": "dist/assets/AccountLayout-C6Wcfh-B.js",
+        "rawBytes": 1215,
+        "gzipBytes": 658,
+        "brotliBytes": 581
+      },
+      {
+        "file": "dist/assets/CheckoutCancelPage-DXUvzqp-.js",
+        "rawBytes": 993,
+        "gzipBytes": 542,
+        "brotliBytes": 470
+      },
+      {
+        "file": "dist/assets/quoteService-Cg0bn3-n.js",
+        "rawBytes": 485,
+        "gzipBytes": 347,
+        "brotliBytes": 291
+      },
+      {
+        "file": "dist/assets/AccountAuthGate-B-yJPECL.js",
+        "rawBytes": 445,
+        "gzipBytes": 319,
+        "brotliBytes": 264
+      }
+    ],
+    "cssFiles": [
+      {
+        "file": "dist/assets/index-BzUcw_09.css",
+        "rawBytes": 30694,
+        "gzipBytes": 6071,
+        "brotliBytes": 5253
+      }
+    ],
+    "largestFiles": [
+      {
+        "file": "dist/Fiche produit/Blue Dream/fiche.png",
+        "rawBytes": 2086035
+      },
+      {
+        "file": "dist/Fiche produit/Amnesia/fiche.png",
+        "rawBytes": 2054914
+      },
+      {
+        "file": "dist/Fiche produit/Plutonium/fiche.png",
+        "rawBytes": 2011367
+      },
+      {
+        "file": "dist/Fiche produit/Mandarine/fiche.png",
+        "rawBytes": 1943155
+      },
+      {
+        "file": "dist/Fiche produit/Petite tetes OG Kush ( sous serre)/fiche1.png",
+        "rawBytes": 1921231
+      },
+      {
+        "file": "dist/Fiche produit/Mango Haze/fiche.png",
+        "rawBytes": 1911854
+      },
+      {
+        "file": "dist/Fiche produit/La mousse/fiche.png",
+        "rawBytes": 1909914
+      },
+      {
+        "file": "dist/Fiche produit/Harlequin (sous-serre)/fiche2.png",
+        "rawBytes": 1880762
+      },
+      {
+        "file": "dist/QRcode.png",
+        "rawBytes": 1704570
+      },
+      {
+        "file": "dist/Fiche produit/Harlequin (sous-serre)/harlequin_20-02-25-ezgif.com-optimize.webp",
+        "rawBytes": 1674244
+      },
+      {
+        "file": "dist/Fiche produit/Supreme Purple CBD/fiche.png",
+        "rawBytes": 1671344
+      },
+      {
+        "file": "dist/Fiche produit/Harlequin (sous-serre)/fiche.png",
+        "rawBytes": 1661921
+      },
+      {
+        "file": "dist/Fiche produit/Cookie Kush (intérieur)/fiche.png",
+        "rawBytes": 1658076
+      },
+      {
+        "file": "dist/Fiche produit/Golden static/fiche.png",
+        "rawBytes": 1596860
+      },
+      {
+        "file": "dist/Fiche produit/Petite tetes OG Kush ( sous serre)/fiche2.png",
+        "rawBytes": 1530801
+      },
+      {
+        "file": "dist/Fiche produit/Cookie Kush (intérieur)/cookie_04-02-25-ezgif.com-optimize.webp",
+        "rawBytes": 1436090
+      },
+      {
+        "file": "dist/verdanza-label.png",
+        "rawBytes": 1293102
+      },
+      {
+        "file": "dist/verdanza-badge.png",
+        "rawBytes": 1098904
+      },
+      {
+        "file": "dist/verdanza-logo.png",
+        "rawBytes": 961345
+      },
+      {
+        "file": "dist/assets/vendor-firebase-_LTHlUTX.js",
+        "rawBytes": 529042,
+        "gzipBytes": 123309,
+        "brotliBytes": 103031
+      }
+    ],
+    "publicInitialChunks": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "exclusiveChunks": [
+      {
+        "file": "dist/assets/vendor-firebase-_LTHlUTX.js",
+        "rawKB": 517,
+        "gzipKB": 120,
+        "group": "public-initial"
+      },
+      {
+        "file": "dist/assets/vendor-react-B4BaZa-h.js",
+        "rawKB": 190,
+        "gzipKB": 62,
+        "group": "public-initial"
+      },
+      {
+        "file": "dist/assets/index-0WO00OGW.js",
+        "rawKB": 79,
+        "gzipKB": 21,
+        "group": "public-initial"
+      },
+      {
+        "file": "dist/assets/AdminPage-NohPi2oI.js",
+        "rawKB": 76,
+        "gzipKB": 17,
+        "group": "admin"
+      },
+      {
+        "file": "dist/assets/CheckoutPage-DUqQvmkL.js",
+        "rawKB": 16,
+        "gzipKB": 5,
+        "group": "account"
+      },
+      {
+        "file": "dist/assets/AccountOrdersPage-BGHO17vk.js",
+        "rawKB": 5,
+        "gzipKB": 2,
+        "group": "account"
+      },
+      {
+        "file": "dist/assets/orderStatus-BY0QhEbW.js",
+        "rawKB": 5,
+        "gzipKB": 2,
+        "group": "account"
+      },
+      {
+        "file": "dist/assets/CartPage-HaZUxO0d.js",
+        "rawKB": 4,
+        "gzipKB": 2,
+        "group": "public-or-shared"
+      },
+      {
+        "file": "dist/assets/AuthPage-Bc7YV9Zp.js",
+        "rawKB": 4,
+        "gzipKB": 2,
+        "group": "public-or-shared"
+      },
+      {
+        "file": "dist/assets/LegalPage-cXddPNHz.js",
+        "rawKB": 4,
+        "gzipKB": 2,
+        "group": "public-or-shared"
+      },
+      {
+        "file": "dist/assets/AdminAuthGate-Brr5a-J7.js",
+        "rawKB": 4,
+        "gzipKB": 1,
+        "group": "admin"
+      },
+      {
+        "file": "dist/assets/AdminLayout-zrhkP2Hv.js",
+        "rawKB": 3,
+        "gzipKB": 1,
+        "group": "admin"
+      },
+      {
+        "file": "dist/assets/CheckoutSuccessPage-BQshOtRO.js",
+        "rawKB": 3,
+        "gzipKB": 1,
+        "group": "checkout"
+      },
+      {
+        "file": "dist/assets/AccountFavoritesPage-DNImxldD.js",
+        "rawKB": 2,
+        "gzipKB": 1,
+        "group": "account"
+      },
+      {
+        "file": "dist/assets/AccountProfilePage-BZBwdb9c.js",
+        "rawKB": 2,
+        "gzipKB": 1,
+        "group": "account"
+      },
+      {
+        "file": "dist/assets/deliveryZonesService-BOhPovm4.js",
+        "rawKB": 1,
+        "gzipKB": 1,
+        "group": "public-or-shared"
+      },
+      {
+        "file": "dist/assets/AccountOverviewPage-k2J76VOY.js",
+        "rawKB": 1,
+        "gzipKB": 1,
+        "group": "account"
+      },
+      {
+        "file": "dist/assets/AccountLayout-C6Wcfh-B.js",
+        "rawKB": 1,
+        "gzipKB": 1,
+        "group": "account"
+      },
+      {
+        "file": "dist/assets/CheckoutCancelPage-DXUvzqp-.js",
+        "rawKB": 1,
+        "gzipKB": 1,
+        "group": "checkout"
+      },
+      {
+        "file": "dist/assets/quoteService-Cg0bn3-n.js",
+        "rawKB": 0,
+        "gzipKB": 0,
+        "group": "checkout"
+      },
+      {
+        "file": "dist/assets/AccountAuthGate-B-yJPECL.js",
+        "rawKB": 0,
+        "gzipKB": 0,
+        "group": "account"
+      }
+    ],
+    "markers": {
+      "publicInitialContainsFirebaseAdmin": false,
+      "publicInitialContainsPdfLib": false,
+      "anyClientAssetContainsFirebaseAdmin": false,
+      "anyClientAssetContainsPdfLib": false,
+      "publicInitialContainsFirestore": true,
+      "publicInitialContainsAuth": true
+    }
+  },
+  "fieldData": [
+    {
+      "url": "https://verdanza.fr/",
+      "strategy": "mobile",
+      "status": 429,
+      "fieldAvailable": false,
+      "originAvailable": false,
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null
+    },
+    {
+      "url": "https://verdanza.fr/",
+      "strategy": "desktop",
+      "status": 429,
+      "fieldAvailable": false,
+      "originAvailable": false,
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null
+    },
+    {
+      "url": "https://verdanza.fr/boutique",
+      "strategy": "mobile",
+      "status": 429,
+      "fieldAvailable": false,
+      "originAvailable": false,
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null
+    },
+    {
+      "url": "https://verdanza.fr/boutique",
+      "strategy": "desktop",
+      "status": 429,
+      "fieldAvailable": false,
+      "originAvailable": false,
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null
+    },
+    {
+      "url": "https://verdanza.fr/fleurs-cbd",
+      "strategy": "mobile",
+      "status": 429,
+      "fieldAvailable": false,
+      "originAvailable": false,
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null
+    },
+    {
+      "url": "https://verdanza.fr/fleurs-cbd",
+      "strategy": "desktop",
+      "status": 429,
+      "fieldAvailable": false,
+      "originAvailable": false,
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null
+    },
+    {
+      "url": "https://verdanza.fr/livraison-express-aix",
+      "strategy": "mobile",
+      "status": 429,
+      "fieldAvailable": false,
+      "originAvailable": false,
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null
+    },
+    {
+      "url": "https://verdanza.fr/livraison-express-aix",
+      "strategy": "desktop",
+      "status": 429,
+      "fieldAvailable": false,
+      "originAvailable": false,
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null
+    },
+    {
+      "url": "https://verdanza.fr/produits/golden-static",
+      "strategy": "mobile",
+      "status": 429,
+      "fieldAvailable": false,
+      "originAvailable": false,
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null
+    },
+    {
+      "url": "https://verdanza.fr/produits/golden-static",
+      "strategy": "desktop",
+      "status": 429,
+      "fieldAvailable": false,
+      "originAvailable": false,
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "originLcpMs": null,
+      "originInpMs": null,
+      "originCls": null
+    }
+  ]
+}

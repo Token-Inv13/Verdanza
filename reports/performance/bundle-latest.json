@@ -1,0 +1,1143 @@
+{
+  "generatedAt": "2026-07-11T14:49:15.743Z",
+  "jsFiles": [
+    {
+      "file": "dist/assets/vendor-firebase-_LTHlUTX.js",
+      "rawBytes": 529042,
+      "gzipBytes": 123309,
+      "brotliBytes": 103031
+    },
+    {
+      "file": "dist/assets/vendor-react-B4BaZa-h.js",
+      "rawBytes": 194983,
+      "gzipBytes": 63078,
+      "brotliBytes": 55151
+    },
+    {
+      "file": "dist/assets/index-0WO00OGW.js",
+      "rawBytes": 81019,
+      "gzipBytes": 21883,
+      "brotliBytes": 19215
+    },
+    {
+      "file": "dist/assets/AdminPage-NohPi2oI.js",
+      "rawBytes": 78062,
+      "gzipBytes": 17548,
+      "brotliBytes": 15104
+    },
+    {
+      "file": "dist/assets/CheckoutPage-DUqQvmkL.js",
+      "rawBytes": 16117,
+      "gzipBytes": 4932,
+      "brotliBytes": 4456
+    },
+    {
+      "file": "dist/assets/AccountOrdersPage-BGHO17vk.js",
+      "rawBytes": 5387,
+      "gzipBytes": 2101,
+      "brotliBytes": 1875
+    },
+    {
+      "file": "dist/assets/orderStatus-BY0QhEbW.js",
+      "rawBytes": 5018,
+      "gzipBytes": 1936,
+      "brotliBytes": 1676
+    },
+    {
+      "file": "dist/assets/CartPage-HaZUxO0d.js",
+      "rawBytes": 4546,
+      "gzipBytes": 1796,
+      "brotliBytes": 1589
+    },
+    {
+      "file": "dist/assets/AuthPage-Bc7YV9Zp.js",
+      "rawBytes": 4088,
+      "gzipBytes": 1701,
+      "brotliBytes": 1494
+    },
+    {
+      "file": "dist/assets/LegalPage-cXddPNHz.js",
+      "rawBytes": 3793,
+      "gzipBytes": 1700,
+      "brotliBytes": 1537
+    },
+    {
+      "file": "dist/assets/AdminAuthGate-Brr5a-J7.js",
+      "rawBytes": 3684,
+      "gzipBytes": 1420,
+      "brotliBytes": 1223
+    },
+    {
+      "file": "dist/assets/AdminLayout-zrhkP2Hv.js",
+      "rawBytes": 3333,
+      "gzipBytes": 1341,
+      "brotliBytes": 1193
+    },
+    {
+      "file": "dist/assets/CheckoutSuccessPage-BQshOtRO.js",
+      "rawBytes": 3123,
+      "gzipBytes": 1393,
+      "brotliBytes": 1267
+    },
+    {
+      "file": "dist/assets/AccountFavoritesPage-DNImxldD.js",
+      "rawBytes": 2059,
+      "gzipBytes": 990,
+      "brotliBytes": 864
+    },
+    {
+      "file": "dist/assets/AccountProfilePage-BZBwdb9c.js",
+      "rawBytes": 1558,
+      "gzipBytes": 735,
+      "brotliBytes": 620
+    },
+    {
+      "file": "dist/assets/deliveryZonesService-BOhPovm4.js",
+      "rawBytes": 1488,
+      "gzipBytes": 720,
+      "brotliBytes": 619
+    },
+    {
+      "file": "dist/assets/AccountOverviewPage-k2J76VOY.js",
+      "rawBytes": 1417,
+      "gzipBytes": 670,
+      "brotliBytes": 574
+    },
+    {
+      "file": "dist/assets/AccountLayout-C6Wcfh-B.js",
+      "rawBytes": 1215,
+      "gzipBytes": 658,
+      "brotliBytes": 581
+    },
+    {
+      "file": "dist/assets/CheckoutCancelPage-DXUvzqp-.js",
+      "rawBytes": 993,
+      "gzipBytes": 542,
+      "brotliBytes": 470
+    },
+    {
+      "file": "dist/assets/quoteService-Cg0bn3-n.js",
+      "rawBytes": 485,
+      "gzipBytes": 347,
+      "brotliBytes": 291
+    },
+    {
+      "file": "dist/assets/AccountAuthGate-B-yJPECL.js",
+      "rawBytes": 445,
+      "gzipBytes": 319,
+      "brotliBytes": 264
+    }
+  ],
+  "cssFiles": [
+    {
+      "file": "dist/assets/index-BzUcw_09.css",
+      "rawBytes": 30694,
+      "gzipBytes": 6071,
+      "brotliBytes": 5253
+    }
+  ],
+  "images": [
+    {
+      "file": "dist/Fiche produit/Blue Dream/fiche.png",
+      "rawBytes": 2086035
+    },
+    {
+      "file": "dist/Fiche produit/Amnesia/fiche.png",
+      "rawBytes": 2054914
+    },
+    {
+      "file": "dist/Fiche produit/Plutonium/fiche.png",
+      "rawBytes": 2011367
+    },
+    {
+      "file": "dist/Fiche produit/Mandarine/fiche.png",
+      "rawBytes": 1943155
+    },
+    {
+      "file": "dist/Fiche produit/Petite tetes OG Kush ( sous serre)/fiche1.png",
+      "rawBytes": 1921231
+    },
+    {
+      "file": "dist/Fiche produit/Mango Haze/fiche.png",
+      "rawBytes": 1911854
+    },
+    {
+      "file": "dist/Fiche produit/La mousse/fiche.png",
+      "rawBytes": 1909914
+    },
+    {
+      "file": "dist/Fiche produit/Harlequin (sous-serre)/fiche2.png",
+      "rawBytes": 1880762
+    },
+    {
+      "file": "dist/QRcode.png",
+      "rawBytes": 1704570
+    },
+    {
+      "file": "dist/Fiche produit/Harlequin (sous-serre)/harlequin_20-02-25-ezgif.com-optimize.webp",
+      "rawBytes": 1674244
+    },
+    {
+      "file": "dist/Fiche produit/Supreme Purple CBD/fiche.png",
+      "rawBytes": 1671344
+    },
+    {
+      "file": "dist/Fiche produit/Harlequin (sous-serre)/fiche.png",
+      "rawBytes": 1661921
+    },
+    {
+      "file": "dist/Fiche produit/Cookie Kush (intérieur)/fiche.png",
+      "rawBytes": 1658076
+    },
+    {
+      "file": "dist/Fiche produit/Golden static/fiche.png",
+      "rawBytes": 1596860
+    },
+    {
+      "file": "dist/Fiche produit/Petite tetes OG Kush ( sous serre)/fiche2.png",
+      "rawBytes": 1530801
+    },
+    {
+      "file": "dist/Fiche produit/Cookie Kush (intérieur)/cookie_04-02-25-ezgif.com-optimize.webp",
+      "rawBytes": 1436090
+    },
+    {
+      "file": "dist/verdanza-label.png",
+      "rawBytes": 1293102
+    },
+    {
+      "file": "dist/verdanza-badge.png",
+      "rawBytes": 1098904
+    },
+    {
+      "file": "dist/verdanza-logo.png",
+      "rawBytes": 961345
+    },
+    {
+      "file": "dist/Fiche produit/Golden static/Composition-ezgif.com-resize.webp",
+      "rawBytes": 361200
+    },
+    {
+      "file": "dist/Fiche produit/Golden static/goldenstatic.webp",
+      "rawBytes": 257152
+    },
+    {
+      "file": "dist/Fiche produit/Petite tetes OG Kush ( sous serre)/PTOGKush_zoom.webp",
+      "rawBytes": 251988
+    },
+    {
+      "file": "dist/Fiche produit/Harlequin (sous-serre)/harlequin_zoom.webp",
+      "rawBytes": 234702
+    },
+    {
+      "file": "dist/Fiche produit/Mandarine/mandarine_zoom.webp",
+      "rawBytes": 229500
+    },
+    {
+      "file": "dist/Fiche produit/Amnesia/amnesia_hydro_zoom.webp",
+      "rawBytes": 228832
+    },
+    {
+      "file": "dist/Fiche produit/Cookie Kush (intérieur)/cookie-zoom.webp",
+      "rawBytes": 206580
+    },
+    {
+      "file": "dist/Fiche produit/Blue Dream/BlueDream.webp",
+      "rawBytes": 177168
+    },
+    {
+      "file": "dist/Fiche produit/Mango Haze/MangoHaze.webp",
+      "rawBytes": 166436
+    },
+    {
+      "file": "dist/Fiche produit/Plutonium/zoom.webp",
+      "rawBytes": 161880
+    },
+    {
+      "file": "dist/images/verdanza-hero-premium.webp",
+      "rawBytes": 137338
+    }
+  ],
+  "largestFiles": [
+    {
+      "file": "dist/Fiche produit/Blue Dream/fiche.png",
+      "rawBytes": 2086035
+    },
+    {
+      "file": "dist/Fiche produit/Amnesia/fiche.png",
+      "rawBytes": 2054914
+    },
+    {
+      "file": "dist/Fiche produit/Plutonium/fiche.png",
+      "rawBytes": 2011367
+    },
+    {
+      "file": "dist/Fiche produit/Mandarine/fiche.png",
+      "rawBytes": 1943155
+    },
+    {
+      "file": "dist/Fiche produit/Petite tetes OG Kush ( sous serre)/fiche1.png",
+      "rawBytes": 1921231
+    },
+    {
+      "file": "dist/Fiche produit/Mango Haze/fiche.png",
+      "rawBytes": 1911854
+    },
+    {
+      "file": "dist/Fiche produit/La mousse/fiche.png",
+      "rawBytes": 1909914
+    },
+    {
+      "file": "dist/Fiche produit/Harlequin (sous-serre)/fiche2.png",
+      "rawBytes": 1880762
+    },
+    {
+      "file": "dist/QRcode.png",
+      "rawBytes": 1704570
+    },
+    {
+      "file": "dist/Fiche produit/Harlequin (sous-serre)/harlequin_20-02-25-ezgif.com-optimize.webp",
+      "rawBytes": 1674244
+    },
+    {
+      "file": "dist/Fiche produit/Supreme Purple CBD/fiche.png",
+      "rawBytes": 1671344
+    },
+    {
+      "file": "dist/Fiche produit/Harlequin (sous-serre)/fiche.png",
+      "rawBytes": 1661921
+    },
+    {
+      "file": "dist/Fiche produit/Cookie Kush (intérieur)/fiche.png",
+      "rawBytes": 1658076
+    },
+    {
+      "file": "dist/Fiche produit/Golden static/fiche.png",
+      "rawBytes": 1596860
+    },
+    {
+      "file": "dist/Fiche produit/Petite tetes OG Kush ( sous serre)/fiche2.png",
+      "rawBytes": 1530801
+    },
+    {
+      "file": "dist/Fiche produit/Cookie Kush (intérieur)/cookie_04-02-25-ezgif.com-optimize.webp",
+      "rawBytes": 1436090
+    },
+    {
+      "file": "dist/verdanza-label.png",
+      "rawBytes": 1293102
+    },
+    {
+      "file": "dist/verdanza-badge.png",
+      "rawBytes": 1098904
+    },
+    {
+      "file": "dist/verdanza-logo.png",
+      "rawBytes": 961345
+    },
+    {
+      "file": "dist/assets/vendor-firebase-_LTHlUTX.js",
+      "rawBytes": 529042,
+      "gzipBytes": 123309,
+      "brotliBytes": 103031
+    }
+  ],
+  "publicInitialChunks": [
+    "/assets/index-0WO00OGW.js",
+    "/assets/vendor-react-B4BaZa-h.js",
+    "/assets/vendor-firebase-_LTHlUTX.js",
+    "/assets/index-BzUcw_09.css"
+  ],
+  "htmlChunkMap": {
+    "dist/404.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/a-propos/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/a-propos.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/admin/avis/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/avis.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/clients/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/clients.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/commandes/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/commandes.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/coupons/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/coupons.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/facturation/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/facturation.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/factures/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/factures.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/favoris/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/favoris.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/livraisons/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/livraisons.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/parametres/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/parametres.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/produits/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/produits.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/stocks/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin/stocks.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/admin.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AdminAuthGate-Brr5a-J7.js"
+    ],
+    "dist/boutique/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/boutique.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/cgv/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/LegalPage-cXddPNHz.js"
+    ],
+    "dist/cgv.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/LegalPage-cXddPNHz.js"
+    ],
+    "dist/checkout/cancel/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/CheckoutCancelPage-DXUvzqp-.js"
+    ],
+    "dist/checkout/cancel.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/CheckoutCancelPage-DXUvzqp-.js"
+    ],
+    "dist/checkout/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/CheckoutPage-DUqQvmkL.js",
+      "/assets/deliveryZonesService-BOhPovm4.js",
+      "/assets/quoteService-Cg0bn3-n.js"
+    ],
+    "dist/checkout/success/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/CheckoutSuccessPage-BQshOtRO.js"
+    ],
+    "dist/checkout/success.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/CheckoutSuccessPage-BQshOtRO.js"
+    ],
+    "dist/checkout.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/CheckoutPage-DUqQvmkL.js",
+      "/assets/deliveryZonesService-BOhPovm4.js",
+      "/assets/quoteService-Cg0bn3-n.js"
+    ],
+    "dist/compte/commandes/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AccountAuthGate-B-yJPECL.js",
+      "/assets/AuthPage-Bc7YV9Zp.js"
+    ],
+    "dist/compte/commandes.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AccountAuthGate-B-yJPECL.js",
+      "/assets/AuthPage-Bc7YV9Zp.js"
+    ],
+    "dist/compte/favoris/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AccountAuthGate-B-yJPECL.js",
+      "/assets/AuthPage-Bc7YV9Zp.js"
+    ],
+    "dist/compte/favoris.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AccountAuthGate-B-yJPECL.js",
+      "/assets/AuthPage-Bc7YV9Zp.js"
+    ],
+    "dist/compte/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AccountAuthGate-B-yJPECL.js",
+      "/assets/AuthPage-Bc7YV9Zp.js"
+    ],
+    "dist/compte/profil/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AccountAuthGate-B-yJPECL.js",
+      "/assets/AuthPage-Bc7YV9Zp.js"
+    ],
+    "dist/compte/profil.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AccountAuthGate-B-yJPECL.js",
+      "/assets/AuthPage-Bc7YV9Zp.js"
+    ],
+    "dist/compte.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AccountAuthGate-B-yJPECL.js",
+      "/assets/AuthPage-Bc7YV9Zp.js"
+    ],
+    "dist/confidentialite/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/LegalPage-cXddPNHz.js"
+    ],
+    "dist/confidentialite.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/LegalPage-cXddPNHz.js"
+    ],
+    "dist/connexion/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AuthPage-Bc7YV9Zp.js"
+    ],
+    "dist/connexion.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AuthPage-Bc7YV9Zp.js"
+    ],
+    "dist/contact/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/contact.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/faq/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/faq.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/fleurs-cbd/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/fleurs-cbd.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/inscription/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AuthPage-Bc7YV9Zp.js"
+    ],
+    "dist/inscription.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/AuthPage-Bc7YV9Zp.js"
+    ],
+    "dist/livraison-express-aix/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/livraison-express-aix.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/livraison-postale/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/livraison-postale.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/mentions-legales/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/LegalPage-cXddPNHz.js"
+    ],
+    "dist/mentions-legales.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/LegalPage-cXddPNHz.js"
+    ],
+    "dist/panier/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/CartPage-HaZUxO0d.js",
+      "/assets/quoteService-Cg0bn3-n.js"
+    ],
+    "dist/panier.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/CartPage-HaZUxO0d.js",
+      "/assets/quoteService-Cg0bn3-n.js"
+    ],
+    "dist/produits/amnesia-cbd-hydroponique/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/amnesia-cbd-hydroponique.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/blue-dream-cbd/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/blue-dream-cbd.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/cookie-kush-indoor/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/cookie-kush-indoor.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/golden-static/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/golden-static.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/harlequin-greenhouse/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/harlequin-greenhouse.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/la-mousse/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/la-mousse.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/mandarine-cbd/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/mandarine-cbd.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/mango-haze-cbd/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/mango-haze-cbd.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/petites-tetes-og-kush/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/petites-tetes-og-kush.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/plutonium-cbd-hydroponique/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/plutonium-cbd-hydroponique.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/produit-introuvable-test/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/produit-introuvable-test.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/supreme-purple-cbd/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/produits/supreme-purple-cbd.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/qualite-conformite/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/qualite-conformite.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/resines-cbd/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/resines-cbd.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/retours/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/LegalPage-cXddPNHz.js"
+    ],
+    "dist/retours.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css",
+      "/assets/LegalPage-cXddPNHz.js"
+    ],
+    "dist/route-introuvable-test/index.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ],
+    "dist/route-introuvable-test.html": [
+      "/assets/index-0WO00OGW.js",
+      "/assets/vendor-react-B4BaZa-h.js",
+      "/assets/vendor-firebase-_LTHlUTX.js",
+      "/assets/index-BzUcw_09.css"
+    ]
+  },
+  "exclusiveChunks": [
+    {
+      "file": "dist/assets/vendor-firebase-_LTHlUTX.js",
+      "rawKB": 517,
+      "gzipKB": 120,
+      "group": "public-initial"
+    },
+    {
+      "file": "dist/assets/vendor-react-B4BaZa-h.js",
+      "rawKB": 190,
+      "gzipKB": 62,
+      "group": "public-initial"
+    },
+    {
+      "file": "dist/assets/index-0WO00OGW.js",
+      "rawKB": 79,
+      "gzipKB": 21,
+      "group": "public-initial"
+    },
+    {
+      "file": "dist/assets/AdminPage-NohPi2oI.js",
+      "rawKB": 76,
+      "gzipKB": 17,
+      "group": "admin"
+    },
+    {
+      "file": "dist/assets/CheckoutPage-DUqQvmkL.js",
+      "rawKB": 16,
+      "gzipKB": 5,
+      "group": "account"
+    },
+    {
+      "file": "dist/assets/AccountOrdersPage-BGHO17vk.js",
+      "rawKB": 5,
+      "gzipKB": 2,
+      "group": "account"
+    },
+    {
+      "file": "dist/assets/orderStatus-BY0QhEbW.js",
+      "rawKB": 5,
+      "gzipKB": 2,
+      "group": "account"
+    },
+    {
+      "file": "dist/assets/CartPage-HaZUxO0d.js",
+      "rawKB": 4,
+      "gzipKB": 2,
+      "group": "public-or-shared"
+    },
+    {
+      "file": "dist/assets/AuthPage-Bc7YV9Zp.js",
+      "rawKB": 4,
+      "gzipKB": 2,
+      "group": "public-or-shared"
+    },
+    {
+      "file": "dist/assets/LegalPage-cXddPNHz.js",
+      "rawKB": 4,
+      "gzipKB": 2,
+      "group": "public-or-shared"
+    },
+    {
+      "file": "dist/assets/AdminAuthGate-Brr5a-J7.js",
+      "rawKB": 4,
+      "gzipKB": 1,
+      "group": "admin"
+    },
+    {
+      "file": "dist/assets/AdminLayout-zrhkP2Hv.js",
+      "rawKB": 3,
+      "gzipKB": 1,
+      "group": "admin"
+    },
+    {
+      "file": "dist/assets/CheckoutSuccessPage-BQshOtRO.js",
+      "rawKB": 3,
+      "gzipKB": 1,
+      "group": "checkout"
+    },
+    {
+      "file": "dist/assets/AccountFavoritesPage-DNImxldD.js",
+      "rawKB": 2,
+      "gzipKB": 1,
+      "group": "account"
+    },
+    {
+      "file": "dist/assets/AccountProfilePage-BZBwdb9c.js",
+      "rawKB": 2,
+      "gzipKB": 1,
+      "group": "account"
+    },
+    {
+      "file": "dist/assets/deliveryZonesService-BOhPovm4.js",
+      "rawKB": 1,
+      "gzipKB": 1,
+      "group": "public-or-shared"
+    },
+    {
+      "file": "dist/assets/AccountOverviewPage-k2J76VOY.js",
+      "rawKB": 1,
+      "gzipKB": 1,
+      "group": "account"
+    },
+    {
+      "file": "dist/assets/AccountLayout-C6Wcfh-B.js",
+      "rawKB": 1,
+      "gzipKB": 1,
+      "group": "account"
+    },
+    {
+      "file": "dist/assets/CheckoutCancelPage-DXUvzqp-.js",
+      "rawKB": 1,
+      "gzipKB": 1,
+      "group": "checkout"
+    },
+    {
+      "file": "dist/assets/quoteService-Cg0bn3-n.js",
+      "rawKB": 0,
+      "gzipKB": 0,
+      "group": "checkout"
+    },
+    {
+      "file": "dist/assets/AccountAuthGate-B-yJPECL.js",
+      "rawKB": 0,
+      "gzipKB": 0,
+      "group": "account"
+    }
+  ],
+  "markers": {
+    "publicInitialContainsFirebaseAdmin": false,
+    "publicInitialContainsPdfLib": false,
+    "anyClientAssetContainsFirebaseAdmin": false,
+    "anyClientAssetContainsPdfLib": false,
+    "publicInitialContainsFirestore": true,
+    "publicInitialContainsAuth": true
+  }
+}

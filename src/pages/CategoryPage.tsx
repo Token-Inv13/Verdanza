@@ -173,8 +173,8 @@ export function CategoryPage({
         <p className="mt-6 text-forest/70">Chargement des produits...</p>
       ) : (
         <div className="product-grid mt-6">
-          {categoryProducts.map((product) => (
-            <ProductCard key={product.id} product={product} />
+          {categoryProducts.map((product, index) => (
+            <ProductCard key={product.id} product={product} priorityImage={index < 4} />
           ))}
         </div>
       )}

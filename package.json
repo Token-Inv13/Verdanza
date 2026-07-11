@@ -14,6 +14,8 @@
     "audit:structured-data": "node --import tsx scripts/auditStructuredData.ts",
     "audit:indexnow": "node --import tsx scripts/auditIndexNow.ts",
     "audit:seo-landing-pages": "node --import tsx scripts/auditSeoLandingPages.ts",
+    "audit:performance": "node --import tsx scripts/auditPerformance.ts",
+    "analyze:bundle": "node --import tsx scripts/analyzeBundle.ts",
     "indexnow": "node --import tsx scripts/submitIndexNow.ts",
     "indexnow:verify": "node --import tsx scripts/verifyIndexNow.ts",
     "test:indexnow": "node --import tsx scripts/testIndexNow.ts",

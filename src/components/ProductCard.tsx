@@ -11,7 +11,13 @@ function productImageAlt(product: Product) {
   } Verdanza`;
 }
 
-export function ProductCard({ product }: { product: Product }) {
+export function ProductCard({
+  product,
+  priorityImage = false,
+}: {
+  product: Product;
+  priorityImage?: boolean;
+}) {
   const { addItem } = useCart();
   const isComingSoon = product.comingSoon || product.stockStatus === "coming_soon";
 
@@ -22,6 +28,10 @@ export function ProductCard({ product }: { product: Product }) {
         <img
           src={product.image}
           alt={productImageAlt(product)}
+          width={713}
+          height={713}
+          loading={priorityImage ? "eager" : "lazy"}
+          decoding="async"
           className="mx-auto h-48 w-full object-contain transition group-hover:scale-105"
         />
       </Link>

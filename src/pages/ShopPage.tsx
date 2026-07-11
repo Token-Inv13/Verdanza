@@ -32,8 +32,8 @@ export function ShopPage() {
         <p className="mt-6 text-forest/70">Chargement du catalogue...</p>
       ) : (
         <div className="product-grid mt-6">
-          {products.map((product) => (
-            <ProductCard key={product.id} product={product} />
+          {products.map((product, index) => (
+            <ProductCard key={product.id} product={product} priorityImage={index < 4} />
           ))}
         </div>
       )}

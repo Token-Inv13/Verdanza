@@ -111,11 +111,14 @@ export function ProductPage() {
       />
       <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-4">
-          <div className="rounded-lg border border-champagne/30 bg-cream p-8">
+          <div className="aspect-square rounded-lg border border-champagne/30 bg-cream p-8">
             <img
               src={product.image}
               alt={productImageAlt(product)}
-              className="mx-auto max-h-[520px] object-contain"
+              width={713}
+              height={713}
+              decoding="async"
+              className="mx-auto h-full w-full object-contain"
             />
           </div>
           {isPremiumHydroponic && (
