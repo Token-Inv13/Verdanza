@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { blogArticlePath, publishedBlogArticles } from "../src/data/blogArticles";
 import { products } from "../src/data/products";
 import type { Product } from "../src/types";
 import {
@@ -22,6 +23,9 @@ const distDir = resolve("dist");
 const productByPath = new Map(
   products.filter((product) => product.isActive).map((product) => [productPath(product), product]),
 );
+const articleByPath = new Map(
+  publishedBlogArticles.map((article) => [blogArticlePath(article), article]),
+);
 const rows = [
   ...prerenderSeoRoutes().map((route) => auditRoute(route, outputPathForRoute(route.path))),
   ...prerenderFallbackSeoRoutes().map((route) => auditRoute(route, outputPathForRoute(route.path))),
@@ -35,6 +39,7 @@ console.table(
     scripts: row.scriptCount,
     Product: row.typeCounts.Product || 0,
     Offer: row.typeCounts.Offer || 0,
+    BlogPosting: row.typeCounts.BlogPosting || 0,
     BreadcrumbList: row.typeCounts.BreadcrumbList || 0,
     WebSite: row.typeCounts.WebSite || 0,
     OnlineStore: row.typeCounts.OnlineStore || 0,
@@ -67,6 +72,7 @@ function auditRoute(route: SeoRoute, filePath: string) {
   const nodes = scripts.flatMap((script) => flattenJsonLd(script.value));
   const typeCounts = countTypes(nodes);
   const product = productByPath.get(route.path);
+  const article = articleByPath.get(route.path);
   const isHome = route.path === "/";
   const isNoindex = robots.includes("noindex") || !route.indexable;
 
@@ -86,6 +92,13 @@ function auditRoute(route: SeoRoute, filePath: string) {
     expectCount(typeCounts, "BreadcrumbList", 1, failures);
     auditProduct(nodes, product, canonical, failures);
     auditBreadcrumb(nodes, expectedBreadcrumbItems(route.path, product), canonical, failures);
+  } else if (article) {
+    expectCount(typeCounts, "BlogPosting", 1, failures);
+    expectCount(typeCounts, "BreadcrumbList", 1, failures);
+    expectCount(typeCounts, "Product", 0, failures);
+    expectCount(typeCounts, "Offer", 0, failures);
+    auditBlogPosting(nodes, article, canonical, failures);
+    auditBreadcrumb(nodes, expectedBreadcrumbItems(route.path), canonical, failures);
   } else if (isNoindex) {
     expectCount(typeCounts, "Product", 0, failures);
     expectCount(typeCounts, "Offer", 0, failures);
@@ -102,6 +115,7 @@ function auditRoute(route: SeoRoute, filePath: string) {
   if (serialized.includes('"review"') || serialized.includes('"reviews"')) {
     failures.push("review present");
   }
+  if (serialized.includes("MedicalWebPage")) failures.push("MedicalWebPage present");
 
   return {
     path: route.path,
@@ -109,6 +123,37 @@ function auditRoute(route: SeoRoute, filePath: string) {
     typeCounts,
     failures,
   };
+}
+
+function auditBlogPosting(
+  nodes: Record<string, JsonLdValue>[],
+  article: (typeof publishedBlogArticles)[number],
+  canonical: string,
+  failures: string[],
+) {
+  const node = nodeByType(nodes, "BlogPosting");
+  if (!node) return;
+  const url = absoluteUrl(blogArticlePath(article));
+  if (canonical !== url) failures.push("blog canonical mismatch");
+  if (node["@id"] !== `${url}#article`) failures.push("BlogPosting @id mismatch");
+  if (node.url !== url) failures.push("BlogPosting url mismatch");
+  if (!isRecord(node.mainEntityOfPage) || node.mainEntityOfPage["@id"] !== url) {
+    failures.push("BlogPosting mainEntityOfPage mismatch");
+  }
+  if (node.headline !== article.title) failures.push("BlogPosting headline mismatch");
+  if (node.description !== article.description) failures.push("BlogPosting description mismatch");
+  if (!Array.isArray(node.image) || node.image.length !== 3) {
+    failures.push("BlogPosting image count mismatch");
+  }
+  if (node.datePublished !== article.datePublished) failures.push("BlogPosting datePublished mismatch");
+  if (node.dateModified !== article.dateModified) failures.push("BlogPosting dateModified mismatch");
+  if (node.inLanguage !== "fr-FR") failures.push("BlogPosting language mismatch");
+  if (!isRecord(node.author) || node.author.name !== article.authorName) {
+    failures.push("BlogPosting author mismatch");
+  }
+  if (!isRecord(node.publisher) || node.publisher["@id"] !== `${absoluteUrl("/")}#organization`) {
+    failures.push("BlogPosting publisher mismatch");
+  }
 }
 
 function extractJsonLdScripts(html: string, failures: string[]) {
@@ -259,6 +304,26 @@ function expectedBreadcrumbItems(path: string, product?: Product) {
     "/boutique": [
       { name: "Accueil", path: "/" },
       { name: "Boutique", path: "/boutique" },
+    ],
+    "/blog": [
+      { name: "Accueil", path: "/" },
+      { name: "Guides CBD", path: "/blog" },
+    ],
+    "/blog/fleur-cbd-ou-resine-cbd-differences": [
+      { name: "Accueil", path: "/" },
+      { name: "Guides CBD", path: "/blog" },
+      {
+        name: "Fleur CBD ou résine CBD : quelles différences ?",
+        path: "/blog/fleur-cbd-ou-resine-cbd-differences",
+      },
+    ],
+    "/blog/indoor-greenhouse-hydroponique-differences": [
+      { name: "Accueil", path: "/" },
+      { name: "Guides CBD", path: "/blog" },
+      {
+        name: "Indoor, greenhouse ou hydroponique : comprendre les méthodes de culture",
+        path: "/blog/indoor-greenhouse-hydroponique-differences",
+      },
     ],
     "/fleurs-cbd": [
       { name: "Accueil", path: "/" },

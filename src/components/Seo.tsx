@@ -12,6 +12,9 @@ export function Seo({
   ogDescription,
   ogType = "website",
   image,
+  articlePublishedTime,
+  articleModifiedTime,
+  articleAuthor,
 }: {
   title: string;
   description: string;
@@ -22,6 +25,9 @@ export function Seo({
   ogDescription?: string;
   ogType?: "website" | "product" | "article";
   image?: string;
+  articlePublishedTime?: string;
+  articleModifiedTime?: string;
+  articleAuthor?: string;
 }) {
   useEffect(() => {
     const href = canonicalUrl(canonical || path);
@@ -46,8 +52,20 @@ export function Seo({
       removeProperty("og:image");
       removeMeta("twitter:image");
     }
+    if (ogType === "article") {
+      setOptionalProperty("article:published_time", articlePublishedTime);
+      setOptionalProperty("article:modified_time", articleModifiedTime);
+      setOptionalProperty("article:author", articleAuthor);
+    } else {
+      removeProperty("article:published_time");
+      removeProperty("article:modified_time");
+      removeProperty("article:author");
+    }
     setCanonical(href);
   }, [
+    articleAuthor,
+    articleModifiedTime,
+    articlePublishedTime,
     canonical,
     description,
     image,
@@ -109,6 +127,14 @@ function setProperty(property: string, content: string) {
     document.head.appendChild(meta);
   }
   meta.content = content;
+}
+
+function setOptionalProperty(property: string, content?: string) {
+  if (!content) {
+    removeProperty(property);
+    return;
+  }
+  setProperty(property, content);
 }
 
 function removeProperty(property: string) {

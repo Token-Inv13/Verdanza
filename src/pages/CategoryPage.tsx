@@ -57,6 +57,8 @@ const categoryContent = {
       },
     ],
     links: [
+      { to: "/blog/fleur-cbd-ou-resine-cbd-differences", label: "Lire le guide fleur ou résine" },
+      { to: "/blog/indoor-greenhouse-hydroponique-differences", label: "Comprendre les cultures CBD" },
       { to: "/resines-cbd", label: "Comparer avec les résines CBD" },
       { to: "/livraison-express-aix", label: "Voir la livraison à Aix-en-Provence" },
       { to: "/livraison-postale", label: "Vérifier la livraison postale" },
@@ -113,6 +115,7 @@ const categoryContent = {
       },
     ],
     links: [
+      { to: "/blog/fleur-cbd-ou-resine-cbd-differences", label: "Lire le guide fleur ou résine" },
       { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
       { to: "/livraison-express-aix", label: "Voir la livraison à Aix-en-Provence" },
       { to: "/livraison-postale", label: "Vérifier la livraison postale" },

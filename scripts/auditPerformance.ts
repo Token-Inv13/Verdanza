@@ -55,8 +55,8 @@ if (!/verdanza-hero-premium(?:-\d+)?\.webp[\s\S]{0,350}height="941"/i.test(homeH
 }
 const expectedPrerenderRoutes =
   prerenderSeoRoutes().length + prerenderFallbackSeoRoutes().length + 1;
-if (expectedPrerenderRoutes !== 50) {
-  failures.push(`expected 50 prerendered routes, found ${expectedPrerenderRoutes}`);
+if (expectedPrerenderRoutes !== 53) {
+  failures.push(`expected 53 prerendered routes, found ${expectedPrerenderRoutes}`);
 }
 if (!existsSync(join(distDir, "404.html"))) failures.push("missing 404.html");
 checkHtmlText();
@@ -99,7 +99,13 @@ function hasChunkMatch(pattern: RegExp) {
 
 function checkHtmlText() {
   const corrupted = /Ã|â€™|�/;
-  const requiredPages = ["index.html", "boutique.html", "fleurs-cbd.html", "livraison-express-aix.html"];
+  const requiredPages = [
+    "index.html",
+    "boutique.html",
+    "fleurs-cbd.html",
+    "livraison-express-aix.html",
+    "blog.html",
+  ];
   requiredPages.forEach((file) => {
     const html = readHtml(file);
     if (!html) failures.push(`missing ${file}`);

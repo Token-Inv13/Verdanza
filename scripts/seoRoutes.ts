@@ -1,6 +1,11 @@
 import { products } from "../src/data/products";
+import { blogArticlePath, publishedBlogArticles } from "../src/data/blogArticles";
 
 const siteUrl = "https://verdanza.fr";
+const blogIndexLastmod = publishedBlogArticles
+  .map((article) => article.dateModified)
+  .sort()
+  .at(-1);
 
 export type SeoRouteKind =
   | "public-indexable"
@@ -17,11 +22,19 @@ export type SeoRoute = {
   component: string;
   indexable: boolean;
   dynamic?: boolean;
+  lastmod?: string;
 };
 
 export const staticSeoRoutes: SeoRoute[] = [
   { path: "/", kind: "public-indexable", component: "HomePage", indexable: true },
   { path: "/boutique", kind: "public-indexable", component: "ShopPage", indexable: true },
+  {
+    path: "/blog",
+    kind: "public-indexable",
+    component: "BlogPage",
+    indexable: true,
+    lastmod: blogIndexLastmod,
+  },
   {
     path: "/fleurs-cbd",
     kind: "public-indexable",
@@ -173,9 +186,21 @@ export function productSeoRoutes(): SeoRoute[] {
     }));
 }
 
+export function blogSeoRoutes(): SeoRoute[] {
+  return publishedBlogArticles.map((article) => ({
+    path: blogArticlePath(article),
+    kind: "public-indexable" as const,
+    component: "BlogArticlePage",
+    indexable: true,
+    dynamic: true,
+    lastmod: article.dateModified,
+  }));
+}
+
 export function allSeoRoutes() {
   return [
     ...staticSeoRoutes.filter((route) => route.kind !== "fallback"),
+    ...blogSeoRoutes(),
     ...productSeoRoutes(),
     ...staticSeoRoutes.filter((route) => route.kind === "fallback"),
   ];
@@ -196,10 +221,17 @@ export function prerenderFallbackSeoRoutes() {
 }
 
 export function sitemapUrls() {
+  return sitemapEntries().map((entry) => entry.loc);
+}
+
+export function sitemapEntries() {
   const paths = allSeoRoutes()
     .filter((route) => route.indexable)
-    .map((route) => route.path);
-  return [...new Set(paths)].map((path) => canonicalUrl(path));
+    .map((route) => ({
+      loc: canonicalUrl(route.path),
+      lastmod: route.lastmod,
+    }));
+  return uniqueEntries(paths);
 }
 
 export function canonicalUrl(path: string) {
@@ -213,4 +245,13 @@ export function canonicalUrl(path: string) {
 function normalizePathname(pathname: string) {
   if (!pathname || pathname === "/") return "/";
   return pathname.replace(/\/{2,}/g, "/").replace(/\/+$/, "");
+}
+
+function uniqueEntries(entries: { loc: string; lastmod?: string }[]) {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    if (seen.has(entry.loc)) return false;
+    seen.add(entry.loc);
+    return true;
+  });
 }

@@ -16,6 +16,7 @@
     "audit:seo-landing-pages": "node --import tsx scripts/auditSeoLandingPages.ts",
     "audit:performance": "node --import tsx scripts/auditPerformance.ts",
     "audit:images": "node --import tsx scripts/auditImages.ts",
+    "audit:blog": "node --import tsx scripts/auditBlog.ts",
     "analyze:bundle": "node --import tsx scripts/analyzeBundle.ts",
     "images:generate": "node --import tsx scripts/generateImages.ts",
     "indexnow": "node --import tsx scripts/submitIndexNow.ts",

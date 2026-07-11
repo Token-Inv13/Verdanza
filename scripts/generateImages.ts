@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import sharp from "sharp";
+import { blogArticles } from "../src/data/blogArticles";
 import { products } from "../src/data/products";
 
 type Variant = {
@@ -33,6 +34,7 @@ type ProductReport = {
 const publicDir = resolve("public");
 const productOutputDir = resolve(publicDir, "images/products");
 const brandOutputDir = resolve(publicDir, "images/brand");
+const blogOutputDir = resolve(publicDir, "images/blog");
 const reportPath = resolve("reports/performance/images-latest.json");
 const manifestPath = resolve("src/lib/generatedImageVariants.ts");
 const productCardVariants: Variant[] = [
@@ -73,9 +75,33 @@ const staticTargets = [
     sizes: "180px",
   },
 ];
+const blogImageSources: Record<string, { label: string; sources: string[] }> = {
+  "fleur-cbd-ou-resine-cbd-differences": {
+    label: "Fleur et résine CBD",
+    sources: [
+      "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
+      "/Fiche produit/Golden static/goldenstatic.webp",
+      "/Fiche produit/La%20mousse/mousse1.webp",
+    ],
+  },
+  "indoor-greenhouse-hydroponique-differences": {
+    label: "Méthodes de culture",
+    sources: [
+      "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
+      "/Fiche produit/Harlequin (sous-serre)/harlequin_zoom.webp",
+      "/Fiche produit/Mango%20Haze/MangoHaze.webp",
+    ],
+  },
+};
+const blogRatios = [
+  { key: "square", suffix: "1x1", width: 900, height: 900, sizes: "(min-width: 1024px) 420px, 92vw" },
+  { key: "landscape", suffix: "4x3", width: 1200, height: 900, sizes: "(min-width: 1024px) 520px, 92vw" },
+  { key: "wide", suffix: "16x9", width: 1600, height: 900, sizes: "100vw" },
+] as const;
 
 mkdirSync(productOutputDir, { recursive: true });
 mkdirSync(brandOutputDir, { recursive: true });
+mkdirSync(blogOutputDir, { recursive: true });
 mkdirSync(dirname(reportPath), { recursive: true });
 
 const productReports: ProductReport[] = [];
@@ -165,16 +191,51 @@ for (const target of staticTargets) {
   }`);
 }
 
+const blogReport = [];
+for (const article of blogArticles) {
+  if (article.status !== "published") continue;
+  const sourceSet = blogImageSources[article.slug];
+  if (!sourceSet) throw new Error(`Missing blog image source definition for ${article.slug}`);
+
+  const generated = [];
+  for (const ratio of blogRatios) {
+    const outputUrl = article.images[ratio.key];
+    const output = await generateBlogImage({
+      outputUrl,
+      label: sourceSet.label,
+      sourceUrls: sourceSet.sources,
+      width: ratio.width,
+      height: ratio.height,
+    });
+    generated.push(output);
+    staticManifestEntries.push(`  ${JSON.stringify(output.src)}: {
+    src: ${JSON.stringify(output.src)},
+    srcSet: ${JSON.stringify(`${output.src} ${output.width}w`)},
+    sizes: ${JSON.stringify(ratio.sizes)},
+    width: ${output.width},
+    height: ${output.height},
+  }`);
+  }
+  blogReport.push({
+    articleSlug: article.slug,
+    articleTitle: article.title,
+    sources: sourceSet.sources,
+    variants: generated,
+  });
+}
+
 const report = {
   generatedAt: new Date().toISOString(),
   productImages: productReports,
   staticImages: staticReport,
+  blogImages: blogReport,
   totals: {
     productSourceBytes: sum(productReports.map((item) => item.sourceBytes)),
     productCardLargestBytes: sum(productReports.map((item) => item.card.at(-1)?.bytes || 0)),
     productDetailBytes: sum(productReports.map((item) => item.detail.at(-1)?.bytes || 0)),
     staticSourceBytes: sum(staticReport.map((item) => item.sourceBytes)),
     staticLargestBytes: sum(staticReport.map((item) => item.variants.at(-1)?.bytes || 0)),
+    blogImageBytes: sum(blogReport.flatMap((item) => item.variants.map((variant) => variant.bytes))),
   },
 };
 
@@ -223,6 +284,15 @@ console.table(
     reduction: percent(item.sourceBytes, item.variants.at(-1)?.bytes || 0),
   })),
 );
+console.table(
+  blogReport.flatMap((item) =>
+    item.variants.map((variant) => ({
+      article: item.articleSlug,
+      image: variant.src,
+      KB: kb(variant.bytes),
+    })),
+  ),
+);
 
 async function generateProductVariants(
   slug: string,
@@ -268,6 +338,73 @@ async function generateVariant(
   };
 }
 
+async function generateBlogImage({
+  outputUrl,
+  label,
+  sourceUrls,
+  width,
+  height,
+}: {
+  outputUrl: string;
+  label: string;
+  sourceUrls: string[];
+  width: number;
+  height: number;
+}): Promise<GeneratedVariant> {
+  const outputFile = publicPath(outputUrl);
+  mkdirSync(dirname(outputFile), { recursive: true });
+
+  const tileWidth = Math.round(width * 0.34);
+  const tileHeight = Math.round(height * 0.62);
+  const gap = Math.round(width * 0.025);
+  const startX = Math.round(width * 0.08);
+  const top = Math.round(height * 0.19);
+  const composites = await Promise.all(
+    sourceUrls.slice(0, 3).map(async (sourceUrl, index) => {
+      const sourceFile = publicPath(sourceUrl);
+      if (!existsSync(sourceFile)) throw new Error(`Missing blog source image: ${sourceUrl}`);
+      const image = await sharp(readFileSync(sourceFile))
+        .resize({ width: tileWidth, height: tileHeight, fit: "cover" })
+        .webp({ quality: 82, effort: 5 })
+        .toBuffer();
+      return {
+        input: image,
+        left: startX + index * Math.round(tileWidth * 0.7 + gap),
+        top: top + (index % 2) * Math.round(height * 0.05),
+      };
+    }),
+  );
+
+  const overlay = Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+  <rect width="${width}" height="${height}" fill="#faf8f2"/>
+  <rect x="0" y="0" width="${Math.round(width * 0.28)}" height="${height}" fill="#0d3b2e"/>
+  <rect x="${Math.round(width * 0.28)}" y="0" width="${width}" height="${height}" fill="#f5f0e6"/>
+  <circle cx="${Math.round(width * 0.18)}" cy="${Math.round(height * 0.18)}" r="${Math.round(height * 0.18)}" fill="#c9a45c" opacity="0.2"/>
+  <text x="${Math.round(width * 0.34)}" y="${Math.round(height * 0.12)}" fill="#0d3b2e" font-family="Arial, sans-serif" font-size="${Math.round(height * 0.04)}" font-weight="700">${escapeSvg(label)}</text>
+</svg>`);
+
+  const output = await sharp({
+    create: {
+      width,
+      height,
+      channels: 3,
+      background: "#faf8f2",
+    },
+  })
+    .composite([{ input: overlay, left: 0, top: 0 }, ...composites])
+    .webp({ quality: 82, effort: 6 })
+    .toBuffer();
+  writeIfChanged(outputFile, output);
+
+  return {
+    src: outputUrl,
+    width,
+    height,
+    bytes: output.length,
+  };
+}
+
 function publicPath(url: string) {
   return resolve(publicDir, decodeURIComponent(url).replace(/^\/+/, ""));
 }
@@ -295,4 +432,12 @@ function sum(values: number[]) {
 
 function percent(before: number, after: number) {
   return before > 0 ? `${Math.round(((before - after) / before) * 100)}%` : "0%";
+}
+
+function escapeSvg(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }

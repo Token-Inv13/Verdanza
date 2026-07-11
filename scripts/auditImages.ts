@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
+import { publishedBlogArticles } from "../src/data/blogArticles";
 import { products } from "../src/data/products";
 import { productImageVariants, staticImageVariants } from "../src/lib/generatedImageVariants";
 
@@ -16,8 +17,18 @@ const distDir = resolve("dist");
 const failures: string[] = [];
 const warnings: string[] = [];
 const productImageUrls = new Set(products.map((product) => product.image));
-const staticImageUrls = new Set(["/images/verdanza-hero-premium.webp", "/verdanza-badge.png", "/verdanza-logo.png"]);
-const generatedPrefixes = ["/images/products/", "/images/brand/", "/images/verdanza-hero-premium-"];
+const blogImageUrls = publishedBlogArticles.flatMap((article) => [
+  article.images.square,
+  article.images.landscape,
+  article.images.wide,
+]);
+const staticImageUrls = new Set([
+  "/images/verdanza-hero-premium.webp",
+  "/verdanza-badge.png",
+  "/verdanza-logo.png",
+  ...blogImageUrls,
+]);
+const generatedPrefixes = ["/images/products/", "/images/brand/", "/images/blog/", "/images/verdanza-hero-premium-"];
 const referencedUrls = new Set([...productImageUrls, ...staticImageUrls]);
 const publicImages = listPublicImages(publicDir);
 
@@ -40,7 +51,14 @@ for (const source of staticImageUrls) {
   if (!existsSync(publicFile(source))) failures.push(`missing static image ${source}`);
   const variant = staticImageVariants[source];
   if (!variant) failures.push(`missing optimized static variant for ${source}`);
-  else auditVariantSet(source, variant, source.includes("hero") ? 160 * 1024 : 80 * 1024);
+  else {
+    const maxBytes = source.includes("/images/blog/")
+      ? 240 * 1024
+      : source.includes("hero")
+        ? 160 * 1024
+        : 80 * 1024;
+    auditVariantSet(source, variant, maxBytes);
+  }
 }
 
 const largeUnused = publicImages.filter(
@@ -136,6 +154,18 @@ function auditRenderedImages() {
   for (const image of publicImages) {
     if (image.bytes > 1500 * 1024 && boutiqueHtml.includes(image.url)) {
       failures.push(`large source image rendered in boutique HTML: ${image.url}`);
+    }
+  }
+
+  const blogHtml = readDistHtml("blog.html");
+  if (!blogHtml.includes("/images/blog/")) failures.push("blog optimized images missing from prerendered HTML");
+  for (const article of publishedBlogArticles) {
+    const html = readDistHtml(`blog/${article.slug}.html`);
+    if (!html.includes(article.images.wide)) {
+      failures.push(`article hero image missing from HTML: ${article.slug}`);
+    }
+    if (!html.includes("fetchpriority=\"high\"")) {
+      failures.push(`article hero image priority missing: ${article.slug}`);
     }
   }
 }

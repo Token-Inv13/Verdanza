@@ -104,4 +104,65 @@
   .input-field {
     @apply min-h-11 w-full rounded-md border border-forest/15 bg-ivory px-3 py-2 text-sm text-ink outline-none transition focus:border-champagne focus:ring-2 focus:ring-champagne/30;
   }
+
+  .blog-prose {
+    @apply mt-10 max-w-4xl text-base leading-8 text-ink/75;
+  }
+
+  .blog-prose h2 {
+    @apply mt-10 font-display text-3xl leading-tight text-forest md:text-4xl;
+  }
+
+  .blog-prose p {
+    @apply mt-5;
+  }
+
+  .blog-prose a {
+    @apply font-semibold text-forest underline decoration-champagne underline-offset-4;
+  }
+
+  .blog-prose ul {
+    @apply mt-5 space-y-2 pl-5;
+  }
+
+  .blog-prose li {
+    @apply list-disc;
+  }
+
+  .blog-table-wrap {
+    @apply mt-6 overflow-x-auto rounded-lg border border-forest/10 bg-ivory;
+  }
+
+  .blog-table-wrap table {
+    @apply min-w-[720px] w-full border-collapse text-left text-sm;
+  }
+
+  .blog-table-wrap caption {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-champagne;
+  }
+
+  .blog-table-wrap th,
+  .blog-table-wrap td {
+    @apply border-t border-forest/10 px-4 py-3 align-top;
+  }
+
+  .blog-table-wrap thead th {
+    @apply bg-cream text-forest;
+  }
+
+  .blog-note {
+    @apply mt-6 rounded-lg border border-champagne/30 bg-cream p-5 text-sm leading-6 text-forest;
+  }
+
+  .blog-link-panel {
+    @apply mt-8 rounded-lg border border-forest/10 bg-cream p-5;
+  }
+
+  .blog-link-panel > div {
+    @apply mt-4 flex flex-wrap gap-2;
+  }
+
+  .blog-link-panel a {
+    @apply rounded-md border border-forest/10 bg-ivory px-3 py-2 text-sm no-underline transition hover:border-champagne;
+  }
 }

@@ -3,6 +3,9 @@ import { chromium, type Page } from "playwright";
 const baseUrl = process.argv[2] || "http://127.0.0.1:4173";
 const noJavaScriptRoutes = [
   "/",
+  "/blog",
+  "/blog/fleur-cbd-ou-resine-cbd-differences",
+  "/blog/indoor-greenhouse-hydroponique-differences",
   "/fleurs-cbd",
   "/resines-cbd",
   "/livraison-postale",
@@ -93,6 +96,13 @@ async function auditInteractiveViewport(
     try {
       await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
       await expectOneH1(page, `${label} home`);
+      await page.getByRole("link", { name: /Guides/i }).first().click();
+      await page.waitForURL("**/blog");
+      await expectOneH1(page, `${label} blog`);
+      await page.getByRole("link", { name: /Fleur CBD ou résine CBD/i }).first().click();
+      await page.waitForURL("**/blog/fleur-cbd-ou-resine-cbd-differences");
+      await expectOneH1(page, `${label} blog article`);
+      await expectImagesLoaded(page, `${label} blog article`);
       await page.getByRole("link", { name: /Boutique/i }).first().click();
       await page.waitForURL("**/boutique");
       await expectOneH1(page, `${label} boutique`);
@@ -154,9 +164,20 @@ async function expectOneH1(page: Page, label: string) {
 }
 
 async function expectImagesLoaded(page: Page, label: string) {
+  await page
+    .waitForFunction(
+      () =>
+        Array.from(document.images).every((image) => image.complete && image.naturalWidth > 0),
+      undefined,
+      { timeout: 5000 },
+    )
+    .catch(() => undefined);
   const brokenImages = await page.locator("img").evaluateAll((images) =>
     images
-      .filter((image) => !(image as HTMLImageElement).complete)
+      .filter((image) => {
+        const element = image as HTMLImageElement;
+        return !element.complete || element.naturalWidth === 0;
+      })
       .map((image) => (image as HTMLImageElement).src),
   );
   if (brokenImages.length) {

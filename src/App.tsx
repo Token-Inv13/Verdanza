@@ -5,6 +5,8 @@ import { HomePage } from "./pages/HomePage";
 import { ShopPage } from "./pages/ShopPage";
 import { CategoryPage } from "./pages/CategoryPage";
 import { ProductPage } from "./pages/ProductPage";
+import { BlogPage } from "./pages/BlogPage";
+import { BlogArticlePage } from "./pages/BlogArticlePage";
 import { DeliveryPage } from "./pages/DeliveryPage";
 import { ContentPage } from "./pages/ContentPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
@@ -74,6 +76,8 @@ export function App() {
         <Route element={<MainLayout />}>
           <Route index element={<HomePage />} />
           <Route path="boutique" element={<ShopPage />} />
+          <Route path="blog" element={<BlogPage />} />
+          <Route path="blog/:slug" element={<BlogArticlePage />} />
           <Route
             path="fleurs-cbd"
             element={<CategoryPage category="flowers" title="Fleurs CBD" />}

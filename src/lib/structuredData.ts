@@ -1,4 +1,5 @@
 import type { Product } from "../types";
+import type { BlogArticle } from "../types/blog";
 import { absoluteUrl } from "./siteUrl";
 
 export type JsonLdValue =
@@ -110,5 +111,38 @@ export function buildBreadcrumbJsonLd(items: BreadcrumbItem[], pagePath: string)
       name: item.name,
       item: absoluteUrl(item.path),
     })),
+  };
+}
+
+export function buildBlogPostingJsonLd(article: BlogArticle): JsonLdValue {
+  const url = absoluteUrl(`/blog/${article.slug}`);
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "@id": `${url}#article`,
+    url,
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": url,
+    },
+    headline: article.title,
+    description: article.description,
+    image: [
+      absoluteUrl(article.images.square),
+      absoluteUrl(article.images.landscape),
+      absoluteUrl(article.images.wide),
+    ],
+    datePublished: article.datePublished,
+    dateModified: article.dateModified,
+    inLanguage: "fr-FR",
+    author: {
+      "@type": "Organization",
+      name: article.authorName,
+      url: absoluteUrl("/a-propos"),
+    },
+    publisher: {
+      "@id": organizationId,
+    },
   };
 }

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-11T18:20:07.784Z",
+  "generatedAt": "2026-07-11T19:41:24.719Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -442,11 +442,72 @@
       ]
     }
   ],
+  "blogImages": [
+    {
+      "articleSlug": "fleur-cbd-ou-resine-cbd-differences",
+      "articleTitle": "Fleur CBD ou résine CBD : quelles différences ?",
+      "sources": [
+        "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
+        "/Fiche produit/Golden static/goldenstatic.webp",
+        "/Fiche produit/La%20mousse/mousse1.webp"
+      ],
+      "variants": [
+        {
+          "src": "/images/blog/fleur-cbd-ou-resine-cbd-1x1.webp",
+          "width": 900,
+          "height": 900,
+          "bytes": 110928
+        },
+        {
+          "src": "/images/blog/fleur-cbd-ou-resine-cbd-4x3.webp",
+          "width": 1200,
+          "height": 900,
+          "bytes": 141932
+        },
+        {
+          "src": "/images/blog/fleur-cbd-ou-resine-cbd-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 181530
+        }
+      ]
+    },
+    {
+      "articleSlug": "indoor-greenhouse-hydroponique-differences",
+      "articleTitle": "Indoor, greenhouse ou hydroponique : comprendre les méthodes de culture",
+      "sources": [
+        "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
+        "/Fiche produit/Harlequin (sous-serre)/harlequin_zoom.webp",
+        "/Fiche produit/Mango%20Haze/MangoHaze.webp"
+      ],
+      "variants": [
+        {
+          "src": "/images/blog/indoor-greenhouse-hydroponique-1x1.webp",
+          "width": 900,
+          "height": 900,
+          "bytes": 116540
+        },
+        {
+          "src": "/images/blog/indoor-greenhouse-hydroponique-4x3.webp",
+          "width": 1200,
+          "height": 900,
+          "bytes": 152910
+        },
+        {
+          "src": "/images/blog/indoor-greenhouse-hydroponique-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 199954
+        }
+      ]
+    }
+  ],
   "totals": {
     "productSourceBytes": 2036162,
     "productCardLargestBytes": 1095790,
     "productDetailBytes": 1627236,
     "staticSourceBytes": 2197587,
-    "staticLargestBytes": 114692
+    "staticLargestBytes": 114692,
+    "blogImageBytes": 903794
   }
 }

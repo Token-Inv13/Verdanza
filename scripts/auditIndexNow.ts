@@ -87,10 +87,23 @@ function auditKeyFiles() {
 function auditRoutes() {
   const urls = currentIndexableUrls();
   const paths = currentIndexableRoutePaths();
-  if (urls.length !== 25) failures.push(`expected 25 indexable URLs, got ${urls.length}`);
-  if (paths.length !== 25) failures.push(`expected 25 indexable route paths, got ${paths.length}`);
+  if (urls.length !== paths.length) {
+    failures.push(`indexable URL count (${urls.length}) does not match route path count (${paths.length})`);
+  }
+  if (new Set(urls).size !== urls.length) failures.push("IndexNow URL list contains duplicates");
+  if (new Set(paths).size !== paths.length) failures.push("IndexNow route path list contains duplicates");
   const batch = buildIndexNowBatch(parseIndexNowArgs(["--all-indexable", "--dry-run"]));
   if (batch.urls.length !== urls.length) failures.push("--all-indexable batch does not match sitemapUrls()");
+  for (const requiredPath of [
+    "/blog",
+    "/blog/fleur-cbd-ou-resine-cbd-differences",
+    "/blog/indoor-greenhouse-hydroponique-differences",
+  ]) {
+    if (!paths.includes(requiredPath)) failures.push(`missing blog route in IndexNow list: ${requiredPath}`);
+    if (!urls.includes(`https://verdanza.fr${requiredPath}`)) {
+      failures.push(`missing blog URL in IndexNow list: https://verdanza.fr${requiredPath}`);
+    }
+  }
   const privateMarkers = ["/admin", "/compte", "/panier", "/checkout", "/connexion", "/inscription"];
   for (const url of urls) {
     if (!url.startsWith("https://verdanza.fr/")) failures.push(`unexpected non-canonical URL: ${url}`);

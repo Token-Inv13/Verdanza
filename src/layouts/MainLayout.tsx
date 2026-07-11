@@ -12,6 +12,7 @@ const navItems = [
   { label: "Boutique", to: "/boutique" },
   { label: "Fleurs CBD", to: "/fleurs-cbd" },
   { label: "Résines CBD", to: "/resines-cbd" },
+  { label: "Guides", to: "/blog" },
   { label: "Livraison", to: "/livraison-postale" },
   { label: "Qualité", to: "/qualite-conformite" },
 ];
@@ -118,6 +119,7 @@ export function MainLayout() {
             <strong className="text-forest">Informations</strong>
             <NavLink to="/livraison-postale">Livraison en France</NavLink>
             <NavLink to="/livraison-express-aix">Express local Aix</NavLink>
+            <NavLink to="/blog">Guides CBD</NavLink>
             <NavLink to="/faq">FAQ</NavLink>
             <NavLink to="/contact">Contact</NavLink>
             {contactEmail && <a href={`mailto:${contactEmail}`}>{contactEmail}</a>}

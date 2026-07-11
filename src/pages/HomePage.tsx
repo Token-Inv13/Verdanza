@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Leaf, PackageCheck, ShieldCheck, Truck } from "lucide-react";
+import { BlogCard } from "../components/BlogCard";
 import { ProductCard } from "../components/ProductCard";
 import { JsonLd } from "../components/JsonLd";
 import { Seo } from "../components/Seo";
+import { publishedBlogArticles } from "../data/blogArticles";
 import { useProducts } from "../hooks/useProducts";
 import { staticImageVariants } from "../lib/generatedImageVariants";
 import { buildHomeJsonLd } from "../lib/structuredData";
@@ -97,6 +99,18 @@ export function HomePage() {
           <div className="product-grid">
             {featuredProducts.slice(0, 4).map((product) => (
               <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        </section>
+
+        <section className="container-page pb-16 pt-2">
+          <div className="section-heading">
+            <h2>Guides CBD</h2>
+            <Link to="/blog">Tous les guides</Link>
+          </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            {publishedBlogArticles.slice(0, 2).map((article) => (
+              <BlogCard key={article.slug} article={article} />
             ))}
           </div>
         </section>

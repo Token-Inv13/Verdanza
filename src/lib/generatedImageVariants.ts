@@ -211,5 +211,47 @@ export const staticImageVariants: Record<string, ResponsiveImageVariant> = {
     sizes: "180px",
     width: 320,
     height: 180,
+  },
+  "/images/blog/fleur-cbd-ou-resine-cbd-1x1.webp": {
+    src: "/images/blog/fleur-cbd-ou-resine-cbd-1x1.webp",
+    srcSet: "/images/blog/fleur-cbd-ou-resine-cbd-1x1.webp 900w",
+    sizes: "(min-width: 1024px) 420px, 92vw",
+    width: 900,
+    height: 900,
+  },
+  "/images/blog/fleur-cbd-ou-resine-cbd-4x3.webp": {
+    src: "/images/blog/fleur-cbd-ou-resine-cbd-4x3.webp",
+    srcSet: "/images/blog/fleur-cbd-ou-resine-cbd-4x3.webp 1200w",
+    sizes: "(min-width: 1024px) 520px, 92vw",
+    width: 1200,
+    height: 900,
+  },
+  "/images/blog/fleur-cbd-ou-resine-cbd-16x9.webp": {
+    src: "/images/blog/fleur-cbd-ou-resine-cbd-16x9.webp",
+    srcSet: "/images/blog/fleur-cbd-ou-resine-cbd-16x9.webp 1600w",
+    sizes: "100vw",
+    width: 1600,
+    height: 900,
+  },
+  "/images/blog/indoor-greenhouse-hydroponique-1x1.webp": {
+    src: "/images/blog/indoor-greenhouse-hydroponique-1x1.webp",
+    srcSet: "/images/blog/indoor-greenhouse-hydroponique-1x1.webp 900w",
+    sizes: "(min-width: 1024px) 420px, 92vw",
+    width: 900,
+    height: 900,
+  },
+  "/images/blog/indoor-greenhouse-hydroponique-4x3.webp": {
+    src: "/images/blog/indoor-greenhouse-hydroponique-4x3.webp",
+    srcSet: "/images/blog/indoor-greenhouse-hydroponique-4x3.webp 1200w",
+    sizes: "(min-width: 1024px) 520px, 92vw",
+    width: 1200,
+    height: 900,
+  },
+  "/images/blog/indoor-greenhouse-hydroponique-16x9.webp": {
+    src: "/images/blog/indoor-greenhouse-hydroponique-16x9.webp",
+    srcSet: "/images/blog/indoor-greenhouse-hydroponique-16x9.webp 1600w",
+    sizes: "100vw",
+    width: 1600,
+    height: 900,
   }
 };
