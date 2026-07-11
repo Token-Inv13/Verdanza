@@ -13,6 +13,7 @@
     "audit:runtime": "node --import tsx scripts/auditRuntime.ts",
     "audit:structured-data": "node --import tsx scripts/auditStructuredData.ts",
     "audit:indexnow": "node --import tsx scripts/auditIndexNow.ts",
+    "audit:seo-landing-pages": "node --import tsx scripts/auditSeoLandingPages.ts",
     "indexnow": "node --import tsx scripts/submitIndexNow.ts",
     "indexnow:verify": "node --import tsx scripts/verifyIndexNow.ts",
     "test:indexnow": "node --import tsx scripts/testIndexNow.ts",
