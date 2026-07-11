@@ -25,6 +25,7 @@ Optimiser le chargement initial sans modifier le SEO éditorial, les URL, les do
 - Dimensions explicites sur les images produit et sur l'image hero.
 - Image hero prioritaire sur la page d'accueil avec `fetchPriority="high"` et sans lazy-loading.
 - Images des premières cartes produit chargées en priorité limitée, puis lazy-loading pour le reste.
+- Headers Vercel : cache immutable pour `/assets/*`, cache court avec stale-while-revalidate pour les images publiques non hashées.
 - Ajout de `npm run analyze:bundle` et `npm run audit:performance`.
 
 ## Bundle
@@ -80,7 +81,7 @@ Médianes sur 3 passages avec confirmation d'âge déjà présente.
 
 - Pas de passage à `hydrateRoot` : le pré-rendu et la synchronisation Firestore rendent le risque de mismatch trop élevé pour cette phase.
 - Pas de suppression ou contournement de l'age gate.
-- Pas de conversion massive des images produit : sujet séparé, avec risque visuel et besoin de validation produit.
+- Pas de conversion massive des images produit : sujet séparé, avec risque visuel et besoin de validation produit. Les images non hashées gardent donc un cache court plutôt qu'un cache annuel.
 - Pas de PWA, pas de blog, pas de modification éditoriale.
 - Pas d'IndexNow : les modifications sont techniques et ne changent pas les contenus indexables.
 
@@ -97,4 +98,3 @@ Médianes sur 3 passages avec confirmation d'âge déjà présente.
 - `npm run analyze:bundle`
 - `npm run audit:performance`
 - `npm run audit:runtime -- http://127.0.0.1:4173`
-
