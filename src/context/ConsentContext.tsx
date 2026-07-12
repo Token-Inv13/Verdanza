@@ -35,7 +35,12 @@ type ConsentContextValue = {
 const ConsentContext = createContext<ConsentContextValue | null>(null);
 
 export function ConsentProvider({ children }: { children: React.ReactNode }) {
-  const [consent, setConsent] = useState<ConsentState | null>(() => readStoredConsent());
+  const [consent, setConsent] = useState<ConsentState | null>(() => {
+    const stored = readStoredConsent();
+    setAnalyticsConsentAllowed(Boolean(stored?.analytics));
+    if (stored?.analytics) initializeGoogleConsentMode();
+    return stored;
+  });
   const [preferencesOpen, setPreferencesOpen] = useState(false);
 
   useEffect(() => {

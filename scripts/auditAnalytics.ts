@@ -10,6 +10,11 @@ const packageJson = JSON.parse(readFileSync(resolve("package.json"), "utf8")) as
 };
 const failures: string[] = [];
 
+type GoogleRequestLog = {
+  gtm: string[];
+  ga4: string[];
+};
+
 auditStaticFiles();
 
 if (existsSync(resolve(distDir, "index.html"))) {
@@ -52,6 +57,12 @@ function auditStaticFiles() {
   }
   if (!consentSource.includes("removeAnalyticsCookies")) {
     failures.push("consent withdrawal does not remove analytics cookies");
+  }
+  if (!analyticsSource.includes('window.gtag?.("event", event, payload)')) {
+    failures.push("trackEvent does not send consented events through gtag");
+  }
+  if (/dataLayer\.push\(\s*\{\s*event/.test(analyticsSource)) {
+    failures.push("trackEvent still pushes analytics event objects into dataLayer");
   }
   if (!analyticsSource.includes("order_submitted")) failures.push("order_submitted is missing");
   if (/trackEvent\(\s*["']purchase["']/.test(checkoutSuccessSource + checkoutSource)) {
@@ -107,20 +118,8 @@ async function auditRuntimeConsent() {
 
   try {
     const context = await browser.newContext();
-    const googleRequests: string[] = [];
-    await context.route("**/*", async (route) => {
-      const url = route.request().url();
-      if (url.includes("googletagmanager.com") || url.includes("google-analytics.com")) {
-        googleRequests.push(url);
-        await route.fulfill({
-          status: 200,
-          contentType: "application/javascript",
-          body: "window.__verdanzaMockGtmLoaded = (window.__verdanzaMockGtmLoaded || 0) + 1;",
-        });
-        return;
-      }
-      await route.continue();
-    });
+    const googleRequests: GoogleRequestLog = { gtm: [], ga4: [] };
+    await installGoogleRequestMock(context, googleRequests);
 
     await assertFreshSession(context, baseUrl, googleRequests);
     await assertRejectFlow(context, baseUrl, googleRequests);
@@ -133,26 +132,26 @@ async function auditRuntimeConsent() {
   }
 }
 
-async function assertFreshSession(context: BrowserContext, baseUrl: string, googleRequests: string[]) {
-  googleRequests.length = 0;
+async function assertFreshSession(context: BrowserContext, baseUrl: string, googleRequests: GoogleRequestLog) {
+  resetGoogleRequests(googleRequests);
   const page = await context.newPage();
   await page.goto(baseUrl, { waitUntil: "load" });
   if (!(await page.getByRole("heading", { name: "Accès réservé aux majeurs" }).count())) {
     failures.push("AgeGate is not visible on a fresh session");
   }
-  if (googleRequests.length) failures.push("Google request fired before age/consent choice");
+  if (googleRequests.gtm.length || googleRequests.ga4.length) failures.push("Google request fired before age/consent choice");
   if ((await analyticsCookieCount(context)) !== 0) failures.push("_ga cookie exists before consent");
   await page.getByRole("button", { name: "J'ai 18 ans ou plus" }).click();
-  if (!(await page.getByText("Cookies et mesure d'audience").count())) {
+  if (!(await page.getByText("Cookies et mesure d'audience").waitFor({ timeout: 2000 }).then(() => true).catch(() => false))) {
     failures.push("cookie banner is not visible after age confirmation");
   }
   await assertPageScrollable(page, "after age confirmation before cookie choice");
-  if (googleRequests.length) failures.push("Google request fired before consent decision");
+  if (googleRequests.gtm.length || googleRequests.ga4.length) failures.push("Google request fired before consent decision");
   await page.close();
 }
 
-async function assertRejectFlow(context: BrowserContext, baseUrl: string, googleRequests: string[]) {
-  googleRequests.length = 0;
+async function assertRejectFlow(context: BrowserContext, baseUrl: string, googleRequests: GoogleRequestLog) {
+  resetGoogleRequests(googleRequests);
   await context.clearCookies();
   const page = await context.newPage();
   await page.goto(baseUrl, { waitUntil: "load" });
@@ -163,7 +162,7 @@ async function assertRejectFlow(context: BrowserContext, baseUrl: string, google
   await assertPageScrollable(page, "after reject all");
   await page.getByRole("link", { name: "Boutique", exact: true }).click();
   await page.waitForURL("**/boutique");
-  if (googleRequests.length) failures.push("Google request fired after reject all");
+  if (googleRequests.gtm.length || googleRequests.ga4.length) failures.push("Google request fired after reject all");
   if ((await analyticsCookieCount(context)) !== 0) failures.push("_ga cookie exists after reject all");
   await page.goto(`${baseUrl}/produits/golden-static`, { waitUntil: "load" });
   await page.getByRole("button", { name: "Ajouter 1 g au panier" }).click();
@@ -172,8 +171,8 @@ async function assertRejectFlow(context: BrowserContext, baseUrl: string, google
   await page.close();
 }
 
-async function assertAcceptAndWithdrawFlow(context: BrowserContext, baseUrl: string, googleRequests: string[]) {
-  googleRequests.length = 0;
+async function assertAcceptAndWithdrawFlow(context: BrowserContext, baseUrl: string, googleRequests: GoogleRequestLog) {
+  resetGoogleRequests(googleRequests);
   await context.clearCookies();
   const page = await context.newPage();
   await page.goto(baseUrl, { waitUntil: "load" });
@@ -186,14 +185,44 @@ async function assertAcceptAndWithdrawFlow(context: BrowserContext, baseUrl: str
   await assertPageScrollable(page, "after accept all");
   const gtmScriptCount = await page.locator('script[data-verdanza-gtm="GTM-W76PFW2X"]').count();
   if (gtmScriptCount !== 1) failures.push(`expected one GTM script after accept, got ${gtmScriptCount}`);
-  if (googleRequests.filter((url) => url.includes("googletagmanager.com/gtm.js")).length !== 1) {
+  if (googleRequests.gtm.length !== 1) {
     failures.push("expected exactly one GTM request after accept");
   }
-  await page.goto(`${baseUrl}/produits/golden-static`, { waitUntil: "load" });
-  const dataLayerLength = await page.evaluate(() => window.dataLayer?.length || 0);
+  await waitForGa4Event(googleRequests, "page_view");
+  await page.waitForTimeout(100);
+  if (ga4EventCount(googleRequests, "page_view") !== 1) {
+    failures.push(`expected one initial page_view after accept, got ${ga4EventCount(googleRequests, "page_view")}`);
+  }
+
+  await page.getByRole("link", { name: "Fleurs CBD", exact: true }).click();
+  await page.waitForURL("**/fleurs-cbd");
+  await waitForGa4EventCount(googleRequests, "page_view", 2);
+  await waitForGa4Event(googleRequests, "view_item_list");
+  await assertNoObjectDataLayerEvent(page, "view_item_list");
+
+  await page.getByRole("link", { name: "Cookie Kush Indoor", exact: true }).first().click();
+  await page.waitForURL("**/produits/cookie-kush-indoor");
+  await waitForGa4Event(googleRequests, "view_item");
+  await assertNoObjectDataLayerEvent(page, "view_item");
   await page.getByRole("button", { name: "Ajouter 1 g au panier" }).click();
-  const dataLayerAfterEvent = await page.evaluate(() => window.dataLayer?.length || 0);
-  if (dataLayerAfterEvent <= dataLayerLength) failures.push("analytics event was not pushed after accept");
+  await waitForGa4Event(googleRequests, "add_to_cart");
+  await assertNoObjectDataLayerEvent(page, "add_to_cart");
+
+  await page.getByRole("link", { name: "Panier" }).click();
+  await page.waitForURL("**/panier");
+  await waitForGa4Event(googleRequests, "view_cart");
+  await assertNoObjectDataLayerEvent(page, "view_cart");
+
+  await page.goto(`${baseUrl}/checkout`, { waitUntil: "load" });
+  await waitForGa4Event(googleRequests, "begin_checkout");
+  await assertNoObjectDataLayerEvent(page, "begin_checkout");
+
+  await page.getByRole("link", { name: "Guides", exact: true }).click();
+  await page.waitForURL("**/blog");
+  await page.getByRole("link", { name: /Fleur CBD ou rÃ©sine CBD|Fleur CBD ou résine CBD/ }).first().click();
+  await page.waitForURL("**/blog/fleur-cbd-ou-resine-cbd-differences");
+  await waitForGa4Event(googleRequests, "blog_article_view");
+  await assertNoObjectDataLayerEvent(page, "blog_article_view");
 
   await page.getByRole("button", { name: "Gérer mes cookies" }).click();
   await assertPageLocked(page, "preferences dialog open");
@@ -211,12 +240,12 @@ async function assertAcceptAndWithdrawFlow(context: BrowserContext, baseUrl: str
   await page.waitForTimeout(100);
   await assertPageScrollable(page, "preferences dialog closed after withdrawal");
   if ((await analyticsCookieCount(context)) !== 0) failures.push("_ga cookies were not removed after withdrawal");
-  const dataLayerBeforeBlockedEvent = await page.evaluate(() => window.dataLayer?.length || 0);
+  const ga4RequestsBeforeBlockedEvent = googleRequests.ga4.length;
   await page.goto(`${baseUrl}/produits/golden-static`, { waitUntil: "load" });
   await page.getByRole("button", { name: "Ajouter 1 g au panier" }).click();
-  const dataLayerAfterBlockedEvent = await page.evaluate(() => window.dataLayer?.length || 0);
-  if (dataLayerAfterBlockedEvent > dataLayerBeforeBlockedEvent + 1) {
-    failures.push("new ecommerce events were not blocked after withdrawal");
+  await page.waitForTimeout(200);
+  if (googleRequests.ga4.length !== ga4RequestsBeforeBlockedEvent) {
+    failures.push("new GA4 events were not blocked after withdrawal");
   }
   await page.close();
 }
@@ -234,24 +263,147 @@ async function assertKnownVisitorFlow(browser: Browser, baseUrl: string) {
       }),
     );
   });
-  await context.route("**/*", async (route) => {
-    const url = route.request().url();
-    if (url.includes("googletagmanager.com") || url.includes("google-analytics.com")) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/javascript",
-        body: "window.__verdanzaMockGtmLoaded = (window.__verdanzaMockGtmLoaded || 0) + 1;",
-      });
-      return;
-    }
-    await route.continue();
-  });
+  await installGoogleRequestMock(context, { gtm: [], ga4: [] });
 
   const page = await context.newPage();
   await page.goto(`${baseUrl}/fleurs-cbd`, { waitUntil: "load" });
   await assertPageScrollable(page, "known visitor initial load");
   await page.close();
   await context.close();
+}
+
+async function installGoogleRequestMock(context: BrowserContext, requests: GoogleRequestLog) {
+  await context.route("**/*", async (route) => {
+    const url = route.request().url();
+    if (url.includes("googletagmanager.com/gtm.js")) {
+      requests.gtm.push(url);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/javascript",
+        body: mockGoogleTagManagerScript(),
+      });
+      return;
+    }
+    if (isGoogleAnalyticsCollectUrl(url)) {
+      requests.ga4.push(url);
+      await route.fulfill({
+        status: 204,
+        contentType: "text/plain",
+        body: "",
+      });
+      return;
+    }
+    if (url.includes("googletagmanager.com") || url.includes("google-analytics.com")) {
+      await route.fulfill({
+        status: 204,
+        contentType: "text/plain",
+        body: "",
+      });
+      return;
+    }
+    await route.continue();
+  });
+}
+
+function mockGoogleTagManagerScript() {
+  return `
+    window.__verdanzaMockGtmLoaded = (window.__verdanzaMockGtmLoaded || 0) + 1;
+    (function () {
+      function sendGa4Event(name, params) {
+        var query = new URLSearchParams();
+        query.set("v", "2");
+        query.set("tid", "G-E9XNP7BJ2Y");
+        query.set("en", name);
+        query.set("_p", String(Date.now()));
+        var payload = params || {};
+        Object.keys(payload).forEach(function (key) {
+          var value = payload[key];
+          if (value === undefined || value === null || typeof value === "object") return;
+          query.set("ep." + key, String(value));
+        });
+        new Image().src = "https://www.google-analytics.com/g/collect?" + query.toString();
+      }
+      window.gtag = function () {
+        var args = Array.prototype.slice.call(arguments);
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push(args);
+        if (args[0] === "event") {
+          sendGa4Event(args[1], args[2]);
+        }
+      };
+      (window.dataLayer || []).forEach(function (entry) {
+        if (Array.isArray(entry) && entry[0] === "event") {
+          sendGa4Event(entry[1], entry[2]);
+        }
+      });
+      sendGa4Event("page_view", { page_location: window.location.href, page_title: document.title });
+    })();
+  `;
+}
+
+function resetGoogleRequests(requests: GoogleRequestLog) {
+  requests.gtm.length = 0;
+  requests.ga4.length = 0;
+}
+
+async function waitForGa4Event(requests: GoogleRequestLog, eventName: string) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 4000) {
+    if (requests.ga4.some((url) => ga4EventNameFromUrl(url) === eventName)) return;
+    await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+  }
+  failures.push(`GA4 collect request missing for ${eventName}`);
+}
+
+async function waitForGa4EventCount(requests: GoogleRequestLog, eventName: string, expectedCount: number) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 4000) {
+    if (ga4EventCount(requests, eventName) >= expectedCount) return;
+    await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+  }
+  failures.push(
+    `GA4 collect request count for ${eventName} below ${expectedCount}: ${ga4EventCount(requests, eventName)}`,
+  );
+}
+
+function ga4EventCount(requests: GoogleRequestLog, eventName: string) {
+  return requests.ga4.filter((url) => ga4EventNameFromUrl(url) === eventName).length;
+}
+
+function isGoogleAnalyticsCollectUrl(url: string) {
+  return (
+    url.includes("google-analytics.com/g/collect") ||
+    url.includes("analytics.google.com/g/collect") ||
+    url.includes("google-analytics.com/collect") ||
+    url.includes("analytics.google.com/collect")
+  );
+}
+
+function ga4EventNameFromUrl(url: string) {
+  try {
+    return new URL(url).searchParams.get("en") || "";
+  } catch {
+    return "";
+  }
+}
+
+async function assertNoObjectDataLayerEvent(page: Page, eventName: string) {
+  const objectEventCount = await page.evaluate((name) => {
+    return Array.isArray(window.dataLayer)
+      ? window.dataLayer.filter((entry) => {
+          return (
+            entry &&
+            !Array.isArray(entry) &&
+            typeof entry === "object" &&
+            "event" in entry &&
+            entry.event === name
+          );
+        }).length
+      : 0;
+  }, eventName);
+  if (objectEventCount > 0) {
+    failures.push(`${eventName} was also pushed as a dataLayer event object`);
+  }
 }
 
 async function assertPageScrollable(page: Page, label: string) {

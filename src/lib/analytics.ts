@@ -69,8 +69,7 @@ export function hasAnalyticsConsent() {
 export function trackEvent(event: AnalyticsEventName, payload: AnalyticsPayload = {}) {
   if (typeof window === "undefined" || !analyticsAllowed) return;
   if (containsBlockedKey(payload)) return;
-  window.dataLayer = window.dataLayer || [];
-  window.dataLayer.push({ event, ...payload });
+  window.gtag?.("event", event, payload);
 }
 
 export function trackPageView(path: string, title: string) {
