@@ -65,6 +65,15 @@ function auditStaticFiles() {
     failures.push("trackEvent still pushes analytics event objects into dataLayer");
   }
   if (!analyticsSource.includes("order_submitted")) failures.push("order_submitted is missing");
+  if (!analyticsSource.includes("payment_method_selected")) {
+    failures.push("payment_method_selected is missing");
+  }
+  if (!checkoutSource.includes("trackPaymentMethodSelected")) {
+    failures.push("CheckoutPage does not track payment_method_selected");
+  }
+  if (checkoutSource.includes("trackAddPaymentInfo")) {
+    failures.push("CheckoutPage still tracks add_payment_info for payment preference selection");
+  }
   if (/trackEvent\(\s*["']purchase["']/.test(checkoutSuccessSource + checkoutSource)) {
     failures.push("client purchase event is still tracked in checkout pages");
   }
@@ -217,7 +226,9 @@ async function assertAcceptAndWithdrawFlow(context: BrowserContext, baseUrl: str
 
   await page.goto(`${baseUrl}/checkout`, { waitUntil: "load" });
   await waitForGa4Event(googleRequests, "begin_checkout");
+  await waitForGa4Event(googleRequests, "payment_method_selected");
   await assertNoObjectDataLayerEvent(page, "begin_checkout");
+  await assertNoObjectDataLayerEvent(page, "payment_method_selected");
 
   await page.getByRole("link", { name: "Guides", exact: true }).click();
   await page.waitForURL("**/blog");

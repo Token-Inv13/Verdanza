@@ -60,6 +60,17 @@ export default async function handler(
       "emails.paymentLinkProviderId": result.id ?? null,
       updatedAt: FieldValue.serverTimestamp(),
     });
+    await db.collection("analyticsOperationalEvents").doc().set({
+      event: "payment_link_sent",
+      orderId: order.id,
+      transaction_id: order.id,
+      payment_method: "card_payment_link",
+      delivery_method: order.deliveryMethod,
+      value: Number(order.total || 0),
+      currency: "EUR",
+      createdAt: FieldValue.serverTimestamp(),
+      createdBy: admin.uid,
+    });
 
     sendJson(response, { ok: true });
   } catch (error) {

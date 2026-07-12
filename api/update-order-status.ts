@@ -16,6 +16,7 @@ import {
 import type {
   Order,
   OrderStatus,
+  FinalPaymentMethod,
   PaymentLinkChannel,
   PaymentStatus,
 } from "../src/types/index.js";
@@ -38,6 +39,12 @@ const paymentStatuses: PaymentStatus[] = [
   "cancelled",
 ];
 const paymentLinkChannels: PaymentLinkChannel[] = ["email", "whatsapp", "sms", "other"];
+const finalPaymentMethods: FinalPaymentMethod[] = [
+  "card_payment_link",
+  "cash_on_delivery",
+  "bank_transfer",
+  "other",
+];
 
 export default async function handler(
   request: VercelRequestLike,
@@ -69,6 +76,8 @@ export default async function handler(
       const order = { id: snapshot.id, ...snapshot.data() } as Order;
       previousStatus = order.orderStatus;
       const nextStatus = body.orderStatus ?? order.orderStatus;
+      const nextFinalPaymentMethod =
+        body.finalPaymentMethod || order.finalPaymentMethod || undefined;
       const update: Record<string, unknown> = {
         updatedAt: FieldValue.serverTimestamp(),
       };
@@ -77,10 +86,24 @@ export default async function handler(
         update.internalNote = body.internalNote;
       }
       if (body.paymentStatus) {
+        if (body.paymentStatus === "paid" && !nextFinalPaymentMethod) {
+          throw new Error("Methode de paiement finale requise avant paiement confirme.");
+        }
         update.paymentStatus = body.paymentStatus;
         if (body.paymentStatus === "paid" && order.paymentStatus !== "paid") {
           update.paidAt = new Date().toISOString();
+          update.paymentConfirmedAt = update.paidAt;
+          update.paymentConfirmedBy = admin.email;
         }
+      }
+      if (body.finalPaymentMethod !== undefined) {
+        if (
+          body.finalPaymentMethod === "cash_on_delivery" &&
+          order.deliveryMethod !== "local_express"
+        ) {
+          throw new Error("Paiement en especes reserve a la livraison locale.");
+        }
+        update.finalPaymentMethod = body.finalPaymentMethod || FieldValue.delete();
       }
       if (body.paymentReference !== undefined) {
         update.paymentReference = body.paymentReference;
@@ -107,6 +130,19 @@ export default async function handler(
           : FieldValue.delete();
         update.paymentLinkSentBy = body.paymentLinkSent ? admin.email : FieldValue.delete();
         if (body.paymentLinkSent && !body.paymentStatus) update.paymentStatus = "payment_link_sent";
+        if (body.paymentLinkSent) {
+          transaction.set(db.collection("analyticsOperationalEvents").doc(), {
+            event: "payment_link_sent",
+            orderId: order.id,
+            transaction_id: order.id,
+            payment_method: "card_payment_link",
+            delivery_method: order.deliveryMethod,
+            value: Number(order.total || 0),
+            currency: "EUR",
+            createdAt: FieldValue.serverTimestamp(),
+            createdBy: admin.uid,
+          });
+        }
       }
       if (body.trackingNumber !== undefined) {
         update.trackingNumber = body.trackingNumber;
@@ -249,6 +285,7 @@ function parseBody(value: unknown): {
   orderId: string;
   orderStatus?: OrderStatus;
   paymentStatus?: PaymentStatus;
+  finalPaymentMethod?: FinalPaymentMethod | "";
   internalNote?: string;
   paymentReference?: string;
   paymentLinkUrl?: string;
@@ -270,6 +307,7 @@ function parseBody(value: unknown): {
     orderId?: string;
     orderStatus?: OrderStatus;
     paymentStatus?: PaymentStatus;
+    finalPaymentMethod?: FinalPaymentMethod | "";
     internalNote?: string;
     paymentReference?: string;
     paymentLinkUrl?: string;
@@ -293,6 +331,12 @@ function parseBody(value: unknown): {
     throw new Error("Statut reglement invalide.");
   }
   if (
+    payload.finalPaymentMethod &&
+    !finalPaymentMethods.includes(payload.finalPaymentMethod)
+  ) {
+    throw new Error("Methode de paiement finale invalide.");
+  }
+  if (
     payload.paymentLinkChannel &&
     !paymentLinkChannels.includes(payload.paymentLinkChannel)
   ) {
@@ -308,6 +352,7 @@ function parseJsonObject(value: unknown): {
   orderId?: string;
   orderStatus?: OrderStatus;
   paymentStatus?: PaymentStatus;
+  finalPaymentMethod?: FinalPaymentMethod | "";
   internalNote?: string;
   paymentReference?: string;
   paymentLinkUrl?: string;
@@ -329,6 +374,7 @@ function parseJsonObject(value: unknown): {
     orderId?: string;
     orderStatus?: OrderStatus;
     paymentStatus?: PaymentStatus;
+    finalPaymentMethod?: FinalPaymentMethod | "";
     internalNote?: string;
     paymentReference?: string;
     paymentLinkUrl?: string;

@@ -50,6 +50,7 @@ import type {
   CustomerProfile,
   DeliveryZone,
   DeliveryZoneStatus,
+  FinalPaymentMethod,
   Invoice,
   InvoiceLine,
   InvoiceStatus,
@@ -117,6 +118,13 @@ const paymentStatusOptions: PaymentStatus[] = [
   "pending",
   "paid",
   "cancelled",
+];
+
+const finalPaymentMethodOptions: FinalPaymentMethod[] = [
+  "card_payment_link",
+  "cash_on_delivery",
+  "bank_transfer",
+  "other",
 ];
 
 export function AdminPage({ section }: { section: string }) {
@@ -1580,6 +1588,9 @@ type AdminOrderListItem = {
   paymentProvider?: PaymentProvider;
   paymentStatus: string;
   preferredPaymentMethod?: PreferredPaymentMethod;
+  finalPaymentMethod?: FinalPaymentMethod;
+  paymentConfirmedAt?: string;
+  paymentConfirmedBy?: string;
   orderStatus: string;
   deliveryMethod?: string;
   delivery: string;
@@ -1624,6 +1635,7 @@ type AdminOrderListItem = {
 type AdminOrderUpdateInput = {
   orderStatus?: OrderStatus;
   paymentStatus?: PaymentStatus;
+  finalPaymentMethod?: FinalPaymentMethod | "";
   internalNote?: string;
   historyNote?: string;
   paymentReference?: string;
@@ -1742,6 +1754,16 @@ function AdminOrders({
         error instanceof Error ? error.message : "Relance purchase GA4 impossible.",
       );
     }
+  }
+
+  function handlePaymentStatusChange(order: AdminOrderListItem, paymentStatus: PaymentStatus) {
+    if (paymentStatus !== "paid") {
+      void onUpdate(order.id, { paymentStatus });
+      return;
+    }
+    const finalPaymentMethod = confirmedFinalPaymentMethodForPaid(order);
+    if (!finalPaymentMethod) return;
+    void onUpdate(order.id, { paymentStatus, finalPaymentMethod });
   }
 
   return (
@@ -1865,9 +1887,7 @@ function AdminOrders({
                     value={order.paymentStatus}
                     disabled={orderSource !== "firestore"}
                     onChange={(event) =>
-                      void onUpdate(order.id, {
-                        paymentStatus: event.target.value as PaymentStatus,
-                      })
+                      handlePaymentStatusChange(order, event.target.value as PaymentStatus)
                     }
                   >
                     {paymentStatusOptions.map((status) => (
@@ -1878,6 +1898,11 @@ function AdminOrders({
                   </select>
                 </label>
               </div>
+              <PaymentMethodAdminFields
+                order={order}
+                orderSource={orderSource}
+                onUpdate={onUpdate}
+              />
               <div className="mt-4 rounded-md bg-cream p-3 text-xs leading-5 text-ink/65">
                 <strong className="block text-forest">{order.delivery}</strong>
                 {order.items.length
@@ -2048,9 +2073,7 @@ function AdminOrders({
                     value={order.paymentStatus}
                     disabled={orderSource !== "firestore"}
                     onChange={(event) =>
-                      void onUpdate(order.id, {
-                        paymentStatus: event.target.value as PaymentStatus,
-                      })
+                      handlePaymentStatusChange(order, event.target.value as PaymentStatus)
                     }
                   >
                     {paymentStatusOptions.map((status) => (
@@ -2059,6 +2082,11 @@ function AdminOrders({
                       </option>
                     ))}
                   </select>
+                  <PaymentMethodAdminFields
+                    order={order}
+                    orderSource={orderSource}
+                    onUpdate={onUpdate}
+                  />
                   <PaymentLinkActions
                     order={order}
                     orderSource={orderSource}
@@ -2407,11 +2435,16 @@ function DesktopOrderCard({
                 className="input-field mt-2"
                 value={order.paymentStatus}
                 disabled={orderSource !== "firestore"}
-                onChange={(event) =>
-                  void onUpdate(order.id, {
-                    paymentStatus: event.target.value as PaymentStatus,
-                  })
-                }
+                onChange={(event) => {
+                  const paymentStatus = event.target.value as PaymentStatus;
+                  if (paymentStatus !== "paid") {
+                    void onUpdate(order.id, { paymentStatus });
+                    return;
+                  }
+                  const finalPaymentMethod = confirmedFinalPaymentMethodForPaid(order);
+                  if (!finalPaymentMethod) return;
+                  void onUpdate(order.id, { paymentStatus, finalPaymentMethod });
+                }}
               >
                 {paymentStatusOptions.map((status) => (
                   <option key={status} value={status}>
@@ -2421,6 +2454,11 @@ function DesktopOrderCard({
               </select>
             </label>
           </div>
+          <PaymentMethodAdminFields
+            order={order}
+            orderSource={orderSource}
+            onUpdate={onUpdate}
+          />
 
           <div className="rounded-md border border-forest/10 p-3 text-sm leading-6 text-ink/70">
             <strong className="block text-forest">{order.delivery}</strong>
@@ -2641,6 +2679,51 @@ function canRetryPurchaseAnalytics(order: AdminOrderListItem) {
     !order.analytics.consentRevokedAt &&
     Boolean(order.analytics.clientId) &&
     ["pending", "failed"].includes(order.analytics.purchaseStatus)
+  );
+}
+
+function PaymentMethodAdminFields({
+  order,
+  orderSource,
+  onUpdate,
+}: {
+  order: AdminOrderListItem;
+  orderSource: "firestore" | "empty";
+  onUpdate: (orderId: string, data: AdminOrderUpdateInput) => Promise<void>;
+}) {
+  return (
+    <div className="mt-3 rounded-md border border-forest/10 bg-ivory p-3 text-xs leading-5 text-ink/65">
+      <span className="block text-ink/55">Paiement souhaité par le client</span>
+      <strong className="block text-forest">
+        {preferredPaymentMethodLabel(order.preferredPaymentMethod)}
+      </strong>
+      <label className="mt-3 block font-semibold uppercase tracking-[0.12em] text-forest/60">
+        Paiement final confirmé
+        <select
+          className="input-field mt-2"
+          value={order.finalPaymentMethod || ""}
+          disabled={orderSource !== "firestore" || order.paymentStatus === "paid"}
+          onChange={(event) =>
+            void onUpdate(order.id, {
+              finalPaymentMethod: event.target.value as FinalPaymentMethod | "",
+            })
+          }
+        >
+          <option value="">À choisir avant paiement</option>
+          {allowedFinalPaymentMethods(order).map((method) => (
+            <option key={method} value={method}>
+              {finalPaymentMethodLabel(method)}
+            </option>
+          ))}
+        </select>
+      </label>
+      {order.paymentConfirmedAt && (
+        <span className="mt-2 block text-ink/55">
+          Confirmé le {order.paymentConfirmedAt}
+          {order.paymentConfirmedBy ? ` par ${order.paymentConfirmedBy}` : ""}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -3482,9 +3565,42 @@ function preferredPaymentMethodLabel(method?: PreferredPaymentMethod) {
   if (method === "card_payment_link") {
     return "Carte bancaire via lien de paiement après confirmation";
   }
+  if (method === "cash_on_delivery") return "Espèces à la livraison locale";
   if (method === "bank_transfer") return "Virement bancaire";
   if (method === "local_delivery_payment") return "Paiement à la livraison locale";
   return "À confirmer avec Verdanza";
+}
+
+function finalPaymentMethodLabel(method?: FinalPaymentMethod | "") {
+  if (method === "card_payment_link") return "Carte bancaire via lien";
+  if (method === "cash_on_delivery") return "Espèces à la livraison locale";
+  if (method === "bank_transfer") return "Virement bancaire";
+  if (method === "other") return "Autre moyen confirmé";
+  return "À choisir avant paiement";
+}
+
+function allowedFinalPaymentMethods(order: { deliveryMethod?: string }) {
+  return finalPaymentMethodOptions.filter(
+    (method) => method !== "cash_on_delivery" || order.deliveryMethod === "local_express",
+  );
+}
+
+function confirmedFinalPaymentMethodForPaid(order: AdminOrderListItem) {
+  if (order.finalPaymentMethod) return order.finalPaymentMethod;
+  const selected = window.prompt(
+    "Paiement final confirmé ? card_payment_link, cash_on_delivery, bank_transfer ou other",
+    order.deliveryMethod === "local_express" ? "cash_on_delivery" : "card_payment_link",
+  );
+  if (!selected) return null;
+  if (!finalPaymentMethodOptions.includes(selected as FinalPaymentMethod)) {
+    window.alert("Méthode finale invalide.");
+    return null;
+  }
+  if (selected === "cash_on_delivery" && order.deliveryMethod !== "local_express") {
+    window.alert("Les espèces sont réservées à la livraison locale.");
+    return null;
+  }
+  return selected as FinalPaymentMethod;
 }
 
 function Input({

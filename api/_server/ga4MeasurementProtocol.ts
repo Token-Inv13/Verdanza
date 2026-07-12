@@ -26,6 +26,7 @@ export type Ga4PurchasePayload = {
         value: number;
         shipping: number;
         coupon?: string;
+        payment_method: string;
         session_id?: string;
         engagement_time_msec: 1;
         items: Ga4PurchaseItem[];
@@ -75,6 +76,7 @@ export function buildGa4PurchasePayload(order: Order): Ga4PurchasePayload | null
           value: roundMoney(netProductValue(order)),
           shipping: roundMoney(Number(order.deliveryFee || 0)),
           coupon: order.couponCode || order.promoCode || undefined,
+          payment_method: order.finalPaymentMethod,
           session_id: order.analytics.sessionId,
           engagement_time_msec: 1,
           items,
@@ -130,12 +132,14 @@ export async function sendGa4Payload(
 
 export function isPurchaseEligible(order: Order): order is Order & {
   analytics: NonNullable<Order["analytics"]> & { clientId: string };
+  finalPaymentMethod: NonNullable<Order["finalPaymentMethod"]>;
 } {
   return (
     order.paymentStatus === "paid" &&
     order.analytics?.consentGrantedAtSubmission === true &&
     !order.analytics.consentRevokedAt &&
     order.analytics.purchaseStatus !== "sent" &&
+    Boolean(order.finalPaymentMethod) &&
     Boolean(order.analytics.clientId && /^[A-Za-z0-9._-]{1,128}$/.test(order.analytics.clientId))
   );
 }

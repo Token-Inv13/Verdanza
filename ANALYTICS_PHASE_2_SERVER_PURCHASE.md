@@ -2,7 +2,7 @@
 
 ## Objectif
 
-Envoyer l'evenement GA4 `purchase` uniquement cote serveur, apres confirmation administrative d'un vrai paiement, sans achat client-side et sans changement GTM.
+Envoyer l'evenement GA4 `purchase` uniquement cote serveur, apres confirmation administrative d'un vrai paiement, sans achat client-side et sans changement GTM. La preference de paiement exprimee au checkout est separee de la methode finale confirmee par l'administration.
 
 ## Cause confirmee
 
@@ -27,7 +27,7 @@ Si l'utilisateur retire son consentement avant la confirmation du reglement, le 
 
 ## Envoi serveur
 
-Quand `/api/update-order-status` fait passer une commande a `paymentStatus: "paid"`, une entree deterministe est creee dans `analyticsOutbox` avec l'identifiant `purchase_{orderId}`. Apres commit Firestore, le serveur envoie `purchase` via Measurement Protocol GA4 avec :
+Quand `/api/update-order-status` fait passer une commande a `paymentStatus: "paid"`, l'admin doit fournir `finalPaymentMethod`. Une entree deterministe est creee dans `analyticsOutbox` avec l'identifiant `purchase_{orderId}`. Apres commit Firestore, le serveur envoie `purchase` via Measurement Protocol GA4 avec :
 
 - `transaction_id`
 - `currency: "EUR"`
@@ -37,9 +37,34 @@ Quand `/api/update-order-status` fait passer une commande a `paymentStatus: "pai
 - `items`
 - `client_id`
 - `session_id` si disponible
+- `payment_method`, base uniquement sur `finalPaymentMethod`
 - consentement publicitaire refuse
 
 Les donnees personnelles client ne sont pas incluses.
+
+## Preference client et paiement final
+
+Le checkout peut enregistrer `preferredPaymentMethod` avec les valeurs stables suivantes :
+
+- `card_payment_link`
+- `cash_on_delivery`
+- `bank_transfer`
+- `confirm_with_verdanza`
+
+L'ancienne valeur `local_delivery_payment` reste acceptee comme alias et est normalisee vers `cash_on_delivery` pour les nouvelles commandes. Le virement reste desactive tant qu'il n'est pas operationnel. Les especes sont reservees a `deliveryMethod: "local_express"`.
+
+Le champ `finalPaymentMethod` est renseigne par l'administration avant ou au moment de `paymentStatus: "paid"` :
+
+- `card_payment_link`
+- `cash_on_delivery`
+- `bank_transfer`
+- `other`
+
+`preferredPaymentMethod` n'est jamais utilise comme methode finale dans le payload `purchase`.
+
+## Evenement payment_link_sent
+
+Quand un lien de paiement est marque comme envoye par l'administration, Verdanza enregistre un evenement operationnel `payment_link_sent` sans URL de lien, reference sensible, email, telephone ou nom client. Cet evenement n'est pas un `purchase`.
 
 ## Deduplication et reprise
 

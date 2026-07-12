@@ -20,6 +20,7 @@ async function main() {
   assert(payload.events[0].params.transaction_id === order.id, "transaction_id should match order id");
   assert(payload.events[0].params.value === 13, "purchase value should exclude shipping and discount products only");
   assert(payload.events[0].params.shipping === 4, "shipping should be separated");
+  assert(payload.events[0].params.payment_method === "cash_on_delivery", "purchase should use final payment method");
   assert(payload.events[0].params.items.length === 2, "items should be included");
   assert(payload.events[0].params.items[0].discount === 0.67, "line discount should be allocated per unit");
   assert(payload.events[0].params.items[1].discount === 0.67, "discount remainder should stay on last line");
@@ -29,6 +30,10 @@ async function main() {
   assert(!JSON.stringify(payload).includes(order.customerName || ""), "payload should not contain customer name");
 
   assert(!isPurchaseEligible({ ...order, paymentStatus: "to_confirm" }), "unpaid order should not be eligible");
+  assert(
+    !isPurchaseEligible({ ...order, finalPaymentMethod: undefined }),
+    "order without final payment method should not be eligible",
+  );
   assert(
     !isPurchaseEligible({
       ...order,
@@ -148,8 +153,10 @@ function mockPaidOrder(): Order {
     couponCode: "TEST",
     total: 17,
     paymentStatus: "paid",
+    preferredPaymentMethod: "card_payment_link",
+    finalPaymentMethod: "cash_on_delivery",
     orderStatus: "confirmed",
-    deliveryMethod: "postal",
+    deliveryMethod: "local_express",
     deliveryAddress: {
       firstName: "Client",
       lastName: "Test",

@@ -15,6 +15,7 @@ import type {
   OrderType,
   PaymentLinkChannel,
   PaymentProvider,
+  FinalPaymentMethod,
   PreferredPaymentMethod,
   PaymentStatus,
   StatusHistoryEntry,
@@ -30,6 +31,9 @@ export type AdminOrderRow = {
   paymentProvider?: PaymentProvider;
   paymentStatus: PaymentStatus;
   preferredPaymentMethod?: PreferredPaymentMethod;
+  finalPaymentMethod?: FinalPaymentMethod;
+  paymentConfirmedAt?: string;
+  paymentConfirmedBy?: string;
   orderStatus: OrderStatus | string;
   deliveryMethod?: Order["deliveryMethod"];
   delivery: string;
@@ -100,6 +104,9 @@ export async function getAdminOrdersWithFallback() {
         paymentProvider: order.paymentProvider,
         paymentStatus: order.paymentStatus,
         preferredPaymentMethod: order.preferredPaymentMethod,
+        finalPaymentMethod: order.finalPaymentMethod,
+        paymentConfirmedAt: order.paymentConfirmedAt,
+        paymentConfirmedBy: order.paymentConfirmedBy,
         orderStatus: order.orderStatus,
         deliveryMethod: order.deliveryMethod,
         delivery: order.deliveryZone || order.deliveryMethod,
@@ -177,6 +184,7 @@ export async function updateOrderAdminFields(
     internalNote?: string;
     historyNote?: string;
     paymentReference?: string;
+    finalPaymentMethod?: FinalPaymentMethod | "";
     paymentLinkUrl?: string;
     paymentLinkLabel?: string;
     paymentLinkAmount?: number;

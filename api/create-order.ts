@@ -237,6 +237,7 @@ function preferredPaymentMethodLabel(method?: Order["preferredPaymentMethod"]) {
   if (method === "card_payment_link") {
     return "Carte bancaire via lien de paiement après confirmation";
   }
+  if (method === "cash_on_delivery") return "Espèces à la livraison locale";
   if (method === "bank_transfer") return "Virement bancaire";
   if (method === "local_delivery_payment") return "Paiement à la livraison locale";
   return "À confirmer avec Verdanza";

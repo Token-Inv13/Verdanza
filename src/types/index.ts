@@ -81,9 +81,15 @@ export type PaymentProvider =
   | "future_psp";
 export type PreferredPaymentMethod =
   | "card_payment_link"
+  | "cash_on_delivery"
   | "bank_transfer"
   | "local_delivery_payment"
   | "confirm_with_verdanza";
+export type FinalPaymentMethod =
+  | "card_payment_link"
+  | "cash_on_delivery"
+  | "bank_transfer"
+  | "other";
 export type PaymentLinkChannel = "email" | "whatsapp" | "sms" | "other";
 export type DeliveryFeeStatus = "free" | "to_confirm" | "configured";
 
@@ -281,6 +287,9 @@ export type Order = {
   paymentReference?: string;
   paymentInstructions?: string;
   preferredPaymentMethod?: PreferredPaymentMethod;
+  finalPaymentMethod?: FinalPaymentMethod;
+  paymentConfirmedAt?: string;
+  paymentConfirmedBy?: string;
   paymentLinkUrl?: string;
   paymentLinkLabel?: string;
   paymentLinkAmount?: number;

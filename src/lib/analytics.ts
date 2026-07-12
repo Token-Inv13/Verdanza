@@ -1,5 +1,5 @@
 import type { BlogArticle } from "../types/blog";
-import type { DeliveryMethod, Product } from "../types";
+import type { DeliveryMethod, PreferredPaymentMethod, Product } from "../types";
 import { ga4MeasurementId } from "./googleTagManager";
 
 type Primitive = string | number | boolean | null | undefined;
@@ -27,6 +27,7 @@ export type AnalyticsEventName =
   | "begin_checkout"
   | "add_shipping_info"
   | "add_payment_info"
+  | "payment_method_selected"
   | "order_submitted"
   | "login"
   | "sign_up"
@@ -226,6 +227,22 @@ export function trackAddPaymentInfo(
   });
 }
 
+export function trackPaymentMethodSelected(
+  lines: { product: Product; quantity: number }[],
+  value: number,
+  preferredPaymentMethod: PreferredPaymentMethod,
+  deliveryMethod: DeliveryMethod,
+) {
+  if (!lines.length) return;
+  trackEvent("payment_method_selected", {
+    preferred_payment_method: preferredPaymentMethod,
+    delivery_method: deliveryMethod,
+    currency: "EUR",
+    value: roundMoney(value),
+    items: lines.map((line) => productToGa4Item(line.product, line.quantity)),
+  });
+}
+
 export function trackOrderSubmitted(input: {
   transactionId: string;
   lines: { product: Product; quantity: number }[];
@@ -243,7 +260,7 @@ export function trackOrderSubmitted(input: {
     value: roundMoney(input.value),
     coupon: input.coupon,
     shipping_tier: input.shippingTier,
-    payment_method: input.paymentMethod,
+    preferred_payment_method: input.paymentMethod,
     items: input.lines.map((line) => productToGa4Item(line.product, line.quantity)),
   });
   if (typeof window !== "undefined" && analyticsAllowed) {

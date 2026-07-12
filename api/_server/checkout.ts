@@ -18,6 +18,7 @@ import {
 
 const preferredPaymentMethods: PreferredPaymentMethod[] = [
   "card_payment_link",
+  "cash_on_delivery",
   "bank_transfer",
   "local_delivery_payment",
   "confirm_with_verdanza",
@@ -131,9 +132,13 @@ export function parseCheckoutBody(value: unknown): CheckoutRequestBody {
   }
   if (
     body.deliveryMethod === "postal" &&
-    body.preferredPaymentMethod === "local_delivery_payment"
+    (body.preferredPaymentMethod === "local_delivery_payment" ||
+      body.preferredPaymentMethod === "cash_on_delivery")
   ) {
     throw new Error("Paiement a la livraison locale indisponible en livraison postale.");
+  }
+  if (body.preferredPaymentMethod === "bank_transfer") {
+    throw new Error("Virement bancaire pas encore disponible.");
   }
   if (!body.customer?.email || !body.customer.phone) {
     throw new Error("Email et telephone client requis.");
@@ -154,6 +159,7 @@ export function parseCheckoutBody(value: unknown): CheckoutRequestBody {
   const analyticsContext = parseAnalyticsContext(body.analyticsContext);
   return {
     ...(body as CheckoutRequestBody),
+    preferredPaymentMethod: normalizePreferredPaymentMethod(body.preferredPaymentMethod),
     analyticsContext,
   };
 }
@@ -452,7 +458,7 @@ export function orderPayload(
   const paymentProvider = "manual";
   const paymentInstructions = paymentInstructionsFor();
   const preferredPaymentMethod =
-    body.preferredPaymentMethod ||
+    normalizePreferredPaymentMethod(body.preferredPaymentMethod) ||
     (body.deliveryMethod === "local_express" ? "confirm_with_verdanza" : "card_payment_link");
   const orderStatus = "contact_required";
 
@@ -525,6 +531,11 @@ export function orderPayload(
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
+}
+
+function normalizePreferredPaymentMethod(method?: PreferredPaymentMethod) {
+  if (method === "local_delivery_payment") return "cash_on_delivery";
+  return method;
 }
 
 function parseAnalyticsContext(value: unknown): CheckoutAnalyticsContext | undefined {

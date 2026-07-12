@@ -7,13 +7,13 @@ import { deliveryZones as fallbackDeliveryZones } from "../data/deliveryZones";
 import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
 import type { DeliveryMethod, DeliveryZone, PreferredPaymentMethod } from "../types";
 import {
-  trackAddPaymentInfo,
   trackAddShippingInfo,
   trackContactClick,
   trackBeginCheckout,
   getGa4MeasurementContext,
   trackLocalDeliveryZoneSelected,
   trackOrderSubmitted,
+  trackPaymentMethodSelected,
 } from "../lib/analytics";
 import { rememberPendingOrderAnalyticsRevocation } from "../lib/orderAnalyticsRevocation";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
@@ -33,7 +33,8 @@ const promoStorageKey = "verdanza-coupon-code";
 
 const paymentMethodLabels: Record<PreferredPaymentMethod, string> = {
   card_payment_link: "Carte bancaire via lien de paiement après confirmation",
-  bank_transfer: "Virement bancaire",
+  cash_on_delivery: "Espèces à la livraison locale",
+  bank_transfer: "Virement bancaire (bientôt disponible)",
   local_delivery_payment: "Paiement à la livraison locale",
   confirm_with_verdanza: "À confirmer avec Verdanza",
 };
@@ -133,11 +134,11 @@ export function CheckoutPage() {
 
   useEffect(() => {
     if (!lines.length) return;
-    const signature = `${preferredPaymentMethod}:${lines.map((line) => `${line.productId}:${line.quantity}`).join("|")}`;
+    const signature = `${deliveryMethod}:${preferredPaymentMethod}:${lines.map((line) => `${line.productId}:${line.quantity}`).join("|")}`;
     if (paymentSignature.current === signature) return;
     paymentSignature.current = signature;
-    trackAddPaymentInfo(lines, estimatedTotal, preferredPaymentMethod);
-  }, [estimatedTotal, lines, preferredPaymentMethod]);
+    trackPaymentMethodSelected(lines, estimatedTotal, preferredPaymentMethod, deliveryMethod);
+  }, [deliveryMethod, estimatedTotal, lines, preferredPaymentMethod]);
 
   useEffect(() => {
     let cancelled = false;
@@ -161,7 +162,11 @@ export function CheckoutPage() {
   }, [deliveryMethod, deliveryZone, openLocalDeliveryZones]);
 
   useEffect(() => {
-    if (deliveryMethod === "postal" && preferredPaymentMethod === "local_delivery_payment") {
+    if (
+      deliveryMethod === "postal" &&
+      (preferredPaymentMethod === "local_delivery_payment" ||
+        preferredPaymentMethod === "cash_on_delivery")
+    ) {
       setPreferredPaymentMethod("card_payment_link");
     }
   }, [deliveryMethod, preferredPaymentMethod]);
@@ -244,6 +249,12 @@ export function CheckoutPage() {
         throw new Error(
           "La zone de livraison sélectionnée n’est actuellement pas disponible. Veuillez choisir une autre zone ou contacter Verdanza.",
         );
+      }
+      if (deliveryMethod === "postal" && preferredPaymentMethod === "cash_on_delivery") {
+        throw new Error("Le paiement en espèces est réservé à la livraison locale.");
+      }
+      if (preferredPaymentMethod === "bank_transfer") {
+        throw new Error("Le virement bancaire n'est pas encore disponible.");
       }
       const finalQuote = couponCode.trim() ? await handleApplyPromo(false) : quote;
 
@@ -574,10 +585,12 @@ export function CheckoutPage() {
                   <option value="card_payment_link">
                     {paymentMethodLabels.card_payment_link}
                   </option>
-                  <option value="bank_transfer">{paymentMethodLabels.bank_transfer}</option>
+                  <option value="bank_transfer" disabled>
+                    {paymentMethodLabels.bank_transfer}
+                  </option>
                   {isLocalDelivery && (
-                    <option value="local_delivery_payment">
-                      {paymentMethodLabels.local_delivery_payment}
+                    <option value="cash_on_delivery">
+                      {paymentMethodLabels.cash_on_delivery}
                     </option>
                   )}
                   <option value="confirm_with_verdanza">
