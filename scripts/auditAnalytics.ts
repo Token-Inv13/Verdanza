@@ -51,6 +51,9 @@ function auditStaticFiles() {
   if (!gtmSource.includes("GTM-W76PFW2X") || !gtmSource.includes("G-E9XNP7BJ2Y")) {
     failures.push("GTM/GA4 public fallbacks are missing");
   }
+  if (!gtmSource.includes('window.gtag?.("config", ga4MeasurementId') || !gtmSource.includes("send_page_view: false")) {
+    failures.push("GA4 target config without automatic page_view is missing");
+  }
   if (/googletagmanager\.com\/gtm\.js/.test(indexHtml)) failures.push("index.html contains a static GTM script");
   if (/<noscript/i.test(indexHtml) && /googletagmanager/i.test(indexHtml)) {
     failures.push("index.html contains a GTM noscript iframe");

@@ -3,6 +3,7 @@ declare global {
     dataLayer?: unknown[];
     gtag?: (...args: unknown[]) => void;
     verdanzaConsentModeInitialized?: boolean;
+    verdanzaGa4Configured?: boolean;
     verdanzaGtmLoaded?: boolean;
   }
 }
@@ -54,6 +55,7 @@ export function loadGoogleTagManager() {
   }
 
   initializeGoogleConsentMode();
+  configureGoogleAnalyticsTag();
   window.dataLayer?.push({
     "gtm.start": Date.now(),
     event: "gtm.js",
@@ -65,4 +67,12 @@ export function loadGoogleTagManager() {
   script.dataset.verdanzaGtm = gtmId;
   document.head.appendChild(script);
   window.verdanzaGtmLoaded = true;
+}
+
+function configureGoogleAnalyticsTag() {
+  if (typeof window === "undefined" || window.verdanzaGa4Configured) return;
+  window.gtag?.("config", ga4MeasurementId, {
+    send_page_view: false,
+  });
+  window.verdanzaGa4Configured = true;
 }
