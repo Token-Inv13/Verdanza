@@ -8,7 +8,7 @@ import { ComplianceNote } from "../components/ComplianceNote";
 import { CookieConsentBanner } from "../components/CookieConsentBanner";
 import { useConsent } from "../context/ConsentContext";
 import { staticImageVariants } from "../lib/generatedImageVariants";
-import { trackContactClick } from "../lib/analytics";
+import { trackContactClick, trackCtaClick } from "../lib/analytics";
 
 const navItems = [
   { label: "Accueil", to: "/" },
@@ -19,6 +19,21 @@ const navItems = [
   { label: "Livraison", to: "/livraison-postale" },
   { label: "Qualité", to: "/qualite-conformite" },
 ];
+
+function ctaCategoryForPath(path: string) {
+  if (path.startsWith("/blog")) return "content";
+  if (path.startsWith("/livraison")) return "delivery";
+  if (path === "/boutique") return "shop_navigation";
+  if (path === "/fleurs-cbd" || path === "/resines-cbd") return "category_navigation";
+  if (path === "/qualite-conformite") return "quality";
+  if (path === "/faq") return "support";
+  if (path === "/contact") return "contact";
+  return "navigation";
+}
+
+function ctaIdForPath(prefix: string, path: string) {
+  return `${prefix}_${path.replace(/^\/+/, "").replace(/[^a-z0-9]+/gi, "_") || "home"}`;
+}
 
 export function MainLayout() {
   const [open, setOpen] = useState(false);
@@ -52,6 +67,14 @@ export function MainLayout() {
               <NavLink
                 key={item.to}
                 to={item.to}
+                onClick={() =>
+                  trackCtaClick({
+                    ctaId: ctaIdForPath("header_nav", item.to),
+                    ctaLocation: "header",
+                    destinationPath: item.to,
+                    ctaCategory: ctaCategoryForPath(item.to),
+                  })
+                }
                 className={({ isActive }) =>
                   isActive ? "text-forest underline decoration-champagne" : ""
                 }
@@ -87,7 +110,19 @@ export function MainLayout() {
         {open && (
           <nav className="container-page grid gap-3 border-t border-forest/10 pb-5 pt-2 text-sm text-forest lg:hidden">
             {navItems.map((item) => (
-              <NavLink key={item.to} to={item.to} onClick={() => setOpen(false)}>
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={() => {
+                  setOpen(false);
+                  trackCtaClick({
+                    ctaId: ctaIdForPath("mobile_nav", item.to),
+                    ctaLocation: "mobile_menu",
+                    destinationPath: item.to,
+                    ctaCategory: ctaCategoryForPath(item.to),
+                  });
+                }}
+              >
                 {item.label}
               </NavLink>
             ))}
@@ -121,11 +156,28 @@ export function MainLayout() {
           </div>
           <div className="grid gap-2 text-sm text-forest/80">
             <strong className="text-forest">Informations</strong>
-            <NavLink to="/livraison-postale">Livraison en France</NavLink>
-            <NavLink to="/livraison-express-aix">Express local Aix</NavLink>
-            <NavLink to="/blog">Guides CBD</NavLink>
-            <NavLink to="/faq">FAQ</NavLink>
-            <NavLink to="/contact">Contact</NavLink>
+            {[
+              { to: "/livraison-postale", label: "Livraison en France" },
+              { to: "/livraison-express-aix", label: "Express local Aix" },
+              { to: "/blog", label: "Guides CBD" },
+              { to: "/faq", label: "FAQ" },
+              { to: "/contact", label: "Contact" },
+            ].map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={() =>
+                  trackCtaClick({
+                    ctaId: ctaIdForPath("footer_info", item.to),
+                    ctaLocation: "footer_information",
+                    destinationPath: item.to,
+                    ctaCategory: ctaCategoryForPath(item.to),
+                  })
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
             {contactEmail && (
               <a
                 href={`mailto:${contactEmail}`}

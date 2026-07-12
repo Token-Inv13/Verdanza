@@ -65,6 +65,9 @@ function auditStaticFiles() {
     failures.push("trackEvent still pushes analytics event objects into dataLayer");
   }
   if (!analyticsSource.includes("order_submitted")) failures.push("order_submitted is missing");
+  if (!analyticsSource.includes('"cta_click"')) failures.push("cta_click is missing");
+  if (!analyticsSource.includes("trackCtaClick")) failures.push("trackCtaClick helper is missing");
+  if (!layoutSource.includes("trackCtaClick")) failures.push("MainLayout does not track acquisition CTAs");
   if (!analyticsSource.includes("payment_method_selected")) {
     failures.push("payment_method_selected is missing");
   }
@@ -207,6 +210,8 @@ async function assertAcceptAndWithdrawFlow(context: BrowserContext, baseUrl: str
 
   await page.getByRole("link", { name: "Fleurs CBD", exact: true }).click();
   await page.waitForURL("**/fleurs-cbd");
+  await waitForGa4Event(googleRequests, "cta_click");
+  await assertNoObjectDataLayerEvent(page, "cta_click");
   await waitForGa4EventCount(googleRequests, "page_view", 2);
   await waitForGa4Event(googleRequests, "view_item_list");
   await assertNoObjectDataLayerEvent(page, "view_item_list");

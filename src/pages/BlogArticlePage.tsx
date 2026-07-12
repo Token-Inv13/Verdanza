@@ -14,7 +14,20 @@ import {
 import { buildBlogPostingJsonLd } from "../lib/structuredData";
 import { formatFrenchDate } from "../lib/dateFormat";
 import { staticImageVariants } from "../lib/generatedImageVariants";
-import { trackBlogArticleView, trackBlogReadProgress } from "../lib/analytics";
+import { trackBlogArticleView, trackBlogReadProgress, trackCtaClick } from "../lib/analytics";
+
+function ctaCategoryForPath(path: string) {
+  if (path.startsWith("/blog")) return "content";
+  if (path.startsWith("/produits")) return "product_navigation";
+  if (path === "/boutique") return "shop_navigation";
+  if (path === "/fleurs-cbd" || path === "/resines-cbd") return "category_navigation";
+  if (path.startsWith("/livraison")) return "delivery";
+  return "navigation";
+}
+
+function ctaIdForPath(prefix: string, path: string) {
+  return `${prefix}_${path.replace(/^\/+/, "").replace(/[^a-z0-9]+/gi, "_") || "home"}`;
+}
 
 export function BlogArticlePage() {
   const { slug } = useParams();
@@ -155,7 +168,19 @@ export function BlogArticlePage() {
           </div>
           <div className="flex flex-wrap gap-2">
             {article.links.map((link) => (
-              <Link key={link.to} to={link.to} className="btn-secondary min-h-10 py-2">
+              <Link
+                key={link.to}
+                to={link.to}
+                className="btn-secondary min-h-10 py-2"
+                onClick={() =>
+                  trackCtaClick({
+                    ctaId: ctaIdForPath("blog_article_link", link.to),
+                    ctaLocation: "blog_article_footer",
+                    destinationPath: link.to,
+                    ctaCategory: ctaCategoryForPath(link.to),
+                  })
+                }
+              >
                 {link.label}
               </Link>
             ))}
@@ -167,7 +192,19 @@ export function BlogArticlePage() {
         <section className="mt-14">
           <div className="section-heading">
             <h2>À lire également</h2>
-            <Link to="/blog">Tous les guides</Link>
+            <Link
+              to="/blog"
+              onClick={() =>
+                trackCtaClick({
+                  ctaId: "blog_article_all_guides",
+                  ctaLocation: "blog_related_articles",
+                  destinationPath: "/blog",
+                  ctaCategory: "content",
+                })
+              }
+            >
+              Tous les guides
+            </Link>
           </div>
           <div className="grid gap-6 lg:grid-cols-2">
             {relatedArticles.map((related) => (

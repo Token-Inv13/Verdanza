@@ -6,7 +6,7 @@ import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 import { useProducts } from "../hooks/useProducts";
 import { getProductsByCategory } from "../data/products";
-import { trackViewItemList } from "../lib/analytics";
+import { trackCtaClick, trackViewItemList } from "../lib/analytics";
 import type { Product, ProductCategory } from "../types";
 
 const categoryContent = {
@@ -146,6 +146,19 @@ type CategoryContent = {
   links: { to: string; label: string }[];
 };
 
+function ctaCategoryForPath(path: string) {
+  if (path.startsWith("/blog")) return "content";
+  if (path.startsWith("/livraison")) return "delivery";
+  if (path === "/boutique") return "shop_navigation";
+  if (path === "/fleurs-cbd" || path === "/resines-cbd") return "category_navigation";
+  if (path === "/qualite-conformite") return "quality";
+  return "navigation";
+}
+
+function ctaIdForPath(prefix: string, path: string) {
+  return `${prefix}_${path.replace(/^\/+/, "").replace(/[^a-z0-9]+/gi, "_") || "home"}`;
+}
+
 export function CategoryPage({
   category,
   title,
@@ -256,6 +269,14 @@ function CategoryGuide({
               key={product.id}
               to={`/produits/${product.slug}`}
               className="rounded-md border border-forest/10 bg-ivory p-4 text-sm font-semibold text-forest transition hover:border-champagne hover:bg-cream"
+              onClick={() =>
+                trackCtaClick({
+                  ctaId: `category_product_${product.slug}`,
+                  ctaLocation: "category_featured_products",
+                  destinationPath: `/produits/${product.slug}`,
+                  ctaCategory: "product_navigation",
+                })
+              }
             >
               {product.category === "flowers" ? "Découvrir" : "Consulter"} {product.name}
               {product.comingSoon || product.stockStatus === "coming_soon" ? (
@@ -276,6 +297,14 @@ function CategoryGuide({
               key={link.to}
               to={link.to}
               className="rounded-md border border-forest/10 bg-ivory px-4 py-3 text-sm font-semibold text-forest transition hover:border-champagne hover:bg-cream"
+              onClick={() =>
+                trackCtaClick({
+                  ctaId: ctaIdForPath("category_link", link.to),
+                  ctaLocation: "category_useful_links",
+                  destinationPath: link.to,
+                  ctaCategory: ctaCategoryForPath(link.to),
+                })
+              }
             >
               {link.label}
             </Link>

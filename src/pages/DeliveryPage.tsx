@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { localDeliveryZones } from "../data/deliveryZones";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
+import { trackCtaClick } from "../lib/analytics";
 import {
   LOCAL_DELIVERY_MINIMUM,
   POSTAL_DELIVERY_MINIMUM,
@@ -24,6 +25,20 @@ const deliverySteps = [
   "Renseigner les informations de livraison dans une zone couverte.",
   "Faire confirmer la commande selon le processus Verdanza avant la livraison.",
 ];
+
+function ctaCategoryForPath(path: string) {
+  if (path.startsWith("/livraison")) return "delivery";
+  if (path === "/boutique") return "shop_navigation";
+  if (path === "/fleurs-cbd" || path === "/resines-cbd") return "category_navigation";
+  if (path === "/qualite-conformite") return "quality";
+  if (path === "/faq") return "support";
+  if (path === "/contact") return "contact";
+  return "navigation";
+}
+
+function ctaIdForPath(prefix: string, path: string) {
+  return `${prefix}_${path.replace(/^\/+/, "").replace(/[^a-z0-9]+/gi, "_") || "home"}`;
+}
 
 export function DeliveryPage({ mode }: { mode: "local" | "postal" }) {
   const isLocal = mode === "local";
@@ -164,10 +179,32 @@ function LocalDeliveryPage({ path, title }: { path: string; title: string }) {
             France peut être consultée séparément avec ses propres conditions.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
-            <Link className="btn-primary" to="/boutique">
+            <Link
+              className="btn-primary"
+              to="/boutique"
+              onClick={() =>
+                trackCtaClick({
+                  ctaId: "local_delivery_choose_products",
+                  ctaLocation: "delivery_page",
+                  destinationPath: "/boutique",
+                  ctaCategory: "shop_navigation",
+                })
+              }
+            >
               Choisir les produits
             </Link>
-            <Link className="btn-secondary" to="/livraison-postale">
+            <Link
+              className="btn-secondary"
+              to="/livraison-postale"
+              onClick={() =>
+                trackCtaClick({
+                  ctaId: "local_delivery_postal_delivery",
+                  ctaLocation: "delivery_page",
+                  destinationPath: "/livraison-postale",
+                  ctaCategory: "delivery",
+                })
+              }
+            >
               Vérifier la livraison postale
             </Link>
           </div>
@@ -182,6 +219,14 @@ function LocalDeliveryPage({ path, title }: { path: string; title: string }) {
               key={link.to}
               to={link.to}
               className="rounded-md border border-forest/10 bg-ivory px-4 py-3 text-sm font-semibold text-forest transition hover:border-champagne hover:bg-cream"
+              onClick={() =>
+                trackCtaClick({
+                  ctaId: ctaIdForPath("delivery_link", link.to),
+                  ctaLocation: "delivery_useful_links",
+                  destinationPath: link.to,
+                  ctaCategory: ctaCategoryForPath(link.to),
+                })
+              }
             >
               {link.label}
             </Link>

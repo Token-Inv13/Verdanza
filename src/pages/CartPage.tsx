@@ -5,7 +5,7 @@ import { ProductImage } from "../components/ProductImage";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
-import { trackAddToCart, trackRemoveFromCart, trackViewCart } from "../lib/analytics";
+import { trackAddToCart, trackCtaClick, trackRemoveFromCart, trackViewCart } from "../lib/analytics";
 
 const promoStorageKey = "verdanza-coupon-code";
 
@@ -86,7 +86,18 @@ export function CartPage() {
       {lines.length === 0 ? (
         <section className="mt-10 rounded-lg border border-forest/10 bg-cream p-8">
           <p>Votre panier est vide.</p>
-          <Link to="/boutique" className="btn-primary mt-6 inline-flex">
+          <Link
+            to="/boutique"
+            className="btn-primary mt-6 inline-flex"
+            onClick={() =>
+              trackCtaClick({
+                ctaId: "empty_cart_shop",
+                ctaLocation: "cart_empty",
+                destinationPath: "/boutique",
+                ctaCategory: "shop_navigation",
+              })
+            }
+          >
             Voir la boutique
           </Link>
         </section>
@@ -206,7 +217,18 @@ export function CartPage() {
                 <span>{formatEuro(total)}</span>
               </p>
             </div>
-            <Link to="/checkout" className="btn-primary mt-6 w-full justify-center">
+            <Link
+              to="/checkout"
+              className="btn-primary mt-6 w-full justify-center"
+              onClick={() =>
+                trackCtaClick({
+                  ctaId: "cart_continue_checkout",
+                  ctaLocation: "cart_summary",
+                  destinationPath: "/checkout",
+                  ctaCategory: "checkout",
+                })
+              }
+            >
               Continuer
             </Link>
           </aside>

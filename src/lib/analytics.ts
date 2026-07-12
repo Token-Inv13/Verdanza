@@ -31,6 +31,7 @@ export type AnalyticsEventName =
   | "order_submitted"
   | "login"
   | "sign_up"
+  | "cta_click"
   | "contact_click"
   | "delivery_method_selected"
   | "local_delivery_zone_selected"
@@ -100,6 +101,21 @@ export function trackPageView(path: string, title: string) {
     page_location: url.toString(),
     page_path: `${url.pathname}${url.search}`,
     page_title: title,
+  });
+}
+
+export function trackCtaClick(input: {
+  ctaId: string;
+  ctaLocation: string;
+  destinationPath: string;
+  ctaCategory?: string;
+}) {
+  trackEvent("cta_click", {
+    cta_id: input.ctaId,
+    cta_location: input.ctaLocation,
+    destination_path: sanitizeDestinationPath(input.destinationPath),
+    page_path: typeof window === "undefined" ? undefined : window.location.pathname,
+    cta_category: input.ctaCategory,
   });
 }
 
@@ -302,6 +318,15 @@ export function trackBlogReadProgress(article: BlogArticle, threshold: 25 | 50 |
 
 function roundMoney(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function sanitizeDestinationPath(path: string) {
+  try {
+    const url = new URL(path, "https://verdanza.fr");
+    return url.pathname;
+  } catch {
+    return path.startsWith("/") ? path.split("?")[0].split("#")[0] : undefined;
+  }
 }
 
 function containsBlockedKey(payload: AnalyticsPayload) {

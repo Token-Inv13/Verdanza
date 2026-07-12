@@ -9,7 +9,7 @@ import { publishedBlogArticles } from "../data/blogArticles";
 import { useProducts } from "../hooks/useProducts";
 import { staticImageVariants } from "../lib/generatedImageVariants";
 import { buildHomeJsonLd } from "../lib/structuredData";
-import { trackViewItemList } from "../lib/analytics";
+import { trackCtaClick, trackViewItemList } from "../lib/analytics";
 
 export function HomePage() {
   const { products } = useProducts();
@@ -65,10 +65,32 @@ export function HomePage() {
                 zones ouvertes.
               </p>
               <div className="mt-6 flex flex-col gap-3 sm:flex-row md:mt-8">
-                <Link to="/boutique" className="btn-primary bg-champagne text-forest hover:bg-[#d7b66e]">
+                <Link
+                  to="/boutique"
+                  className="btn-primary bg-champagne text-forest hover:bg-[#d7b66e]"
+                  onClick={() =>
+                    trackCtaClick({
+                      ctaId: "home_hero_shop",
+                      ctaLocation: "home_hero",
+                      destinationPath: "/boutique",
+                      ctaCategory: "shop_navigation",
+                    })
+                  }
+                >
                   Voir la boutique <ArrowRight size={18} />
                 </Link>
-                <Link to="/livraison-postale" className="btn-secondary border-ivory/35 bg-ivory/10 text-ivory hover:bg-ivory hover:text-forest">
+                <Link
+                  to="/livraison-postale"
+                  className="btn-secondary border-ivory/35 bg-ivory/10 text-ivory hover:bg-ivory hover:text-forest"
+                  onClick={() =>
+                    trackCtaClick({
+                      ctaId: "home_hero_postal_delivery",
+                      ctaLocation: "home_hero",
+                      destinationPath: "/livraison-postale",
+                      ctaCategory: "delivery",
+                    })
+                  }
+                >
                   Livraison en France
                 </Link>
               </div>
@@ -105,7 +127,19 @@ export function HomePage() {
         <section className="container-page py-14">
           <div className="section-heading">
             <h2>Sélection Verdanza</h2>
-            <Link to="/boutique">Tout voir</Link>
+            <Link
+              to="/boutique"
+              onClick={() =>
+                trackCtaClick({
+                  ctaId: "home_featured_shop",
+                  ctaLocation: "home_featured_products",
+                  destinationPath: "/boutique",
+                  ctaCategory: "shop_navigation",
+                })
+              }
+            >
+              Tout voir
+            </Link>
           </div>
           <div className="product-grid">
             {featuredProducts.slice(0, 4).map((product) => (
@@ -122,7 +156,19 @@ export function HomePage() {
         <section className="container-page pb-16 pt-2">
           <div className="section-heading">
             <h2>Guides CBD</h2>
-            <Link to="/blog">Tous les guides</Link>
+            <Link
+              to="/blog"
+              onClick={() =>
+                trackCtaClick({
+                  ctaId: "home_blog_guides",
+                  ctaLocation: "home_blog",
+                  destinationPath: "/blog",
+                  ctaCategory: "content",
+                })
+              }
+            >
+              Tous les guides
+            </Link>
           </div>
           <div className="grid gap-6 lg:grid-cols-2">
             {publishedBlogArticles.slice(0, 2).map((article) => (
