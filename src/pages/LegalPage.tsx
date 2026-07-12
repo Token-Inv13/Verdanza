@@ -135,6 +135,18 @@ function legalSections(title: string, contactEmail?: string) {
         ],
       },
       {
+        heading: "Mesure d'audience et cookies",
+        items: [
+          "Verdanza utilise Google Tag Manager et Google Analytics 4 uniquement si vous acceptez la mesure d'audience dans le panneau de cookies.",
+          "La mesure d'audience aide à comprendre les pages consultées, les produits vus, les ajouts au panier, les favoris, le parcours de commande et la lecture des guides.",
+          "La mesure d'audience est désactivée par défaut. Vous pouvez refuser ou retirer votre consentement à tout moment avec le lien Gérer mes cookies en bas de page.",
+          "La personnalisation publicitaire, le stockage publicitaire, les données utilisateur publicitaires et la personnalisation des annonces restent volontairement refusés dans cette phase.",
+          "Les événements Analytics n'incluent pas les données de formulaire, l'adresse email, le téléphone, le nom, l'adresse de livraison, le message client ou l'identifiant Firebase.",
+          "Google peut traiter les données de mesure selon ses propres règles de confidentialité. Consultez les informations Google Analytics et Google Tag Manager pour plus de détails.",
+          "Cette section décrit la configuration technique actuelle et ne remplace pas une validation juridique définitive.",
+        ],
+      },
+      {
         heading: "Droits utilisateur",
         items: [
           `Toute demande relative aux données personnelles peut être transmise à ${contactEmail}.`,

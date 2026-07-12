@@ -1,15 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { ProductImage } from "../components/ProductImage";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
+import { trackAddToCart, trackRemoveFromCart, trackViewCart } from "../lib/analytics";
 
 const promoStorageKey = "verdanza-coupon-code";
 
 export function CartPage() {
   const { items, lines, subtotal, addItem, decrementItem, removeItem } = useCart();
+  const trackedCartSignature = useRef("");
   const deliveryEstimate = 0;
   const [couponCode, setCouponCode] = useState(() =>
     window.localStorage.getItem(promoStorageKey) || "",
@@ -27,6 +29,13 @@ export function CartPage() {
       setPromoMessage("");
     }
   }, [couponCode]);
+
+  useEffect(() => {
+    const signature = lines.map((line) => `${line.productId}:${line.quantity}`).join("|");
+    if (!signature || trackedCartSignature.current === signature) return;
+    trackedCartSignature.current = signature;
+    trackViewCart(lines, subtotal);
+  }, [lines, subtotal]);
 
   async function handleApplyPromo() {
     const code = couponCode.trim().toUpperCase();
@@ -102,14 +111,32 @@ export function CartPage() {
                   </h2>
                   <p className="text-sm text-ink/60">{line.product.shortDescription}</p>
                   <div className="mt-4 flex items-center gap-2">
-                    <button className="icon-button" onClick={() => decrementItem(line.productId)}>
+                    <button
+                      className="icon-button"
+                      onClick={() => {
+                        decrementItem(line.productId);
+                        trackRemoveFromCart(line.product);
+                      }}
+                    >
                       <Minus size={16} />
                     </button>
                     <span className="w-12 text-center">{line.quantity} g</span>
-                    <button className="icon-button" onClick={() => addItem(line.productId)}>
+                    <button
+                      className="icon-button"
+                      onClick={() => {
+                        addItem(line.productId);
+                        trackAddToCart(line.product);
+                      }}
+                    >
                       <Plus size={16} />
                     </button>
-                    <button className="icon-button" onClick={() => removeItem(line.productId)}>
+                    <button
+                      className="icon-button"
+                      onClick={() => {
+                        removeItem(line.productId);
+                        trackRemoveFromCart(line.product, line.quantity);
+                      }}
+                    >
                       <Trash2 size={16} />
                     </button>
                   </div>

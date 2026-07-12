@@ -10,7 +10,10 @@ export function AgeGate() {
   });
 
   useEffect(() => {
-    if (isConfirmed) localStorage.setItem(key, "true");
+    if (isConfirmed) {
+      localStorage.setItem(key, "true");
+      window.dispatchEvent(new Event("verdanza:age-confirmed"));
+    }
   }, [isConfirmed]);
 
   useEffect(() => {

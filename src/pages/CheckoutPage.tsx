@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
@@ -6,7 +6,14 @@ import { useAuth } from "../context/AuthContext";
 import { deliveryZones as fallbackDeliveryZones } from "../data/deliveryZones";
 import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
 import type { DeliveryMethod, DeliveryZone, PreferredPaymentMethod } from "../types";
-import { trackEvent } from "../lib/analytics";
+import {
+  trackAddPaymentInfo,
+  trackAddShippingInfo,
+  trackContactClick,
+  trackBeginCheckout,
+  trackLocalDeliveryZoneSelected,
+  trackOrderSubmitted,
+} from "../lib/analytics";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
 import {
   effectiveLocalDeliveryMinimum,
@@ -31,6 +38,9 @@ const paymentMethodLabels: Record<PreferredPaymentMethod, string> = {
 
 export function CheckoutPage() {
   const { itemCount, subtotal, items, lines } = useCart();
+  const beginCheckoutSignature = useRef("");
+  const shippingSignature = useRef("");
+  const paymentSignature = useRef("");
   const { user, customerProfile } = useAuth();
   const navigate = useNavigate();
   const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>(fallbackDeliveryZones);
@@ -99,6 +109,33 @@ export function CheckoutPage() {
     : postalZone?.fee ?? 0;
   const discountAmount = quote?.promoApplied ? quote.discountAmount : 0;
   const estimatedTotal = Math.max(0, subtotal + estimatedDeliveryFee - discountAmount);
+
+  useEffect(() => {
+    const signature = lines.map((line) => `${line.productId}:${line.quantity}`).join("|");
+    if (!signature || beginCheckoutSignature.current === signature) return;
+    beginCheckoutSignature.current = signature;
+    trackBeginCheckout(lines, estimatedTotal);
+  }, [estimatedTotal, lines]);
+
+  useEffect(() => {
+    if (!lines.length) return;
+    const zonePart = isLocalDelivery ? selectedZone?.id || "none" : "postal-france";
+    const signature = `${deliveryMethod}:${zonePart}:${lines.map((line) => `${line.productId}:${line.quantity}`).join("|")}`;
+    if (shippingSignature.current === signature) return;
+    shippingSignature.current = signature;
+    trackAddShippingInfo(lines, estimatedTotal, deliveryMethod);
+    if (isLocalDelivery && selectedZone) {
+      trackLocalDeliveryZoneSelected(selectedZone.id, selectedZone.name);
+    }
+  }, [deliveryMethod, estimatedTotal, isLocalDelivery, lines, selectedZone]);
+
+  useEffect(() => {
+    if (!lines.length) return;
+    const signature = `${preferredPaymentMethod}:${lines.map((line) => `${line.productId}:${line.quantity}`).join("|")}`;
+    if (paymentSignature.current === signature) return;
+    paymentSignature.current = signature;
+    trackAddPaymentInfo(lines, estimatedTotal, preferredPaymentMethod);
+  }, [estimatedTotal, lines, preferredPaymentMethod]);
 
   useEffect(() => {
     let cancelled = false;
@@ -209,12 +246,6 @@ export function CheckoutPage() {
       const finalQuote = couponCode.trim() ? await handleApplyPromo(false) : quote;
 
       const authToken = user ? await user.getIdToken() : undefined;
-      trackEvent("begin_checkout", {
-        itemCount,
-        subtotal,
-        deliveryMethod,
-      });
-
       const response = await fetch("/api/create-order", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -253,6 +284,15 @@ export function CheckoutPage() {
       if (!response.ok || !payload.orderId) {
         throw new Error(payload.error || checkoutErrorMessage);
       }
+
+      trackOrderSubmitted({
+        transactionId: payload.orderId,
+        lines,
+        value: finalQuote?.total ?? estimatedTotal,
+        coupon: finalQuote?.couponCode || undefined,
+        shippingTier: deliveryMethod,
+        paymentMethod: preferredPaymentMethod,
+      });
 
       window.sessionStorage.setItem(
         "verdanza:lastOrderSummary",
@@ -319,7 +359,11 @@ export function CheckoutPage() {
       <section className="mt-8 rounded-lg border border-champagne/30 bg-cream p-5 text-sm leading-6 text-forest">
         <p>
           Contact :{" "}
-          <a className="underline decoration-champagne" href={`mailto:${contactEmail}`}>
+          <a
+            className="underline decoration-champagne"
+            href={`mailto:${contactEmail}`}
+            onClick={() => trackContactClick("email", "checkout")}
+          >
             {contactEmail}
           </a>
         </p>
@@ -414,7 +458,11 @@ export function CheckoutPage() {
                 <p className="mt-4 rounded-md border border-champagne/40 bg-cream p-3 text-sm leading-6 text-forest">
                   Livraison locale temporairement indisponible. Vous pouvez choisir
                   la livraison postale ou contacter Verdanza par email à{" "}
-                  <a className="underline decoration-champagne" href={`mailto:${contactEmail}`}>
+                  <a
+                    className="underline decoration-champagne"
+                    href={`mailto:${contactEmail}`}
+                    onClick={() => trackContactClick("email", "checkout")}
+                  >
                     {contactEmail}
                   </a>
                   .

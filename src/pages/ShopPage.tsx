@@ -1,11 +1,22 @@
 import { ProductCard } from "../components/ProductCard";
+import { useEffect, useRef } from "react";
 import { CatalogNotice } from "../components/CatalogNotice";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 import { useProducts } from "../hooks/useProducts";
+import { trackViewItemList } from "../lib/analytics";
 
 export function ShopPage() {
   const { products, isLoading } = useProducts();
+  const trackedListSignature = useRef("");
+
+  useEffect(() => {
+    if (isLoading) return;
+    const signature = products.map((product) => product.id).join("|");
+    if (!signature || trackedListSignature.current === signature) return;
+    trackedListSignature.current = signature;
+    trackViewItemList("shop_catalog", "Boutique Verdanza", products);
+  }, [isLoading, products]);
 
   return (
     <main className="container-page py-12">
@@ -33,7 +44,13 @@ export function ShopPage() {
       ) : (
         <div className="product-grid mt-6">
           {products.map((product, index) => (
-            <ProductCard key={product.id} product={product} priorityImage={index < 4} />
+            <ProductCard
+              key={product.id}
+              product={product}
+              priorityImage={index < 4}
+              itemListId="shop_catalog"
+              itemListName="Boutique Verdanza"
+            />
           ))}
         </div>
       )}

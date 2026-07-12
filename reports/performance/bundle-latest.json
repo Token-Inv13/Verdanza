@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-11T19:50:09.852Z",
+  "generatedAt": "2026-07-12T00:30:44.064Z",
   "jsFiles": [
     {
       "file": "dist/assets/vendor-firebase-_LTHlUTX.js",
@@ -8,111 +8,111 @@
       "brotliBytes": 103031
     },
     {
-      "file": "dist/assets/vendor-react-CEd2m-4Q.js",
+      "file": "dist/assets/vendor-react-DzhmbrHy.js",
       "rawBytes": 195908,
       "gzipBytes": 63255,
-      "brotliBytes": 55271
+      "brotliBytes": 55282
     },
     {
-      "file": "dist/assets/index-BwV5Nwr0.js",
-      "rawBytes": 113540,
-      "gzipBytes": 28985,
-      "brotliBytes": 24995
+      "file": "dist/assets/index-CW3NvyGX.js",
+      "rawBytes": 125785,
+      "gzipBytes": 32584,
+      "brotliBytes": 27921
     },
     {
-      "file": "dist/assets/AdminPage-CCG5PwLh.js",
+      "file": "dist/assets/AdminPage-ChO2_Gw4.js",
       "rawBytes": 78062,
-      "gzipBytes": 17546,
-      "brotliBytes": 15115
+      "gzipBytes": 17550,
+      "brotliBytes": 15156
     },
     {
-      "file": "dist/assets/CheckoutPage-DdXhxuVo.js",
-      "rawBytes": 16117,
-      "gzipBytes": 4932,
-      "brotliBytes": 4461
+      "file": "dist/assets/CheckoutPage-BDzzhgR6.js",
+      "rawBytes": 16876,
+      "gzipBytes": 5192,
+      "brotliBytes": 4677
     },
     {
-      "file": "dist/assets/AccountOrdersPage-D_c4myGV.js",
+      "file": "dist/assets/AccountOrdersPage-D38jlSNG.js",
       "rawBytes": 5387,
       "gzipBytes": 2100,
-      "brotliBytes": 1875
+      "brotliBytes": 1878
     },
     {
-      "file": "dist/assets/orderStatus-C-hBPTIx.js",
+      "file": "dist/assets/orderStatus-Dxz-DB6N.js",
       "rawBytes": 5018,
-      "gzipBytes": 1933,
-      "brotliBytes": 1675
+      "gzipBytes": 1934,
+      "brotliBytes": 1674
     },
     {
-      "file": "dist/assets/CartPage-CmQo8Mvy.js",
-      "rawBytes": 4579,
-      "gzipBytes": 1818,
-      "brotliBytes": 1610
+      "file": "dist/assets/LegalPage-DOL5JF3S.js",
+      "rawBytes": 4980,
+      "gzipBytes": 2147,
+      "brotliBytes": 1947
     },
     {
-      "file": "dist/assets/AuthPage-BwKzC1KC.js",
-      "rawBytes": 4088,
-      "gzipBytes": 1700,
-      "brotliBytes": 1492
+      "file": "dist/assets/CartPage-B0sg8E3X.js",
+      "rawBytes": 4795,
+      "gzipBytes": 1913,
+      "brotliBytes": 1702
     },
     {
-      "file": "dist/assets/LegalPage-DWwAaAsF.js",
-      "rawBytes": 3793,
-      "gzipBytes": 1700,
-      "brotliBytes": 1555
+      "file": "dist/assets/AuthPage-C_i3KPqe.js",
+      "rawBytes": 4069,
+      "gzipBytes": 1695,
+      "brotliBytes": 1490
     },
     {
-      "file": "dist/assets/AdminAuthGate-htDBCCMe.js",
+      "file": "dist/assets/AdminAuthGate-fkf45yvu.js",
       "rawBytes": 3684,
-      "gzipBytes": 1418,
-      "brotliBytes": 1223
+      "gzipBytes": 1419,
+      "brotliBytes": 1224
     },
     {
-      "file": "dist/assets/AdminLayout-CJ8qpFew.js",
+      "file": "dist/assets/AdminLayout-T75CXRqS.js",
       "rawBytes": 3333,
-      "gzipBytes": 1341,
-      "brotliBytes": 1196
+      "gzipBytes": 1340,
+      "brotliBytes": 1188
     },
     {
-      "file": "dist/assets/CheckoutSuccessPage-Bb6WjLFl.js",
-      "rawBytes": 3123,
-      "gzipBytes": 1393,
-      "brotliBytes": 1241
+      "file": "dist/assets/CheckoutSuccessPage-BJFrx66H.js",
+      "rawBytes": 3114,
+      "gzipBytes": 1383,
+      "brotliBytes": 1256
     },
     {
-      "file": "dist/assets/AccountFavoritesPage-BvbJcEXm.js",
+      "file": "dist/assets/AccountFavoritesPage-Dsgcs2Dr.js",
       "rawBytes": 2092,
-      "gzipBytes": 1008,
-      "brotliBytes": 886
+      "gzipBytes": 1007,
+      "brotliBytes": 884
     },
     {
-      "file": "dist/assets/AccountProfilePage-B5V55tyV.js",
+      "file": "dist/assets/AccountProfilePage-xUgdnYPr.js",
       "rawBytes": 1558,
-      "gzipBytes": 734,
+      "gzipBytes": 733,
       "brotliBytes": 624
     },
     {
-      "file": "dist/assets/deliveryZonesService-pH7SPkzI.js",
+      "file": "dist/assets/deliveryZonesService-uwWfc28C.js",
       "rawBytes": 1493,
-      "gzipBytes": 722,
-      "brotliBytes": 642
+      "gzipBytes": 720,
+      "brotliBytes": 639
     },
     {
-      "file": "dist/assets/AccountOverviewPage-Dj6KXtu5.js",
+      "file": "dist/assets/AccountOverviewPage-wVdvbDWP.js",
       "rawBytes": 1417,
-      "gzipBytes": 669,
-      "brotliBytes": 573
+      "gzipBytes": 668,
+      "brotliBytes": 572
     },
     {
-      "file": "dist/assets/AccountLayout-u7JAi0Ev.js",
+      "file": "dist/assets/AccountLayout-DTg4qJE3.js",
       "rawBytes": 1215,
       "gzipBytes": 657,
-      "brotliBytes": 583
+      "brotliBytes": 580
     },
     {
-      "file": "dist/assets/CheckoutCancelPage-BsH4F7nD.js",
+      "file": "dist/assets/CheckoutCancelPage-DIOIFA4Q.js",
       "rawBytes": 993,
-      "gzipBytes": 541,
+      "gzipBytes": 540,
       "brotliBytes": 470
     },
     {
@@ -122,18 +122,18 @@
       "brotliBytes": 291
     },
     {
-      "file": "dist/assets/AccountAuthGate-abv21OMM.js",
+      "file": "dist/assets/AccountAuthGate-H2oNj409.js",
       "rawBytes": 445,
-      "gzipBytes": 322,
+      "gzipBytes": 318,
       "brotliBytes": 263
     }
   ],
   "cssFiles": [
     {
-      "file": "dist/assets/index-CXcwxFMq.css",
-      "rawBytes": 34235,
-      "gzipBytes": 6465,
-      "brotliBytes": 5593
+      "file": "dist/assets/index-sPkXy5TN.css",
+      "rawBytes": 34730,
+      "gzipBytes": 6557,
+      "brotliBytes": 5669
     }
   ],
   "images": [
@@ -343,701 +343,701 @@
     }
   ],
   "publicInitialChunks": [
-    "/assets/index-BwV5Nwr0.js",
-    "/assets/vendor-react-CEd2m-4Q.js",
+    "/assets/index-CW3NvyGX.js",
+    "/assets/vendor-react-DzhmbrHy.js",
     "/assets/vendor-firebase-_LTHlUTX.js",
-    "/assets/index-CXcwxFMq.css"
+    "/assets/index-sPkXy5TN.css"
   ],
   "htmlChunkMap": {
     "dist/404.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/a-propos/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/a-propos.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/admin/avis/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/avis.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/clients/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/clients.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/commandes/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/commandes.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/coupons/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/coupons.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/facturation/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/facturation.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/factures/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/factures.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/favoris/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/favoris.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/livraisons/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/livraisons.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/parametres/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/parametres.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/produits/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/produits.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/stocks/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin/stocks.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/admin.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AdminAuthGate-htDBCCMe.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AdminAuthGate-fkf45yvu.js"
     ],
     "dist/blog/fleur-cbd-ou-resine-cbd-differences/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/blog/fleur-cbd-ou-resine-cbd-differences.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/blog/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/blog/indoor-greenhouse-hydroponique-differences/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/blog/indoor-greenhouse-hydroponique-differences.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/blog.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/boutique/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/boutique.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/cgv/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/LegalPage-DWwAaAsF.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/LegalPage-DOL5JF3S.js"
     ],
     "dist/cgv.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/LegalPage-DWwAaAsF.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/LegalPage-DOL5JF3S.js"
     ],
     "dist/checkout/cancel/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/CheckoutCancelPage-BsH4F7nD.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/CheckoutCancelPage-DIOIFA4Q.js"
     ],
     "dist/checkout/cancel.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/CheckoutCancelPage-BsH4F7nD.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/CheckoutCancelPage-DIOIFA4Q.js"
     ],
     "dist/checkout/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/CheckoutPage-DdXhxuVo.js",
-      "/assets/deliveryZonesService-pH7SPkzI.js",
+      "/assets/index-sPkXy5TN.css",
+      "/assets/CheckoutPage-BDzzhgR6.js",
+      "/assets/deliveryZonesService-uwWfc28C.js",
       "/assets/quoteService-Cg0bn3-n.js"
     ],
     "dist/checkout/success/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/CheckoutSuccessPage-Bb6WjLFl.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/CheckoutSuccessPage-BJFrx66H.js"
     ],
     "dist/checkout/success.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/CheckoutSuccessPage-Bb6WjLFl.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/CheckoutSuccessPage-BJFrx66H.js"
     ],
     "dist/checkout.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/CheckoutPage-DdXhxuVo.js",
-      "/assets/deliveryZonesService-pH7SPkzI.js",
+      "/assets/index-sPkXy5TN.css",
+      "/assets/CheckoutPage-BDzzhgR6.js",
+      "/assets/deliveryZonesService-uwWfc28C.js",
       "/assets/quoteService-Cg0bn3-n.js"
     ],
     "dist/compte/commandes/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AccountAuthGate-abv21OMM.js",
-      "/assets/AuthPage-BwKzC1KC.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AccountAuthGate-H2oNj409.js",
+      "/assets/AuthPage-C_i3KPqe.js"
     ],
     "dist/compte/commandes.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AccountAuthGate-abv21OMM.js",
-      "/assets/AuthPage-BwKzC1KC.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AccountAuthGate-H2oNj409.js",
+      "/assets/AuthPage-C_i3KPqe.js"
     ],
     "dist/compte/favoris/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AccountAuthGate-abv21OMM.js",
-      "/assets/AuthPage-BwKzC1KC.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AccountAuthGate-H2oNj409.js",
+      "/assets/AuthPage-C_i3KPqe.js"
     ],
     "dist/compte/favoris.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AccountAuthGate-abv21OMM.js",
-      "/assets/AuthPage-BwKzC1KC.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AccountAuthGate-H2oNj409.js",
+      "/assets/AuthPage-C_i3KPqe.js"
     ],
     "dist/compte/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AccountAuthGate-abv21OMM.js",
-      "/assets/AuthPage-BwKzC1KC.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AccountAuthGate-H2oNj409.js",
+      "/assets/AuthPage-C_i3KPqe.js"
     ],
     "dist/compte/profil/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AccountAuthGate-abv21OMM.js",
-      "/assets/AuthPage-BwKzC1KC.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AccountAuthGate-H2oNj409.js",
+      "/assets/AuthPage-C_i3KPqe.js"
     ],
     "dist/compte/profil.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AccountAuthGate-abv21OMM.js",
-      "/assets/AuthPage-BwKzC1KC.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AccountAuthGate-H2oNj409.js",
+      "/assets/AuthPage-C_i3KPqe.js"
     ],
     "dist/compte.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AccountAuthGate-abv21OMM.js",
-      "/assets/AuthPage-BwKzC1KC.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AccountAuthGate-H2oNj409.js",
+      "/assets/AuthPage-C_i3KPqe.js"
     ],
     "dist/confidentialite/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/LegalPage-DWwAaAsF.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/LegalPage-DOL5JF3S.js"
     ],
     "dist/confidentialite.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/LegalPage-DWwAaAsF.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/LegalPage-DOL5JF3S.js"
     ],
     "dist/connexion/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AuthPage-BwKzC1KC.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AuthPage-C_i3KPqe.js"
     ],
     "dist/connexion.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AuthPage-BwKzC1KC.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AuthPage-C_i3KPqe.js"
     ],
     "dist/contact/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/contact.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/faq/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/faq.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/fleurs-cbd/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/fleurs-cbd.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/inscription/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AuthPage-BwKzC1KC.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AuthPage-C_i3KPqe.js"
     ],
     "dist/inscription.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/AuthPage-BwKzC1KC.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/AuthPage-C_i3KPqe.js"
     ],
     "dist/livraison-express-aix/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/livraison-express-aix.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/livraison-postale/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/livraison-postale.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/mentions-legales/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/LegalPage-DWwAaAsF.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/LegalPage-DOL5JF3S.js"
     ],
     "dist/mentions-legales.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/LegalPage-DWwAaAsF.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/LegalPage-DOL5JF3S.js"
     ],
     "dist/panier/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/CartPage-CmQo8Mvy.js",
+      "/assets/index-sPkXy5TN.css",
+      "/assets/CartPage-B0sg8E3X.js",
       "/assets/quoteService-Cg0bn3-n.js"
     ],
     "dist/panier.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/CartPage-CmQo8Mvy.js",
+      "/assets/index-sPkXy5TN.css",
+      "/assets/CartPage-B0sg8E3X.js",
       "/assets/quoteService-Cg0bn3-n.js"
     ],
     "dist/produits/amnesia-cbd-hydroponique/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/amnesia-cbd-hydroponique.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/blue-dream-cbd/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/blue-dream-cbd.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/cookie-kush-indoor/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/cookie-kush-indoor.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/golden-static/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/golden-static.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/harlequin-greenhouse/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/harlequin-greenhouse.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/la-mousse/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/la-mousse.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/mandarine-cbd/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/mandarine-cbd.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/mango-haze-cbd/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/mango-haze-cbd.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/petites-tetes-og-kush/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/petites-tetes-og-kush.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/plutonium-cbd-hydroponique/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/plutonium-cbd-hydroponique.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/produit-introuvable-test/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/produit-introuvable-test.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/supreme-purple-cbd/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/produits/supreme-purple-cbd.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/qualite-conformite/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/qualite-conformite.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/resines-cbd/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/resines-cbd.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/retours/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/LegalPage-DWwAaAsF.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/LegalPage-DOL5JF3S.js"
     ],
     "dist/retours.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css",
-      "/assets/LegalPage-DWwAaAsF.js"
+      "/assets/index-sPkXy5TN.css",
+      "/assets/LegalPage-DOL5JF3S.js"
     ],
     "dist/route-introuvable-test/index.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ],
     "dist/route-introuvable-test.html": [
-      "/assets/index-BwV5Nwr0.js",
-      "/assets/vendor-react-CEd2m-4Q.js",
+      "/assets/index-CW3NvyGX.js",
+      "/assets/vendor-react-DzhmbrHy.js",
       "/assets/vendor-firebase-_LTHlUTX.js",
-      "/assets/index-CXcwxFMq.css"
+      "/assets/index-sPkXy5TN.css"
     ]
   },
   "exclusiveChunks": [
@@ -1048,109 +1048,109 @@
       "group": "public-initial"
     },
     {
-      "file": "dist/assets/vendor-react-CEd2m-4Q.js",
+      "file": "dist/assets/vendor-react-DzhmbrHy.js",
       "rawKB": 191,
       "gzipKB": 62,
       "group": "public-initial"
     },
     {
-      "file": "dist/assets/index-BwV5Nwr0.js",
-      "rawKB": 111,
-      "gzipKB": 28,
+      "file": "dist/assets/index-CW3NvyGX.js",
+      "rawKB": 123,
+      "gzipKB": 32,
       "group": "public-initial"
     },
     {
-      "file": "dist/assets/AdminPage-CCG5PwLh.js",
+      "file": "dist/assets/AdminPage-ChO2_Gw4.js",
       "rawKB": 76,
       "gzipKB": 17,
       "group": "admin"
     },
     {
-      "file": "dist/assets/CheckoutPage-DdXhxuVo.js",
+      "file": "dist/assets/CheckoutPage-BDzzhgR6.js",
       "rawKB": 16,
       "gzipKB": 5,
       "group": "account"
     },
     {
-      "file": "dist/assets/AccountOrdersPage-D_c4myGV.js",
+      "file": "dist/assets/AccountOrdersPage-D38jlSNG.js",
       "rawKB": 5,
       "gzipKB": 2,
       "group": "account"
     },
     {
-      "file": "dist/assets/orderStatus-C-hBPTIx.js",
+      "file": "dist/assets/orderStatus-Dxz-DB6N.js",
       "rawKB": 5,
       "gzipKB": 2,
       "group": "account"
     },
     {
-      "file": "dist/assets/CartPage-CmQo8Mvy.js",
+      "file": "dist/assets/LegalPage-DOL5JF3S.js",
+      "rawKB": 5,
+      "gzipKB": 2,
+      "group": "public-or-shared"
+    },
+    {
+      "file": "dist/assets/CartPage-B0sg8E3X.js",
+      "rawKB": 5,
+      "gzipKB": 2,
+      "group": "public-or-shared"
+    },
+    {
+      "file": "dist/assets/AuthPage-C_i3KPqe.js",
       "rawKB": 4,
       "gzipKB": 2,
       "group": "public-or-shared"
     },
     {
-      "file": "dist/assets/AuthPage-BwKzC1KC.js",
-      "rawKB": 4,
-      "gzipKB": 2,
-      "group": "public-or-shared"
-    },
-    {
-      "file": "dist/assets/LegalPage-DWwAaAsF.js",
-      "rawKB": 4,
-      "gzipKB": 2,
-      "group": "public-or-shared"
-    },
-    {
-      "file": "dist/assets/AdminAuthGate-htDBCCMe.js",
+      "file": "dist/assets/AdminAuthGate-fkf45yvu.js",
       "rawKB": 4,
       "gzipKB": 1,
       "group": "admin"
     },
     {
-      "file": "dist/assets/AdminLayout-CJ8qpFew.js",
+      "file": "dist/assets/AdminLayout-T75CXRqS.js",
       "rawKB": 3,
       "gzipKB": 1,
       "group": "admin"
     },
     {
-      "file": "dist/assets/CheckoutSuccessPage-Bb6WjLFl.js",
+      "file": "dist/assets/CheckoutSuccessPage-BJFrx66H.js",
       "rawKB": 3,
       "gzipKB": 1,
       "group": "checkout"
     },
     {
-      "file": "dist/assets/AccountFavoritesPage-BvbJcEXm.js",
+      "file": "dist/assets/AccountFavoritesPage-Dsgcs2Dr.js",
       "rawKB": 2,
       "gzipKB": 1,
       "group": "account"
     },
     {
-      "file": "dist/assets/AccountProfilePage-B5V55tyV.js",
+      "file": "dist/assets/AccountProfilePage-xUgdnYPr.js",
       "rawKB": 2,
       "gzipKB": 1,
       "group": "account"
     },
     {
-      "file": "dist/assets/deliveryZonesService-pH7SPkzI.js",
+      "file": "dist/assets/deliveryZonesService-uwWfc28C.js",
       "rawKB": 1,
       "gzipKB": 1,
       "group": "public-or-shared"
     },
     {
-      "file": "dist/assets/AccountOverviewPage-Dj6KXtu5.js",
+      "file": "dist/assets/AccountOverviewPage-wVdvbDWP.js",
       "rawKB": 1,
       "gzipKB": 1,
       "group": "account"
     },
     {
-      "file": "dist/assets/AccountLayout-u7JAi0Ev.js",
+      "file": "dist/assets/AccountLayout-DTg4qJE3.js",
       "rawKB": 1,
       "gzipKB": 1,
       "group": "account"
     },
     {
-      "file": "dist/assets/CheckoutCancelPage-BsH4F7nD.js",
+      "file": "dist/assets/CheckoutCancelPage-DIOIFA4Q.js",
       "rawKB": 1,
       "gzipKB": 1,
       "group": "checkout"
@@ -1162,7 +1162,7 @@
       "group": "checkout"
     },
     {
-      "file": "dist/assets/AccountAuthGate-abv21OMM.js",
+      "file": "dist/assets/AccountAuthGate-H2oNj409.js",
       "rawKB": 0,
       "gzipKB": 0,
       "group": "account"

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Heart } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useFavorites } from "../context/FavoritesContext";
+import { trackAddToWishlist } from "../lib/analytics";
 import type { Product } from "../types";
 
 export function FavoriteButton({
@@ -33,6 +34,7 @@ export function FavoriteButton({
     setIsUpdating(true);
     try {
       const result = await toggleFavorite(product);
+      if (result === "added") trackAddToWishlist(product);
       setMessage(result === "added" ? "Ajouté aux favoris." : "Retiré des favoris.");
     } catch {
       setMessage("Impossible de modifier les favoris. Réessayez.");

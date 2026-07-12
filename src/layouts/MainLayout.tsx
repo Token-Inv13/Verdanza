@@ -5,7 +5,10 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { AgeGate } from "../components/AgeGate";
 import { ComplianceNote } from "../components/ComplianceNote";
+import { CookieConsentBanner } from "../components/CookieConsentBanner";
+import { useConsent } from "../context/ConsentContext";
 import { staticImageVariants } from "../lib/generatedImageVariants";
+import { trackContactClick } from "../lib/analytics";
 
 const navItems = [
   { label: "Accueil", to: "/" },
@@ -21,6 +24,7 @@ export function MainLayout() {
   const [open, setOpen] = useState(false);
   const { itemCount } = useCart();
   const { user } = useAuth();
+  const consent = useConsent();
   const logoImage = staticImageVariants["/verdanza-logo.png"];
   const contactEmail =
     (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
@@ -122,7 +126,21 @@ export function MainLayout() {
             <NavLink to="/blog">Guides CBD</NavLink>
             <NavLink to="/faq">FAQ</NavLink>
             <NavLink to="/contact">Contact</NavLink>
-            {contactEmail && <a href={`mailto:${contactEmail}`}>{contactEmail}</a>}
+            {contactEmail && (
+              <a
+                href={`mailto:${contactEmail}`}
+                onClick={() => trackContactClick("email", "footer")}
+              >
+                {contactEmail}
+              </a>
+            )}
+            <button
+              type="button"
+              className="text-left underline decoration-champagne underline-offset-4"
+              onClick={consent.openPreferences}
+            >
+              Gérer mes cookies
+            </button>
           </div>
           <div className="grid gap-2 text-sm text-forest/80">
             <strong className="text-forest">Légal</strong>
@@ -133,6 +151,7 @@ export function MainLayout() {
           </div>
         </div>
       </footer>
+      <CookieConsentBanner />
     </div>
   );
 }

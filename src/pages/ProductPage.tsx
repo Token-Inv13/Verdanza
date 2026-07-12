@@ -7,7 +7,7 @@ import { JsonLd } from "../components/JsonLd";
 import { ProductImage } from "../components/ProductImage";
 import { useCart } from "../context/CartContext";
 import { useProducts } from "../hooks/useProducts";
-import { trackEvent } from "../lib/analytics";
+import { trackAddToCart, trackViewItem } from "../lib/analytics";
 import { FavoriteButton } from "../components/FavoriteButton";
 import {
   buildProductJsonLd,
@@ -29,11 +29,7 @@ export function ProductPage() {
 
   useEffect(() => {
     if (!product) return;
-    trackEvent("view_product", {
-      productId: product.id,
-      productName: product.name,
-      price: product.price,
-    });
+    trackViewItem(product);
   }, [product]);
 
   if (isLoading) {
@@ -222,11 +218,7 @@ export function ProductPage() {
                 className="btn-primary"
                 onClick={() => {
                   addItem(product.id);
-                  trackEvent("add_to_cart", {
-                    productId: product.id,
-                    productName: product.name,
-                    price: product.price,
-                  });
+                  trackAddToCart(product);
                 }}
               >
                 <ShoppingBag size={18} /> Ajouter 1 g au panier

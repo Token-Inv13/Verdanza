@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
+import { useEffect, useRef } from "react";
 import { ProductCard } from "../components/ProductCard";
 import { CatalogNotice } from "../components/CatalogNotice";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 import { useProducts } from "../hooks/useProducts";
 import { getProductsByCategory } from "../data/products";
+import { trackViewItemList } from "../lib/analytics";
 import type { Product, ProductCategory } from "../types";
 
 const categoryContent = {
@@ -152,11 +154,21 @@ export function CategoryPage({
   title: string;
 }) {
   const { products, isLoading } = useProducts();
+  const trackedListSignature = useRef("");
   const pageCategory = category === "flowers" ? "flowers" : "resins";
   const content = categoryContent[pageCategory];
   const categoryProducts = products.filter((product) => product.category === category);
   const localCategoryProducts = getProductsByCategory(category).filter((product) => product.isActive);
   const highlightedProducts = localCategoryProducts.slice(0, 4);
+  const itemListId = category === "flowers" ? "category_flowers" : "category_resins";
+
+  useEffect(() => {
+    if (isLoading) return;
+    const signature = categoryProducts.map((product) => product.id).join("|");
+    if (!signature || trackedListSignature.current === signature) return;
+    trackedListSignature.current = signature;
+    trackViewItemList(itemListId, content.breadcrumb, categoryProducts);
+  }, [categoryProducts, content.breadcrumb, isLoading, itemListId]);
 
   return (
     <main className="container-page py-12">
@@ -177,7 +189,13 @@ export function CategoryPage({
       ) : (
         <div className="product-grid mt-6">
           {categoryProducts.map((product, index) => (
-            <ProductCard key={product.id} product={product} priorityImage={index < 4} />
+            <ProductCard
+              key={product.id}
+              product={product}
+              priorityImage={index < 4}
+              itemListId={itemListId}
+              itemListName={content.breadcrumb}
+            />
           ))}
         </div>
       )}

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Leaf, PackageCheck, ShieldCheck, Truck } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { BlogCard } from "../components/BlogCard";
 import { ProductCard } from "../components/ProductCard";
 import { JsonLd } from "../components/JsonLd";
@@ -8,14 +9,24 @@ import { publishedBlogArticles } from "../data/blogArticles";
 import { useProducts } from "../hooks/useProducts";
 import { staticImageVariants } from "../lib/generatedImageVariants";
 import { buildHomeJsonLd } from "../lib/structuredData";
+import { trackViewItemList } from "../lib/analytics";
 
 export function HomePage() {
   const { products } = useProducts();
   const featuredProducts = products.filter((product) => product.isFeatured);
+  const trackedListSignature = useRef("");
   const heroImage = staticImageVariants["/images/verdanza-hero-premium.webp"];
   const contactEmail =
     (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
     "contact@verdanza.fr";
+
+  useEffect(() => {
+    const visibleProducts = featuredProducts.slice(0, 4);
+    const signature = visibleProducts.map((product) => product.id).join("|");
+    if (!signature || trackedListSignature.current === signature) return;
+    trackedListSignature.current = signature;
+    trackViewItemList("home_featured", "Sélection Verdanza", visibleProducts);
+  }, [featuredProducts]);
 
   return (
     <>
@@ -98,7 +109,12 @@ export function HomePage() {
           </div>
           <div className="product-grid">
             {featuredProducts.slice(0, 4).map((product) => (
-              <ProductCard key={product.id} product={product} />
+              <ProductCard
+                key={product.id}
+                product={product}
+                itemListId="home_featured"
+                itemListName="Sélection Verdanza"
+              />
             ))}
           </div>
         </section>

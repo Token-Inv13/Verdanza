@@ -1,5 +1,6 @@
 import { Link, useParams } from "react-router-dom";
 import { Clock3, UserRound } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { BlogArticleRenderer } from "../components/BlogArticleRenderer";
 import { BlogCard } from "../components/BlogCard";
 import { Breadcrumbs } from "../components/Breadcrumbs";
@@ -13,10 +14,39 @@ import {
 import { buildBlogPostingJsonLd } from "../lib/structuredData";
 import { formatFrenchDate } from "../lib/dateFormat";
 import { staticImageVariants } from "../lib/generatedImageVariants";
+import { trackBlogArticleView, trackBlogReadProgress } from "../lib/analytics";
 
 export function BlogArticlePage() {
   const { slug } = useParams();
   const article = slug ? getPublishedBlogArticleBySlug(slug) : undefined;
+  const viewedSlug = useRef("");
+  const progressTracked = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!article || viewedSlug.current === article.slug) return;
+    viewedSlug.current = article.slug;
+    progressTracked.current = new Set();
+    trackBlogArticleView(article);
+  }, [article]);
+
+  useEffect(() => {
+    if (!article) return undefined;
+    const trackedArticle = article;
+    function handleScroll() {
+      const documentHeight = document.documentElement.scrollHeight - window.innerHeight;
+      if (documentHeight <= 0) return;
+      const progress = Math.round((window.scrollY / documentHeight) * 100);
+      for (const threshold of [25, 50, 75, 90] as const) {
+        if (progress >= threshold && !progressTracked.current.has(threshold)) {
+          progressTracked.current.add(threshold);
+          trackBlogReadProgress(trackedArticle, threshold);
+        }
+      }
+    }
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [article]);
 
   if (!article) {
     return (

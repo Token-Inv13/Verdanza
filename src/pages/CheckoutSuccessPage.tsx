@@ -2,7 +2,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useEffect } from "react";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
-import { trackEvent } from "../lib/analytics";
+import { trackContactClick } from "../lib/analytics";
 
 const contactEmail =
   (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
@@ -16,11 +16,7 @@ export function CheckoutSuccessPage() {
 
   useEffect(() => {
     clearCart();
-    trackEvent("purchase", {
-      hasOrderId: Boolean(orderId),
-      orderType: "order",
-    });
-  }, [clearCart, orderId]);
+  }, [clearCart]);
 
   return (
     <main className="container-page py-16">
@@ -76,7 +72,11 @@ export function CheckoutSuccessPage() {
           )}
           <p>
             Email :{" "}
-            <a className="underline decoration-champagne" href={`mailto:${contactEmail}`}>
+            <a
+              className="underline decoration-champagne"
+              href={`mailto:${contactEmail}`}
+              onClick={() => trackContactClick("email", "checkout_success")}
+            >
               {contactEmail}
             </a>
           </p>

@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
+import { trackContactClick } from "../lib/analytics";
 
 const content = {
   quality: {
@@ -79,7 +80,11 @@ export function ContentPage({ variant }: { variant: keyof typeof content }) {
       {variant === "contact" && contactEmail && (
         <p className="mt-6 text-sm text-forest/80">
           Email direct :{" "}
-          <a className="underline decoration-champagne" href={`mailto:${contactEmail}`}>
+          <a
+            className="underline decoration-champagne"
+            href={`mailto:${contactEmail}`}
+            onClick={() => trackContactClick("email", "contact_page")}
+          >
             {contactEmail}
           </a>
         </p>
@@ -158,7 +163,11 @@ function QualityTrustSection() {
         <p className="mt-4 leading-7 text-ink/70">
           Pour toute question sur un produit ou une commande, vous pouvez
           contacter Verdanza par email à{" "}
-          <a className="underline decoration-champagne" href={`mailto:${contactEmail}`}>
+          <a
+            className="underline decoration-champagne"
+            href={`mailto:${contactEmail}`}
+            onClick={() => trackContactClick("email", "contact_page")}
+          >
             {contactEmail}
           </a>
           .
@@ -193,6 +202,7 @@ function ContactForm() {
       });
       const payload = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) throw new Error(payload.error || "Message non envoye.");
+      trackContactClick("formulaire", "contact_page");
       setStatus("sent");
       setForm({
         name: "",

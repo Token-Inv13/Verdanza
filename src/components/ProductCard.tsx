@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { ShoppingBag } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import type { Product } from "../types";
-import { trackEvent } from "../lib/analytics";
+import { trackAddToCart, trackSelectItem } from "../lib/analytics";
 import { FavoriteButton } from "./FavoriteButton";
 import { ProductImage } from "./ProductImage";
 
@@ -15,9 +15,13 @@ function productImageAlt(product: Product) {
 export function ProductCard({
   product,
   priorityImage = false,
+  itemListId,
+  itemListName,
 }: {
   product: Product;
   priorityImage?: boolean;
+  itemListId?: string;
+  itemListName?: string;
 }) {
   const { addItem } = useCart();
   const isComingSoon = product.comingSoon || product.stockStatus === "coming_soon";
@@ -25,7 +29,11 @@ export function ProductCard({
   return (
     <article className="group relative overflow-hidden rounded-lg border border-forest/10 bg-ivory shadow-sm transition hover:-translate-y-1 hover:shadow-soft">
       <FavoriteButton product={product} className="absolute right-3 top-3 z-10" />
-      <Link to={`/produits/${product.slug}`} className="block bg-cream p-6">
+      <Link
+        to={`/produits/${product.slug}`}
+        className="block bg-cream p-6"
+        onClick={() => trackSelectItem(product, itemListId, itemListName)}
+      >
         <ProductImage
           variant="card"
           src={product.image}
@@ -49,6 +57,7 @@ export function ProductCard({
           <Link
             to={`/produits/${product.slug}`}
             className="mt-1 block font-display text-2xl text-forest"
+            onClick={() => trackSelectItem(product, itemListId, itemListName)}
           >
             {product.name}
           </Link>
@@ -80,11 +89,7 @@ export function ProductCard({
               aria-label={`Ajouter ${product.name} au panier`}
               onClick={() => {
                 addItem(product.id);
-                trackEvent("add_to_cart", {
-                  productId: product.id,
-                  productName: product.name,
-                  price: product.price,
-                });
+                trackAddToCart(product);
               }}
               title="Ajouter au panier"
             >

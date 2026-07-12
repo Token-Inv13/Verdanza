@@ -3,7 +3,7 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { Seo } from "../components/Seo";
 import { useAuth } from "../context/AuthContext";
-import { trackEvent } from "../lib/analytics";
+import { trackLogin, trackSignUp } from "../lib/analytics";
 
 type AuthMode = "login" | "register";
 
@@ -43,7 +43,8 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     try {
       if (mode === "register") await register(email, password, displayName);
       else await signIn(email, password);
-      trackEvent(mode === "register" ? "signup" : "login", { method: "password" });
+      if (mode === "register") trackSignUp("password");
+      else trackLogin("password");
       navigate(redirectTo, { replace: true });
     } catch (authError) {
       setError(authError instanceof Error ? authError.message : "Authentification impossible.");
@@ -58,7 +59,8 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     setIsSubmitting(true);
     try {
       await signInWithGoogle();
-      trackEvent(mode === "register" ? "signup" : "login", { method: "google" });
+      if (mode === "register") trackSignUp("google");
+      else trackLogin("google");
       navigate(redirectTo, { replace: true });
     } catch (authError) {
       setError(authError instanceof Error ? authError.message : "Connexion Google impossible.");

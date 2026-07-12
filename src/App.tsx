@@ -1,6 +1,7 @@
 import { Suspense, lazy } from "react";
 import { Route, Routes } from "react-router-dom";
 import { MainLayout } from "./layouts/MainLayout";
+import { AnalyticsRouteTracker } from "./components/AnalyticsRouteTracker";
 import { HomePage } from "./pages/HomePage";
 import { ShopPage } from "./pages/ShopPage";
 import { CategoryPage } from "./pages/CategoryPage";
@@ -72,6 +73,7 @@ const LegalPage = lazy(() =>
 export function App() {
   return (
     <Suspense fallback={<RouteFallback />}>
+      <AnalyticsRouteTracker />
       <Routes>
         <Route element={<MainLayout />}>
           <Route index element={<HomePage />} />
