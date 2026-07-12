@@ -92,7 +92,10 @@ export async function getGa4MeasurementContext(): Promise<Ga4MeasurementContext 
 export function trackEvent(event: AnalyticsEventName, payload: AnalyticsPayload = {}) {
   if (typeof window === "undefined" || !analyticsAllowed) return;
   if (containsBlockedKey(payload)) return;
-  window.gtag?.("event", event, payload);
+  window.gtag?.("event", event, {
+    send_to: ga4MeasurementId,
+    ...payload,
+  });
 }
 
 export function trackPageView(path: string, title: string) {

@@ -58,7 +58,7 @@ function auditStaticFiles() {
   if (!consentSource.includes("removeAnalyticsCookies")) {
     failures.push("consent withdrawal does not remove analytics cookies");
   }
-  if (!analyticsSource.includes('window.gtag?.("event", event, payload)')) {
+  if (!analyticsSource.includes('window.gtag?.("event", event') || !analyticsSource.includes("send_to: ga4MeasurementId")) {
     failures.push("trackEvent does not send consented events through gtag");
   }
   if (/dataLayer\.push\(\s*\{\s*event/.test(analyticsSource)) {
