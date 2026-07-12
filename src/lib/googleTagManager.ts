@@ -55,6 +55,7 @@ export function loadGoogleTagManager() {
   }
 
   initializeGoogleConsentMode();
+  loadGoogleAnalyticsTag();
   configureGoogleAnalyticsTag();
   window.dataLayer?.push({
     "gtm.start": Date.now(),
@@ -67,6 +68,16 @@ export function loadGoogleTagManager() {
   script.dataset.verdanzaGtm = gtmId;
   document.head.appendChild(script);
   window.verdanzaGtmLoaded = true;
+}
+
+function loadGoogleAnalyticsTag() {
+  if (typeof document === "undefined") return;
+  if (document.querySelector(`script[data-verdanza-ga4="${ga4MeasurementId}"]`)) return;
+  const script = document.createElement("script");
+  script.async = true;
+  script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(ga4MeasurementId)}`;
+  script.dataset.verdanzaGa4 = ga4MeasurementId;
+  document.head.appendChild(script);
 }
 
 function configureGoogleAnalyticsTag() {

@@ -54,6 +54,9 @@ function auditStaticFiles() {
   if (!gtmSource.includes('window.gtag?.("config", ga4MeasurementId') || !gtmSource.includes("send_page_view: false")) {
     failures.push("GA4 target config without automatic page_view is missing");
   }
+  if (!gtmSource.includes("googletagmanager.com/gtag/js") || !gtmSource.includes("data-verdanza-ga4")) {
+    failures.push("direct GA4 gtag loader after consent is missing");
+  }
   if (/googletagmanager\.com\/gtm\.js/.test(indexHtml)) failures.push("index.html contains a static GTM script");
   if (/<noscript/i.test(indexHtml) && /googletagmanager/i.test(indexHtml)) {
     failures.push("index.html contains a GTM noscript iframe");
