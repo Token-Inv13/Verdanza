@@ -181,7 +181,9 @@ async function assertAcceptAndWithdrawFlow(context: BrowserContext, baseUrl: str
   await page.getByRole("button", { name: "J'ai 18 ans ou plus" }).click();
   await page.getByRole("button", { name: "Tout accepter" }).click();
   await page.waitForFunction(() => window.localStorage.getItem("verdanza-consent-v1")?.includes('"analytics":true'));
+  await assertConsentCommandOrder(page, "after accept all before GTM is required");
   await page.waitForFunction(() => Boolean(document.querySelector('script[data-verdanza-gtm="GTM-W76PFW2X"]')));
+  await assertConsentCommandOrder(page, "after GTM load");
   await assertPageScrollable(page, "after accept all");
   const gtmScriptCount = await page.locator('script[data-verdanza-gtm="GTM-W76PFW2X"]').count();
   if (gtmScriptCount !== 1) failures.push(`expected one GTM script after accept, got ${gtmScriptCount}`);
@@ -332,8 +334,9 @@ function mockGoogleTagManagerScript() {
         }
       };
       (window.dataLayer || []).forEach(function (entry) {
-        if (Array.isArray(entry) && entry[0] === "event") {
-          sendGa4Event(entry[1], entry[2]);
+        var args = Array.prototype.slice.call(entry);
+        if (args[0] === "event") {
+          sendGa4Event(args[1], args[2]);
         }
       });
       sendGa4Event("page_view", { page_location: window.location.href, page_title: document.title });
@@ -403,6 +406,55 @@ async function assertNoObjectDataLayerEvent(page: Page, eventName: string) {
   }, eventName);
   if (objectEventCount > 0) {
     failures.push(`${eventName} was also pushed as a dataLayer event object`);
+  }
+}
+
+async function assertConsentCommandOrder(page: Page, label: string) {
+  const order = await page.evaluate(() => {
+    return Array.isArray(window.dataLayer)
+      ? window.dataLayer.map((entry) => {
+          const args = Array.prototype.slice.call(entry);
+          if (args[0] === "consent") {
+            return {
+              kind: `consent:${args[1]}`,
+              analyticsStorage: args[2]?.analytics_storage,
+              adStorage: args[2]?.ad_storage,
+              adUserData: args[2]?.ad_user_data,
+              adPersonalization: args[2]?.ad_personalization,
+            };
+          }
+          if (entry && !Array.isArray(entry) && typeof entry === "object" && "event" in entry) {
+            return { kind: `event:${entry.event}` };
+          }
+          if (args[0] === "event") return { kind: `gtag-event:${args[1]}` };
+          return { kind: "other" };
+        })
+      : [];
+  });
+  const defaultIndex = order.findIndex((entry) => entry.kind === "consent:default");
+  const grantedUpdateIndex = order.findIndex(
+    (entry) => entry.kind === "consent:update" && entry.analyticsStorage === "granted",
+  );
+  const gtmIndex = order.findIndex((entry) => entry.kind === "event:gtm.js");
+  if (defaultIndex < 0) failures.push(`${label}: consent default command is missing`);
+  if (grantedUpdateIndex < 0) failures.push(`${label}: granted consent update command is missing`);
+  if (gtmIndex < 0) failures.push(`${label}: gtm.js event is missing`);
+  if (defaultIndex >= 0 && grantedUpdateIndex >= 0 && defaultIndex > grantedUpdateIndex) {
+    failures.push(`${label}: consent default is after granted update`);
+  }
+  if (grantedUpdateIndex >= 0 && gtmIndex >= 0 && grantedUpdateIndex > gtmIndex) {
+    failures.push(`${label}: consent update granted is after gtm.js`);
+  }
+  for (const entry of order) {
+    if (entry.kind?.startsWith("consent:") && entry.adStorage !== "denied") {
+      failures.push(`${label}: ad_storage is not denied for ${entry.kind}`);
+    }
+    if (entry.kind?.startsWith("consent:") && entry.adUserData !== "denied") {
+      failures.push(`${label}: ad_user_data is not denied for ${entry.kind}`);
+    }
+    if (entry.kind?.startsWith("consent:") && entry.adPersonalization !== "denied") {
+      failures.push(`${label}: ad_personalization is not denied for ${entry.kind}`);
+    }
   }
 }
 
