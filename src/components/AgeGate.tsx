@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { staticImageVariants } from "../lib/generatedImageVariants";
+import { ensureBodyScrollUnlocked } from "../lib/bodyScrollLock";
+import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 
 const key = "verdanza-age-confirmed";
 
@@ -12,18 +14,12 @@ export function AgeGate() {
   useEffect(() => {
     if (isConfirmed) {
       localStorage.setItem(key, "true");
+      ensureBodyScrollUnlocked();
       window.dispatchEvent(new Event("verdanza:age-confirmed"));
     }
   }, [isConfirmed]);
 
-  useEffect(() => {
-    if (isConfirmed) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [isConfirmed]);
+  useBodyScrollLock(!isConfirmed);
 
   if (isConfirmed) return null;
 

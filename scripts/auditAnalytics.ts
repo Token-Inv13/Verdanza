@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname, resolve } from "node:path";
-import { chromium, type BrowserContext } from "playwright";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 
 const distDir = resolve("dist");
 const srcDir = resolve("src");
@@ -126,6 +126,7 @@ async function auditRuntimeConsent() {
     await assertRejectFlow(context, baseUrl, googleRequests);
     await assertAcceptAndWithdrawFlow(context, baseUrl, googleRequests);
     await context.close();
+    await assertKnownVisitorFlow(browser, baseUrl);
   } finally {
     await browser.close();
     await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
@@ -145,6 +146,7 @@ async function assertFreshSession(context: BrowserContext, baseUrl: string, goog
   if (!(await page.getByText("Cookies et mesure d'audience").count())) {
     failures.push("cookie banner is not visible after age confirmation");
   }
+  await assertPageScrollable(page, "after age confirmation before cookie choice");
   if (googleRequests.length) failures.push("Google request fired before consent decision");
   await page.close();
 }
@@ -158,6 +160,7 @@ async function assertRejectFlow(context: BrowserContext, baseUrl: string, google
   await page.reload({ waitUntil: "load" });
   await page.getByRole("button", { name: "J'ai 18 ans ou plus" }).click();
   await page.getByRole("button", { name: "Tout refuser" }).click();
+  await assertPageScrollable(page, "after reject all");
   await page.getByRole("link", { name: "Boutique", exact: true }).click();
   await page.waitForURL("**/boutique");
   if (googleRequests.length) failures.push("Google request fired after reject all");
@@ -180,6 +183,7 @@ async function assertAcceptAndWithdrawFlow(context: BrowserContext, baseUrl: str
   await page.getByRole("button", { name: "Tout accepter" }).click();
   await page.waitForFunction(() => window.localStorage.getItem("verdanza-consent-v1")?.includes('"analytics":true'));
   await page.waitForFunction(() => Boolean(document.querySelector('script[data-verdanza-gtm="GTM-W76PFW2X"]')));
+  await assertPageScrollable(page, "after accept all");
   const gtmScriptCount = await page.locator('script[data-verdanza-gtm="GTM-W76PFW2X"]').count();
   if (gtmScriptCount !== 1) failures.push(`expected one GTM script after accept, got ${gtmScriptCount}`);
   if (googleRequests.filter((url) => url.includes("googletagmanager.com/gtm.js")).length !== 1) {
@@ -192,13 +196,20 @@ async function assertAcceptAndWithdrawFlow(context: BrowserContext, baseUrl: str
   if (dataLayerAfterEvent <= dataLayerLength) failures.push("analytics event was not pushed after accept");
 
   await page.getByRole("button", { name: "Gérer mes cookies" }).click();
+  await assertPageLocked(page, "preferences dialog open");
+  await assertPreferencesDialogCanScrollIfNeeded(page);
   await page.getByRole("button", { name: "Tout refuser" }).click();
+  await page.waitForTimeout(100);
+  await assertPageScrollable(page, "preferences dialog closed after reject");
   await page.evaluate(() => {
     document.cookie = "_ga=test; path=/";
     document.cookie = "_ga_TEST=test; path=/";
   });
   await page.getByRole("button", { name: "Gérer mes cookies" }).click();
+  await assertPageLocked(page, "preferences dialog reopened");
   await page.getByRole("button", { name: "Tout refuser" }).click();
+  await page.waitForTimeout(100);
+  await assertPageScrollable(page, "preferences dialog closed after withdrawal");
   if ((await analyticsCookieCount(context)) !== 0) failures.push("_ga cookies were not removed after withdrawal");
   const dataLayerBeforeBlockedEvent = await page.evaluate(() => window.dataLayer?.length || 0);
   await page.goto(`${baseUrl}/produits/golden-static`, { waitUntil: "load" });
@@ -208,6 +219,111 @@ async function assertAcceptAndWithdrawFlow(context: BrowserContext, baseUrl: str
     failures.push("new ecommerce events were not blocked after withdrawal");
   }
   await page.close();
+}
+
+async function assertKnownVisitorFlow(browser: Browser, baseUrl: string) {
+  const context = await browser.newContext();
+  await context.addInitScript(() => {
+    window.localStorage.setItem("verdanza-age-confirmed", "true");
+    window.localStorage.setItem(
+      "verdanza-consent-v1",
+      JSON.stringify({
+        version: 1,
+        analytics: true,
+        decidedAt: new Date().toISOString(),
+      }),
+    );
+  });
+  await context.route("**/*", async (route) => {
+    const url = route.request().url();
+    if (url.includes("googletagmanager.com") || url.includes("google-analytics.com")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/javascript",
+        body: "window.__verdanzaMockGtmLoaded = (window.__verdanzaMockGtmLoaded || 0) + 1;",
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  const page = await context.newPage();
+  await page.goto(`${baseUrl}/fleurs-cbd`, { waitUntil: "load" });
+  await assertPageScrollable(page, "known visitor initial load");
+  await page.close();
+  await context.close();
+}
+
+async function assertPageScrollable(page: Page, label: string) {
+  await page.waitForFunction(() => document.scrollingElement !== null);
+  const initialState = await scrollState(page);
+  if (initialState.scrollHeight <= initialState.clientHeight) {
+    failures.push(`${label}: page content is not taller than viewport`);
+    return;
+  }
+  if (initialState.bodyComputedOverflow === "hidden" || initialState.htmlComputedOverflow === "hidden") {
+    failures.push(
+      `${label}: scroll is still locked (body=${initialState.bodyComputedOverflow}, html=${initialState.htmlComputedOverflow})`,
+    );
+  }
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(() => window.scrollTo(0, 500));
+  await page.waitForTimeout(50);
+  const afterScrollTo = await page.evaluate(() => window.scrollY);
+  if (afterScrollTo <= 0) failures.push(`${label}: window.scrollTo did not move the page`);
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.mouse.move(200, 200);
+  await page.mouse.wheel(0, 700);
+  await page.waitForTimeout(50);
+  const afterWheel = await page.evaluate(() => window.scrollY);
+  if (afterWheel <= 0) failures.push(`${label}: wheel did not move the page`);
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.keyboard.press("PageDown");
+  await page.waitForTimeout(50);
+  const afterPageDown = await page.evaluate(() => window.scrollY);
+  if (afterPageDown <= 0) failures.push(`${label}: PageDown did not move the page`);
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+}
+
+async function assertPageLocked(page: Page, label: string) {
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(() => window.scrollTo(0, 500));
+  await page.waitForTimeout(50);
+  const state = await scrollState(page);
+  if (state.bodyComputedOverflow !== "hidden" || state.htmlComputedOverflow !== "hidden") {
+    failures.push(
+      `${label}: expected scroll lock, got body=${state.bodyComputedOverflow}, html=${state.htmlComputedOverflow}`,
+    );
+  }
+  if (state.scrollY !== 0) failures.push(`${label}: background scrolled while modal was open`);
+}
+
+async function assertPreferencesDialogCanScrollIfNeeded(page: Page) {
+  const dialogState = await page.locator('[role="dialog"][aria-modal="true"]').evaluate((dialog) => ({
+    scrollHeight: dialog.scrollHeight,
+    clientHeight: dialog.clientHeight,
+    overflowY: window.getComputedStyle(dialog).overflowY,
+  }));
+  if (dialogState.scrollHeight > dialogState.clientHeight && dialogState.overflowY === "visible") {
+    failures.push("preferences dialog content is taller than viewport but not scrollable");
+  }
+}
+
+async function scrollState(page: Page) {
+  return page.evaluate(() => ({
+    bodyStyleOverflow: document.body.style.overflow,
+    bodyComputedOverflow: window.getComputedStyle(document.body).overflow,
+    htmlStyleOverflow: document.documentElement.style.overflow,
+    htmlComputedOverflow: window.getComputedStyle(document.documentElement).overflow,
+    scrollingElement: document.scrollingElement?.tagName || "",
+    scrollHeight: document.scrollingElement?.scrollHeight || 0,
+    clientHeight: document.scrollingElement?.clientHeight || 0,
+    scrollY: window.scrollY,
+  }));
 }
 
 async function analyticsCookieCount(context: BrowserContext) {

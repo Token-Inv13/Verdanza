@@ -2,12 +2,14 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useConsent } from "../context/ConsentContext";
+import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 
 export function CookiePreferencesDialog() {
   const consent = useConsent();
   const titleId = useId();
   const firstButtonRef = useRef<HTMLButtonElement>(null);
   const [analytics, setAnalytics] = useState(false);
+  useBodyScrollLock(consent.preferencesOpen);
 
   useEffect(() => {
     if (!consent.preferencesOpen) return;
@@ -23,7 +25,7 @@ export function CookiePreferencesDialog() {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="w-full max-w-2xl rounded-lg border border-champagne/30 bg-ivory p-6 text-ink shadow-soft"
+        className="max-h-[calc(100dvh-3rem)] w-full max-w-2xl overflow-y-auto rounded-lg border border-champagne/30 bg-ivory p-6 text-ink shadow-soft"
       >
         <div className="flex items-start justify-between gap-4">
           <div>
