@@ -241,6 +241,8 @@ function createStaticServer(root: string, fallback: string, fallbackContent: Buf
 
 function resolveStaticPath(root: string, pathname: string, fallback: string) {
   const safePath = pathname.replace(/^\/+/, "");
+  if (!extname(safePath)) return fallback;
+
   const directPath = resolve(root, safePath);
   if (directPath.startsWith(root) && existsSync(directPath) && statSync(directPath).isFile()) {
     return directPath;

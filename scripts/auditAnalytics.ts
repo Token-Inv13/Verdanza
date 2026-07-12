@@ -13,6 +13,7 @@ const failures: string[] = [];
 auditStaticFiles();
 
 if (existsSync(resolve(distDir, "index.html"))) {
+  auditPrerenderedAnalyticsHtml();
   await auditRuntimeConsent();
 } else {
   failures.push("dist/index.html is missing; run npm run build before audit:analytics");
@@ -74,6 +75,27 @@ function auditStaticFiles() {
     if (!bannerSource.includes(requiredButton)) failures.push(`cookie banner missing ${requiredButton}`);
   }
   if (!packageJson.scripts?.["audit:analytics"]) failures.push("missing npm script audit:analytics");
+}
+
+function auditPrerenderedAnalyticsHtml() {
+  const privacyHtmlPath = resolve(distDir, "confidentialite", "index.html");
+  if (!existsSync(privacyHtmlPath)) {
+    failures.push("prerendered privacy HTML is missing");
+    return;
+  }
+
+  const privacyHtml = readFileSync(privacyHtmlPath, "utf8");
+  for (const required of [
+    "Mesure d'audience et cookies",
+    "Google Tag Manager",
+    "Google Analytics 4",
+    "désactivée par défaut",
+    "n'incluent pas les données de formulaire",
+  ]) {
+    if (!privacyHtml.includes(required)) {
+      failures.push(`prerendered privacy HTML missing: ${required}`);
+    }
+  }
 }
 
 async function auditRuntimeConsent() {

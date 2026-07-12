@@ -124,7 +124,8 @@ function legalSections(title: string, contactEmail?: string) {
     ];
   }
 
-  if (title.includes("Confidentialité") || title.includes("confidentialite")) {
+  const normalizedTitle = title.toLowerCase();
+  if (normalizedTitle.includes("confidentialité") || normalizedTitle.includes("confidentialite")) {
     return [
       {
         heading: "Données collectées",
