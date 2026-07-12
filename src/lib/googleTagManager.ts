@@ -2,6 +2,7 @@ declare global {
   interface Window {
     dataLayer?: unknown[];
     gtag?: (...args: unknown[]) => void;
+    verdanzaConsentModeInitialized?: boolean;
     verdanzaGtmLoaded?: boolean;
   }
 }
@@ -23,12 +24,14 @@ export function initializeGoogleConsentMode() {
     function gtagShim(...args: unknown[]) {
       window.dataLayer?.push(args);
     };
+  if (window.verdanzaConsentModeInitialized) return;
   window.gtag("consent", "default", {
     analytics_storage: "denied",
     ad_storage: "denied",
     ad_user_data: "denied",
     ad_personalization: "denied",
   });
+  window.verdanzaConsentModeInitialized = true;
 }
 
 export function updateAnalyticsConsent(granted: boolean) {
