@@ -8,6 +8,10 @@ import { ConsentProvider } from "./context/ConsentContext";
 import { FavoritesProvider } from "./context/FavoritesContext";
 import "./styles/index.css";
 
+if ("scrollRestoration" in window.history) {
+  window.history.scrollRestoration = "manual";
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>

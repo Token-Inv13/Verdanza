@@ -2,6 +2,7 @@ import { Suspense, lazy } from "react";
 import { Route, Routes } from "react-router-dom";
 import { MainLayout } from "./layouts/MainLayout";
 import { AnalyticsRouteTracker } from "./components/AnalyticsRouteTracker";
+import { ScrollToTop } from "./components/ScrollToTop";
 import { HomePage } from "./pages/HomePage";
 import { ShopPage } from "./pages/ShopPage";
 import { CategoryPage } from "./pages/CategoryPage";
@@ -74,6 +75,7 @@ export function App() {
   return (
     <Suspense fallback={<RouteFallback />}>
       <AnalyticsRouteTracker />
+      <ScrollToTop />
       <Routes>
         <Route element={<MainLayout />}>
           <Route index element={<HomePage />} />
