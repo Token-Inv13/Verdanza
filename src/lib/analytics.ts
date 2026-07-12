@@ -1,5 +1,6 @@
 import type { BlogArticle } from "../types/blog";
 import type { DeliveryMethod, Product } from "../types";
+import { ga4MeasurementId } from "./googleTagManager";
 
 type Primitive = string | number | boolean | null | undefined;
 
@@ -64,6 +65,26 @@ export function setAnalyticsConsentAllowed(allowed: boolean) {
 
 export function hasAnalyticsConsent() {
   return analyticsAllowed;
+}
+
+export type Ga4MeasurementContext = {
+  consentGranted: true;
+  consentCapturedAt: string;
+  clientId: string;
+  sessionId?: string;
+};
+
+export async function getGa4MeasurementContext(): Promise<Ga4MeasurementContext | null> {
+  if (typeof window === "undefined" || !analyticsAllowed || !window.gtag) return null;
+  const clientId = await getGtagValue("client_id", 900);
+  if (!clientId || !isSafeGa4Id(clientId)) return null;
+  const sessionId = await getGtagValue("session_id", 500);
+  return {
+    consentGranted: true,
+    consentCapturedAt: new Date().toISOString(),
+    clientId,
+    sessionId: sessionId && isSafeGa4Id(sessionId) ? sessionId : undefined,
+  };
 }
 
 export function trackEvent(event: AnalyticsEventName, payload: AnalyticsPayload = {}) {
@@ -270,4 +291,26 @@ function containsBlockedKey(payload: AnalyticsPayload) {
   return Object.keys(payload).some((key) =>
     blockedPayloadKeys.some((blocked) => key.toLowerCase().includes(blocked.toLowerCase())),
   );
+}
+
+function getGtagValue(fieldName: "client_id" | "session_id", timeoutMs: number) {
+  return new Promise<string | null>((resolve) => {
+    let resolved = false;
+    const timeout = window.setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
+      resolve(null);
+    }, timeoutMs);
+
+    window.gtag?.("get", ga4MeasurementId, fieldName, (value: unknown) => {
+      if (resolved) return;
+      resolved = true;
+      window.clearTimeout(timeout);
+      resolve(typeof value === "string" || typeof value === "number" ? String(value) : null);
+    });
+  });
+}
+
+function isSafeGa4Id(value: string) {
+  return /^[A-Za-z0-9._-]{1,128}$/.test(value);
 }

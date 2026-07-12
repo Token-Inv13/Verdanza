@@ -139,6 +139,9 @@ function legalSections(title: string, contactEmail?: string) {
         heading: "Mesure d'audience et cookies",
         items: [
           "Verdanza utilise Google Tag Manager et Google Analytics 4 uniquement si vous acceptez la mesure d'audience dans le panneau de cookies.",
+          "Si vous passez commande avec la mesure d'audience acceptée, un événement d'achat peut être envoyé à Google Analytics 4 uniquement après confirmation administrative du règlement.",
+          "Cet événement d'achat est envoyé depuis le serveur, avec le montant, la devise, les produits commandés et l'identifiant technique Analytics nécessaire à la mesure, sans email, téléphone, nom, adresse, message client ou identifiant Firebase.",
+          "Si vous retirez votre consentement avant la confirmation du règlement, Verdanza neutralise l'envoi Analytics de cet achat lorsque la commande est encore en attente.",
           "La mesure d'audience aide à comprendre les pages consultées, les produits vus, les ajouts au panier, les favoris, le parcours de commande et la lecture des guides.",
           "La mesure d'audience est désactivée par défaut. Vous pouvez refuser ou retirer votre consentement à tout moment avec le lien Gérer mes cookies en bas de page.",
           "La personnalisation publicitaire, le stockage publicitaire, les données utilisateur publicitaires et la personnalisation des annonces restent volontairement refusés dans cette phase.",

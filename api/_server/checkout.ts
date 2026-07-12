@@ -70,6 +70,13 @@ export type CheckoutCustomerInput = {
   address: Address;
 };
 
+export type CheckoutAnalyticsContext = {
+  consentGranted: true;
+  consentCapturedAt: string;
+  clientId: string;
+  sessionId?: string;
+};
+
 export type CheckoutRequestBody = {
   items: CheckoutRequestItem[];
   deliveryMethod: DeliveryMethod;
@@ -80,6 +87,7 @@ export type CheckoutRequestBody = {
   customerMessage?: string;
   preferredPaymentMethod?: PreferredPaymentMethod;
   complianceAccepted?: boolean;
+  analyticsContext?: CheckoutAnalyticsContext;
   customer: CheckoutCustomerInput;
 };
 
@@ -143,7 +151,11 @@ export function parseCheckoutBody(value: unknown): CheckoutRequestBody {
     throw new Error("Adresse client incomplete.");
   }
 
-  return body as CheckoutRequestBody;
+  const analyticsContext = parseAnalyticsContext(body.analyticsContext);
+  return {
+    ...(body as CheckoutRequestBody),
+    analyticsContext,
+  };
 }
 
 export async function priceCheckout(
@@ -192,6 +204,9 @@ export async function priceCheckout(
       name: product.name,
       quantity: item.quantity,
       unitPrice: product.price,
+      slug: product.slug,
+      category: product.category,
+      cultureType: product.cultureType,
     });
   }
 
@@ -432,6 +447,7 @@ export function orderPayload(
   body: CheckoutRequestBody,
   priced: PricedCheckout,
   customerId?: string,
+  analyticsRevocationTokenHash?: string,
 ): Record<string, unknown> {
   const paymentProvider = "manual";
   const paymentInstructions = paymentInstructionsFor();
@@ -490,10 +506,50 @@ export function orderPayload(
       },
     ],
     emails: {},
+    analytics:
+      body.analyticsContext?.consentGranted && body.analyticsContext.clientId
+        ? {
+            consentGrantedAtSubmission: true,
+            consentCapturedAt: body.analyticsContext.consentCapturedAt,
+            clientId: body.analyticsContext.clientId,
+            sessionId: body.analyticsContext.sessionId,
+            revocationTokenHash: analyticsRevocationTokenHash,
+            purchaseStatus: "pending",
+            purchaseAttempts: 0,
+          }
+        : {
+            consentGrantedAtSubmission: false,
+            purchaseStatus: "not_eligible",
+          },
     internalNote: "",
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
+}
+
+function parseAnalyticsContext(value: unknown): CheckoutAnalyticsContext | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const context = value as Partial<CheckoutAnalyticsContext>;
+  if (context.consentGranted !== true) return undefined;
+  if (!context.clientId || !isSafeGa4Id(context.clientId)) return undefined;
+  const capturedAt =
+    typeof context.consentCapturedAt === "string" &&
+    Number.isFinite(Date.parse(context.consentCapturedAt))
+      ? context.consentCapturedAt
+      : new Date().toISOString();
+  return {
+    consentGranted: true,
+    consentCapturedAt: capturedAt,
+    clientId: context.clientId,
+    sessionId:
+      context.sessionId && isSafeGa4Id(context.sessionId)
+        ? context.sessionId
+        : undefined,
+  };
+}
+
+function isSafeGa4Id(value: string) {
+  return /^[A-Za-z0-9._-]{1,128}$/.test(value);
 }
 
 export function cents(value: number) {

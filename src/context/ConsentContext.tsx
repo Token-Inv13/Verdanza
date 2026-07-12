@@ -19,6 +19,7 @@ import {
   updateAnalyticsConsent,
 } from "../lib/googleTagManager";
 import { setAnalyticsConsentAllowed } from "../lib/analytics";
+import { revokePendingOrderAnalytics } from "../lib/orderAnalyticsRevocation";
 
 type ConsentContextValue = {
   consent: ConsentState | null;
@@ -66,6 +67,7 @@ export function ConsentProvider({ children }: { children: React.ReactNode }) {
       loadGoogleTagManager();
     } else {
       removeAnalyticsCookies();
+      void revokePendingOrderAnalytics();
     }
   }, []);
 

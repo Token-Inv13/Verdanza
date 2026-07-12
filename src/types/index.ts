@@ -183,6 +183,30 @@ export type OrderItem = {
   name: string;
   quantity: number;
   unitPrice: number;
+  slug?: string;
+  category?: ProductCategory;
+  cultureType?: CultureType;
+};
+
+export type OrderAnalyticsPurchaseStatus =
+  | "not_eligible"
+  | "pending"
+  | "sending"
+  | "sent"
+  | "failed";
+
+export type OrderAnalytics = {
+  consentGrantedAtSubmission: boolean;
+  consentCapturedAt?: string;
+  clientId?: string;
+  sessionId?: string;
+  consentRevokedAt?: string;
+  revocationTokenHash?: string;
+  purchaseStatus: OrderAnalyticsPurchaseStatus;
+  purchaseAttempts?: number;
+  purchaseLastAttemptAt?: string;
+  purchaseSentAt?: string;
+  purchaseLastErrorCode?: string;
 };
 
 export type StatusHistoryEntry = {
@@ -281,6 +305,7 @@ export type Order = {
   statusHistory?: StatusHistoryEntry[];
   emails?: OrderEmails;
   alerts?: OrderAlerts;
+  analytics?: OrderAnalytics;
   internalNote?: string;
   archived?: boolean;
   hidden?: boolean;

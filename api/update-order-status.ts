@@ -8,6 +8,11 @@ import {
   type VercelResponseLike,
 } from "./_server/http.js";
 import { sendOrderStatusUpdateEmail } from "./_server/email.js";
+import {
+  enqueuePurchaseAnalyticsForPaidTransition,
+  processPurchaseAnalyticsOutbox,
+  type PurchaseAnalyticsProcessResult,
+} from "./_server/purchaseAnalytics.js";
 import type {
   Order,
   OrderStatus,
@@ -53,6 +58,8 @@ export default async function handler(
     const admin = await assertAdminUser(db, idToken);
     let updatedOrder: Order | null = null;
     let previousStatus: OrderStatus | null = null;
+    let purchaseAnalyticsQueued = false;
+    let purchaseAnalyticsResult: PurchaseAnalyticsProcessResult | null = null;
 
     await db.runTransaction(async (transaction) => {
       const orderRef = db.collection("orders").doc(body.orderId);
@@ -71,6 +78,9 @@ export default async function handler(
       }
       if (body.paymentStatus) {
         update.paymentStatus = body.paymentStatus;
+        if (body.paymentStatus === "paid" && order.paymentStatus !== "paid") {
+          update.paidAt = new Date().toISOString();
+        }
       }
       if (body.paymentReference !== undefined) {
         update.paymentReference = body.paymentReference;
@@ -184,6 +194,15 @@ export default async function handler(
         }
       }
 
+      if (body.paymentStatus === "paid") {
+        purchaseAnalyticsQueued = await enqueuePurchaseAnalyticsForPaidTransition({
+          db,
+          transaction,
+          order,
+          update,
+        });
+      }
+
       transaction.update(
         orderRef,
         update as FirebaseFirestore.UpdateData<FirebaseFirestore.DocumentData>,
@@ -213,7 +232,11 @@ export default async function handler(
       }
     }
 
-    sendJson(response, { ok: true });
+    if (purchaseAnalyticsQueued) {
+      purchaseAnalyticsResult = await processPurchaseAnalyticsOutbox(db, body.orderId);
+    }
+
+    sendJson(response, { ok: true, analyticsPurchase: purchaseAnalyticsResult });
   } catch (error) {
     console.error("update-order-status failed", error);
     const message =

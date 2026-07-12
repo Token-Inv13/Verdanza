@@ -10,6 +10,7 @@ import { collections } from "./collections";
 import type {
   Order,
   OrderItem,
+  OrderAnalytics,
   OrderStatus,
   OrderType,
   PaymentLinkChannel,
@@ -64,6 +65,7 @@ export type AdminOrderRow = {
   archivedAt?: string;
   hiddenAt?: string;
   emails?: Order["emails"];
+  analytics?: OrderAnalytics;
 };
 
 export type CustomerOrderRow = {
@@ -133,6 +135,7 @@ export async function getAdminOrdersWithFallback() {
         archivedAt: order.archivedAt,
         hiddenAt: order.hiddenAt,
         emails: order.emails,
+        analytics: order.analytics,
       };
     });
     return {
@@ -143,6 +146,27 @@ export async function getAdminOrdersWithFallback() {
     console.warn("Unable to load Firestore orders", error);
     return { orders: [], source: "empty" as const };
   }
+}
+
+export async function retryOrderPurchaseAnalytics(orderId: string) {
+  const token = await auth?.currentUser?.getIdToken();
+  if (!token) throw new Error("Connexion admin requise.");
+  const response = await fetch("/api/retry-order-purchase-analytics", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ orderId }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as {
+    error?: string;
+    analyticsPurchase?: { status?: string; code?: string };
+  };
+  if (!response.ok) {
+    throw new Error(payload.error || "Relance analytics purchase impossible.");
+  }
+  return payload.analyticsPurchase;
 }
 
 export async function updateOrderAdminFields(

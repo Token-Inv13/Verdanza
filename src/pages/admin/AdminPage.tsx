@@ -6,7 +6,10 @@ import {
   upsertProduct,
   type ProductInput,
 } from "../../services/productsService";
-import { updateOrderAdminFields } from "../../services/ordersService";
+import {
+  retryOrderPurchaseAnalytics,
+  updateOrderAdminFields,
+} from "../../services/ordersService";
 import { updateDeliveryZoneAdmin } from "../../services/deliveryZonesService";
 import {
   archiveCoupon,
@@ -51,6 +54,7 @@ import type {
   InvoiceLine,
   InvoiceStatus,
   OrderStatus,
+  OrderAnalytics,
   PaymentProvider,
   PreferredPaymentMethod,
   PaymentLinkChannel,
@@ -1614,6 +1618,7 @@ type AdminOrderListItem = {
     adminNotificationStatus?: string;
     adminNotificationRecipients?: Record<string, { status: string; reason?: string }>;
   };
+  analytics?: OrderAnalytics;
 };
 
 type AdminOrderUpdateInput = {
@@ -1719,6 +1724,22 @@ function AdminOrders({
         error instanceof Error
           ? error.message
           : "Envoi email impossible. Copiez le message manuellement.",
+      );
+    }
+  }
+
+  async function handleRetryPurchaseAnalytics(orderId: string) {
+    try {
+      const result = await retryOrderPurchaseAnalytics(orderId);
+      setPaymentLinkMessage(
+        result?.status === "sent"
+          ? "Purchase GA4 envoye."
+          : `Relance purchase GA4 terminee : ${result?.status || "inconnue"}.`,
+      );
+      await onUpdate(orderId, {});
+    } catch (error) {
+      setPaymentLinkMessage(
+        error instanceof Error ? error.message : "Relance purchase GA4 impossible.",
       );
     }
   }
@@ -1918,6 +1939,16 @@ function AdminOrders({
                     Archiver
                   </button>
                 )}
+                {canRetryPurchaseAnalytics(order) && (
+                  <button
+                    className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+                    disabled={orderSource !== "firestore"}
+                    onClick={() => void handleRetryPurchaseAnalytics(order.id)}
+                    type="button"
+                  >
+                    Relancer GA4
+                  </button>
+                )}
               </div>
             </article>
           ))}
@@ -1935,6 +1966,7 @@ function AdminOrders({
               onCreateInvoice={onCreateInvoice}
               onUpdate={onUpdate}
               onSendEmail={handleSendPaymentLinkEmail}
+              onRetryPurchaseAnalytics={handleRetryPurchaseAnalytics}
             />
           ))}
         </div>
@@ -2255,6 +2287,7 @@ function DesktopOrderCard({
   onCreateInvoice,
   onUpdate,
   onSendEmail,
+  onRetryPurchaseAnalytics,
 }: {
   order: AdminOrderListItem;
   invoice?: Invoice;
@@ -2269,6 +2302,7 @@ function DesktopOrderCard({
     paymentLinkAmount: number;
     paymentLinkCurrency: "EUR";
   }) => Promise<void>;
+  onRetryPurchaseAnalytics: (orderId: string) => Promise<void>;
 }) {
   const isArchived = order.archived || order.hidden;
 
@@ -2540,6 +2574,16 @@ function DesktopOrderCard({
               </button>
             </>
           )}
+          {canRetryPurchaseAnalytics(order) && (
+            <button
+              className="btn-secondary min-h-10 px-3 py-2 text-xs"
+              disabled={orderSource !== "firestore"}
+              onClick={() => void onRetryPurchaseAnalytics(order.id)}
+              type="button"
+            >
+              Relancer GA4
+            </button>
+          )}
         </div>
       </div>
 
@@ -2588,6 +2632,16 @@ function orderMatchesAdminFilter(
   if (filter === "postal") return order.deliveryMethod === "postal";
   if (removedFromMainView) return false;
   return order.orderStatus === filter;
+}
+
+function canRetryPurchaseAnalytics(order: AdminOrderListItem) {
+  return (
+    order.paymentStatus === "paid" &&
+    order.analytics?.consentGrantedAtSubmission === true &&
+    !order.analytics.consentRevokedAt &&
+    Boolean(order.analytics.clientId) &&
+    ["pending", "failed"].includes(order.analytics.purchaseStatus)
+  );
 }
 
 function PaymentLinkActions({

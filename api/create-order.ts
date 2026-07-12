@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import crypto from "node:crypto";
 import { getAdminDb } from "./_server/firebaseAdmin.js";
 import {
   assertMethod,
@@ -36,6 +37,12 @@ export default async function handler(
       ? await verifyFirebaseIdToken(body.authToken)
       : null;
     const orderRef = db.collection("orders").doc();
+    const analyticsRevocationToken = body.analyticsContext?.clientId
+      ? crypto.randomBytes(32).toString("base64url")
+      : undefined;
+    const analyticsRevocationTokenHash = analyticsRevocationToken
+      ? hashToken(analyticsRevocationToken)
+      : undefined;
 
     await db.runTransaction(async (transaction) => {
       const couponRef = priced.couponId
@@ -105,7 +112,10 @@ export default async function handler(
         );
       }
 
-      transaction.set(orderRef, orderPayload(body, priced, verifiedCustomer?.uid));
+      transaction.set(
+        orderRef,
+        orderPayload(body, priced, verifiedCustomer?.uid, analyticsRevocationTokenHash),
+      );
     });
 
     const orderSnapshot = await orderRef.get();
@@ -130,6 +140,7 @@ export default async function handler(
       orderId: orderRef.id,
       total: priced.total,
       paymentInstructions: order.paymentInstructions,
+      analyticsRevocationToken,
     });
   } catch (error) {
     console.error("create-order failed", error);
@@ -148,6 +159,10 @@ export default async function handler(
       400,
     );
   }
+}
+
+function hashToken(value: string) {
+  return crypto.createHash("sha256").update(value).digest("hex");
 }
 
 async function createDraftInvoiceForOrder(

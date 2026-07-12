@@ -11,9 +11,11 @@ import {
   trackAddShippingInfo,
   trackContactClick,
   trackBeginCheckout,
+  getGa4MeasurementContext,
   trackLocalDeliveryZoneSelected,
   trackOrderSubmitted,
 } from "../lib/analytics";
+import { rememberPendingOrderAnalyticsRevocation } from "../lib/orderAnalyticsRevocation";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
 import {
   effectiveLocalDeliveryMinimum,
@@ -246,12 +248,14 @@ export function CheckoutPage() {
       const finalQuote = couponCode.trim() ? await handleApplyPromo(false) : quote;
 
       const authToken = user ? await user.getIdToken() : undefined;
+      const analyticsContext = await getGa4MeasurementContext().catch(() => null);
       const response = await fetch("/api/create-order", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           items,
           authToken,
+          analyticsContext,
           deliveryMethod,
           deliveryZone:
             deliveryMethod === "local_express" ? deliveryZone : "postal-france",
@@ -278,12 +282,18 @@ export function CheckoutPage() {
       });
       const payload = (await response.json().catch(() => ({}))) as {
         orderId?: string;
+        analyticsRevocationToken?: string;
         error?: string;
       };
 
       if (!response.ok || !payload.orderId) {
         throw new Error(payload.error || checkoutErrorMessage);
       }
+
+      rememberPendingOrderAnalyticsRevocation(
+        payload.orderId,
+        payload.analyticsRevocationToken,
+      );
 
       trackOrderSubmitted({
         transactionId: payload.orderId,
