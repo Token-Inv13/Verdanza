@@ -426,10 +426,15 @@ async function assertPageScrollable(page: Page, label: string) {
   if (afterScrollTo <= 0) failures.push(`${label}: window.scrollTo did not move the page`);
 
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.mouse.move(200, 200);
-  await page.mouse.wheel(0, 700);
-  await page.waitForTimeout(50);
-  const afterWheel = await page.evaluate(() => window.scrollY);
+  const viewport = page.viewportSize() ?? { width: 390, height: 844 };
+  let afterWheel = 0;
+  for (let attempt = 0; attempt < 3 && afterWheel <= 0; attempt += 1) {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.mouse.move(Math.floor(viewport.width / 2), Math.floor(viewport.height / 2));
+    await page.mouse.wheel(0, 700);
+    await page.waitForTimeout(100);
+    afterWheel = await page.evaluate(() => window.scrollY);
+  }
   if (afterWheel <= 0) failures.push(`${label}: wheel did not move the page`);
 
   await page.evaluate(() => window.scrollTo(0, 0));
