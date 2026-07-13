@@ -32,10 +32,10 @@ const categoryContent = {
     ],
     selectionTitle: "La sélection Verdanza",
     selectionText:
-      "La sélection privilégie des références distinctes, des informations lisibles et une présentation claire de la traçabilité lorsque les données sont disponibles. Les fiches restent factuelles et ne formulent aucune promesse thérapeutique.",
+      "La sélection privilégie des références distinctes, des informations lisibles et une traçabilité claire lorsque les éléments sont disponibles.",
     featuredTitle: "Fleurs à comparer",
     featuredIntro:
-      "Ces liens permettent d'ouvrir rapidement plusieurs fiches fleurs sans dupliquer les informations détaillées de chaque produit.",
+      "Ces liens permettent de comparer rapidement plusieurs fleurs CBD.",
     faq: [
       {
         question: "Quelle différence entre indoor, greenhouse et hydroponique ?",
@@ -90,10 +90,10 @@ const categoryContent = {
     ],
     selectionTitle: "La sélection Verdanza",
     selectionText:
-      "La sélection met en avant des références lisibles, des prix clairs et les informations disponibles sans extrapoler d'effets à partir des cannabinoïdes. Chaque fiche doit être consultée pour les détails exacts.",
+      "La sélection met en avant des références lisibles, des prix clairs et les informations utiles pour comparer les profils.",
     featuredTitle: "Résines à découvrir",
     featuredIntro:
-      "Ces liens ouvrent directement les fiches des résines actives pour comparer les profils disponibles.",
+      "Ces liens ouvrent directement les résines disponibles à comparer.",
     faq: [
       {
         question: "Quelle différence entre une fleur et une résine CBD ?",
@@ -194,7 +194,6 @@ export function CategoryPage({
       />
       <div className="page-intro">
         <h1>{content.title}</h1>
-        <p>{content.intro}</p>
       </div>
       <CatalogNotice variant={category === "flowers" ? "flowers" : "resins"} />
       {isLoading ? (

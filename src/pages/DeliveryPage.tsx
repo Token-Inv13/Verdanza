@@ -65,15 +65,17 @@ export function DeliveryPage({ mode }: { mode: "local" | "postal" }) {
       <div className="page-intro">
         <h1>Livraison postale</h1>
         <p>
-          Livraison postale disponible en France à partir de {POSTAL_DELIVERY_MINIMUM} EUR
-          d'achat. Livraison postale offerte à partir de {POSTAL_FREE_SHIPPING_THRESHOLD} EUR.
+          Livraison postale disponible en France à partir de {POSTAL_DELIVERY_MINIMUM} €
+          d'achat. Elle est offerte à partir de {POSTAL_FREE_SHIPPING_THRESHOLD} €. En
+          dessous de {POSTAL_FREE_SHIPPING_THRESHOLD} €, les frais postaux sont confirmés
+          avec vous après validation de la commande.
         </p>
       </div>
-      <section className="mt-10 rounded-lg border border-forest/10 bg-cream p-8">
+      <section className="mt-8 rounded-lg border border-forest/10 bg-cream p-6 sm:p-8">
         <h2 className="font-display text-3xl text-forest">Expédition suivie</h2>
         <p className="mt-4 max-w-3xl leading-7 text-ink/70">
-          En dessous de {POSTAL_FREE_SHIPPING_THRESHOLD} EUR, les frais postaux sont
-          confirmés avec vous après validation de la commande.
+          Après confirmation de la commande, Verdanza vous indique les modalités
+          d'expédition et le suivi selon le mode choisi.
         </p>
       </section>
     </main>

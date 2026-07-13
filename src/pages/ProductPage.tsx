@@ -127,7 +127,7 @@ export function ProductPage() {
                 Hydroponique · Sélection Verdanza
               </p>
               <p className="mt-3 text-sm leading-6 text-ink/60">
-                THC inférieur au seuil légal selon analyse producteur
+                THC inférieur au seuil légal selon analyse transmise
               </p>
             </aside>
           )}
@@ -190,8 +190,8 @@ export function ProductPage() {
                 Cette fleur est issue d'une culture hydroponique, une méthode qui
                 permet de mieux contrôler l'environnement de production. Elle est
                 sélectionnée pour sa structure, son profil aromatique et sa qualité
-                visuelle. Chaque lot est proposé selon les garanties et analyses du
-                producteur.
+                visuelle. Chaque lot est proposé selon les informations et analyses
+                transmises.
               </p>
             </div>
           )}
@@ -229,7 +229,7 @@ export function ProductPage() {
             <p className="mt-6 text-sm leading-6 text-ink/60">
               Produit réservé aux adultes. Vente interdite aux mineurs. Produit
               CBD conforme à la réglementation en vigueur selon analyse
-              producteur. THC inférieur au seuil légal. Ne pas ingérer. Tenir
+              transmise. THC inférieur au seuil légal. Ne pas ingérer. Tenir
               hors de portée des enfants. Déconseillé aux femmes enceintes ou
               allaitantes. Consultez un professionnel de santé en cas de
               traitement médical.

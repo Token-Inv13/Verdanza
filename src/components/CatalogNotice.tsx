@@ -19,13 +19,13 @@ export function CatalogNotice({ variant = "shop" }: { variant?: CatalogNoticeVar
   const content = noticeContent[variant];
 
   return (
-    <aside className="mt-6 rounded-md border border-champagne/30 bg-cream px-4 py-3.5 shadow-sm sm:px-5">
+    <aside className="mt-4 rounded-md border border-champagne/25 bg-cream px-3.5 py-3 shadow-sm sm:px-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 max-w-3xl">
-          <h2 className="font-display text-xl leading-tight text-forest sm:text-2xl">
+          <h2 className="font-display text-lg leading-tight text-forest sm:text-xl">
             {content.title}
           </h2>
-          <p className="mt-1 text-sm leading-5 text-ink/70">{content.text}</p>
+          <p className="mt-1 text-sm leading-5 text-ink/65">{content.text}</p>
         </div>
         <span className="inline-flex shrink-0 rounded-full border border-forest/10 bg-ivory px-2 py-0.5 text-xs font-semibold text-forest">
           Bientôt

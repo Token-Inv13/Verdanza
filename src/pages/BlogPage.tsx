@@ -9,7 +9,7 @@ export function BlogPage() {
     <main className="container-page py-12">
       <Seo
         title="Guides CBD : fleurs, résines et méthodes de culture | Verdanza"
-        description="Guides pratiques Verdanza pour comprendre fleurs et résines CBD, méthodes de culture, qualité et lecture des fiches produit, sans promesse médicale."
+        description="Guides pratiques Verdanza pour comprendre fleurs et résines CBD, méthodes de culture, qualité et informations du catalogue."
         path="/blog"
       />
       <Breadcrumbs
@@ -22,9 +22,8 @@ export function BlogPage() {
       <div className="page-intro">
         <h1>Guides CBD Verdanza</h1>
         <p>
-          Ces contenus aident à comprendre les produits, les méthodes de culture,
-          les profils aromatiques et les informations affichées dans le catalogue
-          Verdanza. Ils restent factuels et ne formulent aucune promesse médicale.
+          Des guides simples pour mieux comprendre les fleurs, résines, méthodes de
+          culture et informations affichées dans le catalogue Verdanza.
         </p>
       </div>
 
