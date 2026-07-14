@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-12T00:47:43.918Z",
+  "generatedAt": "2026-07-14T17:02:34.735Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -196,6 +196,105 @@
           "width": 713,
           "height": 475,
           "bytes": 32770
+        }
+      ]
+    },
+    {
+      "productId": "resin-3x-filtre-cbd-cbg",
+      "productName": "3X Filtré CBD/CBG",
+      "sourceUrl": "/Fiche produit/3X%20Filtr%C3%A9%20CBD%20CBG/3X%20Filtr%C3%A9.webp",
+      "sourceFile": "public/Fiche produit/3X Filtré CBD CBG/3X Filtré.webp",
+      "sourceBytes": 21058,
+      "sourceWidth": 713,
+      "sourceHeight": 713,
+      "format": "webp",
+      "hasAlpha": false,
+      "card": [
+        {
+          "src": "/images/products/3x-filtre-cbd-cbg-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 2610
+        },
+        {
+          "src": "/images/products/3x-filtre-cbd-cbg-card-640.webp",
+          "width": 640,
+          "height": 640,
+          "bytes": 8624
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/3x-filtre-cbd-cbg-detail.webp",
+          "width": 713,
+          "height": 713,
+          "bytes": 15420
+        }
+      ]
+    },
+    {
+      "productId": "resin-le-beldia-cbn-cbd",
+      "productName": "Le Beldia CBN + CBD",
+      "sourceUrl": "/Fiche produit/Le%20Beldia/beldia.webp",
+      "sourceFile": "public/Fiche produit/Le Beldia/beldia.webp",
+      "sourceBytes": 34926,
+      "sourceWidth": 600,
+      "sourceHeight": 600,
+      "format": "webp",
+      "hasAlpha": false,
+      "card": [
+        {
+          "src": "/images/products/le-beldia-cbn-cbd-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 5592
+        },
+        {
+          "src": "/images/products/le-beldia-cbn-cbd-card-640.webp",
+          "width": 600,
+          "height": 600,
+          "bytes": 22302
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/le-beldia-cbn-cbd-detail.webp",
+          "width": 600,
+          "height": 600,
+          "bytes": 24274
+        }
+      ]
+    },
+    {
+      "productId": "resin-creamy-piatella-cbd",
+      "productName": "Creamy Piatella CBD",
+      "sourceUrl": "/Fiche produit/Creamy%20Piatella/piatella.webp",
+      "sourceFile": "public/Fiche produit/Creamy Piatella/piatella.webp",
+      "sourceBytes": 27556,
+      "sourceWidth": 713,
+      "sourceHeight": 713,
+      "format": "webp",
+      "hasAlpha": false,
+      "card": [
+        {
+          "src": "/images/products/creamy-piatella-cbd-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 3650
+        },
+        {
+          "src": "/images/products/creamy-piatella-cbd-card-640.webp",
+          "width": 640,
+          "height": 640,
+          "bytes": 11206
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/creamy-piatella-cbd-detail.webp",
+          "width": 713,
+          "height": 713,
+          "bytes": 17078
         }
       ]
     },
@@ -444,6 +543,30 @@
   ],
   "blogImages": [
     {
+      "articleSlug": "comment-lire-analyse-cbd",
+      "articleTitle": "Comment lire une analyse de CBD ?",
+      "variants": [
+        {
+          "src": "/images/blog/comment-lire-analyse-cbd-1x1.webp",
+          "width": 900,
+          "height": 900,
+          "bytes": 14492
+        },
+        {
+          "src": "/images/blog/comment-lire-analyse-cbd-4x3.webp",
+          "width": 1200,
+          "height": 900,
+          "bytes": 15184
+        },
+        {
+          "src": "/images/blog/comment-lire-analyse-cbd-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 16064
+        }
+      ]
+    },
+    {
       "articleSlug": "fleur-cbd-ou-resine-cbd-differences",
       "articleTitle": "Fleur CBD ou résine CBD : quelles différences ?",
       "sources": [
@@ -503,11 +626,11 @@
     }
   ],
   "totals": {
-    "productSourceBytes": 2036162,
-    "productCardLargestBytes": 1095790,
-    "productDetailBytes": 1627236,
+    "productSourceBytes": 2119702,
+    "productCardLargestBytes": 1137922,
+    "productDetailBytes": 1684008,
     "staticSourceBytes": 2197587,
     "staticLargestBytes": 114692,
-    "blogImageBytes": 903794
+    "blogImageBytes": 949534
   }
 }

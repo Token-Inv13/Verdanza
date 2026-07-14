@@ -96,6 +96,7 @@ function auditRoutes() {
   if (batch.urls.length !== urls.length) failures.push("--all-indexable batch does not match sitemapUrls()");
   for (const requiredPath of [
     "/blog",
+    "/blog/comment-lire-analyse-cbd",
     "/blog/fleur-cbd-ou-resine-cbd-differences",
     "/blog/indoor-greenhouse-hydroponique-differences",
   ]) {

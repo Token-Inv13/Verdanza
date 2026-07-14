@@ -309,6 +309,14 @@ function expectedBreadcrumbItems(path: string, product?: Product) {
       { name: "Accueil", path: "/" },
       { name: "Guides CBD", path: "/blog" },
     ],
+    "/blog/comment-lire-analyse-cbd": [
+      { name: "Accueil", path: "/" },
+      { name: "Guides CBD", path: "/blog" },
+      {
+        name: "Comment lire une analyse de CBD ?",
+        path: "/blog/comment-lire-analyse-cbd",
+      },
+    ],
     "/blog/fleur-cbd-ou-resine-cbd-differences": [
       { name: "Accueil", path: "/" },
       { name: "Guides CBD", path: "/blog" },

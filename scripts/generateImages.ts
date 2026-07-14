@@ -75,7 +75,14 @@ const staticTargets = [
     sizes: "180px",
   },
 ];
-const blogImageSources: Record<string, { label: string; sources: string[] }> = {
+const blogImageSources: Record<
+  string,
+  { label: string; sources?: string[]; kind?: "collage" | "analysis" }
+> = {
+  "comment-lire-analyse-cbd": {
+    label: "Lecture d'analyse CBD",
+    kind: "analysis",
+  },
   "fleur-cbd-ou-resine-cbd-differences": {
     label: "Fleur et résine CBD",
     sources: [
@@ -200,13 +207,21 @@ for (const article of blogArticles) {
   const generated = [];
   for (const ratio of blogRatios) {
     const outputUrl = article.images[ratio.key];
-    const output = await generateBlogImage({
-      outputUrl,
-      label: sourceSet.label,
-      sourceUrls: sourceSet.sources,
-      width: ratio.width,
-      height: ratio.height,
-    });
+    const output =
+      sourceSet.kind === "analysis"
+        ? await generateAnalysisBlogImage({
+            outputUrl,
+            label: sourceSet.label,
+            width: ratio.width,
+            height: ratio.height,
+          })
+        : await generateBlogImage({
+            outputUrl,
+            label: sourceSet.label,
+            sourceUrls: sourceSet.sources || [],
+            width: ratio.width,
+            height: ratio.height,
+          });
     generated.push(output);
     staticManifestEntries.push(`  ${JSON.stringify(output.src)}: {
     src: ${JSON.stringify(output.src)},
@@ -395,6 +410,69 @@ async function generateBlogImage({
     .composite([{ input: overlay, left: 0, top: 0 }, ...composites])
     .webp({ quality: 82, effort: 6 })
     .toBuffer();
+  writeIfChanged(outputFile, output);
+
+  return {
+    src: outputUrl,
+    width,
+    height,
+    bytes: output.length,
+  };
+}
+
+async function generateAnalysisBlogImage({
+  outputUrl,
+  label,
+  width,
+  height,
+}: {
+  outputUrl: string;
+  label: string;
+  width: number;
+  height: number;
+}): Promise<GeneratedVariant> {
+  const outputFile = publicPath(outputUrl);
+  mkdirSync(dirname(outputFile), { recursive: true });
+
+  const svg = Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f7f1e6"/>
+      <stop offset="100%" stop-color="#efe6d8"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#12392f"/>
+      <stop offset="100%" stop-color="#0d3b2e"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#0d3b2e" flood-opacity="0.16"/>
+    </filter>
+  </defs>
+  <rect width="${width}" height="${height}" fill="url(#bg)"/>
+  <circle cx="${Math.round(width * 0.18)}" cy="${Math.round(height * 0.18)}" r="${Math.round(Math.min(width, height) * 0.18)}" fill="#c9a45c" opacity="0.16"/>
+  <rect x="0" y="0" width="${Math.round(width * 0.28)}" height="${height}" fill="url(#panel)"/>
+  <rect x="${Math.round(width * 0.31)}" y="${Math.round(height * 0.12)}" width="${Math.round(width * 0.42)}" height="${Math.round(height * 0.72)}" rx="${Math.round(Math.min(width, height) * 0.03)}" fill="#fffaf1" filter="url(#shadow)"/>
+  <rect x="${Math.round(width * 0.37)}" y="${Math.round(height * 0.19)}" width="${Math.round(width * 0.19)}" height="${Math.round(height * 0.045)}" rx="${Math.round(height * 0.02)}" fill="#0d3b2e" opacity="0.92"/>
+  <rect x="${Math.round(width * 0.37)}" y="${Math.round(height * 0.28)}" width="${Math.round(width * 0.24)}" height="${Math.round(height * 0.014)}" rx="${Math.round(height * 0.007)}" fill="#d8c9ad"/>
+  <rect x="${Math.round(width * 0.37)}" y="${Math.round(height * 0.32)}" width="${Math.round(width * 0.20)}" height="${Math.round(height * 0.014)}" rx="${Math.round(height * 0.007)}" fill="#d8c9ad"/>
+  <rect x="${Math.round(width * 0.37)}" y="${Math.round(height * 0.36)}" width="${Math.round(width * 0.26)}" height="${Math.round(height * 0.014)}" rx="${Math.round(height * 0.007)}" fill="#d8c9ad"/>
+  <rect x="${Math.round(width * 0.37)}" y="${Math.round(height * 0.43)}" width="${Math.round(width * 0.06)}" height="${Math.round(height * 0.20)}" rx="12" fill="#0d3b2e"/>
+  <rect x="${Math.round(width * 0.45)}" y="${Math.round(height * 0.48)}" width="${Math.round(width * 0.06)}" height="${Math.round(height * 0.15)}" rx="12" fill="#c9a45c"/>
+  <rect x="${Math.round(width * 0.53)}" y="${Math.round(height * 0.40)}" width="${Math.round(width * 0.06)}" height="${Math.round(height * 0.23)}" rx="12" fill="#0d3b2e" opacity="0.78"/>
+  <rect x="${Math.round(width * 0.61)}" y="${Math.round(height * 0.52)}" width="${Math.round(width * 0.06)}" height="${Math.round(height * 0.11)}" rx="12" fill="#c9a45c" opacity="0.82"/>
+  <line x1="${Math.round(width * 0.37)}" y1="${Math.round(height * 0.70)}" x2="${Math.round(width * 0.67)}" y2="${Math.round(height * 0.70)}" stroke="#d8c9ad" stroke-width="4" stroke-linecap="round"/>
+  <line x1="${Math.round(width * 0.37)}" y1="${Math.round(height * 0.75)}" x2="${Math.round(width * 0.63)}" y2="${Math.round(height * 0.75)}" stroke="#d8c9ad" stroke-width="4" stroke-linecap="round"/>
+  <line x1="${Math.round(width * 0.37)}" y1="${Math.round(height * 0.80)}" x2="${Math.round(width * 0.59)}" y2="${Math.round(height * 0.80)}" stroke="#d8c9ad" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="${Math.round(width * 0.72)}" cy="${Math.round(height * 0.46)}" r="${Math.round(Math.min(width, height) * 0.10)}" fill="none" stroke="#0d3b2e" stroke-width="${Math.max(8, Math.round(width * 0.008))}"/>
+  <line x1="${Math.round(width * 0.79)}" y1="${Math.round(height * 0.53)}" x2="${Math.round(width * 0.86)}" y2="${Math.round(height * 0.60)}" stroke="#0d3b2e" stroke-width="${Math.max(10, Math.round(width * 0.01))}" stroke-linecap="round"/>
+  <circle cx="${Math.round(width * 0.74)}" cy="${Math.round(height * 0.16)}" r="${Math.round(Math.min(width, height) * 0.045)}" fill="#c9a45c" opacity="0.22"/>
+  <circle cx="${Math.round(width * 0.80)}" cy="${Math.round(height * 0.24)}" r="${Math.round(Math.min(width, height) * 0.028)}" fill="#0d3b2e" opacity="0.12"/>
+  <text x="${Math.round(width * 0.36)}" y="${Math.round(height * 0.11)}" fill="#0d3b2e" font-family="Arial, sans-serif" font-size="${Math.round(height * 0.04)}" font-weight="700">${escapeSvg(label)}</text>
+  <text x="${Math.round(width * 0.36)}" y="${Math.round(height * 0.92)}" fill="#0d3b2e" font-family="Arial, sans-serif" font-size="${Math.round(height * 0.026)}" font-weight="600" opacity="0.72">Lecture méthodique du document et des mesures</text>
+</svg>`);
+
+  const output = await sharp(svg).webp({ quality: 82, effort: 6 }).toBuffer();
   writeIfChanged(outputFile, output);
 
   return {

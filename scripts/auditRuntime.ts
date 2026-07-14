@@ -4,6 +4,7 @@ const baseUrl = process.argv[2] || "http://127.0.0.1:4173";
 const noJavaScriptRoutes = [
   "/",
   "/blog",
+  "/blog/comment-lire-analyse-cbd",
   "/blog/fleur-cbd-ou-resine-cbd-differences",
   "/blog/indoor-greenhouse-hydroponique-differences",
   "/fleurs-cbd",
