@@ -18,6 +18,13 @@ import {
   type CouponInput,
 } from "../../services/couponsService";
 import {
+  archivePromoBanner,
+  promoBannerStatus,
+  updatePromoBannerStatus,
+  upsertPromoBanner,
+  type PromoBannerInput,
+} from "../../services/promoBannersService";
+import {
   adjustCustomerLoyalty,
   updateCustomerInternalNote,
 } from "../../services/adminCustomersService";
@@ -62,6 +69,10 @@ import type {
   PaymentStatus,
   Product,
   ProductCategory,
+  PromoBanner,
+  PromoBannerPlacement,
+  PromoBannerType,
+  PromoBannerVariant,
   ProductReview,
   ReviewStatus,
   StatusHistoryEntry,
@@ -112,6 +123,23 @@ const emptyCoupon: CouponInput = {
   categories: [],
 };
 
+const emptyPromoBanner: PromoBannerInput = {
+  title: "",
+  message: "",
+  type: "shop_card",
+  placement: "draft",
+  isActive: false,
+  startsAt: "",
+  endsAt: "",
+  priority: 10,
+  buttonLabel: "",
+  buttonUrl: "",
+  linkedPromoCode: "",
+  variant: "default",
+  dismissible: false,
+  isArchived: false,
+};
+
 const paymentStatusOptions: PaymentStatus[] = [
   "to_confirm",
   "payment_link_sent",
@@ -137,6 +165,8 @@ export function AdminPage({ section }: { section: string }) {
     deliverySource,
     coupons,
     couponSource,
+    promoBanners,
+    promoBannerSource,
     customers,
     customerSource,
     invoices,
@@ -149,6 +179,8 @@ export function AdminPage({ section }: { section: string }) {
   const [message, setMessage] = useState("");
   const [editingProduct, setEditingProduct] = useState<ProductInput>(emptyProduct);
   const [editingCoupon, setEditingCoupon] = useState<CouponInput>(emptyCoupon);
+  const [editingPromoBanner, setEditingPromoBanner] =
+    useState<PromoBannerInput>(emptyPromoBanner);
   const [editingBilling, setEditingBilling] = useState<BillingSettings>(billingSettings);
 
   useEffect(() => {
@@ -246,6 +278,29 @@ export function AdminPage({ section }: { section: string }) {
     if (!confirmed) return;
     await archiveCoupon(coupon.id);
     setMessage(`Code promo ${coupon.code} archive.`);
+    await refresh();
+  }
+
+  async function handlePromoBannerSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await upsertPromoBanner(editingPromoBanner);
+    setEditingPromoBanner(emptyPromoBanner);
+    setMessage("Banniere enregistree.");
+    await refresh();
+  }
+
+  async function handlePromoBannerToggle(banner: PromoBanner) {
+    await updatePromoBannerStatus(banner.id, !banner.isActive);
+    await refresh();
+  }
+
+  async function handlePromoBannerArchive(banner: PromoBanner) {
+    const confirmed = window.confirm(
+      "Cette action archive la banniere. Elle ne sera plus visible cote client.",
+    );
+    if (!confirmed) return;
+    await archivePromoBanner(banner.id);
+    setMessage(`Banniere ${banner.title} archivee.`);
     await refresh();
   }
 
@@ -410,6 +465,25 @@ export function AdminPage({ section }: { section: string }) {
               onEdit={setEditingCoupon}
               onToggle={handleCouponToggle}
               onArchive={handleCouponArchive}
+            />
+          </section>
+        </div>
+      )}
+
+      {section === "Bannieres" && (
+        <div className="mt-8 grid gap-6 xl:grid-cols-[420px_1fr]">
+          <PromoBannerForm
+            banner={editingPromoBanner}
+            onChange={setEditingPromoBanner}
+            onSubmit={handlePromoBannerSubmit}
+          />
+          <section>
+            <SourceLine source={promoBannerSource} />
+            <PromoBannersTable
+              banners={promoBanners}
+              onEdit={setEditingPromoBanner}
+              onToggle={handlePromoBannerToggle}
+              onArchive={handlePromoBannerArchive}
             />
           </section>
         </div>
@@ -1334,6 +1408,335 @@ function CouponsTable({
       </div>
     </section>
     </section>
+  );
+}
+
+function PromoBannerForm({
+  banner,
+  onChange,
+  onSubmit,
+}: {
+  banner: PromoBannerInput;
+  onChange: (banner: PromoBannerInput) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  return (
+    <form onSubmit={onSubmit} className="admin-card h-fit">
+      <h2 className="font-display text-3xl text-forest">
+        {banner.id ? "Modifier une banniere" : "Creer une banniere"}
+      </h2>
+      <p className="mt-2 text-sm leading-6 text-ink/60">
+        Les bannieres inactives, expirees ou archivees ne sont pas visibles cote client.
+      </p>
+      <div className="mt-5 grid gap-4">
+        <Input
+          label="Titre"
+          value={banner.title}
+          onChange={(title) => onChange({ ...banner, title })}
+        />
+        <Textarea
+          label="Message court"
+          value={banner.message}
+          onChange={(message) => onChange({ ...banner, message })}
+        />
+        <p className="text-xs leading-5 text-ink/55">Gardez le message court et sans HTML.</p>
+        <label className="text-sm font-medium text-forest">
+          Type de banniere
+          <select
+            className="input-field mt-2"
+            value={banner.type}
+            onChange={(event) =>
+              onChange({ ...banner, type: event.target.value as PromoBannerType })
+            }
+          >
+            <option value="top_bar">Bandeau haut de page</option>
+            <option value="shop_card">Encadre boutique</option>
+            <option value="checkout_notice">Encart panier / checkout</option>
+            <option value="modal">Modale legere</option>
+          </select>
+        </label>
+        <label className="text-sm font-medium text-forest">
+          Emplacement
+          <select
+            className="input-field mt-2"
+            value={banner.placement}
+            onChange={(event) =>
+              onChange({ ...banner, placement: event.target.value as PromoBannerPlacement })
+            }
+          >
+            <option value="draft">Aucun / brouillon</option>
+            <option value="all_public">Toutes les pages publiques</option>
+            <option value="home">Accueil</option>
+            <option value="shop">Boutique</option>
+            <option value="flowers">Fleurs CBD</option>
+            <option value="resins">Resines CBD</option>
+            <option value="cart">Panier</option>
+            <option value="checkout">Checkout</option>
+          </select>
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="Date de debut"
+            value={dateInputValue(banner.startsAt)}
+            onChange={(startsAt) => onChange({ ...banner, startsAt: startsAt || undefined })}
+            type="date"
+          />
+          <Input
+            label="Date de fin"
+            value={dateInputValue(banner.endsAt)}
+            onChange={(endsAt) => onChange({ ...banner, endsAt: endsAt || undefined })}
+            type="date"
+          />
+        </div>
+        <Input
+          label="Bouton optionnel"
+          value={banner.buttonLabel || ""}
+          onChange={(buttonLabel) => onChange({ ...banner, buttonLabel })}
+        />
+        <Input
+          label="Lien optionnel"
+          value={banner.buttonUrl || ""}
+          onChange={(buttonUrl) => onChange({ ...banner, buttonUrl })}
+        />
+        <Input
+          label="Code promo lie optionnel"
+          value={banner.linkedPromoCode || ""}
+          onChange={(linkedPromoCode) =>
+            onChange({
+              ...banner,
+              linkedPromoCode: linkedPromoCode.toUpperCase().replace(/\s+/g, ""),
+            })
+          }
+        />
+        <label className="flex items-center gap-2 text-sm text-forest">
+          <input
+            type="checkbox"
+            checked={banner.isActive}
+            onChange={(event) => onChange({ ...banner, isActive: event.target.checked })}
+          />
+          Active
+        </label>
+        <div className="rounded-md border border-champagne/30 bg-cream p-4">
+          <p className="text-xs uppercase tracking-[0.14em] text-champagne">Apercu</p>
+          <div className={`mt-3 rounded-md border p-4 ${adminBannerPreviewClass(banner.variant)}`}>
+            <strong className="block text-forest">{banner.title || "Titre de la banniere"}</strong>
+            <p className="mt-1 text-sm leading-6 text-ink/70">
+              {banner.message || "Message visible cote client."}
+            </p>
+            {banner.linkedPromoCode && (
+              <p className="mt-2 text-xs font-semibold text-forest">
+                Code : {banner.linkedPromoCode}
+              </p>
+            )}
+          </div>
+        </div>
+        <button
+          className="btn-secondary min-h-10 justify-between px-3 py-2 text-sm"
+          type="button"
+          onClick={() => setShowAdvanced((value) => !value)}
+        >
+          Options avancees
+          <span>{showAdvanced ? "Masquer" : "Afficher"}</span>
+        </button>
+        {showAdvanced && (
+          <div className="grid gap-4 rounded-md border border-forest/10 bg-cream p-4">
+            <NumberInput
+              label="Priorite"
+              value={banner.priority}
+              onChange={(priority) => onChange({ ...banner, priority })}
+            />
+            <label className="text-sm font-medium text-forest">
+              Variante visuelle
+              <select
+                className="input-field mt-2"
+                value={banner.variant}
+                onChange={(event) =>
+                  onChange({ ...banner, variant: event.target.value as PromoBannerVariant })
+                }
+              >
+                <option value="default">Default</option>
+                <option value="promo">Promo</option>
+                <option value="delivery">Livraison</option>
+                <option value="info">Info</option>
+                <option value="warning">Avertissement</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-sm text-forest">
+              <input
+                type="checkbox"
+                checked={banner.dismissible}
+                onChange={(event) =>
+                  onChange({ ...banner, dismissible: event.target.checked })
+                }
+              />
+              Refermable cote client
+            </label>
+          </div>
+        )}
+        <button className="btn-primary" type="submit">
+          Enregistrer la banniere
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function PromoBannersTable({
+  banners,
+  onEdit,
+  onToggle,
+  onArchive,
+}: {
+  banners: PromoBanner[];
+  onEdit: (banner: PromoBannerInput) => void;
+  onToggle: (banner: PromoBanner) => Promise<void>;
+  onArchive: (banner: PromoBanner) => Promise<void>;
+}) {
+  const activeCount = banners.filter((banner) => promoBannerStatus(banner).label === "Active").length;
+  const archivedCount = banners.filter((banner) => banner.isArchived).length;
+  const scheduledCount = banners.filter((banner) => promoBannerStatus(banner).label === "Programmee").length;
+
+  return (
+    <section className="grid gap-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        <article className="admin-card">
+          <p className="text-sm text-ink/55">Bannieres actives</p>
+          <strong className="mt-2 block font-display text-3xl text-forest">{activeCount}</strong>
+        </article>
+        <article className="admin-card">
+          <p className="text-sm text-ink/55">Programmees</p>
+          <strong className="mt-2 block font-display text-3xl text-forest">{scheduledCount}</strong>
+        </article>
+        <article className="admin-card">
+          <p className="text-sm text-ink/55">Archivees</p>
+          <strong className="mt-2 block font-display text-3xl text-forest">{archivedCount}</strong>
+        </article>
+      </div>
+      <section className="overflow-hidden rounded-lg border border-forest/10 bg-ivory">
+        {!banners.length && (
+          <AdminEmptyState
+            title="Aucune banniere pour le moment."
+            description="Creez un bandeau discret, un encadre boutique ou un message checkout."
+          />
+        )}
+        {!!banners.length && (
+          <div className="grid gap-3 p-3 lg:hidden">
+            {banners.map((banner) => (
+              <PromoBannerCard
+                key={banner.id}
+                banner={banner}
+                onEdit={onEdit}
+                onToggle={onToggle}
+                onArchive={onArchive}
+              />
+            ))}
+          </div>
+        )}
+        <div className="overflow-x-auto">
+          <table className="hidden w-full min-w-[1120px] text-left text-sm lg:table">
+            <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
+              <tr>
+                {[
+                  "Titre",
+                  "Type",
+                  "Emplacement",
+                  "Dates",
+                  "Code",
+                  "Priorite",
+                  "Statut",
+                  "Actions",
+                ].map((header) => (
+                  <th key={header} className="px-4 py-3 font-medium">{header}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {banners.map((banner) => {
+                const status = promoBannerStatus(banner);
+                return (
+                  <tr key={banner.id} className="border-t border-forest/10">
+                    <td className="px-4 py-4">
+                      <strong className="block text-forest">{banner.title}</strong>
+                      <span className="line-clamp-2 text-xs text-ink/55">{banner.message}</span>
+                    </td>
+                    <td className="px-4 py-4">{promoBannerTypeLabel(banner.type)}</td>
+                    <td className="px-4 py-4">{promoBannerPlacementLabel(banner.placement)}</td>
+                    <td className="px-4 py-4 text-xs text-ink/60">
+                      {banner.startsAt || "Immediat"} - {banner.endsAt || "Sans fin"}
+                    </td>
+                    <td className="px-4 py-4">{banner.linkedPromoCode || "-"}</td>
+                    <td className="px-4 py-4">{banner.priority}</td>
+                    <td className="px-4 py-4">
+                      <button type="button" onClick={() => void onToggle(banner)}>
+                        <AdminBadge tone={status.tone}>{status.label}</AdminBadge>
+                      </button>
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex flex-wrap gap-2">
+                        <button className="btn-secondary min-h-9 px-3 py-2" onClick={() => onEdit(banner)}>
+                          Modifier
+                        </button>
+                        <button className="btn-secondary min-h-9 px-3 py-2" onClick={() => void onArchive(banner)}>
+                          Archiver
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function PromoBannerCard({
+  banner,
+  onEdit,
+  onToggle,
+  onArchive,
+}: {
+  banner: PromoBanner;
+  onEdit: (banner: PromoBannerInput) => void;
+  onToggle: (banner: PromoBanner) => Promise<void>;
+  onArchive: (banner: PromoBanner) => Promise<void>;
+}) {
+  const status = promoBannerStatus(banner);
+  return (
+    <article className="rounded-lg border border-forest/10 bg-ivory p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <strong className="block text-forest">{banner.title}</strong>
+          <span className="text-xs text-ink/55">
+            {promoBannerTypeLabel(banner.type)} - {promoBannerPlacementLabel(banner.placement)}
+          </span>
+        </div>
+        <AdminBadge tone={status.tone}>{status.label}</AdminBadge>
+      </div>
+      <p className="mt-3 text-sm leading-6 text-ink/70">{banner.message}</p>
+      <p className="mt-2 text-xs text-ink/55">
+        Priorite {banner.priority} - {banner.startsAt || "Immediat"} -{" "}
+        {banner.endsAt || "Sans fin"}
+      </p>
+      {banner.linkedPromoCode && (
+        <p className="mt-2 text-xs font-semibold text-forest">Code : {banner.linkedPromoCode}</p>
+      )}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs" onClick={() => onEdit(banner)}>
+          Modifier
+        </button>
+        <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs" onClick={() => void onToggle(banner)}>
+          {banner.isActive ? "Desactiver" : "Activer"}
+        </button>
+        <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs" onClick={() => void onArchive(banner)}>
+          Archiver
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -3631,6 +4034,35 @@ function couponStatus(coupon: Coupon): { label: string; tone: AdminBadgeTone } {
     return { label: "Limite atteinte", tone: "warning" };
   }
   return { label: "Actif", tone: "success" };
+}
+
+function promoBannerTypeLabel(type: PromoBannerType) {
+  if (type === "top_bar") return "Bandeau haut de page";
+  if (type === "shop_card") return "Encadre boutique";
+  if (type === "checkout_notice") return "Encart panier / checkout";
+  return "Modale legere";
+}
+
+function promoBannerPlacementLabel(placement: PromoBannerPlacement) {
+  const labels: Record<PromoBannerPlacement, string> = {
+    home: "Accueil",
+    shop: "Boutique",
+    flowers: "Fleurs CBD",
+    resins: "Resines CBD",
+    cart: "Panier",
+    checkout: "Checkout",
+    all_public: "Toutes les pages publiques",
+    draft: "Aucun / brouillon",
+  };
+  return labels[placement] || placement;
+}
+
+function adminBannerPreviewClass(variant: PromoBannerVariant) {
+  if (variant === "promo") return "border-champagne/50 bg-champagne/15";
+  if (variant === "delivery") return "border-forest/15 bg-forest/5";
+  if (variant === "warning") return "border-red-200 bg-red-50";
+  if (variant === "info") return "border-forest/10 bg-ivory";
+  return "border-forest/10 bg-ivory";
 }
 
 function invoiceStatusLabel(status: InvoiceStatus) {

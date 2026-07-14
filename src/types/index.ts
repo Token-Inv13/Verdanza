@@ -138,6 +138,39 @@ export type Coupon = {
   updatedAt?: string;
 };
 
+export type PromoBannerType = "top_bar" | "shop_card" | "checkout_notice" | "modal";
+export type PromoBannerPlacement =
+  | "home"
+  | "shop"
+  | "flowers"
+  | "resins"
+  | "cart"
+  | "checkout"
+  | "all_public"
+  | "draft";
+export type PromoBannerVariant = "default" | "promo" | "delivery" | "info" | "warning";
+
+export type PromoBanner = {
+  id: string;
+  title: string;
+  message: string;
+  type: PromoBannerType;
+  placement: PromoBannerPlacement;
+  isActive: boolean;
+  startsAt?: string;
+  endsAt?: string;
+  priority: number;
+  buttonLabel?: string;
+  buttonUrl?: string;
+  linkedPromoCode?: string;
+  variant: PromoBannerVariant;
+  dismissible: boolean;
+  isArchived?: boolean;
+  archivedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type StockMovementType =
   | "manual_add"
   | "sale"

@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useEffect, useRef } from "react";
 import { ProductCard } from "../components/ProductCard";
 import { CatalogNotice } from "../components/CatalogNotice";
+import { PromoBannerSlot } from "../components/PromoBannerSlot";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 import { useProducts } from "../hooks/useProducts";
@@ -77,6 +78,11 @@ export function CategoryPage({
         <h1>{content.title}</h1>
       </div>
       <CatalogNotice variant={category === "flowers" ? "flowers" : "resins"} />
+      <PromoBannerSlot
+        placement={category === "flowers" ? "flowers" : "resins"}
+        type="shop_card"
+        className="mt-6 grid gap-3"
+      />
       {isLoading ? (
         <p className="mt-6 text-forest/70">Chargement des produits...</p>
       ) : (

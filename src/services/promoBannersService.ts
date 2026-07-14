@@ -1,0 +1,217 @@
+import {
+  collection,
+  doc,
+  getDocs,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+} from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { collections } from "./collections";
+import type {
+  PromoBanner,
+  PromoBannerPlacement,
+  PromoBannerType,
+  PromoBannerVariant,
+} from "../types";
+
+export type PromoBannerInput = Omit<PromoBanner, "id" | "createdAt" | "updatedAt"> & {
+  id?: string;
+};
+
+export async function getPromoBannersWithFallback() {
+  if (!db) return { banners: [], source: "empty" as const };
+  try {
+    const snapshot = await getDocs(
+      query(collection(db, collections.promoBanners), orderBy("priority", "asc")),
+    );
+    const banners = snapshot.docs.map(
+      (entry) => normalizePromoBanner({ id: entry.id, ...entry.data() } as PromoBanner),
+    );
+    return {
+      banners,
+      source: banners.length ? ("firestore" as const) : ("empty" as const),
+    };
+  } catch (error) {
+    console.warn("Unable to load Firestore promo banners", error);
+    return { banners: [], source: "empty" as const };
+  }
+}
+
+export async function getPublicPromoBanners() {
+  if (!db) return [];
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(db, collections.promoBanners),
+        where("isActive", "==", true),
+        orderBy("priority", "asc"),
+      ),
+    );
+    return snapshot.docs
+      .map((entry) => normalizePromoBanner({ id: entry.id, ...entry.data() } as PromoBanner))
+      .filter((banner) => isPromoBannerVisibleNow(banner));
+  } catch (error) {
+    console.warn("Unable to load public promo banners", error);
+    return [];
+  }
+}
+
+export async function upsertPromoBanner(input: PromoBannerInput) {
+  if (!db) throw new Error("Firebase is not configured.");
+  const title = input.title.trim();
+  const message = input.message.trim();
+  if (!title) throw new Error("Titre requis.");
+  if (!message) throw new Error("Message requis.");
+  const bannerId = input.id || slugify(`${title}-${Date.now()}`);
+
+  await setDoc(
+    doc(db, collections.promoBanners, bannerId),
+    {
+      title,
+      message,
+      type: input.type,
+      placement: input.placement,
+      isActive: Boolean(input.isActive),
+      startsAt: input.startsAt || "",
+      endsAt: input.endsAt || "",
+      priority: Number(input.priority || 0),
+      buttonLabel: input.buttonLabel?.trim() || "",
+      buttonUrl: sanitizeBannerUrl(input.buttonUrl || ""),
+      linkedPromoCode: input.linkedPromoCode?.trim().toUpperCase().replace(/\s+/g, "") || "",
+      variant: input.variant,
+      dismissible: Boolean(input.dismissible),
+      isArchived: Boolean(input.isArchived),
+      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
+export async function updatePromoBannerStatus(bannerId: string, isActive: boolean) {
+  if (!db) throw new Error("Firebase is not configured.");
+  await updateDoc(doc(db, collections.promoBanners, bannerId), {
+    isActive,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function archivePromoBanner(bannerId: string) {
+  if (!db) throw new Error("Firebase is not configured.");
+  await updateDoc(doc(db, collections.promoBanners, bannerId), {
+    isActive: false,
+    isArchived: true,
+    archivedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export function isPromoBannerVisibleNow(banner: PromoBanner, now = new Date()) {
+  if (!banner.isActive || banner.isArchived || banner.placement === "draft") return false;
+  const startsAt = banner.startsAt ? Date.parse(banner.startsAt) : 0;
+  const endsAt = banner.endsAt ? Date.parse(banner.endsAt) : 0;
+  const current = now.getTime();
+  if (startsAt && current < startsAt) return false;
+  if (endsAt && current > endOfDay(endsAt)) return false;
+  return true;
+}
+
+export function promoBannerMatchesPlacement(
+  banner: PromoBanner,
+  placement: PromoBannerPlacement,
+) {
+  if (banner.placement === "all_public") return true;
+  return banner.placement === placement;
+}
+
+export function promoBannerStatus(banner: PromoBanner): {
+  label: string;
+  tone: "success" | "warning" | "danger" | "muted" | "gold";
+} {
+  const now = Date.now();
+  const startsAt = banner.startsAt ? Date.parse(banner.startsAt) : 0;
+  const endsAt = banner.endsAt ? Date.parse(banner.endsAt) : 0;
+  if (banner.isArchived) return { label: "Archivee", tone: "muted" };
+  if (!banner.isActive) return { label: "Inactive", tone: "muted" };
+  if (startsAt && now < startsAt) return { label: "Programmee", tone: "gold" };
+  if (endsAt && now > endOfDay(endsAt)) return { label: "Expiree", tone: "danger" };
+  return { label: "Active", tone: "success" };
+}
+
+function normalizePromoBanner(banner: PromoBanner): PromoBanner {
+  return {
+    ...banner,
+    title: String(banner.title || ""),
+    message: String(banner.message || ""),
+    type: normalizeBannerType(banner.type),
+    placement: normalizeBannerPlacement(banner.placement),
+    priority: Number(banner.priority || 0),
+    buttonLabel: banner.buttonLabel || "",
+    buttonUrl: sanitizeBannerUrl(banner.buttonUrl || ""),
+    linkedPromoCode: banner.linkedPromoCode || "",
+    variant: normalizeBannerVariant(banner.variant),
+    dismissible: Boolean(banner.dismissible),
+    isActive: Boolean(banner.isActive),
+    isArchived: Boolean(banner.isArchived),
+  };
+}
+
+function normalizeBannerType(value: string): PromoBannerType {
+  if (["top_bar", "shop_card", "checkout_notice", "modal"].includes(value)) {
+    return value as PromoBannerType;
+  }
+  return "shop_card";
+}
+
+function normalizeBannerPlacement(value: string): PromoBannerPlacement {
+  if (
+    [
+      "home",
+      "shop",
+      "flowers",
+      "resins",
+      "cart",
+      "checkout",
+      "all_public",
+      "draft",
+    ].includes(value)
+  ) {
+    return value as PromoBannerPlacement;
+  }
+  return "draft";
+}
+
+function normalizeBannerVariant(value: string): PromoBannerVariant {
+  if (["default", "promo", "delivery", "info", "warning"].includes(value)) {
+    return value as PromoBannerVariant;
+  }
+  return "default";
+}
+
+function sanitizeBannerUrl(value: string) {
+  const url = value.trim();
+  if (!url) return "";
+  if (url.startsWith("/")) return url;
+  if (url.startsWith("https://verdanza.fr")) return url;
+  if (url.startsWith("https://verdanza-opal.vercel.app")) return url;
+  return "";
+}
+
+function slugify(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+function endOfDay(timestamp: number) {
+  const date = new Date(timestamp);
+  date.setHours(23, 59, 59, 999);
+  return date.getTime();
+}

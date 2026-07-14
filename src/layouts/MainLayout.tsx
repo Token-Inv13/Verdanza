@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { AgeGate } from "../components/AgeGate";
 import { ComplianceNote } from "../components/ComplianceNote";
 import { CookieConsentBanner } from "../components/CookieConsentBanner";
+import { PromoBannersProvider, PromoBannerSlot } from "../components/PromoBannerSlot";
 import { useConsent } from "../context/ConsentContext";
 import { staticImageVariants } from "../lib/generatedImageVariants";
 import { trackContactClick, trackCtaClick } from "../lib/analytics";
@@ -47,8 +48,9 @@ export function MainLayout() {
 
   return (
     <div className="min-h-screen bg-ivory text-ink">
-      <AgeGate />
-      <header className="sticky top-0 z-40 border-b border-forest/10 bg-ivory/95 backdrop-blur">
+      <PromoBannersProvider>
+        <AgeGate />
+        <header className="sticky top-0 z-40 border-b border-forest/10 bg-ivory/95 backdrop-blur">
         <div className="container-page flex min-h-20 items-center justify-between gap-4">
           <NavLink to="/" className="flex items-center gap-3">
             <img
@@ -131,9 +133,11 @@ export function MainLayout() {
             </NavLink>
           </nav>
         )}
-      </header>
-      <Outlet />
-      <ComplianceNote />
+        </header>
+        <PromoBannerSlot type="top_bar" />
+        <Outlet />
+        <ComplianceNote />
+      </PromoBannersProvider>
       <footer className="bg-cream py-12">
         <div className="container-page grid gap-8 md:grid-cols-[1.4fr_1fr_1fr]">
           <div>

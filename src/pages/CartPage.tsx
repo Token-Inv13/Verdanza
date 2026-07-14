@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { ProductImage } from "../components/ProductImage";
+import { PromoBannerSlot } from "../components/PromoBannerSlot";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
@@ -83,6 +84,7 @@ export function CartPage() {
           alentours selon disponibilité.
         </p>
       </div>
+      <PromoBannerSlot placement="cart" type="checkout_notice" className="mt-6 grid gap-3" />
       {lines.length === 0 ? (
         <section className="mt-10 rounded-lg border border-forest/10 bg-cream p-8">
           <p>Votre panier est vide.</p>

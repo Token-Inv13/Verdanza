@@ -1,6 +1,7 @@
 import { ProductCard } from "../components/ProductCard";
 import { useEffect, useRef } from "react";
 import { CatalogNotice } from "../components/CatalogNotice";
+import { PromoBannerSlot } from "../components/PromoBannerSlot";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 import { useProducts } from "../hooks/useProducts";
@@ -39,6 +40,7 @@ export function ShopPage() {
         </p>
       </div>
       <CatalogNotice />
+      <PromoBannerSlot placement="shop" type="shop_card" className="mt-6 grid gap-3" />
       {isLoading ? (
         <p className="mt-6 text-forest/70">Chargement du catalogue...</p>
       ) : (

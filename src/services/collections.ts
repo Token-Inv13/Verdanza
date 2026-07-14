@@ -6,6 +6,7 @@ export const collections = {
   stockMovements: "stockMovements",
   deliveryZones: "deliveryZones",
   coupons: "coupons",
+  promoBanners: "promoBanners",
   invoices: "invoices",
   counters: "counters",
   loyaltyMovements: "loyaltyMovements",

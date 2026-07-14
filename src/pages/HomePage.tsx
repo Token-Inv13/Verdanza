@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Leaf, PackageCheck, ShieldCheck, Truck } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { ProductCard } from "../components/ProductCard";
+import { PromoBannerSlot } from "../components/PromoBannerSlot";
 import { JsonLd } from "../components/JsonLd";
 import { Seo } from "../components/Seo";
 import { blogArticlePath, publishedBlogArticles } from "../data/blogArticles";
@@ -97,6 +98,12 @@ export function HomePage() {
             </div>
           </div>
         </section>
+
+        <PromoBannerSlot
+          placement="home"
+          type="shop_card"
+          className="container-page mt-8 grid gap-3"
+        />
 
         <section className="container-page grid gap-4 py-12 md:grid-cols-3">
           {[

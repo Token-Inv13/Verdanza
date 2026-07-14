@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { PromoBannerSlot } from "../components/PromoBannerSlot";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
@@ -389,6 +390,8 @@ export function CheckoutPage() {
           </a>
         </p>
       </section>
+
+      <PromoBannerSlot placement="checkout" type="checkout_notice" className="mt-6 grid gap-3" />
 
       {!user && itemCount > 0 && (
         <section className="mt-8 rounded-lg border border-champagne/30 bg-cream p-5">

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
 import { getAdminCustomersWithFallback } from "../services/adminCustomersService";
 import { getCouponsWithFallback } from "../services/couponsService";
+import { getPromoBannersWithFallback } from "../services/promoBannersService";
 import {
   defaultBillingSettings,
   getBillingSettings,
@@ -9,7 +10,7 @@ import {
 } from "../services/invoicesService";
 import { getAdminOrdersWithFallback, type AdminOrderRow } from "../services/ordersService";
 import { getAdminProductsWithFallback } from "../services/productsService";
-import type { BillingSettings, Coupon, CustomerProfile, DeliveryZone, Invoice, Product } from "../types";
+import type { BillingSettings, Coupon, CustomerProfile, DeliveryZone, Invoice, Product, PromoBanner } from "../types";
 
 export function useAdminData() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -20,6 +21,8 @@ export function useAdminData() {
   const [deliverySource, setDeliverySource] = useState<"firestore" | "local">("local");
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [couponSource, setCouponSource] = useState<"firestore" | "empty">("empty");
+  const [promoBanners, setPromoBanners] = useState<PromoBanner[]>([]);
+  const [promoBannerSource, setPromoBannerSource] = useState<"firestore" | "empty">("empty");
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
   const [customerSource, setCustomerSource] = useState<"firestore" | "empty">("empty");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -35,6 +38,7 @@ export function useAdminData() {
       orderResult,
       deliveryResult,
       couponResult,
+      promoBannerResult,
       customerResult,
       invoiceResult,
       billingResult,
@@ -43,6 +47,7 @@ export function useAdminData() {
       getAdminOrdersWithFallback(),
       getDeliveryZonesWithFallback(),
       getCouponsWithFallback(),
+      getPromoBannersWithFallback(),
       getAdminCustomersWithFallback(),
       getInvoicesWithFallback(),
       getBillingSettings(),
@@ -55,6 +60,8 @@ export function useAdminData() {
     setDeliverySource(deliveryResult.source);
     setCoupons(couponResult.coupons);
     setCouponSource(couponResult.source);
+    setPromoBanners(promoBannerResult.banners);
+    setPromoBannerSource(promoBannerResult.source);
     setCustomers(customerResult.customers);
     setCustomerSource(customerResult.source);
     setInvoices(invoiceResult.invoices);
@@ -77,6 +84,8 @@ export function useAdminData() {
     deliverySource,
     coupons,
     couponSource,
+    promoBanners,
+    promoBannerSource,
     customers,
     customerSource,
     invoices,
