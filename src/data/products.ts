@@ -158,6 +158,118 @@ export const products: Product[] = [
       "La Mousse Verdanza, résine CBD française issue de fleurs de CBD sélectionnées, vendue au gramme.",
   },
   {
+    id: "resin-3x-filtre-cbd-cbg",
+    slug: "3x-filtre-cbd-cbg",
+    name: "3X Filtré CBD/CBG",
+    category: "resins",
+    price: 6,
+    shortDescription:
+      "Résine CBD/CBG premium, triple filtration, profil cèdre, girofle et notes poivrées.",
+    longDescription:
+      "Une résine premium travaillée selon un processus de triple filtration, pensée pour offrir un profil plus pur, plus net et plus technique. Son équilibre CBD/CBG et ses arômes puissants en font une référence destinée aux amateurs de résines de caractère.",
+    image: "/Fiche produit/3X%20Filtr%C3%A9%20CBD%20CBG/3X%20Filtr%C3%A9.webp",
+    cbdRate: "21 % selon fiche producteur",
+    cbgRate: "23 % selon fiche producteur",
+    thcRate: "Inférieur au seuil légal",
+    origin: "France",
+    cultureType: "Autre",
+    texture: "Neutre / travaillée",
+    aromas: ["Cèdre", "Girofle", "Poivré", "Puissant", "Boisé"],
+    tags: ["résine", "premium", "cbd", "cbg", "france", "triple filtration"],
+    productTier: "Premium",
+    whyChooseDescription:
+      "3X Filtré est une référence intéressante pour les clients qui recherchent une résine plus technique, avec une vraie notion de filtration et un profil aromatique plus sec, boisé et poivré.",
+    advisedProfile:
+      "Pour les amateurs de résines techniques, boisées et poivrées.",
+    experienceDescription:
+      "À proposer comme produit connaisseur, moins gourmand que Creamy Piatella et moins fruité que Suprême Purple, mais très pertinent pour construire une gamme résine sérieuse et premium.",
+    comingSoon: true,
+    stockStatus: "coming_soon",
+    stockLabel: "En arrivage chez Verdanza",
+    stock: 0,
+    lowStockThreshold: 5,
+    isActive: true,
+    isFeatured: false,
+    seoTitle: "3X Filtré CBD/CBG - Résine premium Verdanza",
+    seoDescription:
+      "3X Filtré CBD/CBG Verdanza, résine premium française triple filtration au profil cèdre, girofle et poivré. En arrivage chez Verdanza.",
+  },
+  {
+    id: "resin-le-beldia-cbn-cbd",
+    slug: "le-beldia-cbn-cbd",
+    name: "Le Beldia CBN + CBD",
+    category: "resins",
+    price: 7,
+    shortDescription:
+      "Résine CBD + CBN premium, texture malléable, profil terreux, épicé et boisé.",
+    longDescription:
+      "Une résine premium inspirée des profils traditionnels Beldia, revisitée avec une composition moderne associant CBD et CBN. Sa texture malléable et légèrement grasse lui donne un caractère authentique, proche des résines classiques appréciées des connaisseurs.",
+    image: "/Fiche produit/Le%20Beldia/beldia.webp",
+    cbdRate: "40 % selon fiche producteur",
+    cbgRate: "Non communiqué",
+    cbnRate: "20 % selon fiche producteur",
+    thcRate: "Inférieur au seuil légal",
+    origin: "France",
+    cultureType: "Autre",
+    texture: "Malléable, légèrement grasse",
+    aromas: ["Terreux", "Épicé", "Boisé", "Profond", "Traditionnel"],
+    tags: ["résine", "premium", "cbd", "cbn", "france", "beldia"],
+    productTier: "Premium",
+    whyChooseDescription:
+      "Le Beldia est une référence idéale pour les clients qui aiment les résines au profil traditionnel, plus sombre et plus profond. Sa composition CBD + CBN lui donne une vraie différence par rapport aux résines plus simples.",
+    advisedProfile:
+      "Pour les amateurs de résines traditionnelles, boisées et profondes.",
+    experienceDescription:
+      "À proposer comme résine connaisseur, avec une identité plus classique, boisée et épicée. Elle complète parfaitement les profils plus crémeux ou fruités comme Creamy Piatella et Suprême Purple.",
+    comingSoon: true,
+    stockStatus: "coming_soon",
+    stockLabel: "En arrivage chez Verdanza",
+    stock: 0,
+    lowStockThreshold: 5,
+    isActive: true,
+    isFeatured: false,
+    seoTitle: "Le Beldia CBN + CBD - Résine premium Verdanza",
+    seoDescription:
+      "Le Beldia CBN + CBD Verdanza, résine premium française à la texture malléable et au profil terreux, épicé et boisé. En arrivage chez Verdanza.",
+  },
+  {
+    id: "resin-creamy-piatella-cbd",
+    slug: "creamy-piatella-cbd",
+    name: "Creamy Piatella CBD",
+    category: "resins",
+    price: 8,
+    shortDescription:
+      "Résine CBD ultra premium, texture crémeuse, profil sucré, terreux et boisé.",
+    longDescription:
+      "Une résine CBD ultra premium à la texture beurrée et crémeuse, travaillée pour offrir une présentation dense, souple et raffinée. Sa fabrication française et son affinage à froid lui donnent une identité haut de gamme, pensée pour les amateurs de résines riches et aromatiques.",
+    image: "/Fiche produit/Creamy%20Piatella/piatella.webp",
+    cbdRate: "70 % selon fiche producteur",
+    cbgRate: "Non communiqué",
+    thcRate: "Inférieur au seuil légal",
+    origin: "France",
+    cultureType: "Autre",
+    texture: "Beurrée, crémeuse, malléable",
+    aromas: ["Crémeux", "Sucré", "Terreux", "Boisé", "Floral"],
+    tags: ["résine", "ultra premium", "cbd", "france", "piatella"],
+    productTier: "Ultra premium",
+    whyChooseDescription:
+      "Creamy Piatella est la référence la plus premium de cette sélection. Sa texture crémeuse, son fort taux de CBD annoncé et son profil aromatique doux et boisé en font un produit vitrine pour la gamme résines Verdanza.",
+    advisedProfile:
+      "Pour les amateurs de résines haut de gamme, crémeuses et aromatiques.",
+    experienceDescription:
+      "À proposer aux clients qui recherchent une résine haut de gamme, visuellement qualitative, facile à présenter et plus raffinée qu'une résine classique.",
+    comingSoon: true,
+    stockStatus: "coming_soon",
+    stockLabel: "En arrivage chez Verdanza",
+    stock: 0,
+    lowStockThreshold: 5,
+    isActive: true,
+    isFeatured: false,
+    seoTitle: "Creamy Piatella CBD - Résine ultra premium Verdanza",
+    seoDescription:
+      "Creamy Piatella CBD Verdanza, résine CBD ultra premium française à la texture crémeuse et au profil sucré, terreux et boisé. En arrivage chez Verdanza.",
+  },
+  {
     id: "flower-mango-haze-cbd",
     slug: "mango-haze-cbd",
     name: "Mango Haze CBD",

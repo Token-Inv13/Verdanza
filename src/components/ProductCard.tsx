@@ -25,6 +25,12 @@ export function ProductCard({
 }) {
   const { addItem } = useCart();
   const isComingSoon = product.comingSoon || product.stockStatus === "coming_soon";
+  const secondaryFact =
+    product.cbgRate && product.cbgRate !== "Non communiqué"
+      ? { label: "CBG", value: product.cbgRate }
+      : product.cbnRate
+        ? { label: "CBN", value: product.cbnRate }
+        : { label: "Origine", value: product.origin };
 
   return (
     <article className="group relative overflow-hidden rounded-lg border border-forest/10 bg-ivory shadow-sm transition hover:-translate-y-1 hover:shadow-soft">
@@ -71,8 +77,8 @@ export function ProductCard({
             <dd>{product.cbdRate}</dd>
           </div>
           <div>
-            <dt className="text-ink/45">CBG</dt>
-            <dd>{product.cbgRate}</dd>
+            <dt className="text-ink/45">{secondaryFact.label}</dt>
+            <dd>{secondaryFact.value}</dd>
           </div>
           <div>
             <dt className="text-ink/45">THC</dt>

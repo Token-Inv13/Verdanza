@@ -23,9 +23,11 @@ export function isProductOrderable(product: Product) {
 }
 
 export function productAvailability(product: Product) {
-  return isProductOrderable(product)
-    ? "https://schema.org/InStock"
-    : "https://schema.org/OutOfStock";
+  if (product.comingSoon || product.stockStatus === "coming_soon") {
+    return "https://schema.org/PreOrder";
+  }
+
+  return "https://schema.org/InStock";
 }
 
 export function productCategoryLabel(product: Pick<Product, "category">) {

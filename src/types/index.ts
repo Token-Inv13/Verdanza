@@ -21,12 +21,14 @@ export type Product = {
   image: string;
   cbdRate: string;
   cbgRate: string;
+  cbnRate?: string;
   thcRate: string;
   origin: string;
   cultureType: CultureType;
   aromas: string[];
   tags: string[];
-  productTier?: "Premium";
+  texture?: string;
+  productTier?: "Premium" | "Ultra premium";
   experienceDescription?: string;
   whyChooseDescription?: string;
   advisedProfile?: string;
