@@ -10,7 +10,7 @@ export const products: Product[] = [
     shortDescription:
       "Résine multi-cannabinoides CBD, CBG et CBN, puissante et herbacée.",
     longDescription:
-      "Golden Static est une résine premium produite en France, à la texture crémeuse et au profil riche. Sa composition associe CBD, CBG et CBN pour une référence technique, moderne et haut de gamme.",
+      "Golden Static est une résine sélectionnée produite en France, à la texture crémeuse et au profil riche. Sa composition associe CBD, CBG et CBN pour une référence technique, moderne et haut de gamme.",
     image: "/Fiche produit/Golden static/goldenstatic.webp",
     cbdRate: "50 %",
     cbgRate: "10 %",
@@ -34,9 +34,9 @@ export const products: Product[] = [
     category: "resins",
     price: 5,
     shortDescription:
-      "Résine CBD premium française, compacte, légèrement friable et intensément aromatique.",
+      "Résine CBD française sélectionnée, compacte, légèrement friable et intensément aromatique.",
     longDescription:
-      "Suprême Purple CBD est une résine premium au profil intense et authentique. Sa fiche indique 50 % de CBD, une origine France et une texture compacte légèrement friable.",
+      "Suprême Purple CBD est une résine sélectionnée au profil intense et authentique. Sa fiche indique 50 % de CBD, une origine France et une texture compacte légèrement friable.",
     image: "/Fiche produit/Supreme Purple CBD/SUPREMEPURPLEcopieffff.webp",
     cbdRate: "50 %",
     cbgRate: "Non communiqué",
@@ -44,12 +44,12 @@ export const products: Product[] = [
     origin: "France",
     cultureType: "Autre",
     aromas: ["Terreux", "Végétal", "Raisin doux", "Épicé"],
-    tags: ["résine", "cbd", "france", "premium"],
+    tags: ["résine", "cbd", "france", "selection"],
     stock: 100,
     lowStockThreshold: 15,
     isActive: true,
     isFeatured: true,
-    seoTitle: "Suprême Purple CBD - Résine premium Verdanza",
+    seoTitle: "Suprême Purple CBD - Résine sélectionnée Verdanza",
     seoDescription:
       "Suprême Purple CBD Verdanza, résine CBD française à 50 % de CBD, vendue au gramme.",
   },
@@ -164,9 +164,9 @@ export const products: Product[] = [
     category: "resins",
     price: 6,
     shortDescription:
-      "Résine CBD/CBG premium, triple filtration, profil cèdre, girofle et notes poivrées.",
+      "Résine CBD/CBG sélectionnée, triple filtration, profil cèdre, girofle et notes poivrées.",
     longDescription:
-      "Une résine premium travaillée selon un processus de triple filtration, pensée pour offrir un profil plus pur, plus net et plus technique. Son équilibre CBD/CBG et ses arômes puissants en font une référence destinée aux amateurs de résines de caractère.",
+      "Une résine travaillée selon un processus de triple filtration, pensée pour offrir un profil plus pur, plus net et plus technique. Son équilibre CBD/CBG et ses arômes puissants en font une référence destinée aux amateurs de résines de caractère.",
     image: "/Fiche produit/3X%20Filtr%C3%A9%20CBD%20CBG/3X%20Filtr%C3%A9.webp",
     cbdRate: "21 %",
     cbgRate: "23 %",
@@ -175,14 +175,14 @@ export const products: Product[] = [
     cultureType: "Autre",
     texture: "Neutre / travaillée",
     aromas: ["Cèdre", "Girofle", "Poivré", "Puissant", "Boisé"],
-    tags: ["résine", "premium", "cbd", "cbg", "france", "triple filtration"],
+    tags: ["résine", "selection", "cbd", "cbg", "france", "triple filtration"],
     productTier: "Premium",
     whyChooseDescription:
       "3X Filtré est une référence intéressante pour les clients qui recherchent une résine plus technique, avec une vraie notion de filtration et un profil aromatique plus sec, boisé et poivré.",
     advisedProfile:
       "Pour les amateurs de résines techniques, boisées et poivrées.",
     experienceDescription:
-      "À proposer comme produit connaisseur, moins gourmand que Creamy Piatella et moins fruité que Suprême Purple, mais très pertinent pour construire une gamme résine sérieuse et premium.",
+      "À proposer comme produit connaisseur, moins gourmand que Creamy Piatella et moins fruité que Suprême Purple, mais très pertinent pour construire une gamme résine sérieuse et cohérente.",
     comingSoon: true,
     stockStatus: "coming_soon",
     stockLabel: "En arrivage chez Verdanza",
@@ -190,9 +190,9 @@ export const products: Product[] = [
     lowStockThreshold: 5,
     isActive: true,
     isFeatured: false,
-    seoTitle: "3X Filtré CBD/CBG - Résine premium Verdanza",
+    seoTitle: "3X Filtré CBD/CBG - Résine sélectionnée Verdanza",
     seoDescription:
-      "3X Filtré CBD/CBG Verdanza, résine premium française triple filtration au profil cèdre, girofle et poivré. En arrivage chez Verdanza.",
+      "3X Filtré CBD/CBG Verdanza, résine française à triple filtration au profil cèdre, girofle et poivré. En arrivage chez Verdanza.",
   },
   {
     id: "resin-le-beldia-cbn-cbd",
@@ -201,9 +201,9 @@ export const products: Product[] = [
     category: "resins",
     price: 7,
     shortDescription:
-      "Résine CBD + CBN premium, texture malléable, profil terreux, épicé et boisé.",
+      "Résine CBD + CBN sélectionnée, texture malléable, profil terreux, épicé et boisé.",
     longDescription:
-      "Une résine premium inspirée des profils traditionnels Beldia, revisitée avec une composition moderne associant CBD et CBN. Sa texture malléable et légèrement grasse lui donne un caractère authentique, proche des résines classiques appréciées des connaisseurs.",
+      "Une résine sélectionnée inspirée des profils traditionnels Beldia, revisitée avec une composition moderne associant CBD et CBN. Sa texture malléable et légèrement grasse lui donne un caractère authentique, proche des résines classiques appréciées des connaisseurs.",
     image: "/Fiche produit/Le%20Beldia/beldia.webp",
     cbdRate: "40 %",
     cbgRate: "Non communiqué",
@@ -213,7 +213,7 @@ export const products: Product[] = [
     cultureType: "Autre",
     texture: "Malléable, légèrement grasse",
     aromas: ["Terreux", "Épicé", "Boisé", "Profond", "Traditionnel"],
-    tags: ["résine", "premium", "cbd", "cbn", "france", "beldia"],
+    tags: ["résine", "selection", "cbd", "cbn", "france", "beldia"],
     productTier: "Premium",
     whyChooseDescription:
       "Le Beldia est une référence idéale pour les clients qui aiment les résines au profil traditionnel, plus sombre et plus profond. Sa composition CBD + CBN lui donne une vraie différence par rapport aux résines plus simples.",
@@ -228,9 +228,9 @@ export const products: Product[] = [
     lowStockThreshold: 5,
     isActive: true,
     isFeatured: false,
-    seoTitle: "Le Beldia CBN + CBD - Résine premium Verdanza",
+    seoTitle: "Le Beldia CBN + CBD - Résine sélectionnée Verdanza",
     seoDescription:
-      "Le Beldia CBN + CBD Verdanza, résine premium française à la texture malléable et au profil terreux, épicé et boisé. En arrivage chez Verdanza.",
+      "Le Beldia CBN + CBD Verdanza, résine française à la texture malléable et au profil terreux, épicé et boisé. En arrivage chez Verdanza.",
   },
   {
     id: "resin-creamy-piatella-cbd",
@@ -239,9 +239,9 @@ export const products: Product[] = [
     category: "resins",
     price: 8,
     shortDescription:
-      "Résine CBD ultra premium, texture crémeuse, profil sucré, terreux et boisé.",
+      "Résine CBD travaillée, texture crémeuse, profil sucré, terreux et boisé.",
     longDescription:
-      "Une résine CBD ultra premium à la texture beurrée et crémeuse, travaillée pour offrir une présentation dense, souple et raffinée. Sa fabrication française et son affinage à froid lui donnent une identité haut de gamme, pensée pour les amateurs de résines riches et aromatiques.",
+      "Une résine CBD à la texture beurrée et crémeuse, travaillée pour offrir une présentation dense, souple et raffinée. Sa fabrication française et son affinage à froid lui donnent une identité haut de gamme, pensée pour les amateurs de résines riches et aromatiques.",
     image: "/Fiche produit/Creamy%20Piatella/piatella.webp",
     cbdRate: "70 %",
     cbgRate: "Non communiqué",
@@ -250,10 +250,10 @@ export const products: Product[] = [
     cultureType: "Autre",
     texture: "Beurrée, crémeuse, malléable",
     aromas: ["Crémeux", "Sucré", "Terreux", "Boisé", "Floral"],
-    tags: ["résine", "ultra premium", "cbd", "france", "piatella"],
+    tags: ["résine", "travaillée", "cbd", "france", "piatella"],
     productTier: "Ultra premium",
     whyChooseDescription:
-      "Creamy Piatella est la référence la plus premium de cette sélection. Sa texture crémeuse, son fort taux de CBD annoncé et son profil aromatique doux et boisé en font un produit vitrine pour la gamme résines Verdanza.",
+      "Creamy Piatella est la référence la plus travaillée de cette sélection. Sa texture crémeuse, son fort taux de CBD annoncé et son profil aromatique doux et boisé en font un produit vitrine pour la gamme résines Verdanza.",
     advisedProfile:
       "Pour les amateurs de résines haut de gamme, crémeuses et aromatiques.",
     experienceDescription:
@@ -265,9 +265,9 @@ export const products: Product[] = [
     lowStockThreshold: 5,
     isActive: true,
     isFeatured: false,
-    seoTitle: "Creamy Piatella CBD - Résine ultra premium Verdanza",
+    seoTitle: "Creamy Piatella CBD - Résine travaillée Verdanza",
     seoDescription:
-      "Creamy Piatella CBD Verdanza, résine CBD ultra premium française à la texture crémeuse et au profil sucré, terreux et boisé. En arrivage chez Verdanza.",
+      "Creamy Piatella CBD Verdanza, résine CBD travaillée française à la texture crémeuse et au profil sucré, terreux et boisé. En arrivage chez Verdanza.",
   },
   {
     id: "flower-mango-haze-cbd",
@@ -276,9 +276,9 @@ export const products: Product[] = [
     category: "flowers",
     price: 7,
     shortDescription:
-      "Fleur CBD hydroponique premium cultivée en Suisse, au profil sucré, fruité et acidulé.",
+      "Fleur CBD hydroponique cultivée en Suisse, au profil sucré, fruité et acidulé.",
     longDescription:
-      "Une fleur CBD hydroponique premium cultivée en Suisse, sélectionnée pour son profil aromatique gourmand et sa belle qualité visuelle. Grâce à sa culture en hydroponie et à une manucure réalisée à la main, la Mango Haze développe une expression aromatique nette, fruitée et raffinée.",
+      "Une fleur CBD hydroponique cultivée en Suisse, sélectionnée pour son profil aromatique gourmand et sa belle qualité visuelle. Grâce à sa culture en hydroponie et à une manucure réalisée à la main, la Mango Haze développe une expression aromatique nette, fruitée et raffinée.",
     image: "/Fiche produit/Mango%20Haze/MangoHaze.webp",
     cbdRate: "Non communiqué",
     cbgRate: "Non communiqué",
@@ -286,14 +286,14 @@ export const products: Product[] = [
     origin: "Suisse",
     cultureType: "Hydroponique",
     aromas: ["Sucré", "Fruité", "Acidulé", "Exotique", "Gourmand"],
-    tags: ["fleur", "premium", "hydroponique", "suisse", "fruité"],
+    tags: ["fleur", "selection", "hydroponique", "suisse", "fruité"],
     productTier: "Premium",
     whyChooseDescription:
-      "Mango Haze est pensée pour les amateurs de fleurs fruitées et gourmandes. Son profil sucré, exotique et acidulé en fait une référence idéale pour découvrir une fleur premium hydroponique au caractère doux, aromatique et accessible.",
+      "Mango Haze est pensée pour les amateurs de fleurs fruitées et gourmandes. Son profil sucré, exotique et acidulé en fait une référence idéale pour découvrir une fleur hydroponique sélectionnée au caractère doux, aromatique et accessible.",
     advisedProfile:
       "Pour les amateurs de goûts sucrés, fruités et exotiques.",
     experienceDescription:
-      "La Mango Haze est une référence idéale pour les clients qui recherchent une fleur premium au goût fruité et sucré. Elle se positionne comme l'une des fleurs les plus gourmandes de la gamme Verdanza, avec un profil accessible mais haut de gamme.",
+      "La Mango Haze est une référence idéale pour les clients qui recherchent une fleur sélectionnée au goût fruité et sucré. Elle se positionne comme l'une des fleurs les plus gourmandes de la gamme Verdanza, avec un profil accessible mais haut de gamme.",
     comingSoon: true,
     stockStatus: "coming_soon",
     stockLabel: "En arrivage chez Verdanza",
@@ -301,9 +301,9 @@ export const products: Product[] = [
     lowStockThreshold: 5,
     isActive: true,
     isFeatured: false,
-    seoTitle: "Mango Haze CBD hydroponique premium - Verdanza",
+    seoTitle: "Mango Haze CBD hydroponique - Verdanza",
     seoDescription:
-      "Mango Haze CBD hydroponique premium cultivée en Suisse, au profil sucré, fruité et acidulé. En arrivage chez Verdanza.",
+      "Mango Haze CBD hydroponique cultivée en Suisse, au profil sucré, fruité et acidulé. En arrivage chez Verdanza.",
   },
   {
     id: "flower-mandarine-cbd",
@@ -314,7 +314,7 @@ export const products: Product[] = [
     shortDescription:
       "Fleur CBD hydroponique au profil frais et fruité, dominé par les agrumes, la mandarine et des notes citronnées.",
     longDescription:
-      "Une fleur CBD hydroponique premium cultivée avec précision pour offrir un profil frais, intense et fruité. Son identité aromatique évoque les agrumes, avec une touche acidulée et rafraîchissante qui en fait une référence très expressive.",
+      "Une fleur CBD hydroponique cultivée avec précision pour offrir un profil frais, intense et fruité. Son identité aromatique évoque les agrumes, avec une touche acidulée et rafraîchissante qui en fait une référence très expressive.",
     image: "/Fiche produit/Mandarine/mandarine_zoom.webp",
     cbdRate: "Non communiqué",
     cbgRate: "Non communiqué",
@@ -322,14 +322,14 @@ export const products: Product[] = [
     origin: "Italie",
     cultureType: "Hydroponique",
     aromas: ["Mandarine", "Agrumes", "Citron", "Pin", "Fruit doux", "Fraîcheur acidulée"],
-    tags: ["fleur", "premium", "hydroponique", "italie", "agrumes"],
+    tags: ["fleur", "selection", "hydroponique", "italie", "agrumes"],
     productTier: "Premium",
     whyChooseDescription:
       "Mandarine est idéale pour les clients qui recherchent une fleur fraîche, lumineuse et fruitée. Son profil agrume, citronné et légèrement acidulé lui donne une identité aromatique simple à comprendre et agréable à conseiller.",
     advisedProfile:
       "Pour ceux qui aiment les arômes frais, citronnés et agrumes.",
     experienceDescription:
-      "La Mandarine est une fleur parfaite pour les clients qui recherchent un produit frais, fruité et premium. Elle apporte une vraie identité aromatique à la gamme Verdanza et se distingue par son côté agrume naturel, facile à comprendre et à conseiller.",
+      "La Mandarine est une fleur parfaite pour les clients qui recherchent un produit frais, fruité et soigné. Elle apporte une vraie identité aromatique à la gamme Verdanza et se distingue par son côté agrume naturel, facile à comprendre et à conseiller.",
     comingSoon: true,
     stockStatus: "coming_soon",
     stockLabel: "En arrivage chez Verdanza",
@@ -337,9 +337,9 @@ export const products: Product[] = [
     lowStockThreshold: 5,
     isActive: true,
     isFeatured: false,
-    seoTitle: "Mandarine CBD hydroponique premium - Verdanza",
+    seoTitle: "Mandarine CBD hydroponique - Verdanza",
     seoDescription:
-      "Mandarine CBD hydroponique premium au profil frais, fruité et dominé par les agrumes. En arrivage chez Verdanza.",
+      "Mandarine CBD hydroponique au profil frais, fruité et dominé par les agrumes. En arrivage chez Verdanza.",
   },
   {
     id: "flower-amnesia-cbd-hydroponique",
@@ -348,9 +348,9 @@ export const products: Product[] = [
     category: "flowers",
     price: 7,
     shortDescription:
-      "Fleur CBD premium à la structure dense et résineuse, avec un profil tonique, boisé et intense.",
+      "Fleur CBD à la structure dense et résineuse, avec un profil tonique, boisé et intense.",
     longDescription:
-      "Une fleur CBD premium issue d'une culture hydroponique contrôlée, pensée pour les amateurs de variétés classiques et puissantes en arômes. Sa structure dense, compacte et résineuse lui donne une présentation soignée, adaptée à une gamme haut de gamme.",
+      "Une fleur CBD issue d'une culture hydroponique contrôlée, pensée pour les amateurs de variétés classiques et puissantes en arômes. Sa structure dense, compacte et résineuse lui donne une présentation soignée, adaptée à une gamme haut de gamme.",
     image: "/Fiche produit/Amnesia/amnesia_hydro_zoom.webp",
     cbdRate: "Non communiqué",
     cbgRate: "Non communiqué",
@@ -358,14 +358,14 @@ export const products: Product[] = [
     origin: "Italie",
     cultureType: "Hydroponique",
     aromas: ["Tonique", "Résineux", "Boisé", "Intense", "Authentique"],
-    tags: ["fleur", "premium", "hydroponique", "italie", "amnesia"],
+    tags: ["fleur", "selection", "hydroponique", "italie", "amnesia"],
     productTier: "Premium",
     whyChooseDescription:
-      "Amnesia est une valeur sûre pour les amateurs de fleurs CBD au profil plus classique, intense et résineux. Elle convient aux clients qui recherchent une fleur premium de caractère, avec une identité aromatique plus profonde que les profils fruités.",
+      "Amnesia est une valeur sûre pour les amateurs de fleurs CBD au profil plus classique, intense et résineux. Elle convient aux clients qui recherchent une fleur sélectionnée de caractère, avec une identité aromatique plus profonde que les profils fruités.",
     advisedProfile:
       "Pour les amateurs de fleurs classiques, intenses et résineuses.",
     experienceDescription:
-      "L'Amnesia CBD est une valeur sûre pour les clients qui connaissent déjà les fleurs CBD et recherchent un profil plus classique, profond et aromatique. Elle sert de référence premium incontournable dans une sélection Verdanza sérieuse.",
+      "L'Amnesia CBD est une valeur sûre pour les clients qui connaissent déjà les fleurs CBD et recherchent un profil plus classique, profond et aromatique. Elle sert de référence sélectionnée incontournable dans une sélection Verdanza cohérente.",
     comingSoon: true,
     stockStatus: "coming_soon",
     stockLabel: "En arrivage chez Verdanza",
@@ -373,9 +373,9 @@ export const products: Product[] = [
     lowStockThreshold: 5,
     isActive: true,
     isFeatured: false,
-    seoTitle: "Amnesia CBD hydroponique premium - Verdanza",
+    seoTitle: "Amnesia CBD hydroponique - Verdanza",
     seoDescription:
-      "Amnesia CBD hydroponique premium, dense et résineuse, au profil tonique, boisé et intense. En arrivage chez Verdanza.",
+      "Amnesia CBD hydroponique, dense et résineuse, au profil tonique, boisé et intense. En arrivage chez Verdanza.",
   },
   {
     id: "flower-blue-dream-cbd",
@@ -384,9 +384,9 @@ export const products: Product[] = [
     category: "flowers",
     price: 6,
     shortDescription:
-      "Fleur CBD hydroponique premium aux notes citronnées, résineuses et fruitées.",
+      "Fleur CBD hydroponique aux notes citronnées, résineuses et fruitées.",
     longDescription:
-      "Une fleur CBD hydroponique premium au profil frais, équilibré et fruité. Sa culture contrôlée permet d'obtenir une fleur compacte, résineuse et soigneusement manucurée, avec une belle expression aromatique autour du citron, du pin et du fruit doux.",
+      "Une fleur CBD hydroponique au profil frais, équilibré et fruité. Sa culture contrôlée permet d'obtenir une fleur compacte, résineuse et soigneusement manucurée, avec une belle expression aromatique autour du citron, du pin et du fruit doux.",
     image: "/Fiche produit/Blue%20Dream/BlueDream.webp",
     cbdRate: "Non communiqué",
     cbgRate: "Non communiqué",
@@ -394,14 +394,14 @@ export const products: Product[] = [
     origin: "Italie",
     cultureType: "Hydroponique",
     aromas: ["Citron", "Pin", "Fruit doux", "Fraîcheur végétale", "Équilibré"],
-    tags: ["fleur", "premium", "hydroponique", "italie", "citron"],
+    tags: ["fleur", "selection", "hydroponique", "italie", "citron"],
     productTier: "Premium",
     whyChooseDescription:
-      "Blue Dream offre un bon équilibre entre fraîcheur, fruit doux et notes végétales. C'est une fleur premium polyvalente, adaptée aux clients qui veulent une référence aromatique sans profil trop sucré ni trop lourd.",
+      "Blue Dream offre un bon équilibre entre fraîcheur, fruit doux et notes végétales. C'est une fleur sélectionnée polyvalente, adaptée aux clients qui veulent une référence aromatique sans profil trop sucré ni trop lourd.",
     advisedProfile:
       "Pour ceux qui veulent une fleur équilibrée, fraîche et légèrement fruitée.",
     experienceDescription:
-      "La Blue Dream est une fleur premium polyvalente : fraîche, fruitée, mais moins sucrée que Mango Haze. Elle convient bien aux clients qui veulent une fleur aromatique, propre et équilibrée, sans profil trop lourd.",
+      "La Blue Dream est une fleur sélectionnée polyvalente : fraîche, fruitée, mais moins sucrée que Mango Haze. Elle convient bien aux clients qui veulent une fleur aromatique, propre et équilibrée, sans profil trop lourd.",
     comingSoon: true,
     stockStatus: "coming_soon",
     stockLabel: "En arrivage chez Verdanza",
@@ -409,9 +409,9 @@ export const products: Product[] = [
     lowStockThreshold: 5,
     isActive: true,
     isFeatured: false,
-    seoTitle: "Blue Dream CBD hydroponique premium - Verdanza",
+    seoTitle: "Blue Dream CBD hydroponique - Verdanza",
     seoDescription:
-      "Blue Dream CBD hydroponique premium aux notes citronnées, résineuses et fruitées. En arrivage chez Verdanza.",
+      "Blue Dream CBD hydroponique aux notes citronnées, résineuses et fruitées. En arrivage chez Verdanza.",
   },
   {
     id: "flower-plutonium-cbd-hydroponique",
@@ -420,9 +420,9 @@ export const products: Product[] = [
     category: "flowers",
     price: 6,
     shortDescription:
-      "Fleur CBD premium cultivée en Suisse, au profil boisé, terreux et épicé.",
+      "Fleur CBD cultivée en Suisse, au profil boisé, terreux et épicé.",
     longDescription:
-      "Une fleur CBD hydroponique premium au profil profond, dense et aromatique. Cultivée en Suisse, elle se distingue par sa texture compacte, sa richesse naturelle en résine et son identité boisée, terreuse et épicée.",
+      "Une fleur CBD hydroponique au profil profond, dense et aromatique. Cultivée en Suisse, elle se distingue par sa texture compacte, sa richesse naturelle en résine et son identité boisée, terreuse et épicée.",
     image: "/Fiche produit/Plutonium/zoom.webp",
     cbdRate: "Non communiqué",
     cbgRate: "Non communiqué",
@@ -430,7 +430,7 @@ export const products: Product[] = [
     origin: "Suisse",
     cultureType: "Hydroponique",
     aromas: ["Boisé", "Terreux", "Épicé", "Chaleureux", "Profond"],
-    tags: ["fleur", "premium", "hydroponique", "suisse", "boisé"],
+    tags: ["fleur", "selection", "hydroponique", "suisse", "boisé"],
     productTier: "Premium",
     whyChooseDescription:
       "Plutonium s'adresse aux clients qui apprécient les fleurs plus profondes, boisées et terreuses. Son profil plus sombre et épicé en fait une référence de caractère, pensée pour les amateurs de produits plus marqués.",
@@ -445,9 +445,9 @@ export const products: Product[] = [
     lowStockThreshold: 5,
     isActive: true,
     isFeatured: false,
-    seoTitle: "Plutonium CBD hydroponique premium - Verdanza",
+    seoTitle: "Plutonium CBD hydroponique - Verdanza",
     seoDescription:
-      "Plutonium CBD hydroponique premium cultivée en Suisse, au profil boisé, terreux et épicé. En arrivage chez Verdanza.",
+      "Plutonium CBD hydroponique cultivée en Suisse, au profil boisé, terreux et épicé. En arrivage chez Verdanza.",
   },
 ];
 

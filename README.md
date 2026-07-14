@@ -1,6 +1,6 @@
 # Verdanza CBD
 
-Boutique en ligne Verdanza : catalogue CBD premium au gramme, panier, commande sans reglement en ligne, livraison locale autour d'Aix-en-Provence, livraison postale en France, cockpit admin Firestore, Firebase Auth et emails transactionnels.
+Boutique en ligne Verdanza : catalogue CBD sélectionné au gramme, panier, commande sans reglement en ligne, livraison locale autour d'Aix-en-Provence, livraison postale en France, cockpit admin Firestore, Firebase Auth et emails transactionnels.
 
 ## Stack
 

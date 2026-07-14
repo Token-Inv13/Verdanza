@@ -12,9 +12,9 @@ import type { ProductCategory } from "../types";
 const categoryContent = {
   flowers: {
     path: "/fleurs-cbd",
-    title: "Fleurs CBD premium",
+    title: "Fleurs CBD",
     breadcrumb: "Fleurs CBD",
-    seoTitle: "Fleurs CBD premium : indoor, greenhouse et hydroponique | Verdanza",
+    seoTitle: "Fleurs CBD : indoor, greenhouse et hydroponique | Verdanza",
     seoDescription:
       "Sélection de fleurs CBD Verdanza : indoor, greenhouse et hydroponique selon les références, avec livraison à Aix-en-Provence et livraison postale.",
     guideCtaTitle: "Besoin d'aide pour choisir ?",
@@ -23,9 +23,9 @@ const categoryContent = {
   },
   resins: {
     path: "/resines-cbd",
-    title: "Résines CBD premium",
+    title: "Résines CBD",
     breadcrumb: "Résines CBD",
-    seoTitle: "Résines CBD premium : sélection et profils | Verdanza",
+    seoTitle: "Résines CBD : sélection et profils | Verdanza",
     seoDescription:
       "Sélection de résines CBD Verdanza avec textures et profils disponibles, livraison locale à Aix-en-Provence et livraison postale.",
     guideCtaTitle: "Besoin d'aide pour comparer ?",

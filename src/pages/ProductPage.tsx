@@ -68,15 +68,13 @@ export function ProductPage() {
   const path = productPath(product);
   const categoryName = productCategoryLabel(product);
   const categoryPath = product.category === "flowers" ? "/fleurs-cbd" : "/resines-cbd";
-  const isPremiumHydroponic =
-    product.productTier === "Premium" &&
-    product.cultureType === "Hydroponique" &&
-    product.category === "flowers";
+  const isHydroponicFlower =
+    product.cultureType === "Hydroponique" && product.category === "flowers";
   const isComingSoonResin = isComingSoon && product.category === "resins";
-  const keyFacts = isPremiumHydroponic
+  const keyFacts = isHydroponicFlower
     ? [
         ["Type", "Fleur CBD"],
-        ["Gamme", "Premium"],
+        ["Gamme", "Sélection Verdanza"],
         ["THC", product.thcRate],
         ["Origine", product.origin],
         ["Culture", product.cultureType],
@@ -85,7 +83,7 @@ export function ProductPage() {
     : isComingSoonResin
       ? [
           ["Type", "Résine CBD"],
-          ["Gamme", product.productTier || "Premium"],
+          ["Gamme", "Sélection Verdanza"],
           ["CBD", product.cbdRate],
           [
             product.cbgRate !== "Non communiqué" ? "CBG" : product.cbnRate ? "CBN" : "Composition",
@@ -136,15 +134,15 @@ export function ProductPage() {
               className="mx-auto h-full w-full object-contain"
             />
           </div>
-          {(isPremiumHydroponic || isComingSoonResin) && (
+          {(isHydroponicFlower || isComingSoonResin) && (
             <aside className="rounded-md border border-forest/10 bg-ivory p-5">
               <p className="font-display text-2xl text-forest">
-                {product.category === "flowers" ? "Fleur CBD Premium" : "Résine CBD Premium"}
+                {product.category === "flowers" ? "Fleur CBD" : "Résine CBD"}
               </p>
               <p className="mt-1 text-sm font-semibold text-forest/80">
                 {product.category === "flowers"
                   ? "Hydroponique · Sélection Verdanza"
-                  : `${product.texture || "Texture premium"} · Sélection Verdanza`}
+                  : `${product.texture || "Texture soignée"} · Sélection Verdanza`}
               </p>
               <p className="mt-3 text-sm leading-6 text-ink/60">
                 THC inférieur au seuil légal
@@ -201,7 +199,7 @@ export function ProductPage() {
               </p>
             </div>
           )}
-          {isPremiumHydroponic && (
+          {isHydroponicFlower && (
             <div className="mt-7">
               <h2 className="font-display text-2xl text-forest">
                 Qualité & culture

@@ -32,8 +32,8 @@ export function HomePage() {
   return (
     <>
       <Seo
-        title="Verdanza CBD - Fleurs et résines CBD premium en ligne"
-        description="Boutique en ligne de fleurs et résines CBD premium, avec livraison postale en France et livraison locale selon zone disponible."
+        title="Verdanza CBD - Fleurs et résines CBD en ligne"
+        description="Boutique en ligne de fleurs et résines CBD sélectionnées, avec livraison postale en France et livraison locale selon zone disponible."
         path="/"
         image="/images/verdanza-hero-premium.webp"
       />
@@ -44,7 +44,7 @@ export function HomePage() {
             src={heroImage?.src || "/images/verdanza-hero-premium.webp"}
             srcSet={heroImage?.srcSet}
             sizes={heroImage?.sizes || "100vw"}
-            alt="Sélection CBD premium Verdanza"
+            alt="Sélection CBD Verdanza"
             width={heroImage?.width || 1672}
             height={heroImage?.height || 941}
             fetchPriority="high"
@@ -58,7 +58,7 @@ export function HomePage() {
                 <Leaf size={14} /> Verdanza CBD
               </p>
               <h1 className="mt-5 font-display text-4xl leading-tight sm:text-5xl md:text-7xl">
-                CBD premium, sélectionné avec exigence
+                CBD sélectionné avec exigence
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-ivory/82 md:mt-6 md:text-lg md:leading-8">
                 Fleurs et résines CBD sélectionnées avec soin, disponibles en

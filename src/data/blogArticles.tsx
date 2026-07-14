@@ -190,7 +190,7 @@ export const blogArticles: BlogArticle[] = [
           <>
             Le prix ne suffit pas à comparer deux produits. Il doit être lu avec
             la disponibilité, la catégorie, les informations produit et le
-            statut de la fiche. Les fleurs premium hydroponiques comme{" "}
+            statut de la fiche. Les fleurs hydroponiques sélectionnées comme{" "}
             <Link to="/produits/mango-haze-cbd">Mango Haze CBD</Link> peuvent
             être affichées en arrivage : dans ce cas, le statut de la fiche prime
             sur toute intention d’achat immédiat.
@@ -418,7 +418,7 @@ export const blogArticles: BlogArticle[] = [
         text: (
           <>
             Une méthode ne garantit pas automatiquement qu’un produit sera
-            meilleur, plus premium, plus riche en CBD ou plus aromatique qu’un
+            meilleur, plus travaillé, plus riche en CBD ou plus aromatique qu’un
             autre. La lecture doit rester globale : origine, fiche produit,
             informations disponibles, aspect, statut et prix
             sont à considérer ensemble.

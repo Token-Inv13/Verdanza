@@ -59,7 +59,6 @@ export function ProductCard({
             <span className="text-xs uppercase tracking-[0.18em] text-champagne">
               {product.category === "flowers" ? "Fleur CBD" : "Résine CBD"}
             </span>
-            {product.productTier && <span className="tag">{product.productTier}</span>}
             {product.cultureType === "Hydroponique" && (
               <span className="tag">Hydroponique</span>
             )}

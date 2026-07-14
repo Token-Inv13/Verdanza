@@ -18,9 +18,9 @@ const content = {
   },
   about: {
     title: "A propos",
-    text: "Verdanza est une marque inspiree par la Provence, construite autour d'une experience vegetale sobre, premium et transparente.",
+    text: "Verdanza est une marque inspiree par la Provence, construite autour d'une experience vegetale sobre, claire et transparente.",
     points: [
-      "Selection CBD premium",
+      "Selection CBD Verdanza",
       "Boutique en ligne avec livraison en France",
       "Livraison locale selon zone disponible",
       "Design naturel et haut de gamme",

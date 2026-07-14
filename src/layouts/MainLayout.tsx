@@ -153,7 +153,7 @@ export function MainLayout() {
               className="h-16 w-auto"
             />
             <p className="mt-4 max-w-md text-sm leading-6 text-ink/70">
-              Verdanza sélectionne des produits CBD premium, conformes et
+              Verdanza sélectionne des produits CBD conformes et
               contrôlés, avec livraison postale en France et livraison locale
               selon zone disponible.
             </p>

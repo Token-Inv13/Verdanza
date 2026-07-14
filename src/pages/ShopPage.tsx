@@ -23,7 +23,7 @@ export function ShopPage() {
     <main className="container-page py-12">
       <Seo
         title="Boutique Verdanza CBD"
-        description="Catalogue Verdanza CBD : fleurs et resines premium disponibles au gramme, livraison express Aix-en-Provence et alentours."
+        description="Catalogue Verdanza CBD : fleurs et résines sélectionnées disponibles au gramme, livraison express Aix-en-Provence et alentours."
         path="/boutique"
       />
       <Breadcrumbs
@@ -33,9 +33,9 @@ export function ShopPage() {
         ]}
       />
       <div className="page-intro">
-        <h1>Boutique CBD premium</h1>
+        <h1>Boutique CBD</h1>
         <p>
-          Selection réelle Verdanza : fleurs et résines CBD premium disponibles
+          Sélection réelle Verdanza : fleurs et résines CBD sélectionnées disponibles
           au gramme, avec livraison express locale à Aix-en-Provence et alentours.
         </p>
       </div>

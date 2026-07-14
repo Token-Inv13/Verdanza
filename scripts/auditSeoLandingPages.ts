@@ -14,7 +14,7 @@ const distDir = resolve("dist");
 const pages = [
   {
     path: "/fleurs-cbd",
-    titleIncludes: ["Fleurs CBD premium", "Verdanza"],
+    titleIncludes: ["Fleurs CBD", "Verdanza"],
     descriptionIncludes: ["Sélection de fleurs CBD", "livraison"],
     h2: [
       "Comprendre les méthodes de culture",
@@ -29,7 +29,7 @@ const pages = [
   },
   {
     path: "/resines-cbd",
-    titleIncludes: ["Résines CBD premium", "Verdanza"],
+    titleIncludes: ["Résines CBD", "Verdanza"],
     descriptionIncludes: ["résines CBD", "livraison"],
     h2: [
       "Comprendre CBD, CBG et autres indications",
