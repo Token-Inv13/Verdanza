@@ -25,12 +25,16 @@ export function ProductCard({
 }) {
   const { addItem } = useCart();
   const isComingSoon = product.comingSoon || product.stockStatus === "coming_soon";
+  const hasKnownCbd = product.cbdRate && product.cbdRate !== "Non communiqué";
   const secondaryFact =
     product.cbgRate && product.cbgRate !== "Non communiqué"
       ? { label: "CBG", value: product.cbgRate }
       : product.cbnRate
         ? { label: "CBN", value: product.cbnRate }
         : { label: "Origine", value: product.origin };
+  const primaryFact = hasKnownCbd
+    ? { label: "CBD", value: product.cbdRate }
+    : { label: product.category === "flowers" ? "Culture" : "Type", value: product.cultureType };
 
   return (
     <article className="group relative overflow-hidden rounded-lg border border-forest/10 bg-ivory shadow-sm transition hover:-translate-y-1 hover:shadow-soft">
@@ -73,8 +77,8 @@ export function ProductCard({
         </p>
         <dl className="grid grid-cols-3 gap-2 text-xs text-forest/75">
           <div>
-            <dt className="text-ink/45">CBD</dt>
-            <dd>{product.cbdRate}</dd>
+            <dt className="text-ink/45">{primaryFact.label}</dt>
+            <dd>{primaryFact.value}</dd>
           </div>
           <div>
             <dt className="text-ink/45">{secondaryFact.label}</dt>

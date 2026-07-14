@@ -26,7 +26,7 @@ const categoryContent = {
     breadcrumb: "Résines CBD",
     seoTitle: "Résines CBD premium : sélection et profils | Verdanza",
     seoDescription:
-      "Sélection de résines CBD Verdanza avec textures, taux déclarés et profils disponibles, livraison locale à Aix-en-Provence et livraison postale.",
+      "Sélection de résines CBD Verdanza avec textures et profils disponibles, livraison locale à Aix-en-Provence et livraison postale.",
     guideCtaTitle: "Besoin d'aide pour comparer ?",
     guideCtaText:
       "Les guides Verdanza aident à comprendre les textures, compositions et différences entre fleurs et résines CBD.",

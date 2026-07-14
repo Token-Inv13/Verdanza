@@ -103,7 +103,7 @@ export function HomePage() {
             {
               icon: ShieldCheck,
               title: "Conformité",
-              text: "Produits réservés aux adultes, THC conforme selon analyses transmises.",
+              text: "Produits réservés aux adultes, THC inférieur au seuil légal.",
             },
             {
               icon: Truck,

@@ -42,7 +42,7 @@ export const blogArticles: BlogArticle[] = [
             du produit, sa texture, les informations disponibles sur la fiche et
             la manière de comparer deux références. Ce guide reste volontairement
             factuel : les caractéristiques varient selon chaque produit, chaque
-            lot et les données communiquées par le producteur.
+            lot et les informations disponibles pour la référence.
           </>
         ),
       },
@@ -175,7 +175,7 @@ export const blogArticles: BlogArticle[] = [
           "prix au gramme et disponibilité réelle ;",
           "origine lorsqu’elle est indiquée ;",
           "mode de culture ou méthode de présentation lorsqu’ils sont connus ;",
-          "taux déclarés, uniquement lorsqu’ils sont fournis pour la référence ;",
+          "taux disponibles, uniquement lorsqu’ils sont renseignés pour la référence ;",
           "statut actif ou en arrivage.",
         ],
       },
@@ -189,7 +189,7 @@ export const blogArticles: BlogArticle[] = [
         text: (
           <>
             Le prix ne suffit pas à comparer deux produits. Il doit être lu avec
-            la disponibilité, la catégorie, les informations producteur et le
+            la disponibilité, la catégorie, les informations produit et le
             statut de la fiche. Les fleurs premium hydroponiques comme{" "}
             <Link to="/produits/mango-haze-cbd">Mango Haze CBD</Link> peuvent
             être affichées en arrivage : dans ce cas, le statut de la fiche prime
@@ -293,7 +293,7 @@ export const blogArticles: BlogArticle[] = [
         text: (
           <>
             Ces informations aident à situer une référence dans le catalogue.
-            Elles peuvent éclairer la manière dont le producteur présente le lot,
+            Elles peuvent éclairer la manière dont le lot est présenté,
             mais elles ne garantissent pas à elles seules une qualité, une
             richesse en CBD ou un profil aromatique précis. Les informations
             doivent toujours être lues avec le reste de la fiche.
@@ -367,7 +367,7 @@ export const blogArticles: BlogArticle[] = [
             [
               "Greenhouse",
               "Un environnement sous serre.",
-              "Indique une culture protégée, avec variables selon le producteur.",
+              "Indique une culture protégée, avec des conditions variables selon la référence.",
             ],
             [
               "Hydroponique",
@@ -405,7 +405,7 @@ export const blogArticles: BlogArticle[] = [
           "la part de lumière naturelle ou artificielle ;",
           "le support de culture utilisé ;",
           "la manière dont l’eau et les nutriments sont apportés ;",
-          "la régularité potentielle d’un lot, selon le producteur.",
+          "la régularité potentielle d’un lot.",
         ],
       },
       {
@@ -420,7 +420,7 @@ export const blogArticles: BlogArticle[] = [
             Une méthode ne garantit pas automatiquement qu’un produit sera
             meilleur, plus premium, plus riche en CBD ou plus aromatique qu’un
             autre. La lecture doit rester globale : origine, fiche produit,
-            analyse producteur lorsqu’elle est disponible, aspect, statut et prix
+            informations disponibles, aspect, statut et prix
             sont à considérer ensemble.
           </>
         ),

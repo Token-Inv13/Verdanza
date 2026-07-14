@@ -91,7 +91,7 @@ export function ProductPage() {
             product.cbgRate !== "Non communiqué" ? "CBG" : product.cbnRate ? "CBN" : "Composition",
             product.cbgRate !== "Non communiqué"
               ? product.cbgRate
-              : product.cbnRate || "Selon fiche produit",
+              : product.cbnRate || "Non communiqué",
           ],
           ["THC", product.thcRate],
           ["Origine", product.origin],
@@ -147,7 +147,7 @@ export function ProductPage() {
                   : `${product.texture || "Texture premium"} · Sélection Verdanza`}
               </p>
               <p className="mt-3 text-sm leading-6 text-ink/60">
-                THC inférieur au seuil légal selon analyse transmise
+                THC inférieur au seuil légal
               </p>
             </aside>
           )}
@@ -210,8 +210,7 @@ export function ProductPage() {
                 Cette fleur est issue d'une culture hydroponique, une méthode qui
                 permet de mieux contrôler l'environnement de production. Elle est
                 sélectionnée pour sa structure, son profil aromatique et sa qualité
-                visuelle. Chaque lot est proposé selon les informations et analyses
-                transmises.
+                visuelle.
               </p>
             </div>
           )}
@@ -219,9 +218,7 @@ export function ProductPage() {
             <div className="mt-7">
               <h2 className="font-display text-2xl text-forest">Composition</h2>
               <p className="mt-2 leading-7 text-ink/70">
-                Cette résine est sélectionnée pour sa texture, son profil
-                aromatique et les taux déclarés sur sa fiche produit. Chaque lot
-                sera proposé selon les garanties et analyses transmises.
+                Cette résine est sélectionnée pour sa texture, son profil aromatique et sa qualité visuelle.
               </p>
             </div>
           )}
@@ -258,8 +255,7 @@ export function ProductPage() {
           {isComingSoon && (
             <p className="mt-6 text-sm leading-6 text-ink/60">
               Produit réservé aux adultes. Vente interdite aux mineurs. Produit
-              CBD conforme à la réglementation en vigueur selon analyse
-              transmise. THC inférieur au seuil légal. Ne pas ingérer. Tenir
+              CBD conforme à la règlementation en vigueur. THC inférieur au seuil légal. Ne pas ingérer. Tenir
               hors de portée des enfants. Déconseillé aux femmes enceintes ou
               allaitantes. Consultez un professionnel de santé en cas de
               traitement médical.
