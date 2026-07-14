@@ -1,15 +1,15 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Leaf, PackageCheck, ShieldCheck, Truck } from "lucide-react";
 import { useEffect, useRef } from "react";
-import { BlogCard } from "../components/BlogCard";
 import { ProductCard } from "../components/ProductCard";
 import { JsonLd } from "../components/JsonLd";
 import { Seo } from "../components/Seo";
-import { publishedBlogArticles } from "../data/blogArticles";
+import { blogArticlePath, publishedBlogArticles } from "../data/blogArticles";
 import { useProducts } from "../hooks/useProducts";
 import { staticImageVariants } from "../lib/generatedImageVariants";
 import { buildHomeJsonLd } from "../lib/structuredData";
 import { trackCtaClick, trackViewItemList } from "../lib/analytics";
+import type { BlogArticle } from "../types/blog";
 
 export function HomePage() {
   const { products } = useProducts();
@@ -153,11 +153,19 @@ export function HomePage() {
           </div>
         </section>
 
-        <section className="container-page pb-16 pt-2">
-          <div className="section-heading">
-            <h2>Guides CBD</h2>
+        <section className="container-page mt-2 border-t border-forest/10 pb-16 pt-12 md:mt-6 md:pt-14">
+          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="font-display text-3xl leading-tight text-forest md:text-4xl">
+                Guides CBD
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-ink/65">
+                Des repères simples pour mieux comprendre les produits.
+              </p>
+            </div>
             <Link
               to="/blog"
+              className="text-sm font-semibold text-forest underline decoration-champagne underline-offset-4"
               onClick={() =>
                 trackCtaClick({
                   ctaId: "home_blog_guides",
@@ -170,13 +178,72 @@ export function HomePage() {
               Tous les guides
             </Link>
           </div>
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             {publishedBlogArticles.slice(0, 2).map((article) => (
-              <BlogCard key={article.slug} article={article} />
+              <HomeGuideCard key={article.slug} article={article} />
             ))}
           </div>
         </section>
       </main>
     </>
+  );
+}
+
+function HomeGuideCard({ article }: { article: BlogArticle }) {
+  const image = staticImageVariants[article.images.landscape];
+  const path = blogArticlePath(article);
+
+  return (
+    <article className="grid overflow-hidden rounded-md border border-forest/10 bg-ivory shadow-sm sm:grid-cols-[170px_1fr]">
+      <Link
+        to={path}
+        className="block bg-cream"
+        onClick={() =>
+          trackCtaClick({
+            ctaId: `home_blog_article_${article.slug}`,
+            ctaLocation: "home_blog",
+            destinationPath: path,
+            ctaCategory: "content",
+          })
+        }
+      >
+        <img
+          src={image?.src || article.images.landscape}
+          srcSet={image?.srcSet}
+          sizes="(min-width: 768px) 170px, 92vw"
+          alt=""
+          width={image?.width || 1200}
+          height={image?.height || 900}
+          loading="lazy"
+          decoding="async"
+          className="h-32 w-full object-cover sm:h-full"
+        />
+      </Link>
+      <div className="flex min-w-0 flex-col p-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-champagne">
+          {article.category}
+        </p>
+        <h3 className="mt-2 font-display text-2xl leading-tight text-forest">
+          <Link to={path}>{article.title}</Link>
+        </h3>
+        <p className="mt-2 max-h-12 overflow-hidden text-sm leading-6 text-ink/65">
+          {article.excerpt}
+        </p>
+        <Link
+          to={path}
+          className="mt-3 inline-flex text-sm font-semibold text-forest underline decoration-champagne underline-offset-4"
+          onClick={() =>
+            trackCtaClick({
+              ctaId: `home_blog_article_read_${article.slug}`,
+              ctaLocation: "home_blog",
+              destinationPath: path,
+              ctaCategory: "content",
+            })
+          }
+        >
+          Lire le guide
+        </Link>
+      </div>
+    </article>
   );
 }
