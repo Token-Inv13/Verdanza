@@ -317,6 +317,14 @@ function expectedBreadcrumbItems(path: string, product?: Product) {
         path: "/blog/comment-lire-analyse-cbd",
       },
     ],
+    "/blog/choisir-fleur-cbd-profil-aromatique": [
+      { name: "Accueil", path: "/" },
+      { name: "Guides CBD", path: "/blog" },
+      {
+        name: "Comment choisir une fleur CBD selon son profil aromatique ?",
+        path: "/blog/choisir-fleur-cbd-profil-aromatique",
+      },
+    ],
     "/blog/fleur-cbd-ou-resine-cbd-differences": [
       { name: "Accueil", path: "/" },
       { name: "Guides CBD", path: "/blog" },

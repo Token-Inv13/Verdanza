@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-14T17:02:34.735Z",
+  "generatedAt": "2026-07-14T17:30:08.967Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -596,6 +596,30 @@
       ]
     },
     {
+      "articleSlug": "choisir-fleur-cbd-profil-aromatique",
+      "articleTitle": "Comment choisir une fleur CBD selon son profil aromatique ?",
+      "variants": [
+        {
+          "src": "/images/blog/choisir-fleur-cbd-profil-aromatique-1x1.webp",
+          "width": 900,
+          "height": 900,
+          "bytes": 15178
+        },
+        {
+          "src": "/images/blog/choisir-fleur-cbd-profil-aromatique-4x3.webp",
+          "width": 1200,
+          "height": 900,
+          "bytes": 16766
+        },
+        {
+          "src": "/images/blog/choisir-fleur-cbd-profil-aromatique-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 18626
+        }
+      ]
+    },
+    {
       "articleSlug": "indoor-greenhouse-hydroponique-differences",
       "articleTitle": "Indoor, greenhouse ou hydroponique : comprendre les méthodes de culture",
       "sources": [
@@ -631,6 +655,6 @@
     "productDetailBytes": 1684008,
     "staticSourceBytes": 2197587,
     "staticLargestBytes": 114692,
-    "blogImageBytes": 949534
+    "blogImageBytes": 1000104
   }
 }

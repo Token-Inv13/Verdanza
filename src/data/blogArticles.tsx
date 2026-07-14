@@ -2,8 +2,8 @@ import React from "react";
 import { Link } from "react-router-dom";
 import type { BlogArticle } from "../types/blog";
 
-// Blog editorial rule: keep guides evergreen, category-first, and independent from live stock,
-// prices, promos, or transient availability.
+// Règle éditoriale du blog: garder des guides durables, centrés sur les catégories, et
+// indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
     slug: "comment-lire-analyse-cbd",
@@ -354,8 +354,8 @@ export const blogArticles: BlogArticle[] = [
             Une fleur CBD correspond à la partie végétale présentée comme telle
             sur une fiche produit. Elle peut être décrite par son origine, son
             mode de culture, son aspect, sa structure et son profil aromatique.
-            La page <Link to="/fleurs-cbd">fleurs CBD</Link> réunit les
-            références du moment, tandis qu’un certificat d’analyse permet de
+            La page <Link to="/fleurs-cbd">fleurs CBD</Link> rassemble les
+            fiches de la catégorie, tandis qu’un certificat d’analyse permet de
             lire les taux mesurés indépendamment du texte commercial.
           </>
         ),
@@ -412,8 +412,8 @@ export const blogArticles: BlogArticle[] = [
               "Notes végétales, terreuses, épicées ou plus rondes selon la résine.",
             ],
             [
-              "Disponibilité",
-              "La disponibilité est indiquée par la fiche de la référence.",
+              "Lecture complémentaire",
+              "La fiche précise les informations communiquées pour cette référence.",
               "Ne pas généraliser à toute la catégorie.",
             ],
             [
@@ -470,24 +470,23 @@ export const blogArticles: BlogArticle[] = [
           "nom de la référence et catégorie ;",
           "origine lorsqu’elle est indiquée ;",
           "mode de culture ou méthode de présentation lorsqu’ils sont connus ;",
-          "taux disponibles, uniquement lorsqu’ils sont renseignés pour la référence ;",
+          "taux mesurés ou indiqués, uniquement lorsqu’ils sont renseignés pour la référence ;",
           "statut de la fiche et informations de lecture utiles.",
         ],
       },
       {
         type: "heading",
-        id: "prix-disponibilite",
-        text: "Lecture et disponibilité",
+        id: "lecture-des-fiches",
+        text: "Lecture des fiches",
       },
       {
         type: "paragraph",
         text: (
           <>
-            Le prix ne suffit pas à comparer deux produits. Il doit être lu avec
-            la disponibilité, la catégorie, les informations produit et le
-            statut de la fiche. Pour lire correctement les valeurs mesurées,
-            <Link to="/blog/comment-lire-analyse-cbd"> l’analyse de CBD</Link>
-            reste le bon point de départ.
+            Pour comparer deux produits, regardez d’abord la catégorie, la
+            description, les taux mesurés lorsqu’ils sont indiqués et le
+            certificat d’analyse. La lecture doit partir de la fiche, pas d’un
+            raccourci commercial.
           </>
         ),
       },
@@ -501,7 +500,7 @@ export const blogArticles: BlogArticle[] = [
         text: (
           <>
             Pour comparer sans raccourci, partez de critères concrets : texture,
-            profil aromatique, origine, culture et disponibilité. Si vous
+            profil aromatique, origine, culture et lecture des fiches. Si vous
             hésitez entre catégories, ouvrez une fiche fleur et une fiche résine
             côte à côte, puis vérifiez les informations affichées plutôt que de
             raisonner à partir d’idées générales.
@@ -531,6 +530,198 @@ export const blogArticles: BlogArticle[] = [
           "la texture et la présentation changent selon chaque référence ;",
           "les taux et indications ne doivent pas être généralisés ;",
           "la fiche produit reste la référence avant tout choix.",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "choisir-fleur-cbd-profil-aromatique",
+    title: "Comment choisir une fleur CBD selon son profil aromatique ?",
+    seoTitle:
+      "Comment choisir une fleur CBD selon son profil aromatique ? | Verdanza",
+    description:
+      "Guide pour lire un profil aromatique de fleur CBD : familles de notes, intensité, texture, culture et fiche produit avant de comparer.",
+    excerpt:
+      "Comprendre les familles aromatiques aide à choisir une fleur CBD selon ses préférences, sans réduire la décision au taux ou au discours commercial.",
+    category: "Guide fleurs",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-07-14T19:22:37+02:00",
+    dateModified: "2026-07-14T19:22:37+02:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/choisir-fleur-cbd-profil-aromatique-1x1.webp",
+      landscape: "/images/blog/choisir-fleur-cbd-profil-aromatique-4x3.webp",
+      wide: "/images/blog/choisir-fleur-cbd-profil-aromatique-16x9.webp",
+    },
+    relatedSlugs: [
+      "fleur-cbd-ou-resine-cbd-differences",
+      "comment-lire-analyse-cbd",
+      "indoor-greenhouse-hydroponique-differences",
+    ],
+    links: [
+      { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+      { to: "/blog/fleur-cbd-ou-resine-cbd-differences", label: "Comparer fleur et résine" },
+      { to: "/blog/comment-lire-analyse-cbd", label: "Lire une analyse" },
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le profil aromatique d’une fleur CBD décrit l’ensemble des notes que
+            l’on perçoit au premier nez puis à l’ouverture de la fiche produit.
+            Il ne s’agit pas d’une promesse abstraite : la lecture se fait
+            référence par référence, avec des nuances qui peuvent varier selon
+            la culture, la présentation et le lot affiché.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "comprendre-le-profil-aromatique",
+        text: "Comprendre le profil aromatique",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Un profil aromatique regroupe plusieurs familles de notes. Une fleur
+            peut être décrite comme agrumée, florale, boisée, terreuse, résineuse
+            ou plus gourmande. L’intérêt n’est pas de classer les fleurs dans un
+            ordre de valeur, mais de savoir quelle direction aromatique vous
+            recherchez avant de comparer deux fiches.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "grandes-familles-aromatiques",
+        text: "Les grandes familles aromatiques",
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Repères simples pour lire un profil aromatique de fleur CBD.",
+          headers: ["Famille", "Ce que l’on perçoit souvent", "Ce que cela aide à comparer"],
+          rows: [
+            [
+              "Agrumée",
+              "Des notes fraîches, vives et parfois zestées.",
+              "Utile si vous cherchez une impression légère et dynamique.",
+            ],
+            [
+              "Florale",
+              "Des nuances douces, rondes ou délicates.",
+              "Permet de repérer des fleurs plus aériennes ou élégantes.",
+            ],
+            [
+              "Boisée",
+              "Des accents secs, nets ou plus profonds.",
+              "Aide à comparer les fleurs au caractère plus structuré.",
+            ],
+            [
+              "Terreuse",
+              "Des notes plus sombres, minérales ou végétales.",
+              "Donne une idée d’un profil plus ancré et moins sucré.",
+            ],
+            [
+              "Gourmande",
+              "Des sensations rondes, sucrées ou plus enveloppantes.",
+              "Intéressant pour comparer les fleurs au rendu plus ample.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "intensite-et-equilibre",
+        text: "Intensité et équilibre",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Deux fleurs peuvent partager une même famille aromatique tout en
+            offrant des intensités différentes. L’une peut paraître nette et
+            directe, l’autre plus complexe et progressive. Pour choisir
+            correctement, il faut donc regarder l’équilibre global, la finesse
+            des notes et la manière dont elles sont décrites sur la fiche.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "lire-les-indications",
+        text: "Lire les indications de la fiche",
+      },
+      {
+        type: "list",
+        items: [
+          "la famille aromatique mise en avant ;",
+          "la description textuelle du rendu ;",
+          "le mode de culture ou la méthode de présentation ;",
+          "les taux ou mesures seulement lorsqu’ils sont explicitement indiqués ;",
+          "la cohérence entre le texte, la catégorie et le certificat d’analyse.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "texture-et-sensation",
+        text: "Texture et sensation d’ensemble",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La perception aromatique ne se résume pas au parfum. La texture, la
+            densité visuelle et la structure du produit influencent aussi la
+            lecture de la fiche. Une fleur plus compacte, plus aérée ou plus
+            résineuse n’évoque pas le même ensemble sensoriel, même si la famille
+            aromatique reste proche.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "comparer-deux-fleurs",
+        text: "Comparer deux fleurs sans se tromper",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Pour comparer proprement, ouvrez deux fiches côte à côte et vérifiez
+            d’abord ce qui est écrit, puis ce qui est mesuré. La catégorie
+            <Link to="/fleurs-cbd"> fleurs CBD</Link> donne le point d’entrée,
+            tandis que <Link to="/blog/comment-lire-analyse-cbd">l’analyse de CBD</Link>
+            aide à distinguer les données techniques du texte commercial.
+          </>
+        ),
+      },
+      {
+        type: "links",
+        title: "Aller plus loin",
+        links: [
+          { to: "/fleurs-cbd", label: "Comparer les fleurs CBD" },
+          { to: "/blog/comment-lire-analyse-cbd", label: "Lire une analyse" },
+          { to: "/blog/fleur-cbd-ou-resine-cbd-differences", label: "Fleur ou résine" },
+          { to: "/qualite-conformite", label: "Qualité et conformité" },
+        ],
+      },
+      {
+        type: "heading",
+        id: "points-a-retenir",
+        text: "Points à retenir",
+      },
+      {
+        type: "list",
+        items: [
+          "le profil aromatique se lit référence par référence ;",
+          "les grandes familles aident à comparer sans simplifier à l’excès ;",
+          "la fiche produit et l’analyse restent les meilleures bases de lecture ;",
+          "la texture complète la perception, mais ne remplace pas la description.",
         ],
       },
     ],
@@ -735,8 +926,8 @@ export const blogArticles: BlogArticle[] = [
           <>
             Sur une fiche, commencez par la catégorie, puis regardez le mode de
             culture, l’origine, les arômes déclarés, les taux lorsqu’ils sont
-            communiqués et la disponibilité. Quand un lot comporte aussi une
-            analyse, reliez la lecture du document au reste de la fiche et{" "}
+            communiqués. Quand un lot comporte aussi une analyse, reliez la
+            lecture du document au reste de la fiche et{" "}
             <Link to="/blog/comment-lire-analyse-cbd">vérifiez les valeurs</Link>{" "}
             avant de conclure.
           </>

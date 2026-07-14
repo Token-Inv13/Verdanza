@@ -5,6 +5,7 @@ const noJavaScriptRoutes = [
   "/",
   "/blog",
   "/blog/comment-lire-analyse-cbd",
+  "/blog/choisir-fleur-cbd-profil-aromatique",
   "/blog/fleur-cbd-ou-resine-cbd-differences",
   "/blog/indoor-greenhouse-hydroponique-differences",
   "/fleurs-cbd",

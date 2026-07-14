@@ -9,7 +9,7 @@ Périmètre : `/blog`, `/blog/fleur-cbd-ou-resine-cbd-differences`, `/blog/indoo
 
 Créer une première architecture de blog statique, publier deux guides piliers CBD, renforcer le maillage interne vers les catégories et produits existants, et exposer des données structurées `BlogPosting` sans modifier les URLs commerciales validées.
 
-## Règle evergreen
+## Règle de contenu durable
 
 - Les articles doivent rester universels et durables.
 - Le stock, les prix, les promos et les arrivages ne doivent pas entrer dans le corps éditorial.
