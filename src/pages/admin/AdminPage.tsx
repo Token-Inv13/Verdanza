@@ -670,12 +670,44 @@ function ProductTable({
   onEdit: (product: Product) => void;
   onFlagChange: (product: Product, key: "isActive" | "isFeatured") => Promise<void>;
 }) {
+  const [categoryFilter, setCategoryFilter] = useState<ProductCategoryFilter>("all");
+  const categoryFilters = buildProductCategoryFilters(products);
+  const visibleProducts = products.filter((product) =>
+    productMatchesCategoryFilter(product, categoryFilter),
+  );
+
   return (
     <section className="overflow-hidden rounded-lg border border-forest/10 bg-ivory">
+      <div className="border-b border-forest/10 bg-cream/70 p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.16em] text-champagne">Catalogue</p>
+            <h2 className="font-display text-3xl text-forest">Produits par section</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {categoryFilters.map((filter) => (
+              <button
+                key={filter.value}
+                type="button"
+                className={categoryFilter === filter.value ? "btn-primary min-h-9 px-3 py-1.5 text-xs" : "btn-secondary min-h-9 px-3 py-1.5 text-xs"}
+                onClick={() => setCategoryFilter(filter.value)}
+              >
+                {filter.label} · {filter.count}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
       {!products.length && (
         <AdminEmptyState
           title="Aucun produit pour le moment."
           description="Ajoutez un produit ou rafraichissez les donnees connectees."
+        />
+      )}
+      {!!products.length && !visibleProducts.length && (
+        <AdminEmptyState
+          title="Aucun produit dans cette section."
+          description="Changez de filtre ou affichez tous les produits."
         />
       )}
       <div className="overflow-x-auto">
@@ -688,7 +720,7 @@ function ProductTable({
             </tr>
           </thead>
           <tbody>
-            {products.map((product) => (
+            {visibleProducts.map((product) => (
               <tr key={product.id} className="border-t border-forest/10">
                 <td className="px-4 py-4">
                   <div className="flex items-center gap-3">
@@ -705,7 +737,9 @@ function ProductTable({
                   </div>
                 </td>
                 <td className="px-4 py-4">
-                  <AdminBadge tone="neutral">{product.category}</AdminBadge>
+                  <AdminBadge tone={categoryTone(product.category)}>
+                    {productCategoryLabel(product.category)}
+                  </AdminBadge>
                 </td>
                 <td className="px-4 py-4">{product.price.toFixed(2)} EUR/g</td>
                 <td className="px-4 py-4">
@@ -753,9 +787,39 @@ function StockTable({
     threshold: number,
   ) => Promise<void>;
 }) {
+  const [filter, setFilter] = useState<StockFilter>("all");
+  const stockFilters = buildStockFilters(products);
+  const visibleProducts = products.filter((product) => productMatchesStockFilter(product, filter));
+
   return (
     <section className="mt-8 grid gap-4">
-      {products.map((product) => (
+      <div className="rounded-lg border border-forest/10 bg-ivory p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.16em] text-champagne">Stocks</p>
+            <h2 className="font-display text-3xl text-forest">Gestion rapide par filtre</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {stockFilters.map((stockFilter) => (
+              <button
+                key={stockFilter.value}
+                type="button"
+                className={filter === stockFilter.value ? "btn-primary min-h-9 px-3 py-1.5 text-xs" : "btn-secondary min-h-9 px-3 py-1.5 text-xs"}
+                onClick={() => setFilter(stockFilter.value)}
+              >
+                {stockFilter.label} · {stockFilter.count}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      {!visibleProducts.length && (
+        <AdminEmptyState
+          title="Aucun produit pour ce filtre."
+          description="Changez de filtre ou revenez sur Tous."
+        />
+      )}
+      {visibleProducts.map((product) => (
         <StockRow key={product.id} product={product} onStockChange={onStockChange} />
       ))}
     </section>
@@ -790,6 +854,9 @@ function StockRow({
           <div className="mt-2 flex flex-wrap gap-2">
             <AdminBadge tone={product.isActive ? "success" : "muted"}>
               {product.isActive ? "Actif" : "Inactif"}
+            </AdminBadge>
+            <AdminBadge tone={categoryTone(product.category)}>
+              {productCategoryLabel(product.category)}
             </AdminBadge>
             <AdminBadge tone={stockTone(product)}>{stockLabel(product)}</AdminBadge>
           </div>
@@ -858,9 +925,39 @@ function DeliveryZonesPanel({
     >,
   ) => Promise<void>;
 }) {
+  const [filter, setFilter] = useState<DeliveryZoneFilter>("all");
+  const zoneFilters = buildDeliveryZoneFilters(zones);
+  const visibleZones = zones.filter((zone) => deliveryZoneMatchesFilter(zone, filter));
+
   return (
     <section className="mt-8 grid gap-4">
-      {zones.map((zone) => (
+      <div className="rounded-lg border border-forest/10 bg-ivory p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.16em] text-champagne">Zones locales</p>
+            <h2 className="font-display text-3xl text-forest">Disponibilite client</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {zoneFilters.map((zoneFilter) => (
+              <button
+                key={zoneFilter.value}
+                type="button"
+                className={filter === zoneFilter.value ? "btn-primary min-h-9 px-3 py-1.5 text-xs" : "btn-secondary min-h-9 px-3 py-1.5 text-xs"}
+                onClick={() => setFilter(zoneFilter.value)}
+              >
+                {zoneFilter.label} · {zoneFilter.count}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      {!visibleZones.length && (
+        <AdminEmptyState
+          title="Aucune zone pour ce filtre."
+          description="Changez de filtre ou affichez toutes les zones."
+        />
+      )}
+      {visibleZones.map((zone) => (
         <DeliveryZoneRow key={zone.id} zone={zone} onSave={onSave} />
       ))}
     </section>
@@ -911,6 +1008,14 @@ function DeliveryZoneRow({
         <p className="text-xs uppercase tracking-[0.14em] text-champagne">
           {zone.method === "postal" ? "Postale" : "Locale"}
         </p>
+        <div className="mb-3 mt-2 flex flex-wrap gap-2">
+          <AdminBadge tone={isActive ? "success" : "muted"}>
+            {isActive ? "Active" : "Inactive"}
+          </AdminBadge>
+          <AdminBadge tone={deliveryStatusTone(status, isActive)}>
+            {deliveryStatusLabel(status, isActive)}
+          </AdminBadge>
+        </div>
         <Input label="Nom" value={name} onChange={setName} />
       </div>
       <NumberInput label="Frais" value={fee} onChange={setFee} />
@@ -3227,6 +3332,89 @@ function reviewStatusLabel(status: ReviewStatus) {
   return "Rejeté";
 }
 
+type ProductCategoryFilter = ProductCategory | "all" | "other";
+type StockFilter =
+  | ProductCategoryFilter
+  | "stock_ok"
+  | "low_stock"
+  | "out_of_stock";
+type DeliveryZoneFilter = "all" | "active" | "inactive" | "open" | "closed";
+type AdminFilterOption<T extends string> = {
+  value: T;
+  label: string;
+  count: number;
+};
+
+function productCategoryLabel(category: ProductCategory) {
+  const labels: Record<ProductCategory, string> = {
+    flowers: "Fleurs CBD",
+    resins: "Resines CBD",
+    oils: "Huiles CBD",
+    packs: "Autres produits CBD",
+  };
+  return labels[category] || "Autres produits CBD";
+}
+
+function categoryTone(category: ProductCategory): AdminBadgeTone {
+  if (category === "flowers") return "success";
+  if (category === "resins") return "gold";
+  return "neutral";
+}
+
+function isOtherProductCategory(category: ProductCategory) {
+  return !["flowers", "resins"].includes(category);
+}
+
+function productMatchesCategoryFilter(product: Product, filter: ProductCategoryFilter) {
+  if (filter === "all") return true;
+  if (filter === "other") return isOtherProductCategory(product.category);
+  return product.category === filter;
+}
+
+function buildProductCategoryFilters(products: Product[]): AdminFilterOption<ProductCategoryFilter>[] {
+  const count = (value: ProductCategoryFilter) =>
+    products.filter((product) => productMatchesCategoryFilter(product, value)).length;
+
+  return [
+    { value: "all" as const, label: "Tous", count: products.length },
+    { value: "flowers" as const, label: "Fleurs CBD", count: count("flowers") },
+    { value: "resins" as const, label: "Resines CBD", count: count("resins") },
+    { value: "other" as const, label: "Autres", count: count("other") },
+  ];
+}
+
+function buildStockFilters(products: Product[]): AdminFilterOption<StockFilter>[] {
+  return [
+    ...buildProductCategoryFilters(products),
+    {
+      value: "stock_ok" as const,
+      label: "Stock OK",
+      count: products.filter((product) => product.stock > product.lowStockThreshold).length,
+    },
+    {
+      value: "low_stock" as const,
+      label: "Stock bas",
+      count: products.filter(
+        (product) => product.stock > 0 && product.stock <= product.lowStockThreshold,
+      ).length,
+    },
+    {
+      value: "out_of_stock" as const,
+      label: "Rupture",
+      count: products.filter((product) => product.stock <= 0).length,
+    },
+  ];
+}
+
+function productMatchesStockFilter(product: Product, filter: StockFilter) {
+  if (filter === "stock_ok") return product.stock > product.lowStockThreshold;
+  if (filter === "low_stock") return product.stock > 0 && product.stock <= product.lowStockThreshold;
+  if (filter === "out_of_stock") return product.stock <= 0;
+  if (filter === "all") return true;
+  if (filter === "other") return isOtherProductCategory(product.category);
+  return product.category === filter;
+}
+
 function stockLabel(product: Product) {
   if (product.stock <= 0) return "Rupture";
   if (product.stock <= product.lowStockThreshold) return "Stock bas";
@@ -3237,6 +3425,49 @@ function stockTone(product: Product): "success" | "warning" | "danger" {
   if (product.stock <= 0) return "danger";
   if (product.stock <= product.lowStockThreshold) return "warning";
   return "success";
+}
+
+function buildDeliveryZoneFilters(zones: DeliveryZone[]): AdminFilterOption<DeliveryZoneFilter>[] {
+  const closedStatuses: DeliveryZoneStatus[] = ["temporarily_closed", "coming_soon", "disabled"];
+  return [
+    { value: "all" as const, label: "Toutes", count: zones.length },
+    { value: "active" as const, label: "Actives", count: zones.filter((zone) => zone.isActive).length },
+    { value: "inactive" as const, label: "Inactives", count: zones.filter((zone) => !zone.isActive).length },
+    {
+      value: "open" as const,
+      label: "Ouvertes",
+      count: zones.filter((zone) => zone.isActive && (zone.status || "open") === "open").length,
+    },
+    {
+      value: "closed" as const,
+      label: "Fermees",
+      count: zones.filter((zone) => !zone.isActive || closedStatuses.includes(zone.status || "disabled")).length,
+    },
+  ];
+}
+
+function deliveryZoneMatchesFilter(zone: DeliveryZone, filter: DeliveryZoneFilter) {
+  const status = zone.status || (zone.isActive ? "open" : "disabled");
+  if (filter === "active") return zone.isActive;
+  if (filter === "inactive") return !zone.isActive;
+  if (filter === "open") return zone.isActive && status === "open";
+  if (filter === "closed") return !zone.isActive || status !== "open";
+  return true;
+}
+
+function deliveryStatusLabel(status: DeliveryZoneStatus, isActive: boolean) {
+  if (!isActive) return "Desactivee";
+  if (status === "open") return "Ouverte";
+  if (status === "temporarily_closed") return "Fermee";
+  if (status === "coming_soon") return "Bientot";
+  return "Desactivee";
+}
+
+function deliveryStatusTone(status: DeliveryZoneStatus, isActive: boolean): AdminBadgeTone {
+  if (!isActive || status === "disabled") return "muted";
+  if (status === "open") return "success";
+  if (status === "temporarily_closed") return "warning";
+  return "gold";
 }
 
 function orderStatusTone(
