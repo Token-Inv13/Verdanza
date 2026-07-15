@@ -75,6 +75,34 @@ export default async function handler(
 
       const order = { id: snapshot.id, ...snapshot.data() } as Order;
       previousStatus = order.orderStatus;
+      if (body.deleteCancelled) {
+        if (order.orderStatus !== "cancelled" || order.paymentStatus !== "cancelled") {
+          throw new Error(
+            "Seules les commandes annulees peuvent etre supprimees definitivement.",
+          );
+        }
+        if (!order.stockRestoredAt) {
+          throw new Error(
+            "Suppression refusee: le stock de cette commande n'est pas marque comme restaure.",
+          );
+        }
+        if (order.invoiceId || order.invoiceNumber) {
+          throw new Error(
+            "Suppression refusee: une facture est liee a cette commande. Archivez-la plutot.",
+          );
+        }
+        const invoiceSnapshot = await transaction.get(
+          db.collection("invoices").where("orderId", "==", order.id).limit(1),
+        );
+        if (!invoiceSnapshot.empty) {
+          throw new Error(
+            "Suppression refusee: une facture est liee a cette commande. Archivez-la plutot.",
+          );
+        }
+        transaction.delete(orderRef);
+        return;
+      }
+
       const nextStatus = body.orderStatus ?? order.orderStatus;
       const nextFinalPaymentMethod =
         body.finalPaymentMethod || order.finalPaymentMethod || undefined;
@@ -298,6 +326,7 @@ function parseBody(value: unknown): {
   archived?: boolean;
   hidden?: boolean;
   restore?: boolean;
+  deleteCancelled?: boolean;
   historyNote?: string;
   authToken?: string;
 } {
@@ -320,6 +349,7 @@ function parseBody(value: unknown): {
     archived?: boolean;
     hidden?: boolean;
     restore?: boolean;
+    deleteCancelled?: boolean;
     historyNote?: string;
     authToken?: string;
   };
@@ -365,6 +395,7 @@ function parseJsonObject(value: unknown): {
   archived?: boolean;
   hidden?: boolean;
   restore?: boolean;
+  deleteCancelled?: boolean;
   historyNote?: string;
   authToken?: string;
 } {
@@ -387,6 +418,7 @@ function parseJsonObject(value: unknown): {
     archived?: boolean;
     hidden?: boolean;
     restore?: boolean;
+    deleteCancelled?: boolean;
     historyNote?: string;
     authToken?: string;
   };

@@ -216,13 +216,13 @@ export async function updateOrderAdminFields(
 export async function deleteCancelledOrder(orderId: string) {
   const token = await auth?.currentUser?.getIdToken();
   if (!token) throw new Error("Connexion admin requise.");
-  const response = await fetch("/api/delete-order", {
+  const response = await fetch("/api/update-order-status", {
     method: "POST",
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ orderId }),
+    body: JSON.stringify({ orderId, deleteCancelled: true }),
   });
   const payload = (await response.json().catch(() => ({}))) as { error?: string };
   if (!response.ok) {
