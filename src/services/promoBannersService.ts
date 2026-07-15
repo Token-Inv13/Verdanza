@@ -48,14 +48,17 @@ export async function getPublicPromoBanners() {
       query(
         collection(db, collections.promoBanners),
         where("isActive", "==", true),
-        orderBy("priority", "asc"),
+        where("isArchived", "==", false),
       ),
     );
     return snapshot.docs
       .map((entry) => normalizePromoBanner({ id: entry.id, ...entry.data() } as PromoBanner))
-      .filter((banner) => isPromoBannerVisibleNow(banner));
+      .filter((banner) => isPromoBannerVisibleNow(banner))
+      .sort((left, right) => Number(left.priority || 0) - Number(right.priority || 0));
   } catch (error) {
-    console.warn("Unable to load public promo banners", error);
+    if (import.meta.env.DEV) {
+      console.warn("Unable to load public promo banners", error);
+    }
     return [];
   }
 }
@@ -112,8 +115,8 @@ export async function archivePromoBanner(bannerId: string) {
 
 export function isPromoBannerVisibleNow(banner: PromoBanner, now = new Date()) {
   if (!banner.isActive || banner.isArchived || banner.placement === "draft") return false;
-  const startsAt = banner.startsAt ? Date.parse(banner.startsAt) : 0;
-  const endsAt = banner.endsAt ? Date.parse(banner.endsAt) : 0;
+  const startsAt = parseBannerDate(banner.startsAt);
+  const endsAt = parseBannerDate(banner.endsAt);
   const current = now.getTime();
   if (startsAt && current < startsAt) return false;
   if (endsAt && current > endOfDay(endsAt)) return false;
@@ -133,8 +136,8 @@ export function promoBannerStatus(banner: PromoBanner): {
   tone: "success" | "warning" | "danger" | "muted" | "gold";
 } {
   const now = Date.now();
-  const startsAt = banner.startsAt ? Date.parse(banner.startsAt) : 0;
-  const endsAt = banner.endsAt ? Date.parse(banner.endsAt) : 0;
+  const startsAt = parseBannerDate(banner.startsAt);
+  const endsAt = parseBannerDate(banner.endsAt);
   if (banner.isArchived) return { label: "Archivee", tone: "muted" };
   if (!banner.isActive) return { label: "Inactive", tone: "muted" };
   if (startsAt && now < startsAt) return { label: "Programmee", tone: "gold" };
@@ -156,31 +159,64 @@ function normalizePromoBanner(banner: PromoBanner): PromoBanner {
     variant: normalizeBannerVariant(banner.variant),
     dismissible: Boolean(banner.dismissible),
     isActive: Boolean(banner.isActive),
-    isArchived: Boolean(banner.isArchived),
+    isArchived: Boolean(banner.isArchived || banner.archivedAt),
+    startsAt: normalizeBannerDateValue(banner.startsAt),
+    endsAt: normalizeBannerDateValue(banner.endsAt),
   };
 }
 
 function normalizeBannerType(value: string): PromoBannerType {
-  if (["top_bar", "shop_card", "checkout_notice", "modal"].includes(value)) {
-    return value as PromoBannerType;
+  const normalized = String(value || "")
+    .trim()
+    .replace(/([a-z])([A-Z])/g, "$1_$2")
+    .replace(/[-\s]+/g, "_")
+    .toLowerCase();
+  const aliases: Record<string, PromoBannerType> = {
+    topbar: "top_bar",
+    top_bar: "top_bar",
+    bandeau_haut_de_page: "top_bar",
+    shopcard: "shop_card",
+    shop_card: "shop_card",
+    checkoutnotice: "checkout_notice",
+    checkout_notice: "checkout_notice",
+    modal: "modal",
+  };
+  if (aliases[normalized]) {
+    return aliases[normalized];
   }
   return "shop_card";
 }
 
 function normalizeBannerPlacement(value: string): PromoBannerPlacement {
-  if (
-    [
-      "home",
-      "shop",
-      "flowers",
-      "resins",
-      "cart",
-      "checkout",
-      "all_public",
-      "draft",
-    ].includes(value)
-  ) {
-    return value as PromoBannerPlacement;
+  const normalized = String(value || "")
+    .trim()
+    .replace(/([a-z])([A-Z])/g, "$1_$2")
+    .replace(/[-\s]+/g, "_")
+    .toLowerCase();
+  const aliases: Record<string, PromoBannerPlacement> = {
+    home: "home",
+    homepage: "home",
+    accueil: "home",
+    shop: "shop",
+    boutique: "shop",
+    flowers: "flowers",
+    fleurs: "flowers",
+    fleurs_cbd: "flowers",
+    resins: "resins",
+    resines: "resins",
+    resines_cbd: "resins",
+    cart: "cart",
+    panier: "cart",
+    checkout: "checkout",
+    all: "all_public",
+    all_public: "all_public",
+    allpublic: "all_public",
+    toutes_les_pages_publiques: "all_public",
+    draft: "draft",
+    brouillon: "draft",
+  };
+  if (aliases[normalized]) {
+    return aliases[normalized];
   }
   return "draft";
 }
@@ -199,6 +235,27 @@ function sanitizeBannerUrl(value: string) {
   if (url.startsWith("https://verdanza.fr")) return url;
   if (url.startsWith("https://verdanza-opal.vercel.app")) return url;
   return "";
+}
+
+function normalizeBannerDateValue(value: unknown) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (
+    typeof value === "object" &&
+    "toDate" in value &&
+    typeof value.toDate === "function"
+  ) {
+    return value.toDate().toISOString().slice(0, 10);
+  }
+  return "";
+}
+
+function parseBannerDate(value: unknown) {
+  const normalized = normalizeBannerDateValue(value);
+  if (!normalized) return 0;
+  const timestamp = Date.parse(normalized);
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function slugify(value: string) {

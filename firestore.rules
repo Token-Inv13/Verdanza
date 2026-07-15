@@ -77,7 +77,8 @@ service cloud.firestore {
 
     match /promoBanners/{bannerId} {
       allow read: if isAdmin()
-        || resource.data.isActive == true;
+        || (resource.data.isActive == true
+          && resource.data.isArchived == false);
       allow create, update, delete: if isAdmin();
     }
 
