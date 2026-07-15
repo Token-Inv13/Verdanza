@@ -71,10 +71,18 @@ function PublicPromoBanner({ banner }: { banner: PromoBanner }) {
 
   if (dismissed) return null;
 
+  const showOfferBadge = banner.variant === "promo";
   const content = (
     <>
-      <div className="min-w-0">
-        <strong className="block text-sm font-semibold text-forest">{banner.title}</strong>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          {showOfferBadge && (
+            <span className="rounded-full border border-champagne/40 bg-ivory/80 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-forest">
+              Offre
+            </span>
+          )}
+          <strong className="block text-sm font-semibold text-forest">{banner.title}</strong>
+        </div>
         <p className="mt-1 text-sm leading-6 text-ink/70">{banner.message}</p>
         {banner.linkedPromoCode && (
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-forest">
@@ -95,14 +103,14 @@ function PublicPromoBanner({ banner }: { banner: PromoBanner }) {
       {banner.dismissible && (
         <button
           type="button"
-          className="ml-auto rounded border border-transparent px-2 py-1 text-sm text-forest/70 hover:border-forest/10 hover:text-forest"
+          className="ml-auto h-9 w-9 rounded-full border border-transparent text-lg leading-none text-forest/70 hover:border-forest/10 hover:bg-ivory/80 hover:text-forest"
           aria-label="Fermer cette banniere"
           onClick={() => {
             window.localStorage.setItem(dismissStorageKey(banner.id), "true");
             setDismissed(true);
           }}
         >
-          x
+          ×
         </button>
       )}
     </>
@@ -110,7 +118,7 @@ function PublicPromoBanner({ banner }: { banner: PromoBanner }) {
 
   if (banner.type === "top_bar") {
     return (
-      <aside className={`border-b px-4 py-3 ${bannerVariantClass(banner.variant)}`}>
+      <aside className={`border-b px-4 py-3 shadow-sm ${bannerVariantClass(banner.variant)}`}>
         <div className="container-page flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           {content}
         </div>
@@ -154,11 +162,11 @@ function placementFromPath(pathname: string): PromoBannerPlacement {
 }
 
 function bannerVariantClass(variant: PromoBannerVariant) {
-  if (variant === "promo") return "border-champagne/40 bg-champagne/15";
-  if (variant === "delivery") return "border-forest/10 bg-forest/5";
-  if (variant === "warning") return "border-red-200 bg-red-50";
+  if (variant === "promo") return "border-champagne/50 bg-[#f8efd9]";
+  if (variant === "delivery") return "border-forest/15 bg-forest/5";
+  if (variant === "warning") return "border-champagne/50 bg-[#fff8eb]";
   if (variant === "info") return "border-forest/10 bg-cream";
-  return "border-forest/10 bg-cream";
+  return "border-forest/10 bg-ivory";
 }
 
 function isBannerDismissed(banner: PromoBanner) {

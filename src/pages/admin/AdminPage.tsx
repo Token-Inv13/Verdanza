@@ -19,6 +19,7 @@ import {
 } from "../../services/couponsService";
 import {
   archivePromoBanner,
+  getBannerPlacements,
   promoBannerStatus,
   updatePromoBannerStatus,
   upsertPromoBanner,
@@ -128,6 +129,7 @@ const emptyPromoBanner: PromoBannerInput = {
   message: "",
   type: "shop_card",
   placement: "draft",
+  placements: ["draft"],
   isActive: false,
   startsAt: "",
   endsAt: "",
@@ -481,6 +483,7 @@ export function AdminPage({ section }: { section: string }) {
             <SourceLine source={promoBannerSource} />
             <PromoBannersTable
               banners={promoBanners}
+              coupons={coupons}
               onEdit={setEditingPromoBanner}
               onToggle={handlePromoBannerToggle}
               onArchive={handlePromoBannerArchive}
@@ -1333,7 +1336,10 @@ function CouponsTable({
                     <strong className="block text-forest">{coupon.code}</strong>
                     <span className="text-xs text-ink/55">{coupon.label}</span>
                   </div>
-                  <AdminBadge tone={status.tone}>{status.label}</AdminBadge>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {isTemplateCoupon(coupon) && <AdminBadge tone="gold">Modele</AdminBadge>}
+                    <AdminBadge tone={status.tone}>{status.label}</AdminBadge>
+                  </div>
                 </div>
                 <p className="mt-3 text-sm text-ink/70">{couponDescription(coupon)}</p>
                 <p className="mt-2 text-xs text-ink/55">
@@ -1374,6 +1380,11 @@ function CouponsTable({
                   <td className="px-4 py-4">
                     <strong className="block text-forest">{coupon.code}</strong>
                     <span className="text-xs text-ink/55">{coupon.label}</span>
+                    {isTemplateCoupon(coupon) && (
+                      <span className="mt-2 inline-flex">
+                        <AdminBadge tone="gold">Modele</AdminBadge>
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-4">{couponTypeLabel(coupon.discountType)}</td>
                   <td className="px-4 py-4">{couponValueLabel(coupon)}</td>
@@ -1408,6 +1419,72 @@ function CouponsTable({
       </div>
     </section>
     </section>
+  );
+}
+
+function BannerPlacementSelector({
+  banner,
+  onChange,
+}: {
+  banner: PromoBannerInput;
+  onChange: (banner: PromoBannerInput) => void;
+}) {
+  const selectedPlacements = bannerInputPlacements(banner);
+
+  function togglePlacement(placement: PromoBannerPlacement) {
+    let nextPlacements: PromoBannerPlacement[];
+    if (placement === "all_public") {
+      nextPlacements = selectedPlacements.includes("all_public") ? ["draft"] : ["all_public"];
+    } else {
+      nextPlacements = selectedPlacements
+        .filter((entry) => entry !== "all_public" && entry !== "draft");
+      if (selectedPlacements.includes(placement)) {
+        nextPlacements = nextPlacements.filter((entry) => entry !== placement);
+      } else {
+        nextPlacements.push(placement);
+      }
+      if (!nextPlacements.length) nextPlacements = ["draft"];
+    }
+
+    onChange({
+      ...banner,
+      placement: nextPlacements.includes("all_public") ? "all_public" : nextPlacements[0],
+      placements: nextPlacements,
+    });
+  }
+
+  return (
+    <fieldset className="rounded-md border border-forest/10 bg-cream p-4">
+      <legend className="px-1 text-sm font-medium text-forest">Emplacements</legend>
+      <p className="mt-1 text-xs leading-5 text-ink/55">
+        Choisissez les pages publiques ou la banniere doit apparaitre.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {bannerPlacementOptions.map((option) => {
+          const checked = selectedPlacements.includes(option.value);
+          const disabled =
+            selectedPlacements.includes("all_public") && option.value !== "all_public";
+          return (
+            <button
+              key={option.value}
+              type="button"
+              disabled={disabled}
+              className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${
+                checked
+                  ? "border-forest bg-forest text-ivory"
+                  : "border-forest/15 bg-ivory text-forest hover:border-forest/40"
+              } ${disabled ? "cursor-not-allowed opacity-45" : ""}`}
+              onClick={() => togglePlacement(option.value)}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-xs text-ink/55">
+        Selection actuelle : {promoBannerPlacementsLabel({ ...banner, id: banner.id || "" } as PromoBanner)}
+      </p>
+    </fieldset>
   );
 }
 
@@ -1457,25 +1534,7 @@ function PromoBannerForm({
             <option value="modal">Modale legere</option>
           </select>
         </label>
-        <label className="text-sm font-medium text-forest">
-          Emplacement
-          <select
-            className="input-field mt-2"
-            value={banner.placement}
-            onChange={(event) =>
-              onChange({ ...banner, placement: event.target.value as PromoBannerPlacement })
-            }
-          >
-            <option value="draft">Aucun / brouillon</option>
-            <option value="all_public">Toutes les pages publiques</option>
-            <option value="home">Accueil</option>
-            <option value="shop">Boutique</option>
-            <option value="flowers">Fleurs CBD</option>
-            <option value="resins">Resines CBD</option>
-            <option value="cart">Panier</option>
-            <option value="checkout">Checkout</option>
-          </select>
-        </label>
+        <BannerPlacementSelector banner={banner} onChange={onChange} />
         <div className="grid grid-cols-2 gap-3">
           <Input
             label="Date de debut"
@@ -1542,11 +1601,21 @@ function PromoBannerForm({
         </button>
         {showAdvanced && (
           <div className="grid gap-4 rounded-md border border-forest/10 bg-cream p-4">
-            <NumberInput
-              label="Priorite"
-              value={banner.priority}
-              onChange={(priority) => onChange({ ...banner, priority })}
-            />
+            <label className="text-sm font-medium text-forest">
+              Priorite
+              <select
+                className="input-field mt-2"
+                value={priorityBucket(banner.priority)}
+                onChange={(event) => onChange({ ...banner, priority: Number(event.target.value) })}
+              >
+                <option value={10}>Normale</option>
+                <option value={50}>Importante</option>
+                <option value={100}>Tres importante</option>
+              </select>
+              <span className="mt-1 block text-xs font-normal text-ink/55">
+                Utile seulement si plusieurs bannieres sont actives au meme endroit.
+              </span>
+            </label>
             <label className="text-sm font-medium text-forest">
               Variante visuelle
               <select
@@ -1562,6 +1631,9 @@ function PromoBannerForm({
                 <option value="info">Info</option>
                 <option value="warning">Avertissement</option>
               </select>
+              <span className="mt-1 block text-xs font-normal text-ink/55">
+                Change l'apparence de la banniere selon son usage.
+              </span>
             </label>
             <label className="flex items-center gap-2 text-sm text-forest">
               <input
@@ -1573,6 +1645,10 @@ function PromoBannerForm({
               />
               Refermable cote client
             </label>
+            <p className="text-xs leading-5 text-ink/55">
+              Si active, le client peut fermer la banniere. Elle ne reapparaitra
+              plus immediatement sur ce navigateur.
+            </p>
           </div>
         )}
         <button className="btn-primary" type="submit">
@@ -1585,11 +1661,13 @@ function PromoBannerForm({
 
 function PromoBannersTable({
   banners,
+  coupons,
   onEdit,
   onToggle,
   onArchive,
 }: {
   banners: PromoBanner[];
+  coupons: Coupon[];
   onEdit: (banner: PromoBannerInput) => void;
   onToggle: (banner: PromoBanner) => Promise<void>;
   onArchive: (banner: PromoBanner) => Promise<void>;
@@ -1627,6 +1705,7 @@ function PromoBannersTable({
               <PromoBannerCard
                 key={banner.id}
                 banner={banner}
+                coupons={coupons}
                 onEdit={onEdit}
                 onToggle={onToggle}
                 onArchive={onArchive}
@@ -1655,19 +1734,35 @@ function PromoBannersTable({
             <tbody>
               {banners.map((banner) => {
                 const status = promoBannerStatus(banner);
+                const linkedCoupon = findLinkedCoupon(coupons, banner);
+                const linkedCouponInactive = Boolean(
+                  banner.linkedPromoCode && (!linkedCoupon || !linkedCoupon.isActive),
+                );
                 return (
                   <tr key={banner.id} className="border-t border-forest/10">
                     <td className="px-4 py-4">
                       <strong className="block text-forest">{banner.title}</strong>
                       <span className="line-clamp-2 text-xs text-ink/55">{banner.message}</span>
+                      {banner.isTemplate && (
+                        <span className="mt-2 inline-flex">
+                          <AdminBadge tone="gold">Modele</AdminBadge>
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-4">{promoBannerTypeLabel(banner.type)}</td>
-                    <td className="px-4 py-4">{promoBannerPlacementLabel(banner.placement)}</td>
+                    <td className="px-4 py-4">{promoBannerPlacementsLabel(banner)}</td>
                     <td className="px-4 py-4 text-xs text-ink/60">
                       {banner.startsAt || "Immediat"} - {banner.endsAt || "Sans fin"}
                     </td>
-                    <td className="px-4 py-4">{banner.linkedPromoCode || "-"}</td>
-                    <td className="px-4 py-4">{banner.priority}</td>
+                    <td className="px-4 py-4">
+                      {banner.linkedPromoCode || "-"}
+                      {linkedCouponInactive && (
+                        <span className="mt-2 block">
+                          <AdminBadge tone="warning">Code lie inactif</AdminBadge>
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4">{promoBannerPriorityLabel(banner.priority)}</td>
                     <td className="px-4 py-4">
                       <button type="button" onClick={() => void onToggle(banner)}>
                         <AdminBadge tone={status.tone}>{status.label}</AdminBadge>
@@ -1696,34 +1791,53 @@ function PromoBannersTable({
 
 function PromoBannerCard({
   banner,
+  coupons,
   onEdit,
   onToggle,
   onArchive,
 }: {
   banner: PromoBanner;
+  coupons: Coupon[];
   onEdit: (banner: PromoBannerInput) => void;
   onToggle: (banner: PromoBanner) => Promise<void>;
   onArchive: (banner: PromoBanner) => Promise<void>;
 }) {
   const status = promoBannerStatus(banner);
+  const linkedCoupon = findLinkedCoupon(coupons, banner);
+  const linkedCouponInactive = Boolean(
+    banner.linkedPromoCode && (!linkedCoupon || !linkedCoupon.isActive),
+  );
   return (
     <article className="rounded-lg border border-forest/10 bg-ivory p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <strong className="block text-forest">{banner.title}</strong>
           <span className="text-xs text-ink/55">
-            {promoBannerTypeLabel(banner.type)} - {promoBannerPlacementLabel(banner.placement)}
+            {promoBannerTypeLabel(banner.type)} - {promoBannerPlacementsLabel(banner)}
           </span>
         </div>
-        <AdminBadge tone={status.tone}>{status.label}</AdminBadge>
+        <div className="flex flex-wrap justify-end gap-2">
+          {banner.isTemplate && <AdminBadge tone="gold">Modele</AdminBadge>}
+          <AdminBadge tone={status.tone}>{status.label}</AdminBadge>
+        </div>
       </div>
       <p className="mt-3 text-sm leading-6 text-ink/70">{banner.message}</p>
       <p className="mt-2 text-xs text-ink/55">
-        Priorite {banner.priority} - {banner.startsAt || "Immediat"} -{" "}
+        Priorite {promoBannerPriorityLabel(banner.priority)} - {banner.startsAt || "Immediat"} -{" "}
         {banner.endsAt || "Sans fin"}
       </p>
       {banner.linkedPromoCode && (
-        <p className="mt-2 text-xs font-semibold text-forest">Code : {banner.linkedPromoCode}</p>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-forest">
+          <span>Code : {banner.linkedPromoCode}</span>
+          <button
+            type="button"
+            className="rounded border border-forest/15 px-2 py-1 text-xs hover:bg-forest hover:text-ivory"
+            onClick={() => void navigator.clipboard?.writeText(banner.linkedPromoCode || "")}
+          >
+            Copier
+          </button>
+          {linkedCouponInactive && <AdminBadge tone="warning">Code lie inactif</AdminBadge>}
+        </div>
       )}
       <div className="mt-4 flex flex-wrap gap-2">
         <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs" onClick={() => onEdit(banner)}>
@@ -4036,6 +4150,20 @@ function couponStatus(coupon: Coupon): { label: string; tone: AdminBadgeTone } {
   return { label: "Actif", tone: "success" };
 }
 
+const bannerPlacementOptions: Array<{ value: PromoBannerPlacement; label: string }> = [
+  { value: "all_public", label: "Toutes les pages publiques" },
+  { value: "home", label: "Accueil" },
+  { value: "shop", label: "Boutique" },
+  { value: "flowers", label: "Fleurs CBD" },
+  { value: "resins", label: "Resines CBD" },
+  { value: "cart", label: "Panier" },
+  { value: "checkout", label: "Checkout" },
+];
+
+function isTemplateCoupon(coupon: Coupon) {
+  return Boolean(coupon.isTemplate || coupon.internalNote?.toLowerCase().includes("modele"));
+}
+
 function promoBannerTypeLabel(type: PromoBannerType) {
   if (type === "top_bar") return "Bandeau haut de page";
   if (type === "shop_card") return "Encadre boutique";
@@ -4055,6 +4183,39 @@ function promoBannerPlacementLabel(placement: PromoBannerPlacement) {
     draft: "Aucun / brouillon",
   };
   return labels[placement] || placement;
+}
+
+function promoBannerPlacementsLabel(banner: Pick<PromoBanner, "placement" | "placements">) {
+  const placements = getBannerPlacements(banner);
+  if (placements.includes("all_public")) return "Toutes les pages publiques";
+  return placements.map((placement) => promoBannerPlacementLabel(placement)).join(", ");
+}
+
+function bannerInputPlacements(banner: Pick<PromoBannerInput, "placement" | "placements">) {
+  return getBannerPlacements({
+    placement: banner.placement,
+    placements: banner.placements,
+  });
+}
+
+function priorityBucket(priority: number) {
+  const normalized = Number(priority || 10);
+  if (normalized >= 100) return 100;
+  if (normalized >= 50) return 50;
+  return 10;
+}
+
+function promoBannerPriorityLabel(priority: number) {
+  const bucket = priorityBucket(priority);
+  if (bucket === 100) return "Tres importante";
+  if (bucket === 50) return "Importante";
+  return "Normale";
+}
+
+function findLinkedCoupon(coupons: Coupon[], banner: PromoBanner) {
+  const code = (banner.linkedPromoCode || "").trim().toUpperCase();
+  if (!code) return undefined;
+  return coupons.find((coupon) => coupon.code.trim().toUpperCase() === code);
 }
 
 function adminBannerPreviewClass(variant: PromoBannerVariant) {

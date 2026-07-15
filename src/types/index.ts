@@ -133,6 +133,7 @@ export type Coupon = {
   productIds?: string[];
   categories?: ProductCategory[];
   isArchived?: boolean;
+  isTemplate?: boolean;
   internalNote?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -156,6 +157,7 @@ export type PromoBanner = {
   message: string;
   type: PromoBannerType;
   placement: PromoBannerPlacement;
+  placements?: PromoBannerPlacement[];
   isActive: boolean;
   startsAt?: string;
   endsAt?: string;
@@ -166,6 +168,7 @@ export type PromoBanner = {
   variant: PromoBannerVariant;
   dismissible: boolean;
   isArchived?: boolean;
+  isTemplate?: boolean;
   archivedAt?: string;
   createdAt?: string;
   updatedAt?: string;

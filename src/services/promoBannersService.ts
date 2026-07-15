@@ -70,6 +70,12 @@ export async function upsertPromoBanner(input: PromoBannerInput) {
   if (!title) throw new Error("Titre requis.");
   if (!message) throw new Error("Message requis.");
   const bannerId = input.id || slugify(`${title}-${Date.now()}`);
+  const placements = normalizeBannerPlacements(
+    input.placements?.length ? input.placements : [input.placement],
+  );
+  const primaryPlacement = placements.includes("all_public")
+    ? "all_public"
+    : placements[0] || "draft";
 
   await setDoc(
     doc(db, collections.promoBanners, bannerId),
@@ -77,7 +83,8 @@ export async function upsertPromoBanner(input: PromoBannerInput) {
       title,
       message,
       type: input.type,
-      placement: input.placement,
+      placement: primaryPlacement,
+      placements,
       isActive: Boolean(input.isActive),
       startsAt: input.startsAt || "",
       endsAt: input.endsAt || "",
@@ -88,6 +95,7 @@ export async function upsertPromoBanner(input: PromoBannerInput) {
       variant: input.variant,
       dismissible: Boolean(input.dismissible),
       isArchived: Boolean(input.isArchived),
+      isTemplate: Boolean(input.isTemplate),
       updatedAt: serverTimestamp(),
       createdAt: serverTimestamp(),
     },
@@ -114,7 +122,15 @@ export async function archivePromoBanner(bannerId: string) {
 }
 
 export function isPromoBannerVisibleNow(banner: PromoBanner, now = new Date()) {
-  if (!banner.isActive || banner.isArchived || banner.placement === "draft") return false;
+  const placements = getBannerPlacements(banner);
+  if (
+    !banner.isActive ||
+    banner.isArchived ||
+    !placements.length ||
+    placements.every((placement) => placement === "draft")
+  ) {
+    return false;
+  }
   const startsAt = parseBannerDate(banner.startsAt);
   const endsAt = parseBannerDate(banner.endsAt);
   const current = now.getTime();
@@ -127,8 +143,9 @@ export function promoBannerMatchesPlacement(
   banner: PromoBanner,
   placement: PromoBannerPlacement,
 ) {
-  if (banner.placement === "all_public") return true;
-  return banner.placement === placement;
+  const placements = getBannerPlacements(banner);
+  if (placements.includes("all_public")) return true;
+  return placements.includes(placement);
 }
 
 export function promoBannerStatus(banner: PromoBanner): {
@@ -146,12 +163,18 @@ export function promoBannerStatus(banner: PromoBanner): {
 }
 
 function normalizePromoBanner(banner: PromoBanner): PromoBanner {
+  const placements = normalizeBannerPlacements(
+    banner.placements?.length ? banner.placements : [banner.placement],
+  );
   return {
     ...banner,
     title: String(banner.title || ""),
     message: String(banner.message || ""),
     type: normalizeBannerType(banner.type),
-    placement: normalizeBannerPlacement(banner.placement),
+    placement: placements.includes("all_public")
+      ? "all_public"
+      : placements[0] || normalizeBannerPlacement(banner.placement),
+    placements,
     priority: Number(banner.priority || 0),
     buttonLabel: banner.buttonLabel || "",
     buttonUrl: sanitizeBannerUrl(banner.buttonUrl || ""),
@@ -160,9 +183,16 @@ function normalizePromoBanner(banner: PromoBanner): PromoBanner {
     dismissible: Boolean(banner.dismissible),
     isActive: Boolean(banner.isActive),
     isArchived: Boolean(banner.isArchived || banner.archivedAt),
+    isTemplate: Boolean(banner.isTemplate),
     startsAt: normalizeBannerDateValue(banner.startsAt),
     endsAt: normalizeBannerDateValue(banner.endsAt),
   };
+}
+
+export function getBannerPlacements(banner: Pick<PromoBanner, "placement" | "placements">) {
+  return normalizeBannerPlacements(
+    banner.placements?.length ? banner.placements : [banner.placement],
+  );
 }
 
 function normalizeBannerType(value: string): PromoBannerType {
@@ -219,6 +249,16 @@ function normalizeBannerPlacement(value: string): PromoBannerPlacement {
     return aliases[normalized];
   }
   return "draft";
+}
+
+function normalizeBannerPlacements(values: unknown[]) {
+  const placements = values
+    .map((value) => normalizeBannerPlacement(String(value || "")))
+    .filter(Boolean);
+  const unique = Array.from(new Set(placements));
+  if (unique.includes("all_public")) return ["all_public"] as PromoBannerPlacement[];
+  const publicPlacements = unique.filter((placement) => placement !== "draft");
+  return publicPlacements.length ? publicPlacements : (["draft"] as PromoBannerPlacement[]);
 }
 
 function normalizeBannerVariant(value: string): PromoBannerVariant {
