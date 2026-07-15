@@ -7,6 +7,7 @@ import {
   type ProductInput,
 } from "../../services/productsService";
 import {
+  deleteCancelledOrder,
   retryOrderPurchaseAnalytics,
   updateOrderAdminFields,
 } from "../../services/ordersService";
@@ -198,6 +199,19 @@ export function AdminPage({ section }: { section: string }) {
     [orders, products],
   );
 
+  async function handleDeleteCancelledOrder(orderId: string) {
+    setMessage("");
+    try {
+      await deleteCancelledOrder(orderId);
+      setMessage(`Commande ${orderId} supprimee definitivement.`);
+      await refresh();
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Suppression commande impossible.",
+      );
+    }
+  }
+
   async function handleProductSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
@@ -374,6 +388,13 @@ export function AdminPage({ section }: { section: string }) {
           <AdminOrders
             orders={orders}
             orderSource={orderSource}
+            onDelete={async (orderId) => {
+              if (orderSource !== "firestore") {
+                setMessage("Aucune commande supprimable.");
+                return;
+              }
+              await handleDeleteCancelledOrder(orderId);
+            }}
             onUpdate={async (orderId, data) => {
               if (orderSource !== "firestore") {
                 setMessage("Aucune commande modifiable.");
@@ -428,6 +449,13 @@ export function AdminPage({ section }: { section: string }) {
             orders={orders}
             invoices={invoices}
             orderSource={orderSource}
+            onDelete={async (orderId) => {
+              if (orderSource !== "firestore") {
+                setMessage("Aucune commande supprimable.");
+                return;
+              }
+              await handleDeleteCancelledOrder(orderId);
+            }}
             onCreateInvoice={async (orderId) => {
               const result = await createInvoiceFromOrder(orderId);
               setMessage(`Facture brouillon ${result.invoiceNumber} creee.`);
@@ -2279,12 +2307,14 @@ function AdminOrders({
   orderSource,
   onCreateInvoice,
   onUpdate,
+  onDelete,
 }: {
   orders: AdminOrderListItem[];
   invoices?: Invoice[];
   orderSource: "firestore" | "empty";
   onCreateInvoice?: (orderId: string) => Promise<void>;
   onUpdate: (orderId: string, data: AdminOrderUpdateInput) => Promise<void>;
+  onDelete: (orderId: string) => Promise<void>;
 }) {
   const [filter, setFilter] = useState("active");
   const [paymentLinks, setPaymentLinks] = useState<AdminPaymentLink[]>([]);
@@ -2596,6 +2626,20 @@ function AdminOrders({
                     Relancer GA4
                   </button>
                 )}
+                {canDeleteCancelledOrder(order) && (
+                  <button
+                    className="min-h-9 rounded-md border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    disabled={orderSource !== "firestore"}
+                    onClick={() => {
+                      if (confirmPermanentOrderDeletion(order.id)) {
+                        void onDelete(order.id);
+                      }
+                    }}
+                    type="button"
+                  >
+                    Supprimer
+                  </button>
+                )}
               </div>
             </article>
           ))}
@@ -2612,6 +2656,7 @@ function AdminOrders({
               paymentLinks={paymentLinks}
               onCreateInvoice={onCreateInvoice}
               onUpdate={onUpdate}
+              onDelete={onDelete}
               onSendEmail={handleSendPaymentLinkEmail}
               onRetryPurchaseAnalytics={handleRetryPurchaseAnalytics}
             />
@@ -2936,6 +2981,7 @@ function DesktopOrderCard({
   paymentLinks,
   onCreateInvoice,
   onUpdate,
+  onDelete,
   onSendEmail,
   onRetryPurchaseAnalytics,
 }: {
@@ -2945,6 +2991,7 @@ function DesktopOrderCard({
   paymentLinks: AdminPaymentLink[];
   onCreateInvoice?: (orderId: string) => Promise<void>;
   onUpdate: (orderId: string, data: AdminOrderUpdateInput) => Promise<void>;
+  onDelete: (orderId: string) => Promise<void>;
   onSendEmail: (input: {
     orderId: string;
     paymentLinkUrl: string;
@@ -3242,6 +3289,20 @@ function DesktopOrderCard({
               type="button"
             >
               Relancer GA4
+            </button>
+          )}
+          {canDeleteCancelledOrder(order) && (
+            <button
+              className="min-h-10 rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+              disabled={orderSource !== "firestore"}
+              onClick={() => {
+                if (confirmPermanentOrderDeletion(order.id)) {
+                  void onDelete(order.id);
+                }
+              }}
+              type="button"
+            >
+              Supprimer
             </button>
           )}
         </div>
@@ -4407,6 +4468,18 @@ function allowedFinalPaymentMethods(order: { deliveryMethod?: string }) {
   return finalPaymentMethodOptions.filter(
     (method) => method !== "cash_on_delivery" || order.deliveryMethod === "local_express",
   );
+}
+
+function canDeleteCancelledOrder(order: AdminOrderListItem) {
+  return order.orderStatus === "cancelled" && order.paymentStatus === "cancelled";
+}
+
+function confirmPermanentOrderDeletion(orderId: string) {
+  const confirmed = window.prompt(
+    `Suppression definitive de la commande ${orderId}. Cette action est irreversible et la commande ne s'affichera plus nulle part. Tapez SUPPRIMER pour confirmer.`,
+    "",
+  );
+  return confirmed === "SUPPRIMER";
 }
 
 function confirmedFinalPaymentMethodForPaid(order: AdminOrderListItem) {

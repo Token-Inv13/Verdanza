@@ -213,6 +213,23 @@ export async function updateOrderAdminFields(
   }
 }
 
+export async function deleteCancelledOrder(orderId: string) {
+  const token = await auth?.currentUser?.getIdToken();
+  if (!token) throw new Error("Connexion admin requise.");
+  const response = await fetch("/api/delete-order", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ orderId }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as { error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error || "Suppression commande impossible.");
+  }
+}
+
 export async function getCustomerOrders(customerId: string) {
   if (!db) return [];
   const snapshot = await getDocs(
