@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ShoppingBag } from "lucide-react";
 import { useCart } from "../context/CartContext";
+import { availableProductStock, isProductOrderable } from "../lib/cartStock";
 import type { Product } from "../types";
 import { trackAddToCart, trackSelectItem } from "../lib/analytics";
 import { FavoriteButton } from "./FavoriteButton";
@@ -25,6 +26,8 @@ export function ProductCard({
 }) {
   const { addItem } = useCart();
   const isComingSoon = product.comingSoon || product.stockStatus === "coming_soon";
+  const isOrderable = isProductOrderable(product);
+  const availableStock = availableProductStock(product);
   const hasKnownCbd = product.cbdRate && product.cbdRate !== "Non communiqué";
   const secondaryFact =
     product.cbgRate && product.cbgRate !== "Non communiqué"
@@ -92,7 +95,7 @@ export function ProductCard({
           <span className="font-display text-2xl text-forest">
             {product.price.toFixed(2).replace(".", ",")} EUR/g
           </span>
-          {!isComingSoon && (
+          {isOrderable && (
             <button
               className="icon-button"
               aria-label={`Ajouter ${product.name} au panier`}
@@ -106,9 +109,19 @@ export function ProductCard({
             </button>
           )}
         </div>
+        {isOrderable && (
+          <p className="text-xs font-semibold text-forest/65">
+            Stock disponible : {availableStock} g
+          </p>
+        )}
         {isComingSoon && (
           <p className="rounded-md border border-champagne/35 bg-cream px-3 py-2 text-sm font-semibold text-forest">
             {product.stockLabel || "En arrivage chez Verdanza"}
+          </p>
+        )}
+        {!isComingSoon && !isOrderable && (
+          <p className="rounded-md border border-champagne/35 bg-cream px-3 py-2 text-sm font-semibold text-forest">
+            Produit actuellement indisponible
           </p>
         )}
       </div>

@@ -5,13 +5,18 @@ import { ProductImage } from "../components/ProductImage";
 import { PromoBannerSlot } from "../components/PromoBannerSlot";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
+import {
+  availableProductStock,
+  getCartLineStockIssue,
+  getCartStockIssues,
+} from "../lib/cartStock";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
 import { trackAddToCart, trackCtaClick, trackRemoveFromCart, trackViewCart } from "../lib/analytics";
 
 const promoStorageKey = "verdanza-coupon-code";
 
 export function CartPage() {
-  const { items, lines, subtotal, addItem, decrementItem, removeItem } = useCart();
+  const { items, lines, subtotal, addItem, decrementItem, setItemQuantity, removeItem } = useCart();
   const trackedCartSignature = useRef("");
   const deliveryEstimate = 0;
   const [couponCode, setCouponCode] = useState(() =>
@@ -22,6 +27,8 @@ export function CartPage() {
   const [isCheckingPromo, setIsCheckingPromo] = useState(false);
   const discountAmount = quote?.promoApplied ? quote.discountAmount : 0;
   const total = Math.max(0, subtotal + (lines.length ? deliveryEstimate : 0) - discountAmount);
+  const stockIssues = getCartStockIssues(lines);
+  const hasStockIssues = stockIssues.length > 0;
 
   useEffect(() => {
     if (!couponCode.trim()) {
@@ -106,57 +113,82 @@ export function CartPage() {
       ) : (
         <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_380px]">
           <div className="grid gap-4">
-            {lines.map((line) => (
-              <article
-                key={line.productId}
-                className="grid gap-4 rounded-lg border border-forest/10 bg-ivory p-4 sm:grid-cols-[120px_1fr_auto]"
-              >
-                <ProductImage
-                  variant="card"
-                  src={line.product.image}
-                  alt=""
-                  loading="lazy"
-                  className="h-28 w-full rounded-md bg-cream object-contain"
-                />
-                <div>
-                  <h2 className="font-display text-2xl text-forest">
-                    {line.product.name}
-                  </h2>
-                  <p className="text-sm text-ink/60">{line.product.shortDescription}</p>
-                  <div className="mt-4 flex items-center gap-2">
-                    <button
-                      className="icon-button"
-                      onClick={() => {
-                        decrementItem(line.productId);
-                        trackRemoveFromCart(line.product);
-                      }}
-                    >
-                      <Minus size={16} />
-                    </button>
-                    <span className="w-12 text-center">{line.quantity} g</span>
-                    <button
-                      className="icon-button"
-                      onClick={() => {
-                        addItem(line.productId);
-                        trackAddToCart(line.product);
-                      }}
-                    >
-                      <Plus size={16} />
-                    </button>
-                    <button
-                      className="icon-button"
-                      onClick={() => {
-                        removeItem(line.productId);
-                        trackRemoveFromCart(line.product, line.quantity);
-                      }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+            {lines.map((line) => {
+              const availableStock = availableProductStock(line.product);
+              const stockIssue = getCartLineStockIssue(line);
+              const canIncrease = !stockIssue && line.quantity < availableStock;
+
+              return (
+                <article
+                  key={line.productId}
+                  className="grid gap-4 rounded-lg border border-forest/10 bg-ivory p-4 sm:grid-cols-[120px_1fr_auto]"
+                >
+                  <ProductImage
+                    variant="card"
+                    src={line.product.image}
+                    alt=""
+                    loading="lazy"
+                    className="h-28 w-full rounded-md bg-cream object-contain"
+                  />
+                  <div>
+                    <h2 className="font-display text-2xl text-forest">
+                      {line.product.name}
+                    </h2>
+                    <p className="text-sm text-ink/60">{line.product.shortDescription}</p>
+                    <p className="mt-2 text-xs font-semibold text-forest/70">
+                      Stock disponible : {availableStock} g
+                    </p>
+                    {stockIssue && (
+                      <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                        <p>{stockIssue.message}</p>
+                        {availableStock > 0 && line.quantity > availableStock && (
+                          <button
+                            type="button"
+                            className="mt-2 underline"
+                            onClick={() => setItemQuantity(line.productId, availableStock)}
+                          >
+                            Ajuster à {availableStock} g
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    <div className="mt-4 flex items-center gap-2">
+                      <button
+                        className="icon-button"
+                        onClick={() => {
+                          decrementItem(line.productId);
+                          trackRemoveFromCart(line.product);
+                        }}
+                      >
+                        <Minus size={16} />
+                      </button>
+                      <span className="w-12 text-center">{line.quantity} g</span>
+                      <button
+                        className="icon-button disabled:cursor-not-allowed disabled:opacity-40"
+                        disabled={!canIncrease}
+                        onClick={() => {
+                          addItem(line.productId);
+                          trackAddToCart(line.product);
+                        }}
+                        title={canIncrease ? "Ajouter 1 g" : "Stock maximum atteint"}
+                      >
+                        <Plus size={16} />
+                      </button>
+                      <button
+                        className="icon-button"
+                        onClick={() => {
+                          removeItem(line.productId);
+                          trackRemoveFromCart(line.product, line.quantity);
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <strong className="text-forest">{formatEuro(line.lineTotal)}</strong>
-              </article>
-            ))}
+                  <strong className="text-forest">{formatEuro(line.lineTotal)}</strong>
+                </article>
+              );
+            })}
           </div>
           <aside className="h-fit rounded-lg border border-champagne/30 bg-cream p-6">
             <h2 className="font-display text-3xl text-forest">Résumé</h2>
@@ -218,21 +250,37 @@ export function CartPage() {
                 <span>Total</span>
                 <span>{formatEuro(total)}</span>
               </p>
+              {hasStockIssues && (
+                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-800">
+                  <p>Ajustez votre panier avant de continuer.</p>
+                  <ul className="mt-1 list-disc pl-5">
+                    {stockIssues.map((issue) => (
+                      <li key={issue.productId}>{issue.message}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
-            <Link
-              to="/checkout"
-              className="btn-primary mt-6 w-full justify-center"
-              onClick={() =>
-                trackCtaClick({
-                  ctaId: "cart_continue_checkout",
-                  ctaLocation: "cart_summary",
-                  destinationPath: "/checkout",
-                  ctaCategory: "checkout",
-                })
-              }
-            >
-              Continuer
-            </Link>
+            {hasStockIssues ? (
+              <button className="btn-primary mt-6 w-full justify-center opacity-60" disabled>
+                Continuer
+              </button>
+            ) : (
+              <Link
+                to="/checkout"
+                className="btn-primary mt-6 w-full justify-center"
+                onClick={() =>
+                  trackCtaClick({
+                    ctaId: "cart_continue_checkout",
+                    ctaLocation: "cart_summary",
+                    destinationPath: "/checkout",
+                    ctaCategory: "checkout",
+                  })
+                }
+              >
+                Continuer
+              </Link>
+            )}
           </aside>
         </div>
       )}

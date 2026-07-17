@@ -7,6 +7,11 @@ import {
   useState,
 } from "react";
 import { products } from "../data/products";
+import {
+  availableProductStock,
+  isProductOrderable,
+} from "../lib/cartStock";
+import { getProductsWithFallback } from "../services/productsService";
 import type { CartItem, Product } from "../types";
 
 type CartLine = CartItem & {
@@ -21,6 +26,7 @@ type CartContextValue = {
   subtotal: number;
   addItem: (productId: string) => void;
   decrementItem: (productId: string) => void;
+  setItemQuantity: (productId: string, quantity: number) => void;
   removeItem: (productId: string) => void;
   clearCart: () => void;
 };
@@ -29,6 +35,7 @@ const CartContext = createContext<CartContextValue | null>(null);
 const storageKey = "verdanza-cart";
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+  const [catalog, setCatalog] = useState<Product[]>(products);
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
       const stored = localStorage.getItem(storageKey);
@@ -42,21 +49,34 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(storageKey, JSON.stringify(items));
   }, [items]);
 
+  useEffect(() => {
+    let cancelled = false;
+    getProductsWithFallback()
+      .then((result) => {
+        if (!cancelled) setCatalog(result.products);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const addItem = useCallback((productId: string) => {
-    const product = products.find((entry) => entry.id === productId);
-    if (!product || product.comingSoon || product.stockStatus === "coming_soon") {
+    const product = catalog.find((entry) => entry.id === productId);
+    if (!isProductOrderable(product)) {
       return;
     }
+    const maxQuantity = availableProductStock(product);
     setItems((current) => {
       const existing = current.find((item) => item.productId === productId);
       if (!existing) return [...current, { productId, quantity: 1 }];
       return current.map((item) =>
         item.productId === productId
-          ? { ...item, quantity: item.quantity + 1 }
+          ? { ...item, quantity: Math.min(item.quantity + 1, maxQuantity) }
           : item,
       );
     });
-  }, []);
+  }, [catalog]);
 
   const decrementItem = useCallback((productId: string) => {
     setItems((current) =>
@@ -70,6 +90,26 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const setItemQuantity = useCallback(
+    (productId: string, quantity: number) => {
+      const product = catalog.find((entry) => entry.id === productId);
+      const maxQuantity = isProductOrderable(product) ? availableProductStock(product) : 0;
+      const nextQuantity = Math.min(Math.max(0, Math.floor(quantity)), maxQuantity);
+
+      setItems((current) => {
+        if (nextQuantity <= 0) {
+          return current.filter((item) => item.productId !== productId);
+        }
+        const existing = current.find((item) => item.productId === productId);
+        if (!existing) return [...current, { productId, quantity: nextQuantity }];
+        return current.map((item) =>
+          item.productId === productId ? { ...item, quantity: nextQuantity } : item,
+        );
+      });
+    },
+    [catalog],
+  );
+
   const removeItem = useCallback((productId: string) => {
     setItems((current) => current.filter((item) => item.productId !== productId));
   }, []);
@@ -79,7 +119,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<CartContextValue>(() => {
     const lines = items
       .map((item) => {
-        const product = products.find((entry) => entry.id === item.productId);
+        const product = catalog.find((entry) => entry.id === item.productId);
         if (!product) return null;
         return {
           ...item,
@@ -96,10 +136,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       subtotal: lines.reduce((sum, line) => sum + line.lineTotal, 0),
       addItem,
       decrementItem,
+      setItemQuantity,
       removeItem,
       clearCart,
     };
-  }, [addItem, clearCart, decrementItem, items, removeItem]);
+  }, [addItem, catalog, clearCart, decrementItem, items, removeItem, setItemQuantity]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

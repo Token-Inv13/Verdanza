@@ -8,6 +8,7 @@ import { ProductImage } from "../components/ProductImage";
 import { useCart } from "../context/CartContext";
 import { useProducts } from "../hooks/useProducts";
 import { trackAddToCart, trackViewItem } from "../lib/analytics";
+import { availableProductStock, isProductOrderable } from "../lib/cartStock";
 import { FavoriteButton } from "../components/FavoriteButton";
 import {
   buildProductJsonLd,
@@ -65,6 +66,8 @@ export function ProductPage() {
   }
 
   const isComingSoon = product.comingSoon || product.stockStatus === "coming_soon";
+  const isOrderable = isProductOrderable(product);
+  const availableStock = availableProductStock(product);
   const path = productPath(product);
   const categoryName = productCategoryLabel(product);
   const categoryPath = product.category === "flowers" ? "/fleurs-cbd" : "/resines-cbd";
@@ -102,7 +105,7 @@ export function ProductPage() {
         ["THC", product.thcRate],
         ["Origine", product.origin],
         ["Culture", product.cultureType],
-        ["Stock", product.stock > 0 ? "Disponible" : "Stock à confirmer"],
+        ["Stock", availableStock > 0 ? `${availableStock} g disponibles` : "Indisponible"],
       ];
 
   return (
@@ -238,7 +241,7 @@ export function ProductPage() {
               <span className="rounded-md border border-champagne/40 bg-cream px-5 py-3 font-semibold text-forest">
                 {product.stockLabel || "En arrivage chez Verdanza"}
               </span>
-            ) : (
+            ) : isOrderable ? (
               <button
                 className="btn-primary"
                 onClick={() => {
@@ -248,8 +251,17 @@ export function ProductPage() {
               >
                 <ShoppingBag size={18} /> Ajouter 1 g au panier
               </button>
+            ) : (
+              <span className="rounded-md border border-champagne/40 bg-cream px-5 py-3 font-semibold text-forest">
+                Produit actuellement indisponible
+              </span>
             )}
           </div>
+          {isOrderable && (
+            <p className="mt-3 text-sm font-semibold text-forest/70">
+              Stock disponible : {availableStock} g
+            </p>
+          )}
           {isComingSoon && (
             <p className="mt-6 text-sm leading-6 text-ink/60">
               Produit réservé aux adultes. Vente interdite aux mineurs. Produit

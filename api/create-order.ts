@@ -145,7 +145,15 @@ export default async function handler(
   } catch (error) {
     console.error("create-order failed", error);
     const message = error instanceof Error ? error.message : "";
-    const safeBusinessError = message.includes("minimum de commande") ||
+    const stockOrProductError =
+      message.includes("Stock insuffisant") ||
+      message.includes("Produit indisponible") ||
+      message.includes("Produit inactif") ||
+      message.includes("produit n'est plus disponible") ||
+      message.includes("Quantite produit invalide");
+    const safeBusinessError = stockOrProductError
+      ? "Stock insuffisant ou produit indisponible. Veuillez ajuster votre panier avant de valider."
+      : message.includes("minimum de commande") ||
       message.includes("Code promo") ||
       message.includes("code promo") ||
       message.includes("livraison postale")

@@ -17,6 +17,7 @@ import {
   trackPaymentMethodSelected,
 } from "../lib/analytics";
 import { rememberPendingOrderAnalyticsRevocation } from "../lib/orderAnalyticsRevocation";
+import { getCartStockIssues } from "../lib/cartStock";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
 import {
   effectiveLocalDeliveryMinimum,
@@ -113,6 +114,8 @@ export function CheckoutPage() {
     : postalZone?.fee ?? 0;
   const discountAmount = quote?.promoApplied ? quote.discountAmount : 0;
   const estimatedTotal = Math.max(0, subtotal + estimatedDeliveryFee - discountAmount);
+  const stockIssues = useMemo(() => getCartStockIssues(lines), [lines]);
+  const hasStockIssues = stockIssues.length > 0;
 
   useEffect(() => {
     const signature = lines.map((line) => `${line.productId}:${line.quantity}`).join("|");
@@ -240,6 +243,11 @@ export function CheckoutPage() {
     setIsSubmitting(true);
 
     try {
+      if (hasStockIssues) {
+        throw new Error(
+          "Certains produits dépassent le stock disponible. Veuillez ajuster votre panier avant de continuer.",
+        );
+      }
       if (isBelowLocalMinimum) {
         throw new Error("Le minimum de commande pour la livraison locale est de 20 €.");
       }
@@ -352,6 +360,11 @@ export function CheckoutPage() {
           checkoutError.message.includes("Code promo") ||
           checkoutError.message.includes("code promo") ||
           checkoutError.message.includes("promo") ||
+          checkoutError.message.includes("stock disponible") ||
+          checkoutError.message.includes("Stock insuffisant") ||
+          checkoutError.message.includes("produit indisponible") ||
+          checkoutError.message.includes("Produit indisponible") ||
+          checkoutError.message.includes("produits dépassent le stock") ||
           checkoutError.message.includes("Livraison locale disponible") ||
           checkoutError.message.includes("zone de livraison"))
           ? checkoutError.message
@@ -691,6 +704,16 @@ export function CheckoutPage() {
                 <span>Total estimé</span>
                 <span>{formatEuro(estimatedTotal)}</span>
               </p>
+              {hasStockIssues && (
+                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-800">
+                  <p>Ajustez votre panier avant de valider.</p>
+                  <ul className="mt-1 list-disc pl-5">
+                    {stockIssues.map((issue) => (
+                      <li key={issue.productId}>{issue.message}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <p className="rounded-md border border-forest/10 bg-ivory p-3 text-xs leading-5 text-forest">
                 Paiement : lien envoyé après confirmation si paiement CB souhaité.
                 <br />
@@ -714,7 +737,7 @@ export function CheckoutPage() {
               de conformité.
             </label>
             {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
-            <button className="btn-primary mt-6 w-full" disabled={isSubmitting}>
+            <button className="btn-primary mt-6 w-full" disabled={isSubmitting || hasStockIssues}>
               {isSubmitting ? "Validation..." : "Valider ma commande"}
             </button>
           </aside>

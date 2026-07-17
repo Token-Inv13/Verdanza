@@ -33,6 +33,7 @@
     "seed:admin-auth": "node --import tsx scripts/bootstrapAdminAuth.ts",
     "seed:marketing-templates": "node --import tsx scripts/seedMarketingTemplates.ts",
     "cleanup:test-data": "node --import tsx scripts/cleanupProductionTestData.ts",
+    "cleanup:orders": "node --import tsx scripts/cleanupCancelledFinishedOrders.ts",
     "reconcile:launch-stock": "node --import tsx scripts/reconcileLaunchStock.ts",
     "preview": "vite preview"
   },

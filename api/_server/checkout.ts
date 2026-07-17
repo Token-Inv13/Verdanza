@@ -174,8 +174,7 @@ export async function priceCheckout(
     if (
       !item.productId ||
       !Number.isInteger(item.quantity) ||
-      item.quantity < 1 ||
-      item.quantity > 20
+      item.quantity < 1
     ) {
       throw new Error("Quantite produit invalide.");
     }

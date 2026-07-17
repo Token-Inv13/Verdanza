@@ -26,6 +26,7 @@ pnpm-debug.log*
 
 # Local QA artifacts
 tmp_logo_contact_sheet.png
+reports/firestore-cleanup/
 
 .vercel
 .env*
