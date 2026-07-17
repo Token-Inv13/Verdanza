@@ -8,6 +8,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { deliveryZones as localDeliveryZones } from "../data/deliveryZones";
+import { logFirestoreFallback } from "../lib/clientLog";
 import { collections } from "./collections";
 import {
   effectiveLocalDeliveryMinimum,
@@ -27,7 +28,7 @@ export async function getDeliveryZonesWithFallback() {
       source: zones.length ? ("firestore" as const) : ("local" as const),
     };
   } catch (error) {
-    console.warn("Falling back to local delivery zones", error);
+    logFirestoreFallback("Falling back to local delivery zones", error);
     return { zones: localDeliveryZones, source: "local" as const };
   }
 }

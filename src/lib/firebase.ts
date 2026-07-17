@@ -1,7 +1,7 @@
 import { initializeApp, getApp, getApps } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, setLogLevel } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const publicFirebaseFallback = {
@@ -39,6 +39,10 @@ export const app = isFirebaseConfigured
     ? getApp()
     : initializeApp(firebaseConfig)
   : null;
+
+if (import.meta.env.PROD) {
+  setLogLevel("silent");
+}
 
 export const auth = app ? getAuth(app) : null;
 export const db = app ? getFirestore(app) : null;

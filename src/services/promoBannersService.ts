@@ -10,6 +10,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { logFirestoreFallback } from "../lib/clientLog";
 import { collections } from "./collections";
 import type {
   PromoBanner,
@@ -36,7 +37,7 @@ export async function getPromoBannersWithFallback() {
       source: banners.length ? ("firestore" as const) : ("empty" as const),
     };
   } catch (error) {
-    console.warn("Unable to load Firestore promo banners", error);
+    logFirestoreFallback("Unable to load Firestore promo banners", error);
     return { banners: [], source: "empty" as const };
   }
 }
@@ -56,9 +57,7 @@ export async function getPublicPromoBanners() {
       .filter((banner) => isPromoBannerVisibleNow(banner))
       .sort((left, right) => Number(left.priority || 0) - Number(right.priority || 0));
   } catch (error) {
-    if (import.meta.env.DEV) {
-      console.warn("Unable to load public promo banners", error);
-    }
+    logFirestoreFallback("Unable to load public promo banners", error);
     return [];
   }
 }

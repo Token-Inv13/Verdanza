@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { products as localProducts } from "../data/products";
+import { logFirestoreFallback } from "../lib/clientLog";
 import { collections } from "./collections";
 import type { Product } from "../types";
 
@@ -53,7 +54,7 @@ export async function getAdminProductsWithFallback() {
       source: firestoreProducts.length ? ("firestore" as const) : ("local" as const),
     };
   } catch (error) {
-    console.warn("Falling back to local admin products", error);
+    logFirestoreFallback("Falling back to local admin products", error);
     return { products: getLocalProducts(), source: "local" as const };
   }
 }
@@ -66,7 +67,7 @@ export async function getProductsWithFallback() {
       source: firestoreProducts.length ? ("firestore" as const) : ("local" as const),
     };
   } catch (error) {
-    console.warn("Falling back to local products", error);
+    logFirestoreFallback("Falling back to local products", error);
     return { products: getLocalProducts(), source: "local" as const };
   }
 }

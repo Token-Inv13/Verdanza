@@ -108,54 +108,6 @@ export const productImageVariants: Record<string, ProductImageVariantSet> = {
       height: 475,
     },
   },
-  "/Fiche produit/3X%20Filtr%C3%A9%20CBD%20CBG/3X%20Filtr%C3%A9.webp": {
-    card: {
-      src: "/images/products/3x-filtre-cbd-cbg-card-640.webp",
-      srcSet: "/images/products/3x-filtre-cbd-cbg-card-320.webp 320w, /images/products/3x-filtre-cbd-cbg-card-640.webp 640w",
-      sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
-      width: 640,
-      height: 640,
-    },
-    detail: {
-      src: "/images/products/3x-filtre-cbd-cbg-detail.webp",
-      srcSet: "/images/products/3x-filtre-cbd-cbg-detail.webp 713w",
-      sizes: "(min-width: 1024px) 45vw, 92vw",
-      width: 713,
-      height: 713,
-    },
-  },
-  "/Fiche produit/Le%20Beldia/beldia.webp": {
-    card: {
-      src: "/images/products/le-beldia-cbn-cbd-card-640.webp",
-      srcSet: "/images/products/le-beldia-cbn-cbd-card-320.webp 320w, /images/products/le-beldia-cbn-cbd-card-640.webp 600w",
-      sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
-      width: 600,
-      height: 600,
-    },
-    detail: {
-      src: "/images/products/le-beldia-cbn-cbd-detail.webp",
-      srcSet: "/images/products/le-beldia-cbn-cbd-detail.webp 600w",
-      sizes: "(min-width: 1024px) 45vw, 92vw",
-      width: 600,
-      height: 600,
-    },
-  },
-  "/Fiche produit/Creamy%20Piatella/piatella.webp": {
-    card: {
-      src: "/images/products/creamy-piatella-cbd-card-640.webp",
-      srcSet: "/images/products/creamy-piatella-cbd-card-320.webp 320w, /images/products/creamy-piatella-cbd-card-640.webp 640w",
-      sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
-      width: 640,
-      height: 640,
-    },
-    detail: {
-      src: "/images/products/creamy-piatella-cbd-detail.webp",
-      srcSet: "/images/products/creamy-piatella-cbd-detail.webp 713w",
-      sizes: "(min-width: 1024px) 45vw, 92vw",
-      width: 713,
-      height: 713,
-    },
-  },
   "/Fiche produit/Mango%20Haze/MangoHaze.webp": {
     card: {
       src: "/images/products/mango-haze-cbd-card-640.webp",
