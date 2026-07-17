@@ -36,17 +36,70 @@ function ctaIdForPath(prefix: string, path: string) {
   return `${prefix}_${path.replace(/^\/+/, "").replace(/[^a-z0-9]+/gi, "_") || "home"}`;
 }
 
-export function DeliveryPage({ mode }: { mode: "local" | "postal" }) {
+export function DeliveryPage({ mode }: { mode: "overview" | "local" | "postal" }) {
+  if (mode === "overview") return <DeliveryOverviewPage />;
   if (mode === "local") return <LocalDeliveryPage />;
   return <PostalDeliveryPage />;
+}
+
+function DeliveryOverviewPage() {
+  return (
+    <main className="container-page py-12">
+      <Seo
+        title="Livraison CBD en France et Aix-en-Provence - Verdanza"
+        description="Découvrez les modes de livraison Verdanza : livraison locale autour d'Aix-en-Provence et livraison postale en France."
+        path="/livraison"
+      />
+      <Breadcrumbs
+        items={[
+          { name: "Accueil", path: "/" },
+          { name: "Livraison", path: "/livraison", current: true },
+        ]}
+      />
+
+      <div className="page-intro">
+        <h1>Livraison Verdanza</h1>
+        <p>
+          Verdanza propose deux modes de livraison selon votre situation : livraison
+          locale autour d'Aix-en-Provence ou livraison postale en France.
+        </p>
+      </div>
+
+      <section className="mt-10 grid gap-5 lg:grid-cols-2">
+        <DeliveryModeCard
+          title="Livraison locale Aix-en-Provence"
+          items={[
+            "Disponible selon les zones ouvertes.",
+            `Minimum local : ${formatCurrency(LOCAL_DELIVERY_MINIMUM)}.`,
+            "Horaires et zones mis à jour selon les disponibilités.",
+            "Sélection possible au moment de la commande si votre zone est ouverte.",
+          ]}
+          ctaLabel="Voir les zones locales"
+          ctaPath="/livraison-locale"
+          ctaId="delivery_overview_local"
+        />
+        <DeliveryModeCard
+          title="Livraison postale en France"
+          items={[
+            `Disponible en France à partir de ${formatCurrency(POSTAL_DELIVERY_MINIMUM)} d'achat.`,
+            `Livraison offerte à partir de ${formatCurrency(POSTAL_FREE_SHIPPING_THRESHOLD)}.`,
+            "Frais et suivi confirmés après validation de la commande.",
+          ]}
+          ctaLabel="Voir la livraison postale"
+          ctaPath="/livraison-postale"
+          ctaId="delivery_overview_postal"
+        />
+      </section>
+    </main>
+  );
 }
 
 function PostalDeliveryPage() {
   return (
     <main className="container-page py-12">
       <Seo
-        title="Livraison postale CBD en France | Verdanza"
-        description="Livraison postale Verdanza disponible en France, avec minimum de commande et frais confirmés avant expédition."
+        title="Livraison postale CBD en France - Verdanza"
+        description="Consultez les conditions de livraison postale Verdanza en France : minimum de commande, livraison offerte et confirmation après validation."
         path="/livraison-postale"
       />
       <Breadcrumbs
@@ -58,17 +111,43 @@ function PostalDeliveryPage() {
       <div className="page-intro">
         <h1>Livraison postale</h1>
         <p>
-          Livraison postale disponible en France à partir de {POSTAL_DELIVERY_MINIMUM} EUR
-          d'achat. Elle est offerte à partir de {POSTAL_FREE_SHIPPING_THRESHOLD} EUR. En
-          dessous de {POSTAL_FREE_SHIPPING_THRESHOLD} EUR, les frais postaux sont confirmés
-          avec vous après validation de la commande.
+          Verdanza propose une livraison postale en France, avec confirmation des
+          modalités après validation de la commande.
         </p>
       </div>
-      <section className="mt-8 rounded-lg border border-forest/10 bg-cream p-6 sm:p-8">
-        <h2 className="font-display text-3xl text-forest">Expédition suivie</h2>
+
+      <section className="mt-8 grid gap-4 md:grid-cols-3">
+        <SummaryCard label="Minimum postal" value={formatCurrency(POSTAL_DELIVERY_MINIMUM)} />
+        <SummaryCard
+          label="Livraison offerte"
+          value={`Dès ${formatCurrency(POSTAL_FREE_SHIPPING_THRESHOLD)}`}
+        />
+        <SummaryCard label="Suivi" value="Selon le mode choisi" />
+      </section>
+
+      <section className="mt-10 rounded-lg border border-forest/10 bg-cream p-6 sm:p-8">
+        <h2 className="font-display text-3xl text-forest">Fonctionnement</h2>
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
+          {[
+            "Ajoutez vos produits au panier.",
+            "Sélectionnez la livraison postale au moment de la commande.",
+            "Après validation, Verdanza confirme les modalités d'expédition et le règlement.",
+          ].map((step, index) => (
+            <article key={step} className="rounded-md border border-forest/10 bg-ivory p-4">
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-champagne">
+                Etape {index + 1}
+              </span>
+              <p className="mt-2 text-sm leading-6 text-ink/70">{step}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="mt-10 rounded-lg border border-champagne/30 bg-cream p-6 sm:p-8">
+        <h2 className="font-display text-3xl text-forest">Alternative locale</h2>
         <p className="mt-4 max-w-3xl leading-7 text-ink/70">
-          Après confirmation de la commande, Verdanza vous indique les modalités
-          d'expédition et le suivi selon le mode choisi.
+          Si vous êtes autour d'Aix-en-Provence, la livraison locale peut être
+          disponible selon les zones ouvertes.
         </p>
         <Link
           className="btn-secondary mt-6 inline-flex"
@@ -82,7 +161,7 @@ function PostalDeliveryPage() {
             })
           }
         >
-          Voir la livraison locale
+          Voir les zones locales
         </Link>
       </section>
     </main>
@@ -186,8 +265,8 @@ function LocalDeliveryPage() {
           <div>
             <h2>Zones actuellement ouvertes</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-ink/65">
-              Ces zones proviennent de la configuration de livraison. Elles peuvent évoluer
-              selon les créneaux et l'organisation du jour.
+              Les zones ci-dessous sont ouvertes à la livraison locale. Elles peuvent évoluer
+              selon les disponibilités du jour.
             </p>
           </div>
         </div>
@@ -310,6 +389,50 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
         {label}
       </p>
       <p className="mt-3 font-display text-3xl leading-tight text-forest">{value}</p>
+    </article>
+  );
+}
+
+function DeliveryModeCard({
+  title,
+  items,
+  ctaLabel,
+  ctaPath,
+  ctaId,
+}: {
+  title: string;
+  items: string[];
+  ctaLabel: string;
+  ctaPath: string;
+  ctaId: string;
+}) {
+  return (
+    <article className="feature-panel flex h-full flex-col">
+      <h2 className="font-display text-3xl leading-tight text-forest">{title}</h2>
+      <ul className="mt-5 space-y-3 text-sm leading-6 text-ink/70">
+        {items.map((item) => (
+          <li key={item} className="flex gap-3">
+            <span className="mt-2 h-1.5 w-1.5 flex-none rounded-full bg-champagne" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-6">
+        <Link
+          className="btn-primary inline-flex"
+          to={ctaPath}
+          onClick={() =>
+            trackCtaClick({
+              ctaId,
+              ctaLocation: "delivery_overview_page",
+              destinationPath: ctaPath,
+              ctaCategory: "delivery",
+            })
+          }
+        >
+          {ctaLabel}
+        </Link>
+      </div>
     </article>
   );
 }

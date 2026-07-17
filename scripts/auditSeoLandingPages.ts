@@ -55,6 +55,22 @@ const pages = [
     links: ["/boutique", "/livraison-postale", "/qualite-conformite", "/contact"],
     textMarkers: ["Aix-en-Provence centre", "Puyricard", "Gardanne", "Le Tholonet"],
   },
+  {
+    path: "/livraison",
+    titleIncludes: ["Livraison CBD", "Verdanza"],
+    descriptionIncludes: ["livraison locale", "livraison postale"],
+    h2: ["Livraison locale Aix-en-Provence", "Livraison postale en France"],
+    links: ["/livraison-locale", "/livraison-postale"],
+    textMarkers: ["Minimum local", "Livraison offerte", "zones ouvertes"],
+  },
+  {
+    path: "/livraison-postale",
+    titleIncludes: ["Livraison postale CBD", "Verdanza"],
+    descriptionIncludes: ["livraison postale", "livraison offerte"],
+    h2: ["Fonctionnement", "Alternative locale"],
+    links: ["/livraison-locale"],
+    textMarkers: ["Minimum postal", "Livraison offerte", "expédition"],
+  },
 ];
 
 const privateRoutePatterns = [

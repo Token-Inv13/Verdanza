@@ -91,6 +91,7 @@ export function App() {
             element={<CategoryPage category="resins" title="Résines CBD" />}
           />
           <Route path="produits/:slug" element={<ProductPage />} />
+          <Route path="livraison" element={<DeliveryPage mode="overview" />} />
           <Route
             path="livraison-express-aix"
             element={<DeliveryPage mode="local" />}

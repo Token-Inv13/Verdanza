@@ -55,8 +55,8 @@ if (!/verdanza-hero-premium(?:-\d+)?\.webp[\s\S]{0,350}height="941"/i.test(homeH
 }
 const expectedPrerenderRoutes =
   prerenderSeoRoutes().length + prerenderFallbackSeoRoutes().length + 1;
-if (expectedPrerenderRoutes !== 53) {
-  failures.push(`expected 53 prerendered routes, found ${expectedPrerenderRoutes}`);
+if (expectedPrerenderRoutes !== 54) {
+  failures.push(`expected 54 prerendered routes, found ${expectedPrerenderRoutes}`);
 }
 if (!existsSync(join(distDir, "404.html"))) failures.push("missing 404.html");
 checkHtmlText();
@@ -103,6 +103,7 @@ function checkHtmlText() {
     "index.html",
     "boutique.html",
     "fleurs-cbd.html",
+    "livraison.html",
     "livraison-locale.html",
     "blog.html",
   ];

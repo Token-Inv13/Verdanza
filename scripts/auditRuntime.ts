@@ -10,6 +10,8 @@ const noJavaScriptRoutes = [
   "/blog/indoor-greenhouse-hydroponique-differences",
   "/fleurs-cbd",
   "/resines-cbd",
+  "/livraison",
+  "/livraison-locale",
   "/livraison-postale",
   "/produits/golden-static",
   "/produits/supreme-purple-cbd",

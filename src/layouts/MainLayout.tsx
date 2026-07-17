@@ -17,7 +17,7 @@ const navItems = [
   { label: "Fleurs CBD", to: "/fleurs-cbd" },
   { label: "Résines CBD", to: "/resines-cbd" },
   { label: "Guides", to: "/blog" },
-  { label: "Livraison", to: "/livraison-postale" },
+  { label: "Livraison", to: "/livraison" },
   { label: "Qualité", to: "/qualite-conformite" },
 ];
 
@@ -161,6 +161,7 @@ export function MainLayout() {
           <div className="grid gap-2 text-sm text-forest/80">
             <strong className="text-forest">Informations</strong>
             {[
+              { to: "/livraison", label: "Livraison" },
               { to: "/livraison-postale", label: "Livraison en France" },
               { to: "/livraison-locale", label: "Express local Aix" },
               { to: "/blog", label: "Guides CBD" },

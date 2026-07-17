@@ -349,6 +349,10 @@ function expectedBreadcrumbItems(path: string, product?: Product) {
       { name: "Accueil", path: "/" },
       { name: "Résines CBD", path: "/resines-cbd" },
     ],
+    "/livraison": [
+      { name: "Accueil", path: "/" },
+      { name: "Livraison", path: "/livraison" },
+    ],
     "/livraison-locale": [
       { name: "Accueil", path: "/" },
       { name: "Livraison locale Aix-en-Provence", path: "/livraison-locale" },
