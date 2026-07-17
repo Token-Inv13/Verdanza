@@ -95,6 +95,7 @@ export function App() {
             path="livraison-express-aix"
             element={<DeliveryPage mode="local" />}
           />
+          <Route path="livraison-locale" element={<DeliveryPage mode="local" />} />
           <Route path="livraison-postale" element={<DeliveryPage mode="postal" />} />
           <Route
             path="qualite-conformite"

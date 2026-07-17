@@ -162,7 +162,7 @@ export function MainLayout() {
             <strong className="text-forest">Informations</strong>
             {[
               { to: "/livraison-postale", label: "Livraison en France" },
-              { to: "/livraison-express-aix", label: "Express local Aix" },
+              { to: "/livraison-locale", label: "Express local Aix" },
               { to: "/blog", label: "Guides CBD" },
               { to: "/faq", label: "FAQ" },
               { to: "/contact", label: "Contact" },

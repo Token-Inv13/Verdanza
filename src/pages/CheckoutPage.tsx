@@ -507,21 +507,29 @@ export function CheckoutPage() {
               )}
 
               {isLocalDelivery && (
-                <label className="mt-5 block text-sm font-medium text-forest">
-                  Zone locale
-                  <select
-                    className="input-field mt-2"
-                    value={deliveryZone}
-                    onChange={(event) => setDeliveryZone(event.target.value)}
+                <div className="mt-5">
+                  <label className="block text-sm font-medium text-forest">
+                    Zone locale
+                    <select
+                      className="input-field mt-2"
+                      value={deliveryZone}
+                      onChange={(event) => setDeliveryZone(event.target.value)}
+                    >
+                      {openLocalDeliveryZones.map((zone) => (
+                        <option key={zone.id} value={zone.id}>
+                          {zone.name}
+                          {zone.customerMessage ? ` - ${zone.customerMessage}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <Link
+                    to="/livraison-locale"
+                    className="mt-2 inline-flex text-sm font-medium text-forest underline decoration-champagne underline-offset-4"
                   >
-                    {openLocalDeliveryZones.map((zone) => (
-                      <option key={zone.id} value={zone.id}>
-                        {zone.name}
-                        {zone.customerMessage ? ` - ${zone.customerMessage}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    Voir les zones de livraison locale
+                  </Link>
+                </div>
               )}
 
               {isBelowLocalMinimum && (

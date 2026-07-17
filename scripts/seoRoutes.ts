@@ -48,7 +48,7 @@ export const staticSeoRoutes: SeoRoute[] = [
     indexable: true,
   },
   {
-    path: "/livraison-express-aix",
+    path: "/livraison-locale",
     kind: "public-indexable",
     component: "DeliveryPage(local)",
     indexable: true,

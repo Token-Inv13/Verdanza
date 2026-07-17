@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+﻿import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { staticSeoRoutes, canonicalUrl } from "./seoRoutes";
 
@@ -24,7 +24,7 @@ const pages = [
       "Liens utiles",
       "Questions fréquentes",
     ],
-    links: ["/resines-cbd", "/livraison-express-aix", "/livraison-postale", "/qualite-conformite"],
+    links: ["/resines-cbd", "/livraison-locale", "/livraison-postale", "/qualite-conformite"],
     textMarkers: ["indoor", "greenhouse", "hydroponique", "prix au gramme"],
   },
   {
@@ -39,25 +39,20 @@ const pages = [
       "Liens utiles",
       "Questions fréquentes",
     ],
-    links: ["/fleurs-cbd", "/livraison-express-aix", "/livraison-postale", "/qualite-conformite"],
+    links: ["/fleurs-cbd", "/livraison-locale", "/livraison-postale", "/qualite-conformite"],
     textMarkers: ["texture", "CBG", "cannabinoïdes", "prix au gramme"],
   },
   {
-    path: "/livraison-express-aix",
-    titleIncludes: ["Livraison CBD à Aix-en-Provence", "Verdanza"],
-    descriptionIncludes: ["Livraison locale", "Aix-en-Provence", "créneaux"],
+    path: "/livraison-locale",
+    titleIncludes: ["Livraison locale CBD", "Verdanza"],
+    descriptionIncludes: ["zones ouvertes", "Aix-en-Provence"],
     h2: [
-      "Minimum",
-      "Horaires",
-      "Validation",
-      "Adultes",
-      "Zones desservies autour d'Aix-en-Provence",
-      "Comment commander",
-      "Livraison locale ou postale",
+      "Fonctionnement",
+      "Zones actuellement ouvertes",
+      "Livraison postale en alternative",
       "Liens utiles",
-      "Questions fréquentes",
     ],
-    links: ["/fleurs-cbd", "/resines-cbd", "/boutique", "/livraison-postale", "/qualite-conformite"],
+    links: ["/boutique", "/livraison-postale", "/qualite-conformite", "/contact"],
     textMarkers: ["Aix-en-Provence centre", "Puyricard", "Gardanne", "Le Tholonet"],
   },
 ];

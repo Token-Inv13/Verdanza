@@ -103,7 +103,7 @@ function checkHtmlText() {
     "index.html",
     "boutique.html",
     "fleurs-cbd.html",
-    "livraison-express-aix.html",
+    "livraison-locale.html",
     "blog.html",
   ];
   requiredPages.forEach((file) => {

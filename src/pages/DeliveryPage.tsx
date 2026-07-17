@@ -1,29 +1,25 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { localDeliveryZones } from "../data/deliveryZones";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
-import { trackCtaClick } from "../lib/analytics";
 import {
   LOCAL_DELIVERY_MINIMUM,
   POSTAL_DELIVERY_MINIMUM,
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../config/deliveryRules";
+import { trackCtaClick } from "../lib/analytics";
+import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
+import type { DeliveryZone } from "../types";
 
-const localDeliveryLinks = [
-  { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
-  { to: "/resines-cbd", label: "Découvrir les résines CBD" },
-  { to: "/boutique", label: "Parcourir la boutique" },
-  { to: "/livraison-postale", label: "Vérifier la livraison postale" },
-  { to: "/qualite-conformite", label: "Consulter les engagements qualité" },
-  { to: "/faq", label: "Lire la FAQ" },
-  { to: "/contact", label: "Contacter Verdanza" },
-];
+type DeliveryZonesState =
+  | { status: "loading"; zones: DeliveryZone[] }
+  | { status: "ready"; zones: DeliveryZone[] }
+  | { status: "error"; zones: DeliveryZone[] };
 
 const deliverySteps = [
-  "Choisir les produits disponibles dans la boutique.",
-  "Vérifier le panier, les quantités et le statut des références en arrivage.",
-  "Renseigner les informations de livraison dans une zone couverte.",
-  "Faire confirmer la commande selon le processus Verdanza avant la livraison.",
+  "Choisissez vos produits dans la boutique.",
+  "Sélectionnez une zone locale ouverte au moment de la commande.",
+  "Validez votre demande : Verdanza confirme la disponibilité, le règlement et le créneau.",
 ];
 
 function ctaCategoryForPath(path: string) {
@@ -41,33 +37,30 @@ function ctaIdForPath(prefix: string, path: string) {
 }
 
 export function DeliveryPage({ mode }: { mode: "local" | "postal" }) {
-  const isLocal = mode === "local";
-  const path = isLocal ? "/livraison-express-aix" : "/livraison-postale";
-  const title = isLocal ? "Livraison express Aix" : "Livraison postale";
+  if (mode === "local") return <LocalDeliveryPage />;
+  return <PostalDeliveryPage />;
+}
 
-  if (isLocal) {
-    return <LocalDeliveryPage path={path} title={title} />;
-  }
-
+function PostalDeliveryPage() {
   return (
     <main className="container-page py-12">
       <Seo
         title="Livraison postale CBD en France | Verdanza"
         description="Livraison postale Verdanza disponible en France, avec minimum de commande et frais confirmés avant expédition."
-        path={path}
+        path="/livraison-postale"
       />
       <Breadcrumbs
         items={[
           { name: "Accueil", path: "/" },
-          { name: title, path, current: true },
+          { name: "Livraison postale", path: "/livraison-postale", current: true },
         ]}
       />
       <div className="page-intro">
         <h1>Livraison postale</h1>
         <p>
-          Livraison postale disponible en France à partir de {POSTAL_DELIVERY_MINIMUM} €
-          d'achat. Elle est offerte à partir de {POSTAL_FREE_SHIPPING_THRESHOLD} €. En
-          dessous de {POSTAL_FREE_SHIPPING_THRESHOLD} €, les frais postaux sont confirmés
+          Livraison postale disponible en France à partir de {POSTAL_DELIVERY_MINIMUM} EUR
+          d'achat. Elle est offerte à partir de {POSTAL_FREE_SHIPPING_THRESHOLD} EUR. En
+          dessous de {POSTAL_FREE_SHIPPING_THRESHOLD} EUR, les frais postaux sont confirmés
           avec vous après validation de la commande.
         </p>
       </div>
@@ -77,154 +70,225 @@ export function DeliveryPage({ mode }: { mode: "local" | "postal" }) {
           Après confirmation de la commande, Verdanza vous indique les modalités
           d'expédition et le suivi selon le mode choisi.
         </p>
+        <Link
+          className="btn-secondary mt-6 inline-flex"
+          to="/livraison-locale"
+          onClick={() =>
+            trackCtaClick({
+              ctaId: "postal_delivery_local_delivery",
+              ctaLocation: "postal_delivery_page",
+              destinationPath: "/livraison-locale",
+              ctaCategory: "delivery",
+            })
+          }
+        >
+          Voir la livraison locale
+        </Link>
       </section>
     </main>
   );
 }
 
-function LocalDeliveryPage({ path, title }: { path: string; title: string }) {
-  const firstZone = localDeliveryZones[0];
-  const deliveryHours = firstZone?.estimatedDelay || "Selon les disponibilités du créneau";
-  const zoneNames = localDeliveryZones.map((zone) => zone.name).join(", ");
+function LocalDeliveryPage() {
+  const [state, setState] = useState<DeliveryZonesState>({
+    status: "loading",
+    zones: [],
+  });
+
+  useEffect(() => {
+    let mounted = true;
+
+    getDeliveryZonesWithFallback()
+      .then(({ zones }) => {
+        if (!mounted) return;
+        setState({ status: "ready", zones });
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setState({ status: "error", zones: [] });
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const { openZones, closedZones } = useMemo(() => {
+    const localZones = state.zones
+      .filter((zone) => zone.method === "local_express" && zone.isActive && !zone.isArchived)
+      .sort((left, right) => Number(left.sortOrder || 0) - Number(right.sortOrder || 0));
+
+    return {
+      openZones: localZones.filter((zone) => isOpenZone(zone)),
+      closedZones: localZones.filter((zone) => !isOpenZone(zone)),
+    };
+  }, [state.zones]);
+
+  const referenceZone = openZones[0] || closedZones[0];
+  const minimum = openZones.length
+    ? Math.min(
+        ...openZones.map((zone) =>
+          Number(zone.minimumOrderAmount ?? zone.minimumOrder ?? LOCAL_DELIVERY_MINIMUM),
+        ),
+      )
+    : LOCAL_DELIVERY_MINIMUM;
+  const deliveryHours = referenceZone?.estimatedDelay || "Selon les disponibilités du jour";
 
   return (
     <main className="container-page py-12">
       <Seo
-        title="Livraison CBD à Aix-en-Provence et alentours | Verdanza"
-        description={`Livraison locale Verdanza à Aix-en-Provence et zones configurées, minimum ${LOCAL_DELIVERY_MINIMUM} EUR, horaires ${deliveryHours}, selon disponibilité des créneaux.`}
-        path={path}
+        title="Livraison locale CBD à Aix-en-Provence - Verdanza"
+        description="Consultez les zones ouvertes, horaires et conditions de livraison locale Verdanza autour d'Aix-en-Provence."
+        path="/livraison-locale"
       />
       <Breadcrumbs
         items={[
           { name: "Accueil", path: "/" },
-          { name: title, path, current: true },
+          { name: "Livraison locale Aix-en-Provence", path: "/livraison-locale", current: true },
         ]}
       />
+
       <div className="page-intro">
-        <h1>Livraison de CBD à Aix-en-Provence et alentours</h1>
+        <h1>Livraison locale Aix-en-Provence</h1>
         <p>
-          Verdanza propose une livraison locale dans les zones configurées autour
-          d'Aix-en-Provence. Le minimum de commande est de {LOCAL_DELIVERY_MINIMUM} EUR,
-          les horaires proviennent des règles de livraison, et chaque créneau dépend des
-          disponibilités avant validation.
+          Les zones de livraison locale sont mises à jour par Verdanza selon les
+          disponibilités. Si votre zone est ouverte, vous pourrez la sélectionner au moment
+          de la commande.
         </p>
       </div>
 
-      <section className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <article className="feature-panel">
-          <h2>Minimum</h2>
-          <p>{LOCAL_DELIVERY_MINIMUM} EUR d'achat minimum pour une livraison locale.</p>
-        </article>
-        <article className="feature-panel">
-          <h2>Horaires</h2>
-          <p>{deliveryHours}.</p>
-        </article>
-        <article className="feature-panel">
-          <h2>Validation</h2>
-          <p>La commande doit être confirmée avant préparation et livraison.</p>
-        </article>
-        <article className="feature-panel">
-          <h2>Adultes</h2>
-          <p>Les produits CBD de la boutique sont réservés aux personnes majeures.</p>
-        </article>
+      <section className="mt-8 grid gap-4 md:grid-cols-3">
+        <SummaryCard label="Minimum local" value={formatCurrency(minimum)} />
+        <SummaryCard label="Horaires" value={deliveryHours} />
+        <SummaryCard label="Zones ouvertes" value={`${openZones.length}`} />
+      </section>
+
+      <section className="mt-10 rounded-lg border border-forest/10 bg-cream p-6 sm:p-8">
+        <h2 className="font-display text-3xl text-forest">Fonctionnement</h2>
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
+          {deliverySteps.map((step, index) => (
+            <article key={step} className="rounded-md border border-forest/10 bg-ivory p-4">
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-champagne">
+                Etape {index + 1}
+              </span>
+              <p className="mt-2 text-sm leading-6 text-ink/70">{step}</p>
+            </article>
+          ))}
+        </div>
+        <p className="mt-5 max-w-3xl text-sm leading-6 text-ink/65">
+          Le règlement est confirmé après validation de la commande. Un lien de paiement
+          peut être envoyé par email si nécessaire.
+        </p>
       </section>
 
       <section className="mt-12">
         <div className="section-heading mb-5">
           <div>
-            <h2>Zones desservies autour d'Aix-en-Provence</h2>
+            <h2>Zones actuellement ouvertes</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-ink/65">
-              Les zones ci-dessous viennent de la configuration de livraison locale. Elles
-              indiquent les frais, minimums et délais estimés sans garantir un créneau à chaque
-              instant.
+              Ces zones proviennent de la configuration de livraison. Elles peuvent évoluer
+              selon les créneaux et l'organisation du jour.
             </p>
           </div>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {localDeliveryZones.map((zone) => (
-            <article key={zone.id} className="feature-panel">
-              <h3 className="font-display text-2xl leading-tight text-forest">{zone.name}</h3>
-              <dl className="mt-4 space-y-2 text-sm leading-6 text-ink/70">
-                <div>
-                  <dt className="font-semibold text-forest">Minimum</dt>
-                  <dd>{formatCurrency(zone.minimumOrderAmount || zone.minimumOrder)}</dd>
-                </div>
-                <div>
-                  <dt className="font-semibold text-forest">Frais</dt>
-                  <dd>{formatCurrency(zone.fee)}</dd>
-                </div>
-                <div>
-                  <dt className="font-semibold text-forest">Délai estimé</dt>
-                  <dd>{zone.estimatedDelay}</dd>
-                </div>
-              </dl>
-            </article>
-          ))}
-        </div>
+
+        {state.status === "loading" && (
+          <div className="rounded-lg border border-forest/10 bg-ivory p-6 text-sm text-ink/65">
+            Chargement des zones de livraison locale...
+          </div>
+        )}
+
+        {state.status === "error" && (
+          <div className="rounded-lg border border-forest/10 bg-ivory p-6 text-sm text-ink/65">
+            Les informations de livraison locale sont temporairement indisponibles. Vous
+            pouvez consulter la livraison postale ou réessayer plus tard.
+          </div>
+        )}
+
+        {state.status === "ready" && openZones.length === 0 && (
+          <div className="rounded-lg border border-forest/10 bg-ivory p-6 text-sm text-ink/65">
+            La livraison locale n'est pas ouverte actuellement. Vous pouvez utiliser la
+            livraison postale ou revenir plus tard.
+          </div>
+        )}
+
+        {openZones.length > 0 && (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {openZones.map((zone) => (
+              <DeliveryZoneCard key={zone.id} zone={zone} statusLabel="Ouverte" />
+            ))}
+          </div>
+        )}
       </section>
 
-      <section className="mt-12 grid gap-6 lg:grid-cols-[1fr_1fr]">
-        <article className="rounded-lg border border-forest/10 bg-cream p-6 sm:p-8">
-          <h2 className="font-display text-3xl text-forest">Comment commander</h2>
-          <ol className="mt-5 space-y-3 text-sm leading-6 text-ink/70">
-            {deliverySteps.map((step, index) => (
-              <li key={step}>
-                <span className="font-semibold text-forest">{index + 1}.</span> {step}
-              </li>
+      {closedZones.length > 0 && (
+        <section className="mt-10">
+          <h2 className="font-display text-3xl text-forest">
+            Zones temporairement indisponibles
+          </h2>
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {closedZones.map((zone) => (
+              <DeliveryZoneCard key={zone.id} zone={zone} statusLabel="Fermée" subdued />
             ))}
-          </ol>
-        </article>
-        <article className="rounded-lg border border-forest/10 bg-ivory p-6 sm:p-8">
-          <h2 className="font-display text-3xl text-forest">Livraison locale ou postale</h2>
-          <p className="mt-4 leading-7 text-ink/70">
-            Si votre adresse n'entre pas dans une zone locale active, la livraison postale en
-            France peut être consultée séparément avec ses propres conditions.
-          </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <Link
-              className="btn-primary"
-              to="/boutique"
-              onClick={() =>
-                trackCtaClick({
-                  ctaId: "local_delivery_choose_products",
-                  ctaLocation: "delivery_page",
-                  destinationPath: "/boutique",
-                  ctaCategory: "shop_navigation",
-                })
-              }
-            >
-              Choisir les produits
-            </Link>
-            <Link
-              className="btn-secondary"
-              to="/livraison-postale"
-              onClick={() =>
-                trackCtaClick({
-                  ctaId: "local_delivery_postal_delivery",
-                  ctaLocation: "delivery_page",
-                  destinationPath: "/livraison-postale",
-                  ctaCategory: "delivery",
-                })
-              }
-            >
-              Vérifier la livraison postale
-            </Link>
           </div>
-        </article>
+        </section>
+      )}
+
+      <section className="mt-12 rounded-lg border border-champagne/30 bg-cream p-6 sm:p-8">
+        <h2 className="font-display text-3xl text-forest">Livraison postale en alternative</h2>
+        <p className="mt-4 max-w-3xl leading-7 text-ink/70">
+          La livraison postale est disponible en France à partir de {POSTAL_DELIVERY_MINIMUM} EUR
+          d'achat et offerte à partir de {POSTAL_FREE_SHIPPING_THRESHOLD} EUR.
+        </p>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <Link
+            className="btn-primary"
+            to="/boutique"
+            onClick={() =>
+              trackCtaClick({
+                ctaId: "local_delivery_shop",
+                ctaLocation: "local_delivery_page",
+                destinationPath: "/boutique",
+                ctaCategory: "shop_navigation",
+              })
+            }
+          >
+            Voir la boutique
+          </Link>
+          <Link
+            className="btn-secondary"
+            to="/livraison-postale"
+            onClick={() =>
+              trackCtaClick({
+                ctaId: "local_delivery_postal",
+                ctaLocation: "local_delivery_page",
+                destinationPath: "/livraison-postale",
+                ctaCategory: "delivery",
+              })
+            }
+          >
+            Voir la livraison postale
+          </Link>
+        </div>
       </section>
 
       <section className="mt-12">
         <h2 className="font-display text-3xl text-forest">Liens utiles</h2>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {localDeliveryLinks.map((link) => (
+          {[
+            { to: "/boutique", label: "Parcourir la boutique" },
+            { to: "/livraison-postale", label: "Livraison postale" },
+            { to: "/qualite-conformite", label: "Qualité & conformité" },
+            { to: "/contact", label: "Contact" },
+          ].map((link) => (
             <Link
               key={link.to}
               to={link.to}
               className="rounded-md border border-forest/10 bg-ivory px-4 py-3 text-sm font-semibold text-forest transition hover:border-champagne hover:bg-cream"
               onClick={() =>
                 trackCtaClick({
-                  ctaId: ctaIdForPath("delivery_link", link.to),
-                  ctaLocation: "delivery_useful_links",
+                  ctaId: ctaIdForPath("local_delivery_link", link.to),
+                  ctaLocation: "local_delivery_useful_links",
                   destinationPath: link.to,
                   ctaCategory: ctaCategoryForPath(link.to),
                 })
@@ -235,48 +299,72 @@ function LocalDeliveryPage({ path, title }: { path: string; title: string }) {
           ))}
         </div>
       </section>
-
-      <section className="mt-12">
-        <h2 className="font-display text-3xl text-forest">Questions fréquentes</h2>
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          {[
-            {
-              question: "Quelles zones sont desservies autour d'Aix-en-Provence ?",
-              answer: `Les zones affichées sur cette page sont les zones locales configurées : ${zoneNames}.`,
-            },
-            {
-              question: "Quel est le minimum de commande ?",
-              answer: `Le minimum local configuré est de ${LOCAL_DELIVERY_MINIMUM} EUR d'achat.`,
-            },
-            {
-              question: "Quels sont les horaires de livraison ?",
-              answer: deliveryHours,
-            },
-            {
-              question: "La livraison est-elle toujours garantie ?",
-              answer:
-                "Non. La zone, le créneau, les disponibilités produits et la validation de commande doivent être confirmés avant livraison.",
-            },
-            {
-              question: "Que faire lorsque mon adresse n'est pas dans la zone locale ?",
-              answer:
-                "Vous pouvez consulter la livraison postale en France ou contacter Verdanza avant de valider votre commande.",
-            },
-          ].map((item) => (
-            <article key={item.question} className="rounded-lg border border-forest/10 bg-ivory p-5">
-              <h3 className="font-display text-2xl leading-tight text-forest">
-                {item.question}
-              </h3>
-              <p className="mt-3 text-sm leading-6 text-ink/70">{item.answer}</p>
-            </article>
-          ))}
-        </div>
-      </section>
     </main>
   );
 }
 
+function SummaryCard({ label, value }: { label: string; value: string }) {
+  return (
+    <article className="feature-panel">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-champagne">
+        {label}
+      </p>
+      <p className="mt-3 font-display text-3xl leading-tight text-forest">{value}</p>
+    </article>
+  );
+}
+
+function DeliveryZoneCard({
+  zone,
+  statusLabel,
+  subdued = false,
+}: {
+  zone: DeliveryZone;
+  statusLabel: "Ouverte" | "Fermée";
+  subdued?: boolean;
+}) {
+  return (
+    <article className={`feature-panel ${subdued ? "opacity-75" : ""}`}>
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="font-display text-2xl leading-tight text-forest">{zone.name}</h3>
+        <span
+          className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+            statusLabel === "Ouverte"
+              ? "border-forest/15 bg-forest/5 text-forest"
+              : "border-champagne/40 bg-cream text-ink/65"
+          }`}
+        >
+          {statusLabel}
+        </span>
+      </div>
+      <dl className="mt-4 space-y-2 text-sm leading-6 text-ink/70">
+        <div>
+          <dt className="font-semibold text-forest">Minimum</dt>
+          <dd>{formatCurrency(Number(zone.minimumOrderAmount ?? zone.minimumOrder ?? 0))}</dd>
+        </div>
+        <div>
+          <dt className="font-semibold text-forest">Frais</dt>
+          <dd>{formatCurrency(Number(zone.fee || 0))}</dd>
+        </div>
+        <div>
+          <dt className="font-semibold text-forest">Horaires / délai</dt>
+          <dd>{zone.estimatedDelay || "Selon disponibilité"}</dd>
+        </div>
+      </dl>
+      {zone.customerMessage && (
+        <p className="mt-4 rounded-md bg-cream px-4 py-3 text-sm leading-6 text-ink/65">
+          {zone.customerMessage}
+        </p>
+      )}
+    </article>
+  );
+}
+
+function isOpenZone(zone: DeliveryZone) {
+  return zone.isActive && zone.isOpen !== false && (zone.status || "open") === "open";
+}
+
 function formatCurrency(value: number) {
-  if (value === 0) return "0 EUR";
+  if (!Number.isFinite(value) || value <= 0) return "0 EUR";
   return `${value.toFixed(2).replace(".", ",")} EUR`;
 }

@@ -40,7 +40,7 @@ export function BlogPage() {
             { to: "/fleurs-cbd", label: "Fleurs CBD" },
             { to: "/resines-cbd", label: "Résines CBD" },
             { to: "/qualite-conformite", label: "Qualité" },
-            { to: "/livraison-express-aix", label: "Livraison Aix" },
+            { to: "/livraison-locale", label: "Livraison Aix" },
             { to: "/boutique", label: "Boutique" },
           ].map((link) => (
             <Link

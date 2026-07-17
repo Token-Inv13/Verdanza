@@ -325,7 +325,7 @@ export const blogArticles: BlogArticle[] = [
       { to: "/blog/comment-lire-analyse-cbd", label: "Lire une analyse" },
       { to: "/qualite-conformite", label: "Qualité et conformité" },
       { to: "/livraison-postale", label: "Livraison postale" },
-      { to: "/livraison-express-aix", label: "Livraison locale Aix" },
+      { to: "/livraison-locale", label: "Livraison locale Aix" },
       { to: "/boutique", label: "Parcourir la boutique" },
     ],
     blocks: [
@@ -515,7 +515,7 @@ export const blogArticles: BlogArticle[] = [
           { to: "/resines-cbd", label: "Comparer les résines CBD" },
           { to: "/qualite-conformite", label: "Lire les engagements qualité" },
           { to: "/livraison-postale", label: "Voir la livraison postale" },
-          { to: "/livraison-express-aix", label: "Voir la livraison locale" },
+          { to: "/livraison-locale", label: "Voir la livraison locale" },
         ],
       },
       {
