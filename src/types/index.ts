@@ -462,9 +462,45 @@ export type CustomerProfile = {
   orderCount: number;
   totalSpent: number;
   internalNote?: string;
+  status?: "new" | "active" | "loyal" | "watch" | "archived";
+  archived?: boolean;
+  hidden?: boolean;
+  archivedAt?: string;
+  hiddenAt?: string;
+  assignedPromos?: CustomerAssignedPromo[];
+  loyaltyHistory?: CustomerLoyaltyHistoryEntry[];
+  internalNotes?: CustomerInternalNote[];
   role: "customer";
   createdAt?: string;
   updatedAt?: string;
+};
+
+export type CustomerAssignedPromo = {
+  code: string;
+  couponId?: string;
+  label?: string;
+  note?: string;
+  isActive: boolean;
+  assignedAt?: string;
+  assignedBy?: string;
+};
+
+export type CustomerLoyaltyHistoryEntry = {
+  type: "add" | "remove" | "set";
+  points: number;
+  previousBalance: number;
+  nextBalance: number;
+  reason: string;
+  note?: string;
+  createdAt?: string;
+  createdBy?: string;
+};
+
+export type CustomerInternalNote = {
+  note: string;
+  isImportant?: boolean;
+  createdAt?: string;
+  createdBy?: string;
 };
 
 export type LoyaltyMovement = {

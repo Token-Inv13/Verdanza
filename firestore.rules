@@ -54,7 +54,9 @@ service cloud.firestore {
         && request.resource.data.role == "customer"
         && request.resource.data.loyaltyPoints == resource.data.loyaltyPoints
         && request.resource.data.orderCount == resource.data.orderCount
-        && request.resource.data.totalSpent == resource.data.totalSpent;
+        && request.resource.data.totalSpent == resource.data.totalSpent
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(["displayName", "phone", "updatedAt"]);
       allow delete: if isAdmin();
     }
 

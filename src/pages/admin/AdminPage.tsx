@@ -10,6 +10,7 @@ import {
   deleteCancelledOrder,
   retryOrderPurchaseAnalytics,
   updateOrderAdminFields,
+  type AdminOrderRow,
 } from "../../services/ordersService";
 import { updateDeliveryZoneAdmin } from "../../services/deliveryZonesService";
 import {
@@ -28,7 +29,11 @@ import {
 } from "../../services/promoBannersService";
 import {
   adjustCustomerLoyalty,
+  assignPromoToCustomer,
+  getCustomerAdminDetails,
+  updateCustomerAdminStatus,
   updateCustomerInternalNote,
+  type CustomerAdminDetails,
 } from "../../services/adminCustomersService";
 import {
   createInvoiceFromOrder,
@@ -76,6 +81,8 @@ import type {
   PromoBannerType,
   PromoBannerVariant,
   ProductReview,
+  ProductFavorite,
+  LoyaltyMovement,
   ReviewStatus,
   StatusHistoryEntry,
 } from "../../types";
@@ -321,11 +328,42 @@ export function AdminPage({ section }: { section: string }) {
   }
 
   async function handleLoyaltyAdjustment(customer: CustomerProfile) {
-    const rawPoints = window.prompt("Nombre de points a ajouter ou retirer", "0");
+    const modeInput = window.prompt(
+      "Action points : add pour ajouter, remove pour retirer, set pour definir",
+      "add",
+    );
+    const mode = modeInput === "remove" || modeInput === "set" ? modeInput : "add";
+    const rawPoints = window.prompt(
+      mode === "set" ? "Nouveau solde de points" : "Nombre de points",
+      "0",
+    );
     const points = Number(rawPoints);
-    if (!Number.isFinite(points) || points === 0) return;
-    const note = window.prompt("Motif de l'ajustement", "") || "";
-    await adjustCustomerLoyalty(customer, points, note);
+    if (!Number.isFinite(points) || points < 0 || (mode !== "set" && points === 0)) return;
+    const reason = window.prompt("Raison", "correction manuelle") || "correction manuelle";
+    const note = window.prompt("Note interne", "") || "";
+    const signedPoints = mode === "remove" ? -points : points;
+    await adjustCustomerLoyalty(customer, signedPoints, note, mode, reason);
+    setMessage("Points fidelite mis a jour.");
+    await refresh();
+  }
+
+  async function handleCustomerPromoAssignment(customer: CustomerProfile, couponId: string, note: string) {
+    const coupon = coupons.find((entry) => entry.id === couponId);
+    if (!coupon) {
+      setMessage("Code promo introuvable.");
+      return;
+    }
+    await assignPromoToCustomer(customer, coupon, note);
+    setMessage(`Code ${coupon.code} attribue a ${customer.displayName || customer.email || "ce client"}.`);
+    await refresh();
+  }
+
+  async function handleCustomerStatusUpdate(
+    customer: CustomerProfile,
+    data: { status?: CustomerProfile["status"]; archived?: boolean; hidden?: boolean },
+  ) {
+    await updateCustomerAdminStatus(customer.id, data);
+    setMessage("Fiche client mise a jour.");
     await refresh();
   }
 
@@ -525,11 +563,16 @@ export function AdminPage({ section }: { section: string }) {
           <SourceLine source={customerSource} />
           <CustomersTable
             customers={customers}
+            orders={orders}
+            coupons={coupons}
             onAdjustPoints={handleLoyaltyAdjustment}
             onNote={async (customer, note) => {
               await updateCustomerInternalNote(customer.id, note);
+              setMessage("Note client enregistree.");
               await refresh();
             }}
+            onAssignPromo={handleCustomerPromoAssignment}
+            onStatusUpdate={handleCustomerStatusUpdate}
           />
         </>
       )}
@@ -1884,127 +1927,732 @@ function PromoBannerCard({
 
 function CustomersTable({
   customers,
+  orders,
+  coupons,
   onAdjustPoints,
   onNote,
+  onAssignPromo,
+  onStatusUpdate,
 }: {
   customers: CustomerProfile[];
+  orders: AdminOrderRow[];
+  coupons: Coupon[];
   onAdjustPoints: (customer: CustomerProfile) => Promise<void>;
   onNote: (customer: CustomerProfile, note: string) => Promise<void>;
+  onAssignPromo: (customer: CustomerProfile, couponId: string, note: string) => Promise<void>;
+  onStatusUpdate: (
+    customer: CustomerProfile,
+    data: { status?: CustomerProfile["status"]; archived?: boolean; hidden?: boolean },
+  ) => Promise<void>;
 }) {
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<CustomerFilter>("active");
+  const [sort, setSort] = useState<CustomerSort>("lastOrder");
+  const [selectedCustomerId, setSelectedCustomerId] = useState(customers[0]?.id || "");
+  const [promoCouponId, setPromoCouponId] = useState(coupons[0]?.id || "");
+  const [promoNote, setPromoNote] = useState("");
+  const [details, setDetails] = useState<CustomerAdminDetails>({
+    loyaltyMovements: [],
+    favorites: [],
+    reviews: [],
+  });
+  const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId) || customers[0];
+  const selectedOrders = selectedCustomer ? ordersForCustomer(orders, selectedCustomer) : [];
+  const selectedStats = selectedCustomer ? customerStats(selectedCustomer, selectedOrders) : null;
+
+  useEffect(() => {
+    if (!selectedCustomerId && customers[0]?.id) {
+      setSelectedCustomerId(customers[0].id);
+    }
+  }, [customers, selectedCustomerId]);
+
+  useEffect(() => {
+    if (!selectedCustomer) {
+      setDetails({ loyaltyMovements: [], favorites: [], reviews: [] });
+      return;
+    }
+    let cancelled = false;
+    void getCustomerAdminDetails(selectedCustomer).then((nextDetails) => {
+      if (!cancelled) setDetails(nextDetails);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCustomer]);
+
+  const enrichedCustomers = useMemo(
+    () =>
+      customers.map((customer) => {
+        const customerOrders = ordersForCustomer(orders, customer);
+        return {
+          customer,
+          orders: customerOrders,
+          stats: customerStats(customer, customerOrders),
+        };
+      }),
+    [customers, orders],
+  );
+
+  const visibleCustomers = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+    return enrichedCustomers
+      .filter(({ customer, orders: customerOrders, stats }) => {
+        const haystack = [
+          customer.displayName,
+          customer.email,
+          customer.phone,
+          customer.internalNote,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (normalizedSearch && !haystack.includes(normalizedSearch)) return false;
+        if (filter === "archived") return customer.archived === true || customer.status === "archived";
+        if (customer.archived || customer.hidden) return false;
+        if (filter === "loyal") return customerStatus(customer, customerOrders).label === "Fidele";
+        if (filter === "new") return customerStatus(customer, customerOrders).label === "Nouveau";
+        if (filter === "withOrders") return customerOrders.length > 0;
+        if (filter === "withoutOrders") return customerOrders.length === 0;
+        if (filter === "withNote") return Boolean(customer.internalNote?.trim());
+        if (filter === "withPromo") return Boolean(customer.assignedPromos?.some((promo) => promo.isActive));
+        if (filter === "watch") return customer.status === "watch";
+        if (filter === "all") return true;
+        return stats.status.label !== "Archive";
+      })
+      .sort((left, right) => sortCustomers(left, right, sort));
+  }, [enrichedCustomers, filter, search, sort]);
+
   return (
-    <section className="mt-8 overflow-hidden rounded-lg border border-forest/10 bg-ivory">
+    <section className="mt-8 space-y-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <AdminStatCard label="Clients" value={String(customers.length)} detail="Profils en base" />
+        <AdminStatCard
+          label="Avec commandes"
+          value={String(enrichedCustomers.filter((entry) => entry.orders.length > 0).length)}
+          detail="Historique disponible"
+        />
+        <AdminStatCard
+          label="Clients fideles"
+          value={String(enrichedCustomers.filter((entry) => entry.stats.status.label === "Fidele").length)}
+          detail="3 commandes ou plus"
+        />
+        <AdminStatCard
+          label="Promos attribuees"
+          value={String(customers.reduce((sum, customer) => sum + (customer.assignedPromos?.length || 0), 0))}
+          detail="Suivi interne"
+        />
+      </div>
+
+      <div className="rounded-lg border border-forest/10 bg-ivory p-4">
+        <div className="grid gap-3 lg:grid-cols-[1fr_220px_220px]">
+          <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-forest/60">
+            Recherche
+            <input
+              className="input-field mt-2"
+              value={search}
+              onChange={(event) => setSearch(event.currentTarget.value)}
+              placeholder="Nom, email, telephone, note"
+            />
+          </label>
+          <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-forest/60">
+            Filtre
+            <select
+              className="input-field mt-2"
+              value={filter}
+              onChange={(event) => setFilter(event.currentTarget.value as CustomerFilter)}
+            >
+              {customerFilters.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-forest/60">
+            Tri
+            <select
+              className="input-field mt-2"
+              value={sort}
+              onChange={(event) => setSort(event.currentTarget.value as CustomerSort)}
+            >
+              <option value="lastOrder">Derniere commande</option>
+              <option value="totalSpent">Total depense</option>
+              <option value="orderCount">Nombre de commandes</option>
+              <option value="loyalty">Points fidelite</option>
+              <option value="name">Alphabetique</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
       {!customers.length && (
-        <p className="border-b border-forest/10 bg-cream px-4 py-4 text-sm text-forest">
-          Aucun client pour le moment.
-        </p>
+        <AdminEmptyState
+          title="Aucun client pour le moment."
+          description="Les profils clients apparaitront ici apres inscription ou commande connectee."
+        />
       )}
       {!!customers.length && (
-        <div className="hidden gap-4 p-4 lg:grid xl:grid-cols-2 2xl:grid-cols-3">
-          {customers.map((customer) => (
-            <article
-              key={customer.id}
-              className="rounded-lg border border-forest/10 bg-cream p-4"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <strong className="block truncate text-forest">
-                    {customer.displayName || "Client"}
-                  </strong>
-                  <span className="mt-1 block break-all text-xs text-ink/60">
-                    {customer.email || "Email non renseigne"}
-                  </span>
-                  <span className="block text-xs text-ink/60">
-                    {customer.phone || "Telephone non renseigne"}
-                  </span>
-                </div>
-                <AdminBadge tone={customer.orderCount ? "success" : "muted"}>
-                  {`${customer.orderCount || 0} commande(s)`}
-                </AdminBadge>
-              </div>
+        <div className="grid gap-5 2xl:grid-cols-[minmax(360px,520px)_1fr]">
+          <div className="space-y-3">
+            {!visibleCustomers.length && (
+              <AdminEmptyState
+                title="Aucun client pour ce filtre."
+                description="Changez de filtre ou consultez tous les clients."
+                action={
+                  <button className="btn-secondary mt-3" onClick={() => setFilter("all")} type="button">
+                    Voir tous
+                  </button>
+                }
+              />
+            )}
+            {visibleCustomers.map(({ customer, stats }) => {
+              const status = stats.status;
+              const selected = selectedCustomer?.id === customer.id;
+              return (
+                <article
+                  key={customer.id}
+                  className={`rounded-lg border p-4 transition ${
+                    selected
+                      ? "border-champagne bg-cream shadow-sm"
+                      : "border-forest/10 bg-ivory hover:border-champagne/60"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <strong className="block truncate text-forest">
+                        {customer.displayName || "Client sans nom"}
+                      </strong>
+                      <span className="mt-1 block break-all text-xs text-ink/60">
+                        {customer.email || "Email non renseigne"}
+                      </span>
+                      <span className="block text-xs text-ink/60">
+                        {customer.phone || "Telephone non renseigne"}
+                      </span>
+                    </div>
+                    <AdminBadge tone={status.tone}>{status.label}</AdminBadge>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                    <MiniCustomerMetric label="Commandes" value={String(stats.orderCount)} />
+                    <MiniCustomerMetric label="Total" value={`${formatEuro(stats.totalSpent)} EUR`} />
+                    <MiniCustomerMetric label="Derniere" value={stats.lastOrderLabel} />
+                    <MiniCustomerMetric label="Points" value={String(customer.loyaltyPoints || 0)} />
+                  </div>
+                  {customer.internalNote && (
+                    <p className="mt-3 line-clamp-2 rounded-md bg-ivory px-3 py-2 text-xs text-ink/65">
+                      {customer.internalNote}
+                    </p>
+                  )}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+                      type="button"
+                      onClick={() => setSelectedCustomerId(customer.id)}
+                    >
+                      Voir fiche
+                    </button>
+                    <button
+                      className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+                      type="button"
+                      onClick={() => void onAdjustPoints(customer)}
+                    >
+                      Ajuster points
+                    </button>
+                    <button
+                      className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+                      type="button"
+                      onClick={() => void onStatusUpdate(customer, { archived: true, status: "archived" })}
+                    >
+                      Archiver
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-md border border-forest/10 bg-ivory p-3">
-                  <span className="block text-[11px] uppercase tracking-[0.12em] text-forest/50">
-                    Total
-                  </span>
-                  <strong className="mt-1 block text-forest">
-                    {formatEuro(Number(customer.totalSpent || 0))} EUR
-                  </strong>
-                </div>
-                <div className="rounded-md border border-forest/10 bg-ivory p-3">
-                  <span className="block text-[11px] uppercase tracking-[0.12em] text-forest/50">
-                    Fidelite
-                  </span>
-                  <strong className="mt-1 block text-forest">
-                    {customer.loyaltyPoints || 0} point(s)
-                  </strong>
-                </div>
-              </div>
-
-              <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.12em] text-forest/60">
-                Note interne
-                <input
-                  className="input-field mt-2"
-                  defaultValue={customer.internalNote || ""}
-                  placeholder="Note"
-                  onBlur={(event) => void onNote(customer, event.currentTarget.value)}
-                />
-              </label>
-
-              <button
-                className="btn-secondary mt-4 min-h-10 px-3 py-2 text-xs"
-                onClick={() => void onAdjustPoints(customer)}
-                type="button"
-              >
-                Ajuster points
-              </button>
-            </article>
-          ))}
+          {selectedCustomer && selectedStats && (
+            <CustomerDetailPanel
+              customer={selectedCustomer}
+              orders={selectedOrders}
+              stats={selectedStats}
+              coupons={coupons}
+              details={details}
+              promoCouponId={promoCouponId}
+              promoNote={promoNote}
+              onPromoCouponChange={setPromoCouponId}
+              onPromoNoteChange={setPromoNote}
+              onAssignPromo={async () => {
+                if (!promoCouponId) return;
+                await onAssignPromo(selectedCustomer, promoCouponId, promoNote);
+                setPromoNote("");
+              }}
+              onAdjustPoints={() => onAdjustPoints(selectedCustomer)}
+              onNote={(note) => onNote(selectedCustomer, note)}
+              onStatusUpdate={(data) => onStatusUpdate(selectedCustomer, data)}
+            />
+          )}
         </div>
       )}
-      <div className="overflow-x-auto lg:hidden">
-        <table className="w-full min-w-[980px] text-left text-sm">
-          <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
-            <tr>
-              {["Client", "Commandes", "Total", "Points", "Note interne", "Action"].map((header) => (
-                <th key={header} className="px-4 py-3 font-medium">{header}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {customers.map((customer) => (
-              <tr key={customer.id} className="border-t border-forest/10">
-                <td className="px-4 py-4">
-                  <strong className="block text-forest">{customer.displayName || "Client"}</strong>
-                  <span className="block text-xs text-ink/55">{customer.email}</span>
-                  <span className="block text-xs text-ink/55">{customer.phone}</span>
-                </td>
-                <td className="px-4 py-4">{customer.orderCount || 0}</td>
-                <td className="px-4 py-4">{formatEuro(Number(customer.totalSpent || 0))} EUR</td>
-                <td className="px-4 py-4">{customer.loyaltyPoints || 0}</td>
-                <td className="px-4 py-4">
-                  <input
-                    className="input-field"
-                    defaultValue={customer.internalNote || ""}
-                    placeholder="Note"
-                    onBlur={(event) => void onNote(customer, event.currentTarget.value)}
-                  />
-                </td>
-                <td className="px-4 py-4">
-                  <button
-                    className="btn-secondary whitespace-nowrap"
-                    onClick={() => void onAdjustPoints(customer)}
-                  >
-                    Ajuster points
-                  </button>
-                </td>
-              </tr>
+    </section>
+  );
+}
+
+type CustomerFilter =
+  | "active"
+  | "all"
+  | "new"
+  | "loyal"
+  | "watch"
+  | "withOrders"
+  | "withoutOrders"
+  | "withNote"
+  | "withPromo"
+  | "archived";
+
+type CustomerSort = "lastOrder" | "totalSpent" | "orderCount" | "loyalty" | "name";
+
+const customerFilters: { value: CustomerFilter; label: string }[] = [
+  { value: "active", label: "Actifs" },
+  { value: "new", label: "Nouveaux" },
+  { value: "loyal", label: "Fideles" },
+  { value: "watch", label: "A suivre" },
+  { value: "withOrders", label: "Avec commandes" },
+  { value: "withoutOrders", label: "Sans commande" },
+  { value: "withNote", label: "Avec note" },
+  { value: "withPromo", label: "Avec promo" },
+  { value: "archived", label: "Archives" },
+  { value: "all", label: "Tous" },
+];
+
+function CustomerDetailPanel({
+  customer,
+  orders,
+  stats,
+  coupons,
+  details,
+  promoCouponId,
+  promoNote,
+  onPromoCouponChange,
+  onPromoNoteChange,
+  onAssignPromo,
+  onAdjustPoints,
+  onNote,
+  onStatusUpdate,
+}: {
+  customer: CustomerProfile;
+  orders: AdminOrderRow[];
+  stats: CustomerComputedStats;
+  coupons: Coupon[];
+  details: CustomerAdminDetails;
+  promoCouponId: string;
+  promoNote: string;
+  onPromoCouponChange: (couponId: string) => void;
+  onPromoNoteChange: (note: string) => void;
+  onAssignPromo: () => Promise<void>;
+  onAdjustPoints: () => Promise<void>;
+  onNote: (note: string) => Promise<void>;
+  onStatusUpdate: (data: {
+    status?: CustomerProfile["status"];
+    archived?: boolean;
+    hidden?: boolean;
+  }) => Promise<void>;
+}) {
+  const [draftNote, setDraftNote] = useState(customer.internalNote || "");
+
+  useEffect(() => {
+    setDraftNote(customer.internalNote || "");
+  }, [customer.id, customer.internalNote]);
+
+  return (
+    <article className="rounded-lg border border-forest/10 bg-ivory p-4 shadow-sm lg:p-5">
+      <div className="flex flex-col justify-between gap-4 border-b border-forest/10 pb-4 xl:flex-row xl:items-start">
+        <div>
+          <p className="text-xs uppercase tracking-[0.18em] text-champagne">Fiche client</p>
+          <h2 className="mt-1 font-display text-3xl text-forest">
+            {customer.displayName || "Client sans nom"}
+          </h2>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <AdminBadge tone={stats.status.tone}>{stats.status.label}</AdminBadge>
+            {customer.archived && <AdminBadge tone="muted">Archive</AdminBadge>}
+            {customer.hidden && <AdminBadge tone="muted">Masque</AdminBadge>}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs" type="button" onClick={onAdjustPoints}>
+            Ajuster points
+          </button>
+          {customer.archived || customer.hidden ? (
+            <button
+              className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+              type="button"
+              onClick={() => void onStatusUpdate({ archived: false, hidden: false, status: "active" })}
+            >
+              Restaurer
+            </button>
+          ) : (
+            <>
+              <button
+                className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+                type="button"
+                onClick={() => void onStatusUpdate({ hidden: true })}
+              >
+                Masquer
+              </button>
+              <button
+                className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+                type="button"
+                onClick={() => void onStatusUpdate({ archived: true, status: "archived" })}
+              >
+                Archiver
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <MiniCustomerMetric label="Commandes" value={String(stats.orderCount)} />
+        <MiniCustomerMetric label="Total depense" value={`${formatEuro(stats.totalSpent)} EUR`} />
+        <MiniCustomerMetric label="Panier moyen" value={`${formatEuro(stats.averageCart)} EUR`} />
+        <MiniCustomerMetric label="Derniere commande" value={stats.lastOrderLabel} />
+      </div>
+
+      <div className="mt-5 grid gap-5 xl:grid-cols-2">
+        <section className="rounded-lg border border-forest/10 bg-cream p-4">
+          <h3 className="font-semibold text-forest">Informations generales</h3>
+          <dl className="mt-3 space-y-2 text-sm text-ink/70">
+            <InfoRow label="Email" value={customer.email || "Email non renseigne"} />
+            <InfoRow label="Telephone" value={customer.phone || "Telephone non renseigne"} />
+            <InfoRow label="Compte cree" value={formatAdminDate(customer.createdAt) || "Non renseigne"} />
+            <InfoRow label="Derniere mise a jour" value={formatAdminDate(customer.updatedAt) || "Non renseigne"} />
+            <InfoRow label="Points fidelite" value={`${customer.loyaltyPoints || 0} point(s)`} />
+          </dl>
+          <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.14em] text-forest/60">
+            Statut client
+            <select
+              className="input-field mt-2"
+              value={customer.status || stats.status.value}
+              onChange={(event) =>
+                void onStatusUpdate({ status: event.currentTarget.value as CustomerProfile["status"] })
+              }
+            >
+              <option value="new">Nouveau</option>
+              <option value="active">Actif</option>
+              <option value="loyal">Fidele</option>
+              <option value="watch">A suivre</option>
+              <option value="archived">Archive</option>
+            </select>
+          </label>
+        </section>
+
+        <section className="rounded-lg border border-forest/10 bg-cream p-4">
+          <h3 className="font-semibold text-forest">Note interne</h3>
+          <textarea
+            className="input-field mt-3 min-h-28"
+            value={draftNote}
+            onChange={(event) => setDraftNote(event.currentTarget.value)}
+            placeholder="Client prefere livraison locale le soir, a rappeler avant expedition..."
+          />
+          <button className="btn-primary mt-3 min-h-10 px-4 py-2 text-sm" type="button" onClick={() => void onNote(draftNote)}>
+            Enregistrer note
+          </button>
+          <div className="mt-4 space-y-2">
+            {(customer.internalNotes || []).slice(-3).reverse().map((note, index) => (
+              <p key={`${note.createdAt || index}-${index}`} className="rounded-md bg-ivory px-3 py-2 text-xs text-ink/65">
+                {note.note}
+                <span className="mt-1 block text-ink/45">{formatAdminDate(note.createdAt)}</span>
+              </p>
             ))}
-          </tbody>
-        </table>
+            {!customer.internalNotes?.length && (
+              <p className="text-sm text-ink/55">Aucune note historisee.</p>
+            )}
+          </div>
+        </section>
+      </div>
+
+      <section className="mt-5 rounded-lg border border-forest/10 bg-cream p-4">
+        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
+          <div>
+            <h3 className="font-semibold text-forest">Promos attribuees</h3>
+            <p className="mt-1 text-sm text-ink/60">
+              Suivi interne uniquement. Cela ne limite pas automatiquement le code a ce client.
+            </p>
+          </div>
+          <div className="grid gap-2 md:grid-cols-[220px_1fr_auto]">
+            <select
+              className="input-field"
+              value={promoCouponId}
+              onChange={(event) => onPromoCouponChange(event.currentTarget.value)}
+            >
+              {coupons.map((coupon) => (
+                <option key={coupon.id} value={coupon.id}>
+                  {coupon.code}
+                </option>
+              ))}
+            </select>
+            <input
+              className="input-field"
+              value={promoNote}
+              onChange={(event) => onPromoNoteChange(event.currentTarget.value)}
+              placeholder="Note attribution"
+            />
+            <button className="btn-secondary min-h-10 px-3 py-2 text-xs" type="button" onClick={() => void onAssignPromo()}>
+              Attribuer
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(customer.assignedPromos || []).map((promo) => (
+            <span key={`${promo.code}-${promo.assignedAt}`} className="rounded-full border border-forest/10 bg-ivory px-3 py-2 text-xs text-forest">
+              {promo.code} {promo.isActive ? "actif" : "inactif"}
+            </span>
+          ))}
+          {!customer.assignedPromos?.length && (
+            <p className="text-sm text-ink/55">Aucune promo attribuee.</p>
+          )}
+        </div>
+      </section>
+
+      <div className="mt-5 grid gap-5 xl:grid-cols-2">
+        <CustomerOrdersPanel orders={orders} />
+        <CustomerSignalsPanel
+          favorites={details.favorites}
+          reviews={details.reviews}
+          loyaltyMovements={details.loyaltyMovements}
+          customer={customer}
+        />
+      </div>
+    </article>
+  );
+}
+
+function CustomerOrdersPanel({ orders }: { orders: AdminOrderRow[] }) {
+  return (
+    <section className="rounded-lg border border-forest/10 bg-cream p-4">
+      <h3 className="font-semibold text-forest">Historique commandes</h3>
+      {!orders.length && <p className="mt-3 text-sm text-ink/55">Aucune commande liee.</p>}
+      <div className="mt-3 space-y-3">
+        {orders.slice(0, 8).map((order) => (
+          <article key={order.id} className="rounded-md border border-forest/10 bg-ivory p-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <strong className="block text-sm text-forest">{order.id}</strong>
+                <span className="text-xs text-ink/55">{formatAdminDate(order.createdAt)}</span>
+              </div>
+              <strong className="text-sm text-forest">{order.total}</strong>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <AdminBadge tone={orderStatusTone(order.orderStatus)}>{orderStatusLabel(order.orderStatus)}</AdminBadge>
+              <AdminBadge tone={paymentStatusTone(order.paymentStatus)}>{paymentStatusLabel(order.paymentStatus)}</AdminBadge>
+              <AdminBadge tone={order.deliveryMethod === "postal" ? "neutral" : "gold"}>
+                {order.deliveryMethod === "postal" ? "Postale" : "Locale"}
+              </AdminBadge>
+            </div>
+            <p className="mt-2 text-xs text-ink/60">
+              {order.items.map((item) => `${item.name} x${item.quantity} g`).join(", ") || "Produits non renseignes"}
+            </p>
+          </article>
+        ))}
       </div>
     </section>
   );
+}
+
+function CustomerSignalsPanel({
+  favorites,
+  reviews,
+  loyaltyMovements,
+  customer,
+}: {
+  favorites: ProductFavorite[];
+  reviews: ProductReview[];
+  loyaltyMovements: LoyaltyMovement[];
+  customer: CustomerProfile;
+}) {
+  return (
+    <section className="rounded-lg border border-forest/10 bg-cream p-4">
+      <h3 className="font-semibold text-forest">Favoris, avis et fidelite</h3>
+      <div className="mt-4 space-y-4">
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-[0.14em] text-forest/60">Favoris</h4>
+          {favorites.length ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {favorites.slice(0, 8).map((favorite) => (
+                <span key={favorite.id} className="rounded-full border border-forest/10 bg-ivory px-3 py-2 text-xs text-forest">
+                  {favorite.productName}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-ink/55">Aucun favori.</p>
+          )}
+        </div>
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-[0.14em] text-forest/60">Avis internes</h4>
+          {reviews.length ? (
+            <div className="mt-2 space-y-2">
+              {reviews.slice(0, 3).map((review) => (
+                <p key={review.id} className="rounded-md bg-ivory px-3 py-2 text-xs text-ink/65">
+                  <strong className="text-forest">{review.productName} - {review.rating}/5</strong>
+                  <span className="mt-1 block">{review.comment}</span>
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-ink/55">Aucun avis client.</p>
+          )}
+        </div>
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-[0.14em] text-forest/60">Mouvements fidelite</h4>
+          {loyaltyMovements.length || customer.loyaltyHistory?.length ? (
+            <div className="mt-2 space-y-2">
+              {(customer.loyaltyHistory || []).slice(-3).reverse().map((entry, index) => (
+                <p key={`${entry.createdAt || index}-${index}`} className="rounded-md bg-ivory px-3 py-2 text-xs text-ink/65">
+                  {entry.reason} : {entry.previousBalance} {"->"} {entry.nextBalance} point(s)
+                  <span className="mt-1 block text-ink/45">{formatAdminDate(entry.createdAt)}</span>
+                </p>
+              ))}
+              {!customer.loyaltyHistory?.length &&
+                loyaltyMovements.slice(0, 3).map((movement) => (
+                  <p key={movement.id} className="rounded-md bg-ivory px-3 py-2 text-xs text-ink/65">
+                    {movement.points > 0 ? "+" : ""}
+                    {movement.points} point(s) - {movement.note || movement.reason}
+                  </p>
+                ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-ink/55">Aucun mouvement fidelite.</p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function AdminStatCard({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="rounded-lg border border-forest/10 bg-ivory p-4">
+      <span className="text-sm text-ink/55">{label}</span>
+      <strong className="mt-2 block font-display text-3xl text-forest">{value}</strong>
+      <span className="mt-1 block text-xs text-ink/55">{detail}</span>
+    </div>
+  );
+}
+
+function MiniCustomerMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-forest/10 bg-ivory px-3 py-2">
+      <span className="block text-[11px] uppercase tracking-[0.12em] text-forest/50">{label}</span>
+      <strong className="mt-1 block text-sm text-forest">{value}</strong>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[120px_1fr] gap-3">
+      <dt className="text-ink/45">{label}</dt>
+      <dd className="break-words text-forest">{value}</dd>
+    </div>
+  );
+}
+
+type CustomerComputedStats = {
+  orderCount: number;
+  totalSpent: number;
+  averageCart: number;
+  lastOrderAt: number;
+  lastOrderLabel: string;
+  status: { value: NonNullable<CustomerProfile["status"]>; label: string; tone: AdminBadgeTone };
+};
+
+function ordersForCustomer(orders: AdminOrderRow[], customer: CustomerProfile) {
+  const email = customer.email?.toLowerCase();
+  const phone = normalizeCustomerPhone(customer.phone);
+  const uid = customer.uid || customer.id;
+  return orders.filter((order) => {
+    if (order.customerId && uid && order.customerId === uid) return true;
+    if (email && order.customerEmail?.toLowerCase() === email) return true;
+    if (phone && normalizeCustomerPhone(order.customerPhone) === phone) return true;
+    return false;
+  });
+}
+
+function customerStats(customer: CustomerProfile, orders: AdminOrderRow[]): CustomerComputedStats {
+  const orderCount = Math.max(Number(customer.orderCount || 0), orders.length);
+  const orderTotal = orders.reduce((sum, order) => sum + parseEuro(order.total), 0);
+  const totalSpent = Math.max(Number(customer.totalSpent || 0), orderTotal);
+  const lastOrderAt = orders.reduce(
+    (latest, order) => Math.max(latest, adminDateValue(order.createdAt)),
+    0,
+  );
+  return {
+    orderCount,
+    totalSpent,
+    averageCart: orderCount ? totalSpent / orderCount : 0,
+    lastOrderAt,
+    lastOrderLabel: lastOrderAt ? formatAdminDate(lastOrderAt) : "Aucune",
+    status: customerStatus(customer, orders),
+  };
+}
+
+function customerStatus(customer: CustomerProfile, orders: AdminOrderRow[]) {
+  if (customer.archived || customer.status === "archived") {
+    return { value: "archived" as const, label: "Archive", tone: "muted" as const };
+  }
+  if (customer.status === "watch") {
+    return { value: "watch" as const, label: "A suivre", tone: "warning" as const };
+  }
+  if (customer.status === "loyal" || Number(customer.orderCount || orders.length) >= 3) {
+    return { value: "loyal" as const, label: "Fidele", tone: "gold" as const };
+  }
+  if (customer.status === "active" || orders.length > 0 || Number(customer.orderCount || 0) > 0) {
+    return { value: "active" as const, label: "Actif", tone: "success" as const };
+  }
+  return { value: "new" as const, label: "Nouveau", tone: "neutral" as const };
+}
+
+function sortCustomers(
+  left: { customer: CustomerProfile; stats: CustomerComputedStats },
+  right: { customer: CustomerProfile; stats: CustomerComputedStats },
+  sort: CustomerSort,
+) {
+  if (sort === "totalSpent") return right.stats.totalSpent - left.stats.totalSpent;
+  if (sort === "orderCount") return right.stats.orderCount - left.stats.orderCount;
+  if (sort === "loyalty") {
+    return Number(right.customer.loyaltyPoints || 0) - Number(left.customer.loyaltyPoints || 0);
+  }
+  if (sort === "name") {
+    return (left.customer.displayName || left.customer.email || "").localeCompare(
+      right.customer.displayName || right.customer.email || "",
+      "fr",
+    );
+  }
+  return right.stats.lastOrderAt - left.stats.lastOrderAt;
+}
+
+function normalizeCustomerPhone(value?: string) {
+  return value?.replace(/\D/g, "") || "";
+}
+
+function formatAdminDate(value?: string | number | unknown) {
+  const timestamp = adminDateValue(value);
+  if (!timestamp) return "";
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(timestamp));
+}
+
+function adminDateValue(value: unknown) {
+  if (!value) return 0;
+  if (typeof value === "number") return value;
+  if (typeof value === "string") return Date.parse(value) || 0;
+  if (typeof value === "object" && "seconds" in value) {
+    return Number((value as { seconds?: number }).seconds || 0) * 1000;
+  }
+  return 0;
 }
 
 function BillingWarning({ settings }: { settings: BillingSettings }) {

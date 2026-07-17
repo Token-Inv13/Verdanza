@@ -23,6 +23,7 @@ import type {
 
 export type AdminOrderRow = {
   id: string;
+  customerId?: string;
   orderType?: OrderType;
   customer: string;
   customerEmail?: string;
@@ -70,6 +71,8 @@ export type AdminOrderRow = {
   hiddenAt?: string;
   emails?: Order["emails"];
   analytics?: OrderAnalytics;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type CustomerOrderRow = {
@@ -96,6 +99,7 @@ export async function getAdminOrdersWithFallback() {
       const order = { id: entry.id, ...entry.data() } as Order;
       return {
         id: order.id,
+        customerId: order.customerId,
         orderType: order.orderType || "order",
         customer: order.customerName || order.customerEmail || "Client",
         customerEmail: order.customerEmail,
@@ -143,6 +147,8 @@ export async function getAdminOrdersWithFallback() {
         hiddenAt: order.hiddenAt,
         emails: order.emails,
         analytics: order.analytics,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
       };
     });
     return {
