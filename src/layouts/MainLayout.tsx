@@ -9,6 +9,7 @@ import { CookieConsentBanner } from "../components/CookieConsentBanner";
 import { PromoBannersProvider, PromoBannerSlot } from "../components/PromoBannerSlot";
 import { useConsent } from "../context/ConsentContext";
 import { staticImageVariants } from "../lib/generatedImageVariants";
+import { BRAND_LOGO, BRAND_LOGO_ALT } from "../lib/brandAssets";
 import { trackContactClick, trackCtaClick } from "../lib/analytics";
 
 const navItems = [
@@ -41,7 +42,7 @@ export function MainLayout() {
   const { itemCount } = useCart();
   const { user } = useAuth();
   const consent = useConsent();
-  const logoImage = staticImageVariants["/verdanza-logo.png"];
+  const logoImage = staticImageVariants[BRAND_LOGO];
   const contactEmail =
     (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
     "contact@verdanza.fr";
@@ -54,10 +55,10 @@ export function MainLayout() {
         <div className="container-page flex min-h-20 items-center justify-between gap-4">
           <NavLink to="/" className="flex items-center gap-3">
             <img
-              src={logoImage?.src || "/verdanza-logo.png"}
+              src={logoImage?.src || BRAND_LOGO}
               srcSet={logoImage?.srcSet}
               sizes={logoImage?.sizes || "180px"}
-              alt="Verdanza"
+              alt={BRAND_LOGO_ALT}
               width={logoImage?.width || 180}
               height={logoImage?.height || 82}
               decoding="async"
@@ -142,10 +143,10 @@ export function MainLayout() {
         <div className="container-page grid gap-8 md:grid-cols-[1.4fr_1fr_1fr]">
           <div>
             <img
-              src={logoImage?.src || "/verdanza-logo.png"}
+              src={logoImage?.src || BRAND_LOGO}
               srcSet={logoImage?.srcSet}
               sizes={logoImage?.sizes || "180px"}
-              alt="Verdanza"
+              alt={BRAND_LOGO_ALT}
               width={logoImage?.width || 180}
               height={logoImage?.height || 82}
               loading="lazy"

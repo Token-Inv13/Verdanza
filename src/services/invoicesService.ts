@@ -8,6 +8,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
+import { BRAND_LOGO } from "../lib/brandAssets";
 import { collections } from "./collections";
 import type { BillingSettings, Invoice, InvoiceLine, InvoiceStatus, PaymentStatus } from "../types";
 
@@ -39,7 +40,7 @@ export const defaultBillingSettings: BillingSettings = {
   email: "contact@verdanza.fr",
   paymentTerms: "Règlement à confirmer directement avec le client.",
   legalMentions: "",
-  logoUrl: "/verdanza-logo.png",
+  logoUrl: BRAND_LOGO,
   isManuallyValidated: false,
   validationWarning:
     "Les informations légales de facturation ne sont pas encore validées. Vérifiez la raison sociale, le SIRET, l'adresse, le régime TVA et les mentions obligatoires avant émission officielle.",

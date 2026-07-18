@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { Seo } from "../components/Seo";
+import { BRAND_LOGO, BRAND_LOGO_ALT } from "../lib/brandAssets";
 
 const adminNav = [
   { label: "Dashboard", to: "/admin", icon: BarChart3 },
@@ -48,7 +49,7 @@ export function AdminLayout() {
         noindex
       />
       <div className="sticky top-0 z-30 flex items-center justify-between border-b border-forest/10 bg-ivory/95 px-4 py-3 backdrop-blur lg:hidden">
-        <img src="/verdanza-logo.png" alt="Verdanza" className="h-12 rounded bg-ivory p-1" />
+        <img src={BRAND_LOGO} alt={BRAND_LOGO_ALT} className="h-12 rounded bg-ivory p-1" />
         <button
           className="icon-button"
           type="button"
@@ -72,7 +73,7 @@ export function AdminLayout() {
         }`}
       >
         <div className="flex items-center justify-between gap-3">
-          <img src="/verdanza-logo.png" alt="Verdanza" className="h-16 rounded bg-ivory p-2" />
+          <img src={BRAND_LOGO} alt={BRAND_LOGO_ALT} className="h-16 rounded bg-ivory p-2" />
           <button
             className="icon-button border-ivory/20 bg-forest text-ivory hover:bg-ivory/10 lg:hidden"
             type="button"

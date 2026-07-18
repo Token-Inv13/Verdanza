@@ -1,5 +1,6 @@
 import type { Product } from "../types";
 import type { BlogArticle } from "../types/blog";
+import { BRAND_OG_IMAGE } from "./brandAssets";
 import { absoluteUrl } from "./siteUrl";
 
 export type JsonLdValue =
@@ -72,7 +73,7 @@ export function buildHomeJsonLd(contactEmail?: string): JsonLdValue {
     "@id": organizationId,
     name: "Verdanza",
     url: absoluteUrl("/"),
-    logo: absoluteUrl("/verdanza-logo.png"),
+    logo: absoluteUrl(BRAND_OG_IMAGE),
   };
 
   if (contactEmail) {

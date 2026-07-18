@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { staticImageVariants } from "../lib/generatedImageVariants";
+import { BRAND_BADGE, BRAND_LOGO_ALT } from "../lib/brandAssets";
 import { ensureBodyScrollUnlocked } from "../lib/bodyScrollLock";
 import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 
 const key = "verdanza-age-confirmed";
 
 export function AgeGate() {
-  const badgeImage = staticImageVariants["/verdanza-badge.png"];
+  const badgeImage = staticImageVariants[BRAND_BADGE];
   const [isConfirmed, setIsConfirmed] = useState(() => {
     return localStorage.getItem(key) === "true";
   });
@@ -32,10 +33,10 @@ export function AgeGate() {
         className="w-full max-w-xl rounded-lg border border-champagne/40 bg-ivory p-8 text-forest shadow-soft"
       >
         <img
-          src={badgeImage?.src || "/verdanza-badge.png"}
+          src={badgeImage?.src || BRAND_BADGE}
           srcSet={badgeImage?.srcSet}
           sizes={badgeImage?.sizes || "112px"}
-          alt="Verdanza CBD"
+          alt={BRAND_LOGO_ALT}
           width={badgeImage?.width || 112}
           height={badgeImage?.height || 112}
           fetchPriority="high"

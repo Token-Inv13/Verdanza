@@ -96,6 +96,7 @@ import {
   POSTAL_DELIVERY_MINIMUM,
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../../config/deliveryRules";
+import { BRAND_LABEL } from "../../lib/brandAssets";
 
 const emptyProduct: ProductInput = {
   slug: "",
@@ -104,7 +105,7 @@ const emptyProduct: ProductInput = {
   price: 0,
   shortDescription: "",
   longDescription: "",
-  image: "/verdanza-label.png",
+  image: BRAND_LABEL,
   cbdRate: "A renseigner",
   cbgRate: "A renseigner",
   thcRate: "< 0,3 %",
@@ -873,7 +874,7 @@ function ProductTable({
                 <td className="px-4 py-4">
                   <div className="flex items-center gap-3">
                     <img
-                      src={product.image || "/verdanza-label.png"}
+                      src={product.image || BRAND_LABEL}
                       alt=""
                       className="h-14 w-14 rounded-md border border-forest/10 object-cover"
                       loading="lazy"
@@ -992,7 +993,7 @@ function StockRow({
     <article className="admin-card grid gap-4 md:grid-cols-[1fr_120px_140px_auto] md:items-end">
       <div className="flex items-center gap-3">
         <img
-          src={product.image || "/verdanza-label.png"}
+          src={product.image || BRAND_LABEL}
           alt=""
           className="h-16 w-16 rounded-md border border-forest/10 object-cover"
           loading="lazy"
