@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { ShoppingBag } from "lucide-react";
 import { useCart } from "../context/CartContext";
-import { availableProductStock, isProductOrderable } from "../lib/cartStock";
+import { isProductOrderable, publicProductStockLabel } from "../lib/cartStock";
 import type { Product } from "../types";
 import { trackAddToCart, trackSelectItem } from "../lib/analytics";
 import { FavoriteButton } from "./FavoriteButton";
@@ -27,7 +27,7 @@ export function ProductCard({
   const { addItem } = useCart();
   const isComingSoon = product.comingSoon || product.stockStatus === "coming_soon";
   const isOrderable = isProductOrderable(product);
-  const availableStock = availableProductStock(product);
+  const stockLabel = publicProductStockLabel(product);
   const hasKnownCbd = product.cbdRate && product.cbdRate !== "Non communiqué";
   const secondaryFact =
     product.cbgRate && product.cbgRate !== "Non communiqué"
@@ -111,7 +111,7 @@ export function ProductCard({
         </div>
         {isOrderable && (
           <p className="text-xs font-semibold text-forest/65">
-            Stock disponible : {availableStock} g
+            {stockLabel}
           </p>
         )}
         {isComingSoon && (

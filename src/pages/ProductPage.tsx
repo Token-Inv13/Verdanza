@@ -8,7 +8,10 @@ import { ProductImage } from "../components/ProductImage";
 import { useCart } from "../context/CartContext";
 import { useProducts } from "../hooks/useProducts";
 import { trackAddToCart, trackViewItem } from "../lib/analytics";
-import { availableProductStock, isProductOrderable } from "../lib/cartStock";
+import {
+  isProductOrderable,
+  publicProductStockLabel,
+} from "../lib/cartStock";
 import { FavoriteButton } from "../components/FavoriteButton";
 import {
   buildProductJsonLd,
@@ -67,7 +70,7 @@ export function ProductPage() {
 
   const isComingSoon = product.comingSoon || product.stockStatus === "coming_soon";
   const isOrderable = isProductOrderable(product);
-  const availableStock = availableProductStock(product);
+  const stockLabel = publicProductStockLabel(product);
   const path = productPath(product);
   const categoryName = productCategoryLabel(product);
   const categoryPath = product.category === "flowers" ? "/fleurs-cbd" : "/resines-cbd";
@@ -105,7 +108,7 @@ export function ProductPage() {
         ["THC", product.thcRate],
         ["Origine", product.origin],
         ["Culture", product.cultureType],
-        ["Stock", availableStock > 0 ? `${availableStock} g disponibles` : "Indisponible"],
+        ["Stock", stockLabel],
       ];
 
   return (
@@ -259,7 +262,7 @@ export function ProductPage() {
           </div>
           {isOrderable && (
             <p className="mt-3 text-sm font-semibold text-forest/70">
-              Stock disponible : {availableStock} g
+              {stockLabel}
             </p>
           )}
           {isComingSoon && (

@@ -9,6 +9,7 @@ import {
   availableProductStock,
   getCartLineStockIssue,
   getCartStockIssues,
+  publicProductStockLabel,
 } from "../lib/cartStock";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
 import { trackAddToCart, trackCtaClick, trackRemoveFromCart, trackViewCart } from "../lib/analytics";
@@ -117,6 +118,7 @@ export function CartPage() {
               const availableStock = availableProductStock(line.product);
               const stockIssue = getCartLineStockIssue(line);
               const canIncrease = !stockIssue && line.quantity < availableStock;
+              const stockLabel = publicProductStockLabel(line.product);
 
               return (
                 <article
@@ -136,7 +138,7 @@ export function CartPage() {
                     </h2>
                     <p className="text-sm text-ink/60">{line.product.shortDescription}</p>
                     <p className="mt-2 text-xs font-semibold text-forest/70">
-                      Stock disponible : {availableStock} g
+                      {stockLabel}
                     </p>
                     {stockIssue && (
                       <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -147,7 +149,7 @@ export function CartPage() {
                             className="mt-2 underline"
                             onClick={() => setItemQuantity(line.productId, availableStock)}
                           >
-                            Ajuster à {availableStock} g
+                            Ajuster la quantité
                           </button>
                         )}
                       </div>
