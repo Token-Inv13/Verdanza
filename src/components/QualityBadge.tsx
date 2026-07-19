@@ -1,4 +1,8 @@
-import { Leaf } from "lucide-react";
+import {
+  BRAND_QUALITY_SEAL,
+  BRAND_QUALITY_SEAL_ALT,
+} from "../lib/brandAssets";
+import { staticImageVariants } from "../lib/generatedImageVariants";
 
 type QualityBadgeVariant = "compact" | "standard" | "seal" | "inline";
 
@@ -33,6 +37,24 @@ function classNames(...values: Array<string | false | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
+function QualitySealImage({ className, sizes }: { className?: string; sizes?: string }) {
+  const variant = staticImageVariants[BRAND_QUALITY_SEAL];
+
+  return (
+    <img
+      src={variant?.src || BRAND_QUALITY_SEAL}
+      srcSet={variant?.srcSet}
+      sizes={sizes || variant?.sizes}
+      width={variant?.width || 320}
+      height={variant?.height || 320}
+      alt={BRAND_QUALITY_SEAL_ALT}
+      loading="lazy"
+      decoding="async"
+      className={classNames("aspect-square rounded-full object-contain", className)}
+    />
+  );
+}
+
 export function QualityBadge({
   variant = "standard",
   origin,
@@ -50,11 +72,11 @@ export function QualityBadge({
     return (
       <span
         className={classNames(
-          "inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-champagne/35 bg-cream px-3 py-1 text-xs font-semibold text-forest",
+          "inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-champagne/35 bg-cream py-1 pl-1 pr-3 text-xs font-semibold text-forest",
           className,
         )}
       >
-        <Leaf size={13} aria-hidden="true" />
+        <QualitySealImage className="h-8 w-8 shrink-0" sizes="32px" />
         <span>Sélection Verdanza</span>
         <span className="text-forest/55">·</span>
         <span>{secondaryLine}</span>
@@ -67,11 +89,11 @@ export function QualityBadge({
     return (
       <div
         className={classNames(
-          "inline-flex max-w-full items-center gap-2 rounded-full border border-champagne/30 bg-cream px-3 py-1.5 text-xs text-forest",
+          "inline-flex max-w-full items-center gap-2 rounded-full border border-champagne/30 bg-cream py-1.5 pl-1.5 pr-3 text-xs text-forest",
           className,
         )}
       >
-        <Leaf size={14} className="shrink-0 text-champagne" aria-hidden="true" />
+        <QualitySealImage className="h-9 w-9 shrink-0" sizes="36px" />
         <span className="min-w-0">
           <span className="font-semibold">Sélection Verdanza</span>
           <span className="mx-1 text-forest/45">·</span>
@@ -83,21 +105,10 @@ export function QualityBadge({
 
   if (variant === "seal") {
     return (
-      <div
-        className={classNames(
-          "inline-flex aspect-square w-28 flex-col items-center justify-center rounded-full border border-champagne/45 bg-ivory p-4 text-center text-forest shadow-sm",
-          className,
-        )}
-      >
-        <Leaf size={20} className="text-champagne" aria-hidden="true" />
-        <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em]">
-          Sélection
-        </p>
-        <p className="font-display text-xl leading-none">Verdanza</p>
-        <p className="mt-1 text-[0.65rem] leading-tight text-forest/65">
-          {cleanValue || "France · Italie · Suisse"}
-        </p>
-      </div>
+      <QualitySealImage
+        className={classNames("w-28 shadow-sm", className)}
+        sizes="112px"
+      />
     );
   }
 
@@ -109,14 +120,12 @@ export function QualityBadge({
       )}
     >
       <div className="flex items-start gap-3">
-        <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-champagne/35 bg-ivory text-champagne">
-          <Leaf size={17} aria-hidden="true" />
-        </span>
+        <QualitySealImage className="h-16 w-16 shrink-0 shadow-sm" sizes="64px" />
         <div>
           <p className="font-display text-2xl leading-tight">Sélection Verdanza</p>
           <p className="mt-1 text-sm leading-6 text-ink/65">
             {cleanValue
-              ? "Produit sélectionné avec une origine renseignée."
+              ? "Produit sélectionné selon son origine et son profil."
               : "Produits sélectionnés selon leur origine, leur profil et les informations disponibles."}
           </p>
           <p className="mt-2 text-sm font-semibold text-forest">{secondaryLine}</p>

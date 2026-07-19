@@ -212,6 +212,13 @@ export const staticImageVariants: Record<string, ResponsiveImageVariant> = {
     width: 320,
     height: 180,
   },
+  "/images/brand/verdanza-quality-seal.png": {
+    src: "/images/brand/verdanza-quality-seal-320.webp",
+    srcSet: "/images/brand/verdanza-quality-seal-96.webp 96w, /images/brand/verdanza-quality-seal-180.webp 180w, /images/brand/verdanza-quality-seal-320.webp 320w",
+    sizes: "(min-width: 1024px) 72px, 56px",
+    width: 320,
+    height: 320,
+  },
   "/images/blog/comment-lire-analyse-cbd-1x1.webp": {
     src: "/images/blog/comment-lire-analyse-cbd-1x1.webp",
     srcSet: "/images/blog/comment-lire-analyse-cbd-1x1.webp 900w",
