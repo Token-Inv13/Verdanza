@@ -8,7 +8,7 @@ import { trackCtaClick } from "../lib/analytics";
 
 const pagePath = "/decouvrir-verdanza";
 const heroImagePath = "/images/verdanza-hero-premium.webp";
-const flowerImagePath = "/Fiche%20produit/Mandarine/Mandarine_pile.webp";
+const flowerImagePath = "/images/products/mandarine-cbd-detail.webp";
 const resinImagePath = "/Fiche%20produit/Creamy%20Piatella/piatella.webp";
 
 const categoryCards = [
