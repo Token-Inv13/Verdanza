@@ -11,6 +11,7 @@ import { BlogPage } from "./pages/BlogPage";
 import { BlogArticlePage } from "./pages/BlogArticlePage";
 import { DeliveryPage } from "./pages/DeliveryPage";
 import { ContentPage } from "./pages/ContentPage";
+import { FlyerLandingPage } from "./pages/FlyerLandingPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
 const AdminLayout = lazy(() =>
@@ -80,6 +81,7 @@ export function App() {
         <Route element={<MainLayout />}>
           <Route index element={<HomePage />} />
           <Route path="boutique" element={<ShopPage />} />
+          <Route path="decouvrir-verdanza" element={<FlyerLandingPage />} />
           <Route path="blog" element={<BlogPage />} />
           <Route path="blog/:slug" element={<BlogArticlePage />} />
           <Route

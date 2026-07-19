@@ -13,34 +13,45 @@ type LandingAudit = {
 const distDir = resolve("dist");
 const pages = [
   {
+    path: "/decouvrir-verdanza",
+    titleIncludes: ["Découvrir Verdanza", "Fleurs et résines CBD"],
+    descriptionIncludes: ["Découvrez Verdanza", "fleurs et résines CBD"],
+    h2: [
+      "Une entrée simple vers l’univers Verdanza",
+      "Des repères clairs avant de choisir",
+      "Découvrez Verdanza à votre rythme",
+    ],
+    links: ["/boutique", "/fleurs-cbd", "/resines-cbd", "/blog", "/livraison", "/qualite-conformite"],
+    textMarkers: [
+      "Découvrir Verdanza",
+      "CBD sélectionné avec exigence",
+      "Fleurs CBD",
+      "Résines CBD",
+      "Guides CBD",
+      "Réservé aux personnes majeures",
+    ],
+  },
+  {
     path: "/fleurs-cbd",
     titleIncludes: ["Fleurs CBD", "Verdanza"],
     descriptionIncludes: ["Sélection de fleurs CBD", "livraison"],
     h2: [
-      "Comprendre les méthodes de culture",
-      "Comment comparer les fleurs CBD",
-      "La sélection Verdanza",
-      "Fleurs à comparer",
-      "Liens utiles",
-      "Questions fréquentes",
+      "De nouvelles fleurs arrivent bientôt",
+      "Besoin d'aide pour choisir ?",
     ],
-    links: ["/resines-cbd", "/livraison-locale", "/livraison-postale", "/qualite-conformite"],
-    textMarkers: ["indoor", "greenhouse", "hydroponique", "prix au gramme"],
+    links: ["/blog"],
+    textMarkers: ["indoor", "greenhouse", "hydroponique", "Disponible"],
   },
   {
     path: "/resines-cbd",
     titleIncludes: ["Résines CBD", "Verdanza"],
     descriptionIncludes: ["résines CBD", "livraison"],
     h2: [
-      "Comprendre CBD, CBG et autres indications",
-      "Comment comparer les résines CBD",
-      "La sélection Verdanza",
-      "Résines à découvrir",
-      "Liens utiles",
-      "Questions fréquentes",
+      "De nouvelles résines arrivent bientôt",
+      "Besoin d'aide pour comparer ?",
     ],
-    links: ["/fleurs-cbd", "/livraison-locale", "/livraison-postale", "/qualite-conformite"],
-    textMarkers: ["texture", "CBG", "cannabinoïdes", "prix au gramme"],
+    links: ["/blog"],
+    textMarkers: ["texture", "CBG", "Disponible"],
   },
   {
     path: "/livraison-locale",
@@ -230,10 +241,10 @@ function hasHref(html: string, href: string) {
 }
 
 function metaContent(html: string, name: string) {
-  return firstMatch(
-    html,
-    new RegExp(`<meta[^>]+name=["']${name}["'][^>]+content=["']([^"']+)["']`, "i"),
+  const match = html.match(
+    new RegExp(`<meta[^>]+name=["']${name}["'][^>]+content=(["'])(.*?)\\1`, "i"),
   );
+  return match?.[2]?.trim() || "";
 }
 
 function firstMatch(value: string, pattern: RegExp) {

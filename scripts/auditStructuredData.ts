@@ -301,6 +301,10 @@ function expectedBreadcrumbItems(path: string, product?: Product) {
   }
 
   const map: Record<string, { name: string; path: string }[]> = {
+    "/decouvrir-verdanza": [
+      { name: "Accueil", path: "/" },
+      { name: "Découvrir Verdanza", path: "/decouvrir-verdanza" },
+    ],
     "/boutique": [
       { name: "Accueil", path: "/" },
       { name: "Boutique", path: "/boutique" },

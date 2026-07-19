@@ -29,6 +29,12 @@ export const staticSeoRoutes: SeoRoute[] = [
   { path: "/", kind: "public-indexable", component: "HomePage", indexable: true },
   { path: "/boutique", kind: "public-indexable", component: "ShopPage", indexable: true },
   {
+    path: "/decouvrir-verdanza",
+    kind: "public-indexable",
+    component: "FlyerLandingPage",
+    indexable: true,
+  },
+  {
     path: "/blog",
     kind: "public-indexable",
     component: "BlogPage",
