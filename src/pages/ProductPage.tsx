@@ -5,6 +5,7 @@ import { Seo } from "../components/Seo";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { JsonLd } from "../components/JsonLd";
 import { ProductImage } from "../components/ProductImage";
+import { QualityBadge } from "../components/QualityBadge";
 import { useCart } from "../context/CartContext";
 import { useProducts } from "../hooks/useProducts";
 import { trackAddToCart, trackViewItem } from "../lib/analytics";
@@ -175,6 +176,7 @@ export function ProductPage() {
               </div>
             ))}
           </div>
+          <QualityBadge variant="standard" origin={product.origin} className="mt-5" />
           <div className="mt-6">
             <h2 className="font-display text-2xl text-forest">Arômes</h2>
             <div className="mt-3 flex flex-wrap gap-2">

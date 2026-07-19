@@ -6,6 +6,7 @@ import type { Product } from "../types";
 import { trackAddToCart, trackSelectItem } from "../lib/analytics";
 import { FavoriteButton } from "./FavoriteButton";
 import { ProductImage } from "./ProductImage";
+import { QualityBadge } from "./QualityBadge";
 
 function productImageAlt(product: Product) {
   return `${product.name} - ${
@@ -73,6 +74,7 @@ export function ProductCard({
           >
             {product.name}
           </Link>
+          <QualityBadge variant="compact" origin={product.origin} className="mt-3" />
         </div>
         <p className="min-h-14 text-sm leading-6 text-ink/70">
           {product.shortDescription}

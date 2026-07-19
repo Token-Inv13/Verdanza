@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { ProductCard } from "../components/ProductCard";
 import { CatalogNotice } from "../components/CatalogNotice";
 import { PromoBannerSlot } from "../components/PromoBannerSlot";
+import { QualityBadge } from "../components/QualityBadge";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 import { useProducts } from "../hooks/useProducts";
@@ -78,6 +79,17 @@ export function CategoryPage({
         <h1>{content.title}</h1>
       </div>
       <CatalogNotice variant={category === "flowers" ? "flowers" : "resins"} />
+      <aside className="mt-4 rounded-md border border-forest/10 bg-ivory px-4 py-3 sm:flex sm:items-center sm:justify-between sm:gap-5">
+        <p className="text-sm leading-6 text-ink/65">
+          Les produits Verdanza sont sélectionnés selon leur origine, leur profil
+          et les informations disponibles.
+        </p>
+        <QualityBadge
+          variant="inline"
+          showGenericOrigins
+          className="mt-3 shrink-0 sm:mt-0"
+        />
+      </aside>
       <PromoBannerSlot
         placement={category === "flowers" ? "flowers" : "resins"}
         type="shop_card"
