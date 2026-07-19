@@ -166,17 +166,20 @@ export function ProductPage() {
             <FavoriteButton product={product} className="shrink-0" />
           </div>
           <p className="mt-5 text-lg leading-8 text-ink/70">{product.longDescription}</p>
-          <div className="mt-8 grid gap-3 sm:grid-cols-2">
-            {keyFacts.map(([label, value]) => (
-              <div key={label} className="rounded-md border border-forest/10 bg-ivory p-4">
-                <dt className="text-xs uppercase tracking-[0.14em] text-ink/45">
-                  {label}
-                </dt>
-                <dd className="mt-1 text-forest">{value}</dd>
-              </div>
-            ))}
+          <div className="mt-8 flex items-start gap-4">
+            <div className="grid flex-1 gap-3 sm:grid-cols-2">
+              {keyFacts.map(([label, value]) => (
+                <div key={label} className="rounded-md border border-forest/10 bg-ivory p-4">
+                  <dt className="text-xs uppercase tracking-[0.14em] text-ink/45">
+                    {label}
+                  </dt>
+                  <dd className="mt-1 text-forest">{value}</dd>
+                </div>
+              ))}
+            </div>
+            <QualityBadge variant="standard" origin={product.origin} className="mt-1 hidden sm:block" />
           </div>
-          <QualityBadge variant="standard" origin={product.origin} className="mt-5" />
+          <QualityBadge variant="standard" origin={product.origin} className="mt-4 sm:hidden" />
           <div className="mt-6">
             <h2 className="font-display text-2xl text-forest">Arômes</h2>
             <div className="mt-3 flex flex-wrap gap-2">

@@ -21,6 +21,16 @@ const UNKNOWN_ORIGINS = new Set([
   "non communiqué",
 ]);
 
+const variantStyles: Record<
+  QualityBadgeVariant,
+  { className: string; sizes: string }
+> = {
+  compact: { className: "h-9 w-9", sizes: "36px" },
+  standard: { className: "h-16 w-16", sizes: "64px" },
+  seal: { className: "w-28", sizes: "112px" },
+  inline: { className: "h-8 w-8", sizes: "32px" },
+};
+
 function cleanOrigin(origin?: string) {
   const value = origin?.trim();
   if (!value) return null;
@@ -37,24 +47,6 @@ function classNames(...values: Array<string | false | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
-function QualitySealImage({ className, sizes }: { className?: string; sizes?: string }) {
-  const variant = staticImageVariants[BRAND_QUALITY_SEAL];
-
-  return (
-    <img
-      src={variant?.src || BRAND_QUALITY_SEAL}
-      srcSet={variant?.srcSet}
-      sizes={sizes || variant?.sizes}
-      width={variant?.width || 320}
-      height={variant?.height || 320}
-      alt={BRAND_QUALITY_SEAL_ALT}
-      loading="lazy"
-      decoding="async"
-      className={classNames("aspect-square rounded-full object-contain", className)}
-    />
-  );
-}
-
 export function QualityBadge({
   variant = "standard",
   origin,
@@ -65,75 +57,25 @@ export function QualityBadge({
 
   if (!cleanValue && !showGenericOrigins) return null;
 
-  const secondaryLine = cleanValue ? `Origine : ${cleanValue}` : "Origines sélectionnées";
-  const tertiaryLine = !cleanValue && showGenericOrigins ? "France · Italie · Suisse" : null;
-
-  if (variant === "inline") {
-    return (
-      <span
-        className={classNames(
-          "inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-champagne/35 bg-cream py-1 pl-1 pr-3 text-xs font-semibold text-forest",
-          className,
-        )}
-      >
-        <QualitySealImage className="h-8 w-8 shrink-0" sizes="32px" />
-        <span>Sélection Verdanza</span>
-        <span className="text-forest/55">·</span>
-        <span>{secondaryLine}</span>
-        {tertiaryLine && <span className="font-medium text-forest/65">{tertiaryLine}</span>}
-      </span>
-    );
-  }
-
-  if (variant === "compact") {
-    return (
-      <div
-        className={classNames(
-          "inline-flex max-w-full items-center gap-2 rounded-full border border-champagne/30 bg-cream py-1.5 pl-1.5 pr-3 text-xs text-forest",
-          className,
-        )}
-      >
-        <QualitySealImage className="h-9 w-9 shrink-0" sizes="36px" />
-        <span className="min-w-0">
-          <span className="font-semibold">Sélection Verdanza</span>
-          <span className="mx-1 text-forest/45">·</span>
-          <span className="text-forest/70">{secondaryLine}</span>
-        </span>
-      </div>
-    );
-  }
-
-  if (variant === "seal") {
-    return (
-      <QualitySealImage
-        className={classNames("w-28 shadow-sm", className)}
-        sizes="112px"
-      />
-    );
-  }
+  const imageVariant = staticImageVariants[BRAND_QUALITY_SEAL];
+  const style = variantStyles[variant];
 
   return (
-    <aside
+    <img
+      src={imageVariant?.src || BRAND_QUALITY_SEAL}
+      srcSet={imageVariant?.srcSet}
+      sizes={style.sizes}
+      width={imageVariant?.width || 320}
+      height={imageVariant?.height || 320}
+      alt={BRAND_QUALITY_SEAL_ALT}
+      aria-label={BRAND_QUALITY_SEAL_ALT}
+      loading="lazy"
+      decoding="async"
       className={classNames(
-        "rounded-md border border-champagne/30 bg-cream p-4 text-forest",
+        "aspect-square shrink-0 rounded-full object-contain shadow-sm",
+        style.className,
         className,
       )}
-    >
-      <div className="flex items-start gap-3">
-        <QualitySealImage className="h-16 w-16 shrink-0 shadow-sm" sizes="64px" />
-        <div>
-          <p className="font-display text-2xl leading-tight">Sélection Verdanza</p>
-          <p className="mt-1 text-sm leading-6 text-ink/65">
-            {cleanValue
-              ? "Produit sélectionné selon son origine et son profil."
-              : "Produits sélectionnés selon leur origine, leur profil et les informations disponibles."}
-          </p>
-          <p className="mt-2 text-sm font-semibold text-forest">{secondaryLine}</p>
-          {tertiaryLine && (
-            <p className="mt-1 text-sm font-medium text-forest/70">{tertiaryLine}</p>
-          )}
-        </div>
-      </div>
-    </aside>
+    />
   );
 }

@@ -59,13 +59,16 @@ export function ProductCard({
       </Link>
       <div className="space-y-4 p-5">
         <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs uppercase tracking-[0.18em] text-champagne">
-              {product.category === "flowers" ? "Fleur CBD" : "Résine CBD"}
-            </span>
-            {product.cultureType === "Hydroponique" && (
-              <span className="tag">Hydroponique</span>
-            )}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs uppercase tracking-[0.18em] text-champagne">
+                {product.category === "flowers" ? "Fleur CBD" : "Résine CBD"}
+              </span>
+              {product.cultureType === "Hydroponique" && (
+                <span className="tag">Hydroponique</span>
+              )}
+            </div>
+            <QualityBadge variant="compact" origin={product.origin} />
           </div>
           <Link
             to={`/produits/${product.slug}`}
@@ -74,7 +77,6 @@ export function ProductCard({
           >
             {product.name}
           </Link>
-          <QualityBadge variant="compact" origin={product.origin} className="mt-3" />
         </div>
         <p className="min-h-14 text-sm leading-6 text-ink/70">
           {product.shortDescription}
