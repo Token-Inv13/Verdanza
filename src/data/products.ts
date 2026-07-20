@@ -16,6 +16,7 @@ export const products: Product[] = [
     cbgRate: "10 %",
     thcRate: "< 0,2 %",
     origin: "France",
+    qualitySealEnabled: true,
     cultureType: "Autre",
     aromas: ["Puissant", "Herbacé", "Végétal", "Authentique"],
     tags: ["résine", "cbd", "cbg", "cbn", "france"],
@@ -177,6 +178,7 @@ export const products: Product[] = [
     aromas: ["Cèdre", "Girofle", "Poivré", "Puissant", "Boisé"],
     tags: ["résine", "selection", "cbd", "cbg", "france", "triple filtration"],
     productTier: "Premium",
+    qualitySealEnabled: true,
     whyChooseDescription:
       "3X Filtré est une référence intéressante pour les clients qui recherchent une résine plus technique, avec une vraie notion de filtration et un profil aromatique plus sec, boisé et poivré.",
     advisedProfile:
@@ -252,6 +254,7 @@ export const products: Product[] = [
     aromas: ["Crémeux", "Sucré", "Terreux", "Boisé", "Floral"],
     tags: ["résine", "travaillée", "cbd", "france", "piatella"],
     productTier: "Ultra premium",
+    qualitySealEnabled: true,
     whyChooseDescription:
       "Creamy Piatella est la référence la plus travaillée de cette sélection. Sa texture crémeuse, son fort taux de CBD annoncé et son profil aromatique doux et boisé en font un produit vitrine pour la gamme résines Verdanza.",
     advisedProfile:
@@ -288,6 +291,7 @@ export const products: Product[] = [
     aromas: ["Sucré", "Fruité", "Acidulé", "Exotique", "Gourmand"],
     tags: ["fleur", "selection", "hydroponique", "suisse", "fruité"],
     productTier: "Premium",
+    qualitySealEnabled: true,
     whyChooseDescription:
       "Mango Haze est pensée pour les amateurs de fleurs fruitées et gourmandes. Son profil sucré, exotique et acidulé en fait une référence idéale pour découvrir une fleur hydroponique sélectionnée au caractère doux, aromatique et accessible.",
     advisedProfile:
@@ -324,6 +328,7 @@ export const products: Product[] = [
     aromas: ["Mandarine", "Agrumes", "Citron", "Pin", "Fruit doux", "Fraîcheur acidulée"],
     tags: ["fleur", "selection", "hydroponique", "italie", "agrumes"],
     productTier: "Premium",
+    qualitySealEnabled: true,
     whyChooseDescription:
       "Mandarine est idéale pour les clients qui recherchent une fleur fraîche, lumineuse et fruitée. Son profil agrume, citronné et légèrement acidulé lui donne une identité aromatique simple à comprendre et agréable à conseiller.",
     advisedProfile:
@@ -360,6 +365,7 @@ export const products: Product[] = [
     aromas: ["Tonique", "Résineux", "Boisé", "Intense", "Authentique"],
     tags: ["fleur", "selection", "hydroponique", "italie", "amnesia"],
     productTier: "Premium",
+    qualitySealEnabled: true,
     whyChooseDescription:
       "Amnesia est une valeur sûre pour les amateurs de fleurs CBD au profil plus classique, intense et résineux. Elle convient aux clients qui recherchent une fleur sélectionnée de caractère, avec une identité aromatique plus profonde que les profils fruités.",
     advisedProfile:
@@ -432,6 +438,7 @@ export const products: Product[] = [
     aromas: ["Boisé", "Terreux", "Épicé", "Chaleureux", "Profond"],
     tags: ["fleur", "selection", "hydroponique", "suisse", "boisé"],
     productTier: "Premium",
+    qualitySealEnabled: true,
     whyChooseDescription:
       "Plutonium s'adresse aux clients qui apprécient les fleurs plus profondes, boisées et terreuses. Son profil plus sombre et épicé en fait une référence de caractère, pensée pour les amateurs de produits plus marqués.",
     advisedProfile:

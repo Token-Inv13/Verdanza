@@ -177,9 +177,13 @@ export function ProductPage() {
                 </div>
               ))}
             </div>
-            <QualityBadge variant="standard" origin={product.origin} className="mt-1 hidden sm:block" />
+            {product.qualitySealEnabled && (
+              <QualityBadge variant="standard" className="mt-1 hidden sm:block" />
+            )}
           </div>
-          <QualityBadge variant="standard" origin={product.origin} className="mt-4 sm:hidden" />
+          {product.qualitySealEnabled && (
+            <QualityBadge variant="standard" className="mt-4 sm:hidden" />
+          )}
           <div className="mt-6">
             <h2 className="font-display text-2xl text-forest">Arômes</h2>
             <div className="mt-3 flex flex-wrap gap-2">

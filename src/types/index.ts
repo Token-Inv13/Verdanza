@@ -29,6 +29,7 @@ export type Product = {
   tags: string[];
   texture?: string;
   productTier?: "Premium" | "Ultra premium";
+  qualitySealEnabled?: boolean;
   experienceDescription?: string;
   whyChooseDescription?: string;
   advisedProfile?: string;

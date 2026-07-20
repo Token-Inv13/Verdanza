@@ -68,7 +68,7 @@ export function ProductCard({
                 <span className="tag">Hydroponique</span>
               )}
             </div>
-            <QualityBadge variant="compact" origin={product.origin} />
+            {product.qualitySealEnabled && <QualityBadge variant="compact" />}
           </div>
           <Link
             to={`/produits/${product.slug}`}

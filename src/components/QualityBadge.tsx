@@ -8,18 +8,8 @@ type QualityBadgeVariant = "compact" | "standard" | "seal" | "inline";
 
 type QualityBadgeProps = {
   variant?: QualityBadgeVariant;
-  origin?: string;
-  showGenericOrigins?: boolean;
   className?: string;
 };
-
-const UNKNOWN_ORIGINS = new Set([
-  "",
-  "a renseigner",
-  "à renseigner",
-  "non communique",
-  "non communiqué",
-]);
 
 const variantStyles: Record<
   QualityBadgeVariant,
@@ -31,32 +21,14 @@ const variantStyles: Record<
   inline: { className: "h-8 w-8", sizes: "32px" },
 };
 
-function cleanOrigin(origin?: string) {
-  const value = origin?.trim();
-  if (!value) return null;
-
-  const normalized = value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-
-  return UNKNOWN_ORIGINS.has(normalized) ? null : value;
-}
-
 function classNames(...values: Array<string | false | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
 export function QualityBadge({
   variant = "standard",
-  origin,
-  showGenericOrigins = false,
   className,
 }: QualityBadgeProps) {
-  const cleanValue = cleanOrigin(origin);
-
-  if (!cleanValue && !showGenericOrigins) return null;
-
   const imageVariant = staticImageVariants[BRAND_QUALITY_SEAL];
   const style = variantStyles[variant];
 

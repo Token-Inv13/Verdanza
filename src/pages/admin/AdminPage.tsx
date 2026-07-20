@@ -115,6 +115,7 @@ const emptyProduct: ProductInput = {
   tags: [],
   stock: 0,
   lowStockThreshold: 5,
+  qualitySealEnabled: false,
   isActive: true,
   isFeatured: false,
   seoTitle: "",
@@ -736,7 +737,7 @@ function ProductForm({
         <Input label="Tags, separes par virgule" value={product.tags.join(", ")} onChange={(tags) => onChange({ ...product, tags: normalizeList(tags) })} />
         <Input label="SEO title" value={product.seoTitle} onChange={(seoTitle) => onChange({ ...product, seoTitle })} />
         <Textarea label="SEO description" value={product.seoDescription} onChange={(seoDescription) => onChange({ ...product, seoDescription })} />
-        <div className="flex gap-4 text-sm text-forest">
+        <div className="flex flex-wrap gap-4 text-sm text-forest">
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -756,6 +757,21 @@ function ProductForm({
               }
             />
             Mis en avant
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={product.qualitySealEnabled === true}
+              onChange={(event) =>
+                onChange({ ...product, qualitySealEnabled: event.target.checked })
+              }
+            />
+            <span>
+              Sceau qualité Verdanza
+              <span className="mt-0.5 block text-xs font-normal text-ink/55">
+                Affiche le sceau rond sur la carte et la fiche produit.
+              </span>
+            </span>
           </label>
         </div>
         <button className="btn-primary" type="submit">
@@ -860,10 +876,10 @@ function ProductTable({
         />
       )}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[960px] text-left text-sm">
+        <table className="w-full min-w-[1040px] text-left text-sm">
           <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
             <tr>
-              {["Produit", "Categorie", "Prix", "Stock", "Actif", "Mis en avant", "Action"].map((header) => (
+              {["Produit", "Categorie", "Prix", "Stock", "Actif", "Mis en avant", "Sceau", "Action"].map((header) => (
                 <th key={header} className="px-4 py-3 font-medium">{header}</th>
               ))}
             </tr>
@@ -910,6 +926,11 @@ function ProductTable({
                     {product.isFeatured ? "Oui" : "Non"}
                     </AdminBadge>
                   </button>
+                </td>
+                <td className="px-4 py-4">
+                  <AdminBadge tone={product.qualitySealEnabled ? "gold" : "muted"}>
+                    {product.qualitySealEnabled ? "Actif" : "Non"}
+                  </AdminBadge>
                 </td>
                 <td className="px-4 py-4">
                   <button className="btn-secondary min-h-9 px-3 py-2" onClick={() => onEdit(product)}>

@@ -26,6 +26,7 @@ export function normalizeProduct(product: Product): Product {
   return {
     ...product,
     compareAtPrice: product.compareAtPrice || undefined,
+    qualitySealEnabled: product.qualitySealEnabled === true,
     lowStockThreshold: product.lowStockThreshold ?? 5,
   };
 }
@@ -79,6 +80,7 @@ export async function upsertProduct(input: ProductInput) {
   const payload = {
     ...input,
     compareAtPrice: input.compareAtPrice || deleteField(),
+    qualitySealEnabled: input.qualitySealEnabled === true,
     lowStockThreshold: input.lowStockThreshold ?? 5,
     updatedAt: serverTimestamp(),
   };
