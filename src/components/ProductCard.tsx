@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import type { KeyboardEvent, MouseEvent } from "react";
 import { ShoppingBag } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { isProductOrderable, publicProductStockLabel } from "../lib/cartStock";
@@ -25,6 +26,7 @@ export function ProductCard({
   itemListId?: string;
   itemListName?: string;
 }) {
+  const navigate = useNavigate();
   const { addItem } = useCart();
   const isComingSoon = product.comingSoon || product.stockStatus === "coming_soon";
   const isOrderable = isProductOrderable(product);
@@ -39,12 +41,35 @@ export function ProductCard({
   const primaryFact = hasKnownCbd
     ? { label: "CBD", value: product.cbdRate }
     : { label: product.category === "flowers" ? "Culture" : "Type", value: product.cultureType };
+  const productUrl = `/produits/${product.slug}`;
+
+  function handleCardClick(event: MouseEvent<HTMLElement>) {
+    const target = event.target as HTMLElement;
+    if (target.closest("a, button, input, select, textarea, [role='button']")) return;
+    trackSelectItem(product, itemListId, itemListName);
+    navigate(productUrl);
+  }
+
+  function handleCardKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    if (event.target !== event.currentTarget) return;
+    event.preventDefault();
+    trackSelectItem(product, itemListId, itemListName);
+    navigate(productUrl);
+  }
 
   return (
-    <article className="group relative overflow-hidden rounded-lg border border-forest/10 bg-ivory shadow-sm transition hover:-translate-y-1 hover:shadow-soft">
+    <article
+      className="group relative cursor-pointer overflow-hidden rounded-lg border border-forest/10 bg-ivory shadow-sm transition hover:-translate-y-1 hover:shadow-soft focus-within:ring-2 focus-within:ring-champagne/60"
+      role="link"
+      tabIndex={0}
+      aria-label={`Voir la fiche ${product.name}`}
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
+    >
       <FavoriteButton product={product} className="absolute right-3 top-3 z-10" />
       <Link
-        to={`/produits/${product.slug}`}
+        to={productUrl}
         className="block bg-cream p-6"
         onClick={() => trackSelectItem(product, itemListId, itemListName)}
       >
@@ -71,7 +96,7 @@ export function ProductCard({
             {product.qualitySealEnabled && <QualityBadge variant="compact" />}
           </div>
           <Link
-            to={`/produits/${product.slug}`}
+            to={productUrl}
             className="mt-1 block font-display text-2xl text-forest"
             onClick={() => trackSelectItem(product, itemListId, itemListName)}
           >
