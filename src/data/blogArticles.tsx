@@ -6,6 +6,200 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "denominations-cbd-cbn-cbg",
+    title: "CBD, CBN, CBG : comprendre les dénominations",
+    seoTitle: "CBD, CBN, CBG : comprendre les dénominations | Verdanza",
+    description:
+      "Guide simple pour comprendre les principales dénominations du CBD : CBD, CBG, CBN, THC, formes acides, terpènes et lecture des fiches produits.",
+    excerpt:
+      "CBD, CBN, CBG, THC, CBDA ou THCA : ces sigles ne disent pas tous la même chose. Voici comment les lire sans confondre nom, taux et promesse d'effet.",
+    category: "Guide CBD",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-07-21T09:00:00+02:00",
+    dateModified: "2026-07-21T09:00:00+02:00",
+    readingTime: "6 min",
+    status: "published",
+    images: {
+      square: "/images/blog/comment-lire-analyse-cbd-1x1.webp",
+      landscape: "/images/blog/comment-lire-analyse-cbd-4x3.webp",
+      wide: "/images/blog/comment-lire-analyse-cbd-16x9.webp",
+    },
+    relatedSlugs: [
+      "comment-lire-analyse-cbd",
+      "fleur-cbd-ou-resine-cbd-differences",
+      "indoor-greenhouse-hydroponique-differences",
+    ],
+    links: [
+      { to: "/qualite-conformite", label: "Démarche qualité Verdanza" },
+      { to: "/blog/comment-lire-analyse-cbd", label: "Lire une analyse CBD" },
+      { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+      { to: "/resines-cbd", label: "Voir les résines CBD" },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les produits CBD utilisent souvent des sigles courts : CBD, CBG,
+            CBN, THC, CBDA ou THCA. Ils peuvent impressionner au premier regard,
+            alors qu'ils servent surtout à identifier des familles de molécules,
+            des valeurs mesurées ou des repères présents sur une fiche produit.
+            L'objectif est de comprendre ce que ces dénominations indiquent, sans
+            leur faire dire plus que ce qu'elles montrent réellement.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "pourquoi-autant-sigles",
+        text: "Pourquoi autant de sigles ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le chanvre contient naturellement plusieurs cannabinoïdes. Chaque
+            sigle désigne une molécule ou une forme associée. Dans une boutique,
+            ces noms aident à lire une fiche produit, à comparer des références
+            et à comprendre les analyses quand elles sont disponibles. Ils ne
+            doivent pas être lus comme une promesse d'effet.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Repères simples pour lire les principales dénominations.",
+          headers: ["Sigle", "Nom courant", "Comment le lire"],
+          rows: [
+            [
+              "CBD",
+              "Cannabidiol",
+              "Le repère le plus courant sur les produits CBD. Il peut être affiché en pourcentage, en mg/g ou simplement comme caractéristique principale.",
+            ],
+            [
+              "CBG",
+              "Cannabigérol",
+              "Un autre cannabinoïde. Il est parfois mis en avant dans certaines fleurs ou résines lorsque le fournisseur communique une valeur.",
+            ],
+            [
+              "CBN",
+              "Cannabinol",
+              "Un cannabinoïde que l'on peut retrouver dans certains profils. Sa présence ne suffit pas à conclure sur l'usage ou le ressenti d'un produit.",
+            ],
+            [
+              "THC",
+              "Tétrahydrocannabinol",
+              "Le cannabinoïde encadré par la réglementation. Côté client, le point important reste le respect du seuil légal applicable.",
+            ],
+            [
+              "CBDA / THCA",
+              "Formes acides",
+              "Des formes que l'on peut voir sur certaines analyses. Elles se lisent comme des données techniques du lot.",
+            ],
+            [
+              "Terpènes",
+              "Composés aromatiques",
+              "Ils ne sont pas des cannabinoïdes. Ils servent surtout à décrire le profil aromatique : fruité, boisé, épicé, floral ou résineux.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Un sigle n'est pas une promesse. Il indique une information de
+            composition ou de lecture produit. Pour choisir, il faut aussi
+            regarder l'origine, la culture, l'état du lot, le statut de stock et
+            les informations de conformité disponibles.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "nom-taux-profil",
+        text: "Nom, taux et profil : trois choses différentes",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le nom d'un cannabinoïde indique la famille de molécule concernée. Le
+            taux indique une mesure, lorsqu'elle est communiquée. Le profil, lui,
+            décrit l'ensemble du produit : aspect, texture, arômes, culture,
+            origine et présentation. Deux produits peuvent donc afficher le même
+            sigle sans avoir le même profil aromatique ni la même lecture en
+            boutique.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "fiche-produit",
+        text: "Ce qu'il faut regarder sur une fiche produit",
+      },
+      {
+        type: "list",
+        items: [
+          "la catégorie : fleur CBD, résine CBD ou autre format ;",
+          "le ou les cannabinoïdes annoncés par le fournisseur ;",
+          "le THC, qui doit rester sous le seuil légal applicable ;",
+          "l'origine et le mode de culture lorsqu'ils sont renseignés ;",
+          "le statut du produit : disponible, stock limité, victime de son succès ou en arrivage ;",
+          "les arômes décrits, qui aident souvent davantage au choix que les seuls sigles.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "rester-prudent",
+        text: "Pourquoi rester prudent avec les effets annoncés ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les dénominations comme CBD, CBN ou CBG ne suffisent pas à prédire un
+            ressenti. Les autorités sanitaires rappellent aussi que les produits à
+            base de CBD peuvent poser question lorsqu'ils sont mélangés avec
+            certains médicaments ou lorsqu'ils contiennent d'autres substances non
+            attendues. En cas de doute, il vaut mieux demander un avis
+            professionnel plutôt que se fier à une promesse commerciale.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "choisir-simplement",
+        text: "Choisir plus simplement",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Pour un achat en boutique, la meilleure lecture reste souvent la plus
+            simple : commencer par la catégorie, vérifier le statut du produit,
+            lire le profil aromatique, puis consulter les informations techniques
+            disponibles. Les sigles apportent un repère utile, mais ils ne
+            remplacent pas une fiche produit claire.
+          </>
+        ),
+      },
+      {
+        type: "links",
+        title: "Poursuivre la lecture",
+        links: [
+          { to: "/blog/comment-lire-analyse-cbd", label: "Comment lire une analyse CBD" },
+          {
+            to: "/blog/fleur-cbd-ou-resine-cbd-differences",
+            label: "Fleur CBD ou résine CBD",
+          },
+          { to: "/qualite-conformite", label: "Qualité et conformité" },
+        ],
+      },
+    ],
+  },
+  {
     slug: "conserver-fleurs-resines-cbd",
     title: "Comment conserver fleurs et résines CBD ?",
     seoTitle: "Conserver fleurs et résines CBD : guide pratique | Verdanza",

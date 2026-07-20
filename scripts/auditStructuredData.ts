@@ -300,6 +300,15 @@ function expectedBreadcrumbItems(path: string, product?: Product) {
     ];
   }
 
+  const article = articleByPath.get(path);
+  if (article) {
+    return [
+      { name: "Accueil", path: "/" },
+      { name: "Guides CBD", path: "/blog" },
+      { name: article.title, path },
+    ];
+  }
+
   const map: Record<string, { name: string; path: string }[]> = {
     "/decouvrir-verdanza": [
       { name: "Accueil", path: "/" },
