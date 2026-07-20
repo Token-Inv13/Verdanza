@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-14T17:30:08.967Z",
+  "generatedAt": "2026-07-20T20:01:49.606Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -543,6 +543,35 @@
   ],
   "blogImages": [
     {
+      "articleSlug": "conserver-fleurs-resines-cbd",
+      "articleTitle": "Comment conserver fleurs et résines CBD ?",
+      "sources": [
+        "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
+        "/Fiche produit/Golden static/goldenstatic.webp",
+        "/Fiche produit/La%20mousse/mousse1.webp"
+      ],
+      "variants": [
+        {
+          "src": "/images/blog/conserver-fleurs-resines-cbd-1x1.webp",
+          "width": 900,
+          "height": 900,
+          "bytes": 113472
+        },
+        {
+          "src": "/images/blog/conserver-fleurs-resines-cbd-4x3.webp",
+          "width": 1200,
+          "height": 900,
+          "bytes": 144398
+        },
+        {
+          "src": "/images/blog/conserver-fleurs-resines-cbd-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 184068
+        }
+      ]
+    },
+    {
       "articleSlug": "comment-lire-analyse-cbd",
       "articleTitle": "Comment lire une analyse de CBD ?",
       "variants": [
@@ -655,6 +684,6 @@
     "productDetailBytes": 1684008,
     "staticSourceBytes": 2197587,
     "staticLargestBytes": 114692,
-    "blogImageBytes": 1000104
+    "blogImageBytes": 1442042
   }
 }

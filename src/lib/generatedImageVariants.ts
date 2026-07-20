@@ -219,6 +219,27 @@ export const staticImageVariants: Record<string, ResponsiveImageVariant> = {
     width: 320,
     height: 320,
   },
+  "/images/blog/conserver-fleurs-resines-cbd-1x1.webp": {
+    src: "/images/blog/conserver-fleurs-resines-cbd-1x1.webp",
+    srcSet: "/images/blog/conserver-fleurs-resines-cbd-1x1.webp 900w",
+    sizes: "(min-width: 1024px) 420px, 92vw",
+    width: 900,
+    height: 900,
+  },
+  "/images/blog/conserver-fleurs-resines-cbd-4x3.webp": {
+    src: "/images/blog/conserver-fleurs-resines-cbd-4x3.webp",
+    srcSet: "/images/blog/conserver-fleurs-resines-cbd-4x3.webp 1200w",
+    sizes: "(min-width: 1024px) 520px, 92vw",
+    width: 1200,
+    height: 900,
+  },
+  "/images/blog/conserver-fleurs-resines-cbd-16x9.webp": {
+    src: "/images/blog/conserver-fleurs-resines-cbd-16x9.webp",
+    srcSet: "/images/blog/conserver-fleurs-resines-cbd-16x9.webp 1600w",
+    sizes: "100vw",
+    width: 1600,
+    height: 900,
+  },
   "/images/blog/comment-lire-analyse-cbd-1x1.webp": {
     src: "/images/blog/comment-lire-analyse-cbd-1x1.webp",
     srcSet: "/images/blog/comment-lire-analyse-cbd-1x1.webp 900w",

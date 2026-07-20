@@ -79,6 +79,14 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" }
 > = {
+  "conserver-fleurs-resines-cbd": {
+    label: "Conservation fleurs et résines CBD",
+    sources: [
+      "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
+      "/Fiche produit/Golden static/goldenstatic.webp",
+      "/Fiche produit/La%20mousse/mousse1.webp",
+    ],
+  },
   "comment-lire-analyse-cbd": {
     label: "Lecture d'analyse CBD",
     kind: "analysis",

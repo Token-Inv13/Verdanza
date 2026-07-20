@@ -6,6 +6,263 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "conserver-fleurs-resines-cbd",
+    title: "Comment conserver fleurs et résines CBD ?",
+    seoTitle: "Conserver fleurs et résines CBD : guide pratique | Verdanza",
+    description:
+      "Guide pratique pour conserver fleurs et résines CBD : lumière, air, humidité, contenant, manipulation et signes d’altération à surveiller.",
+    excerpt:
+      "Lumière, air, humidité et manipulations influencent l’état d’une fleur ou d’une résine CBD. Voici les repères utiles pour organiser leur conservation.",
+    category: "Guide qualité",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-07-20T22:00:00+02:00",
+    dateModified: "2026-07-20T22:00:00+02:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/conserver-fleurs-resines-cbd-1x1.webp",
+      landscape: "/images/blog/conserver-fleurs-resines-cbd-4x3.webp",
+      wide: "/images/blog/conserver-fleurs-resines-cbd-16x9.webp",
+    },
+    relatedSlugs: [
+      "comment-lire-analyse-cbd",
+      "fleur-cbd-ou-resine-cbd-differences",
+      "choisir-fleur-cbd-profil-aromatique",
+    ],
+    links: [
+      { to: "/qualite-conformite", label: "Découvrir la démarche qualité" },
+      { to: "/fleurs-cbd", label: "Consulter les fleurs CBD" },
+      { to: "/resines-cbd", label: "Consulter les résines CBD" },
+      { to: "/blog/comment-lire-analyse-cbd", label: "Lire une analyse" },
+      { to: "/livraison-postale", label: "Informations de livraison" },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Conserver une fleur ou une résine CBD consiste surtout à limiter les
+            variations inutiles autour du produit. La lumière directe, l’air,
+            l’humidité et les manipulations répétées peuvent faire évoluer son
+            aspect, sa texture ou son profil aromatique. Une routine simple aide
+            à garder des repères stables, sans transformer la conservation en
+            protocole compliqué.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "pourquoi-conservation-compte",
+        text: "Pourquoi la conservation compte-t-elle ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une fiche décrit un produit et un lot à un moment donné. Après
+            réception, les conditions de rangement peuvent modifier ce que vous
+            observez : une matière peut sécher, devenir plus souple ou perdre en
+            netteté aromatique. L’objectif n’est pas de figer le produit, mais
+            d’éviter les expositions répétées qui accélèrent ces changements.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "quatre-facteurs",
+        text: "Les quatre facteurs à surveiller",
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Repères simples pour organiser le rangement d’un produit CBD.",
+          headers: ["Facteur", "Ce qui peut se passer", "Repère pratique"],
+          rows: [
+            [
+              "Lumière",
+              "Une exposition directe et prolongée peut faire évoluer l’aspect du produit.",
+              "Choisir un rangement fermé, à l’écart du soleil direct.",
+            ],
+            [
+              "Air",
+              "Des ouvertures fréquentes renouvellent l’air autour du produit.",
+              "Refermer le contenant après chaque vérification.",
+            ],
+            [
+              "Humidité",
+              "Un environnement trop humide ou très variable peut altérer la matière.",
+              "Conserver dans un endroit sec et surveiller tout changement inhabituel.",
+            ],
+            [
+              "Chaleur",
+              "Une source chaude ou des écarts répétés peuvent modifier la texture.",
+              "Éloigner le contenant des radiateurs, fenêtres et surfaces chauffées.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "choisir-contenant",
+        text: "Choisir et utiliser le contenant",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le contenant doit d’abord rester propre, sec et correctement fermé.
+            L’emballage reçu peut convenir lorsqu’il est refermable et intact.
+            Si vous utilisez un autre contenant, choisissez un format adapté au
+            volume afin de limiter les manipulations et gardez une étiquette qui
+            permet d’identifier la référence et le lot.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "vérifier que le contenant est propre et parfaitement sec ;",
+          "conserver le nom de la référence et le numéro de lot lorsqu’il est disponible ;",
+          "éviter de mélanger plusieurs produits ou plusieurs lots ;",
+          "refermer sans laisser de matière sur la zone de fermeture ;",
+          "ranger le contenant hors de portée des enfants et des animaux.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "fleurs-resines-differences",
+        text: "Fleurs et résines : mêmes principes, points d’attention différents",
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Différences de surveillance entre fleurs et résines CBD.",
+          headers: ["Format", "À observer", "À éviter"],
+          rows: [
+            [
+              "Fleurs CBD",
+              "Structure, souplesse, odeur habituelle et éventuelles traces anormales.",
+              "Écrasements répétés et ouvertures inutiles du contenant.",
+            ],
+            [
+              "Résines CBD",
+              "Texture, homogénéité, surface et évolution inhabituelle de l’odeur.",
+              "Contact prolongé avec une source de chaleur ou manipulation excessive.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une fleur et une résine ne vieillissent pas visuellement de la même
+            manière. Il est donc plus utile de comparer chaque produit à son état
+            initial que d’appliquer un seul critère à toute la catégorie. Le guide
+            <Link to="/blog/fleur-cbd-ou-resine-cbd-differences"> fleur ou résine CBD</Link>{" "}
+            détaille les différences de présentation et de texture.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "routine-simple",
+        text: "Une routine de conservation simple",
+      },
+      {
+        type: "list",
+        items: [
+          "identifier le produit et son lot à la réception ;",
+          "choisir un emplacement sec, stable et protégé de la lumière directe ;",
+          "limiter les ouvertures à ce qui est nécessaire ;",
+          "utiliser des mains propres et sèches lors de la manipulation ;",
+          "refermer puis remettre le contenant au même endroit ;",
+          "contrôler l’aspect et l’odeur en cas de changement notable.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "signes-alteration",
+        text: "Quels signes d’altération surveiller ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Un changement léger de texture n’a pas la même portée qu’une trace
+            anormale ou une odeur franchement différente. Avant toute conclusion,
+            observez le produit à la lumière naturelle, sans le mélanger à un autre
+            lot. En cas de doute, isolez le contenant et contactez le vendeur avec
+            le nom de la référence, le lot et des photos lisibles.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "présence de taches, filaments ou dépôts inhabituels ;",
+          "odeur nettement différente de celle observée à la réception ;",
+          "humidité visible à l’intérieur du contenant ;",
+          "emballage endommagé ou fermeture qui ne joue plus son rôle ;",
+          "mélange accidentel entre références ou lots.",
+        ],
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Une photo, une description commerciale ou un taux ne permettent pas
+            à eux seuls d’évaluer l’état réel d’un produit. Le lot, son emballage
+            et les conditions observées restent des éléments essentiels.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "reception-et-livraison",
+        text: "À la réception d’une livraison",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            À l’ouverture du colis, vérifiez que l’emballage est intact et que la
+            référence reçue correspond à la commande. Notez le lot lorsqu’il est
+            indiqué, puis rangez le produit sans le laisser durablement dans un
+            véhicule, sur un rebord de fenêtre ou près d’une source de chaleur.
+            Les modalités générales sont détaillées sur la page{" "}
+            <Link to="/livraison-postale">livraison postale</Link>.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "points-a-retenir",
+        text: "Points à retenir",
+      },
+      {
+        type: "list",
+        items: [
+          "protéger le produit de la lumière directe, de la chaleur et de l’humidité ;",
+          "utiliser un contenant propre, sec, fermé et correctement identifié ;",
+          "ne pas mélanger les références ou les lots ;",
+          "comparer l’évolution du produit à son état initial ;",
+          "isoler le contenant et contacter le vendeur en cas d’anomalie visible.",
+        ],
+      },
+      {
+        type: "links",
+        title: "Compléter vos repères qualité",
+        links: [
+          { to: "/qualite-conformite", label: "Démarche qualité Verdanza" },
+          { to: "/blog/comment-lire-analyse-cbd", label: "Lire une analyse CBD" },
+          { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+          { to: "/resines-cbd", label: "Voir les résines CBD" },
+        ],
+      },
+    ],
+  },
+  {
     slug: "comment-lire-analyse-cbd",
     title: "Comment lire une analyse de CBD ?",
     seoTitle: "Comment lire une analyse de CBD ? Guide pratique | Verdanza",
