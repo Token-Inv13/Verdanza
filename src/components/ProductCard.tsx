@@ -125,7 +125,7 @@ export function ProductCard({
         )}
         {!isComingSoon && !isOrderable && (
           <p className="rounded-md border border-champagne/35 bg-cream px-3 py-2 text-sm font-semibold text-forest">
-            Produit actuellement indisponible
+            {stockLabel}
           </p>
         )}
       </div>

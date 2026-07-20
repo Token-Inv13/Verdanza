@@ -29,7 +29,8 @@ export function publicProductStockLabel(product?: Product | null) {
   }
 
   const stock = availableProductStock(product);
-  if (!product || product.isActive === false || stock <= 0) return "Indisponible";
+  if (!product || product.isActive === false) return "Indisponible";
+  if (stock <= 0) return "Victime de son succès";
   if (stock <= 3) return "Derni\u00e8res quantit\u00e9s";
   if (stock <= 10) return "Stock limit\u00e9";
   return "Disponible";
@@ -53,7 +54,7 @@ export function getCartLineStockIssue(line: CartStockLine): CartStockIssue | nul
       productName: line.product.name,
       requestedQuantity: line.quantity,
       availableStock,
-      message: `${line.product.name} est actuellement indisponible.`,
+      message: `${line.product.name} : ${publicProductStockLabel(line.product)}.`,
     };
   }
 

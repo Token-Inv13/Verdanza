@@ -265,7 +265,7 @@ export function ProductPage() {
               </button>
             ) : (
               <span className="rounded-md border border-champagne/40 bg-cream px-5 py-3 font-semibold text-forest">
-                Produit actuellement indisponible
+                {stockLabel}
               </span>
             )}
           </div>
