@@ -11,6 +11,7 @@ import { useConsent } from "../context/ConsentContext";
 import { staticImageVariants } from "../lib/generatedImageVariants";
 import { BRAND_LOGO, BRAND_LOGO_ALT } from "../lib/brandAssets";
 import { trackContactClick, trackCtaClick } from "../lib/analytics";
+import { getActiveSocialLinks } from "../lib/socialLinks";
 
 const navItems = [
   { label: "Accueil", to: "/" },
@@ -46,6 +47,7 @@ export function MainLayout() {
   const contactEmail =
     (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
     "contact@verdanza.fr";
+  const socialLinks = getActiveSocialLinks();
 
   return (
     <div className="min-h-screen bg-ivory text-ink">
@@ -140,7 +142,7 @@ export function MainLayout() {
         <ComplianceNote />
       </PromoBannersProvider>
       <footer className="bg-cream py-12">
-        <div className="container-page grid gap-8 md:grid-cols-[1.4fr_1fr_1fr]">
+        <div className="container-page grid gap-8 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
             <img
               src={logoImage?.src || BRAND_LOGO}
@@ -207,6 +209,23 @@ export function MainLayout() {
             <NavLink to="/confidentialite">Confidentialité</NavLink>
             <NavLink to="/retours">Retours</NavLink>
           </div>
+          {socialLinks.length > 0 && (
+            <div className="grid content-start gap-2 text-sm text-forest/80">
+              <strong className="text-forest">Réseaux</strong>
+              {socialLinks.map((link) => (
+                <a
+                  key={link.label}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={link.ariaLabel}
+                  className="transition-colors hover:text-forest"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       </footer>
       <CookieConsentBanner />

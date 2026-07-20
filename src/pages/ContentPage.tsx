@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 import { trackContactClick } from "../lib/analytics";
+import { getActiveSocialLinks } from "../lib/socialLinks";
 
 const content = {
   quality: {
@@ -60,6 +61,7 @@ export function ContentPage({ variant }: { variant: keyof typeof content }) {
   const contactEmail =
     (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
     "contact@verdanza.fr";
+  const socialLinks = getActiveSocialLinks();
   return (
     <main className="container-page py-12">
       <Seo
@@ -88,6 +90,9 @@ export function ContentPage({ variant }: { variant: keyof typeof content }) {
             {contactEmail}
           </a>
         </p>
+      )}
+      {variant === "contact" && socialLinks.length > 0 && (
+        <SocialLinksSection />
       )}
       {variant === "contact" && <ContactForm />}
       {variant === "quality" && <QualityTrustSection />}
@@ -172,6 +177,36 @@ function QualityTrustSection() {
           </a>
           .
         </p>
+      </div>
+    </section>
+  );
+}
+
+function SocialLinksSection() {
+  const socialLinks = getActiveSocialLinks();
+
+  if (!socialLinks.length) return null;
+
+  return (
+    <section className="mt-8 rounded-lg border border-forest/10 bg-cream p-6">
+      <h2 className="font-display text-3xl text-forest">Retrouvez Verdanza</h2>
+      <p className="mt-3 max-w-2xl text-sm leading-6 text-ink/70">
+        Suivez les actualités, sélections et nouveautés Verdanza sur Instagram
+        et Facebook.
+      </p>
+      <div className="mt-5 flex flex-wrap gap-3">
+        {socialLinks.map((link) => (
+          <a
+            key={link.label}
+            href={link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={link.ariaLabel}
+            className="rounded-md border border-forest/15 bg-ivory px-4 py-2 text-sm font-semibold text-forest transition-colors hover:border-champagne hover:text-forest"
+          >
+            {link.label}
+          </a>
+        ))}
       </div>
     </section>
   );
