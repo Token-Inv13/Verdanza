@@ -6,6 +6,289 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "cbd-conduite-france",
+    title: "CBD et conduite en France : ce qu'il faut savoir",
+    seoTitle: "CBD et conduite en France : loi, THC et précautions - Verdanza",
+    description:
+      "Le CBD est-il compatible avec la conduite en France ? Comprendre la réglementation, le risque lié au THC et les précautions avant de prendre le volant.",
+    excerpt:
+      "Un produit CBD peut être légal à la vente, mais la conduite reste risquée si du THC est détecté lors d'un contrôle. Voici les repères à connaître avant de prendre le volant.",
+    category: "Guide CBD",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-07-22T09:00:00+02:00",
+    dateModified: "2026-07-23T09:00:00+02:00",
+    readingTime: "7 min",
+    status: "draft",
+    images: {
+      square: "/images/blog/comment-lire-analyse-cbd-1x1.webp",
+      landscape: "/images/blog/comment-lire-analyse-cbd-4x3.webp",
+      wide: "/images/blog/comment-lire-analyse-cbd-16x9.webp",
+    },
+    relatedSlugs: [
+      "denominations-cbd-cbn-cbg",
+      "comment-lire-analyse-cbd",
+      "conserver-fleurs-resines-cbd",
+    ],
+    links: [
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      { to: "/blog/denominations-cbd-cbn-cbg", label: "Comprendre CBD, CBN et CBG" },
+      { to: "/blog/comment-lire-analyse-cbd", label: "Lire une analyse CBD" },
+      { to: "/contact", label: "Contacter Verdanza" },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La question revient souvent : le CBD est-il compatible avec la
+            conduite ? La réponse doit rester prudente. En France, un produit CBD
+            peut être légal à la vente sous certaines conditions, mais cela ne
+            signifie pas que conduire après consommation soit sans risque. Le
+            droit routier s'intéresse notamment à la détection de substances
+            classées comme stupéfiants, dont le THC.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Repère simple : CBD légal ne veut pas dire conduite sans risque. Si
+            du THC est détecté lors d'un contrôle, la situation peut devenir
+            juridiquement sensible, même lorsque le produit consommé était
+            présenté comme un produit CBD conforme.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "cbd-legal-france",
+        text: "Le CBD est-il légal en France ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les produits issus du chanvre peuvent être commercialisés sous
+            conditions. L'arrêté du 30 décembre 2021 fixe notamment un seuil
+            maximal de 0,30 % de delta-9-THC pour les extraits de chanvre et les
+            produits qui les intègrent. Ce seuil concerne la conformité du
+            produit. Il ne doit pas être confondu avec une autorisation de
+            conduire après consommation.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "pourquoi-conduite-probleme",
+        text: "Pourquoi la conduite sous CBD peut poser problème ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Certains produits CBD peuvent contenir des traces de THC. Même en
+            présence d'un produit conforme à la réglementation commerciale, un
+            contrôle routier peut rechercher la présence de THC. Il ne faut donc
+            pas confondre deux sujets : la légalité d'un produit à la vente et la
+            sécurité juridique du conducteur au moment d'un contrôle.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "un produit CBD conforme peut contenir des traces de THC ;",
+          "un test routier ne sert pas à valider une fiche produit ;",
+          "le conducteur reste exposé si l'usage de stupéfiants est établi par analyse ;",
+          "aucun délai universel ne permet de garantir l'absence de risque.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "code-route",
+        text: "Que dit le Code de la route ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            L'article L235-1 du Code de la route vise la conduite lorsqu'il
+            résulte d'une analyse sanguine ou salivaire que la personne a fait
+            usage de substances ou plantes classées comme stupéfiants. Le texte
+            prévoit des sanctions importantes, notamment jusqu'à trois ans
+            d'emprisonnement et 9 000 euros d'amende. Le refus de se soumettre
+            aux vérifications prévues par l'article L235-2 est sanctionné
+            distinctement : jusqu'à deux ans d'emprisonnement et 4 500 euros
+            d'amende.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Repères à connaître en cas de contrôle routier.",
+          headers: ["Sujet", "Point de vigilance"],
+          rows: [
+            [
+              "Dépistage",
+              "Les contrôles peuvent commencer par des épreuves de dépistage.",
+            ],
+            [
+              "Confirmation",
+              "L'usage peut être établi par analyse salivaire ou sanguine selon le cadre prévu.",
+            ],
+            [
+              "Sanctions",
+              "Les sanctions peuvent inclure amende, retrait de points, suspension ou autres peines selon la situation.",
+            ],
+            [
+              "Refus",
+              "Le refus de vérification peut être sanctionné distinctement.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "justice-cbd-thc",
+        text: "CBD légal et THC détecté : ce qu'a rappelé la justice",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Dans une décision du 21 juin 2023, la Cour de cassation a rappelé
+            que l'autorisation de commercialisation de certains produits à base de
+            CBD contenant une teneur admise en THC est sans incidence sur
+            l'incrimination de conduite après usage de stupéfiants lorsque
+            l'infraction est constituée par la présence de THC. Autrement dit, le
+            seuil réglementaire applicable aux produits CBD n'est pas un seuil
+            d'incrimination routière, et le fait d'avoir consommé un produit
+            présenté comme CBD légal ne suffit pas nécessairement à écarter le
+            risque juridique.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "risques-controle",
+        text: "Quels risques en cas de contrôle ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            En cas de contrôle positif ou de procédure, les conséquences peuvent
+            être sérieuses : retrait de points, immobilisation possible du
+            véhicule, suspension du permis, amende ou autres suites selon le
+            dossier. Chaque situation dépend des faits, des analyses et de la
+            procédure. En cas de poursuites, il faut demander conseil à un
+            professionnel du droit.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "conseils-prudence",
+        text: "Nos conseils de prudence",
+      },
+      {
+        type: "list",
+        items: [
+          "ne pas conduire après avoir consommé un produit CBD ;",
+          "éviter toute consommation avant un trajet prévu ;",
+          "ne pas mélanger CBD, alcool ou médicaments ;",
+          "lire les informations produit et les données de conformité disponibles ;",
+          "ne pas prendre le volant en cas de somnolence, gêne, baisse de vigilance ou doute ;",
+          "reporter le trajet si la situation n'est pas claire.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "a-retenir",
+        text: "À retenir",
+      },
+      {
+        type: "list",
+        items: [
+          "CBD légal ne veut pas dire conduite sans risque ;",
+          "le THC, même en traces, peut poser problème lors d'un contrôle ;",
+          "la prudence consiste à ne pas conduire après consommation ;",
+          "il ne faut pas se fier à un délai garanti avant de reprendre le volant ;",
+          "en cas de doute, il vaut mieux reporter le trajet.",
+        ],
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Chez Verdanza, nous privilégions une information claire : les produits
+            CBD sont destinés à des adultes, dans un cadre responsable. Pour la
+            conduite, la règle de prudence est simple : ne prenez pas le volant
+            après consommation.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "sources-officielles",
+        text: "Sources officielles",
+      },
+      {
+        type: "paragraph",
+        text: "Sources consultées le 23 juillet 2026.",
+      },
+      {
+        type: "list",
+        items: [
+          <a
+            href="https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000044793213"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Légifrance - Arrêté du 30 décembre 2021 relatif au chanvre
+          </a>,
+          <a
+            href="https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051877265"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Légifrance - Code de la route, article L235-1
+          </a>,
+          <a
+            href="https://www.legifrance.gouv.fr/codes/section_lc/LEGITEXT000006074228/LEGISCTA000006159522/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Légifrance - Code de la route, articles L235-1 à L235-5
+          </a>,
+          <a
+            href="https://www.courdecassation.fr/publications/bulletin-des-arrets-de-la-chambre-criminelle/numero-6-juin-2023/circulation-routiere"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Cour de cassation - Chambre criminelle, 21 juin 2023
+          </a>,
+          <a
+            href="https://www.service-public.fr/particuliers/vosdroits/F2886"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Service Public - Drogue au volant : sanctions
+          </a>,
+          <a
+            href="https://ansm.sante.fr/actualites/melanger-cbd-et-medicaments-ce-nest-jamais-anodin"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            ANSM - CBD et médicaments : précautions d'usage
+          </a>,
+        ],
+      },
+    ],
+  },
+  {
     slug: "denominations-cbd-cbn-cbg",
     title: "CBD, CBN, CBG : comprendre les dénominations",
     seoTitle: "CBD, CBN, CBG : comprendre les dénominations | Verdanza",

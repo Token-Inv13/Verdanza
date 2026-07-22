@@ -8,6 +8,7 @@ import { JsonLd } from "../components/JsonLd";
 import { Seo } from "../components/Seo";
 import {
   blogArticlePath,
+  getBlogArticleBySlug,
   getPublishedBlogArticleBySlug,
   publishedBlogArticles,
 } from "../data/blogArticles";
@@ -31,7 +32,10 @@ function ctaIdForPath(prefix: string, path: string) {
 
 export function BlogArticlePage() {
   const { slug } = useParams();
-  const article = slug ? getPublishedBlogArticleBySlug(slug) : undefined;
+  const article = slug
+    ? getPublishedBlogArticleBySlug(slug) || (import.meta.env.DEV ? getBlogArticleBySlug(slug) : undefined)
+    : undefined;
+  const isDraft = article?.status === "draft";
   const viewedSlug = useRef("");
   const progressTracked = useRef<Set<number>>(new Set());
 
@@ -106,9 +110,11 @@ export function BlogArticlePage() {
         articlePublishedTime={article.datePublished}
         articleModifiedTime={article.dateModified}
         articleAuthor={article.authorName}
+        noindex={isDraft}
       />
-      <JsonLd id="blog-posting" data={buildBlogPostingJsonLd(article)} />
+      {!isDraft && <JsonLd id="blog-posting" data={buildBlogPostingJsonLd(article)} />}
       <Breadcrumbs
+        structuredData={!isDraft}
         items={[
           { name: "Accueil", path: "/" },
           { name: "Guides CBD", path: "/blog" },
