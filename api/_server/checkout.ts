@@ -109,6 +109,7 @@ export type PricedCheckout = {
   promoApplied: boolean;
   promotionDiscountTotal: number;
   appliedPromotions: AppliedPromotion[];
+  promotionProgressMessages: string[];
   subtotalBeforePromotion: number;
   subtotalAfterPromotion: number;
   subtotalBeforeDiscount: number;
@@ -278,6 +279,7 @@ export async function priceCheckout(
     promoApplied: Boolean(coupon || automaticPromotions.appliedPromotions.length),
     promotionDiscountTotal: automaticPromotions.promotionDiscountTotal,
     appliedPromotions: automaticPromotions.appliedPromotions,
+    promotionProgressMessages: automaticPromotions.progressMessages,
     subtotalBeforePromotion: automaticPromotions.subtotalBeforePromotion,
     subtotalAfterPromotion: automaticPromotions.subtotalAfterPromotion,
     totalAfterDiscount: total,

@@ -37,6 +37,7 @@ export default async function handler(
       discountValue: priced.discountValue,
       promotionDiscountTotal: priced.promotionDiscountTotal,
       appliedPromotions: priced.appliedPromotions,
+      promotionProgressMessages: priced.promotionProgressMessages,
       subtotalBeforePromotion: priced.subtotalBeforePromotion,
       subtotalAfterPromotion: priced.subtotalAfterPromotion,
       postalFreeShippingApplied: priced.postalFreeShippingApplied,

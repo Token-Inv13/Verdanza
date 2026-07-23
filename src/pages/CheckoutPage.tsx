@@ -55,6 +55,9 @@ export function CheckoutPage() {
   const [couponCode, setCouponCode] = useState(() =>
     window.localStorage.getItem(promoStorageKey) || "",
   );
+  const [appliedCouponCode, setAppliedCouponCode] = useState(() =>
+    window.localStorage.getItem(promoStorageKey) || "",
+  );
   const [quote, setQuote] = useState<OrderQuote | null>(null);
   const [automaticQuote, setAutomaticQuote] = useState<OrderQuote | null>(null);
   const [promoMessage, setPromoMessage] = useState("");
@@ -123,20 +126,28 @@ export function CheckoutPage() {
       unitPrice: line.product.price,
     })),
   });
-  const hasCouponInput = Boolean(couponCode.trim());
-  const hasManualPromo = Boolean(quote?.promoApplied && hasCouponInput);
-  const automaticAppliedPromotions = hasCouponInput
+  const normalizedCouponCode = couponCode.trim().toUpperCase();
+  const normalizedAppliedCouponCode = appliedCouponCode.trim().toUpperCase();
+  const hasManualPromo = Boolean(
+    quote?.promoApplied &&
+      normalizedAppliedCouponCode &&
+      quote.couponCode?.toUpperCase() === normalizedAppliedCouponCode,
+  );
+  const automaticAppliedPromotions = hasManualPromo
     ? []
-    : automaticQuote?.appliedPromotions?.length
-      ? automaticQuote.appliedPromotions
+    : automaticQuote
+      ? automaticQuote.appliedPromotions || []
       : automaticPromotions.appliedPromotions;
-  const automaticDiscountAmount = hasCouponInput
+  const automaticDiscountAmount = hasManualPromo
     ? 0
     : Number(
-        automaticQuote?.promoApplied
-          ? automaticQuote.discountAmount
+        automaticQuote
+          ? automaticQuote.promotionDiscountTotal || automaticQuote.discountAmount || 0
           : automaticPromotions.promotionDiscountTotal,
       );
+  const automaticProgressMessages = automaticQuote
+    ? automaticQuote.promotionProgressMessages || []
+    : automaticPromotions.progressMessages;
   const discountAmount = hasManualPromo
     ? Number(quote?.discountAmount || 0)
     : automaticDiscountAmount;
@@ -205,13 +216,14 @@ export function CheckoutPage() {
   useEffect(() => {
     if (!couponCode.trim()) {
       window.localStorage.removeItem(promoStorageKey);
+      setAppliedCouponCode("");
       setQuote(null);
       setPromoMessage("");
     }
   }, [couponCode]);
 
   useEffect(() => {
-    if (!lines.length || couponCode.trim()) {
+    if (!lines.length || hasManualPromo) {
       setAutomaticQuote(null);
       return;
     }
@@ -230,13 +242,42 @@ export function CheckoutPage() {
     return () => {
       cancelled = true;
     };
-  }, [couponCode, deliveryMethod, deliveryZone, items, lines.length, subtotal]);
+  }, [deliveryMethod, deliveryZone, hasManualPromo, items, lines.length, subtotal]);
 
   useEffect(() => {
-    if (!quote?.promoApplied || !couponCode.trim()) return;
+    if (!quote?.promoApplied || !appliedCouponCode.trim()) return;
     void handleApplyPromo(false).catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deliveryMethod, deliveryZone, subtotal]);
+
+  useEffect(() => {
+    const code = appliedCouponCode.trim().toUpperCase();
+    if (!lines.length || !code) {
+      setQuote(null);
+      return;
+    }
+    let cancelled = false;
+    quoteOrder({
+      items,
+      deliveryMethod,
+      deliveryZone: deliveryMethod === "local_express" ? deliveryZone : "postal-france",
+      couponCode: code,
+    })
+      .then((nextQuote) => {
+        if (cancelled) return;
+        setQuote(nextQuote);
+        setCouponCode(nextQuote.couponCode || code);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAppliedCouponCode("");
+        setQuote(null);
+        window.localStorage.removeItem(promoStorageKey);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [appliedCouponCode, deliveryMethod, deliveryZone, items, lines.length, subtotal]);
 
   useEffect(() => {
     if (!user) return;
@@ -272,10 +313,12 @@ export function CheckoutPage() {
         couponCode: code,
       });
       setQuote(nextQuote);
+      setAppliedCouponCode(nextQuote.couponCode || code);
       window.localStorage.setItem(promoStorageKey, code);
       if (showSuccess) setPromoMessage("Code promo appliqué.");
       return nextQuote;
     } catch (error) {
+      setAppliedCouponCode("");
       window.localStorage.removeItem(promoStorageKey);
       const message =
         error instanceof Error ? error.message : "Ce code promo n'est pas valide.";
@@ -283,6 +326,16 @@ export function CheckoutPage() {
       throw new Error(message);
     } finally {
       setIsCheckingPromo(false);
+    }
+  }
+
+  function handleCouponInputChange(value: string) {
+    const nextCode = value.toUpperCase();
+    setCouponCode(nextCode);
+    if (nextCode.trim().toUpperCase() !== normalizedAppliedCouponCode) {
+      setAppliedCouponCode("");
+      setQuote(null);
+      window.localStorage.removeItem(promoStorageKey);
     }
   }
 
@@ -314,7 +367,14 @@ export function CheckoutPage() {
       if (preferredPaymentMethod === "bank_transfer") {
         throw new Error("Le virement bancaire n'est pas encore disponible.");
       }
-      const finalQuote = couponCode.trim() ? await handleApplyPromo(false) : quote;
+      const finalQuote = hasManualPromo
+        ? await quoteOrder({
+            items,
+            deliveryMethod,
+            deliveryZone: deliveryMethod === "local_express" ? deliveryZone : "postal-france",
+            couponCode: normalizedAppliedCouponCode,
+          })
+        : automaticQuote;
 
       const authToken = user ? await user.getIdToken() : undefined;
       const analyticsContext = await getGa4MeasurementContext().catch(() => null);
@@ -328,7 +388,7 @@ export function CheckoutPage() {
           deliveryMethod,
           deliveryZone:
             deliveryMethod === "local_express" ? deliveryZone : "postal-france",
-          couponCode: couponCode.trim() || undefined,
+          couponCode: hasManualPromo ? normalizedAppliedCouponCode : undefined,
           customerMessage: customerMessage.trim() || undefined,
           preferredPaymentMethod,
           complianceAccepted,
@@ -725,7 +785,7 @@ export function CheckoutPage() {
                   <input
                     className="input-field"
                     value={couponCode}
-                    onChange={(event) => setCouponCode(event.target.value.toUpperCase())}
+                    onChange={(event) => handleCouponInputChange(event.target.value)}
                     placeholder="WELCOME10"
                   />
                   <button
@@ -747,6 +807,13 @@ export function CheckoutPage() {
                   {promoMessage}
                 </p>
               )}
+              {normalizedCouponCode &&
+                normalizedCouponCode !== normalizedAppliedCouponCode && (
+                  <p className="text-xs leading-5 text-ink/55">
+                    Cliquez sur Appliquer pour utiliser ce code. Les offres
+                    automatiques restent actives tant qu'aucun code n'est applique.
+                  </p>
+                )}
               {quote?.promoApplied && (
                 <p className="flex justify-between text-forest">
                   <span>
@@ -769,7 +836,7 @@ export function CheckoutPage() {
                 ))}
               {!hasManualPromo &&
                 !automaticAppliedPromotions.length &&
-                automaticPromotions.progressMessages.map((message) => (
+                automaticProgressMessages.map((message) => (
                   <p key={message} className="text-xs leading-5 text-forest/70">
                     {message}
                   </p>
@@ -793,9 +860,10 @@ export function CheckoutPage() {
                 <br />
                 Souhait indiqué : {paymentMethodLabels[preferredPaymentMethod]}.
               </p>
-              {couponCode.trim() && !quote?.promoApplied && (
+              {normalizedCouponCode &&
+                normalizedCouponCode !== normalizedAppliedCouponCode && (
                 <p className="text-xs leading-5 text-ink/55">
-                  La remise sera vérifiée et appliquée avant validation de la commande.
+                  Cliquez sur Appliquer pour utiliser ce code avant validation.
                 </p>
               )}
             </div>

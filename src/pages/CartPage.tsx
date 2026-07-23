@@ -24,6 +24,9 @@ export function CartPage() {
   const [couponCode, setCouponCode] = useState(() =>
     window.localStorage.getItem(promoStorageKey) || "",
   );
+  const [appliedCouponCode, setAppliedCouponCode] = useState(() =>
+    window.localStorage.getItem(promoStorageKey) || "",
+  );
   const [quote, setQuote] = useState<OrderQuote | null>(null);
   const [automaticQuote, setAutomaticQuote] = useState<OrderQuote | null>(null);
   const [promoMessage, setPromoMessage] = useState("");
@@ -37,20 +40,28 @@ export function CartPage() {
       unitPrice: line.product.price,
     })),
   });
-  const hasCouponInput = Boolean(couponCode.trim());
-  const hasManualPromo = Boolean(quote?.promoApplied && hasCouponInput);
-  const automaticAppliedPromotions = hasCouponInput
+  const normalizedCouponCode = couponCode.trim().toUpperCase();
+  const normalizedAppliedCouponCode = appliedCouponCode.trim().toUpperCase();
+  const hasManualPromo = Boolean(
+    quote?.promoApplied &&
+      normalizedAppliedCouponCode &&
+      quote.couponCode?.toUpperCase() === normalizedAppliedCouponCode,
+  );
+  const automaticAppliedPromotions = hasManualPromo
     ? []
-    : automaticQuote?.appliedPromotions?.length
-      ? automaticQuote.appliedPromotions
+    : automaticQuote
+      ? automaticQuote.appliedPromotions || []
       : automaticPromotions.appliedPromotions;
-  const automaticDiscountAmount = hasCouponInput
+  const automaticDiscountAmount = hasManualPromo
     ? 0
     : Number(
-        automaticQuote?.promoApplied
-          ? automaticQuote.discountAmount
+        automaticQuote
+          ? automaticQuote.promotionDiscountTotal || automaticQuote.discountAmount || 0
           : automaticPromotions.promotionDiscountTotal,
       );
+  const automaticProgressMessages = automaticQuote
+    ? automaticQuote.promotionProgressMessages || []
+    : automaticPromotions.progressMessages;
   const discountAmount = hasManualPromo
     ? Number(quote?.discountAmount || 0)
     : automaticDiscountAmount;
@@ -61,13 +72,14 @@ export function CartPage() {
   useEffect(() => {
     if (!couponCode.trim()) {
       window.localStorage.removeItem(promoStorageKey);
+      setAppliedCouponCode("");
       setQuote(null);
       setPromoMessage("");
     }
   }, [couponCode]);
 
   useEffect(() => {
-    if (!lines.length || couponCode.trim()) {
+    if (!lines.length || hasManualPromo) {
       setAutomaticQuote(null);
       return;
     }
@@ -86,7 +98,36 @@ export function CartPage() {
     return () => {
       cancelled = true;
     };
-  }, [couponCode, items, lines.length, subtotal]);
+  }, [hasManualPromo, items, lines.length, subtotal]);
+
+  useEffect(() => {
+    const code = appliedCouponCode.trim().toUpperCase();
+    if (!lines.length || !code) {
+      setQuote(null);
+      return;
+    }
+    let cancelled = false;
+    quoteOrder({
+      items,
+      deliveryMethod: "postal",
+      deliveryZone: "postal-france",
+      couponCode: code,
+    })
+      .then((nextQuote) => {
+        if (cancelled) return;
+        setQuote(nextQuote);
+        setCouponCode(nextQuote.couponCode || code);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAppliedCouponCode("");
+        setQuote(null);
+        window.localStorage.removeItem(promoStorageKey);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [appliedCouponCode, items, lines.length, subtotal]);
 
   useEffect(() => {
     const signature = lines.map((line) => `${line.productId}:${line.quantity}`).join("|");
@@ -110,15 +151,27 @@ export function CartPage() {
         couponCode: code,
       });
       setQuote(nextQuote);
+      setAppliedCouponCode(nextQuote.couponCode || code);
       window.localStorage.setItem(promoStorageKey, code);
       setPromoMessage("Code promo appliqué.");
     } catch (error) {
+      setAppliedCouponCode("");
       window.localStorage.removeItem(promoStorageKey);
       setPromoMessage(
         error instanceof Error ? error.message : "Ce code promo n'est pas valide.",
       );
     } finally {
       setIsCheckingPromo(false);
+    }
+  }
+
+  function handleCouponInputChange(value: string) {
+    const nextCode = value.toUpperCase();
+    setCouponCode(nextCode);
+    if (nextCode.trim().toUpperCase() !== normalizedAppliedCouponCode) {
+      setAppliedCouponCode("");
+      setQuote(null);
+      window.localStorage.removeItem(promoStorageKey);
     }
   }
 
@@ -254,7 +307,7 @@ export function CartPage() {
                   <input
                     className="input-field"
                     value={couponCode}
-                    onChange={(event) => setCouponCode(event.target.value.toUpperCase())}
+                    onChange={(event) => handleCouponInputChange(event.target.value)}
                     placeholder="WELCOME10"
                   />
                   <button
@@ -276,6 +329,13 @@ export function CartPage() {
                   {promoMessage}
                 </p>
               )}
+              {normalizedCouponCode &&
+                normalizedCouponCode !== normalizedAppliedCouponCode && (
+                  <p className="text-xs leading-5 text-ink/55">
+                    Cliquez sur Appliquer pour utiliser ce code. Les offres
+                    automatiques restent actives tant qu'aucun code n'est applique.
+                  </p>
+                )}
               {quote?.promoApplied && (
                 <p className="flex justify-between text-forest">
                   <span>
@@ -298,7 +358,7 @@ export function CartPage() {
                 ))}
               {!hasManualPromo &&
                 !automaticAppliedPromotions.length &&
-                automaticPromotions.progressMessages.map((message) => (
+                automaticProgressMessages.map((message) => (
                   <p key={message} className="text-xs leading-5 text-forest/70">
                     {message}
                   </p>

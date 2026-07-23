@@ -19,6 +19,7 @@ export type OrderQuote = {
   discountValue?: number;
   promotionDiscountTotal?: number;
   appliedPromotions?: AppliedPromotion[];
+  promotionProgressMessages?: string[];
   subtotalBeforePromotion?: number;
   subtotalAfterPromotion?: number;
   postalFreeShippingApplied: boolean;

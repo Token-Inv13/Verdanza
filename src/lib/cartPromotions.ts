@@ -115,12 +115,18 @@ export function calculateCartPromotions(input: {
   };
 }
 
-export function automaticPromotionRulesFromCoupons(coupons: Coupon[] = []) {
+export function automaticPromotionRulesFromCoupons(
+  coupons: Coupon[] = [],
+  options: { includeBuiltInFallback?: boolean } = {},
+) {
   const couponRules = coupons
     .map(promotionRuleFromCoupon)
     .filter((rule): rule is PromotionRule => Boolean(rule));
 
-  return dedupePromotionRules([...couponRules, ...BUILT_IN_AUTOMATIC_PROMOTIONS]);
+  return dedupePromotionRules([
+    ...couponRules,
+    ...(options.includeBuiltInFallback ? BUILT_IN_AUTOMATIC_PROMOTIONS : []),
+  ]);
 }
 
 export function promotionRuleFromCoupon(coupon: Coupon): PromotionRule | null {
