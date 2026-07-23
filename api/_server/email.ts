@@ -159,25 +159,33 @@ async function sendAdminNotificationEmails(input: {
 
 export async function sendOrderStatusUpdateEmail(
   order: Order,
-  previousStatus: OrderStatus,
+  _previousStatus: OrderStatus,
   nextStatus: OrderStatus,
 ) {
   const subject = `Commande Verdanza ${shortOrderId(order.id)} : ${statusLabels[nextStatus]}`;
+  const message = customerStatusUpdateMessage(nextStatus);
   return sendTransactionalEmail({
     kind: "order_status_update",
     orderId: order.id,
     to: order.customerEmail,
     subject,
-    html: orderEmailHtml(
-      order,
-      `Votre commande passe de "${statusLabels[previousStatus]}" a "${statusLabels[nextStatus]}".`,
-    ),
-    text: orderEmailText(
-      order,
-      `Votre commande passe de "${statusLabels[previousStatus]}" a "${statusLabels[nextStatus]}".`,
-    ),
+    html: orderEmailHtml(order, message),
+    text: orderEmailText(order, message),
     idempotencyKey: `order-status-${order.id}-${nextStatus}`,
   });
+}
+
+function customerStatusUpdateMessage(nextStatus: OrderStatus) {
+  if (nextStatus === "confirmed") {
+    return "Votre commande Verdanza a bien été confirmée.";
+  }
+  if (nextStatus === "cancelled") {
+    return "Votre commande Verdanza a été annulée.";
+  }
+  if (nextStatus === "delivered") {
+    return "Votre commande Verdanza a été livrée.";
+  }
+  return `Le statut de votre commande Verdanza a été mis à jour : ${statusLabels[nextStatus]}.`;
 }
 
 export async function sendContactMessageEmail(input: {
