@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-20T20:01:49.606Z",
+  "generatedAt": "2026-07-23T14:29:32.656Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -543,6 +543,54 @@
   ],
   "blogImages": [
     {
+      "articleSlug": "cbd-conduite-france",
+      "articleTitle": "CBD et conduite en France : ce qu'il faut savoir",
+      "variants": [
+        {
+          "src": "/images/blog/cbd-conduite-france-1x1.webp",
+          "width": 900,
+          "height": 900,
+          "bytes": 16310
+        },
+        {
+          "src": "/images/blog/cbd-conduite-france-4x3.webp",
+          "width": 1200,
+          "height": 900,
+          "bytes": 17446
+        },
+        {
+          "src": "/images/blog/cbd-conduite-france-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 18650
+        }
+      ]
+    },
+    {
+      "articleSlug": "denominations-cbd-cbn-cbg",
+      "articleTitle": "CBD, CBN, CBG : comprendre les dénominations",
+      "variants": [
+        {
+          "src": "/images/blog/comment-lire-analyse-cbd-1x1.webp",
+          "width": 900,
+          "height": 900,
+          "bytes": 14492
+        },
+        {
+          "src": "/images/blog/comment-lire-analyse-cbd-4x3.webp",
+          "width": 1200,
+          "height": 900,
+          "bytes": 15184
+        },
+        {
+          "src": "/images/blog/comment-lire-analyse-cbd-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 16064
+        }
+      ]
+    },
+    {
       "articleSlug": "conserver-fleurs-resines-cbd",
       "articleTitle": "Comment conserver fleurs et résines CBD ?",
       "sources": [
@@ -684,6 +732,6 @@
     "productDetailBytes": 1684008,
     "staticSourceBytes": 2197587,
     "staticLargestBytes": 114692,
-    "blogImageBytes": 1442042
+    "blogImageBytes": 1540188
   }
 }

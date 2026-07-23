@@ -212,6 +212,27 @@ export const staticImageVariants: Record<string, ResponsiveImageVariant> = {
     width: 320,
     height: 180,
   },
+  "/images/blog/cbd-conduite-france-1x1.webp": {
+    src: "/images/blog/cbd-conduite-france-1x1.webp",
+    srcSet: "/images/blog/cbd-conduite-france-1x1.webp 900w",
+    sizes: "(min-width: 1024px) 420px, 92vw",
+    width: 900,
+    height: 900,
+  },
+  "/images/blog/cbd-conduite-france-4x3.webp": {
+    src: "/images/blog/cbd-conduite-france-4x3.webp",
+    srcSet: "/images/blog/cbd-conduite-france-4x3.webp 1200w",
+    sizes: "(min-width: 1024px) 520px, 92vw",
+    width: 1200,
+    height: 900,
+  },
+  "/images/blog/cbd-conduite-france-16x9.webp": {
+    src: "/images/blog/cbd-conduite-france-16x9.webp",
+    srcSet: "/images/blog/cbd-conduite-france-16x9.webp 1600w",
+    sizes: "100vw",
+    width: 1600,
+    height: 900,
+  },
   "/images/brand/verdanza-quality-seal.png": {
     src: "/images/brand/verdanza-quality-seal-320.webp",
     srcSet: "/images/brand/verdanza-quality-seal-96.webp 96w, /images/brand/verdanza-quality-seal-180.webp 180w, /images/brand/verdanza-quality-seal-320.webp 320w",

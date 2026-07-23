@@ -77,8 +77,16 @@ const staticTargets = [
 ];
 const blogImageSources: Record<
   string,
-  { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" }
+  { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" }
 > = {
+  "cbd-conduite-france": {
+    label: "CBD et conduite",
+    kind: "driving",
+  },
+  "denominations-cbd-cbn-cbg": {
+    label: "Lecture d'analyse CBD",
+    kind: "analysis",
+  },
   "conserver-fleurs-resines-cbd": {
     label: "Conservation fleurs et résines CBD",
     sources: [
@@ -227,6 +235,13 @@ for (const article of blogArticles) {
             width: ratio.width,
             height: ratio.height,
           })
+        : sourceSet.kind === "driving"
+          ? await generateDrivingBlogImage({
+              outputUrl,
+              label: sourceSet.label,
+              width: ratio.width,
+              height: ratio.height,
+            })
         : sourceSet.kind === "aroma"
           ? await generateAromaBlogImage({
               outputUrl,
@@ -489,6 +504,68 @@ async function generateAnalysisBlogImage({
   <circle cx="${Math.round(width * 0.80)}" cy="${Math.round(height * 0.24)}" r="${Math.round(Math.min(width, height) * 0.028)}" fill="#0d3b2e" opacity="0.12"/>
   <text x="${Math.round(width * 0.36)}" y="${Math.round(height * 0.11)}" fill="#0d3b2e" font-family="Arial, sans-serif" font-size="${Math.round(height * 0.04)}" font-weight="700">${escapeSvg(label)}</text>
   <text x="${Math.round(width * 0.36)}" y="${Math.round(height * 0.92)}" fill="#0d3b2e" font-family="Arial, sans-serif" font-size="${Math.round(height * 0.026)}" font-weight="600" opacity="0.72">Lecture méthodique du document et des mesures</text>
+</svg>`);
+
+  const output = await sharp(svg).webp({ quality: 82, effort: 6 }).toBuffer();
+  writeIfChanged(outputFile, output);
+
+  return {
+    src: outputUrl,
+    width,
+    height,
+    bytes: output.length,
+  };
+}
+
+async function generateDrivingBlogImage({
+  outputUrl,
+  label,
+  width,
+  height,
+}: {
+  outputUrl: string;
+  label: string;
+  width: number;
+  height: number;
+}): Promise<GeneratedVariant> {
+  const outputFile = publicPath(outputUrl);
+  mkdirSync(dirname(outputFile), { recursive: true });
+
+  const roadCenter = Math.round(width * 0.61);
+  const roadTop = Math.round(height * 0.17);
+  const roadBottom = Math.round(height * 0.86);
+  const roadHalfTop = Math.round(width * 0.07);
+  const roadHalfBottom = Math.round(width * 0.23);
+  const shieldX = Math.round(width * 0.75);
+  const shieldY = Math.round(height * 0.29);
+  const shieldSize = Math.round(Math.min(width, height) * 0.14);
+
+  const svg = Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg-driving" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8f3e9"/>
+      <stop offset="100%" stop-color="#eadfcf"/>
+    </linearGradient>
+    <linearGradient id="panel-driving" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#123f32"/>
+      <stop offset="100%" stop-color="#0d3b2e"/>
+    </linearGradient>
+    <filter id="shadow-driving" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="${Math.round(height * 0.018)}" stdDeviation="${Math.round(height * 0.018)}" flood-color="#0d3b2e" flood-opacity="0.17"/>
+    </filter>
+  </defs>
+  <rect width="${width}" height="${height}" fill="url(#bg-driving)"/>
+  <rect width="${Math.round(width * 0.27)}" height="${height}" fill="url(#panel-driving)"/>
+  <circle cx="${Math.round(width * 0.18)}" cy="${Math.round(height * 0.18)}" r="${Math.round(Math.min(width, height) * 0.15)}" fill="#c9a45c" opacity="0.18"/>
+  <path d="M ${roadCenter - roadHalfTop} ${roadTop} L ${roadCenter + roadHalfTop} ${roadTop} L ${roadCenter + roadHalfBottom} ${roadBottom} L ${roadCenter - roadHalfBottom} ${roadBottom} Z" fill="#0d3b2e" opacity="0.92" filter="url(#shadow-driving)"/>
+  <path d="M ${roadCenter} ${Math.round(height * 0.24)} L ${roadCenter} ${Math.round(height * 0.34)} M ${roadCenter} ${Math.round(height * 0.42)} L ${roadCenter} ${Math.round(height * 0.56)} M ${roadCenter} ${Math.round(height * 0.66)} L ${roadCenter} ${Math.round(height * 0.80)}" fill="none" stroke="#faf8f2" stroke-width="${Math.max(8, Math.round(width * 0.012))}" stroke-linecap="round"/>
+  <circle cx="${shieldX}" cy="${shieldY}" r="${Math.round(shieldSize * 0.82)}" fill="#fffaf1" stroke="#c9a45c" stroke-width="${Math.max(8, Math.round(width * 0.008))}" filter="url(#shadow-driving)"/>
+  <path d="M ${shieldX} ${shieldY - Math.round(shieldSize * 0.48)} L ${shieldX + Math.round(shieldSize * 0.40)} ${shieldY - Math.round(shieldSize * 0.28)} L ${shieldX + Math.round(shieldSize * 0.34)} ${shieldY + Math.round(shieldSize * 0.22)} C ${shieldX + Math.round(shieldSize * 0.24)} ${shieldY + Math.round(shieldSize * 0.48)}, ${shieldX} ${shieldY + Math.round(shieldSize * 0.62)}, ${shieldX} ${shieldY + Math.round(shieldSize * 0.62)} C ${shieldX} ${shieldY + Math.round(shieldSize * 0.62)}, ${shieldX - Math.round(shieldSize * 0.24)} ${shieldY + Math.round(shieldSize * 0.48)}, ${shieldX - Math.round(shieldSize * 0.34)} ${shieldY + Math.round(shieldSize * 0.22)} L ${shieldX - Math.round(shieldSize * 0.40)} ${shieldY - Math.round(shieldSize * 0.28)} Z" fill="#0d3b2e"/>
+  <path d="M ${shieldX - Math.round(shieldSize * 0.18)} ${shieldY + Math.round(shieldSize * 0.02)} L ${shieldX - Math.round(shieldSize * 0.04)} ${shieldY + Math.round(shieldSize * 0.18)} L ${shieldX + Math.round(shieldSize * 0.22)} ${shieldY - Math.round(shieldSize * 0.16)}" fill="none" stroke="#fffaf1" stroke-width="${Math.max(8, Math.round(width * 0.009))}" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="${Math.round(width * 0.85)}" cy="${Math.round(height * 0.72)}" r="${Math.round(Math.min(width, height) * 0.10)}" fill="#c9a45c" opacity="0.16"/>
+  <text x="${Math.round(width * 0.33)}" y="${Math.round(height * 0.11)}" fill="#0d3b2e" font-family="Arial, sans-serif" font-size="${Math.round(height * 0.04)}" font-weight="700">${escapeSvg(label)}</text>
+  <text x="${Math.round(width * 0.33)}" y="${Math.round(height * 0.93)}" fill="#0d3b2e" font-family="Arial, sans-serif" font-size="${Math.round(height * 0.026)}" font-weight="600" opacity="0.72">Réglementation, THC et prudence au volant</text>
 </svg>`);
 
   const output = await sharp(svg).webp({ quality: 82, effort: 6 }).toBuffer();
