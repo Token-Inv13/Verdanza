@@ -114,9 +114,11 @@ export function CheckoutPage() {
     0,
     POSTAL_FREE_SHIPPING_THRESHOLD - subtotal,
   );
-  const estimatedDeliveryFee = isLocalDelivery
+  const rawEstimatedDeliveryFee = isLocalDelivery
     ? selectedZone?.fee ?? 0
     : postalZone?.fee ?? 0;
+  const estimatedDeliveryFee =
+    !isLocalDelivery && postalShippingFree ? 0 : rawEstimatedDeliveryFee;
   const automaticPromotions = calculateCartPromotions({
     lines: lines.map((line) => ({
       productId: line.productId,
