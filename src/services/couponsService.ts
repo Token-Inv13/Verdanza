@@ -54,6 +54,8 @@ export async function upsertCoupon(input: CouponInput) {
       promotionType: input.promotionType || undefined,
       eligibleCategory: input.eligibleCategory || undefined,
       minEligibleSubtotal: Number(input.minEligibleSubtotal || 0),
+      paidThresholdAmount: Number(input.paidThresholdAmount || 0),
+      maxGiftAmount: Number(input.maxGiftAmount || 0),
       maxDiscountAmount: input.maxDiscountAmount
         ? Number(input.maxDiscountAmount)
         : undefined,

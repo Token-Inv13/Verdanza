@@ -133,6 +133,8 @@ const emptyCoupon: CouponInput = {
   promotionType: "percentage_cart_discount",
   eligibleCategory: undefined,
   minEligibleSubtotal: 0,
+  paidThresholdAmount: 0,
+  maxGiftAmount: 0,
   maxDiscountAmount: undefined,
   stackable: false,
   priority: 10,
@@ -1378,10 +1380,17 @@ function CouponForm({
               >
                 <option value="fixed_cart_discount">Montant fixe panier</option>
                 <option value="fixed_category_discount">Montant fixe categorie</option>
+                <option value="threshold_extra_discount">Offert après seuil</option>
                 <option value="percentage_cart_discount">Pourcentage panier</option>
                 <option value="percentage_category_discount">Pourcentage categorie</option>
                 <option value="free_shipping">Livraison offerte</option>
               </select>
+              {coupon.promotionType === "threshold_extra_discount" && (
+                <span className="mt-1 block text-xs font-normal text-ink/55">
+                  Le client paie un montant minimum, puis reçoit jusqu'à X EUR
+                  offerts sur la catégorie choisie.
+                </span>
+              )}
             </label>
             <label className="text-sm font-medium text-forest">
               Categorie eligible
@@ -1411,6 +1420,22 @@ function CouponForm({
                 onChange({ ...coupon, minEligibleSubtotal })
               }
             />
+            {coupon.promotionType === "threshold_extra_discount" && (
+              <div className="grid gap-3 md:grid-cols-2">
+                <NumberInput
+                  label="Montant minimum payé"
+                  value={coupon.paidThresholdAmount || 0}
+                  onChange={(paidThresholdAmount) =>
+                    onChange({ ...coupon, paidThresholdAmount })
+                  }
+                />
+                <NumberInput
+                  label="Montant offert maximum"
+                  value={coupon.maxGiftAmount || 0}
+                  onChange={(maxGiftAmount) => onChange({ ...coupon, maxGiftAmount })}
+                />
+              </div>
+            )}
             <NumberInput
               label="Remise maximale"
               value={coupon.maxDiscountAmount || 0}
@@ -4924,6 +4949,13 @@ function couponPreview(coupon: CouponInput) {
   const code = coupon.code || "CODE";
   const minimum = Number(coupon.minimumOrder || 0);
   const minimumText = minimum > 0 ? ` à partir de ${formatEuro(minimum)} EUR d'achat` : "";
+  if (coupon.promotionType === "threshold_extra_discount") {
+    return `Le client paie ${formatEuro(
+      Number(coupon.paidThresholdAmount || 0),
+    )} EUR sur la catégorie choisie, puis reçoit jusqu'à ${formatEuro(
+      Number(coupon.maxGiftAmount || 0),
+    )} EUR offerts avec le code ${code}.`;
+  }
   if (coupon.discountType === "free_shipping") {
     return `Le client bénéficiera de la livraison postale offerte avec le code ${code}${minimumText}.`;
   }
@@ -4932,7 +4964,6 @@ function couponPreview(coupon: CouponInput) {
   }
   return `Le client obtiendra ${Number(coupon.discountValue || 0)} % de réduction avec le code ${code}${minimumText}.`;
 }
-
 function couponTypeLabel(type: Coupon["discountType"]) {
   if (type === "fixed") return "Montant fixe";
   if (type === "free_shipping") return "Livraison postale offerte";
@@ -4946,11 +4977,15 @@ function couponValueLabel(coupon: Pick<Coupon, "discountType" | "discountValue">
 }
 
 function couponDescription(coupon: Coupon) {
+  if (coupon.promotionType === "threshold_extra_discount") {
+    return `Offert après seuil : ${formatEuro(
+      Number(coupon.paidThresholdAmount || 0),
+    )} EUR payés, jusqu'à ${formatEuro(Number(coupon.maxGiftAmount || 0))} EUR offerts.`;
+  }
   const minimum = Number(coupon.minimumOrder || 0);
   const minimumText = minimum > 0 ? ` à partir de ${formatEuro(minimum)} EUR` : " sans minimum";
   return `${couponTypeLabel(coupon.discountType)} : ${couponValueLabel(coupon)}${minimumText}.`;
 }
-
 function inferAdminPromotionType(coupon: CouponInput): PromotionRuleType {
   const category = coupon.eligibleCategory || coupon.categories?.[0];
   if (coupon.discountType === "free_shipping") return "free_shipping";

@@ -319,7 +319,10 @@ async function resolveCoupon(
   const startsAt = coupon.startsAt ? Date.parse(coupon.startsAt) : 0;
   const endsAt = coupon.endsAt ? Date.parse(coupon.endsAt) : 0;
   const allowedProductIds = coupon.productIds ?? [];
-  const allowedCategories = coupon.categories ?? [];
+  const allowedCategories = [
+    ...(coupon.categories ?? []),
+    ...(coupon.eligibleCategory ? [coupon.eligibleCategory] : []),
+  ];
 
   if (!coupon.isActive) throw new Error("Code promo inactif.");
   if (coupon.isArchived) throw new Error("Code promo invalide.");
@@ -360,11 +363,18 @@ async function resolveCoupon(
   }
 
   const discountAmount =
-    coupon.discountType === "percent"
-      ? roundMoney(eligibleSubtotal * (Number(coupon.discountValue || 0) / 100))
-      : coupon.discountType === "fixed"
-        ? roundMoney(Number(coupon.discountValue || 0))
-        : 0;
+    coupon.promotionType === "threshold_extra_discount"
+      ? roundMoney(
+          Math.min(
+            Number(coupon.maxGiftAmount || 0),
+            Math.max(0, eligibleSubtotal - Number(coupon.paidThresholdAmount || 0)),
+          ),
+        )
+      : coupon.discountType === "percent"
+        ? roundMoney(eligibleSubtotal * (Number(coupon.discountValue || 0) / 100))
+        : coupon.discountType === "fixed"
+          ? roundMoney(Number(coupon.discountValue || 0))
+          : 0;
 
   if (discountAmount <= 0 && coupon.discountType !== "free_shipping") {
     throw new Error("Code promo sans remise applicable.");

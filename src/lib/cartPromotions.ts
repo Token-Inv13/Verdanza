@@ -23,6 +23,8 @@ export type PromotionRule = {
   eligibleCategory?: ProductCategory;
   minCartSubtotal?: number;
   minEligibleSubtotal?: number;
+  paidThresholdAmount?: number;
+  maxGiftAmount?: number;
   discountAmount?: number;
   discountPercent?: number;
   maxDiscountAmount?: number;
@@ -47,10 +49,10 @@ export const LAUNCH_FLOWERS_PROMOTION: PromotionRule = {
   label: "Offre Verdanza : 20 € de fleurs offerts",
   active: true,
   autoApply: true,
-  type: "fixed_category_discount",
+  type: "threshold_extra_discount",
   eligibleCategory: "flowers",
-  minEligibleSubtotal: 30,
-  discountAmount: 20,
+  paidThresholdAmount: 30,
+  maxGiftAmount: 20,
   priority: 10,
   stackable: false,
 };
@@ -146,6 +148,8 @@ export function promotionRuleFromCoupon(coupon: Coupon): PromotionRule | null {
     eligibleCategory,
     minCartSubtotal: Number(coupon.minimumOrder || 0),
     minEligibleSubtotal: Number(coupon.minEligibleSubtotal || coupon.minimumOrder || 0),
+    paidThresholdAmount: Number(coupon.paidThresholdAmount || 0),
+    maxGiftAmount: Number(coupon.maxGiftAmount || 0),
     discountAmount: coupon.discountType === "fixed" ? Number(coupon.discountValue || 0) : 0,
     discountPercent: coupon.discountType === "percent" ? Number(coupon.discountValue || 0) : 0,
     maxDiscountAmount: coupon.maxDiscountAmount,
@@ -177,27 +181,45 @@ function evaluateRule(
   if (rule.type === "free_shipping") return null;
   const eligibleSubtotal =
     rule.type === "fixed_category_discount" ||
-    rule.type === "percentage_category_discount"
+    rule.type === "percentage_category_discount" ||
+    rule.type === "threshold_extra_discount"
       ? categorySubtotal(lines, rule.eligibleCategory)
       : subtotal;
 
   if (subtotal < Number(rule.minCartSubtotal || 0)) return null;
-  if (eligibleSubtotal < Number(rule.minEligibleSubtotal || 0)) return null;
+  const minimumEligibleSubtotal =
+    rule.type === "threshold_extra_discount"
+      ? Number(rule.paidThresholdAmount || 0)
+      : Number(rule.minEligibleSubtotal || 0);
+  if (eligibleSubtotal < minimumEligibleSubtotal) return null;
   if (eligibleSubtotal <= 0) return null;
 
   const rawDiscount =
-    rule.type === "percentage_cart_discount" || rule.type === "percentage_category_discount"
-      ? eligibleSubtotal * (Number(rule.discountPercent || 0) / 100)
-      : Number(rule.discountAmount || 0);
+    rule.type === "threshold_extra_discount"
+      ? Math.min(
+          Number(rule.maxGiftAmount || 0),
+          Math.max(0, eligibleSubtotal - Number(rule.paidThresholdAmount || 0)),
+        )
+      : rule.type === "percentage_cart_discount" ||
+          rule.type === "percentage_category_discount"
+        ? eligibleSubtotal * (Number(rule.discountPercent || 0) / 100)
+        : Number(rule.discountAmount || 0);
   const cappedDiscount = rule.maxDiscountAmount
     ? Math.min(rawDiscount, Number(rule.maxDiscountAmount))
     : rawDiscount;
   const discountAmount = roundMoney(Math.min(cappedDiscount, subtotal));
 
   if (discountAmount <= 0) return null;
+  const label =
+    rule.type === "threshold_extra_discount"
+      ? `Offre Verdanza : ${formatPromotionEuro(discountAmount).replace(
+          ",00",
+          "",
+        )} de fleurs offerts`
+      : rule.label;
   return {
     id: rule.id,
-    label: rule.label,
+    label,
     type: rule.type,
     discountAmount,
     eligibleSubtotal: roundMoney(eligibleSubtotal),
@@ -213,8 +235,30 @@ function buildProgressMessages(
 ) {
   return rules
     .map((rule) => {
-      if (rule.type !== "fixed_category_discount" || !rule.eligibleCategory) return "";
+      if (
+        rule.type !== "fixed_category_discount" &&
+        rule.type !== "threshold_extra_discount"
+      ) {
+        return "";
+      }
+      if (!rule.eligibleCategory) return "";
       const eligibleSubtotal = categorySubtotal(lines, rule.eligibleCategory);
+      if (rule.type === "threshold_extra_discount") {
+        const paidThresholdAmount = Number(rule.paidThresholdAmount || 0);
+        const maxGiftAmount = Number(rule.maxGiftAmount || 0);
+        const missing = paidThresholdAmount - eligibleSubtotal;
+        if (missing > 0 && subtotal > 0 && eligibleSubtotal > 0) {
+          return `Encore ${formatPromotionEuro(missing)} de fleurs CBD pour débloquer l'offre : jusqu'à ${formatPromotionEuro(
+            maxGiftAmount,
+          )} offerts.`;
+        }
+        if (eligibleSubtotal === paidThresholdAmount && paidThresholdAmount > 0) {
+          return `Offre débloquée : ajoutez jusqu'à ${formatPromotionEuro(
+            maxGiftAmount,
+          )} de fleurs CBD offertes.`;
+        }
+        return "";
+      }
       const missing = Number(rule.minEligibleSubtotal || 0) - eligibleSubtotal;
       if (missing <= 0 || subtotal <= 0 || eligibleSubtotal <= 0) return "";
       return `Encore ${formatPromotionEuro(missing)} de fleurs CBD pour profiter de l'offre : ${formatPromotionEuro(
