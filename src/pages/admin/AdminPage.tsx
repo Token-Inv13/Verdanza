@@ -80,6 +80,7 @@ import type {
   PromoBannerPlacement,
   PromoBannerType,
   PromoBannerVariant,
+  PromotionRuleType,
   ProductReview,
   ProductFavorite,
   LoyaltyMovement,
@@ -128,6 +129,13 @@ const emptyCoupon: CouponInput = {
   discountType: "percent",
   discountValue: 10,
   minimumOrder: 0,
+  autoApply: false,
+  promotionType: "percentage_cart_discount",
+  eligibleCategory: undefined,
+  minEligibleSubtotal: 0,
+  maxDiscountAmount: undefined,
+  stackable: false,
+  priority: 10,
   usedCount: 0,
   isActive: true,
   productIds: [],
@@ -1334,6 +1342,14 @@ function CouponForm({
           />
           Actif
         </label>
+        <label className="flex items-center gap-2 text-sm text-forest">
+          <input
+            type="checkbox"
+            checked={coupon.autoApply === true}
+            onChange={(event) => onChange({ ...coupon, autoApply: event.target.checked })}
+          />
+          Auto-appliquer dans le panier
+        </label>
         <div className="rounded-md border border-champagne/30 bg-cream p-3 text-sm leading-6 text-forest">
           <strong className="block">Aperçu</strong>
           {preview}
@@ -1348,6 +1364,73 @@ function CouponForm({
         </button>
         {showAdvanced && (
           <div className="grid gap-4 rounded-md border border-forest/10 bg-cream p-4">
+            <label className="text-sm font-medium text-forest">
+              Type moteur automatique
+              <select
+                className="input-field mt-2"
+                value={coupon.promotionType || inferAdminPromotionType(coupon)}
+                onChange={(event) =>
+                  onChange({
+                    ...coupon,
+                    promotionType: event.target.value as PromotionRuleType,
+                  })
+                }
+              >
+                <option value="fixed_cart_discount">Montant fixe panier</option>
+                <option value="fixed_category_discount">Montant fixe categorie</option>
+                <option value="percentage_cart_discount">Pourcentage panier</option>
+                <option value="percentage_category_discount">Pourcentage categorie</option>
+                <option value="free_shipping">Livraison offerte</option>
+              </select>
+            </label>
+            <label className="text-sm font-medium text-forest">
+              Categorie eligible
+              <select
+                className="input-field mt-2"
+                value={coupon.eligibleCategory || ""}
+                onChange={(event) => {
+                  const category = (event.target.value || undefined) as
+                    | ProductCategory
+                    | undefined;
+                  onChange({
+                    ...coupon,
+                    eligibleCategory: category,
+                    categories: category ? [category] : coupon.categories,
+                  });
+                }}
+              >
+                <option value="">Tout le panier</option>
+                <option value="flowers">Fleurs CBD</option>
+                <option value="resins">Resines CBD</option>
+              </select>
+            </label>
+            <NumberInput
+              label="Minimum sur categorie eligible"
+              value={coupon.minEligibleSubtotal || 0}
+              onChange={(minEligibleSubtotal) =>
+                onChange({ ...coupon, minEligibleSubtotal })
+              }
+            />
+            <NumberInput
+              label="Remise maximale"
+              value={coupon.maxDiscountAmount || 0}
+              onChange={(maxDiscountAmount) =>
+                onChange({ ...coupon, maxDiscountAmount: maxDiscountAmount || undefined })
+              }
+            />
+            <NumberInput
+              label="Priorite"
+              value={coupon.priority || 10}
+              onChange={(priority) => onChange({ ...coupon, priority })}
+            />
+            <label className="flex items-center gap-2 text-sm text-forest">
+              <input
+                type="checkbox"
+                checked={coupon.stackable === true}
+                onChange={(event) => onChange({ ...coupon, stackable: event.target.checked })}
+              />
+              Cumulable plus tard
+            </label>
             <NumberInput
               label="Utilisations actuelles"
               value={coupon.usedCount || 0}
@@ -2935,6 +3018,7 @@ type AdminOrderListItem = {
   discountAmount?: number;
   couponCode?: string;
   promoApplied?: boolean;
+  appliedPromotions?: AdminOrderRow["appliedPromotions"];
   discountType?: Coupon["discountType"];
   discountValue?: number;
   total: string;
@@ -3232,7 +3316,7 @@ function AdminOrders({
                   : "Produits a renseigner"}
                 {order.promoApplied && (
                   <span className="mt-2 block text-forest">
-                    Code promo {order.couponCode} : -{formatEuro(Number(order.discountAmount || 0))} EUR
+                    {orderPromotionLabel(order)} : -{formatEuro(Number(order.discountAmount || 0))} EUR
                   </span>
                 )}
               </div>
@@ -3518,7 +3602,7 @@ function AdminOrders({
                     : "A renseigner"}
                   {order.promoApplied && (
                     <span className="mt-2 block text-xs leading-5 text-forest">
-                      Code promo {order.couponCode}
+                      {orderPromotionLabel(order)}
                       <br />
                       Remise : -{formatEuro(Number(order.discountAmount || 0))} EUR
                       <br />
@@ -3846,7 +3930,7 @@ function DesktopOrderCard({
             </strong>
             {order.promoApplied && (
               <span className="mt-2 block text-xs text-forest">
-                Code promo {order.couponCode} : -{formatEuro(Number(order.discountAmount || 0))} EUR
+                {orderPromotionLabel(order)} : -{formatEuro(Number(order.discountAmount || 0))} EUR
                 <br />
                 Avant remise : {formatEuro(Number(order.subtotalBeforeDiscount || order.subtotal || 0))} EUR
               </span>
@@ -4867,6 +4951,15 @@ function couponDescription(coupon: Coupon) {
   return `${couponTypeLabel(coupon.discountType)} : ${couponValueLabel(coupon)}${minimumText}.`;
 }
 
+function inferAdminPromotionType(coupon: CouponInput): PromotionRuleType {
+  const category = coupon.eligibleCategory || coupon.categories?.[0];
+  if (coupon.discountType === "free_shipping") return "free_shipping";
+  if (coupon.discountType === "percent") {
+    return category ? "percentage_category_discount" : "percentage_cart_discount";
+  }
+  return category ? "fixed_category_discount" : "fixed_cart_discount";
+}
+
 function couponStatus(coupon: Coupon): { label: string; tone: AdminBadgeTone } {
   const now = Date.now();
   const startsAt = coupon.startsAt ? Date.parse(coupon.startsAt) : 0;
@@ -4947,6 +5040,13 @@ function findLinkedCoupon(coupons: Coupon[], banner: PromoBanner) {
   const code = (banner.linkedPromoCode || "").trim().toUpperCase();
   if (!code) return undefined;
   return coupons.find((coupon) => coupon.code.trim().toUpperCase() === code);
+}
+
+function orderPromotionLabel(
+  order: Pick<AdminOrderRow, "couponCode" | "appliedPromotions">,
+) {
+  if (order.couponCode) return `Code promo ${order.couponCode}`;
+  return order.appliedPromotions?.[0]?.label || "Offre automatique";
 }
 
 function adminBannerPreviewClass(variant: PromoBannerVariant) {

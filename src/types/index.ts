@@ -118,6 +118,22 @@ export type DeliveryZone = {
 };
 
 export type CouponDiscountType = "percent" | "fixed" | "free_shipping";
+export type PromotionRuleType =
+  | "fixed_cart_discount"
+  | "fixed_category_discount"
+  | "percentage_cart_discount"
+  | "percentage_category_discount"
+  | "free_shipping";
+
+export type AppliedPromotion = {
+  id: string;
+  label: string;
+  type: PromotionRuleType;
+  discountAmount: number;
+  eligibleSubtotal?: number;
+  couponId?: string;
+  couponCode?: string;
+};
 
 export type Coupon = {
   id: string;
@@ -126,6 +142,13 @@ export type Coupon = {
   discountType: CouponDiscountType;
   discountValue: number;
   minimumOrder: number;
+  autoApply?: boolean;
+  promotionType?: PromotionRuleType;
+  eligibleCategory?: ProductCategory;
+  minEligibleSubtotal?: number;
+  maxDiscountAmount?: number;
+  stackable?: boolean;
+  priority?: number;
   maxUses?: number;
   usedCount: number;
   startsAt?: string;
@@ -320,6 +343,10 @@ export type Order = {
   discountValue?: number;
   totalAfterDiscount?: number;
   promoApplied?: boolean;
+  promotionDiscountTotal?: number;
+  appliedPromotions?: AppliedPromotion[];
+  subtotalBeforePromotion?: number;
+  subtotalAfterPromotion?: number;
   total: number;
   paymentProvider?: PaymentProvider;
   paymentStatus: PaymentStatus;

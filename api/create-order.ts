@@ -49,6 +49,15 @@ export default async function handler(
         ? db.collection("coupons").doc(priced.couponId)
         : null;
       const couponSnapshot = couponRef ? await transaction.get(couponRef) : null;
+      const automaticCouponReads = await Promise.all(
+        priced.appliedPromotions
+          .filter((promotion) => promotion.couponId && promotion.couponId !== priced.couponId)
+          .map(async (promotion) => {
+            const couponRef = db.collection("coupons").doc(promotion.couponId as string);
+            const couponSnapshot = await transaction.get(couponRef);
+            return { couponSnapshot };
+          }),
+      );
       const productReads = await Promise.all(
         priced.orderItems.map(async (item) => {
           const productRef = db.collection("products").doc(item.productId);
@@ -64,6 +73,15 @@ export default async function handler(
         }
         if (coupon?.maxUses && Number(coupon.usedCount || 0) >= Number(coupon.maxUses)) {
           throw new Error("Code promo deja utilise au maximum.");
+        }
+      }
+      for (const { couponSnapshot } of automaticCouponReads) {
+        const coupon = couponSnapshot.data();
+        if (!couponSnapshot.exists || coupon?.isActive === false || coupon?.isArchived === true) {
+          throw new Error("Promotion automatique invalide.");
+        }
+        if (coupon?.maxUses && Number(coupon.usedCount || 0) >= Number(coupon.maxUses)) {
+          throw new Error("Promotion automatique utilisee au maximum.");
         }
       }
 
@@ -104,6 +122,17 @@ export default async function handler(
       if (priced.couponCode) {
         transaction.set(
           db.collection("coupons").doc(priced.couponId || priced.couponCode.toLowerCase()),
+          {
+            usedCount: FieldValue.increment(1),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+      for (const promotion of priced.appliedPromotions) {
+        if (!promotion.couponId || promotion.couponId === priced.couponId) continue;
+        transaction.set(
+          db.collection("coupons").doc(promotion.couponId),
           {
             usedCount: FieldValue.increment(1),
             updatedAt: FieldValue.serverTimestamp(),
@@ -156,6 +185,7 @@ export default async function handler(
       : message.includes("minimum de commande") ||
       message.includes("Code promo") ||
       message.includes("code promo") ||
+      message.includes("Promotion automatique") ||
       message.includes("livraison postale")
       ? message
       : "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza par email à contact@verdanza.fr.";

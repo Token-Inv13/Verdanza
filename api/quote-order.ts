@@ -35,6 +35,10 @@ export default async function handler(
       promoApplied: priced.promoApplied,
       discountType: priced.discountType,
       discountValue: priced.discountValue,
+      promotionDiscountTotal: priced.promotionDiscountTotal,
+      appliedPromotions: priced.appliedPromotions,
+      subtotalBeforePromotion: priced.subtotalBeforePromotion,
+      subtotalAfterPromotion: priced.subtotalAfterPromotion,
       postalFreeShippingApplied: priced.postalFreeShippingApplied,
       total: priced.total,
     });

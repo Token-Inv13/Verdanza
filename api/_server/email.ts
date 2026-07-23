@@ -417,13 +417,14 @@ function promoEmailHtml(order: Order) {
   if (!hasPromo) return "";
   const subtotal = Number(order.subtotalBeforeDiscount || order.subtotal || 0);
   const discount = Number(order.discountAmount || 0);
+  const promoLabel = promotionEmailLabel(order);
   const discountLabel =
     order.discountType === "free_shipping" && discount <= 0
       ? "Livraison postale offerte"
       : `-${formatMoney(discount)}`;
   return `
     <p><strong>Sous-total avant remise :</strong> ${formatMoney(subtotal)}</p>
-    <p><strong>Code promo ${escapeHtml(code || "")} :</strong> ${escapeHtml(discountLabel)}</p>
+    <p><strong>${escapeHtml(promoLabel)} :</strong> ${escapeHtml(discountLabel)}</p>
   `;
 }
 
@@ -433,14 +434,21 @@ function promoEmailTextLines(order: Order) {
   if (!hasPromo) return [];
   const subtotal = Number(order.subtotalBeforeDiscount || order.subtotal || 0);
   const discount = Number(order.discountAmount || 0);
+  const promoLabel = promotionEmailLabel(order);
   const discountLabel =
     order.discountType === "free_shipping" && discount <= 0
       ? "Livraison postale offerte"
       : `-${formatMoney(discount)}`;
   return [
     `Sous-total avant remise: ${formatMoney(subtotal)}`,
-    `Code promo ${code || ""}: ${discountLabel}`,
+    `${promoLabel}: ${discountLabel}`,
   ];
+}
+
+function promotionEmailLabel(order: Order) {
+  const code = order.couponCode || order.promoCode;
+  if (code) return `Code promo ${code}`;
+  return order.appliedPromotions?.[0]?.label || "Offre Verdanza";
 }
 
 function customerManualOrderEmailHtml(order: Order) {

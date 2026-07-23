@@ -1,0 +1,260 @@
+import type {
+  AppliedPromotion,
+  Coupon,
+  OrderItem,
+  ProductCategory,
+  PromotionRuleType,
+} from "../types";
+
+export type PromotionCartLine = {
+  productId: string;
+  name?: string;
+  category?: ProductCategory;
+  quantity: number;
+  unitPrice: number;
+};
+
+export type PromotionRule = {
+  id: string;
+  label: string;
+  active: boolean;
+  autoApply: boolean;
+  type: PromotionRuleType;
+  eligibleCategory?: ProductCategory;
+  minCartSubtotal?: number;
+  minEligibleSubtotal?: number;
+  discountAmount?: number;
+  discountPercent?: number;
+  maxDiscountAmount?: number;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  priority?: number;
+  stackable?: boolean;
+  couponCode?: string;
+  couponId?: string;
+};
+
+export type CartPromotionResult = {
+  subtotalBeforePromotion: number;
+  subtotalAfterPromotion: number;
+  promotionDiscountTotal: number;
+  appliedPromotions: AppliedPromotion[];
+  progressMessages: string[];
+};
+
+export const LAUNCH_FLOWERS_PROMOTION: PromotionRule = {
+  id: "launch-flowers-20-off-30",
+  label: "Offre Verdanza : 20 € de fleurs offerts",
+  active: true,
+  autoApply: true,
+  type: "fixed_category_discount",
+  eligibleCategory: "flowers",
+  minEligibleSubtotal: 30,
+  discountAmount: 20,
+  priority: 10,
+  stackable: false,
+};
+
+export const BUILT_IN_AUTOMATIC_PROMOTIONS: PromotionRule[] = [
+  LAUNCH_FLOWERS_PROMOTION,
+];
+
+export function calculateCartPromotions(input: {
+  lines: PromotionCartLine[] | OrderItem[];
+  rules?: PromotionRule[];
+  now?: Date;
+}): CartPromotionResult {
+  const rules = input.rules ?? BUILT_IN_AUTOMATIC_PROMOTIONS;
+  const subtotalBeforePromotion = roundMoney(
+    input.lines.reduce(
+      (sum, line) => sum + Number(line.unitPrice || 0) * Number(line.quantity || 0),
+      0,
+    ),
+  );
+  const activeRules = rules
+    .filter((rule) => isRuleUsable(rule, input.now ?? new Date()))
+    .sort((left, right) => Number(left.priority || 0) - Number(right.priority || 0));
+
+  const candidates = activeRules
+    .map((rule) => evaluateRule(rule, input.lines, subtotalBeforePromotion))
+    .filter((entry): entry is AppliedPromotion => Boolean(entry && entry.discountAmount > 0));
+
+  const nonStackable = candidates.filter((entry) => {
+    const rule = activeRules.find((candidate) => candidate.id === entry.id);
+    return rule?.stackable !== true;
+  });
+  const stackable = candidates.filter((entry) => {
+    const rule = activeRules.find((candidate) => candidate.id === entry.id);
+    return rule?.stackable === true;
+  });
+
+  // MVP rule: automatic promotions do not stack by default. If several
+  // non-stackable promotions are eligible, the best discount wins.
+  const bestNonStackable = nonStackable.sort(
+    (left, right) => right.discountAmount - left.discountAmount,
+  )[0];
+  const appliedPromotions = bestNonStackable ? [bestNonStackable] : [];
+
+  // Stackable automatic promotions are intentionally not combined yet. This
+  // avoids unexpected stacking until an explicit Admin rule defines ordering.
+  void stackable;
+
+  const promotionDiscountTotal = roundMoney(
+    Math.min(
+      subtotalBeforePromotion,
+      appliedPromotions.reduce((sum, promotion) => sum + promotion.discountAmount, 0),
+    ),
+  );
+
+  return {
+    subtotalBeforePromotion,
+    subtotalAfterPromotion: roundMoney(subtotalBeforePromotion - promotionDiscountTotal),
+    promotionDiscountTotal,
+    appliedPromotions,
+    progressMessages: buildProgressMessages(activeRules, input.lines, subtotalBeforePromotion),
+  };
+}
+
+export function automaticPromotionRulesFromCoupons(coupons: Coupon[] = []) {
+  const couponRules = coupons
+    .map(promotionRuleFromCoupon)
+    .filter((rule): rule is PromotionRule => Boolean(rule));
+
+  return dedupePromotionRules([...couponRules, ...BUILT_IN_AUTOMATIC_PROMOTIONS]);
+}
+
+export function promotionRuleFromCoupon(coupon: Coupon): PromotionRule | null {
+  if (!coupon.autoApply) return null;
+  const categories = coupon.categories ?? [];
+  const type =
+    coupon.promotionType ??
+    inferPromotionType(coupon.discountType, coupon.eligibleCategory ?? categories[0]);
+  const eligibleCategory = coupon.eligibleCategory ?? categories[0];
+
+  return {
+    id: coupon.id || coupon.code,
+    label: coupon.label || coupon.code,
+    active: coupon.isActive && !coupon.isArchived,
+    autoApply: true,
+    type,
+    eligibleCategory,
+    minCartSubtotal: Number(coupon.minimumOrder || 0),
+    minEligibleSubtotal: Number(coupon.minEligibleSubtotal || coupon.minimumOrder || 0),
+    discountAmount: coupon.discountType === "fixed" ? Number(coupon.discountValue || 0) : 0,
+    discountPercent: coupon.discountType === "percent" ? Number(coupon.discountValue || 0) : 0,
+    maxDiscountAmount: coupon.maxDiscountAmount,
+    startsAt: coupon.startsAt ?? null,
+    endsAt: coupon.endsAt ?? null,
+    priority: coupon.priority,
+    stackable: coupon.stackable,
+    couponCode: coupon.code,
+    couponId: coupon.id,
+  };
+}
+
+function inferPromotionType(
+  discountType: Coupon["discountType"],
+  eligibleCategory?: ProductCategory,
+): PromotionRuleType {
+  if (discountType === "free_shipping") return "free_shipping";
+  if (discountType === "percent") {
+    return eligibleCategory ? "percentage_category_discount" : "percentage_cart_discount";
+  }
+  return eligibleCategory ? "fixed_category_discount" : "fixed_cart_discount";
+}
+
+function evaluateRule(
+  rule: PromotionRule,
+  lines: PromotionCartLine[] | OrderItem[],
+  subtotal: number,
+): AppliedPromotion | null {
+  if (rule.type === "free_shipping") return null;
+  const eligibleSubtotal =
+    rule.type === "fixed_category_discount" ||
+    rule.type === "percentage_category_discount"
+      ? categorySubtotal(lines, rule.eligibleCategory)
+      : subtotal;
+
+  if (subtotal < Number(rule.minCartSubtotal || 0)) return null;
+  if (eligibleSubtotal < Number(rule.minEligibleSubtotal || 0)) return null;
+  if (eligibleSubtotal <= 0) return null;
+
+  const rawDiscount =
+    rule.type === "percentage_cart_discount" || rule.type === "percentage_category_discount"
+      ? eligibleSubtotal * (Number(rule.discountPercent || 0) / 100)
+      : Number(rule.discountAmount || 0);
+  const cappedDiscount = rule.maxDiscountAmount
+    ? Math.min(rawDiscount, Number(rule.maxDiscountAmount))
+    : rawDiscount;
+  const discountAmount = roundMoney(Math.min(cappedDiscount, subtotal));
+
+  if (discountAmount <= 0) return null;
+  return {
+    id: rule.id,
+    label: rule.label,
+    type: rule.type,
+    discountAmount,
+    eligibleSubtotal: roundMoney(eligibleSubtotal),
+    couponId: rule.couponId,
+    couponCode: rule.couponCode,
+  };
+}
+
+function buildProgressMessages(
+  rules: PromotionRule[],
+  lines: PromotionCartLine[] | OrderItem[],
+  subtotal: number,
+) {
+  return rules
+    .map((rule) => {
+      if (rule.type !== "fixed_category_discount" || !rule.eligibleCategory) return "";
+      const eligibleSubtotal = categorySubtotal(lines, rule.eligibleCategory);
+      const missing = Number(rule.minEligibleSubtotal || 0) - eligibleSubtotal;
+      if (missing <= 0 || subtotal <= 0 || eligibleSubtotal <= 0) return "";
+      return `Encore ${formatPromotionEuro(missing)} de fleurs CBD pour profiter de l'offre : ${formatPromotionEuro(
+        Number(rule.discountAmount || 0),
+      )} offerts.`;
+    })
+    .filter(Boolean);
+}
+
+function categorySubtotal(
+  lines: PromotionCartLine[] | OrderItem[],
+  category?: ProductCategory,
+) {
+  if (!category) return 0;
+  return roundMoney(
+    lines.reduce((sum, line) => {
+      if (line.category !== category) return sum;
+      return sum + Number(line.unitPrice || 0) * Number(line.quantity || 0);
+    }, 0),
+  );
+}
+
+function isRuleUsable(rule: PromotionRule, now: Date) {
+  if (!rule.active || !rule.autoApply) return false;
+  const nowTime = now.getTime();
+  const startsAt = rule.startsAt ? Date.parse(rule.startsAt) : 0;
+  const endsAt = rule.endsAt ? Date.parse(rule.endsAt) : 0;
+  if (startsAt && nowTime < startsAt) return false;
+  if (endsAt && nowTime > endsAt) return false;
+  return true;
+}
+
+function dedupePromotionRules(rules: PromotionRule[]) {
+  const seen = new Set<string>();
+  return rules.filter((rule) => {
+    const key = rule.couponCode || rule.id;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function formatPromotionEuro(value: number) {
+  return `${roundMoney(value).toFixed(2).replace(".", ",")} €`;
+}
+
+function roundMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}

@@ -50,6 +50,15 @@ export async function upsertCoupon(input: CouponInput) {
       label: input.label || code,
       discountValue: Number(input.discountValue || 0),
       minimumOrder: Number(input.minimumOrder || 0),
+      autoApply: input.autoApply === true,
+      promotionType: input.promotionType || undefined,
+      eligibleCategory: input.eligibleCategory || undefined,
+      minEligibleSubtotal: Number(input.minEligibleSubtotal || 0),
+      maxDiscountAmount: input.maxDiscountAmount
+        ? Number(input.maxDiscountAmount)
+        : undefined,
+      stackable: input.stackable === true,
+      priority: Number(input.priority || 10),
       maxUses: input.maxUses || undefined,
       usedCount: Number(input.usedCount || 0),
       isActive: Boolean(input.isActive),

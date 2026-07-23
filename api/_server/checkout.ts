@@ -8,6 +8,7 @@ import type {
   Coupon,
   PreferredPaymentMethod,
   DeliveryFeeStatus,
+  AppliedPromotion,
 } from "../../src/types/index.js";
 import {
   effectiveLocalDeliveryMinimum,
@@ -15,6 +16,10 @@ import {
   isPostalShippingFree,
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../../src/config/deliveryRules.js";
+import {
+  automaticPromotionRulesFromCoupons,
+  calculateCartPromotions,
+} from "../../src/lib/cartPromotions.js";
 
 const preferredPaymentMethods: PreferredPaymentMethod[] = [
   "card_payment_link",
@@ -102,6 +107,10 @@ export type PricedCheckout = {
   discountType?: Coupon["discountType"];
   discountValue?: number;
   promoApplied: boolean;
+  promotionDiscountTotal: number;
+  appliedPromotions: AppliedPromotion[];
+  subtotalBeforePromotion: number;
+  subtotalAfterPromotion: number;
   subtotalBeforeDiscount: number;
   totalAfterDiscount: number;
   total: number;
@@ -228,6 +237,18 @@ export async function priceCheckout(
         body.deliveryMethod,
       )
     : null;
+  const automaticPromotions = coupon
+    ? {
+        subtotalBeforePromotion: subtotal,
+        subtotalAfterPromotion: subtotal,
+        promotionDiscountTotal: 0,
+        appliedPromotions: [],
+        progressMessages: [],
+      }
+    : calculateCartPromotions({
+        lines: orderItems,
+        rules: automaticPromotionRulesFromCoupons(await listAutomaticCoupons(db)),
+      });
   const effectiveDelivery =
     coupon?.freeShippingApplied && body.deliveryMethod === "postal"
       ? {
@@ -241,7 +262,7 @@ export async function priceCheckout(
   const beforeDiscount = roundMoney(subtotal + effectiveDelivery.fee);
   const discountAmount = coupon
     ? Math.min(coupon.discountAmount, Math.max(0, beforeDiscount))
-    : 0;
+    : Math.min(automaticPromotions.promotionDiscountTotal, Math.max(0, beforeDiscount));
   const total = roundMoney(beforeDiscount - discountAmount);
 
   return {
@@ -254,7 +275,11 @@ export async function priceCheckout(
     couponId: coupon?.id,
     discountType: coupon?.discountType,
     discountValue: coupon?.discountValue,
-    promoApplied: Boolean(coupon),
+    promoApplied: Boolean(coupon || automaticPromotions.appliedPromotions.length),
+    promotionDiscountTotal: automaticPromotions.promotionDiscountTotal,
+    appliedPromotions: automaticPromotions.appliedPromotions,
+    subtotalBeforePromotion: automaticPromotions.subtotalBeforePromotion,
+    subtotalAfterPromotion: automaticPromotions.subtotalAfterPromotion,
     totalAfterDiscount: total,
     total,
     deliveryZoneName: effectiveDelivery.zoneName,
@@ -263,6 +288,13 @@ export async function priceCheckout(
     deliveryFeeStatus: effectiveDelivery.deliveryFeeStatus,
     deliveryNote: effectiveDelivery.deliveryNote,
   };
+}
+
+async function listAutomaticCoupons(db: FirebaseFirestore.Firestore) {
+  const snapshot = await db.collection("coupons").get();
+  return snapshot.docs
+    .map((entry) => ({ id: entry.id, ...entry.data() }) as Coupon)
+    .filter((coupon) => coupon.autoApply === true);
 }
 
 async function resolveCoupon(
@@ -477,6 +509,10 @@ export function orderPayload(
     promoId: priced.couponId ?? null,
     discountType: priced.discountType ?? null,
     discountValue: priced.discountValue ?? null,
+    promotionDiscountTotal: priced.promotionDiscountTotal,
+    appliedPromotions: priced.appliedPromotions,
+    subtotalBeforePromotion: priced.subtotalBeforePromotion,
+    subtotalAfterPromotion: priced.subtotalAfterPromotion,
     totalAfterDiscount: priced.totalAfterDiscount,
     promoApplied: priced.promoApplied,
     total: priced.total,

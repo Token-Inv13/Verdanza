@@ -59,6 +59,10 @@ export type AdminOrderRow = {
   discountAmount?: number;
   couponCode?: string;
   promoApplied?: boolean;
+  promotionDiscountTotal?: number;
+  appliedPromotions?: Order["appliedPromotions"];
+  subtotalBeforePromotion?: number;
+  subtotalAfterPromotion?: number;
   discountType?: Order["discountType"];
   discountValue?: number;
   total: string;
@@ -135,6 +139,10 @@ export async function getAdminOrdersWithFallback() {
         discountAmount: order.discountAmount,
         couponCode: order.couponCode || order.promoCode,
         promoApplied: order.promoApplied,
+        promotionDiscountTotal: order.promotionDiscountTotal,
+        appliedPromotions: order.appliedPromotions || [],
+        subtotalBeforePromotion: order.subtotalBeforePromotion,
+        subtotalAfterPromotion: order.subtotalAfterPromotion,
         discountType: order.discountType,
         discountValue: order.discountValue,
         total: `${Number(order.total || 0).toFixed(2).replace(".", ",")} EUR`,

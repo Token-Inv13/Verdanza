@@ -11,6 +11,7 @@ import {
   getCartStockIssues,
   publicProductStockLabel,
 } from "../lib/cartStock";
+import { calculateCartPromotions } from "../lib/cartPromotions";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
 import { trackAddToCart, trackCtaClick, trackRemoveFromCart, trackViewCart } from "../lib/analytics";
 
@@ -24,9 +25,35 @@ export function CartPage() {
     window.localStorage.getItem(promoStorageKey) || "",
   );
   const [quote, setQuote] = useState<OrderQuote | null>(null);
+  const [automaticQuote, setAutomaticQuote] = useState<OrderQuote | null>(null);
   const [promoMessage, setPromoMessage] = useState("");
   const [isCheckingPromo, setIsCheckingPromo] = useState(false);
-  const discountAmount = quote?.promoApplied ? quote.discountAmount : 0;
+  const automaticPromotions = calculateCartPromotions({
+    lines: lines.map((line) => ({
+      productId: line.productId,
+      name: line.product.name,
+      category: line.product.category,
+      quantity: line.quantity,
+      unitPrice: line.product.price,
+    })),
+  });
+  const hasCouponInput = Boolean(couponCode.trim());
+  const hasManualPromo = Boolean(quote?.promoApplied && hasCouponInput);
+  const automaticAppliedPromotions = hasCouponInput
+    ? []
+    : automaticQuote?.appliedPromotions?.length
+      ? automaticQuote.appliedPromotions
+      : automaticPromotions.appliedPromotions;
+  const automaticDiscountAmount = hasCouponInput
+    ? 0
+    : Number(
+        automaticQuote?.promoApplied
+          ? automaticQuote.discountAmount
+          : automaticPromotions.promotionDiscountTotal,
+      );
+  const discountAmount = hasManualPromo
+    ? Number(quote?.discountAmount || 0)
+    : automaticDiscountAmount;
   const total = Math.max(0, subtotal + (lines.length ? deliveryEstimate : 0) - discountAmount);
   const stockIssues = getCartStockIssues(lines);
   const hasStockIssues = stockIssues.length > 0;
@@ -38,6 +65,28 @@ export function CartPage() {
       setPromoMessage("");
     }
   }, [couponCode]);
+
+  useEffect(() => {
+    if (!lines.length || couponCode.trim()) {
+      setAutomaticQuote(null);
+      return;
+    }
+    let cancelled = false;
+    quoteOrder({
+      items,
+      deliveryMethod: "postal",
+      deliveryZone: "postal-france",
+    })
+      .then((nextQuote) => {
+        if (!cancelled) setAutomaticQuote(nextQuote);
+      })
+      .catch(() => {
+        if (!cancelled) setAutomaticQuote(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [couponCode, items, lines.length, subtotal]);
 
   useEffect(() => {
     const signature = lines.map((line) => `${line.productId}:${line.quantity}`).join("|");
@@ -240,6 +289,20 @@ export function CartPage() {
                   </span>
                 </p>
               )}
+              {!hasManualPromo &&
+                automaticAppliedPromotions.map((promotion) => (
+                  <p key={promotion.id} className="flex justify-between text-forest">
+                    <span>{promotion.label}</span>
+                    <span>-{formatEuro(promotion.discountAmount)}</span>
+                  </p>
+                ))}
+              {!hasManualPromo &&
+                !automaticAppliedPromotions.length &&
+                automaticPromotions.progressMessages.map((message) => (
+                  <p key={message} className="text-xs leading-5 text-forest/70">
+                    {message}
+                  </p>
+                ))}
               <p className="flex justify-between">
                 <span>Livraison estimée</span>
                 <span>

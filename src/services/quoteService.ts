@@ -1,4 +1,10 @@
-import type { CartItem, CouponDiscountType, DeliveryFeeStatus, DeliveryMethod } from "../types";
+import type {
+  AppliedPromotion,
+  CartItem,
+  CouponDiscountType,
+  DeliveryFeeStatus,
+  DeliveryMethod,
+} from "../types";
 
 export type OrderQuote = {
   subtotal: number;
@@ -11,6 +17,10 @@ export type OrderQuote = {
   promoApplied: boolean;
   discountType?: CouponDiscountType;
   discountValue?: number;
+  promotionDiscountTotal?: number;
+  appliedPromotions?: AppliedPromotion[];
+  subtotalBeforePromotion?: number;
+  subtotalAfterPromotion?: number;
   postalFreeShippingApplied: boolean;
   total: number;
 };
