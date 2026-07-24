@@ -28,7 +28,6 @@ export function ProductCard({
 }) {
   const navigate = useNavigate();
   const { addItem } = useCart();
-  const isComingSoon = product.comingSoon || product.stockStatus === "coming_soon";
   const isOrderable = isProductOrderable(product);
   const stockLabel = publicProductStockLabel(product);
   const hasKnownCbd = product.cbdRate && product.cbdRate !== "Non communiqué";
@@ -138,17 +137,11 @@ export function ProductCard({
             </button>
           )}
         </div>
-        {isOrderable && (
+        {isOrderable ? (
           <p className="text-xs font-semibold text-forest/65">
             {stockLabel}
           </p>
-        )}
-        {isComingSoon && (
-          <p className="rounded-md border border-champagne/35 bg-cream px-3 py-2 text-sm font-semibold text-forest">
-            {product.stockLabel || "En arrivage chez Verdanza"}
-          </p>
-        )}
-        {!isComingSoon && !isOrderable && (
+        ) : (
           <p className="rounded-md border border-champagne/35 bg-cream px-3 py-2 text-sm font-semibold text-forest">
             {stockLabel}
           </p>

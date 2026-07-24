@@ -18,17 +18,42 @@ import type { Product } from "../types";
 
 export type ProductInput = Omit<Product, "id"> & { id?: string };
 
-export function getLocalProducts() {
-  return localProducts;
+const legacyComingSoonLabelPattern = new RegExp(["En arrivage", "chez Verdanza"].join("\\s+"), "g");
+
+export function getLocalProducts(activeOnly = true) {
+  const products = localProducts.map(normalizeProduct);
+  return activeOnly ? products.filter((product) => product.isActive !== false) : products;
 }
 
 export function normalizeProduct(product: Product): Product {
+  const { comingSoon, stockStatus, stockLabel, ...normalized } = product as Product &
+    Record<string, unknown>;
+  void comingSoon;
+  void stockStatus;
+  void stockLabel;
+  const sanitized = normalized as Product;
+
   return {
-    ...product,
-    compareAtPrice: product.compareAtPrice || undefined,
-    qualitySealEnabled: product.qualitySealEnabled === true,
-    lowStockThreshold: product.lowStockThreshold ?? 5,
+    ...sanitized,
+    price: Number(sanitized.price || 0),
+    compareAtPrice: Number(sanitized.compareAtPrice || 0) || undefined,
+    stock: Math.max(0, Math.floor(Number(sanitized.stock || 0))),
+    shortDescription: removeLegacyAvailabilityText(sanitized.shortDescription),
+    longDescription: removeLegacyAvailabilityText(sanitized.longDescription),
+    seoDescription: removeLegacyAvailabilityText(sanitized.seoDescription),
+    qualitySealEnabled: sanitized.qualitySealEnabled === true,
+    lowStockThreshold: Math.max(0, Math.floor(Number(sanitized.lowStockThreshold ?? 5))),
+    isActive: sanitized.isActive !== false,
+    isFeatured: sanitized.isFeatured === true,
   };
+}
+
+function removeLegacyAvailabilityText(value: string) {
+  return value
+    .replace(legacyComingSoonLabelPattern, "")
+    .replace(/\s+([.,;:!?])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 export async function getFirestoreProducts(activeOnly = true) {
@@ -51,12 +76,12 @@ export async function getAdminProductsWithFallback() {
   try {
     const firestoreProducts = await getFirestoreProducts(false);
     return {
-      products: firestoreProducts.length ? firestoreProducts : getLocalProducts(),
+      products: firestoreProducts.length ? firestoreProducts : getLocalProducts(false),
       source: firestoreProducts.length ? ("firestore" as const) : ("local" as const),
     };
   } catch (error) {
     logFirestoreFallback("Falling back to local admin products", error);
-    return { products: getLocalProducts(), source: "local" as const };
+    return { products: getLocalProducts(false), source: "local" as const };
   }
 }
 

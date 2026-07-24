@@ -69,7 +69,6 @@ export function ProductPage() {
     );
   }
 
-  const isComingSoon = product.comingSoon || product.stockStatus === "coming_soon";
   const isOrderable = isProductOrderable(product);
   const stockLabel = publicProductStockLabel(product);
   const path = productPath(product);
@@ -77,7 +76,7 @@ export function ProductPage() {
   const categoryPath = product.category === "flowers" ? "/fleurs-cbd" : "/resines-cbd";
   const isHydroponicFlower =
     product.cultureType === "Hydroponique" && product.category === "flowers";
-  const isComingSoonResin = isComingSoon && product.category === "resins";
+  const isResin = product.category === "resins";
   const keyFacts = isHydroponicFlower
     ? [
         ["Type", "Fleur CBD"],
@@ -85,9 +84,9 @@ export function ProductPage() {
         ["THC", product.thcRate],
         ["Origine", product.origin],
         ["Culture", product.cultureType],
-        ["Statut", product.stockLabel || "En arrivage chez Verdanza"],
+        ["Stock", stockLabel],
       ]
-    : isComingSoonResin
+    : isResin
       ? [
           ["Type", "Résine CBD"],
           ["Gamme", "Sélection Verdanza"],
@@ -101,7 +100,7 @@ export function ProductPage() {
           ["THC", product.thcRate],
           ["Origine", product.origin],
           ["Texture", product.texture || "À confirmer"],
-          ["Statut", product.stockLabel || "En arrivage chez Verdanza"],
+          ["Stock", stockLabel],
         ]
     : [
         ["CBD", product.cbdRate],
@@ -141,7 +140,7 @@ export function ProductPage() {
               className="mx-auto h-full w-full object-contain"
             />
           </div>
-          {(isHydroponicFlower || isComingSoonResin) && (
+          {(isHydroponicFlower || isResin) && (
             <aside className="rounded-md border border-forest/10 bg-ivory p-5">
               <p className="font-display text-2xl text-forest">
                 {product.category === "flowers" ? "Fleur CBD" : "Résine CBD"}
@@ -227,7 +226,7 @@ export function ProductPage() {
               </p>
             </div>
           )}
-          {isComingSoonResin && (
+          {isResin && (
             <div className="mt-7">
               <h2 className="font-display text-2xl text-forest">Composition</h2>
               <p className="mt-2 leading-7 text-ink/70">
@@ -249,11 +248,7 @@ export function ProductPage() {
             <span className="font-display text-4xl text-forest">
               {product.price.toFixed(2).replace(".", ",")} EUR/g
             </span>
-            {isComingSoon ? (
-              <span className="rounded-md border border-champagne/40 bg-cream px-5 py-3 font-semibold text-forest">
-                {product.stockLabel || "En arrivage chez Verdanza"}
-              </span>
-            ) : isOrderable ? (
+            {isOrderable ? (
               <button
                 className="btn-primary"
                 onClick={() => {
@@ -274,22 +269,11 @@ export function ProductPage() {
               {stockLabel}
             </p>
           )}
-          {isComingSoon && (
-            <p className="mt-6 text-sm leading-6 text-ink/60">
-              Produit réservé aux adultes. Vente interdite aux mineurs. Produit
-              CBD conforme à la règlementation en vigueur. THC inférieur au seuil légal. Ne pas ingérer. Tenir
-              hors de portée des enfants. Déconseillé aux femmes enceintes ou
-              allaitantes. Consultez un professionnel de santé en cas de
-              traitement médical.
-            </p>
-          )}
-          {!isComingSoon && (
-            <p className="mt-6 text-sm leading-6 text-ink/60">
-              Produit réservé aux personnes majeures. Tenir hors de portée des
-              enfants. Ce produit n'est pas destiné à remplacer un traitement
-              médical.
-            </p>
-          )}
+          <p className="mt-6 text-sm leading-6 text-ink/60">
+            Produit réservé aux personnes majeures. Tenir hors de portée des
+            enfants. Ce produit n'est pas destiné à remplacer un traitement
+            médical.
+          </p>
         </section>
       </div>
     </main>

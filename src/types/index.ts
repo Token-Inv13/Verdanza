@@ -1,5 +1,4 @@
 export type ProductCategory = "flowers" | "resins" | "oils" | "packs";
-export type ProductStockStatus = "available" | "coming_soon";
 
 export type CultureType =
   | "Indoor"
@@ -33,9 +32,6 @@ export type Product = {
   experienceDescription?: string;
   whyChooseDescription?: string;
   advisedProfile?: string;
-  comingSoon?: boolean;
-  stockStatus?: ProductStockStatus;
-  stockLabel?: string;
   stock: number;
   lowStockThreshold: number;
   isActive: boolean;

@@ -19,20 +19,10 @@ export function availableProductStock(product?: Product | null) {
   return Number.isFinite(stock) ? Math.max(0, stock) : 0;
 }
 
-export function isProductComingSoon(product?: Product | null) {
-  return Boolean(product?.comingSoon || product?.stockStatus === "coming_soon");
-}
-
 export function publicProductStockLabel(product?: Product | null) {
-  if (isProductComingSoon(product)) {
-    return product?.stockLabel || "En arrivage chez Verdanza";
-  }
-
   const stock = availableProductStock(product);
   if (!product || product.isActive === false) return "Indisponible";
-  if (stock <= 0) return "Victime de son succès";
-  if (stock <= 3) return "Derni\u00e8res quantit\u00e9s";
-  if (stock <= 10) return "Stock limit\u00e9";
+  if (stock <= 0) return "Rupture de stock";
   return "Disponible";
 }
 
@@ -40,7 +30,6 @@ export function isProductOrderable(product?: Product | null) {
   return Boolean(
     product &&
       product.isActive !== false &&
-      !isProductComingSoon(product) &&
       availableProductStock(product) > 0,
   );
 }

@@ -71,7 +71,7 @@ async function renderRoute(
   });
 
   await page.goto(`http://127.0.0.1:${port}${route.path}`, {
-    waitUntil: "networkidle",
+    waitUntil: "domcontentloaded",
   });
   await page.waitForSelector("h1", { timeout: 10000 });
   await page.waitForFunction(
@@ -210,7 +210,6 @@ async function blockExternalServices(context: import("playwright").BrowserContex
   await context.route("**/*", async (route) => {
     const url = route.request().url();
     if (
-      url.includes("firestore.googleapis.com") ||
       url.includes("identitytoolkit.googleapis.com") ||
       url.includes("firebaseinstallations.googleapis.com") ||
       url.includes("google-analytics.com") ||

@@ -212,11 +212,7 @@ export async function priceCheckout(
       ...productSnapshot.data(),
     } as Product;
 
-    if (
-      !product.isActive ||
-      product.comingSoon === true ||
-      product.stockStatus === "coming_soon"
-    ) {
+    if (!product.isActive) {
       throw new Error(`Produit inactif refuse : ${product.name}.`);
     }
     if (product.stock < item.quantity) {

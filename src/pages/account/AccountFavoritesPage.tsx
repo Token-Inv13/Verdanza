@@ -4,6 +4,7 @@ import { ProductImage } from "../../components/ProductImage";
 import { useCart } from "../../context/CartContext";
 import { useFavorites } from "../../context/FavoritesContext";
 import { useProducts } from "../../hooks/useProducts";
+import { isProductOrderable } from "../../lib/cartStock";
 
 export function AccountFavoritesPage() {
   const { favorites, isLoading, toggleFavorite } = useFavorites();
@@ -28,13 +29,7 @@ export function AccountFavoritesPage() {
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         {favorites.map((favorite) => {
           const product = products.find((entry) => entry.id === favorite.productId);
-          const canOrder = Boolean(
-            product &&
-              product.isActive &&
-              product.stock > 0 &&
-              !product.comingSoon &&
-              product.stockStatus !== "coming_soon",
-          );
+          const canOrder = isProductOrderable(product);
           return (
             <article
               key={favorite.id}

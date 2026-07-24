@@ -92,11 +92,7 @@ export default async function handler(
 
         const data = productSnapshot.data();
         const stock = Number(data?.stock ?? 0);
-        if (
-          data?.isActive !== true ||
-          data?.comingSoon === true ||
-          data?.stockStatus === "coming_soon"
-        ) {
+        if (data?.isActive !== true) {
           throw new Error(`Produit indisponible : ${item.name}.`);
         }
         if (stock < item.quantity) {

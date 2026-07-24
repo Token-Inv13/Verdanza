@@ -24,6 +24,7 @@
     "indexnow": "node --import tsx scripts/submitIndexNow.ts",
     "indexnow:verify": "node --import tsx scripts/verifyIndexNow.ts",
     "test:indexnow": "node --import tsx scripts/testIndexNow.ts",
+    "test:catalog": "node --import tsx scripts/testProductAvailability.ts",
     "test:promotions": "node --import tsx scripts/testPromotionsAndBanners.ts",
     "prerender": "node --import tsx scripts/prerender.ts",
     "sitemap": "node --import tsx scripts/generateSitemap.ts",

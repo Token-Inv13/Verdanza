@@ -6,7 +6,6 @@ import {
   useMemo,
   useState,
 } from "react";
-import { products } from "../data/products";
 import {
   availableProductStock,
   isProductOrderable,
@@ -35,7 +34,7 @@ const CartContext = createContext<CartContextValue | null>(null);
 const storageKey = "verdanza-cart";
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [catalog, setCatalog] = useState<Product[]>(products);
+  const [catalog, setCatalog] = useState<Product[]>([]);
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
       const stored = localStorage.getItem(storageKey);

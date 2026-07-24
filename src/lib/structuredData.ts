@@ -1,6 +1,7 @@
 import type { Product } from "../types";
 import type { BlogArticle } from "../types/blog";
 import { BRAND_OG_IMAGE } from "./brandAssets";
+import { isProductOrderable as isPublicProductOrderable } from "./cartStock";
 import { absoluteUrl } from "./siteUrl";
 
 export type JsonLdValue =
@@ -20,15 +21,13 @@ const organizationId = `${absoluteUrl("/")}#organization`;
 const websiteId = `${absoluteUrl("/")}#website`;
 
 export function isProductOrderable(product: Product) {
-  return !product.comingSoon && product.stockStatus !== "coming_soon";
+  return isPublicProductOrderable(product);
 }
 
 export function productAvailability(product: Product) {
-  if (product.comingSoon || product.stockStatus === "coming_soon") {
-    return "https://schema.org/PreOrder";
-  }
-
-  return "https://schema.org/InStock";
+  return isPublicProductOrderable(product)
+    ? "https://schema.org/InStock"
+    : "https://schema.org/OutOfStock";
 }
 
 export function productCategoryLabel(product: Pick<Product, "category">) {

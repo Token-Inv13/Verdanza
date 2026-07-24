@@ -14,15 +14,17 @@ const publicFirebaseFallback = {
   measurementId: "G-E9XNP7BJ2Y",
 };
 
+const viteEnv = import.meta.env ?? {};
+
 export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || publicFirebaseFallback.apiKey,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || publicFirebaseFallback.authDomain,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || publicFirebaseFallback.projectId,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || publicFirebaseFallback.storageBucket,
+  apiKey: viteEnv.VITE_FIREBASE_API_KEY || publicFirebaseFallback.apiKey,
+  authDomain: viteEnv.VITE_FIREBASE_AUTH_DOMAIN || publicFirebaseFallback.authDomain,
+  projectId: viteEnv.VITE_FIREBASE_PROJECT_ID || publicFirebaseFallback.projectId,
+  storageBucket: viteEnv.VITE_FIREBASE_STORAGE_BUCKET || publicFirebaseFallback.storageBucket,
   messagingSenderId:
-    import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || publicFirebaseFallback.messagingSenderId,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || publicFirebaseFallback.appId,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || publicFirebaseFallback.measurementId,
+    viteEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || publicFirebaseFallback.messagingSenderId,
+  appId: viteEnv.VITE_FIREBASE_APP_ID || publicFirebaseFallback.appId,
+  measurementId: viteEnv.VITE_FIREBASE_MEASUREMENT_ID || publicFirebaseFallback.measurementId,
 };
 
 export const isFirebaseConfigured = Boolean(
@@ -40,7 +42,7 @@ export const app = isFirebaseConfigured
     : initializeApp(firebaseConfig)
   : null;
 
-if (import.meta.env.PROD) {
+if (viteEnv.PROD) {
   setLogLevel("silent");
 }
 
