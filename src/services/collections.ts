@@ -16,4 +16,5 @@ export const collections = {
   labReports: "labReports",
   favorites: "favorites",
   productReviews: "productReviews",
+  productCosts: "productCosts",
 } as const;

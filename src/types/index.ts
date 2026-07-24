@@ -264,6 +264,13 @@ export type OrderItem = {
   cultureType?: CultureType;
 };
 
+export type ProductCost = {
+  productId: string;
+  purchasePricePerGram?: number | null;
+  updatedAt?: string;
+  updatedBy?: string;
+};
+
 export type OrderAnalyticsPurchaseStatus =
   | "not_eligible"
   | "pending"

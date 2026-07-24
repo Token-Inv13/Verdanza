@@ -10,7 +10,8 @@ import {
 } from "../services/invoicesService";
 import { getAdminOrdersWithFallback, type AdminOrderRow } from "../services/ordersService";
 import { getAdminProductsWithFallback } from "../services/productsService";
-import type { BillingSettings, Coupon, CustomerProfile, DeliveryZone, Invoice, Product, PromoBanner } from "../types";
+import { getProductCostsAdmin } from "../services/productCostsService";
+import type { BillingSettings, Coupon, CustomerProfile, DeliveryZone, Invoice, Product, ProductCost, PromoBanner } from "../types";
 
 export function useAdminData() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -29,6 +30,8 @@ export function useAdminData() {
   const [invoiceSource, setInvoiceSource] = useState<"firestore" | "empty">("empty");
   const [billingSettings, setBillingSettings] = useState<BillingSettings>(defaultBillingSettings);
   const [billingSource, setBillingSource] = useState<"firestore" | "local">("local");
+  const [productCosts, setProductCosts] = useState<ProductCost[]>([]);
+  const [productCostsSource, setProductCostsSource] = useState<"firestore" | "empty">("empty");
   const [isLoading, setIsLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -42,6 +45,7 @@ export function useAdminData() {
       customerResult,
       invoiceResult,
       billingResult,
+      productCostResult,
     ] = await Promise.all([
       getAdminProductsWithFallback(),
       getAdminOrdersWithFallback(),
@@ -51,6 +55,10 @@ export function useAdminData() {
       getAdminCustomersWithFallback(),
       getInvoicesWithFallback(),
       getBillingSettings(),
+      getProductCostsAdmin().catch((error) => {
+        console.warn("Unable to load product costs", error);
+        return { costs: [], source: "empty" as const };
+      }),
     ]);
     setProducts(productResult.products);
     setProductSource(productResult.source);
@@ -68,6 +76,8 @@ export function useAdminData() {
     setInvoiceSource(invoiceResult.source);
     setBillingSettings(billingResult.settings);
     setBillingSource(billingResult.source);
+    setProductCosts(productCostResult.costs);
+    setProductCostsSource(productCostResult.source);
     setIsLoading(false);
   }, []);
 
@@ -92,6 +102,8 @@ export function useAdminData() {
     invoiceSource,
     billingSettings,
     billingSource,
+    productCosts,
+    productCostsSource,
     isLoading,
     refresh,
   };

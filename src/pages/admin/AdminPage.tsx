@@ -53,6 +53,7 @@ import {
   updateInvoiceStatus,
   type ManualInvoiceInput,
 } from "../../services/invoicesService";
+import { saveProductCostAdmin } from "../../services/productCostsService";
 import {
   getAdminPaymentLinks,
   sendOrderPaymentLinkEmail,
@@ -85,6 +86,7 @@ import type {
   PaymentStatus,
   Product,
   ProductCategory,
+  ProductCost,
   PromoBanner,
   PromoBannerPlacement,
   PromoBannerType,
@@ -207,6 +209,8 @@ export function AdminPage({ section }: { section: string }) {
     invoiceSource,
     billingSettings,
     billingSource,
+    productCosts,
+    productCostsSource,
     isLoading,
     refresh,
   } = useAdminData();
@@ -451,6 +455,12 @@ export function AdminPage({ section }: { section: string }) {
   ) {
     await updateCustomerAdminStatus(customer.id, data);
     setMessage("Fiche client mise a jour.");
+    await refresh();
+  }
+
+  async function handleProductCostSave(productId: string, purchasePricePerGram: number | null) {
+    await saveProductCostAdmin(productId, purchasePricePerGram);
+    setMessage("Cout d'achat produit enregistre.");
     await refresh();
   }
 
@@ -717,6 +727,16 @@ export function AdminPage({ section }: { section: string }) {
             />
           </div>
         </>
+      )}
+
+      {section === "Comptabilité" && (
+        <AccountingPanel
+          products={products}
+          productCosts={productCosts}
+          productCostsSource={productCostsSource}
+          orders={orders}
+          onSaveProductCost={handleProductCostSave}
+        />
       )}
 
       {(section === "Parametres de facturation" || section === "Paramètres de facturation") && (
@@ -3122,6 +3142,187 @@ function BillingWarning({ settings }: { settings: BillingSettings }) {
   );
 }
 
+type AccountingPeriodFilter = "week" | "month" | "year";
+
+function AccountingPanel({
+  products,
+  productCosts,
+  productCostsSource,
+  orders,
+  onSaveProductCost,
+}: {
+  products: Product[];
+  productCosts: ProductCost[];
+  productCostsSource: string;
+  orders: AdminOrderRow[];
+  onSaveProductCost: (productId: string, purchasePricePerGram: number | null) => Promise<void>;
+}) {
+  const [period, setPeriod] = useState<AccountingPeriodFilter>("month");
+  const productCostMap = useMemo(
+    () => new Map(productCosts.map((cost) => [cost.productId, cost])),
+    [productCosts],
+  );
+  const summary = useMemo(
+    () => buildAccountingSummary(orders, products, productCostMap, period),
+    [orders, period, productCostMap, products],
+  );
+  const periodFilters: Array<{ value: AccountingPeriodFilter; label: string }> = [
+    { value: "week", label: "Semaine en cours" },
+    { value: "month", label: "Mois en cours" },
+    { value: "year", label: "Année en cours" },
+  ];
+
+  return (
+    <section className="mt-8 grid gap-6">
+      <SourceLine source={productCostsSource} />
+      <div className="rounded-lg border border-forest/10 bg-ivory p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.16em] text-champagne">
+              Comptabilité
+            </p>
+            <h2 className="font-display text-3xl text-forest">Synthèse de période</h2>
+            <p className="mt-1 text-sm text-ink/60">{summary.periodLabel}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {periodFilters.map((filter) => (
+              <button
+                key={filter.value}
+                type="button"
+                className={period === filter.value ? "btn-primary min-h-9 px-3 py-1.5 text-xs" : "btn-secondary min-h-9 px-3 py-1.5 text-xs"}
+                onClick={() => setPeriod(filter.value)}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {!summary.totalOrders && (
+        <AdminEmptyState
+          title="Aucune commande sur cette période."
+          description="Changez de période ou revenez lorsque des commandes seront enregistrées."
+        />
+      )}
+
+      {!!summary.missingCostProducts.length && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong className="block">Marge brute incomplète.</strong>
+          <span className="mt-1 block">
+            Certains produits vendus sur la période n'ont pas de coût d'achat renseigné :{" "}
+            {summary.missingCostProducts.join(", ")}.
+          </span>
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {summary.metrics.map((metric) => (
+          <article key={metric.label} className="admin-card min-h-32 border-forest/10 bg-ivory/95">
+            <p className="text-sm text-ink/55">{metric.label}</p>
+            <strong className="mt-2 block font-display text-3xl text-forest">
+              {metric.value}
+            </strong>
+            <span className="text-xs text-ink/50">{metric.detail}</span>
+          </article>
+        ))}
+      </div>
+
+      <section className="admin-card">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.16em] text-champagne">
+              Coûts d'achat produits
+            </p>
+            <h2 className="font-display text-3xl text-forest">Prix d'achat / g</h2>
+          </div>
+          <p className="text-sm text-ink/60">
+            Ces valeurs sont stockées dans <span className="font-mono">productCosts</span>.
+          </p>
+        </div>
+        <div className="mt-5 overflow-x-auto">
+          <table className="w-full min-w-[860px] text-left text-sm">
+            <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
+              <tr>
+                {["Produit", "Catégorie", "Statut", "Prix d'achat / g", "Action"].map((header) => (
+                  <th key={header} className="px-4 py-3 font-medium">{header}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {products.map((product) => (
+                <ProductCostRow
+                  key={product.id}
+                  product={product}
+                  cost={productCostMap.get(product.id)}
+                  onSave={onSaveProductCost}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function ProductCostRow({
+  product,
+  cost,
+  onSave,
+}: {
+  product: Product;
+  cost?: ProductCost;
+  onSave: (productId: string, purchasePricePerGram: number | null) => Promise<void>;
+}) {
+  const [value, setValue] = useState(optionalNumberInputValue(cost?.purchasePricePerGram));
+
+  useEffect(() => {
+    setValue(optionalNumberInputValue(cost?.purchasePricePerGram));
+  }, [cost?.purchasePricePerGram]);
+
+  const parsed = value.trim() === "" ? null : Number(value);
+  const isInvalid = parsed !== null && (!Number.isFinite(parsed) || parsed < 0);
+
+  return (
+    <tr className="border-t border-forest/10">
+      <td className="px-4 py-4">
+        <strong className="block text-forest">{product.name}</strong>
+        <span className="text-xs text-ink/50">{product.id}</span>
+      </td>
+      <td className="px-4 py-4">{productCategoryLabel(product.category)}</td>
+      <td className="px-4 py-4">
+        <AdminBadge tone={product.isActive ? "success" : "muted"}>
+          {product.isActive ? "Actif" : "Inactif"}
+        </AdminBadge>
+      </td>
+      <td className="px-4 py-4">
+        <input
+          className="input-field max-w-40"
+          type="number"
+          min="0"
+          step="0.01"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          placeholder="Non renseigné"
+        />
+        {cost?.purchasePricePerGram == null && (
+          <span className="mt-1 block text-xs text-amber-700">Coût non renseigné</span>
+        )}
+      </td>
+      <td className="px-4 py-4">
+        <button
+          className="btn-secondary min-h-9 px-3 py-2"
+          disabled={isInvalid}
+          onClick={() => void onSave(product.id, parsed)}
+        >
+          Enregistrer
+        </button>
+      </td>
+    </tr>
+  );
+}
+
 function BillingSettingsPanel({
   settings,
   onChange,
@@ -5177,6 +5378,191 @@ function paymentStatusTone(
   return "neutral";
 }
 
+function buildAccountingSummary(
+  orders: AdminOrderRow[],
+  products: Product[],
+  productCostMap: Map<string, ProductCost>,
+  period: AccountingPeriodFilter,
+) {
+  const range = currentLocalPeriodRange(period);
+  const productNameById = new Map(products.map((product) => [product.id, product.name]));
+  const periodOrders = orders.filter((order) => {
+    if (isCancelledOrDeletedOrder(order)) return false;
+    const date = accountingDate(order);
+    return Boolean(date && date >= range.start && date < range.end);
+  });
+  const paidOrders = periodOrders.filter((order) => order.paymentStatus === "paid");
+  const receivableOrders = periodOrders.filter((order) =>
+    ["to_confirm", "payment_link_sent", "pending"].includes(order.paymentStatus),
+  );
+  const collectedRevenue = paidOrders.reduce((sum, order) => sum + orderTotalAmount(order), 0);
+  const receivableAmount = receivableOrders.reduce((sum, order) => sum + orderTotalAmount(order), 0);
+  const discounts = paidOrders.reduce((sum, order) => sum + orderDiscountAmount(order), 0);
+  const productNetRevenue = paidOrders.reduce((sum, order) => sum + orderProductNetRevenue(order), 0);
+  const missingCostIds = new Set<string>();
+  let estimatedProductCost = 0;
+
+  paidOrders.forEach((order) => {
+    order.items.forEach((item) => {
+      const cost = productCostMap.get(item.productId)?.purchasePricePerGram;
+      if (cost == null) {
+        missingCostIds.add(item.productId);
+        return;
+      }
+      estimatedProductCost += Number(item.quantity || 0) * cost;
+    });
+  });
+
+  const grossMargin = productNetRevenue - estimatedProductCost;
+  const grossMarginRate = productNetRevenue > 0 ? grossMargin / productNetRevenue : null;
+  const localOrders = periodOrders.filter((order) => order.deliveryMethod === "local_express").length;
+  const postalOrders = periodOrders.filter((order) => order.deliveryMethod === "postal").length;
+  const missingCostProducts = [...missingCostIds].map(
+    (productId) => productNameById.get(productId) || productId,
+  );
+
+  return {
+    periodLabel: `${formatLocalDate(range.start)} - ${formatLocalDate(new Date(range.end.getTime() - 1))}`,
+    totalOrders: periodOrders.length,
+    missingCostProducts,
+    metrics: [
+      {
+        label: "CA encaissé",
+        value: formatCurrency(collectedRevenue),
+        detail: "Commandes payées, hors annulées et supprimées",
+      },
+      {
+        label: "Commandes totales",
+        value: String(periodOrders.length),
+        detail: "Commandes non annulées sur la période",
+      },
+      {
+        label: "Commandes payées",
+        value: String(paidOrders.length),
+        detail: "paymentStatus paid",
+      },
+      {
+        label: "Panier moyen payé",
+        value: formatCurrency(paidOrders.length ? collectedRevenue / paidOrders.length : 0),
+        detail: "Commandes payées uniquement",
+      },
+      {
+        label: "Remises accordées",
+        value: formatCurrency(discounts),
+        detail: "Remises sur commandes payées",
+      },
+      {
+        label: "Reste à encaisser",
+        value: formatCurrency(receivableAmount),
+        detail: "A confirmer, lien envoyé ou en attente",
+      },
+      {
+        label: "Coût d'achat estimé",
+        value: formatCurrency(estimatedProductCost),
+        detail: missingCostProducts.length ? "Incomplet : coûts manquants" : "Produits vendus, hors livraison",
+      },
+      {
+        label: "Marge brute estimée",
+        value: formatCurrency(grossMargin),
+        detail: missingCostProducts.length ? "Incomplète" : "CA produits net - coûts d'achat",
+      },
+      {
+        label: "Taux de marge brute",
+        value: grossMarginRate == null ? "-" : `${(grossMarginRate * 100).toFixed(1).replace(".", ",")} %`,
+        detail: "Sur CA produits net",
+      },
+      {
+        label: "Local / postal",
+        value: `${localOrders} / ${postalOrders}`,
+        detail: "Répartition des commandes",
+      },
+    ],
+  };
+}
+
+function currentLocalPeriodRange(period: AccountingPeriodFilter) {
+  const now = new Date();
+  if (period === "year") {
+    return {
+      start: new Date(now.getFullYear(), 0, 1),
+      end: new Date(now.getFullYear() + 1, 0, 1),
+    };
+  }
+  if (period === "week") {
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const day = start.getDay() || 7;
+    start.setDate(start.getDate() - day + 1);
+    return {
+      start,
+      end: new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7),
+    };
+  }
+  return {
+    start: new Date(now.getFullYear(), now.getMonth(), 1),
+    end: new Date(now.getFullYear(), now.getMonth() + 1, 1),
+  };
+}
+
+function accountingDate(order: AdminOrderRow) {
+  return parseAdminDate(
+    order.paymentStatus === "paid"
+      ? order.paymentConfirmedAt || order.updatedAt || order.createdAt
+      : order.updatedAt || order.createdAt,
+  );
+}
+
+function parseAdminDate(value: unknown) {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === "string") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  if (typeof value === "object") {
+    const candidate = value as { toDate?: () => Date; seconds?: number; _seconds?: number };
+    if (typeof candidate.toDate === "function") return candidate.toDate();
+    const seconds = candidate.seconds ?? candidate._seconds;
+    if (typeof seconds === "number") return new Date(seconds * 1000);
+  }
+  return null;
+}
+
+function isCancelledOrDeletedOrder(order: AdminOrderRow) {
+  return order.orderStatus === "cancelled" || Boolean(order.deletedAt);
+}
+
+function orderTotalAmount(order: AdminOrderRow) {
+  return parseEuro(order.total);
+}
+
+function orderDiscountAmount(order: AdminOrderRow) {
+  return Number(order.discountAmount ?? order.promotionDiscountTotal ?? 0);
+}
+
+function orderProductNetRevenue(order: AdminOrderRow) {
+  const subtotalAfterPromotion = Number(order.subtotalAfterPromotion);
+  if (Number.isFinite(subtotalAfterPromotion) && subtotalAfterPromotion > 0) {
+    return subtotalAfterPromotion;
+  }
+  const subtotal = Number(order.subtotalBeforePromotion ?? order.subtotalBeforeDiscount ?? order.subtotal ?? 0);
+  if (Number.isFinite(subtotal) && subtotal > 0) {
+    return Math.max(0, subtotal - orderDiscountAmount(order));
+  }
+  return Math.max(0, orderTotalAmount(order) - Number(order.deliveryFee || 0));
+}
+
+function formatCurrency(value: number) {
+  return `${formatEuro(value)} EUR`;
+}
+
+function formatLocalDate(date: Date) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
 function buildDashboardMetrics(
   products: Product[],
   orders: {
@@ -5187,7 +5573,6 @@ function buildDashboardMetrics(
   }[],
 ): AdminMetric[] {
   const activeOrders = orders.filter((order) => order.orderStatus !== "cancelled");
-  const estimatedTotal = activeOrders.reduce((sum, order) => sum + parseEuro(order.total), 0);
   const paidOrders = activeOrders.filter((order) => order.paymentStatus === "paid");
   const paymentToConfirm = activeOrders.filter((order) =>
     ["to_confirm", "payment_link_sent", "pending"].includes(order.paymentStatus),
@@ -5206,7 +5591,6 @@ function buildDashboardMetrics(
   const lowStockProducts = products.filter(
     (product) => product.stock <= product.lowStockThreshold,
   );
-  const averageCart = activeOrders.length ? estimatedTotal / activeOrders.length : 0;
   const activeProducts = products.filter((product) => product.isActive);
   const totalStock = activeProducts.reduce(
     (sum, product) => sum + Number(product.stock || 0),
@@ -5214,11 +5598,6 @@ function buildDashboardMetrics(
   );
 
   return [
-    {
-      label: "Total estimé",
-      value: `${formatEuro(estimatedTotal)} EUR`,
-      detail: `${activeOrders.length} commande(s) active(s)`,
-    },
     {
       label: "Règlements à suivre",
       value: String(paymentToConfirm.length),
@@ -5243,11 +5622,6 @@ function buildDashboardMetrics(
       label: "Stock total",
       value: `${totalStock} g`,
       detail: "Produits actifs",
-    },
-    {
-      label: "Panier moyen",
-      value: `${formatEuro(averageCart)} EUR`,
-      detail: "Commandes actives",
     },
     {
       label: "Stocks bas",

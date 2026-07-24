@@ -38,6 +38,7 @@ export type AdminOrderRow = {
   orderStatus: OrderStatus | string;
   deliveryMethod?: Order["deliveryMethod"];
   delivery: string;
+  deliveryFee?: number;
   deliveryMinimumApplied?: number;
   postalFreeShippingApplied?: boolean;
   deliveryFeeStatus?: Order["deliveryFeeStatus"];
@@ -118,6 +119,7 @@ export async function getAdminOrdersWithFallback() {
         orderStatus: order.orderStatus,
         deliveryMethod: order.deliveryMethod,
         delivery: order.deliveryZone || order.deliveryMethod,
+        deliveryFee: order.deliveryFee,
         deliveryMinimumApplied: order.deliveryMinimumApplied,
         postalFreeShippingApplied: order.postalFreeShippingApplied,
         deliveryFeeStatus: order.deliveryFeeStatus,
