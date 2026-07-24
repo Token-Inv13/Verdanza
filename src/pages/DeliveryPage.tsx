@@ -217,6 +217,14 @@ function LocalDeliveryPage() {
     : LOCAL_DELIVERY_MINIMUM;
   const deliveryEstimate = formatLocalDeliveryEstimate(referenceZone);
 
+  useEffect(() => {
+    if (window.location.hash !== "#zones-ouvertes") return undefined;
+    const timeout = window.setTimeout(() => {
+      document.getElementById("zones-ouvertes")?.scrollIntoView({ block: "start" });
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [state.status, openZones.length]);
+
   return (
     <main className="container-page py-12">
       <Seo
