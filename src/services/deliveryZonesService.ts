@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getDocs,
   serverTimestamp,
@@ -15,6 +16,23 @@ import {
   effectivePostalDeliveryMinimum,
 } from "../config/deliveryRules";
 import type { DeliveryZone } from "../types";
+
+export type DeliveryZoneAdminInput = Pick<
+  DeliveryZone,
+  | "name"
+  | "isActive"
+  | "isOpen"
+  | "status"
+  | "fee"
+  | "minimumOrder"
+  | "minimumOrderAmount"
+  | "estimatedDelay"
+  | "estimatedDelayMinMinutes"
+  | "estimatedDelayMaxMinutes"
+  | "customerMessage"
+  | "adminNote"
+  | "sortOrder"
+>;
 
 export async function getDeliveryZonesWithFallback() {
   if (!db) return { zones: localDeliveryZones, source: "local" as const };
@@ -57,22 +75,7 @@ export async function seedInitialDeliveryZones() {
 
 export async function updateDeliveryZoneAdmin(
   zoneId: string,
-  data: Pick<
-    DeliveryZone,
-    | "name"
-    | "isActive"
-    | "isOpen"
-    | "status"
-    | "fee"
-    | "minimumOrder"
-    | "minimumOrderAmount"
-    | "estimatedDelay"
-    | "estimatedDelayMinMinutes"
-    | "estimatedDelayMaxMinutes"
-    | "customerMessage"
-    | "adminNote"
-    | "sortOrder"
-  >,
+  data: DeliveryZoneAdminInput,
 ) {
   if (!db) throw new Error("Firebase is not configured.");
   await updateDoc(doc(db, collections.deliveryZones, zoneId), {
@@ -92,6 +95,43 @@ export async function updateDeliveryZoneAdmin(
     sortOrder: Number(data.sortOrder || 0),
     updatedAt: serverTimestamp(),
   });
+}
+
+export async function createDeliveryZoneAdmin(data: DeliveryZoneAdminInput) {
+  if (!db) throw new Error("Firebase is not configured.");
+  const name = data.name.trim();
+  if (!name) throw new Error("Le nom de la zone est obligatoire.");
+  const slug = slugify(name);
+  const zoneId = `local-${slug || "zone"}-${uniqueSuffix()}`;
+
+  await setDoc(doc(db, collections.deliveryZones, zoneId), {
+    id: zoneId,
+    name,
+    slug,
+    method: "local_express",
+    isActive: false,
+    isOpen: false,
+    status: "disabled",
+    fee: Number(data.fee || 0),
+    minimumOrder: Number(data.minimumOrderAmount ?? data.minimumOrder ?? 0),
+    minimumOrderAmount: Number(data.minimumOrderAmount ?? data.minimumOrder ?? 0),
+    estimatedDelay: data.estimatedDelay || "",
+    estimatedDelayMinMinutes: optionalPositiveNumberOrNull(data.estimatedDelayMinMinutes),
+    estimatedDelayMaxMinutes: optionalPositiveNumberOrNull(data.estimatedDelayMaxMinutes),
+    slots: [],
+    customerMessage: data.customerMessage || "",
+    adminNote: data.adminNote || "",
+    sortOrder: Number(data.sortOrder || 0),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return zoneId;
+}
+
+export async function deleteDeliveryZoneAdmin(zoneId: string) {
+  if (!db) throw new Error("Firebase is not configured.");
+  await deleteDoc(doc(db, collections.deliveryZones, zoneId));
 }
 
 function normalizeDeliveryZone(zone: DeliveryZone): DeliveryZone {
@@ -130,4 +170,11 @@ function slugify(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+}
+
+function uniqueSuffix() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID().slice(0, 8);
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }

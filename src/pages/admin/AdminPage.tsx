@@ -12,7 +12,12 @@ import {
   updateOrderAdminFields,
   type AdminOrderRow,
 } from "../../services/ordersService";
-import { updateDeliveryZoneAdmin } from "../../services/deliveryZonesService";
+import {
+  createDeliveryZoneAdmin,
+  deleteDeliveryZoneAdmin,
+  updateDeliveryZoneAdmin,
+  type DeliveryZoneAdminInput,
+} from "../../services/deliveryZonesService";
 import {
   archiveCoupon,
   deleteCouponAndNeutralizeBannerLinks,
@@ -278,25 +283,26 @@ export function AdminPage({ section }: { section: string }) {
 
   async function handleDeliveryZoneSave(
     zone: DeliveryZone,
-    data: Pick<
-      DeliveryZone,
-      | "name"
-      | "isActive"
-      | "isOpen"
-      | "status"
-      | "fee"
-      | "minimumOrder"
-      | "minimumOrderAmount"
-      | "estimatedDelay"
-      | "estimatedDelayMinMinutes"
-      | "estimatedDelayMaxMinutes"
-      | "customerMessage"
-      | "adminNote"
-      | "sortOrder"
-    >,
+    data: DeliveryZoneAdminInput,
   ) {
     await updateDeliveryZoneAdmin(zone.id, data);
     setMessage(`Zone ${zone.name} mise a jour.`);
+    await refresh();
+  }
+
+  async function handleDeliveryZoneCreate(data: DeliveryZoneAdminInput) {
+    const zoneId = await createDeliveryZoneAdmin(data);
+    setMessage(`Zone ${data.name} creee (${zoneId}).`);
+    await refresh();
+  }
+
+  async function handleDeliveryZoneDelete(zone: DeliveryZone) {
+    const confirmed = window.confirm(
+      `Suppression definitive de la zone ${zone.name} (${zone.id}). Cette action est irreversible. Les commandes existantes ne seront pas modifiees. Confirmer ?`,
+    );
+    if (!confirmed) return;
+    await deleteDeliveryZoneAdmin(zone.id);
+    setMessage(`Zone ${zone.name} supprimee.`);
     await refresh();
   }
 
@@ -596,7 +602,12 @@ export function AdminPage({ section }: { section: string }) {
         <>
           <SourceLine source={deliverySource} />
           <DeliveryRulesSummary />
-          <DeliveryZonesPanel zones={deliveryZones} onSave={handleDeliveryZoneSave} />
+          <DeliveryZonesPanel
+            zones={deliveryZones}
+            onSave={handleDeliveryZoneSave}
+            onCreate={handleDeliveryZoneCreate}
+            onDelete={handleDeliveryZoneDelete}
+          />
         </>
       )}
 
@@ -1162,31 +1173,22 @@ function DeliveryRulesSummary() {
 function DeliveryZonesPanel({
   zones,
   onSave,
+  onCreate,
+  onDelete,
 }: {
   zones: DeliveryZone[];
   onSave: (
     zone: DeliveryZone,
-    data: Pick<
-      DeliveryZone,
-      | "name"
-      | "isActive"
-      | "isOpen"
-      | "status"
-      | "fee"
-      | "minimumOrder"
-      | "minimumOrderAmount"
-      | "estimatedDelay"
-      | "estimatedDelayMinMinutes"
-      | "estimatedDelayMaxMinutes"
-      | "customerMessage"
-      | "adminNote"
-      | "sortOrder"
-    >,
+    data: DeliveryZoneAdminInput,
   ) => Promise<void>;
+  onCreate: (data: DeliveryZoneAdminInput) => Promise<void>;
+  onDelete: (zone: DeliveryZone) => Promise<void>;
 }) {
   const [filter, setFilter] = useState<DeliveryZoneFilter>("all");
   const zoneFilters = buildDeliveryZoneFilters(zones);
   const visibleZones = zones.filter((zone) => deliveryZoneMatchesFilter(zone, filter));
+  const nextSortOrder =
+    zones.reduce((max, zone) => Math.max(max, Number(zone.sortOrder || 0)), 0) + 1;
 
   return (
     <section className="mt-8 grid gap-4">
@@ -1210,6 +1212,7 @@ function DeliveryZonesPanel({
           </div>
         </div>
       </div>
+      <DeliveryZoneCreateForm nextSortOrder={nextSortOrder} onCreate={onCreate} />
       {!visibleZones.length && (
         <AdminEmptyState
           title="Aucune zone pour ce filtre."
@@ -1217,36 +1220,130 @@ function DeliveryZonesPanel({
         />
       )}
       {visibleZones.map((zone) => (
-        <DeliveryZoneRow key={zone.id} zone={zone} onSave={onSave} />
+        <DeliveryZoneRow key={zone.id} zone={zone} onSave={onSave} onDelete={onDelete} />
       ))}
     </section>
+  );
+}
+
+function DeliveryZoneCreateForm({
+  nextSortOrder,
+  onCreate,
+}: {
+  nextSortOrder: number;
+  onCreate: (data: DeliveryZoneAdminInput) => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const [fee, setFee] = useState(0);
+  const [minimumOrder, setMinimumOrder] = useState(LOCAL_DELIVERY_MINIMUM);
+  const [estimatedDelay, setEstimatedDelay] = useState("");
+  const [estimatedDelayMinMinutes, setEstimatedDelayMinMinutes] = useState("");
+  const [estimatedDelayMaxMinutes, setEstimatedDelayMaxMinutes] = useState("");
+  const [customerMessage, setCustomerMessage] = useState("");
+  const [adminNote, setAdminNote] = useState("");
+  const [sortOrder, setSortOrder] = useState(nextSortOrder);
+  const publicEstimate = formatLocalDeliveryEstimate({
+    estimatedDelayMinMinutes: optionalPositiveNumberFromInput(estimatedDelayMinMinutes),
+    estimatedDelayMaxMinutes: optionalPositiveNumberFromInput(estimatedDelayMaxMinutes),
+  });
+
+  useEffect(() => {
+    setSortOrder(nextSortOrder);
+  }, [nextSortOrder]);
+
+  async function handleCreate() {
+    await onCreate({
+      name,
+      isActive: false,
+      isOpen: false,
+      status: "disabled",
+      fee,
+      minimumOrder,
+      minimumOrderAmount: minimumOrder,
+      estimatedDelay,
+      estimatedDelayMinMinutes: optionalPositiveNumberFromInput(estimatedDelayMinMinutes),
+      estimatedDelayMaxMinutes: optionalPositiveNumberFromInput(estimatedDelayMaxMinutes),
+      customerMessage,
+      adminNote,
+      sortOrder,
+    });
+    setName("");
+    setFee(0);
+    setMinimumOrder(LOCAL_DELIVERY_MINIMUM);
+    setEstimatedDelay("");
+    setEstimatedDelayMinMinutes("");
+    setEstimatedDelayMaxMinutes("");
+    setCustomerMessage("");
+    setAdminNote("");
+  }
+
+  return (
+    <article className="admin-card grid gap-4 md:grid-cols-2 xl:grid-cols-6 xl:items-end">
+      <div className="xl:col-span-2">
+        <p className="text-xs uppercase tracking-[0.14em] text-champagne">
+          Nouvelle zone locale
+        </p>
+        <div className="mb-3 mt-2 flex flex-wrap gap-2">
+          <AdminBadge tone="muted">Inactive</AdminBadge>
+          <AdminBadge tone="muted">DÃ©sactivÃ©e</AdminBadge>
+        </div>
+        <Input label="Nom" value={name} onChange={setName} />
+      </div>
+      <NumberInput label="Frais" value={fee} onChange={setFee} />
+      <NumberInput label="Minimum" value={minimumOrder} onChange={setMinimumOrder} />
+      <NumberInput label="Ordre" value={sortOrder} onChange={setSortOrder} />
+      <Input label="DÃ©lai interne historique" value={estimatedDelay} onChange={setEstimatedDelay} />
+      <Input
+        label="DÃ©lai public min (minutes)"
+        type="number"
+        value={estimatedDelayMinMinutes}
+        onChange={setEstimatedDelayMinMinutes}
+      />
+      <Input
+        label="DÃ©lai public max (minutes)"
+        type="number"
+        value={estimatedDelayMaxMinutes}
+        onChange={setEstimatedDelayMaxMinutes}
+      />
+      <p className="rounded-md border border-forest/10 bg-cream px-3 py-2 text-xs leading-5 text-ink/65 xl:col-span-3">
+        DÃ©lai public : {publicEstimate}
+      </p>
+      <label className="text-sm font-medium text-forest">
+        VisibilitÃ©
+        <select className="input-field mt-2" value="inactive" disabled>
+          <option value="inactive">Inactif</option>
+        </select>
+      </label>
+      <label className="text-sm font-medium text-forest xl:col-span-2">
+        Statut client
+        <select className="input-field mt-2" value="disabled" disabled>
+          <option value="disabled">DÃ©sactivÃ©e</option>
+        </select>
+      </label>
+      <Input label="Message client" value={customerMessage} onChange={setCustomerMessage} />
+      <Input label="Note interne" value={adminNote} onChange={setAdminNote} />
+      <button
+        className="btn-primary xl:col-start-6"
+        disabled={!name.trim()}
+        onClick={() => void handleCreate()}
+      >
+        CrÃ©er la zone
+      </button>
+    </article>
   );
 }
 
 function DeliveryZoneRow({
   zone,
   onSave,
+  onDelete,
 }: {
   zone: DeliveryZone;
   onSave: (
     zone: DeliveryZone,
-    data: Pick<
-      DeliveryZone,
-      | "name"
-      | "isActive"
-      | "isOpen"
-      | "status"
-      | "fee"
-      | "minimumOrder"
-      | "minimumOrderAmount"
-      | "estimatedDelay"
-      | "estimatedDelayMinMinutes"
-      | "estimatedDelayMaxMinutes"
-      | "customerMessage"
-      | "adminNote"
-      | "sortOrder"
-    >,
+    data: DeliveryZoneAdminInput,
   ) => Promise<void>;
+  onDelete: (zone: DeliveryZone) => Promise<void>;
 }) {
   const [name, setName] = useState(zone.name);
   const [isActive, setIsActive] = useState(zone.isActive);
@@ -1338,28 +1435,33 @@ function DeliveryZoneRow({
       </label>
       <Input label="Message client" value={customerMessage} onChange={setCustomerMessage} />
       <Input label="Note interne" value={adminNote} onChange={setAdminNote} />
-      <button
-        className="btn-primary xl:col-start-6"
-        onClick={() =>
-          void onSave(zone, {
-            name,
-            isActive,
-            isOpen,
-            status,
-            fee,
-            minimumOrder,
-            minimumOrderAmount: minimumOrder,
-            estimatedDelay,
-            estimatedDelayMinMinutes: optionalPositiveNumberFromInput(estimatedDelayMinMinutes),
-            estimatedDelayMaxMinutes: optionalPositiveNumberFromInput(estimatedDelayMaxMinutes),
-            customerMessage,
-            adminNote,
-            sortOrder,
-          })
-        }
-      >
-        Enregistrer
-      </button>
+      <div className="flex flex-wrap gap-2 xl:col-start-6">
+        <button
+          className="btn-primary"
+          onClick={() =>
+            void onSave(zone, {
+              name,
+              isActive,
+              isOpen,
+              status,
+              fee,
+              minimumOrder,
+              minimumOrderAmount: minimumOrder,
+              estimatedDelay,
+              estimatedDelayMinMinutes: optionalPositiveNumberFromInput(estimatedDelayMinMinutes),
+              estimatedDelayMaxMinutes: optionalPositiveNumberFromInput(estimatedDelayMaxMinutes),
+              customerMessage,
+              adminNote,
+              sortOrder,
+            })
+          }
+        >
+          Enregistrer
+        </button>
+        <button className="btn-secondary" onClick={() => void onDelete(zone)}>
+          Supprimer
+        </button>
+      </div>
     </article>
   );
 }
