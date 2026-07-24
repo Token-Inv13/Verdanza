@@ -67,6 +67,8 @@ export async function updateDeliveryZoneAdmin(
     | "minimumOrder"
     | "minimumOrderAmount"
     | "estimatedDelay"
+    | "estimatedDelayMinMinutes"
+    | "estimatedDelayMaxMinutes"
     | "customerMessage"
     | "adminNote"
     | "sortOrder"
@@ -83,6 +85,8 @@ export async function updateDeliveryZoneAdmin(
     minimumOrder: Number(data.minimumOrderAmount ?? data.minimumOrder ?? 0),
     minimumOrderAmount: Number(data.minimumOrderAmount ?? data.minimumOrder ?? 0),
     estimatedDelay: data.estimatedDelay,
+    estimatedDelayMinMinutes: optionalPositiveNumberOrNull(data.estimatedDelayMinMinutes),
+    estimatedDelayMaxMinutes: optionalPositiveNumberOrNull(data.estimatedDelayMaxMinutes),
     customerMessage: data.customerMessage || "",
     adminNote: data.adminNote || "",
     sortOrder: Number(data.sortOrder || 0),
@@ -104,8 +108,19 @@ function normalizeDeliveryZone(zone: DeliveryZone): DeliveryZone {
     isOpen: zone.isOpen ?? status === "open",
     minimumOrder,
     minimumOrderAmount: minimumOrder,
+    estimatedDelayMinMinutes: optionalPositiveNumberOrUndefined(zone.estimatedDelayMinMinutes),
+    estimatedDelayMaxMinutes: optionalPositiveNumberOrUndefined(zone.estimatedDelayMaxMinutes),
     sortOrder: Number(zone.sortOrder || 0),
   };
+}
+
+function optionalPositiveNumberOrUndefined(value?: number | null) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function optionalPositiveNumberOrNull(value?: number | null) {
+  return optionalPositiveNumberOrUndefined(value) ?? null;
 }
 
 function slugify(value: string) {

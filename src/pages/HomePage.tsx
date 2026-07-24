@@ -10,6 +10,7 @@ import { useProducts } from "../hooks/useProducts";
 import { staticImageVariants } from "../lib/generatedImageVariants";
 import { buildHomeJsonLd } from "../lib/structuredData";
 import { trackCtaClick, trackViewItemList } from "../lib/analytics";
+import { DEFAULT_LOCAL_DELIVERY_ESTIMATE_LABEL } from "../lib/deliveryEstimate";
 import type { BlogArticle } from "../types/blog";
 
 export function HomePage() {
@@ -65,7 +66,7 @@ export function HomePage() {
                 livraison postale en France et en livraison locale selon les
                 zones ouvertes.
               </p>
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row md:mt-8">
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap md:mt-8">
                 <Link
                   to="/boutique"
                   className="btn-primary bg-champagne text-forest hover:bg-[#d7b66e]"
@@ -94,6 +95,20 @@ export function HomePage() {
                 >
                   Livraison en France
                 </Link>
+                <Link
+                  to="/livraison-locale#zones-ouvertes"
+                  className="btn-secondary border-ivory/35 bg-ivory/10 text-ivory hover:bg-ivory hover:text-forest"
+                  onClick={() =>
+                    trackCtaClick({
+                      ctaId: "home_hero_local_delivery",
+                      ctaLocation: "home_hero",
+                      destinationPath: "/livraison-locale#zones-ouvertes",
+                      ctaCategory: "delivery",
+                    })
+                  }
+                >
+                  Livraison locale express
+                </Link>
               </div>
             </div>
           </div>
@@ -120,7 +135,7 @@ export function HomePage() {
             {
               icon: PackageCheck,
               title: "Express local",
-              text: "Livraison rapide sur Aix-en-Provence et zones ouvertes, en complément du postal.",
+              text: DEFAULT_LOCAL_DELIVERY_ESTIMATE_LABEL,
             },
           ].map((item) => (
             <article key={item.title} className="feature-panel">

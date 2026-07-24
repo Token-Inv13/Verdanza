@@ -104,6 +104,8 @@ export type DeliveryZone = {
   minimumOrder: number;
   minimumOrderAmount?: number;
   estimatedDelay: string;
+  estimatedDelayMinMinutes?: number;
+  estimatedDelayMaxMinutes?: number;
   slots: string[];
   customerMessage?: string;
   adminNote?: string;

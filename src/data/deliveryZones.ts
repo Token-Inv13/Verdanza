@@ -1,5 +1,7 @@
 import type { DeliveryZone } from "../types/index.js";
 import {
+  DEFAULT_LOCAL_DELIVERY_ESTIMATE_MAX_MINUTES,
+  DEFAULT_LOCAL_DELIVERY_ESTIMATE_MIN_MINUTES,
   LOCAL_DELIVERY_MINIMUM,
   POSTAL_DELIVERY_MINIMUM,
 } from "../config/deliveryRules.js";
@@ -42,7 +44,9 @@ export const deliveryZones: DeliveryZone[] = [
     fee: 0,
     minimumOrder: LOCAL_DELIVERY_MINIMUM,
     minimumOrderAmount: LOCAL_DELIVERY_MINIMUM,
-    estimatedDelay: "Livraison express 7j/7 de 11h00 à 01h00",
+    estimatedDelay: "Créneau local confirmé après validation",
+    estimatedDelayMinMinutes: DEFAULT_LOCAL_DELIVERY_ESTIMATE_MIN_MINUTES,
+    estimatedDelayMaxMinutes: DEFAULT_LOCAL_DELIVERY_ESTIMATE_MAX_MINUTES,
     slots: ["11:00-14:00", "14:00-18:00", "18:00-22:00", "22:00-01:00"],
     customerMessage: "Livraison locale selon disponibilité du créneau.",
     sortOrder: index + 1,

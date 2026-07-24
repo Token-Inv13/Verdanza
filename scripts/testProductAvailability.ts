@@ -6,6 +6,7 @@ import {
   publicProductStockLabel,
 } from "../src/lib/cartStock.js";
 import { productAvailability } from "../src/lib/structuredData.js";
+import { formatLocalDeliveryEstimate } from "../src/lib/deliveryEstimate.js";
 import { normalizeProduct } from "../src/services/productsService.js";
 import { priceCheckout, type CheckoutRequestBody } from "../api/_server/checkout.js";
 import type { Product } from "../src/types/index.js";
@@ -156,6 +157,76 @@ test("checkout accepts active positive-stock product despite legacy fields", asy
   expect(priced.subtotal === 20, "expected checkout to use Firestore product price");
 });
 
+test("local delivery estimate uses global default and optional zone override", () => {
+  expect(
+    formatLocalDeliveryEstimate() ===
+      "Livraison locale généralement sous 1 à 2 h après confirmation, selon la zone et la disponibilité.",
+    "expected default local delivery estimate",
+  );
+  expect(
+    formatLocalDeliveryEstimate({
+      estimatedDelayMinMinutes: 90,
+      estimatedDelayMaxMinutes: 150,
+    }).includes("1 h 30 à 2 h 30"),
+    "expected zone override to format minute range",
+  );
+  expect(
+    formatLocalDeliveryEstimate({
+      estimatedDelayMinMinutes: 0,
+      estimatedDelayMaxMinutes: -15,
+    }).includes("1 à 2 h"),
+    "expected invalid values to fall back to the global estimate",
+  );
+  expect(
+    formatLocalDeliveryEstimate({
+      estimatedDelayMinMinutes: 180,
+      estimatedDelayMaxMinutes: 60,
+    }).includes("3 h"),
+    "expected inverted range to avoid incoherent public copy",
+  );
+});
+
+test("checkout local delivery note uses public estimate from delivery zone data", async () => {
+  const priced = await priceCheckout(
+    fakeDb({
+      products: {
+        "flower-amnesia-cbd-hydroponique": product({ price: 22 }),
+      },
+      deliveryZones: {
+        "local-test": {
+          id: "local-test",
+          name: "Aix-en-Provence centre",
+          method: "local_express",
+          isActive: true,
+          isOpen: true,
+          status: "open",
+          fee: 0,
+          minimumOrder: 20,
+          minimumOrderAmount: 20,
+          estimatedDelay: "Legacy internal delay should not be public",
+          estimatedDelayMinMinutes: 60,
+          estimatedDelayMaxMinutes: 120,
+          slots: ["18:00-22:00"],
+        },
+      },
+    }),
+    {
+      ...checkoutBody("flower-amnesia-cbd-hydroponique"),
+      deliveryMethod: "local_express",
+      deliveryZone: "local-test",
+    },
+  );
+
+  expect(
+    priced.deliveryNote.includes(
+      "Livraison locale généralement sous 1 à 2 h après confirmation, selon la zone et la disponibilité.",
+    ),
+    "expected checkout delivery note to use public local estimate",
+  );
+  expect(!priced.deliveryNote.includes("7j/7"), "delivery note must not expose legacy hours");
+  expect(!priced.deliveryNote.includes("11h"), "delivery note must not expose legacy hours");
+});
+
 test("checkout rejects zero stock and inactive products", async () => {
   await expectRejects(
     () =>
@@ -191,6 +262,34 @@ test("removed public label is absent from application sources", () => {
   for (const file of files) {
     const source = readFileSync(join(process.cwd(), file), "utf8");
     expect(!source.includes(forbiddenLabel), `${forbiddenLabel} still found in ${file}`);
+  }
+});
+
+test("legacy local delivery hour promise is absent from public delivery sources", () => {
+  const forbiddenTexts = [
+    "7j/7 de 11h",
+    "7j/7 de 11h00",
+    "11h à 01h",
+    "11h00 à 01h00",
+    "11h00 a 01h00",
+    "Livraison locale Aix-en-Provence et alentours",
+  ];
+  const files = [
+    "src/data/deliveryZones.ts",
+    "src/pages/HomePage.tsx",
+    "src/pages/DeliveryPage.tsx",
+    "src/pages/CheckoutPage.tsx",
+    "src/pages/ContentPage.tsx",
+    "src/pages/LegalPage.tsx",
+    "api/_server/checkout.ts",
+    "api/_server/email.ts",
+  ];
+
+  for (const file of files) {
+    const source = readFileSync(join(process.cwd(), file), "utf8");
+    for (const forbiddenText of forbiddenTexts) {
+      expect(!source.includes(forbiddenText), `${forbiddenText} still found in ${file}`);
+    }
   }
 });
 

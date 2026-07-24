@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 import { trackContactClick } from "../lib/analytics";
+import { DEFAULT_LOCAL_DELIVERY_ESTIMATE_LABEL } from "../lib/deliveryEstimate";
 import { getActiveSocialLinks } from "../lib/socialLinks";
 
 const content = {
@@ -44,7 +45,7 @@ const content = {
       "Réponse par email après réception du message",
       "Indiquez votre numéro si la demande concerne une livraison",
       "Aucune donnée bancaire ne doit être transmise via ce formulaire",
-      "Horaires livraison locale : 7j/7 de 11h a 01h",
+      DEFAULT_LOCAL_DELIVERY_ESTIMATE_LABEL,
     ],
   },
 } as const;

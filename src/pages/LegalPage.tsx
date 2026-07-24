@@ -1,5 +1,6 @@
 import { Breadcrumbs, type BreadcrumbLink } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
+import { DEFAULT_LOCAL_DELIVERY_ESTIMATE_LABEL } from "../lib/deliveryEstimate";
 
 export function LegalPage({ title }: { title: string }) {
   const contactEmail =
@@ -117,7 +118,7 @@ function legalSections(title: string, contactEmail?: string) {
         heading: "Livraison",
         items: [
           "Livraison postale disponible en France selon les informations indiquées avant validation de la commande.",
-          "Livraison locale disponible autour d'Aix-en-Provence, 7j/7 de 11h à 01h, selon zone ouverte.",
+          `Livraison locale disponible autour d'Aix-en-Provence. ${DEFAULT_LOCAL_DELIVERY_ESTIMATE_LABEL}`,
         ],
       },
       ...common,

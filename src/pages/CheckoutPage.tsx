@@ -19,6 +19,7 @@ import {
 import { rememberPendingOrderAnalyticsRevocation } from "../lib/orderAnalyticsRevocation";
 import { getCartStockIssues } from "../lib/cartStock";
 import { calculateCartPromotions } from "../lib/cartPromotions";
+import { formatLocalDeliveryEstimate } from "../lib/deliveryEstimate";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
 import {
   effectiveLocalDeliveryMinimum,
@@ -100,6 +101,9 @@ export function CheckoutPage() {
   const localDeliveryUnavailable = openLocalDeliveryZones.length === 0;
   const localDeliveryMinimum = effectiveLocalDeliveryMinimum(
     selectedZone?.minimumOrderAmount ?? selectedZone?.minimumOrder,
+  );
+  const localDeliveryEstimate = formatLocalDeliveryEstimate(
+    selectedZone ?? openLocalDeliveryZones[0],
   );
   const postalDeliveryMinimum = effectivePostalDeliveryMinimum(
     postalZone?.minimumOrderAmount ?? postalZone?.minimumOrder,
@@ -455,7 +459,7 @@ export function CheckoutPage() {
               : "Livraison postale en France",
           deliveryNote:
             deliveryMethod === "local_express"
-              ? "Livraison locale à partir de 20 € d'achat."
+              ? `${localDeliveryEstimate} Minimum local : ${localDeliveryMinimum.toFixed(0)} € d'achat.`
               : postalShippingFree
                 ? "Livraison postale offerte."
                 : "Frais postaux confirmés avec vous après validation de la commande.",
@@ -602,7 +606,7 @@ export function CheckoutPage() {
                   text={
                     localDeliveryUnavailable
                       ? "Livraison locale temporairement indisponible. Vous pouvez choisir la livraison postale."
-                      : "Livraison locale Aix-en-Provence et alentours, 7j/7 de 11h à 01h, à partir de 20 € d'achat."
+                      : `Livraison locale express autour d'Aix-en-Provence, à partir de ${localDeliveryMinimum.toFixed(0)} € d'achat.`
                   }
                   disabled={localDeliveryUnavailable}
                   onChange={() => setDeliveryMethod("local_express")}
@@ -641,8 +645,11 @@ export function CheckoutPage() {
                       ))}
                     </select>
                   </label>
+                  <p className="mt-3 rounded-md border border-champagne/30 bg-cream p-3 text-sm leading-6 text-forest">
+                    {localDeliveryEstimate}
+                  </p>
                   <Link
-                    to="/livraison-locale"
+                    to="/livraison-locale#zones-ouvertes"
                     className="mt-2 inline-flex text-sm font-medium text-forest underline decoration-champagne underline-offset-4"
                   >
                     Voir les zones de livraison locale

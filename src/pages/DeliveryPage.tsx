@@ -8,6 +8,10 @@ import {
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../config/deliveryRules";
 import { trackCtaClick } from "../lib/analytics";
+import {
+  DEFAULT_LOCAL_DELIVERY_ESTIMATE_LABEL,
+  formatLocalDeliveryEstimate,
+} from "../lib/deliveryEstimate";
 import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
 import type { DeliveryZone } from "../types";
 
@@ -71,11 +75,11 @@ function DeliveryOverviewPage() {
           items={[
             "Disponible selon les zones ouvertes.",
             `Minimum local : ${formatCurrency(LOCAL_DELIVERY_MINIMUM)}.`,
-            "Horaires et zones mis à jour selon les disponibilités.",
+            DEFAULT_LOCAL_DELIVERY_ESTIMATE_LABEL,
             "Sélection possible au moment de la commande si votre zone est ouverte.",
           ]}
           ctaLabel="Voir les zones locales"
-          ctaPath="/livraison-locale"
+          ctaPath="/livraison-locale#zones-ouvertes"
           ctaId="delivery_overview_local"
         />
         <DeliveryModeCard
@@ -211,7 +215,7 @@ function LocalDeliveryPage() {
         ),
       )
     : LOCAL_DELIVERY_MINIMUM;
-  const deliveryHours = referenceZone?.estimatedDelay || "Selon les disponibilités du jour";
+  const deliveryEstimate = formatLocalDeliveryEstimate(referenceZone);
 
   return (
     <main className="container-page py-12">
@@ -238,7 +242,7 @@ function LocalDeliveryPage() {
 
       <section className="mt-8 grid gap-4 md:grid-cols-3">
         <SummaryCard label="Minimum local" value={formatCurrency(minimum)} />
-        <SummaryCard label="Horaires" value={deliveryHours} />
+        <SummaryCard label="Délai estimatif" value={deliveryEstimate} />
         <SummaryCard label="Zones ouvertes" value={`${openZones.length}`} />
       </section>
 
@@ -260,13 +264,13 @@ function LocalDeliveryPage() {
         </p>
       </section>
 
-      <section className="mt-12">
+      <section id="zones-ouvertes" className="mt-12 scroll-mt-24">
         <div className="section-heading mb-5">
           <div>
             <h2>Zones actuellement ouvertes</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-ink/65">
               Les zones ci-dessous sont ouvertes à la livraison locale. Elles peuvent évoluer
-              selon les disponibilités du jour.
+              selon les disponibilités du jour. {deliveryEstimate}
             </p>
           </div>
         </div>
@@ -470,8 +474,8 @@ function DeliveryZoneCard({
           <dd>{formatCurrency(Number(zone.fee || 0))}</dd>
         </div>
         <div>
-          <dt className="font-semibold text-forest">Horaires / délai</dt>
-          <dd>{zone.estimatedDelay || "Selon disponibilité"}</dd>
+          <dt className="font-semibold text-forest">Délai estimatif</dt>
+          <dd>{formatLocalDeliveryEstimate(zone)}</dd>
         </div>
       </dl>
       {zone.customerMessage && (

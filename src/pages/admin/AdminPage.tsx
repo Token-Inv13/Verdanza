@@ -102,6 +102,7 @@ import {
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../../config/deliveryRules";
 import { BRAND_LABEL } from "../../lib/brandAssets";
+import { formatLocalDeliveryEstimate } from "../../lib/deliveryEstimate";
 
 const emptyProduct: ProductInput = {
   slug: "",
@@ -287,6 +288,8 @@ export function AdminPage({ section }: { section: string }) {
       | "minimumOrder"
       | "minimumOrderAmount"
       | "estimatedDelay"
+      | "estimatedDelayMinMinutes"
+      | "estimatedDelayMaxMinutes"
       | "customerMessage"
       | "adminNote"
       | "sortOrder"
@@ -1173,6 +1176,8 @@ function DeliveryZonesPanel({
       | "minimumOrder"
       | "minimumOrderAmount"
       | "estimatedDelay"
+      | "estimatedDelayMinMinutes"
+      | "estimatedDelayMaxMinutes"
       | "customerMessage"
       | "adminNote"
       | "sortOrder"
@@ -1235,6 +1240,8 @@ function DeliveryZoneRow({
       | "minimumOrder"
       | "minimumOrderAmount"
       | "estimatedDelay"
+      | "estimatedDelayMinMinutes"
+      | "estimatedDelayMaxMinutes"
       | "customerMessage"
       | "adminNote"
       | "sortOrder"
@@ -1251,14 +1258,24 @@ function DeliveryZoneRow({
     zone.minimumOrderAmount ?? zone.minimumOrder,
   );
   const [estimatedDelay, setEstimatedDelay] = useState(zone.estimatedDelay);
+  const [estimatedDelayMinMinutes, setEstimatedDelayMinMinutes] = useState(
+    optionalNumberInputValue(zone.estimatedDelayMinMinutes),
+  );
+  const [estimatedDelayMaxMinutes, setEstimatedDelayMaxMinutes] = useState(
+    optionalNumberInputValue(zone.estimatedDelayMaxMinutes),
+  );
   const [customerMessage, setCustomerMessage] = useState(zone.customerMessage || "");
   const [adminNote, setAdminNote] = useState(zone.adminNote || "");
   const [sortOrder, setSortOrder] = useState(zone.sortOrder || 0);
   const isOpen = status === "open" && isActive;
+  const publicEstimate = formatLocalDeliveryEstimate({
+    estimatedDelayMinMinutes: optionalPositiveNumberFromInput(estimatedDelayMinMinutes),
+    estimatedDelayMaxMinutes: optionalPositiveNumberFromInput(estimatedDelayMaxMinutes),
+  });
 
   return (
-    <article className="admin-card grid gap-4 xl:grid-cols-[1fr_120px_140px_120px_1.2fr_auto] xl:items-end">
-      <div>
+    <article className="admin-card grid gap-4 md:grid-cols-2 xl:grid-cols-6 xl:items-end">
+      <div className="xl:col-span-2">
         <p className="text-xs uppercase tracking-[0.14em] text-champagne">
           {zone.method === "postal" ? "Postale" : "Locale"}
         </p>
@@ -1275,7 +1292,26 @@ function DeliveryZoneRow({
       <NumberInput label="Frais" value={fee} onChange={setFee} />
       <NumberInput label="Minimum" value={minimumOrder} onChange={setMinimumOrder} />
       <NumberInput label="Ordre" value={sortOrder} onChange={setSortOrder} />
-      <Input label="Délai" value={estimatedDelay} onChange={setEstimatedDelay} />
+      <Input label="Délai interne historique" value={estimatedDelay} onChange={setEstimatedDelay} />
+      {zone.method === "local_express" && (
+        <>
+          <Input
+            label="Délai public min (minutes)"
+            type="number"
+            value={estimatedDelayMinMinutes}
+            onChange={setEstimatedDelayMinMinutes}
+          />
+          <Input
+            label="Délai public max (minutes)"
+            type="number"
+            value={estimatedDelayMaxMinutes}
+            onChange={setEstimatedDelayMaxMinutes}
+          />
+          <p className="rounded-md border border-forest/10 bg-cream px-3 py-2 text-xs leading-5 text-ink/65 xl:col-span-3">
+            Délai public : {publicEstimate}
+          </p>
+        </>
+      )}
       <label className="text-sm font-medium text-forest">
         Visibilité
         <select
@@ -1314,6 +1350,8 @@ function DeliveryZoneRow({
             minimumOrder,
             minimumOrderAmount: minimumOrder,
             estimatedDelay,
+            estimatedDelayMinMinutes: optionalPositiveNumberFromInput(estimatedDelayMinMinutes),
+            estimatedDelayMaxMinutes: optionalPositiveNumberFromInput(estimatedDelayMaxMinutes),
             customerMessage,
             adminNote,
             sortOrder,
@@ -5538,6 +5576,15 @@ function NumberInput({
       />
     </label>
   );
+}
+
+function optionalNumberInputValue(value?: number | null) {
+  return Number.isFinite(Number(value)) && Number(value) > 0 ? String(value) : "";
+}
+
+function optionalPositiveNumberFromInput(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function Textarea({

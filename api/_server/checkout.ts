@@ -11,11 +11,14 @@ import type {
   AppliedPromotion,
 } from "../../src/types/index.js";
 import {
+  DEFAULT_LOCAL_DELIVERY_ESTIMATE_MAX_MINUTES,
+  DEFAULT_LOCAL_DELIVERY_ESTIMATE_MIN_MINUTES,
   effectiveLocalDeliveryMinimum,
   effectivePostalDeliveryMinimum,
   isPostalShippingFree,
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../../src/config/deliveryRules.js";
+import { formatLocalDeliveryEstimate } from "../../src/lib/deliveryEstimate.js";
 import {
   automaticPromotionRulesFromCoupons,
   calculateCartPromotions,
@@ -60,7 +63,10 @@ const fallbackDeliveryZones: DeliveryZone[] = [
     isActive: true,
     fee: 0,
     minimumOrder: 20,
-    estimatedDelay: "Livraison express 7j/7 de 11h00 a 01h00",
+    minimumOrderAmount: 20,
+    estimatedDelay: "Creneau local confirme apres validation",
+    estimatedDelayMinMinutes: DEFAULT_LOCAL_DELIVERY_ESTIMATE_MIN_MINUTES,
+    estimatedDelayMaxMinutes: DEFAULT_LOCAL_DELIVERY_ESTIMATE_MAX_MINUTES,
     slots: ["11:00-14:00", "14:00-18:00", "18:00-22:00", "22:00-01:00"],
   })),
 ];
@@ -474,7 +480,7 @@ async function resolveDeliveryFee(
     minimumApplied: minimumOrder,
     postalFreeShippingApplied: false,
     deliveryFeeStatus: selectedZone.fee > 0 ? "configured" : "free",
-    deliveryNote: "Livraison locale Aix-en-Provence et alentours, 7j/7 de 11h à 01h, à partir de 20 € d'achat.",
+    deliveryNote: `${formatLocalDeliveryEstimate(selectedZone)} Minimum local : ${minimumOrder.toFixed(0)} € d'achat.`,
   };
 }
 

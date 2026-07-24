@@ -1,4 +1,5 @@
 import type { BillingSettings, Invoice, Order, OrderStatus } from "../../src/types/index.js";
+import { formatLocalDeliveryEstimate } from "../../src/lib/deliveryEstimate.js";
 
 export type EmailResult =
   | { status: "sent"; id?: string; recipients?: EmailRecipientResults }
@@ -725,13 +726,14 @@ function preferredPaymentMethodLabel(method?: Order["preferredPaymentMethod"]) {
 }
 
 function deliveryInfoText(order: Order) {
+  if (order.deliveryNote) return order.deliveryNote;
   if (order.deliveryMethod === "postal") {
     if (order.postalFreeShippingApplied) {
       return "Livraison postale offerte.";
     }
     return "Livraison postale à partir de 15 € d'achat. Elle est offerte à partir de 60 €. Si votre commande est inférieure à 60 €, les frais postaux seront confirmés avec vous après validation.";
   }
-  return "Livraison locale à partir de 20 € d'achat.";
+  return `${formatLocalDeliveryEstimate()} Minimum local : 20 € d'achat.`;
 }
 
 function orderEmailTitle() {
