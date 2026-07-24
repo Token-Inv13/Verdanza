@@ -69,6 +69,41 @@ test("active product with positive stock is available and orderable", () => {
   expect(!("stockStatus" in normalized), "legacy stockStatus field must be stripped");
   expect(!("stockLabel" in normalized), "legacy stockLabel field must be stripped");
   expect(!normalized.seoDescription.includes("En arrivage"), "legacy SEO label must be stripped");
+  expect(!normalized.seoDescription.includes(".."), "legacy SEO cleanup must not leave double punctuation");
+  expect(
+    normalized.seoDescription === "Amnesia CBD Hydroponique.",
+    `unexpected cleaned SEO description: ${normalized.seoDescription}`,
+  );
+});
+
+test("legacy availability cleanup keeps product meta descriptions punctuated cleanly", () => {
+  const legacyLabel = ["En arrivage", "chez Verdanza"].join(" ");
+  const normalized = normalizeProduct(
+    product({
+      shortDescription: `Blue Dream CBD hydroponique. ${legacyLabel}.`,
+      longDescription: `Creamy Piatella CBD. ${legacyLabel}. Résine travaillée.`,
+      seoDescription: `Le Beldia CBN + CBD, profil terreux et boisé. ${legacyLabel}.`,
+    }),
+  );
+
+  for (const value of [
+    normalized.shortDescription,
+    normalized.longDescription,
+    normalized.seoDescription,
+  ]) {
+    expect(!value.includes(legacyLabel), "legacy label must be removed from product descriptions");
+    expect(!/[.!?]{2,}/.test(value), `description has repeated sentence punctuation: ${value}`);
+    expect(!/[,;:]{2,}/.test(value), `description has repeated separator punctuation: ${value}`);
+    expect(!/\s+[.,;:!?]/.test(value), `description has a space before punctuation: ${value}`);
+  }
+  expect(
+    normalized.longDescription === "Creamy Piatella CBD. Résine travaillée.",
+    `unexpected cleaned long description: ${normalized.longDescription}`,
+  );
+  expect(
+    normalized.seoDescription === "Le Beldia CBN + CBD, profil terreux et boisé.",
+    `unexpected cleaned meta description: ${normalized.seoDescription}`,
+  );
 });
 
 test("active product with zero stock is out of stock and not orderable", () => {

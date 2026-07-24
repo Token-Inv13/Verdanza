@@ -18,7 +18,10 @@ import type { Product } from "../types";
 
 export type ProductInput = Omit<Product, "id"> & { id?: string };
 
-const legacyComingSoonLabelPattern = new RegExp(["En arrivage", "chez Verdanza"].join("\\s+"), "g");
+const legacyComingSoonLabelPattern = new RegExp(
+  `(?:^|\\s+)${["En arrivage", "chez Verdanza"].join("\\s+")}\\s*[.!?]?`,
+  "g",
+);
 
 export function getLocalProducts(activeOnly = true) {
   const products = localProducts.map(normalizeProduct);
@@ -52,6 +55,10 @@ function removeLegacyAvailabilityText(value: string) {
   return value
     .replace(legacyComingSoonLabelPattern, "")
     .replace(/\s+([.,;:!?])/g, "$1")
+    .replace(/([.!?])\1+/g, "$1")
+    .replace(/([,;:])\1+/g, "$1")
+    .replace(/([.!?])[,;:]+/g, "$1")
+    .replace(/([,;:])+([.!?])/g, "$2")
     .replace(/\s{2,}/g, " ")
     .trim();
 }
