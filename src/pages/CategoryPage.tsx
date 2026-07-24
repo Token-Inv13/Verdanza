@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { useEffect, useRef } from "react";
 import { ProductCard } from "../components/ProductCard";
-import { CatalogNotice } from "../components/CatalogNotice";
 import { PromoBannerSlot } from "../components/PromoBannerSlot";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
@@ -77,7 +76,6 @@ export function CategoryPage({
       <div className="page-intro">
         <h1>{content.title}</h1>
       </div>
-      <CatalogNotice variant={category === "flowers" ? "flowers" : "resins"} />
       <PromoBannerSlot
         placement={category === "flowers" ? "flowers" : "resins"}
         type="shop_card"

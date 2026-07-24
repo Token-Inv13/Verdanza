@@ -35,10 +35,7 @@ const pages = [
     path: "/fleurs-cbd",
     titleIncludes: ["Fleurs CBD", "Verdanza"],
     descriptionIncludes: ["Sélection de fleurs CBD", "livraison"],
-    h2: [
-      "De nouvelles fleurs arrivent bientôt",
-      "Besoin d'aide pour choisir ?",
-    ],
+    h2: ["Besoin d'aide pour choisir ?"],
     links: ["/blog"],
     textMarkers: ["indoor", "greenhouse", "hydroponique", "Disponible"],
   },
@@ -46,10 +43,7 @@ const pages = [
     path: "/resines-cbd",
     titleIncludes: ["Résines CBD", "Verdanza"],
     descriptionIncludes: ["résines CBD", "livraison"],
-    h2: [
-      "De nouvelles résines arrivent bientôt",
-      "Besoin d'aide pour comparer ?",
-    ],
+    h2: ["Besoin d'aide pour comparer ?"],
     links: ["/blog"],
     textMarkers: ["texture", "CBG", "Disponible"],
   },
@@ -110,6 +104,13 @@ const forbiddenAsciiUserText = [
   "Verifier la livraison",
   "Decouvrir les resines",
   "disponibilite des creneaux",
+];
+const forbiddenArrivalNoticeText = [
+  "De nouvelles références arrivent bientôt",
+  "De nouvelles fleurs arrivent bientôt",
+  "De nouvelles résines arrivent bientôt",
+  "Des produits CBD sélectionnés avec soin seront ajoutés progressivement à la boutique.",
+  "Des références sélectionnées avec soin seront ajoutées progressivement.",
 ];
 const corruptedCharacterPattern = /Ã|â€™|�/;
 
@@ -189,6 +190,9 @@ function auditPage(page: (typeof pages)[number]): LandingAudit {
   });
   forbiddenAsciiUserText.forEach((text) => {
     if (userFacingText.includes(text)) failures.push(`unaccented French text present: ${text}`);
+  });
+  forbiddenArrivalNoticeText.forEach((text) => {
+    if (userFacingText.includes(text)) failures.push(`obsolete arrival notice present: ${text}`);
   });
   if (corruptedCharacterPattern.test(userFacingText)) {
     failures.push("corrupted UTF-8 character present");
