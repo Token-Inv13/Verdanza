@@ -4,7 +4,7 @@ import type { ProductCost } from "../types";
 export async function getProductCostsAdmin() {
   const token = await auth?.currentUser?.getIdToken();
   if (!token) return { costs: [], source: "empty" as const };
-  const response = await fetch("/api/product-costs", {
+  const response = await fetch("/api/invoices?action=productCosts", {
     headers: { authorization: `Bearer ${token}` },
   });
   const payload = (await response.json().catch(() => ({}))) as {
@@ -26,13 +26,13 @@ export async function saveProductCostAdmin(
 ) {
   const token = await auth?.currentUser?.getIdToken();
   if (!token) throw new Error("Connexion admin requise.");
-  const response = await fetch("/api/product-costs", {
+  const response = await fetch("/api/invoices", {
     method: "POST",
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ productId, purchasePricePerGram }),
+    body: JSON.stringify({ action: "saveProductCost", productId, purchasePricePerGram }),
   });
   const payload = (await response.json().catch(() => ({}))) as { error?: string };
   if (!response.ok) {

@@ -68,11 +68,26 @@ export default async function handler(
       sendJson(response, { error: "Token admin requis." }, 401);
       return;
     }
-    await assertAdminUser(db, idToken);
+    const adminUser = await assertAdminUser(db, idToken);
 
     if (method === "GET") {
       const query = new URL(request.url || "/", "https://verdanza.local").searchParams;
       const action = query.get("action") || "";
+      if (action === "productCosts") {
+        const snapshot = await db.collection("productCosts").get();
+        sendJson(response, {
+          costs: snapshot.docs.map((entry) => {
+            const data = entry.data();
+            return {
+              productId: entry.id,
+              purchasePricePerGram: optionalNonNegativeNumber(data.purchasePricePerGram),
+              updatedAt: data.updatedAt,
+              updatedBy: data.updatedBy,
+            };
+          }),
+        });
+        return;
+      }
       if (action !== "pdf") {
         sendJson(response, { error: "Action invalide." }, 400);
         return;
@@ -138,6 +153,23 @@ export default async function handler(
         updatedAt: now,
       });
       sendJson(response, { ok: true });
+      return;
+    }
+
+    if (body.action === "saveProductCost") {
+      const productId = String(body.productId || "").trim();
+      if (!productId) throw new Error("Produit requis.");
+      const purchasePricePerGram = optionalNonNegativeNumber(body.purchasePricePerGram);
+      await db.collection("productCosts").doc(productId).set(
+        {
+          productId,
+          purchasePricePerGram: purchasePricePerGram ?? null,
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: adminUser.email || adminUser.uid,
+        },
+        { merge: true },
+      );
+      sendJson(response, { ok: true, productId, purchasePricePerGram });
       return;
     }
 
@@ -326,4 +358,13 @@ function bearerToken(request: VercelRequestLike) {
 
 function roundMoney(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function optionalNonNegativeNumber(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error("Prix d'achat invalide.");
+  }
+  return parsed;
 }
