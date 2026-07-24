@@ -58,7 +58,10 @@ export function HomePage() {
               <p className="inline-flex items-center gap-2 rounded-full border border-ivory/25 bg-ivory/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-champagne">
                 <Leaf size={14} /> Verdanza CBD
               </p>
-              <h1 className="mt-5 font-display text-4xl leading-tight sm:text-5xl md:text-7xl">
+              <h1
+                className="mt-5 text-4xl leading-tight sm:text-5xl md:text-6xl"
+                style={{ fontFamily: '"Playfair Display", Georgia, serif' }}
+              >
                 CBD sélectionné avec exigence
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-ivory/82 md:mt-6 md:text-lg md:leading-8">

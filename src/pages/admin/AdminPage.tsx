@@ -1285,31 +1285,31 @@ function DeliveryZoneCreateForm({
         </p>
         <div className="mb-3 mt-2 flex flex-wrap gap-2">
           <AdminBadge tone="muted">Inactive</AdminBadge>
-          <AdminBadge tone="muted">DÃ©sactivÃ©e</AdminBadge>
+          <AdminBadge tone="muted">Désactivée</AdminBadge>
         </div>
         <Input label="Nom" value={name} onChange={setName} />
       </div>
       <NumberInput label="Frais" value={fee} onChange={setFee} />
       <NumberInput label="Minimum" value={minimumOrder} onChange={setMinimumOrder} />
       <NumberInput label="Ordre" value={sortOrder} onChange={setSortOrder} />
-      <Input label="DÃ©lai interne historique" value={estimatedDelay} onChange={setEstimatedDelay} />
+      <Input label="Délai interne historique" value={estimatedDelay} onChange={setEstimatedDelay} />
       <Input
-        label="DÃ©lai public min (minutes)"
+        label="Délai public min (minutes)"
         type="number"
         value={estimatedDelayMinMinutes}
         onChange={setEstimatedDelayMinMinutes}
       />
       <Input
-        label="DÃ©lai public max (minutes)"
+        label="Délai public max (minutes)"
         type="number"
         value={estimatedDelayMaxMinutes}
         onChange={setEstimatedDelayMaxMinutes}
       />
       <p className="rounded-md border border-forest/10 bg-cream px-3 py-2 text-xs leading-5 text-ink/65 xl:col-span-3">
-        DÃ©lai public : {publicEstimate}
+        Délai public : {publicEstimate}
       </p>
       <label className="text-sm font-medium text-forest">
-        VisibilitÃ©
+        Visibilité
         <select className="input-field mt-2" value="inactive" disabled>
           <option value="inactive">Inactif</option>
         </select>
@@ -1317,7 +1317,7 @@ function DeliveryZoneCreateForm({
       <label className="text-sm font-medium text-forest xl:col-span-2">
         Statut client
         <select className="input-field mt-2" value="disabled" disabled>
-          <option value="disabled">DÃ©sactivÃ©e</option>
+          <option value="disabled">Désactivée</option>
         </select>
       </label>
       <Input label="Message client" value={customerMessage} onChange={setCustomerMessage} />
@@ -1327,7 +1327,7 @@ function DeliveryZoneCreateForm({
         disabled={!name.trim()}
         onClick={() => void handleCreate()}
       >
-        CrÃ©er la zone
+        Créer la zone
       </button>
     </article>
   );
