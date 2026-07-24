@@ -4,6 +4,12 @@
   "devCommand": "npm run dev -- --host 127.0.0.1",
   "outputDirectory": "dist",
   "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/api/public-promo-banners",
+      "destination": "/api/quote-order?publicPromoBanners=1"
+    }
+  ],
   "headers": [
     {
       "source": "/assets/(.*)",

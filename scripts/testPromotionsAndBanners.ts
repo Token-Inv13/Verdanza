@@ -138,9 +138,9 @@ const tests: TestCase[] = [
     name: "banner visibility uses linked coupon lookup instead of stale deletion flags",
     run() {
       assertNotIncludes(readFile("src/services/promoBannersService.ts"), missingDependencyFlagName());
-      assertNotIncludes(readFile("api/public-promo-banners.ts"), missingDependencyFlagName());
+      assertNotIncludes(readFile("api/quote-order.ts"), missingDependencyFlagName());
       assertIncludes(readFile("src/services/promoBannersService.ts"), "Promotion liée introuvable");
-      assertIncludes(readFile("api/public-promo-banners.ts"), "banner.deletedLinkedCouponId");
+      assertIncludes(readFile("api/quote-order.ts"), "banner.deletedLinkedCouponId");
     },
   },
   {
