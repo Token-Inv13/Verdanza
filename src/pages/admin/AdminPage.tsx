@@ -4911,7 +4911,7 @@ function reviewStatusLabel(status: ReviewStatus) {
   return "Rejeté";
 }
 
-type ProductCategoryFilter = ProductCategory | "all" | "other";
+type ProductCategoryFilter = ProductCategory | "all" | "other" | "active" | "inactive";
 type StockFilter =
   | ProductCategoryFilter
   | "stock_ok"
@@ -4946,6 +4946,8 @@ function isOtherProductCategory(category: ProductCategory) {
 
 function productMatchesCategoryFilter(product: Product, filter: ProductCategoryFilter) {
   if (filter === "all") return true;
+  if (filter === "active") return product.isActive === true;
+  if (filter === "inactive") return product.isActive === false;
   if (filter === "other") return isOtherProductCategory(product.category);
   return product.category === filter;
 }
@@ -4956,6 +4958,8 @@ function buildProductCategoryFilters(products: Product[]): AdminFilterOption<Pro
 
   return [
     { value: "all" as const, label: "Tous", count: products.length },
+    { value: "active" as const, label: "Actifs", count: count("active") },
+    { value: "inactive" as const, label: "Inactifs", count: count("inactive") },
     { value: "flowers" as const, label: "Fleurs CBD", count: count("flowers") },
     { value: "resins" as const, label: "Resines CBD", count: count("resins") },
     { value: "other" as const, label: "Autres", count: count("other") },
@@ -4990,6 +4994,8 @@ function productMatchesStockFilter(product: Product, filter: StockFilter) {
   if (filter === "low_stock") return product.stock > 0 && product.stock <= product.lowStockThreshold;
   if (filter === "out_of_stock") return product.stock <= 0;
   if (filter === "all") return true;
+  if (filter === "active") return product.isActive === true;
+  if (filter === "inactive") return product.isActive === false;
   if (filter === "other") return isOtherProductCategory(product.category);
   return product.category === filter;
 }
