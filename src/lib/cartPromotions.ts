@@ -14,6 +14,8 @@ export type PromotionCartLine = {
   unitPrice: number;
 };
 
+type PromotionLine = PromotionCartLine | OrderItem;
+
 export type PromotionRule = {
   id: string;
   label: string;
@@ -65,7 +67,7 @@ export const BUILT_IN_AUTOMATIC_PROMOTIONS: PromotionRule[] = [
 ];
 
 export function calculateCartPromotions(input: {
-  lines: PromotionCartLine[] | OrderItem[];
+  lines: PromotionLine[];
   rules?: PromotionRule[];
   now?: Date;
 }): CartPromotionResult {
@@ -190,7 +192,7 @@ function inferPromotionType(
 
 export function evaluatePromotionRule(
   rule: PromotionRule,
-  lines: PromotionCartLine[] | OrderItem[],
+  lines: PromotionLine[],
   subtotal: number,
 ): AppliedPromotion | null {
   if (rule.type === "free_shipping") return null;
@@ -258,7 +260,7 @@ export function evaluatePromotionRule(
 
 function buildProgressMessages(
   rules: PromotionRule[],
-  lines: PromotionCartLine[] | OrderItem[],
+  lines: PromotionLine[],
   subtotal: number,
 ) {
   return rules
@@ -300,7 +302,7 @@ function buildProgressMessages(
 }
 
 function categorySubtotal(
-  lines: PromotionCartLine[] | OrderItem[],
+  lines: PromotionLine[],
   category?: ProductCategory | ProductCategory[],
 ) {
   if (!category) return 0;
@@ -314,7 +316,7 @@ function categorySubtotal(
 }
 
 function productsSubtotal(
-  lines: PromotionCartLine[] | OrderItem[],
+  lines: PromotionLine[],
   productIds: string[],
 ) {
   const eligibleProductIds = new Set(productIds);
