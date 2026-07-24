@@ -130,10 +130,15 @@ export type AppliedPromotion = {
   id: string;
   label: string;
   type: PromotionRuleType;
+  applicationMode?: "automatic" | "code";
   discountAmount: number;
   eligibleSubtotal?: number;
+  eligibleCategory?: ProductCategory;
+  eligibleCategories?: ProductCategory[];
+  productIds?: string[];
   couponId?: string;
   couponCode?: string;
+  appliedAt?: string;
 };
 
 export type Coupon = {
@@ -191,7 +196,9 @@ export type PromoBanner = {
   priority: number;
   buttonLabel?: string;
   buttonUrl?: string;
+  linkedCouponId?: string;
   linkedPromoCode?: string;
+  deletedLinkedCouponId?: string;
   variant: PromoBannerVariant;
   dismissible: boolean;
   isArchived?: boolean;
@@ -455,6 +462,7 @@ export type Invoice = {
   subtotal: number;
   deliveryFee: number;
   discountAmount: number;
+  appliedPromotions?: AppliedPromotion[];
   total: number;
   paymentMethod?: string;
   paymentStatus: PaymentStatus;

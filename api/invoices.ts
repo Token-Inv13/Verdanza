@@ -186,6 +186,7 @@ async function createInvoiceFromOrder(db: FirebaseFirestore.Firestore, orderId: 
     subtotal: Number(order.subtotal || 0),
     deliveryFee: Number(order.deliveryFee || 0),
     discountAmount: Number(order.discountAmount || 0),
+    appliedPromotions: order.appliedPromotions || [],
     total: Number(order.total || 0),
     paymentMethod: order.paymentInstructions || "Règlement à confirmer",
     paymentStatus: order.paymentStatus || "to_confirm",

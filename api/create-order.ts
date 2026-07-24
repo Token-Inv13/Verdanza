@@ -232,6 +232,7 @@ async function createDraftInvoiceForOrder(
     subtotal: Number(order.subtotal || 0),
     deliveryFee: Number(order.deliveryFee || 0),
     discountAmount: Number(order.discountAmount || 0),
+    appliedPromotions: order.appliedPromotions || [],
     total: Number(order.total || 0),
     paymentMethod: preferredPaymentMethodLabel(order.preferredPaymentMethod),
     paymentStatus: order.paymentStatus || "to_confirm",

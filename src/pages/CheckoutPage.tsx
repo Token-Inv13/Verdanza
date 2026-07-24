@@ -376,7 +376,11 @@ export function CheckoutPage() {
             deliveryZone: deliveryMethod === "local_express" ? deliveryZone : "postal-france",
             couponCode: normalizedAppliedCouponCode,
           })
-        : automaticQuote;
+        : await quoteOrder({
+            items,
+            deliveryMethod,
+            deliveryZone: deliveryMethod === "local_express" ? deliveryZone : "postal-france",
+          });
 
       const authToken = user ? await user.getIdToken() : undefined;
       const analyticsContext = await getGa4MeasurementContext().catch(() => null);

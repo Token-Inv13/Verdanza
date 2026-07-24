@@ -7,6 +7,8 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { collections } from "./collections";
@@ -87,6 +89,32 @@ export async function archiveCoupon(couponId: string) {
     archivedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+}
+
+export async function deleteCouponAndNeutralizeBannerLinks(coupon: Pick<Coupon, "id" | "code">) {
+  if (!db) throw new Error("Firebase is not configured.");
+  const batch = writeBatch(db);
+  const linkedById = await getDocs(
+    query(collection(db, collections.promoBanners), where("linkedCouponId", "==", coupon.id)),
+  );
+  const linkedByCode = coupon.code
+    ? await getDocs(
+        query(collection(db, collections.promoBanners), where("linkedPromoCode", "==", coupon.code)),
+      )
+    : null;
+  const bannerRefs = new Map<string, ReturnType<typeof doc>>();
+  linkedById.docs.forEach((entry) => bannerRefs.set(entry.id, entry.ref as ReturnType<typeof doc>));
+  linkedByCode?.docs.forEach((entry) => bannerRefs.set(entry.id, entry.ref as ReturnType<typeof doc>));
+
+  batch.delete(doc(db, collections.coupons, coupon.id));
+  bannerRefs.forEach((bannerRef) => {
+    batch.update(bannerRef, {
+      linkedCouponId: coupon.id,
+      deletedLinkedCouponId: coupon.id,
+      updatedAt: serverTimestamp(),
+    });
+  });
+  await batch.commit();
 }
 
 export function normalizeCouponCode(value: string) {

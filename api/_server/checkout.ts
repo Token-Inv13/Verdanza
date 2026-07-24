@@ -19,6 +19,8 @@ import {
 import {
   automaticPromotionRulesFromCoupons,
   calculateCartPromotions,
+  evaluatePromotionRule,
+  promotionRuleFromCouponDefinition,
 } from "../../src/lib/cartPromotions.js";
 
 const preferredPaymentMethods: PreferredPaymentMethod[] = [
@@ -120,6 +122,16 @@ export type PricedCheckout = {
   postalFreeShippingApplied: boolean;
   deliveryFeeStatus: DeliveryFeeStatus;
   deliveryNote: string;
+};
+
+type ResolvedCoupon = {
+  id: string;
+  code: string;
+  discountType: Coupon["discountType"];
+  discountValue: number;
+  discountAmount: number;
+  freeShippingApplied: boolean;
+  appliedPromotion?: AppliedPromotion;
 };
 
 export function parseCheckoutBody(value: unknown): CheckoutRequestBody {
@@ -241,9 +253,9 @@ export async function priceCheckout(
   const automaticPromotions = coupon
     ? {
         subtotalBeforePromotion: subtotal,
-        subtotalAfterPromotion: subtotal,
-        promotionDiscountTotal: 0,
-        appliedPromotions: [],
+        subtotalAfterPromotion: roundMoney(subtotal - Math.max(0, coupon.discountAmount)),
+        promotionDiscountTotal: coupon.discountAmount,
+        appliedPromotions: coupon.appliedPromotion ? [coupon.appliedPromotion] : [],
         progressMessages: [],
       }
     : calculateCartPromotions({
@@ -305,7 +317,7 @@ async function resolveCoupon(
   subtotal: number,
   orderItems: OrderItem[],
   deliveryMethod: DeliveryMethod,
-) {
+): Promise<ResolvedCoupon | null> {
   const code = rawCode.trim().toUpperCase().replace(/\s+/g, "");
   if (!code) return null;
 
@@ -362,19 +374,15 @@ async function resolveCoupon(
     throw new Error("Ce code promo est reserve a la livraison postale.");
   }
 
+  const rule = promotionRuleFromCouponDefinition(coupon, "code");
+  const appliedPromotion =
+    coupon.discountType === "free_shipping"
+      ? undefined
+      : evaluatePromotionRule(rule, orderItems, subtotal);
   const discountAmount =
-    coupon.promotionType === "threshold_extra_discount"
-      ? roundMoney(
-          Math.min(
-            Number(coupon.maxGiftAmount || 0),
-            Math.max(0, eligibleSubtotal - Number(coupon.paidThresholdAmount || 0)),
-          ),
-        )
-      : coupon.discountType === "percent"
-        ? roundMoney(eligibleSubtotal * (Number(coupon.discountValue || 0) / 100))
-        : coupon.discountType === "fixed"
-          ? roundMoney(Number(coupon.discountValue || 0))
-          : 0;
+    coupon.discountType === "free_shipping"
+      ? 0
+      : appliedPromotion?.discountAmount ?? 0;
 
   if (discountAmount <= 0 && coupon.discountType !== "free_shipping") {
     throw new Error("Code promo sans remise applicable.");
@@ -387,6 +395,7 @@ async function resolveCoupon(
     discountValue: Number(coupon.discountValue || 0),
     discountAmount,
     freeShippingApplied: coupon.discountType === "free_shipping",
+    appliedPromotion: appliedPromotion || undefined,
   };
 }
 
@@ -522,7 +531,10 @@ export function orderPayload(
     discountType: priced.discountType ?? null,
     discountValue: priced.discountValue ?? null,
     promotionDiscountTotal: priced.promotionDiscountTotal,
-    appliedPromotions: priced.appliedPromotions,
+    appliedPromotions: priced.appliedPromotions.map((promotion) => ({
+      ...promotion,
+      appliedAt: promotion.appliedAt || new Date().toISOString(),
+    })),
     subtotalBeforePromotion: priced.subtotalBeforePromotion,
     subtotalAfterPromotion: priced.subtotalAfterPromotion,
     totalAfterDiscount: priced.totalAfterDiscount,

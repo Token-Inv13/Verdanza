@@ -70,6 +70,19 @@ export async function renderInvoicePdf(invoice: Invoice, settings: BillingSettin
   drawTotal("Sous-total", invoice.subtotal);
   if (invoice.deliveryFee) drawTotal("Livraison", invoice.deliveryFee);
   if (invoice.discountAmount) drawTotal("Remise", -invoice.discountAmount);
+  if (invoice.appliedPromotions?.length) {
+    for (const promotion of invoice.appliedPromotions) {
+      drawText(
+        `${promotion.label} (${promotion.applicationMode === "automatic" ? "automatique" : "code"})`,
+        40,
+        y,
+        8,
+        font,
+        muted,
+      );
+      y -= 12;
+    }
+  }
   drawTotal("Total estime", invoice.total, true);
   y -= 20;
 

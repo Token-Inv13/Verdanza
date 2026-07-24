@@ -15,13 +15,17 @@ import {
 import { updateDeliveryZoneAdmin } from "../../services/deliveryZonesService";
 import {
   archiveCoupon,
+  deleteCouponAndNeutralizeBannerLinks,
+  normalizeCouponCode,
   updateCouponStatus,
   upsertCoupon,
   type CouponInput,
 } from "../../services/couponsService";
 import {
   archivePromoBanner,
+  deletePromoBanner,
   getBannerPlacements,
+  promoBannerVisibility,
   promoBannerStatus,
   updatePromoBannerStatus,
   upsertPromoBanner,
@@ -156,7 +160,9 @@ const emptyPromoBanner: PromoBannerInput = {
   priority: 10,
   buttonLabel: "",
   buttonUrl: "",
+  linkedCouponId: "",
   linkedPromoCode: "",
+  deletedLinkedCouponId: "",
   variant: "default",
   dismissible: false,
   isArchived: false,
@@ -201,6 +207,8 @@ export function AdminPage({ section }: { section: string }) {
   const [message, setMessage] = useState("");
   const [editingProduct, setEditingProduct] = useState<ProductInput>(emptyProduct);
   const [editingCoupon, setEditingCoupon] = useState<CouponInput>(emptyCoupon);
+  const [couponBannerAction, setCouponBannerAction] = useState<"none" | "create" | "link">("none");
+  const [couponBannerTargetId, setCouponBannerTargetId] = useState("");
   const [editingPromoBanner, setEditingPromoBanner] =
     useState<PromoBannerInput>(emptyPromoBanner);
   const [editingBilling, setEditingBilling] = useState<BillingSettings>(billingSettings);
@@ -291,12 +299,48 @@ export function AdminPage({ section }: { section: string }) {
 
   async function handleCouponSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await upsertCoupon({
+    const couponPayload = {
       ...editingCoupon,
       productIds: normalizeList(editingCoupon.productIds ?? []),
       categories: normalizeList(editingCoupon.categories ?? []) as ProductCategory[],
-    });
+    };
+    await upsertCoupon(couponPayload);
+    const couponCode = normalizeCouponCode(couponPayload.code);
+    const couponId = couponPayload.id || couponCode.toLowerCase();
+    if (couponBannerAction === "create") {
+      await upsertPromoBanner({
+        ...emptyPromoBanner,
+        id: `banner-${couponId}`,
+        title: couponPayload.label || couponCode,
+        message: couponDescription({
+          ...couponPayload,
+          id: couponId,
+          code: couponCode,
+          usedCount: Number(couponPayload.usedCount || 0),
+          isActive: Boolean(couponPayload.isActive),
+        } as Coupon),
+        type: "top_bar",
+        placement: "home",
+        placements: ["home"],
+        isActive: false,
+        isTemplate: false,
+        linkedCouponId: couponId,
+        variant: "promo",
+      });
+    }
+    if (couponBannerAction === "link" && couponBannerTargetId) {
+      const target = promoBanners.find((banner) => banner.id === couponBannerTargetId);
+      if (target) {
+        await upsertPromoBanner({
+          ...target,
+          linkedCouponId: couponId,
+          deletedLinkedCouponId: "",
+        });
+      }
+    }
     setEditingCoupon(emptyCoupon);
+    setCouponBannerAction("none");
+    setCouponBannerTargetId("");
     setMessage("Code promo enregistre.");
     await refresh();
   }
@@ -313,6 +357,17 @@ export function AdminPage({ section }: { section: string }) {
     if (!confirmed) return;
     await archiveCoupon(coupon.id);
     setMessage(`Code promo ${coupon.code} archive.`);
+    await refresh();
+  }
+
+  async function handleCouponDelete(coupon: Coupon) {
+    const confirmed = window.confirm(
+      `Suppression definitive de la promotion ${coupon.label || coupon.code} (${coupon.id}). Cette action est irreversible. Les commandes et factures existantes ne seront pas modifiees. Confirmer ?`,
+    );
+    if (!confirmed) return;
+    await deleteCouponAndNeutralizeBannerLinks(coupon);
+    setEditingCoupon(emptyCoupon);
+    setMessage(`Promotion ${coupon.label || coupon.code} supprimee definitivement.`);
     await refresh();
   }
 
@@ -336,6 +391,17 @@ export function AdminPage({ section }: { section: string }) {
     if (!confirmed) return;
     await archivePromoBanner(banner.id);
     setMessage(`Banniere ${banner.title} archivee.`);
+    await refresh();
+  }
+
+  async function handlePromoBannerDelete(banner: PromoBanner) {
+    const confirmed = window.confirm(
+      `Suppression definitive de la banniere ${banner.title} (${banner.id}). Cette action est irreversible. La promotion liee ne sera pas supprimee. Confirmer ?`,
+    );
+    if (!confirmed) return;
+    await deletePromoBanner(banner.id);
+    setEditingPromoBanner(emptyPromoBanner);
+    setMessage(`Banniere ${banner.title} supprimee definitivement.`);
     await refresh();
   }
 
@@ -535,7 +601,12 @@ export function AdminPage({ section }: { section: string }) {
         <div className="mt-8 grid gap-6 xl:grid-cols-[420px_1fr]">
           <CouponForm
             coupon={editingCoupon}
+            banners={promoBanners}
+            bannerAction={couponBannerAction}
+            bannerTargetId={couponBannerTargetId}
             onChange={setEditingCoupon}
+            onBannerActionChange={setCouponBannerAction}
+            onBannerTargetIdChange={setCouponBannerTargetId}
             onSubmit={handleCouponSubmit}
           />
           <section>
@@ -545,6 +616,7 @@ export function AdminPage({ section }: { section: string }) {
               onEdit={setEditingCoupon}
               onToggle={handleCouponToggle}
               onArchive={handleCouponArchive}
+              onDelete={handleCouponDelete}
             />
           </section>
         </div>
@@ -554,6 +626,7 @@ export function AdminPage({ section }: { section: string }) {
         <div className="mt-8 grid gap-6 xl:grid-cols-[420px_1fr]">
           <PromoBannerForm
             banner={editingPromoBanner}
+            coupons={coupons}
             onChange={setEditingPromoBanner}
             onSubmit={handlePromoBannerSubmit}
           />
@@ -565,6 +638,7 @@ export function AdminPage({ section }: { section: string }) {
               onEdit={setEditingPromoBanner}
               onToggle={handlePromoBannerToggle}
               onArchive={handlePromoBannerArchive}
+              onDelete={handlePromoBannerDelete}
             />
           </section>
         </div>
@@ -1254,11 +1328,21 @@ function DeliveryZoneRow({
 
 function CouponForm({
   coupon,
+  banners,
+  bannerAction,
+  bannerTargetId,
   onChange,
+  onBannerActionChange,
+  onBannerTargetIdChange,
   onSubmit,
 }: {
   coupon: CouponInput;
+  banners: PromoBanner[];
+  bannerAction: "none" | "create" | "link";
+  bannerTargetId: string;
   onChange: (coupon: CouponInput) => void;
+  onBannerActionChange: (action: "none" | "create" | "link") => void;
+  onBannerTargetIdChange: (bannerId: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -1356,6 +1440,39 @@ function CouponForm({
           <strong className="block">Aperçu</strong>
           {preview}
         </div>
+        <label className="text-sm font-medium text-forest">
+          Banniere associee
+          <select
+            className="input-field mt-2"
+            value={bannerAction}
+            onChange={(event) => {
+              const action = event.target.value as "none" | "create" | "link";
+              onBannerActionChange(action);
+              if (action !== "link") onBannerTargetIdChange("");
+            }}
+          >
+            <option value="none">Ne creer aucune banniere</option>
+            <option value="create">Creer une banniere associee inactive</option>
+            <option value="link">Selectionner une banniere existante</option>
+          </select>
+        </label>
+        {bannerAction === "link" && (
+          <label className="text-sm font-medium text-forest">
+            Banniere existante
+            <select
+              className="input-field mt-2"
+              value={bannerTargetId}
+              onChange={(event) => onBannerTargetIdChange(event.target.value)}
+            >
+              <option value="">Choisir une banniere</option>
+              {banners.map((banner) => (
+                <option key={banner.id} value={banner.id}>
+                  {banner.title} ({banner.id})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button
           className="btn-secondary min-h-10 justify-between px-3 py-2 text-sm"
           type="button"
@@ -1493,11 +1610,13 @@ function CouponsTable({
   onEdit,
   onToggle,
   onArchive,
+  onDelete,
 }: {
   coupons: Coupon[];
   onEdit: (coupon: CouponInput) => void;
   onToggle: (coupon: Coupon) => Promise<void>;
   onArchive: (coupon: Coupon) => Promise<void>;
+  onDelete: (coupon: Coupon) => Promise<void>;
 }) {
   const activeCount = coupons.filter((coupon) => couponStatus(coupon).label === "Actif").length;
   const expiredCount = coupons.filter((coupon) => couponStatus(coupon).label === "Expiré").length;
@@ -1558,6 +1677,9 @@ function CouponsTable({
                   <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs" onClick={() => void onArchive(coupon)}>
                     Archiver
                   </button>
+                  <button className="btn-secondary min-h-9 border-red-200 px-3 py-1.5 text-xs text-red-700" onClick={() => void onDelete(coupon)}>
+                    Supprimer
+                  </button>
                 </div>
               </article>
             );
@@ -1609,6 +1731,9 @@ function CouponsTable({
                       </button>
                       <button className="btn-secondary min-h-9 px-3 py-2" onClick={() => void onArchive(coupon)}>
                         Archiver
+                      </button>
+                      <button className="btn-secondary min-h-9 border-red-200 px-3 py-2 text-red-700" onClick={() => void onDelete(coupon)}>
+                        Supprimer
                       </button>
                     </div>
                   </td>
@@ -1691,10 +1816,12 @@ function BannerPlacementSelector({
 
 function PromoBannerForm({
   banner,
+  coupons,
   onChange,
   onSubmit,
 }: {
   banner: PromoBannerInput;
+  coupons: Coupon[];
   onChange: (banner: PromoBannerInput) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
@@ -1760,6 +1887,30 @@ function PromoBannerForm({
           value={banner.buttonUrl || ""}
           onChange={(buttonUrl) => onChange({ ...banner, buttonUrl })}
         />
+        <label className="text-sm font-medium text-forest">
+          Promotion liee optionnelle
+          <select
+            className="input-field mt-2"
+            value={banner.linkedCouponId || ""}
+            onChange={(event) =>
+              onChange({
+                ...banner,
+                linkedCouponId: event.target.value,
+                deletedLinkedCouponId: "",
+              })
+            }
+          >
+            <option value="">Aucune promotion liee</option>
+            {coupons.map((coupon) => (
+              <option key={coupon.id} value={coupon.id}>
+                {coupon.label || coupon.code} ({coupon.id}) - {coupon.autoApply ? "automatique" : "code"}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs font-normal text-ink/55">
+            Utilisez cette liaison pour une promotion automatique. Le code lie reste reserve aux codes manuels.
+          </span>
+        </label>
         <Input
           label="Code promo lie optionnel"
           value={banner.linkedPromoCode || ""}
@@ -1866,16 +2017,22 @@ function PromoBannersTable({
   onEdit,
   onToggle,
   onArchive,
+  onDelete,
 }: {
   banners: PromoBanner[];
   coupons: Coupon[];
   onEdit: (banner: PromoBannerInput) => void;
   onToggle: (banner: PromoBanner) => Promise<void>;
   onArchive: (banner: PromoBanner) => Promise<void>;
+  onDelete: (banner: PromoBanner) => Promise<void>;
 }) {
-  const activeCount = banners.filter((banner) => promoBannerStatus(banner).label === "Active").length;
+  const activeCount = banners.filter(
+    (banner) => promoBannerVisibility(banner, {
+      linkedCoupon: findLinkedCoupon(coupons, banner) || null,
+    }).visible,
+  ).length;
   const archivedCount = banners.filter((banner) => banner.isArchived).length;
-  const scheduledCount = banners.filter((banner) => promoBannerStatus(banner).label === "Programmee").length;
+  const scheduledCount = banners.filter((banner) => promoBannerStatus(banner).label === "Programmée").length;
 
   return (
     <section className="grid gap-4">
@@ -1908,9 +2065,10 @@ function PromoBannersTable({
                 banner={banner}
                 coupons={coupons}
                 onEdit={onEdit}
-                onToggle={onToggle}
-                onArchive={onArchive}
-              />
+                  onToggle={onToggle}
+                  onArchive={onArchive}
+                  onDelete={onDelete}
+                />
             ))}
           </div>
         )}
@@ -1923,9 +2081,9 @@ function PromoBannersTable({
                   "Type",
                   "Emplacement",
                   "Dates",
-                  "Code",
+                  "Promotion",
                   "Priorite",
-                  "Statut",
+                  "Visibilite",
                   "Actions",
                 ].map((header) => (
                   <th key={header} className="px-4 py-3 font-medium">{header}</th>
@@ -1934,10 +2092,13 @@ function PromoBannersTable({
             </thead>
             <tbody>
               {banners.map((banner) => {
-                const status = promoBannerStatus(banner);
                 const linkedCoupon = findLinkedCoupon(coupons, banner);
+                const status = promoBannerVisibility(banner, {
+                  linkedCoupon: linkedCoupon || null,
+                });
                 const linkedCouponInactive = Boolean(
-                  banner.linkedPromoCode && (!linkedCoupon || !linkedCoupon.isActive),
+                  (banner.linkedCouponId || banner.linkedPromoCode || banner.deletedLinkedCouponId) &&
+                    !status.visible,
                 );
                 return (
                   <tr key={banner.id} className="border-t border-forest/10">
@@ -1956,10 +2117,23 @@ function PromoBannersTable({
                       {banner.startsAt || "Immediat"} - {banner.endsAt || "Sans fin"}
                     </td>
                     <td className="px-4 py-4">
-                      {banner.linkedPromoCode || "-"}
+                      {linkedCoupon ? (
+                        <div className="grid gap-1">
+                          <span>{linkedCoupon.label || linkedCoupon.code}</span>
+                          <span className="text-xs text-ink/55">
+                            {linkedCoupon.id} - {linkedCoupon.autoApply ? "automatique" : "code"}
+                          </span>
+                        </div>
+                      ) : banner.deletedLinkedCouponId ? (
+                        <span>Supprimee : {banner.deletedLinkedCouponId}</span>
+                      ) : banner.linkedPromoCode ? (
+                        <span>Code : {banner.linkedPromoCode}</span>
+                      ) : (
+                        "-"
+                      )}
                       {linkedCouponInactive && (
                         <span className="mt-2 block">
-                          <AdminBadge tone="warning">Code lie inactif</AdminBadge>
+                          <AdminBadge tone="warning">{status.label}</AdminBadge>
                         </span>
                       )}
                     </td>
@@ -1976,6 +2150,9 @@ function PromoBannersTable({
                         </button>
                         <button className="btn-secondary min-h-9 px-3 py-2" onClick={() => void onArchive(banner)}>
                           Archiver
+                        </button>
+                        <button className="btn-secondary min-h-9 border-red-200 px-3 py-2 text-red-700" onClick={() => void onDelete(banner)}>
+                          Supprimer
                         </button>
                       </div>
                     </td>
@@ -1996,17 +2173,22 @@ function PromoBannerCard({
   onEdit,
   onToggle,
   onArchive,
+  onDelete,
 }: {
   banner: PromoBanner;
   coupons: Coupon[];
   onEdit: (banner: PromoBannerInput) => void;
   onToggle: (banner: PromoBanner) => Promise<void>;
   onArchive: (banner: PromoBanner) => Promise<void>;
+  onDelete: (banner: PromoBanner) => Promise<void>;
 }) {
-  const status = promoBannerStatus(banner);
   const linkedCoupon = findLinkedCoupon(coupons, banner);
+  const status = promoBannerVisibility(banner, {
+    linkedCoupon: linkedCoupon || null,
+  });
   const linkedCouponInactive = Boolean(
-    banner.linkedPromoCode && (!linkedCoupon || !linkedCoupon.isActive),
+    (banner.linkedCouponId || banner.linkedPromoCode || banner.deletedLinkedCouponId) &&
+      !status.visible,
   );
   return (
     <article className="rounded-lg border border-forest/10 bg-ivory p-4">
@@ -2027,17 +2209,16 @@ function PromoBannerCard({
         Priorite {promoBannerPriorityLabel(banner.priority)} - {banner.startsAt || "Immediat"} -{" "}
         {banner.endsAt || "Sans fin"}
       </p>
-      {banner.linkedPromoCode && (
+      {(banner.linkedCouponId || banner.linkedPromoCode || banner.deletedLinkedCouponId) && (
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-forest">
-          <span>Code : {banner.linkedPromoCode}</span>
-          <button
-            type="button"
-            className="rounded border border-forest/15 px-2 py-1 text-xs hover:bg-forest hover:text-ivory"
-            onClick={() => void navigator.clipboard?.writeText(banner.linkedPromoCode || "")}
-          >
-            Copier
-          </button>
-          {linkedCouponInactive && <AdminBadge tone="warning">Code lie inactif</AdminBadge>}
+          <span>
+            {linkedCoupon
+              ? `${linkedCoupon.label || linkedCoupon.code} (${linkedCoupon.id})`
+              : banner.deletedLinkedCouponId
+                ? `Promotion supprimee : ${banner.deletedLinkedCouponId}`
+                : `Code : ${banner.linkedPromoCode}`}
+          </span>
+          {linkedCouponInactive && <AdminBadge tone="warning">{status.label}</AdminBadge>}
         </div>
       )}
       <div className="mt-4 flex flex-wrap gap-2">
@@ -2049,6 +2230,9 @@ function PromoBannerCard({
         </button>
         <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs" onClick={() => void onArchive(banner)}>
           Archiver
+        </button>
+        <button className="btn-secondary min-h-9 border-red-200 px-3 py-1.5 text-xs text-red-700" onClick={() => void onDelete(banner)}>
+          Supprimer
         </button>
       </div>
     </article>
@@ -5072,6 +5256,9 @@ function promoBannerPriorityLabel(priority: number) {
 }
 
 function findLinkedCoupon(coupons: Coupon[], banner: PromoBanner) {
+  if (banner.linkedCouponId) {
+    return coupons.find((coupon) => coupon.id === banner.linkedCouponId);
+  }
   const code = (banner.linkedPromoCode || "").trim().toUpperCase();
   if (!code) return undefined;
   return coupons.find((coupon) => coupon.code.trim().toUpperCase() === code);

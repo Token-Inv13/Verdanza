@@ -1,6 +1,8 @@
 import {
   collection,
+  deleteDoc,
   doc,
+  getDoc,
   getDocs,
   orderBy,
   query,
@@ -17,6 +19,7 @@ import type {
   PromoBannerPlacement,
   PromoBannerType,
   PromoBannerVariant,
+  Coupon,
 } from "../types";
 
 export type PromoBannerInput = Omit<PromoBanner, "id" | "createdAt" | "updatedAt"> & {
@@ -43,6 +46,16 @@ export async function getPromoBannersWithFallback() {
 }
 
 export async function getPublicPromoBanners() {
+  try {
+    const response = await fetch("/api/public-promo-banners");
+    if (response.ok) {
+      const payload = (await response.json()) as { banners?: PromoBanner[] };
+      return (payload.banners ?? []).map(normalizePromoBanner);
+    }
+  } catch {
+    // Fall through to Firestore client fallback below.
+  }
+
   if (!db) return [];
   try {
     const snapshot = await getDocs(
@@ -69,6 +82,11 @@ export async function upsertPromoBanner(input: PromoBannerInput) {
   if (!title) throw new Error("Titre requis.");
   if (!message) throw new Error("Message requis.");
   const bannerId = input.id || slugify(`${title}-${Date.now()}`);
+  const bannerRef = doc(db, collections.promoBanners, bannerId);
+  const existing = await getDoc(bannerRef);
+  const existingData = existing.exists()
+    ? normalizePromoBanner({ id: existing.id, ...existing.data() } as PromoBanner)
+    : null;
   const placements = normalizeBannerPlacements(
     input.placements?.length ? input.placements : [input.placement],
   );
@@ -77,26 +95,34 @@ export async function upsertPromoBanner(input: PromoBannerInput) {
     : placements[0] || "draft";
 
   await setDoc(
-    doc(db, collections.promoBanners, bannerId),
+    bannerRef,
     {
       title,
       message,
       type: input.type,
       placement: primaryPlacement,
       placements,
-      isActive: Boolean(input.isActive),
+      isActive: isExplicitBoolean(input.isActive)
+        ? input.isActive
+        : existingData?.isActive ?? false,
       startsAt: input.startsAt || "",
       endsAt: input.endsAt || "",
       priority: Number(input.priority || 0),
       buttonLabel: input.buttonLabel?.trim() || "",
       buttonUrl: sanitizeBannerUrl(input.buttonUrl || ""),
+      linkedCouponId: input.linkedCouponId?.trim() || "",
       linkedPromoCode: input.linkedPromoCode?.trim().toUpperCase().replace(/\s+/g, "") || "",
       variant: input.variant,
-      dismissible: Boolean(input.dismissible),
-      isArchived: Boolean(input.isArchived),
-      isTemplate: Boolean(input.isTemplate),
+      dismissible: isExplicitBoolean(input.dismissible) ? input.dismissible : false,
+      isArchived: isExplicitBoolean(input.isArchived)
+        ? input.isArchived
+        : existingData?.isArchived ?? false,
+      isTemplate: isExplicitBoolean(input.isTemplate)
+        ? input.isTemplate
+        : existingData?.isTemplate ?? false,
+      deletedLinkedCouponId: input.deletedLinkedCouponId?.trim() || "",
       updatedAt: serverTimestamp(),
-      createdAt: serverTimestamp(),
+      ...(existing.exists() ? {} : { createdAt: serverTimestamp() }),
     },
     { merge: true },
   );
@@ -120,22 +146,59 @@ export async function archivePromoBanner(bannerId: string) {
   });
 }
 
-export function isPromoBannerVisibleNow(banner: PromoBanner, now = new Date()) {
+export async function deletePromoBanner(bannerId: string) {
+  if (!db) throw new Error("Firebase is not configured.");
+  await deleteDoc(doc(db, collections.promoBanners, bannerId));
+}
+
+export function isPromoBannerVisibleNow(
+  banner: PromoBanner,
+  now = new Date(),
+  linkedCoupon?: Coupon | null,
+) {
+  return promoBannerVisibility(banner, { now, linkedCoupon }).visible;
+}
+
+export function promoBannerVisibility(
+  banner: PromoBanner,
+  options: { now?: Date; linkedCoupon?: Coupon | null; hasLinkedCouponLookup?: boolean } = {},
+): {
+  visible: boolean;
+  label: string;
+  tone: "success" | "warning" | "danger" | "muted" | "gold";
+} {
+  const now = options.now ?? new Date();
   const placements = getBannerPlacements(banner);
   if (
-    !banner.isActive ||
-    banner.isArchived ||
-    !placements.length ||
-    placements.every((placement) => placement === "draft")
+    !banner.title.trim() ||
+    !banner.message.trim()
   ) {
-    return false;
+    return { visible: false, label: "Données invalides", tone: "danger" };
+  }
+  if (banner.isTemplate) return { visible: false, label: "Modèle non publiable", tone: "gold" };
+  if (banner.isArchived) return { visible: false, label: "Archivée", tone: "muted" };
+  if (!banner.isActive) return { visible: false, label: "Inactive manuellement", tone: "muted" };
+  if (!placements.length || placements.every((placement) => placement === "draft")) {
+    return { visible: false, label: "Aucun emplacement", tone: "warning" };
   }
   const startsAt = parseBannerDate(banner.startsAt);
   const endsAt = parseBannerDate(banner.endsAt);
   const current = now.getTime();
-  if (startsAt && current < startsAt) return false;
-  if (endsAt && current > endOfDay(endsAt)) return false;
-  return true;
+  if (startsAt && current < startsAt) return { visible: false, label: "Programmée", tone: "gold" };
+  if (endsAt && current > endOfDay(endsAt)) return { visible: false, label: "Expirée", tone: "danger" };
+
+  const hasLinkedCoupon = Boolean(
+    banner.linkedCouponId || banner.linkedPromoCode || banner.deletedLinkedCouponId,
+  );
+  if (hasLinkedCoupon && options.hasLinkedCouponLookup !== false) {
+    if (!options.linkedCoupon) {
+      return { visible: false, label: "Promotion liée introuvable", tone: "warning" };
+    }
+    const couponStatus = linkedCouponVisibility(options.linkedCoupon, now);
+    if (!couponStatus.visible) return couponStatus;
+  }
+
+  return { visible: true, label: "Visible", tone: "success" };
 }
 
 export function promoBannerMatchesPlacement(
@@ -151,17 +214,10 @@ export function promoBannerStatus(banner: PromoBanner): {
   label: string;
   tone: "success" | "warning" | "danger" | "muted" | "gold";
 } {
-  const now = Date.now();
-  const startsAt = parseBannerDate(banner.startsAt);
-  const endsAt = parseBannerDate(banner.endsAt);
-  if (banner.isArchived) return { label: "Archivee", tone: "muted" };
-  if (!banner.isActive) return { label: "Inactive", tone: "muted" };
-  if (startsAt && now < startsAt) return { label: "Programmee", tone: "gold" };
-  if (endsAt && now > endOfDay(endsAt)) return { label: "Expiree", tone: "danger" };
-  return { label: "Active", tone: "success" };
+  return promoBannerVisibility(banner, { hasLinkedCouponLookup: false });
 }
 
-function normalizePromoBanner(banner: PromoBanner): PromoBanner {
+export function normalizePromoBanner(banner: PromoBanner): PromoBanner {
   const placements = normalizeBannerPlacements(
     banner.placements?.length ? banner.placements : [banner.placement],
   );
@@ -177,12 +233,14 @@ function normalizePromoBanner(banner: PromoBanner): PromoBanner {
     priority: Number(banner.priority || 0),
     buttonLabel: banner.buttonLabel || "",
     buttonUrl: sanitizeBannerUrl(banner.buttonUrl || ""),
+    linkedCouponId: banner.linkedCouponId || banner.deletedLinkedCouponId || "",
     linkedPromoCode: banner.linkedPromoCode || "",
     variant: normalizeBannerVariant(banner.variant),
     dismissible: Boolean(banner.dismissible),
-    isActive: Boolean(banner.isActive),
+    isActive: normalizeActiveState(banner),
     isArchived: Boolean(banner.isArchived || banner.archivedAt),
     isTemplate: Boolean(banner.isTemplate),
+    deletedLinkedCouponId: banner.deletedLinkedCouponId || "",
     startsAt: normalizeBannerDateValue(banner.startsAt),
     endsAt: normalizeBannerDateValue(banner.endsAt),
   };
@@ -274,6 +332,43 @@ function sanitizeBannerUrl(value: string) {
   if (url.startsWith("https://verdanza.fr")) return url;
   if (url.startsWith("https://verdanza-opal.vercel.app")) return url;
   return "";
+}
+
+function normalizeActiveState(banner: PromoBanner & { active?: unknown; enabled?: unknown; status?: unknown }) {
+  if (isExplicitBoolean(banner.isActive)) return banner.isActive;
+  if (isExplicitBoolean(banner.active)) return banner.active;
+  if (isExplicitBoolean(banner.enabled)) return banner.enabled;
+  const status = String(banner.status || "").trim().toLowerCase();
+  if (["active", "actif", "visible", "published", "publie"].includes(status)) return true;
+  if (["inactive", "inactif", "disabled", "draft", "brouillon", "archived"].includes(status)) {
+    return false;
+  }
+  return false;
+}
+
+function isExplicitBoolean(value: unknown): value is boolean {
+  return typeof value === "boolean";
+}
+
+function linkedCouponVisibility(
+  coupon: Coupon,
+  now: Date,
+): {
+  visible: boolean;
+  label: string;
+  tone: "success" | "warning" | "danger" | "muted" | "gold";
+} {
+  const nowTime = now.getTime();
+  const startsAt = coupon.startsAt ? Date.parse(coupon.startsAt) : 0;
+  const endsAt = coupon.endsAt ? Date.parse(coupon.endsAt) : 0;
+  if (coupon.isArchived) return { visible: false, label: "Promotion liée archivée", tone: "muted" };
+  if (!coupon.isActive) return { visible: false, label: "Promotion liée inactive", tone: "warning" };
+  if (startsAt && nowTime < startsAt) return { visible: false, label: "Promotion liée programmée", tone: "gold" };
+  if (endsAt && nowTime > endOfDay(endsAt)) return { visible: false, label: "Promotion liée expirée", tone: "danger" };
+  if (coupon.maxUses && Number(coupon.usedCount || 0) >= Number(coupon.maxUses)) {
+    return { visible: false, label: "Promotion liée indisponible", tone: "warning" };
+  }
+  return { visible: true, label: "Visible", tone: "success" };
 }
 
 function normalizeBannerDateValue(value: unknown) {

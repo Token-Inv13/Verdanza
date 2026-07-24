@@ -4,7 +4,7 @@ import type {
   OrderItem,
   ProductCategory,
   PromotionRuleType,
-} from "../types";
+} from "../types/index.js";
 
 export type PromotionCartLine = {
   productId: string;
@@ -21,6 +21,7 @@ export type PromotionRule = {
   autoApply: boolean;
   type: PromotionRuleType;
   eligibleCategory?: ProductCategory;
+  eligibleCategories?: ProductCategory[];
   minCartSubtotal?: number;
   minEligibleSubtotal?: number;
   paidThresholdAmount?: number;
@@ -34,6 +35,8 @@ export type PromotionRule = {
   stackable?: boolean;
   couponCode?: string;
   couponId?: string;
+  applicationMode?: "automatic" | "code";
+  productIds?: string[];
 };
 
 export type CartPromotionResult = {
@@ -78,7 +81,7 @@ export function calculateCartPromotions(input: {
     .sort((left, right) => Number(left.priority || 0) - Number(right.priority || 0));
 
   const candidates = activeRules
-    .map((rule) => evaluateRule(rule, input.lines, subtotalBeforePromotion))
+    .map((rule) => evaluatePromotionRule(rule, input.lines, subtotalBeforePromotion))
     .filter((entry): entry is AppliedPromotion => Boolean(entry && entry.discountAmount > 0));
 
   const nonStackable = candidates.filter((entry) => {
@@ -133,6 +136,13 @@ export function automaticPromotionRulesFromCoupons(
 
 export function promotionRuleFromCoupon(coupon: Coupon): PromotionRule | null {
   if (!coupon.autoApply) return null;
+  return promotionRuleFromCouponDefinition(coupon, "automatic");
+}
+
+export function promotionRuleFromCouponDefinition(
+  coupon: Coupon,
+  applicationMode: "automatic" | "code",
+): PromotionRule {
   const categories = coupon.categories ?? [];
   const type =
     coupon.promotionType ??
@@ -142,10 +152,13 @@ export function promotionRuleFromCoupon(coupon: Coupon): PromotionRule | null {
   return {
     id: coupon.id || coupon.code,
     label: coupon.label || coupon.code,
-    active: coupon.isActive && !coupon.isArchived,
-    autoApply: true,
+    active: coupon.isActive && !coupon.isArchived && !couponHasReachedMaxUses(coupon),
+    autoApply: applicationMode === "automatic",
     type,
     eligibleCategory,
+    eligibleCategories: Array.from(
+      new Set([...(categories ?? []), ...(eligibleCategory ? [eligibleCategory] : [])]),
+    ),
     minCartSubtotal: Number(coupon.minimumOrder || 0),
     minEligibleSubtotal: Number(coupon.minEligibleSubtotal || coupon.minimumOrder || 0),
     paidThresholdAmount: Number(coupon.paidThresholdAmount || 0),
@@ -159,6 +172,8 @@ export function promotionRuleFromCoupon(coupon: Coupon): PromotionRule | null {
     stackable: coupon.stackable,
     couponCode: coupon.code,
     couponId: coupon.id,
+    applicationMode,
+    productIds: coupon.productIds ?? [],
   };
 }
 
@@ -173,18 +188,23 @@ function inferPromotionType(
   return eligibleCategory ? "fixed_category_discount" : "fixed_cart_discount";
 }
 
-function evaluateRule(
+export function evaluatePromotionRule(
   rule: PromotionRule,
   lines: PromotionCartLine[] | OrderItem[],
   subtotal: number,
 ): AppliedPromotion | null {
   if (rule.type === "free_shipping") return null;
+  const categoryScope = rule.eligibleCategories?.length
+    ? rule.eligibleCategories
+    : rule.eligibleCategory;
   const eligibleSubtotal =
-    rule.type === "fixed_category_discount" ||
-    rule.type === "percentage_category_discount" ||
-    rule.type === "threshold_extra_discount"
-      ? categorySubtotal(lines, rule.eligibleCategory)
-      : subtotal;
+    rule.productIds?.length
+      ? productsSubtotal(lines, rule.productIds)
+      : rule.type === "fixed_category_discount" ||
+          rule.type === "percentage_category_discount" ||
+          rule.type === "threshold_extra_discount"
+        ? categorySubtotal(lines, categoryScope)
+        : subtotal;
 
   if (subtotal < Number(rule.minCartSubtotal || 0)) return null;
   const minimumEligibleSubtotal =
@@ -221,8 +241,16 @@ function evaluateRule(
     id: rule.id,
     label,
     type: rule.type,
+    applicationMode: rule.applicationMode ?? (rule.autoApply ? "automatic" : "code"),
     discountAmount,
     eligibleSubtotal: roundMoney(eligibleSubtotal),
+    eligibleCategory: rule.eligibleCategory,
+    eligibleCategories: rule.eligibleCategories?.length
+      ? rule.eligibleCategories
+      : rule.eligibleCategory
+        ? [rule.eligibleCategory]
+        : [],
+    productIds: rule.productIds,
     couponId: rule.couponId,
     couponCode: rule.couponCode,
   };
@@ -241,8 +269,11 @@ function buildProgressMessages(
       ) {
         return "";
       }
-      if (!rule.eligibleCategory) return "";
-      const eligibleSubtotal = categorySubtotal(lines, rule.eligibleCategory);
+      const eligibleCategories = rule.eligibleCategories?.length
+        ? rule.eligibleCategories
+        : rule.eligibleCategory;
+      if (!eligibleCategories) return "";
+      const eligibleSubtotal = categorySubtotal(lines, eligibleCategories);
       if (rule.type === "threshold_extra_discount") {
         const paidThresholdAmount = Number(rule.paidThresholdAmount || 0);
         const maxGiftAmount = Number(rule.maxGiftAmount || 0);
@@ -270,12 +301,26 @@ function buildProgressMessages(
 
 function categorySubtotal(
   lines: PromotionCartLine[] | OrderItem[],
-  category?: ProductCategory,
+  category?: ProductCategory | ProductCategory[],
 ) {
   if (!category) return 0;
+  const categories = Array.isArray(category) ? new Set(category) : new Set([category]);
   return roundMoney(
     lines.reduce((sum, line) => {
-      if (line.category !== category) return sum;
+      if (!line.category || !categories.has(line.category)) return sum;
+      return sum + Number(line.unitPrice || 0) * Number(line.quantity || 0);
+    }, 0),
+  );
+}
+
+function productsSubtotal(
+  lines: PromotionCartLine[] | OrderItem[],
+  productIds: string[],
+) {
+  const eligibleProductIds = new Set(productIds);
+  return roundMoney(
+    lines.reduce((sum, line) => {
+      if (!eligibleProductIds.has(line.productId)) return sum;
       return sum + Number(line.unitPrice || 0) * Number(line.quantity || 0);
     }, 0),
   );
@@ -289,6 +334,14 @@ function isRuleUsable(rule: PromotionRule, now: Date) {
   if (startsAt && nowTime < startsAt) return false;
   if (endsAt && nowTime > endsAt) return false;
   return true;
+}
+
+function couponHasReachedMaxUses(coupon: Coupon) {
+  return Boolean(
+    coupon.maxUses &&
+      Number(coupon.maxUses || 0) > 0 &&
+      Number(coupon.usedCount || 0) >= Number(coupon.maxUses || 0),
+  );
 }
 
 function dedupePromotionRules(rules: PromotionRule[]) {
