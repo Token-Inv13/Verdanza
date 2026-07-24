@@ -1642,7 +1642,7 @@ function CouponsTable({
       {!coupons.length && (
         <AdminEmptyState
           title="Aucun code promo créé pour le moment."
-          description="Créez un code simple comme WELCOME10, BIENVENUE5 ou POSTALOFFERT."
+          description="Créez un code simple comme WELCOME10, BIENVENUE5 ou ETE10."
         />
       )}
       {!!coupons.length && (

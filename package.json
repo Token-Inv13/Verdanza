@@ -32,7 +32,6 @@
     "seed:delivery-zones": "node --import tsx scripts/seedFirestoreDeliveryZones.ts",
     "seed:admin": "node --import tsx scripts/bootstrapAdmin.ts",
     "seed:admin-auth": "node --import tsx scripts/bootstrapAdminAuth.ts",
-    "seed:marketing-templates": "node --import tsx scripts/seedMarketingTemplates.ts",
     "repair:launch-promo-banner": "node --import tsx scripts/repairLaunchPromoBanner.ts",
     "cleanup:test-data": "node --import tsx scripts/cleanupProductionTestData.ts",
     "cleanup:orders": "node --import tsx scripts/cleanupCancelledFinishedOrders.ts",

@@ -8,11 +8,9 @@ async function main() {
   requireConfirmationFlag("repair:launch-promo-banner");
 
   const { db, projectId } = getRequiredAdminDb();
-  const templateRef = db.collection("promoBanners").doc("template-launch-flowers-20");
   const activeRef = db.collection("promoBanners").doc("launch-flowers-20");
   const couponRef = db.collection("coupons").doc("fleurs20");
-  const [templateSnapshot, activeSnapshot, couponSnapshot] = await Promise.all([
-    templateRef.get(),
+  const [activeSnapshot, couponSnapshot] = await Promise.all([
     activeRef.get(),
     couponRef.get(),
   ]);
@@ -21,25 +19,13 @@ async function main() {
     throw new Error("Promotion coupons/fleurs20 introuvable.");
   }
 
-  const template = templateSnapshot.data() || {};
+  const existingBanner = activeSnapshot.data() || {};
   const message =
-    typeof template.message === "string" && template.message.trim()
-      ? template.message.trim().replace(/\s+/g, " ")
+    typeof existingBanner.message === "string" && existingBanner.message.trim()
+      ? existingBanner.message.trim().replace(/\s+/g, " ")
       : "20 EUR de fleurs offerts au choix des 30 EUR d'achat.";
 
   await db.runTransaction(async (transaction) => {
-    transaction.set(
-      templateRef,
-      {
-        isTemplate: true,
-        isActive: false,
-        isArchived: false,
-        updatedAt: FieldValue.serverTimestamp(),
-        ...(templateSnapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
-      },
-      { merge: true },
-    );
-
     transaction.set(
       activeRef,
       {
@@ -72,11 +58,6 @@ async function main() {
     JSON.stringify(
       {
         projectId,
-        template: {
-          id: templateRef.id,
-          isTemplate: true,
-          isActive: false,
-        },
         activeBanner: {
           id: activeRef.id,
           linkedCouponId: "fleurs20",
