@@ -8,6 +8,7 @@ import {
   buildAssociatedPromoBannerInput,
   findAssociatedPromoBanner,
 } from "../src/services/promoBannersService.ts";
+import { buildCouponWritePayload } from "../src/services/couponsService.ts";
 import type { Coupon, PromoBanner } from "../src/types/index.js";
 
 type TestCase = {
@@ -176,6 +177,9 @@ const tests: TestCase[] = [
       assertIncludes(couponSubmit, "try {");
       assertIncludes(couponSubmit, "await upsertCoupon(couponPayload)");
       assertIncludes(couponSubmit, "await upsertAssociatedPromoBanner");
+      assertIncludes(couponSubmit, "Association banniere non mise a jour");
+      assertIncludes(couponSubmit, "associatedPromoBannerId(couponId)");
+      assertIncludes(couponSubmit, "message: targetIsAssociatedBanner ? couponDescription(savedCoupon) : target.message");
       assertIncludes(couponSubmit, "Erreur enregistrement promotion");
       assertIncludes(couponSubmit, "setEditingCoupon(emptyCoupon)");
       assertEqual(
@@ -201,6 +205,45 @@ const tests: TestCase[] = [
           bannerSubmit.indexOf("setEditingPromoBanner(emptyPromoBanner)"),
         true,
       );
+    },
+  },
+  {
+    name: "coupon update payload persists WELCOME10 minimum without undefined fields",
+    run() {
+      const payload = buildCouponWritePayload(
+        {
+          id: "welcome10",
+          code: "welcome10",
+          label: "Welcome10",
+          discountType: "percent",
+          discountValue: 10,
+          minimumOrder: 30,
+          maxUses: 1000,
+          usedCount: 1,
+          startsAt: "2026-07-06",
+          endsAt: "2026-08-30",
+          isActive: true,
+        },
+        { clearMissingOptionalFields: true },
+      );
+
+      assertEqual(payload.code, "WELCOME10");
+      assertEqual(payload.minimumOrder, 30);
+      assertEqual(payload.discountValue, 10);
+      assertEqual(payload.maxUses, 1000);
+      assertEqual("id" in payload, false);
+      assertEqual("createdAt" in payload, false);
+      assertEqual(Object.values(payload).some((value) => value === undefined), false);
+    },
+  },
+  {
+    name: "coupon service updates existing documents instead of recreating them",
+    run() {
+      const source = readFile("src/services/couponsService.ts");
+      assertIncludes(source, "const existing = await getDoc(couponRef)");
+      assertIncludes(source, "await updateDoc(couponRef, couponPayload)");
+      assertIncludes(source, "includeCreatedAt: !existing.exists()");
+      assertNotIncludes(source, "createdAt: serverTimestamp(),");
     },
   },
   {

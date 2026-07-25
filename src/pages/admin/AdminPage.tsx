@@ -35,6 +35,7 @@ import {
 } from "../../services/couponsService";
 import {
   archivePromoBanner,
+  associatedPromoBannerId,
   deletePromoBanner,
   findAssociatedPromoBanner,
   getBannerPlacements,
@@ -488,29 +489,43 @@ export function AdminPage({ section }: { section: string }) {
         usedCount: Number(couponPayload.usedCount || 0),
         isActive: Boolean(couponPayload.isActive),
       } as Coupon;
-      if (couponBannerAction === "create") {
-        await upsertAssociatedPromoBanner({
-          coupon: savedCoupon,
-          banners: promoBanners,
-          title: couponPayload.label || couponCode,
-          message: couponDescription(savedCoupon),
-        });
-      }
-      if (couponBannerAction === "link" && couponBannerTargetId) {
-        const target = promoBanners.find((banner) => banner.id === couponBannerTargetId);
-        if (target) {
-          await upsertPromoBanner({
-            ...target,
-            linkedCouponId: couponId,
-            linkedPromoCode: couponCode,
-            deletedLinkedCouponId: "",
+      let bannerWarning = "";
+      try {
+        if (couponBannerAction === "create") {
+          await upsertAssociatedPromoBanner({
+            coupon: savedCoupon,
+            banners: promoBanners,
+            title: couponPayload.label || couponCode,
+            message: couponDescription(savedCoupon),
           });
         }
+        if (couponBannerAction === "link" && couponBannerTargetId) {
+          const target = promoBanners.find((banner) => banner.id === couponBannerTargetId);
+          if (target) {
+            const targetIsAssociatedBanner =
+              target.id === associatedPromoBannerId(couponId) ||
+              target.linkedCouponId === couponId ||
+              normalizeCouponCode(target.linkedPromoCode || "") === couponCode;
+            await upsertPromoBanner({
+              ...target,
+              message: targetIsAssociatedBanner ? couponDescription(savedCoupon) : target.message,
+              linkedCouponId: couponId,
+              linkedPromoCode: couponCode,
+              deletedLinkedCouponId: "",
+            });
+          }
+        }
+      } catch (bannerError) {
+        console.warn("Unable to update associated promotion banner", bannerError);
+        bannerWarning =
+          bannerError instanceof Error
+            ? ` Association banniere non mise a jour : ${bannerError.message}`
+            : " Association banniere non mise a jour.";
       }
       setEditingCoupon(emptyCoupon);
       setCouponBannerAction("none");
       setCouponBannerTargetId("");
-      setMessage("Code promo enregistre.");
+      setMessage(`Code promo enregistre.${bannerWarning}`);
       await refresh();
     } catch (error) {
       setMessage(

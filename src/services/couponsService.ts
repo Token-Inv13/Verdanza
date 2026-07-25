@@ -1,6 +1,8 @@
 import {
   collection,
+  deleteField,
   doc,
+  getDoc,
   getDocs,
   orderBy,
   query,
@@ -17,6 +19,11 @@ import type { Coupon } from "../types";
 export type CouponInput = Omit<Coupon, "id" | "usedCount" | "createdAt" | "updatedAt"> & {
   id?: string;
   usedCount?: number;
+};
+
+type CouponWriteOptions = {
+  includeCreatedAt?: boolean;
+  clearMissingOptionalFields?: boolean;
 };
 
 export async function getCouponsWithFallback() {
@@ -43,34 +50,65 @@ export async function upsertCoupon(input: CouponInput) {
   const code = normalizeCouponCode(input.code);
   if (!code) throw new Error("Code promo requis.");
   const couponId = input.id || code.toLowerCase();
+  const couponRef = doc(db, collections.coupons, couponId);
+  const existing = await getDoc(couponRef);
+  const couponPayload = buildCouponWritePayload(input, {
+    includeCreatedAt: !existing.exists(),
+    clearMissingOptionalFields: existing.exists(),
+  });
 
-  await setDoc(
-    doc(db, collections.coupons, couponId),
-    {
-      ...input,
-      code,
-      label: input.label || code,
-      discountValue: Number(input.discountValue || 0),
-      minimumOrder: Number(input.minimumOrder || 0),
-      autoApply: input.autoApply === true,
-      promotionType: input.promotionType || undefined,
-      eligibleCategory: input.eligibleCategory || undefined,
-      minEligibleSubtotal: Number(input.minEligibleSubtotal || 0),
-      paidThresholdAmount: Number(input.paidThresholdAmount || 0),
-      maxGiftAmount: Number(input.maxGiftAmount || 0),
-      maxDiscountAmount: input.maxDiscountAmount
-        ? Number(input.maxDiscountAmount)
-        : undefined,
-      stackable: input.stackable === true,
-      priority: Number(input.priority || 10),
-      maxUses: input.maxUses || undefined,
-      usedCount: Number(input.usedCount || 0),
-      isActive: Boolean(input.isActive),
-      updatedAt: serverTimestamp(),
-      createdAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+  if (existing.exists()) {
+    await updateDoc(couponRef, couponPayload);
+    return;
+  }
+
+  await setDoc(couponRef, couponPayload);
+}
+
+export function buildCouponWritePayload(
+  input: CouponInput,
+  options: CouponWriteOptions = {},
+) {
+  const code = normalizeCouponCode(input.code);
+  const clearValue = options.clearMissingOptionalFields ? deleteField() : undefined;
+  const payload = stripUndefinedFields({
+    code,
+    label: input.label || code,
+    discountType: input.discountType,
+    discountValue: Number(input.discountValue || 0),
+    minimumOrder: Number(input.minimumOrder || 0),
+    autoApply: input.autoApply === true,
+    promotionType: input.promotionType || clearValue,
+    eligibleCategory: input.eligibleCategory || clearValue,
+    minEligibleSubtotal: Number(input.minEligibleSubtotal || 0),
+    paidThresholdAmount: Number(input.paidThresholdAmount || 0),
+    maxGiftAmount: Number(input.maxGiftAmount || 0),
+    maxDiscountAmount: input.maxDiscountAmount
+      ? Number(input.maxDiscountAmount)
+      : clearValue,
+    stackable: input.stackable === true,
+    priority: Number(input.priority || 10),
+    maxUses: input.maxUses ? Number(input.maxUses) : clearValue,
+    usedCount: Number(input.usedCount || 0),
+    startsAt: input.startsAt || clearValue,
+    endsAt: input.endsAt || clearValue,
+    isActive: Boolean(input.isActive),
+    productIds: input.productIds ?? [],
+    categories: input.categories ?? [],
+    isArchived: input.isArchived === true,
+    isTemplate: input.isTemplate === true,
+    internalNote: input.internalNote || clearValue,
+    updatedAt: serverTimestamp(),
+    ...(options.includeCreatedAt ? { createdAt: serverTimestamp() } : {}),
+  });
+
+  return payload;
+}
+
+function stripUndefinedFields<T extends Record<string, unknown>>(input: T) {
+  return Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined),
+  ) as T;
 }
 
 export async function updateCouponStatus(couponId: string, isActive: boolean) {
