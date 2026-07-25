@@ -8,25 +8,35 @@ export const products: Product[] = [
     category: "resins",
     price: 5.5,
     shortDescription:
-      "Résine multi-cannabinoides CBD, CBG et CBN, puissante et herbacée.",
+      "Résine multi-cannabinoïdes CBD, CBG et CBN, texture crémeuse et profil herbacé puissant.",
     longDescription:
-      "Golden Static est une résine sélectionnée produite en France, à la texture crémeuse et au profil riche. Sa composition associe CBD, CBG et CBN pour une référence technique, moderne et haut de gamme.",
+      "Golden Static est une résine multi-cannabinoïdes produite en France, pensée autour d'une composition complète associant CBD, CBG et CBN. Sa texture crémeuse facilite la manipulation et lui donne une présentation sombre, dense et travaillée. Son profil aromatique reste puissant, herbacé, végétal et authentique, avec une identité plus technique que les résines classiques de la sélection.",
     image: "/Fiche produit/Golden static/goldenstatic.webp",
+    imageAlt: "Résine CBD Golden Static Verdanza, blocs sombres à texture crémeuse",
     cbdRate: "50 %",
     cbgRate: "10 %",
+    cbnRate: "10 %",
     thcRate: "< 0,2 %",
     origin: "France",
     qualitySealEnabled: true,
     cultureType: "Autre",
+    texture: "Crémeuse, dense, travaillée",
     aromas: ["Puissant", "Herbacé", "Végétal", "Authentique"],
     tags: ["résine", "cbd", "cbg", "cbn", "france"],
+    productTier: "Premium",
+    whyChooseDescription:
+      "Golden Static s'adresse aux clients qui veulent une résine plus technique, avec plusieurs cannabinoïdes annoncés et un profil aromatique franc. Sa composition CBD, CBG et CBN la distingue des références plus simples de la gamme.",
+    advisedProfile:
+      "Pour les amateurs de résines premium au profil herbacé, végétal et plus technique.",
+    experienceDescription:
+      "Une référence moderne et complète, à positionner pour les clients qui souhaitent découvrir une résine marquée par la présence de plusieurs cannabinoïdes annoncés.",
     stock: 25,
     lowStockThreshold: 10,
     isActive: true,
     isFeatured: true,
-    seoTitle: "Golden Static - Résine CBD CBG CBN Verdanza",
+    seoTitle: "Golden Static - Résine CBD CBG CBN premium | Verdanza",
     seoDescription:
-      "Golden Static Verdanza, résine multi-cannabinoides CBD CBG CBN produite en France, disponible au gramme.",
+      "Golden Static Verdanza, résine française multi-cannabinoïdes avec 50 % CBD, 10 % CBG, 10 % CBN et profil herbacé puissant.",
   },
   {
     id: "resin-supreme-purple-cbd",
@@ -35,24 +45,33 @@ export const products: Product[] = [
     category: "resins",
     price: 5,
     shortDescription:
-      "Résine CBD française sélectionnée, compacte, légèrement friable et intensément aromatique.",
+      "Résine CBD premium française, compacte et légèrement friable, au profil terreux et fruité.",
     longDescription:
-      "Suprême Purple CBD est une résine sélectionnée au profil intense et authentique. Sa fiche indique 50 % de CBD, une origine France et une texture compacte légèrement friable.",
+      "Suprême Purple CBD est une résine CBD premium produite en France, actuellement indisponible dans la boutique. Sa fiche confirme une concentration annoncée de 50 % de CBD, une texture compacte et légèrement friable, ainsi qu'un profil aromatique terreux et végétal relevé par des accents de raisin doux et d'épices. Son identité est plus intense et fruitée que les résines végétales ou boisées de la sélection.",
     image: "/Fiche produit/Supreme Purple CBD/SUPREMEPURPLEcopieffff.webp",
+    imageAlt: "Résine CBD Suprême Purple Verdanza, bloc compact brun à texture friable",
     cbdRate: "50 %",
     cbgRate: "Non communiqué",
     thcRate: "< 0,2 %",
     origin: "France",
     cultureType: "Autre",
+    texture: "Compacte, légèrement friable",
     aromas: ["Terreux", "Végétal", "Raisin doux", "Épicé"],
     tags: ["résine", "cbd", "france", "selection"],
+    productTier: "Premium",
+    whyChooseDescription:
+      "Suprême Purple se distingue par son profil aromatique plus fruité et épicé, tout en conservant une base terreuse et végétale. Elle complète les résines plus crémeuses, herbacées ou traditionnelles de la sélection.",
+    advisedProfile:
+      "Pour les clients qui recherchent une résine française compacte, intense et aromatique. Produit actuellement en rupture de stock.",
+    experienceDescription:
+      "Une résine au caractère affirmé, pensée pour apporter une alternative plus fruitée dans la gamme premium Verdanza lorsque le stock est disponible.",
     stock: 0,
     lowStockThreshold: 10,
     isActive: true,
     isFeatured: true,
-    seoTitle: "Suprême Purple CBD - Résine sélectionnée Verdanza",
+    seoTitle: "Suprême Purple - Résine CBD française premium | Verdanza",
     seoDescription:
-      "Suprême Purple CBD Verdanza, résine CBD française à 50 % de CBD, vendue au gramme.",
+      "Suprême Purple Verdanza, résine CBD française à 50 % de CBD, texture compacte et profil terreux, végétal, fruité et épicé.",
   },
   {
     id: "resin-supreme-50-cbd",
@@ -97,24 +116,33 @@ export const products: Product[] = [
     category: "flowers",
     price: 4.5,
     shortDescription:
-      "Fleur CBD indoor gourmande, douce et sucrée, cultivée en intérieur.",
+      "Fleur CBD indoor italienne, gourmande et sucrée, à la présentation régulière.",
     longDescription:
-      "Cookie Kush Indoor est la référence la plus gourmande de la sélection. Cultivée en intérieur en Italie, elle offre un profil sucré, sirupeux et rond avec une présentation soignée.",
+      "Cookie Kush Indoor est une fleur CBD cultivée en intérieur en Italie. Sa culture indoor permet une meilleure maîtrise des conditions de production et une belle régularité visuelle. Elle développe un profil gourmand, sucré, sirupeux et rond, avec une expression aromatique douce et une présentation soignée.",
     image: "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
+    imageAlt: "Fleur CBD Cookie Kush Indoor Verdanza, têtes vertes compactes",
     cbdRate: "Non communiqué",
     cbgRate: "Non communiqué",
     thcRate: "< 0,2 %",
     origin: "Italie",
     cultureType: "Indoor",
+    texture: "Têtes soignées, régulières",
     aromas: ["Sucré", "Sirupeux", "Gourmand", "Rond"],
     tags: ["fleur", "indoor", "italie", "gourmand"],
+    productTier: "Premium",
+    whyChooseDescription:
+      "Cookie Kush Indoor est la référence la plus gourmande de la sélection fleurs. Sa culture intérieure confirmée et son profil sucré en font une option plus premium qu'une greenhouse classique.",
+    advisedProfile:
+      "Pour les clients qui recherchent une fleur CBD douce, aromatique et sucrée.",
+    experienceDescription:
+      "Une fleur accessible mais soignée, pensée pour les amateurs de profils gourmands qui veulent une présentation régulière et une identité aromatique ronde.",
     stock: 15,
     lowStockThreshold: 10,
     isActive: true,
     isFeatured: true,
-    seoTitle: "Cookie Kush Indoor - Fleur CBD Verdanza",
+    seoTitle: "Cookie Kush Indoor - Fleur CBD italienne | Verdanza",
     seoDescription:
-      "Cookie Kush Indoor Verdanza, fleur CBD indoor italienne au profil gourmand, vendue au gramme.",
+      "Cookie Kush Indoor Verdanza, fleur CBD cultivée en intérieur en Italie, profil gourmand, sucré, sirupeux et rond.",
   },
   {
     id: "flower-petites-tetes-og-kush",
@@ -123,24 +151,33 @@ export const products: Product[] = [
     category: "flowers",
     price: 4,
     shortDescription:
-      "Petites têtes de fleur CBD greenhouse, fraîches, intenses et équilibrées.",
+      "Fleur CBD greenhouse italienne, fraîche, intense et équilibrée, en petites têtes.",
     longDescription:
-      "Petites Têtes OG Kush est une fleur CBD cultivée en Italie sous serre. Son profil associe menthe fraîche, agrumes et fraîcheur végétale pour une référence directe et équilibrée.",
+      "Petites Têtes OG Kush est une fleur CBD cultivée en Italie sous serre. Elle se présente en petites têtes au profil frais, direct et équilibré. Sa fiche met en avant des notes de menthe fraîche, d'agrumes et de fraîcheur végétale, avec une intensité aromatique nette.",
     image: "/Fiche produit/Petite tetes OG Kush ( sous serre)/PTOGKush_zoom.webp",
+    imageAlt: "Petites têtes de fleur CBD OG Kush Verdanza, fleurs greenhouse italiennes",
     cbdRate: "Non communiqué",
     cbgRate: "Non communiqué",
     thcRate: "< 0,2 %",
     origin: "Italie",
     cultureType: "Sous-serre",
+    texture: "Petites têtes compactes",
     aromas: ["Menthe fraîche", "Agrumes", "Fraîcheur végétale", "Intense"],
     tags: ["fleur", "greenhouse", "sous-serre", "italie", "og-kush"],
+    productTier: "Premium",
+    whyChooseDescription:
+      "OG Kush convient aux clients qui veulent une fleur greenhouse fraîche et directe, avec une identité aromatique plus vive que les profils boisés ou gourmands.",
+    advisedProfile:
+      "Pour les amateurs de fleurs CBD fraîches, intenses et équilibrées.",
+    experienceDescription:
+      "Une référence accessible et qualitative, pensée pour compléter les fleurs plus premium sans perdre en fraîcheur aromatique.",
     stock: 15,
     lowStockThreshold: 10,
     isActive: true,
     isFeatured: true,
-    seoTitle: "Petites Têtes OG Kush - Fleur CBD Verdanza",
+    seoTitle: "OG Kush - Fleur CBD greenhouse italienne | Verdanza",
     seoDescription:
-      "Petites Têtes OG Kush Verdanza, fleur CBD greenhouse italienne au profil frais et équilibré.",
+      "OG Kush Verdanza, fleur CBD greenhouse italienne en petites têtes, profil menthe fraîche, agrumes et fraîcheur végétale.",
   },
   {
     id: "flower-harlequin-greenhouse",
@@ -149,24 +186,33 @@ export const products: Product[] = [
     category: "flowers",
     price: 4,
     shortDescription:
-      "Fleur CBD greenhouse naturelle, ronde et authentique, cultivée en Italie.",
+      "Fleur CBD greenhouse italienne, naturelle et ronde, au profil boisé et torréfié.",
     longDescription:
-      "Harlequin Greenhouse est une fleur CBD sous serre au profil profond et équilibré. Elle développe des notes de musc, sous-bois, sésame et touches torréfiées.",
+      "Harlequin Greenhouse est une fleur CBD cultivée en Italie sous serre. Son profil est plus profond, mature et naturel que les références gourmandes. Elle développe des notes de musc, de sous-bois, de sésame et de touches torréfiées, avec une rondeur aromatique marquée.",
     image: "/Fiche produit/Harlequin (sous-serre)/harlequin_zoom.webp",
+    imageAlt: "Fleur CBD Harlequin Greenhouse Verdanza, têtes italiennes sous serre",
     cbdRate: "Non communiqué",
     cbgRate: "Non communiqué",
     thcRate: "< 0,2 %",
     origin: "Italie",
     cultureType: "Sous-serre",
+    texture: "Têtes mûres et plus boisées",
     aromas: ["Musc", "Sous-bois", "Notes torréfiées", "Sésame", "Rondeur"],
     tags: ["fleur", "greenhouse", "sous-serre", "italie", "harlequin"],
+    productTier: "Premium",
+    whyChooseDescription:
+      "Harlequin Greenhouse apporte un profil plus naturel, profond et boisé dans la sélection. Elle équilibre les fleurs plus sucrées comme Cookie Kush et les profils plus frais comme OG Kush.",
+    advisedProfile:
+      "Pour les clients qui préfèrent les fleurs CBD rondes, boisées et moins sucrées.",
+    experienceDescription:
+      "Une fleur mature et équilibrée, très complémentaire des profils plus gourmands ou plus frais de la gamme Verdanza.",
     stock: 16,
     lowStockThreshold: 10,
     isActive: true,
     isFeatured: false,
-    seoTitle: "Harlequin Greenhouse - Fleur CBD Verdanza",
+    seoTitle: "Harlequin Greenhouse - Fleur CBD italienne | Verdanza",
     seoDescription:
-      "Harlequin Greenhouse Verdanza, fleur CBD sous serre italienne au profil naturel et boisé.",
+      "Harlequin Greenhouse Verdanza, fleur CBD sous serre italienne au profil musc, sous-bois, sésame et notes torréfiées.",
   },
   {
     id: "resin-la-mousse",
@@ -175,24 +221,34 @@ export const products: Product[] = [
     category: "resins",
     price: 2,
     shortDescription:
-      "Mousse CBD française souple, légère et naturelle, issue de fleurs de CBD sélectionnées.",
+      "Mousse CBD française issue de trichomes, souple, légère, compacte et végétale.",
     longDescription:
-      "La Mousse est une résine CBD française issue d'un travail de sélection, de tamisage et de séparation mécanique des trichomes. Sa texture souple, légère et compacte lui donne une présentation naturelle et authentique.",
+      "La Mousse est une résine CBD française fabriquée à partir de fleurs de CBD sélectionnées. Elle est issue d'un travail de tamisage et de séparation mécanique des trichomes, sans mention d'extraction par solvant. Sa texture souple, légère et compacte lui donne une présentation naturelle, végétale et authentique, avec un taux de CBD variable selon le lot.",
     image: "/Fiche produit/La%20mousse/mousse1.webp",
+    imageAlt: "Mousse CBD Verdanza, résine française claire en texture poudreuse compacte",
     cbdRate: "Variable selon le lot",
     cbgRate: "Non communiqué",
     thcRate: "< 0,3 %",
     origin: "France",
     cultureType: "Autre",
+    texture: "Souple, légère, compacte",
     aromas: ["Chanvre naturel", "Végétal", "Intense", "Authentique"],
     tags: ["resine", "mousse cbd", "france", "tamisage", "trichomes"],
+    productTier: "Premium",
+    qualitySealEnabled: true,
+    whyChooseDescription:
+      "La Mousse est une référence accessible pour les clients qui recherchent une résine française simple, végétale et naturelle, avec une texture plus légère que les blocs de résine classiques.",
+    advisedProfile:
+      "Pour les amateurs de résines souples, végétales et authentiques.",
+    experienceDescription:
+      "Un profil simple, équilibré et qualitatif, utile pour découvrir une résine française à base de trichomes sans aller vers une référence plus technique ou plus concentrée.",
     stock: 60,
     lowStockThreshold: 10,
     isActive: true,
     isFeatured: false,
-    seoTitle: "La Mousse - Résine CBD française Verdanza",
+    seoTitle: "La Mousse - Mousse CBD française | Verdanza",
     seoDescription:
-      "La Mousse Verdanza, résine CBD française issue de fleurs de CBD sélectionnées, vendue au gramme.",
+      "La Mousse Verdanza, mousse CBD française issue de fleurs sélectionnées, texture souple, légère et compacte.",
   },
   {
     id: "resin-3x-filtre-cbd-cbg",
