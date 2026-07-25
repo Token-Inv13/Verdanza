@@ -232,7 +232,7 @@ function parseQuoteBody(value: unknown): CheckoutRequestBody {
     deliveryZone: body.deliveryZone,
     couponCode: body.couponCode,
     complianceAccepted: true,
-    preferredPaymentMethod: "confirm_with_verdanza",
+    preferredPaymentMethod: "card_payment_link",
     customer: {
       email: "quote@verdanza.fr",
       phone: "0000000000",

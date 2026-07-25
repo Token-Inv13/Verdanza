@@ -25,6 +25,7 @@
     "indexnow:verify": "node --import tsx scripts/verifyIndexNow.ts",
     "test:indexnow": "node --import tsx scripts/testIndexNow.ts",
     "test:catalog": "node --import tsx scripts/testProductAvailability.ts",
+    "test:checkout-payment-options": "node --import tsx scripts/testCheckoutPaymentOptions.ts",
     "test:fixed-price-formats": "node --import tsx scripts/testFixedPriceFormats.ts",
     "test:fixed-price-migration": "node --import tsx scripts/testFixedPriceMigration.ts",
     "test:promotions": "node --import tsx scripts/testPromotionsAndBanners.ts",

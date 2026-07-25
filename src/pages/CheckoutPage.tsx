@@ -36,12 +36,15 @@ const checkoutErrorMessage =
   "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza par email.";
 const promoStorageKey = "verdanza-coupon-code";
 
-const paymentMethodLabels: Record<PreferredPaymentMethod, string> = {
+type CheckoutSelectablePaymentMethod = Exclude<
+  PreferredPaymentMethod,
+  "confirm_with_verdanza" | "local_delivery_payment"
+>;
+
+const paymentMethodLabels: Record<CheckoutSelectablePaymentMethod, string> = {
   card_payment_link: "Carte bancaire via lien de paiement après confirmation",
   cash_on_delivery: "Espèces à la livraison locale",
-  bank_transfer: "Virement bancaire (bientôt disponible)",
-  local_delivery_payment: "Paiement à la livraison locale",
-  confirm_with_verdanza: "À confirmer avec Verdanza",
+  bank_transfer: "Virement bancaire",
 };
 
 export function CheckoutPage() {
@@ -73,7 +76,7 @@ export function CheckoutPage() {
   const [isCheckingPromo, setIsCheckingPromo] = useState(false);
   const [customerMessage, setCustomerMessage] = useState("");
   const [preferredPaymentMethod, setPreferredPaymentMethod] =
-    useState<PreferredPaymentMethod>("card_payment_link");
+    useState<CheckoutSelectablePaymentMethod>("card_payment_link");
   const [complianceAccepted, setComplianceAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -220,14 +223,8 @@ export function CheckoutPage() {
   }, [deliveryMethod, deliveryZone, openLocalDeliveryZones]);
 
   useEffect(() => {
-    if (
-      deliveryMethod === "postal" &&
-      (preferredPaymentMethod === "local_delivery_payment" ||
-        preferredPaymentMethod === "cash_on_delivery")
-    ) {
-      setPreferredPaymentMethod("card_payment_link");
-    }
-  }, [deliveryMethod, preferredPaymentMethod]);
+    setPreferredPaymentMethod("card_payment_link");
+  }, [deliveryMethod]);
 
   useEffect(() => {
     if (!couponCode.trim()) {
@@ -402,7 +399,7 @@ export function CheckoutPage() {
         throw new Error("Le paiement en espèces est réservé à la livraison locale.");
       }
       if (preferredPaymentMethod === "bank_transfer") {
-        throw new Error("Le virement bancaire n'est pas encore disponible.");
+        throw new Error("Le virement bancaire ne peut pas être sélectionné.");
       }
       const finalQuote = hasManualPromo
         ? await quoteOrder({
@@ -764,7 +761,7 @@ export function CheckoutPage() {
                   className="input-field mt-2"
                   value={preferredPaymentMethod}
                   onChange={(event) =>
-                    setPreferredPaymentMethod(event.target.value as PreferredPaymentMethod)
+                    setPreferredPaymentMethod(event.target.value as CheckoutSelectablePaymentMethod)
                   }
                 >
                   <option value="card_payment_link">
@@ -778,9 +775,6 @@ export function CheckoutPage() {
                       {paymentMethodLabels.cash_on_delivery}
                     </option>
                   )}
-                  <option value="confirm_with_verdanza">
-                    {paymentMethodLabels.confirm_with_verdanza}
-                  </option>
                 </select>
               </label>
               <label className="mt-5 block text-sm font-medium text-forest">

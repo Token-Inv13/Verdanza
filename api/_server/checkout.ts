@@ -38,8 +38,6 @@ const preferredPaymentMethods: PreferredPaymentMethod[] = [
   "card_payment_link",
   "cash_on_delivery",
   "bank_transfer",
-  "local_delivery_payment",
-  "confirm_with_verdanza",
 ];
 
 const fallbackDeliveryZones: DeliveryZone[] = [
@@ -176,7 +174,7 @@ export function parseCheckoutBody(value: unknown): CheckoutRequestBody {
     throw new Error("Paiement a la livraison locale indisponible en livraison postale.");
   }
   if (body.preferredPaymentMethod === "bank_transfer") {
-    throw new Error("Virement bancaire pas encore disponible.");
+    throw new Error("Virement bancaire non selectionnable.");
   }
   if (!body.customer?.email || !body.customer.phone) {
     throw new Error("Email et telephone client requis.");
@@ -583,8 +581,7 @@ export function orderPayload(
   const paymentProvider = "manual";
   const paymentInstructions = paymentInstructionsFor();
   const preferredPaymentMethod =
-    normalizePreferredPaymentMethod(body.preferredPaymentMethod) ||
-    (body.deliveryMethod === "local_express" ? "confirm_with_verdanza" : "card_payment_link");
+    normalizePreferredPaymentMethod(body.preferredPaymentMethod) || "card_payment_link";
   const orderStatus = "contact_required";
 
   return {

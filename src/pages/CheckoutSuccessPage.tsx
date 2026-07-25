@@ -65,7 +65,8 @@ export function CheckoutSuccessPage() {
               <p>{summary.deliveryNote}</p>
               <p>
                 Mode de règlement souhaité :{" "}
-                {summary.preferredPaymentMethod || "À confirmer avec Verdanza"}
+                {summary.preferredPaymentMethod ||
+                  "Carte bancaire via lien de paiement après confirmation"}
               </p>
               <p>Total estimé : {formatMoney(summary.total)}</p>
             </div>
@@ -110,7 +111,9 @@ function readLastOrderSummary(orderId: string | null) {
       items: parsed.items,
       delivery: parsed.delivery || "À confirmer",
       deliveryNote: parsed.deliveryNote || "",
-      preferredPaymentMethod: parsed.preferredPaymentMethod || "À confirmer avec Verdanza",
+      preferredPaymentMethod:
+        parsed.preferredPaymentMethod ||
+        "Carte bancaire via lien de paiement après confirmation",
       total: Number(parsed.total || 0),
     };
   } catch {
