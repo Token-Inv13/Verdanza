@@ -16,9 +16,7 @@ import {
   normalizeSupplierLabel,
   normalizeText,
 } from "../src/lib/supplierInvoiceParsers.js";
-import {
-  formatProductInternalReference,
-} from "../src/lib/productReferences.js";
+import { reserveProductInternalReference } from "./_server/productReferences.js";
 import {
   normalizeFixedPriceMode,
   serializeFixedPriceOptionsForMode,
@@ -429,6 +427,7 @@ async function upsertProductAdmin(db: FirebaseFirestore.Firestore, rawProduct: u
   }
   delete (payload as Record<string, unknown>).id;
   delete (payload as Record<string, unknown>).internalReference;
+  delete (payload as Record<string, unknown>).legacyInternalReferences;
 
   const productId = await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
@@ -438,7 +437,14 @@ async function upsertProductAdmin(db: FirebaseFirestore.Firestore, rawProduct: u
       updatedAt: FieldValue.serverTimestamp(),
     };
     if (!snapshot.exists || !existingReference) {
-      update.internalReference = await nextProductInternalReference(db, transaction);
+      update.internalReference = await reserveProductInternalReference({
+        db,
+        transaction,
+        productId: id,
+        category: snapshot.exists ? snapshot.data()?.category || input.category : input.category,
+      });
+    }
+    if (!snapshot.exists) {
       update.createdAt = FieldValue.serverTimestamp();
     }
     transaction.set(ref, update, { merge: true });
@@ -446,25 +452,6 @@ async function upsertProductAdmin(db: FirebaseFirestore.Firestore, rawProduct: u
   });
 
   return { ok: true, productId };
-}
-
-async function nextProductInternalReference(
-  db: FirebaseFirestore.Firestore,
-  transaction: FirebaseFirestore.Transaction,
-) {
-  const counterRef = db.collection("counters").doc("productReferences");
-  const counterSnapshot = await transaction.get(counterRef);
-  const current = Number(counterSnapshot.data()?.value || 0);
-  const next = current + 1;
-  transaction.set(
-    counterRef,
-    {
-      value: next,
-      updatedAt: FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  );
-  return formatProductInternalReference(next);
 }
 
 async function saveSupplierProductAlias(

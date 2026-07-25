@@ -220,10 +220,14 @@ function matchSupplierLine(
   );
   if (alias) return productMatch(alias.productId, "alias", "confirmed", context.products);
 
-  const referenceMatch = originalLabel.match(/\bVDZ-\d{6}\b/i);
+  const referenceMatch = originalLabel.match(/\bVDZ-(?:\d{6}|(?:FLR|RES|HUI|PCK|AUT)-[A-HJ-NP-Z2-9]{6})\b/i);
   if (referenceMatch) {
     const reference = referenceMatch[0].toUpperCase();
-    const product = context.products.find((entry) => entry.internalReference === reference);
+    const product = context.products.find(
+      (entry) =>
+        entry.internalReference === reference ||
+        entry.legacyInternalReferences?.includes(reference),
+    );
     if (product) return productMatch(product.id, "internal_reference", "confirmed", context.products);
   }
 

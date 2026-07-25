@@ -11,6 +11,7 @@ export type CultureType =
 export type Product = {
   id: string;
   internalReference?: string;
+  legacyInternalReferences?: string[];
   slug: string;
   name: string;
   category: ProductCategory;

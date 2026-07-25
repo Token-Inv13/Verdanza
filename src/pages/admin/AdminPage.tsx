@@ -933,6 +933,22 @@ function ProductForm({
             <option value="packs">Packs</option>
           </select>
         </label>
+        <div className="rounded-md border border-forest/10 bg-cream/40 px-3 py-2 text-sm text-forest">
+          <span className="block text-xs uppercase tracking-[0.14em] text-ink/50">
+            Reference produit
+          </span>
+          <span className="mt-1 block font-mono text-base">
+            {product.internalReference ||
+              (product.id
+                ? "Une reference sera generee automatiquement a l'enregistrement"
+                : "Generee automatiquement a l'enregistrement")}
+          </span>
+          {!!product.legacyInternalReferences?.length && (
+            <span className="mt-1 block text-xs text-ink/55">
+              Ancienne reference : {product.legacyInternalReferences.join(", ")}
+            </span>
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <NumberInput
             label="Prix / g"
@@ -1389,7 +1405,7 @@ function ProductTable({
             label="Recherche nom, slug ou reference"
             value={search}
             onChange={setSearch}
-            placeholder="VDZ-000001"
+            placeholder="VDZ-RES-KM7QF2"
           />
         </div>
       </div>
@@ -1431,6 +1447,11 @@ function ProductTable({
                       <span className="block text-xs font-mono text-ink/55">
                         {product.internalReference || "Reference a attribuer"}
                       </span>
+                      {!!product.legacyInternalReferences?.length && (
+                        <span className="block text-xs text-ink/45">
+                          Ancienne reference : {product.legacyInternalReferences.join(", ")}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </td>
@@ -1568,6 +1589,11 @@ function StockRow({
           <span className="text-xs font-mono text-ink/50">
             {product.internalReference || "Reference a attribuer"}
           </span>
+          {!!product.legacyInternalReferences?.length && (
+            <span className="block text-xs text-ink/45">
+              Ancienne reference : {product.legacyInternalReferences.join(", ")}
+            </span>
+          )}
           <div className="mt-2 flex flex-wrap gap-2">
             <AdminBadge tone={product.isActive ? "success" : "muted"}>
               {product.isActive ? "Actif" : "Inactif"}
@@ -6584,6 +6610,7 @@ function productMatchesAdminSearch(product: Product, search: string) {
     product.slug,
     product.id,
     product.internalReference,
+    ...(product.legacyInternalReferences || []),
   ]
     .filter(Boolean)
     .some((value) => String(value).toLowerCase().includes(query));

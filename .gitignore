@@ -29,6 +29,7 @@ tmp_logo_contact_sheet.png
 reports/firestore-cleanup/
 reports/fixed-price-migration/*.json
 reports/fixed-price-migration-tests/
+reports/product-reference-migration-v2/*.json
 
 .vercel
 .env*

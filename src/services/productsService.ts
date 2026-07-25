@@ -1,6 +1,5 @@
 import {
   collection,
-  deleteField,
   doc,
   getDocs,
   query,
@@ -18,8 +17,8 @@ import { collections } from "./collections";
 import {
   normalizeFixedPriceMode,
   normalizeFixedPriceOptions,
-  serializeFixedPriceOptionsForMode,
 } from "../lib/fixedPriceOptions";
+import { normalizeLegacyInternalReferences } from "../lib/productReferences";
 import type { Product } from "../types";
 
 export type ProductInput = Omit<Product, "id"> & { id?: string };
@@ -52,6 +51,7 @@ export function normalizeProduct(product: Product): Product {
     seoDescription: removeLegacyAvailabilityText(sanitized.seoDescription),
     fixedPriceMode: normalizeFixedPriceMode(sanitized.fixedPriceMode, sanitized.category),
     fixedPriceOptions: normalizeFixedPriceOptions(sanitized.fixedPriceOptions),
+    legacyInternalReferences: normalizeLegacyInternalReferences(sanitized.legacyInternalReferences),
     qualitySealEnabled: sanitized.qualitySealEnabled === true,
     lowStockThreshold: Math.max(0, Math.floor(Number(sanitized.lowStockThreshold ?? 5))),
     isActive: sanitized.isActive !== false,
@@ -132,22 +132,7 @@ export async function upsertProduct(input: ProductInput) {
     if (!response.ok) throw new Error(payload.error || "Enregistrement produit impossible.");
     return payload.productId || input.id || input.slug;
   }
-  const id = input.id || input.slug;
-  const productRef = doc(db, collections.products, id);
-  const payload = {
-    ...input,
-    fixedPriceMode: normalizeFixedPriceMode(input.fixedPriceMode, input.category),
-    compareAtPrice: input.compareAtPrice || deleteField(),
-    qualitySealEnabled: input.qualitySealEnabled === true,
-    lowStockThreshold: input.lowStockThreshold ?? 5,
-    updatedAt: serverTimestamp(),
-  };
-  payload.fixedPriceOptions = serializeFixedPriceOptionsForMode(
-    payload.fixedPriceMode,
-    input.fixedPriceOptions,
-  );
-  await setDoc(productRef, payload, { merge: true });
-  return id;
+  throw new Error("Session admin requise pour enregistrer un produit via l'API securisee.");
 }
 
 export async function updateProductFlags(
