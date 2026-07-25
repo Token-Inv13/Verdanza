@@ -166,6 +166,44 @@ const tests: TestCase[] = [
     },
   },
   {
+    name: "admin promo and banner saves report write failures",
+    run() {
+      const source = readFile("src/pages/admin/AdminPage.tsx");
+      const couponSubmit = source.slice(
+        source.indexOf("async function handleCouponSubmit"),
+        source.indexOf("async function handleCouponToggle"),
+      );
+      assertIncludes(couponSubmit, "try {");
+      assertIncludes(couponSubmit, "await upsertCoupon(couponPayload)");
+      assertIncludes(couponSubmit, "await upsertAssociatedPromoBanner");
+      assertIncludes(couponSubmit, "Erreur enregistrement promotion");
+      assertIncludes(couponSubmit, "setEditingCoupon(emptyCoupon)");
+      assertEqual(
+        couponSubmit.indexOf("await upsertCoupon(couponPayload)") <
+          couponSubmit.indexOf("setEditingCoupon(emptyCoupon)"),
+        true,
+      );
+      assertEqual(
+        couponSubmit.indexOf("await upsertAssociatedPromoBanner") <
+          couponSubmit.indexOf("setEditingCoupon(emptyCoupon)"),
+        true,
+      );
+
+      const bannerSubmit = source.slice(
+        source.indexOf("async function handlePromoBannerSubmit"),
+        source.indexOf("async function handlePromoBannerToggle"),
+      );
+      assertIncludes(bannerSubmit, "try {");
+      assertIncludes(bannerSubmit, "await upsertPromoBanner(editingPromoBanner)");
+      assertIncludes(bannerSubmit, "Erreur enregistrement banniere");
+      assertEqual(
+        bannerSubmit.indexOf("await upsertPromoBanner(editingPromoBanner)") <
+          bannerSubmit.indexOf("setEditingPromoBanner(emptyPromoBanner)"),
+        true,
+      );
+    },
+  },
+  {
     name: "banner service excludes templates publicly",
     run() {
       const source = readFile("src/services/promoBannersService.ts");

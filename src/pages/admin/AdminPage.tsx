@@ -472,45 +472,53 @@ export function AdminPage({ section }: { section: string }) {
 
   async function handleCouponSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const couponPayload = {
-      ...editingCoupon,
-      productIds: normalizeList(editingCoupon.productIds ?? []),
-      categories: normalizeList(editingCoupon.categories ?? []) as ProductCategory[],
-    };
-    await upsertCoupon(couponPayload);
-    const couponCode = normalizeCouponCode(couponPayload.code);
-    const couponId = couponPayload.id || couponCode.toLowerCase();
-    const savedCoupon = {
-      ...couponPayload,
-      id: couponId,
-      code: couponCode,
-      usedCount: Number(couponPayload.usedCount || 0),
-      isActive: Boolean(couponPayload.isActive),
-    } as Coupon;
-    if (couponBannerAction === "create") {
-      await upsertAssociatedPromoBanner({
-        coupon: savedCoupon,
-        banners: promoBanners,
-        title: couponPayload.label || couponCode,
-        message: couponDescription(savedCoupon),
-      });
-    }
-    if (couponBannerAction === "link" && couponBannerTargetId) {
-      const target = promoBanners.find((banner) => banner.id === couponBannerTargetId);
-      if (target) {
-        await upsertPromoBanner({
-          ...target,
-          linkedCouponId: couponId,
-          linkedPromoCode: couponCode,
-          deletedLinkedCouponId: "",
+    try {
+      const couponPayload = {
+        ...editingCoupon,
+        productIds: normalizeList(editingCoupon.productIds ?? []),
+        categories: normalizeList(editingCoupon.categories ?? []) as ProductCategory[],
+      };
+      await upsertCoupon(couponPayload);
+      const couponCode = normalizeCouponCode(couponPayload.code);
+      const couponId = couponPayload.id || couponCode.toLowerCase();
+      const savedCoupon = {
+        ...couponPayload,
+        id: couponId,
+        code: couponCode,
+        usedCount: Number(couponPayload.usedCount || 0),
+        isActive: Boolean(couponPayload.isActive),
+      } as Coupon;
+      if (couponBannerAction === "create") {
+        await upsertAssociatedPromoBanner({
+          coupon: savedCoupon,
+          banners: promoBanners,
+          title: couponPayload.label || couponCode,
+          message: couponDescription(savedCoupon),
         });
       }
+      if (couponBannerAction === "link" && couponBannerTargetId) {
+        const target = promoBanners.find((banner) => banner.id === couponBannerTargetId);
+        if (target) {
+          await upsertPromoBanner({
+            ...target,
+            linkedCouponId: couponId,
+            linkedPromoCode: couponCode,
+            deletedLinkedCouponId: "",
+          });
+        }
+      }
+      setEditingCoupon(emptyCoupon);
+      setCouponBannerAction("none");
+      setCouponBannerTargetId("");
+      setMessage("Code promo enregistre.");
+      await refresh();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? `Erreur enregistrement promotion : ${error.message}`
+          : "Erreur enregistrement promotion.",
+      );
     }
-    setEditingCoupon(emptyCoupon);
-    setCouponBannerAction("none");
-    setCouponBannerTargetId("");
-    setMessage("Code promo enregistre.");
-    await refresh();
   }
 
   async function handleCouponToggle(coupon: Coupon) {
@@ -541,10 +549,18 @@ export function AdminPage({ section }: { section: string }) {
 
   async function handlePromoBannerSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await upsertPromoBanner(editingPromoBanner);
-    setEditingPromoBanner(emptyPromoBanner);
-    setMessage("Banniere enregistree.");
-    await refresh();
+    try {
+      await upsertPromoBanner(editingPromoBanner);
+      setEditingPromoBanner(emptyPromoBanner);
+      setMessage("Banniere enregistree.");
+      await refresh();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? `Erreur enregistrement banniere : ${error.message}`
+          : "Erreur enregistrement banniere.",
+      );
+    }
   }
 
   async function handlePromoBannerToggle(banner: PromoBanner) {
