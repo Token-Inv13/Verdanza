@@ -229,8 +229,10 @@ export function AdminPage({ section }: { section: string }) {
     billingSource,
     productCosts,
     productCostsSource,
+    productCostsError,
     supplierPurchases,
     supplierPurchasesSource,
+    supplierPurchasesError,
     isLoading,
     refresh,
   } = useAdminData();
@@ -814,9 +816,12 @@ export function AdminPage({ section }: { section: string }) {
           products={products}
           productCosts={productCosts}
           productCostsSource={productCostsSource}
+          productCostsError={productCostsError}
           supplierPurchases={supplierPurchases}
           supplierPurchasesSource={supplierPurchasesSource}
+          supplierPurchasesError={supplierPurchasesError}
           orders={orders}
+          onRetry={refresh}
           onSaveProductCost={handleProductCostSave}
           onSaveSupplierPurchase={handleSupplierPurchaseSave}
           onSaveSupplierAlias={handleSupplierAliasSave}
@@ -1026,6 +1031,29 @@ function AdminEmptyState({
       <strong className="block">{title}</strong>
       <span className="mt-1 block text-ink/60">{description}</span>
       {action && <div className="mt-3">{action}</div>}
+    </div>
+  );
+}
+
+function AdminDataError({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => Promise<void>;
+}) {
+  return (
+    <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <span>{message}</span>
+        <button
+          type="button"
+          className="min-h-9 rounded-md border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-800 hover:bg-red-50"
+          onClick={() => void onRetry()}
+        >
+          Reessayer
+        </button>
+      </div>
     </div>
   );
 }
@@ -3274,9 +3302,12 @@ function AccountingPanel({
   products,
   productCosts,
   productCostsSource,
+  productCostsError,
   supplierPurchases,
   supplierPurchasesSource,
+  supplierPurchasesError,
   orders,
+  onRetry,
   onSaveProductCost,
   onSaveSupplierPurchase,
   onSaveSupplierAlias,
@@ -3286,9 +3317,12 @@ function AccountingPanel({
   products: Product[];
   productCosts: ProductCost[];
   productCostsSource: string;
+  productCostsError: string;
   supplierPurchases: SupplierPurchase[];
   supplierPurchasesSource: string;
+  supplierPurchasesError: string;
   orders: AdminOrderRow[];
+  onRetry: () => Promise<void>;
   onSaveProductCost: (productId: string, purchasePricePerGram: number | null) => Promise<void>;
   onSaveSupplierPurchase: (purchase: Partial<SupplierPurchase>) => Promise<void>;
   onSaveSupplierAlias: (alias: { supplierName: string; originalLabel: string; productId: string }) => Promise<void>;
@@ -3601,13 +3635,20 @@ function AccountingPanel({
           }}
           onSaveAlias={onSaveSupplierAlias}
         />
-        <SupplierPurchasesTable
-          purchases={supplierPurchases}
-          products={products}
-          onEdit={setEditingSupplierPurchase}
-          onDelete={onDeleteSupplierPurchase}
-          onCancel={onCancelSupplierPurchase}
-        />
+        {supplierPurchasesError && (
+          <div className="mt-5">
+            <AdminDataError message={supplierPurchasesError} onRetry={onRetry} />
+          </div>
+        )}
+        {(!supplierPurchasesError || supplierPurchases.length > 0) && (
+          <SupplierPurchasesTable
+            purchases={supplierPurchases}
+            products={products}
+            onEdit={setEditingSupplierPurchase}
+            onDelete={onDeleteSupplierPurchase}
+            onCancel={onCancelSupplierPurchase}
+          />
+        )}
       </section>
       )}
 
@@ -3629,7 +3670,12 @@ function AccountingPanel({
             Ces valeurs sont stockées dans <span className="font-mono">productCosts</span> et utilisées uniquement si aucun coût fournisseur pondéré n'existe.
           </p>
         </div>
-        {!!activeProductsMissingCost.length && (
+        {productCostsError && (
+          <div className="mt-4">
+            <AdminDataError message={productCostsError} onRetry={onRetry} />
+          </div>
+        )}
+        {!productCostsError && !!activeProductsMissingCost.length && (
           <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <strong className="block">Produits actifs sans cout.</strong>
             <span className="mt-1 block">
@@ -3637,6 +3683,8 @@ function AccountingPanel({
             </span>
           </div>
         )}
+        {(!productCostsError || productCosts.length > 0) && (
+        <>
         <div className="mt-4 flex flex-wrap gap-2">
           {productCostFilters.map((filter) => (
             <button
@@ -3671,6 +3719,8 @@ function AccountingPanel({
             </tbody>
           </table>
         </div>
+        </>
+        )}
       </section>
       )}
     </section>

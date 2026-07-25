@@ -52,7 +52,7 @@ export async function analyzeSupplierInvoicePdfAdmin(file: File) {
   if (!token) throw new Error("Connexion admin requise.");
   if (file.type !== "application/pdf") throw new Error("PDF uniquement.");
   if (file.size > 5 * 1024 * 1024) throw new Error("PDF trop volumineux (5 Mo max).");
-  const response = await fetch("/api/invoices?action=analyzeSupplierInvoicePdf", {
+  const response = await fetch("/api/analyze-supplier-invoice", {
     method: "POST",
     headers: {
       "content-type": "application/pdf",

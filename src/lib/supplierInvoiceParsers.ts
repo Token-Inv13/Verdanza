@@ -57,7 +57,9 @@ export class LeGrossisteCbdInvoiceParser implements SupplierInvoiceParser {
     const supplierName = "Le Grossiste CBD";
     const invoiceNumber = extractInvoiceNumber(text);
     const invoiceDate = extractInvoiceDate(text);
-    const globalDiscountExVat = extractMoneyAfter(text, /(?:remise|discount)[^\n\r]{0,30}/i);
+    const globalDiscountExVat = Math.abs(
+      extractMoneyAfter(text, /(?:remise|discount|promotions?)[^\n\r]{0,30}/i),
+    );
     const shippingExVat = extractMoneyAfter(text, /(?:livraison|transport|shipping|frais de port)[^\n\r]{0,30}/i);
     const parsedLines = extractPaidLines(text);
     const ignoredFreeLineLabels = extractIgnoredFreeLines(text);
@@ -273,14 +275,41 @@ function blankMatch(matchConfidence: "ambiguous" | "missing"): SupplierLineMatch
 }
 
 function extractPaidLines(text: string): ParsedSupplierLine[] {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
+  const normalizedLines = invoiceTextLines(text);
+  const blockLines: ParsedSupplierLine[] = [];
+  for (let index = 0; index < normalizedLines.length; index += 1) {
+    const quantityMatch = normalizedLines[index].match(/^(\d+)\s*x$/i);
+    if (!quantityMatch) continue;
+
+    const label = normalizedLines[index + 1] || "";
+    if (!label || isNonProductLine(label) || isFreeSupplierLine(label)) continue;
+    const unitGramsMatch = label.match(/(\d+(?:[,.]\d+)?)\s*(?:g|grammes?)\b/i);
+    if (!unitGramsMatch) continue;
+
+    const priceLine = normalizedLines
+      .slice(index + 2, index + 6)
+      .filter((line) => /€\s*-?\d|(?:^|\s)-?\d+(?:[,.]\d{2})\s*(?:EUR|€)/i.test(line))
+      .slice(-1)[0];
+    if (!priceLine) continue;
+    const amount = lastMoneyAmount(priceLine);
+    if (amount == null || amount <= 0) continue;
+
+    blockLines.push({
+      originalLabel: label,
+      quantityGrams: Number(quantityMatch[1]) * decimalNumber(unitGramsMatch[1]),
+      grossAmountExVat: amount,
+      vatRate: extractVatRate(label) ?? extractVatRate(priceLine) ?? 20,
+      lineDiscountAmount: 0,
+    });
+  }
+
+  const inlineLines = normalizedLines
     .filter((line) => !isNonProductLine(line))
     .filter((line) => !isFreeSupplierLine(line))
     .map(parseLine)
     .filter((line): line is ParsedSupplierLine => Boolean(line));
+
+  return blockLines.length ? blockLines : inlineLines;
 }
 
 function parseLine(line: string): ParsedSupplierLine | null {
@@ -303,9 +332,7 @@ function parseLine(line: string): ParsedSupplierLine | null {
 }
 
 function extractIgnoredFreeLines(text: string) {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
+  return invoiceTextLines(text)
     .filter((line) => line && isFreeSupplierLine(line));
 }
 
@@ -330,6 +357,8 @@ function extractInvoiceNumber(text: string) {
 }
 
 function extractInvoiceDate(text: string) {
+  const isoMatch = text.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
   const match = text.match(/(\d{1,2})[/.-](\d{1,2})[/.-](20\d{2})/);
   if (!match) return "";
   return `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
@@ -344,16 +373,18 @@ function extractSupplierName(text: string) {
 }
 
 function extractMoneyAfter(text: string, pattern: RegExp) {
-  const line = text.split(/\r?\n/).find((candidate) => pattern.test(candidate));
-  if (!line) return 0;
-  const money = line.match(/(\d+(?:[,.]\d{2}))/g)?.pop();
-  return money ? decimalNumber(money) : 0;
+  const lines = invoiceTextLines(text);
+  const index = lines.findIndex((candidate) => pattern.test(candidate));
+  if (index < 0) return 0;
+  const amount = lines.slice(index, index + 3).map(lastMoneyAmount).find((value) => value != null);
+  return amount ?? 0;
 }
 
 function extractTotalExVat(text: string) {
-  const line = text.split(/\r?\n/).find((candidate) => /total\s+ht/i.test(candidate));
-  const money = line?.match(/(\d+(?:[,.]\d{2}))/g)?.pop();
-  return money ? decimalNumber(money) : null;
+  const lines = invoiceTextLines(text);
+  const index = lines.findIndex((candidate) => /(?:total\s+ht|sous-total)/i.test(candidate));
+  if (index < 0) return null;
+  return lines.slice(index, index + 3).map(lastMoneyAmount).find((value) => value != null) ?? null;
 }
 
 function extractVatRate(line: string) {
@@ -364,4 +395,20 @@ function extractVatRate(line: string) {
 function decimalNumber(value: string) {
   const parsed = Number(value.replace(/\s/g, "").replace(",", "."));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function invoiceTextLines(text: string) {
+  return text
+    .split(String.fromCharCode(0))
+    .join("")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && line !== " ");
+}
+
+function lastMoneyAmount(line: string) {
+  const matches = [...line.matchAll(/€\s*(-?\d+(?:[,.]\d{2})|-?\d+)|(-?\d+(?:[,.]\d{2}))\s*(?:EUR|€)/gi)];
+  const last = matches[matches.length - 1];
+  if (!last) return null;
+  return decimalNumber(last[1] || last[2] || "");
 }

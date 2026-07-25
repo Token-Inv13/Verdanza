@@ -1,11 +1,8 @@
-import { createHash } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
-import { PDFParse } from "pdf-parse";
 import { assertAdminUser } from "./_server/adminAuth.js";
 import { getAdminDb } from "./_server/firebaseAdmin.js";
 import {
   assertMethod,
-  readRawBody,
   sendJson,
   type VercelRequestLike,
   type VercelResponseLike,
@@ -18,7 +15,6 @@ import { buildCustomerInvoiceLines } from "../src/lib/customerInvoiceLines.js";
 import {
   normalizeSupplierLabel,
   normalizeText,
-  parseSupplierInvoiceText,
 } from "../src/lib/supplierInvoiceParsers.js";
 import {
   formatProductInternalReference,
@@ -136,12 +132,6 @@ export default async function handler(
     }
 
     if (assertMethod(request, response, "POST")) return;
-    if (isPdfAnalysisRequest(request)) {
-      const result = await analyzeSupplierInvoicePdf(db, request);
-      sendJson(response, result);
-      return;
-    }
-
     const body = parseJsonObject(request.body);
 
     if (body.action === "createFromOrder") {
@@ -497,75 +487,6 @@ async function saveSupplierProductAlias(
   return { ok: true, aliasId: id };
 }
 
-async function analyzeSupplierInvoicePdf(
-  db: FirebaseFirestore.Firestore,
-  request: VercelRequestLike,
-) {
-  const buffer = await pdfBufferFromRequest(request);
-  if (buffer.length > 5 * 1024 * 1024) throw new Error("PDF trop volumineux (5 Mo max).");
-  if (buffer.subarray(0, 4).toString("utf8") !== "%PDF") {
-    throw new Error("Fichier PDF invalide.");
-  }
-
-  const sha256 = createHash("sha256").update(buffer).digest("hex");
-  const parser = new PDFParse({ data: buffer });
-  const parsed = await parser.getText();
-  await parser.destroy();
-  const text = String(parsed.text || "").trim();
-  if (!text) throw new Error("PDF sans texte exploitable. OCR non pris en charge.");
-
-  const [productsSnapshot, aliasesSnapshot] = await Promise.all([
-    db.collection("products").get(),
-    db.collection("supplierProductAliases").get(),
-  ]);
-  const products = productsSnapshot.docs.map((entry) => ({
-    id: entry.id,
-    ...entry.data(),
-  })) as Product[];
-  const aliases = aliasesSnapshot.docs.map((entry) => ({
-    id: entry.id,
-    ...entry.data(),
-  })) as SupplierProductAlias[];
-  const result = parseSupplierInvoiceText(text, { products, aliases });
-  const duplicate = await supplierPurchaseDuplicate(db, {
-    sha256,
-    supplierName: result.purchase.supplierName || "",
-    invoiceNumber: result.purchase.invoiceNumber || "",
-  });
-
-  return {
-    ...result,
-    fileSha256: sha256,
-    duplicate,
-  };
-}
-
-async function supplierPurchaseDuplicate(
-  db: FirebaseFirestore.Firestore,
-  input: { sha256: string; supplierName: string; invoiceNumber: string },
-) {
-  const byHash = await db
-    .collection("supplierPurchases")
-    .where("sourceFileSha256", "==", input.sha256)
-    .limit(1)
-    .get();
-  if (!byHash.empty) return { found: true, reason: "file_hash", purchaseId: byHash.docs[0].id };
-
-  if (!input.supplierName || !input.invoiceNumber) return { found: false };
-  const byInvoice = await db
-    .collection("supplierPurchases")
-    .where("invoiceNumber", "==", input.invoiceNumber)
-    .limit(10)
-    .get();
-  const sameSupplier = byInvoice.docs.find(
-    (entry) => String(entry.data().supplierName || "") === input.supplierName,
-  );
-  if (sameSupplier) {
-    return { found: true, reason: "supplier_invoice_number", purchaseId: sameSupplier.id };
-  }
-  return { found: false };
-}
-
 async function deleteSupplierPurchase(db: FirebaseFirestore.Firestore, purchaseId: string) {
   if (!purchaseId) throw new Error("Achat fournisseur requis.");
   const ref = db.collection("supplierPurchases").doc(purchaseId);
@@ -669,25 +590,6 @@ function parseManualInvoice(value: unknown) {
     paymentStatus,
     internalNote: input.internalNote || "",
   };
-}
-
-function isPdfAnalysisRequest(request: VercelRequestLike) {
-  const contentType = String(request.headers["content-type"] || "");
-  return (
-    requestAction(request) === "analyzeSupplierInvoicePdf" &&
-    contentType.includes("application/pdf")
-  );
-}
-
-async function pdfBufferFromRequest(request: VercelRequestLike) {
-  if (Buffer.isBuffer(request.body)) return request.body;
-  if (request.body instanceof Uint8Array) return Buffer.from(request.body);
-  if (typeof request.body === "string") return Buffer.from(request.body, "binary");
-  return readRawBody(request);
-}
-
-function requestAction(request: VercelRequestLike) {
-  return new URL(request.url || "/", "https://verdanza.local").searchParams.get("action") || "";
 }
 
 function slugifyForId(value: string) {
