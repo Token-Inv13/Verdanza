@@ -265,12 +265,55 @@ export type OrderItem = {
   purchasePricePerGramSnapshot?: number | null;
   purchaseCostTotalSnapshot?: number | null;
   purchaseCostCapturedAt?: string;
+  purchaseCostSource?: "supplier_weighted" | "manual_fallback";
 };
 
 export type ProductCost = {
   productId: string;
   purchasePricePerGram?: number | null;
   updatedAt?: string;
+  updatedBy?: string;
+};
+
+export type SupplierPurchaseStatus = "draft" | "validated" | "cancelled";
+export type SupplierPurchaseCostBase = "HT" | "TTC";
+
+export type SupplierPurchaseLine = {
+  id: string;
+  productId: string;
+  productName?: string;
+  quantityGrams: number;
+  grossAmountExVat: number;
+  vatRate: number;
+  lineDiscountAmount?: number;
+  allocatedGlobalDiscount?: number;
+  allocatedShipping?: number;
+  netCostAmount?: number;
+  effectiveCostPerGram?: number;
+};
+
+export type SupplierPurchase = {
+  id: string;
+  supplierName: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  internalReference?: string;
+  paidLinesGrossAmountExVat: number;
+  globalDiscountExVat: number;
+  shippingExVat: number;
+  vatRate: number;
+  vatAmount?: number;
+  totalExVat: number;
+  totalIncVat: number;
+  costBase: SupplierPurchaseCostBase;
+  status: SupplierPurchaseStatus;
+  lines: SupplierPurchaseLine[];
+  createdAt?: string;
+  updatedAt?: string;
+  validatedAt?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
+  createdBy?: string;
   updatedBy?: string;
 };
 

@@ -11,7 +11,8 @@ import {
 import { getAdminOrdersWithFallback, type AdminOrderRow } from "../services/ordersService";
 import { getAdminProductsWithFallback } from "../services/productsService";
 import { getProductCostsAdmin } from "../services/productCostsService";
-import type { BillingSettings, Coupon, CustomerProfile, DeliveryZone, Invoice, Product, ProductCost, PromoBanner } from "../types";
+import { getSupplierPurchasesAdmin } from "../services/supplierPurchasesService";
+import type { BillingSettings, Coupon, CustomerProfile, DeliveryZone, Invoice, Product, ProductCost, PromoBanner, SupplierPurchase } from "../types";
 
 export function useAdminData() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -32,6 +33,8 @@ export function useAdminData() {
   const [billingSource, setBillingSource] = useState<"firestore" | "local">("local");
   const [productCosts, setProductCosts] = useState<ProductCost[]>([]);
   const [productCostsSource, setProductCostsSource] = useState<"firestore" | "empty">("empty");
+  const [supplierPurchases, setSupplierPurchases] = useState<SupplierPurchase[]>([]);
+  const [supplierPurchasesSource, setSupplierPurchasesSource] = useState<"firestore" | "empty">("empty");
   const [isLoading, setIsLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -46,6 +49,7 @@ export function useAdminData() {
       invoiceResult,
       billingResult,
       productCostResult,
+      supplierPurchaseResult,
     ] = await Promise.all([
       getAdminProductsWithFallback(),
       getAdminOrdersWithFallback(),
@@ -58,6 +62,10 @@ export function useAdminData() {
       getProductCostsAdmin().catch((error) => {
         console.warn("Unable to load product costs", error);
         return { costs: [], source: "empty" as const };
+      }),
+      getSupplierPurchasesAdmin().catch((error) => {
+        console.warn("Unable to load supplier purchases", error);
+        return { purchases: [], source: "empty" as const };
       }),
     ]);
     setProducts(productResult.products);
@@ -78,6 +86,8 @@ export function useAdminData() {
     setBillingSource(billingResult.source);
     setProductCosts(productCostResult.costs);
     setProductCostsSource(productCostResult.source);
+    setSupplierPurchases(supplierPurchaseResult.purchases);
+    setSupplierPurchasesSource(supplierPurchaseResult.source);
     setIsLoading(false);
   }, []);
 
@@ -104,6 +114,8 @@ export function useAdminData() {
     billingSource,
     productCosts,
     productCostsSource,
+    supplierPurchases,
+    supplierPurchasesSource,
     isLoading,
     refresh,
   };

@@ -13,12 +13,18 @@ import {
   processPurchaseAnalyticsOutbox,
   type PurchaseAnalyticsProcessResult,
 } from "./_server/purchaseAnalytics.js";
+import {
+  computeWeightedSupplierCosts,
+  resolveOrderItemPurchaseCost,
+} from "../src/lib/accountingCosts.js";
 import type {
   Order,
   OrderStatus,
   FinalPaymentMethod,
   PaymentLinkChannel,
   PaymentStatus,
+  ProductCost,
+  SupplierPurchase,
 } from "../src/types/index.js";
 
 const orderStatuses: OrderStatus[] = [
@@ -336,26 +342,41 @@ async function capturePurchaseCostSnapshots({
         .filter(Boolean),
     ),
   ];
-  const costEntries = await Promise.all(
-    productIds.map(async (productId) => {
+  const supplierSnapshot = await transaction.get(
+    db.collection("supplierPurchases").where("status", "==", "validated"),
+  );
+  const weightedSupplierCosts = computeWeightedSupplierCosts(
+    supplierSnapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() }) as SupplierPurchase),
+  ).costByProductId;
+  const missingSupplierCostIds = productIds.filter((productId) => !weightedSupplierCosts.has(productId));
+  const manualCostEntries = await Promise.all(
+    missingSupplierCostIds.map(async (productId) => {
       const snapshot = await transaction.get(db.collection("productCosts").doc(productId));
       const rawCost = snapshot.data()?.purchasePricePerGram;
-      return [productId, optionalNonNegativeNumber(rawCost)] as const;
+      return [
+        productId,
+        { productId, purchasePricePerGram: optionalNonNegativeNumber(rawCost) },
+      ] as const;
     }),
   );
-  const costByProductId = new Map(costEntries);
+  const manualCostByProductId = new Map<string, ProductCost>(manualCostEntries);
 
   return items.map((item) => {
     if (item.purchaseCostCapturedAt !== undefined) return item;
-    const purchasePricePerGram = costByProductId.get(item.productId) ?? null;
+    const purchaseCost = resolveOrderItemPurchaseCost(
+      item,
+      weightedSupplierCosts,
+      manualCostByProductId,
+    );
+    const snapshot = {
+      purchasePricePerGramSnapshot: purchaseCost.pricePerGram,
+      purchaseCostTotalSnapshot: purchaseCost.status === "missing" ? null : purchaseCost.cost,
+      purchaseCostCapturedAt: capturedAt,
+    };
     return {
       ...item,
-      purchasePricePerGramSnapshot: purchasePricePerGram,
-      purchaseCostTotalSnapshot:
-        purchasePricePerGram == null
-          ? null
-          : roundMoney(Number(item.quantity || 0) * purchasePricePerGram),
-      purchaseCostCapturedAt: capturedAt,
+      ...snapshot,
+      ...(purchaseCost.source ? { purchaseCostSource: purchaseCost.source } : {}),
     };
   });
 }
@@ -365,10 +386,6 @@ function optionalNonNegativeNumber(value: unknown) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0) return null;
   return parsed;
-}
-
-function roundMoney(value: number) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 function parseBody(value: unknown): {

@@ -10,6 +10,7 @@ import {
 import { renderInvoicePdf } from "./_server/invoicePdf.js";
 import { sendInvoiceToCustomerEmail } from "./_server/email.js";
 import { BRAND_LOGO } from "../src/lib/brandAssets.js";
+import { normalizeSupplierPurchaseInput } from "../src/lib/accountingCosts.js";
 import type {
   BillingSettings,
   Invoice,
@@ -17,6 +18,7 @@ import type {
   InvoiceStatus,
   Order,
   PaymentStatus,
+  SupplierPurchase,
 } from "../src/types/index.js";
 
 const invoiceStatuses: InvoiceStatus[] = [
@@ -84,6 +86,19 @@ export default async function handler(
               updatedAt: data.updatedAt,
               updatedBy: data.updatedBy,
             };
+          }),
+        });
+        return;
+      }
+      if (action === "supplierPurchases") {
+        const snapshot = await db.collection("supplierPurchases").orderBy("invoiceDate", "desc").get();
+        sendJson(response, {
+          purchases: snapshot.docs.map((entry) => {
+            const data = entry.data();
+            return normalizeSupplierPurchaseForResponse({
+              id: entry.id,
+              ...data,
+            });
           }),
         });
         return;
@@ -170,6 +185,24 @@ export default async function handler(
         { merge: true },
       );
       sendJson(response, { ok: true, productId, purchasePricePerGram });
+      return;
+    }
+
+    if (body.action === "saveSupplierPurchase") {
+      const result = await saveSupplierPurchase(db, body.purchase, adminUser);
+      sendJson(response, result);
+      return;
+    }
+
+    if (body.action === "deleteSupplierPurchase") {
+      await deleteSupplierPurchase(db, String(body.purchaseId || ""));
+      sendJson(response, { ok: true });
+      return;
+    }
+
+    if (body.action === "cancelSupplierPurchase") {
+      await cancelSupplierPurchase(db, String(body.purchaseId || ""), adminUser);
+      sendJson(response, { ok: true });
       return;
     }
 
@@ -297,6 +330,119 @@ async function getBillingSettings(db: FirebaseFirestore.Firestore) {
   } as BillingSettings;
 }
 
+async function saveSupplierPurchase(
+  db: FirebaseFirestore.Firestore,
+  rawPurchase: unknown,
+  adminUser: { email?: string | null; uid: string },
+) {
+  if (!rawPurchase || typeof rawPurchase !== "object") {
+    throw new Error("Achat fournisseur invalide.");
+  }
+  const input = rawPurchase as Partial<SupplierPurchase>;
+  const existingRef = input.id ? db.collection("supplierPurchases").doc(String(input.id)) : null;
+  const existingSnapshot = existingRef ? await existingRef.get() : null;
+  const existing = existingSnapshot?.exists
+    ? ({ id: existingSnapshot.id, ...existingSnapshot.data() } as SupplierPurchase)
+    : null;
+  if (existing?.status === "validated") {
+    throw new Error("Achat fournisseur valide non modifiable. Annulez-le pour le neutraliser.");
+  }
+  if (existing?.status === "cancelled") {
+    throw new Error("Achat fournisseur annule non modifiable.");
+  }
+  const normalized = normalizeSupplierPurchaseInput({
+    ...input,
+    createdAt: existing?.createdAt,
+    createdBy: existing?.createdBy,
+    validatedAt: existing?.validatedAt,
+  }) as SupplierPurchase;
+  if (!normalized.supplierName) throw new Error("Fournisseur requis.");
+  if (!normalized.invoiceNumber) throw new Error("Numero de facture fournisseur requis.");
+  if (!normalized.invoiceDate) throw new Error("Date de facture fournisseur requise.");
+  if (normalized.status === "cancelled") throw new Error("Utilisez l'action d'annulation dediee.");
+
+  const now = new Date().toISOString();
+  const ref = existingRef || db.collection("supplierPurchases").doc();
+  const isValidation = normalized.status === "validated";
+  const payload: SupplierPurchase = {
+    ...normalized,
+    id: ref.id,
+    status: normalized.status,
+    createdAt: existing?.createdAt || now,
+    createdBy: existing?.createdBy || adminUser.email || adminUser.uid,
+    updatedAt: now,
+    updatedBy: adminUser.email || adminUser.uid,
+    validatedAt: isValidation ? existing?.validatedAt || now : normalized.validatedAt,
+  };
+  await ref.set(payload, { merge: true });
+  return { ok: true, purchaseId: ref.id };
+}
+
+async function deleteSupplierPurchase(db: FirebaseFirestore.Firestore, purchaseId: string) {
+  if (!purchaseId) throw new Error("Achat fournisseur requis.");
+  const ref = db.collection("supplierPurchases").doc(purchaseId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new Error("Achat fournisseur introuvable.");
+  const purchase = { id: snapshot.id, ...snapshot.data() } as SupplierPurchase;
+  if (purchase.status === "validated") {
+    throw new Error("Un achat fournisseur valide doit etre annule et conserve.");
+  }
+  await ref.delete();
+}
+
+async function cancelSupplierPurchase(
+  db: FirebaseFirestore.Firestore,
+  purchaseId: string,
+  adminUser: { email?: string | null; uid: string },
+) {
+  if (!purchaseId) throw new Error("Achat fournisseur requis.");
+  const ref = db.collection("supplierPurchases").doc(purchaseId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new Error("Achat fournisseur introuvable.");
+  const purchase = { id: snapshot.id, ...snapshot.data() } as SupplierPurchase;
+  if (purchase.status !== "validated") {
+    throw new Error("Seul un achat fournisseur valide peut etre annule.");
+  }
+  await ref.set(
+    {
+      status: "cancelled",
+      cancelledAt: new Date().toISOString(),
+      cancelledBy: adminUser.email || adminUser.uid,
+      updatedAt: new Date().toISOString(),
+      updatedBy: adminUser.email || adminUser.uid,
+    },
+    { merge: true },
+  );
+}
+
+function normalizeSupplierPurchaseForResponse(purchase: Partial<SupplierPurchase>) {
+  return {
+    ...purchase,
+    id: String(purchase.id || ""),
+    supplierName: String(purchase.supplierName || ""),
+    invoiceNumber: String(purchase.invoiceNumber || ""),
+    invoiceDate: String(purchase.invoiceDate || ""),
+    internalReference: String(purchase.internalReference || ""),
+    status: purchase.status || "draft",
+    costBase: purchase.costBase || "HT",
+    paidLinesGrossAmountExVat: Number(purchase.paidLinesGrossAmountExVat || 0),
+    globalDiscountExVat: Number(purchase.globalDiscountExVat || 0),
+    shippingExVat: Number(purchase.shippingExVat || 0),
+    vatRate: Number(purchase.vatRate || 0),
+    vatAmount: Number(purchase.vatAmount || 0),
+    totalExVat: Number(purchase.totalExVat || 0),
+    totalIncVat: Number(purchase.totalIncVat || 0),
+    lines: purchase.lines || [],
+    createdAt: parseTimestamp(purchase.createdAt),
+    updatedAt: parseTimestamp(purchase.updatedAt),
+    validatedAt: parseTimestamp(purchase.validatedAt),
+    cancelledAt: parseTimestamp(purchase.cancelledAt),
+    cancelledBy: purchase.cancelledBy || "",
+    createdBy: purchase.createdBy || "",
+    updatedBy: purchase.updatedBy || "",
+  };
+}
+
 function parseManualInvoice(value: unknown) {
   if (!value || typeof value !== "object") throw new Error("Facture manuelle invalide.");
   const input = value as {
@@ -367,4 +513,17 @@ function optionalNonNegativeNumber(value: unknown) {
     throw new Error("Prix d'achat invalide.");
   }
   return parsed;
+}
+
+function parseTimestamp(value: unknown) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "object") {
+    const candidate = value as { toDate?: () => Date; seconds?: number; _seconds?: number };
+    if (typeof candidate.toDate === "function") return candidate.toDate().toISOString();
+    const seconds = candidate.seconds ?? candidate._seconds;
+    if (typeof seconds === "number") return new Date(seconds * 1000).toISOString();
+  }
+  return "";
 }

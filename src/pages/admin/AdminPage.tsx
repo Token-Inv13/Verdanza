@@ -55,6 +55,11 @@ import {
 } from "../../services/invoicesService";
 import { saveProductCostAdmin } from "../../services/productCostsService";
 import {
+  cancelSupplierPurchaseAdmin,
+  deleteSupplierPurchaseAdmin,
+  saveSupplierPurchaseAdmin,
+} from "../../services/supplierPurchasesService";
+import {
   getAdminPaymentLinks,
   sendOrderPaymentLinkEmail,
   type AdminPaymentLink,
@@ -92,6 +97,8 @@ import type {
   PromoBannerType,
   PromoBannerVariant,
   PromotionRuleType,
+  SupplierPurchase,
+  SupplierPurchaseLine,
   ProductReview,
   ProductFavorite,
   LoyaltyMovement,
@@ -109,6 +116,13 @@ import {
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../../config/deliveryRules";
 import { BRAND_LABEL } from "../../lib/brandAssets";
+import {
+  computeWeightedSupplierCosts,
+  estimateStockValue,
+  normalizeSupplierPurchaseInput,
+  resolveOrderItemPurchaseCost,
+  type WeightedSupplierCost,
+} from "../../lib/accountingCosts";
 import { formatLocalDeliveryEstimate } from "../../lib/deliveryEstimate";
 
 const emptyProduct: ProductInput = {
@@ -211,6 +225,8 @@ export function AdminPage({ section }: { section: string }) {
     billingSource,
     productCosts,
     productCostsSource,
+    supplierPurchases,
+    supplierPurchasesSource,
     isLoading,
     refresh,
   } = useAdminData();
@@ -482,6 +498,32 @@ export function AdminPage({ section }: { section: string }) {
   async function handleProductCostSave(productId: string, purchasePricePerGram: number | null) {
     await saveProductCostAdmin(productId, purchasePricePerGram);
     setMessage("Cout d'achat produit enregistre.");
+    await refresh();
+  }
+
+  async function handleSupplierPurchaseSave(purchase: Partial<SupplierPurchase>) {
+    const purchaseId = await saveSupplierPurchaseAdmin(purchase);
+    setMessage(`Achat fournisseur enregistre (${purchaseId}).`);
+    await refresh();
+  }
+
+  async function handleSupplierPurchaseDelete(purchase: SupplierPurchase) {
+    const confirmed = window.confirm(
+      `Suppression definitive de l'achat fournisseur ${purchase.invoiceNumber || purchase.id}. Cette action est irreversible. Confirmer ?`,
+    );
+    if (!confirmed) return;
+    await deleteSupplierPurchaseAdmin(purchase.id);
+    setMessage("Achat fournisseur supprime.");
+    await refresh();
+  }
+
+  async function handleSupplierPurchaseCancel(purchase: SupplierPurchase) {
+    const confirmed = window.confirm(
+      `Annuler l'achat fournisseur valide ${purchase.invoiceNumber || purchase.id} ? Il sera conserve mais exclu des couts et marges.`,
+    );
+    if (!confirmed) return;
+    await cancelSupplierPurchaseAdmin(purchase.id);
+    setMessage("Achat fournisseur annule.");
     await refresh();
   }
 
@@ -762,8 +804,13 @@ export function AdminPage({ section }: { section: string }) {
           products={products}
           productCosts={productCosts}
           productCostsSource={productCostsSource}
+          supplierPurchases={supplierPurchases}
+          supplierPurchasesSource={supplierPurchasesSource}
           orders={orders}
           onSaveProductCost={handleProductCostSave}
+          onSaveSupplierPurchase={handleSupplierPurchaseSave}
+          onDeleteSupplierPurchase={handleSupplierPurchaseDelete}
+          onCancelSupplierPurchase={handleSupplierPurchaseCancel}
         />
       )}
 
@@ -3176,34 +3223,50 @@ function AccountingPanel({
   products,
   productCosts,
   productCostsSource,
+  supplierPurchases,
+  supplierPurchasesSource,
   orders,
   onSaveProductCost,
+  onSaveSupplierPurchase,
+  onDeleteSupplierPurchase,
+  onCancelSupplierPurchase,
 }: {
   products: Product[];
   productCosts: ProductCost[];
   productCostsSource: string;
+  supplierPurchases: SupplierPurchase[];
+  supplierPurchasesSource: string;
   orders: AdminOrderRow[];
   onSaveProductCost: (productId: string, purchasePricePerGram: number | null) => Promise<void>;
+  onSaveSupplierPurchase: (purchase: Partial<SupplierPurchase>) => Promise<void>;
+  onDeleteSupplierPurchase: (purchase: SupplierPurchase) => Promise<void>;
+  onCancelSupplierPurchase: (purchase: SupplierPurchase) => Promise<void>;
 }) {
   const [period, setPeriod] = useState<AccountingPeriodFilter>("month");
   const todayInput = toDateInputValue(new Date());
   const [customStart, setCustomStart] = useState(todayInput);
   const [customEnd, setCustomEnd] = useState(todayInput);
+  const [editingSupplierPurchase, setEditingSupplierPurchase] =
+    useState<Partial<SupplierPurchase> | null>(null);
   const productCostMap = useMemo(
     () => new Map(productCosts.map((cost) => [cost.productId, cost])),
     [productCosts],
+  );
+  const weightedSupplierCosts = useMemo(
+    () => computeWeightedSupplierCosts(supplierPurchases).costByProductId,
+    [supplierPurchases],
   );
   const periodRange = useMemo(
     () => currentLocalPeriodRange(period, customStart, customEnd),
     [customEnd, customStart, period],
   );
   const summary = useMemo(
-    () => buildAccountingSummary(orders, products, productCostMap, periodRange),
-    [orders, periodRange, productCostMap, products],
+    () => buildAccountingSummary(orders, products, productCostMap, supplierPurchases, weightedSupplierCosts, periodRange),
+    [orders, periodRange, productCostMap, products, supplierPurchases, weightedSupplierCosts],
   );
   const previousSummary = useMemo(
-    () => buildAccountingSummary(orders, products, productCostMap, previousPeriodRange(periodRange)),
-    [orders, periodRange, productCostMap, products],
+    () => buildAccountingSummary(orders, products, productCostMap, supplierPurchases, weightedSupplierCosts, previousPeriodRange(periodRange)),
+    [orders, periodRange, productCostMap, products, supplierPurchases, weightedSupplierCosts],
   );
   const periodFilters: Array<{ value: AccountingPeriodFilter; label: string }> = [
     { value: "week", label: "Semaine en cours" },
@@ -3322,16 +3385,17 @@ function AccountingPanel({
           />
         ) : (
           <div className="mt-5 overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-sm">
+            <table className="w-full min-w-[1120px] text-left text-sm">
               <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
                 <tr>
                   {[
                     "Produit",
                     "Quantite vendue",
                     "CA produits net",
-                    "Cout d'achat",
+                    "Cout des marchandises vendues",
                     "Marge brute",
                     "Taux de marque",
+                    "Taux de marge",
                     "Cout historique",
                   ].map((header) => (
                     <th key={header} className="px-4 py-3 font-medium">{header}</th>
@@ -3354,9 +3418,10 @@ function AccountingPanel({
                       {row.hasMissingCost ? "Incomplete" : formatCurrency(row.grossMargin)}
                     </td>
                     <td className="px-4 py-4">{formatRate(row.grossMarkupRate)}</td>
+                    <td className="px-4 py-4">{formatRate(row.grossMarginRate)}</td>
                     <td className="px-4 py-4">
                       <AdminBadge tone={row.hasMissingCost ? "danger" : row.hasEstimatedCost ? "warning" : "success"}>
-                        {row.hasMissingCost ? "Cout manquant" : row.hasEstimatedCost ? "Estime" : "Fige"}
+                        {row.hasMissingCost ? "Cout manquant" : row.hasEstimatedCost ? costSourceLabel(row.costSources) : "Fige"}
                       </AdminBadge>
                     </td>
                   </tr>
@@ -3365,6 +3430,36 @@ function AccountingPanel({
             </table>
           </div>
         )}
+      </section>
+
+      <section className="admin-card">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.16em] text-champagne">
+              Achats fournisseurs
+            </p>
+            <h2 className="font-display text-3xl text-forest">Factures d'achat produits</h2>
+          </div>
+          <p className="text-sm text-ink/60">
+            Source <span className="font-mono">supplierPurchases</span> ({supplierPurchasesSource}).
+          </p>
+        </div>
+        <SupplierPurchaseForm
+          products={products}
+          editingPurchase={editingSupplierPurchase}
+          onCancelEdit={() => setEditingSupplierPurchase(null)}
+          onSave={async (purchase) => {
+            await onSaveSupplierPurchase(purchase);
+            setEditingSupplierPurchase(null);
+          }}
+        />
+        <SupplierPurchasesTable
+          purchases={supplierPurchases}
+          products={products}
+          onEdit={setEditingSupplierPurchase}
+          onDelete={onDeleteSupplierPurchase}
+          onCancel={onCancelSupplierPurchase}
+        />
       </section>
 
       <section className="admin-card">
@@ -3402,6 +3497,309 @@ function AccountingPanel({
         </div>
       </section>
     </section>
+  );
+}
+
+const emptySupplierLine = (productId = ""): SupplierPurchaseLine => ({
+  id: `line-${Date.now()}`,
+  productId,
+  productName: "",
+  quantityGrams: 0,
+  grossAmountExVat: 0,
+  vatRate: 0,
+  lineDiscountAmount: 0,
+});
+
+function SupplierPurchaseForm({
+  products,
+  editingPurchase,
+  onSave,
+  onCancelEdit,
+}: {
+  products: Product[];
+  editingPurchase: Partial<SupplierPurchase> | null;
+  onSave: (purchase: Partial<SupplierPurchase>) => Promise<void>;
+  onCancelEdit: () => void;
+}) {
+  const firstProductId = products[0]?.id || "";
+  const [supplierName, setSupplierName] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(toDateInputValue(new Date()));
+  const [internalReference, setInternalReference] = useState("");
+  const [globalDiscountExVat, setGlobalDiscountExVat] = useState("0");
+  const [shippingExVat, setShippingExVat] = useState("0");
+  const [vatRate, setVatRate] = useState("0");
+  const [costBase, setCostBase] = useState<"HT" | "TTC">("HT");
+  const [status, setStatus] = useState<"draft" | "validated">("draft");
+  const [lines, setLines] = useState<SupplierPurchaseLine[]>([emptySupplierLine(firstProductId)]);
+
+  useEffect(() => {
+    if (!editingPurchase) return;
+    setSupplierName(editingPurchase.supplierName || "");
+    setInvoiceNumber(editingPurchase.invoiceNumber || "");
+    setInvoiceDate(editingPurchase.invoiceDate || toDateInputValue(new Date()));
+    setInternalReference(editingPurchase.internalReference || "");
+    setGlobalDiscountExVat(optionalNumberInputValue(editingPurchase.globalDiscountExVat));
+    setShippingExVat(optionalNumberInputValue(editingPurchase.shippingExVat));
+    setVatRate(optionalNumberInputValue(editingPurchase.vatRate));
+    setCostBase(editingPurchase.costBase || "HT");
+    setStatus(editingPurchase.status === "validated" ? "validated" : "draft");
+    setLines(
+      editingPurchase.lines?.length
+        ? editingPurchase.lines.map((line, index) => ({
+            ...emptySupplierLine(firstProductId),
+            ...line,
+            id: line.id || `line-${index + 1}`,
+          }))
+        : [emptySupplierLine(firstProductId)],
+    );
+  }, [editingPurchase, firstProductId]);
+
+  const productById = useMemo(
+    () => new Map(products.map((product) => [product.id, product])),
+    [products],
+  );
+  let preview: SupplierPurchase | null = null;
+  try {
+    preview = normalizeSupplierPurchaseInput(buildPayload()) as SupplierPurchase;
+  } catch {
+    preview = null;
+  }
+
+  function buildPayload(): Partial<SupplierPurchase> {
+    return {
+      id: editingPurchase?.id,
+      supplierName,
+      invoiceNumber,
+      invoiceDate,
+      internalReference,
+      globalDiscountExVat: Number(globalDiscountExVat || 0),
+      shippingExVat: Number(shippingExVat || 0),
+      vatRate: Number(vatRate || 0),
+      costBase,
+      status,
+      lines: lines.map((line) => ({
+        ...line,
+        productName: productById.get(line.productId)?.name || line.productName || "",
+        quantityGrams: Number(line.quantityGrams || 0),
+        grossAmountExVat: Number(line.grossAmountExVat || 0),
+        vatRate: Number(line.vatRate || vatRate || 0),
+        lineDiscountAmount: Number(line.lineDiscountAmount || 0),
+      })),
+    };
+  }
+
+  function updateLine(index: number, patch: Partial<SupplierPurchaseLine>) {
+    setLines((current) =>
+      current.map((line, lineIndex) => (lineIndex === index ? { ...line, ...patch } : line)),
+    );
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await onSave(normalizeSupplierPurchaseInput(buildPayload()) as SupplierPurchase);
+    setSupplierName("");
+    setInvoiceNumber("");
+    setInvoiceDate(toDateInputValue(new Date()));
+    setInternalReference("");
+    setGlobalDiscountExVat("0");
+    setShippingExVat("0");
+    setVatRate("0");
+    setCostBase("HT");
+    setStatus("draft");
+    setLines([emptySupplierLine(firstProductId)]);
+  }
+
+  return (
+    <form className="mt-5 rounded-lg border border-forest/10 bg-cream p-4" onSubmit={handleSubmit}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="font-display text-2xl text-forest">
+            {editingPurchase?.id ? "Modifier le brouillon fournisseur" : "Nouvel achat fournisseur"}
+          </h3>
+          <p className="text-sm text-ink/60">
+            Uniquement les produits payants lies au catalogue Verdanza.
+          </p>
+        </div>
+        {editingPurchase?.id && (
+          <button type="button" className="btn-secondary min-h-9 px-3 py-2 text-xs" onClick={onCancelEdit}>
+            Annuler l'edition
+          </button>
+        )}
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-4">
+        <Input label="Fournisseur" value={supplierName} onChange={setSupplierName} required />
+        <Input label="Numero facture" value={invoiceNumber} onChange={setInvoiceNumber} required />
+        <Input label="Date facture" type="date" value={invoiceDate} onChange={setInvoiceDate} required />
+        <Input label="Reference interne" value={internalReference} onChange={setInternalReference} />
+        <Input label="Remise globale HT" type="number" min="0" step="0.01" value={globalDiscountExVat} onChange={setGlobalDiscountExVat} />
+        <Input label="Frais fournisseur HT" type="number" min="0" step="0.01" value={shippingExVat} onChange={setShippingExVat} />
+        <Input label="TVA par defaut (%)" type="number" min="0" step="0.01" value={vatRate} onChange={setVatRate} />
+        <label className="grid gap-1 text-sm font-medium text-forest">
+          Base de cout
+          <select className="input-field" value={costBase} onChange={(event) => setCostBase(event.target.value as "HT" | "TTC")}>
+            <option value="HT">HT</option>
+            <option value="TTC">TTC</option>
+          </select>
+        </label>
+      </div>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full min-w-[920px] text-left text-sm">
+          <thead className="bg-ivory text-xs uppercase tracking-[0.14em] text-forest/70">
+            <tr>
+              {["Produit", "Quantite g", "Montant HT", "TVA %", "Remise ligne", "Action"].map((header) => (
+                <th key={header} className="px-3 py-2 font-medium">{header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map((line, index) => (
+              <tr key={line.id} className="border-t border-forest/10">
+                <td className="px-3 py-3">
+                  <select className="input-field min-w-56" value={line.productId} onChange={(event) => updateLine(index, { productId: event.target.value })}>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>{product.name}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="px-3 py-3">
+                  <input className="input-field max-w-32" type="number" min="0.001" step="0.001" value={line.quantityGrams || ""} onChange={(event) => updateLine(index, { quantityGrams: Number(event.target.value) })} />
+                </td>
+                <td className="px-3 py-3">
+                  <input className="input-field max-w-32" type="number" min="0" step="0.01" value={line.grossAmountExVat || ""} onChange={(event) => updateLine(index, { grossAmountExVat: Number(event.target.value) })} />
+                </td>
+                <td className="px-3 py-3">
+                  <input className="input-field max-w-28" type="number" min="0" step="0.01" value={line.vatRate || ""} onChange={(event) => updateLine(index, { vatRate: Number(event.target.value) })} />
+                </td>
+                <td className="px-3 py-3">
+                  <input className="input-field max-w-32" type="number" min="0" step="0.01" value={line.lineDiscountAmount || ""} onChange={(event) => updateLine(index, { lineDiscountAmount: Number(event.target.value) })} />
+                </td>
+                <td className="px-3 py-3">
+                  <button type="button" className="btn-secondary min-h-9 px-3 py-2 text-xs" onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))} disabled={lines.length <= 1}>
+                    Retirer
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <button type="button" className="btn-secondary min-h-9 px-3 py-2 text-xs" onClick={() => setLines((current) => [...current, emptySupplierLine(firstProductId)])}>
+          Ajouter une ligne
+        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {preview && (
+            <span className="text-sm text-ink/60">
+              Total HT {formatCurrency(preview.totalExVat)} · cout stock {formatCurrency(preview.lines.reduce((sum, line) => sum + Number(line.netCostAmount || 0), 0))}
+            </span>
+          )}
+          <select className="input-field max-w-44" value={status} onChange={(event) => setStatus(event.target.value as "draft" | "validated")}>
+            <option value="draft">Brouillon</option>
+            <option value="validated">Valider</option>
+          </select>
+          <button className="btn-primary min-h-10 px-4 py-2" type="submit">
+            Enregistrer
+          </button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+function SupplierPurchasesTable({
+  purchases,
+  products,
+  onEdit,
+  onDelete,
+  onCancel,
+}: {
+  purchases: SupplierPurchase[];
+  products: Product[];
+  onEdit: (purchase: SupplierPurchase) => void;
+  onDelete: (purchase: SupplierPurchase) => Promise<void>;
+  onCancel: (purchase: SupplierPurchase) => Promise<void>;
+}) {
+  const productById = useMemo(
+    () => new Map(products.map((product) => [product.id, product])),
+    [products],
+  );
+  const sortedPurchases = useMemo(
+    () => [...purchases].sort((left, right) => (right.invoiceDate || "").localeCompare(left.invoiceDate || "")),
+    [purchases],
+  );
+
+  if (!sortedPurchases.length) {
+    return (
+      <AdminEmptyState
+        title="Aucun achat fournisseur."
+        description="Ajoutez une facture fournisseur pour calculer les couts moyens ponderes."
+      />
+    );
+  }
+
+  return (
+    <div className="mt-5 overflow-x-auto">
+      <table className="w-full min-w-[980px] text-left text-sm">
+        <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
+          <tr>
+            {["Facture", "Date", "Statut", "Lignes", "Total HT", "Cout stock", "Action"].map((header) => (
+              <th key={header} className="px-4 py-3 font-medium">{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sortedPurchases.map((purchase) => {
+            const stockCost = purchase.lines.reduce((sum, line) => sum + Number(line.netCostAmount || 0), 0);
+            return (
+              <tr key={purchase.id} className="border-t border-forest/10">
+                <td className="px-4 py-4">
+                  <strong className="block text-forest">{purchase.invoiceNumber}</strong>
+                  <span className="text-xs text-ink/50">{purchase.supplierName}</span>
+                </td>
+                <td className="px-4 py-4">{purchase.invoiceDate || "-"}</td>
+                <td className="px-4 py-4">
+                  <AdminBadge tone={purchase.status === "validated" ? "success" : purchase.status === "cancelled" ? "danger" : "warning"}>
+                    {purchase.status === "validated" ? "Valide" : purchase.status === "cancelled" ? "Annule" : "Brouillon"}
+                  </AdminBadge>
+                </td>
+                <td className="px-4 py-4">
+                  {purchase.lines.map((line) => (
+                    <span key={line.id} className="block text-xs text-ink/60">
+                      {productById.get(line.productId)?.name || line.productName || line.productId} · {formatQuantity(Number(line.quantityGrams || 0))} g · {formatCurrency(Number(line.effectiveCostPerGram || 0))}/g
+                    </span>
+                  ))}
+                </td>
+                <td className="px-4 py-4">{formatCurrency(purchase.totalExVat)}</td>
+                <td className="px-4 py-4">{formatCurrency(stockCost)}</td>
+                <td className="px-4 py-4">
+                  <div className="flex flex-wrap gap-2">
+                    {purchase.status === "draft" && (
+                      <>
+                        <button type="button" className="btn-secondary min-h-9 px-3 py-2 text-xs" onClick={() => onEdit(purchase)}>
+                          Reprendre
+                        </button>
+                        <button type="button" className="min-h-9 rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50" onClick={() => void onDelete(purchase)}>
+                          Supprimer
+                        </button>
+                      </>
+                    )}
+                    {purchase.status === "validated" && (
+                      <button type="button" className="min-h-9 rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50" onClick={() => void onCancel(purchase)}>
+                        Annuler
+                      </button>
+                    )}
+                    {purchase.status === "cancelled" && (
+                      <span className="text-xs text-ink/50">Conserve hors calcul</span>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -5522,7 +5920,9 @@ type AccountingMetricKey =
   | "productNetRevenue"
   | "deliveryRevenue"
   | "collectedRevenue"
+  | "supplierPurchasesTotal"
   | "estimatedProductCost"
+  | "estimatedStockValue"
   | "grossMargin";
 
 type AccountingProductRow = {
@@ -5533,17 +5933,29 @@ type AccountingProductRow = {
   purchaseCost: number;
   grossMargin: number;
   grossMarkupRate: number | null;
+  grossMarginRate: number | null;
   hasEstimatedCost: boolean;
   hasMissingCost: boolean;
+  costSources: Set<string>;
 };
 
 function buildAccountingSummary(
   orders: AdminOrderRow[],
   products: Product[],
   productCostMap: Map<string, ProductCost>,
+  supplierPurchases: SupplierPurchase[],
+  weightedSupplierCosts: Map<string, WeightedSupplierCost>,
   range: AccountingPeriodRange,
 ) {
   const productNameById = new Map(products.map((product) => [product.id, product.name]));
+  const supplierPurchasesTotal = supplierPurchases
+    .filter((purchase) => purchase.status === "validated")
+    .filter((purchase) => {
+      const date = parseAdminDate(purchase.validatedAt || purchase.invoiceDate);
+      return Boolean(date && date >= range.start && date < range.end);
+    })
+    .reduce((sum, purchase) => sum + Number(purchase.totalExVat || 0), 0);
+  const estimatedStockValue = estimateStockValue(products, weightedSupplierCosts);
   const periodOrders = orders.filter((order) => {
     if (isCancelledOrDeletedOrder(order)) return false;
     const date = accountingDate(order);
@@ -5576,7 +5988,7 @@ function buildAccountingSummary(
       const lineProductNetRevenue = grossLinesTotal > 0
         ? orderProductRevenue * (grossLineRevenue / grossLinesTotal)
         : 0;
-      const costResult = orderItemPurchaseCost(item, productCostMap);
+      const costResult = orderItemPurchaseCost(item, weightedSupplierCosts, productCostMap);
 
       if (costResult.status === "missing") missingCostIds.add(item.productId);
       if (costResult.status === "estimated") hasUnfrozenHistoricalCosts = true;
@@ -5590,14 +6002,17 @@ function buildAccountingSummary(
         purchaseCost: 0,
         grossMargin: 0,
         grossMarkupRate: null,
+        grossMarginRate: null,
         hasEstimatedCost: false,
         hasMissingCost: false,
+        costSources: new Set<string>(),
       };
       existing.quantitySold += quantity;
       existing.productNetRevenue += lineProductNetRevenue;
       existing.purchaseCost += costResult.cost;
       existing.hasEstimatedCost ||= costResult.status === "estimated";
       existing.hasMissingCost ||= costResult.status === "missing";
+      if (costResult.source) existing.costSources.add(costResult.source);
       productRowsById.set(item.productId, existing);
     });
   });
@@ -5622,6 +6037,9 @@ function buildAccountingSummary(
         grossMarkupRate: row.hasMissingCost || row.productNetRevenue <= 0
           ? null
           : productGrossMargin / row.productNetRevenue,
+        grossMarginRate: row.hasMissingCost || row.purchaseCost <= 0
+          ? null
+          : productGrossMargin / row.purchaseCost,
       };
     })
     .sort((left, right) => right.productNetRevenue - left.productNetRevenue);
@@ -5629,7 +6047,9 @@ function buildAccountingSummary(
     productNetRevenue,
     deliveryRevenue,
     collectedRevenue,
+    supplierPurchasesTotal,
     estimatedProductCost,
+    estimatedStockValue,
     grossMargin,
   };
 
@@ -5643,7 +6063,7 @@ function buildAccountingSummary(
     comparisonMetrics: [
       { key: "productNetRevenue" as const, label: "CA produits net", value: formatCurrency(productNetRevenue) },
       { key: "collectedRevenue" as const, label: "CA total encaisse", value: formatCurrency(collectedRevenue) },
-      { key: "estimatedProductCost" as const, label: "Cout d'achat", value: formatCurrency(estimatedProductCost) },
+      { key: "estimatedProductCost" as const, label: "Cout des marchandises vendues", value: formatCurrency(estimatedProductCost) },
       { key: "grossMargin" as const, label: "Marge brute", value: formatCurrency(grossMargin) },
     ],
     metrics: [
@@ -5651,11 +6071,13 @@ function buildAccountingSummary(
       { label: "Frais de livraison encaisses", value: formatCurrency(deliveryRevenue), detail: "Commandes payees uniquement" },
       { label: "Remises accordees", value: formatCurrency(discounts), detail: "Remises sur commandes payees" },
       { label: "CA total encaisse", value: formatCurrency(collectedRevenue), detail: "Produits + livraison, commandes payees" },
+      { label: "Achats fournisseurs valides", value: formatCurrency(supplierPurchasesTotal), detail: "Factures fournisseur validees sur la periode" },
       { label: "Commandes totales", value: String(periodOrders.length), detail: "Commandes non annulees sur la periode" },
       { label: "Commandes payees", value: String(paidOrders.length), detail: "paymentStatus paid" },
       { label: "Panier moyen paye", value: formatCurrency(paidOrders.length ? collectedRevenue / paidOrders.length : 0), detail: "Commandes payees uniquement" },
       { label: "Reste a encaisser", value: formatCurrency(receivableAmount), detail: "A confirmer, lien envoye ou en attente" },
-      { label: "Cout d'achat", value: formatCurrency(estimatedProductCost), detail: missingCostProducts.length ? "Incomplet : couts manquants" : "Snapshots historiques ou couts produits" },
+      { label: "Cout des marchandises vendues", value: formatCurrency(estimatedProductCost), detail: missingCostProducts.length ? "Incomplet : couts manquants" : "Cout des quantites vendues sur la periode" },
+      { label: "Valeur stock estimee", value: formatCurrency(estimatedStockValue), detail: "Stock admin actuel x cout fournisseur pondere" },
       { label: "Marge brute", value: formatCurrency(grossMargin), detail: missingCostProducts.length ? "Incomplete" : "CA produits net - couts d'achat" },
       { label: "Taux de marque brute", value: formatRate(grossMarkupRate), detail: "Marge brute / CA produits net" },
       { label: "Taux de marge brute", value: formatRate(grossMarginRate), detail: "Marge brute / cout d'achat" },
@@ -5712,21 +6134,10 @@ function toDateInputValue(date: Date) {
 
 function orderItemPurchaseCost(
   item: AdminOrderRow["items"][number],
+  weightedSupplierCosts: Map<string, WeightedSupplierCost>,
   productCostMap: Map<string, ProductCost>,
-): { cost: number; status: "fixed" | "estimated" | "missing" } {
-  if (item.purchaseCostCapturedAt !== undefined) {
-    const snapshotCost = optionalAccountingNumber(item.purchaseCostTotalSnapshot);
-    return snapshotCost == null ? { cost: 0, status: "missing" } : { cost: snapshotCost, status: "fixed" };
-  }
-  const purchasePricePerGram = productCostMap.get(item.productId)?.purchasePricePerGram;
-  if (purchasePricePerGram == null) return { cost: 0, status: "missing" };
-  return { cost: roundAccounting(Number(item.quantity || 0) * purchasePricePerGram), status: "estimated" };
-}
-
-function optionalAccountingNumber(value: unknown) {
-  if (value === null || value === undefined || value === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
+): { cost: number; status: "fixed" | "estimated" | "missing"; source: string | null } {
+  return resolveOrderItemPurchaseCost(item, weightedSupplierCosts, productCostMap);
 }
 
 function roundAccounting(value: number) {
@@ -5744,6 +6155,12 @@ function formatQuantity(value: number) {
 function formatAccountingValue(key: AccountingMetricKey, value: number) {
   void key;
   return formatCurrency(value);
+}
+
+function costSourceLabel(sources: Set<string>) {
+  if (sources.has("supplier_weighted")) return "Fournisseur pondere";
+  if (sources.has("manual_fallback")) return "Fallback manuel";
+  return "Estime";
 }
 function accountingDate(order: AdminOrderRow) {
   return parseAdminDate(
@@ -6259,11 +6676,17 @@ function Input({
   value,
   onChange,
   type = "text",
+  min,
+  step,
+  required,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
+  min?: string;
+  step?: string;
+  required?: boolean;
 }) {
   return (
     <label className="text-sm font-medium text-forest">
@@ -6271,6 +6694,9 @@ function Input({
       <input
         className="input-field mt-2"
         type={type}
+        min={min}
+        step={step}
+        required={required}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
