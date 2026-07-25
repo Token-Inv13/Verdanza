@@ -214,7 +214,8 @@ export function AdminPage({ section }: { section: string }) {
     isLoading,
     refresh,
   } = useAdminData();
-  const [message, setMessage] = useState("");
+  const [messageState, setMessageState] = useState({ text: "", section });
+  const message = messageState.section === section ? messageState.text : "";
   const [editingProduct, setEditingProduct] = useState<ProductInput>(emptyProduct);
   const [editingCoupon, setEditingCoupon] = useState<CouponInput>(emptyCoupon);
   const [couponBannerAction, setCouponBannerAction] = useState<"none" | "create" | "link">("none");
@@ -227,6 +228,22 @@ export function AdminPage({ section }: { section: string }) {
     setEditingBilling(billingSettings);
   }, [billingSettings]);
 
+  useEffect(() => {
+    setMessageState({ text: "", section });
+  }, [section]);
+
+  useEffect(() => {
+    if (!message) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      setMessageState((current) =>
+        current.section === section && current.text === message
+          ? { text: "", section }
+          : current,
+      );
+    }, 4000);
+    return () => window.clearTimeout(timeoutId);
+  }, [message, section]);
+
   const lowStockProducts = useMemo(
     () => products.filter((product) => product.stock <= product.lowStockThreshold),
     [products],
@@ -235,6 +252,10 @@ export function AdminPage({ section }: { section: string }) {
     () => buildDashboardMetrics(products, orders),
     [orders, products],
   );
+
+  function setMessage(text: string) {
+    setMessageState({ text, section });
+  }
 
   async function handleDeleteCancelledOrder(orderId: string) {
     setMessage("");
@@ -483,9 +504,16 @@ export function AdminPage({ section }: { section: string }) {
       </div>
 
       {message && (
-        <p className="mt-4 rounded-md border border-champagne/30 bg-cream px-4 py-3 text-sm text-forest">
-          {message}
-        </p>
+        <div className="mt-4 flex items-start justify-between gap-3 rounded-md border border-champagne/30 bg-cream px-4 py-3 text-sm text-forest">
+          <p>{message}</p>
+          <button
+            type="button"
+            className="text-xs font-semibold uppercase tracking-[0.12em] text-forest/60 hover:text-forest"
+            onClick={() => setMessage("")}
+          >
+            Fermer
+          </button>
+        </div>
       )}
 
       {isLoading && <p className="mt-8 text-forest/70">Chargement des donnees...</p>}
@@ -5022,13 +5050,9 @@ function SourceCard({
   );
 }
 
-function SourceLine({ source }: { source: string }) {
-  return (
-    <p className="mb-4 rounded-md border border-forest/10 bg-cream px-4 py-3 text-sm text-forest">
-      Source actuelle : {sourceLabel(source)}. Les données de secours ne sont
-      utilisées que si la base en ligne est indisponible.
-    </p>
-  );
+function SourceLine(props: { source: string }) {
+  void props;
+  return null;
 }
 
 function sourceLabel(source: string) {
