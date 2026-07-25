@@ -3,6 +3,7 @@ import type { BlogArticle } from "../types/blog";
 import { BRAND_OG_IMAGE } from "./brandAssets";
 import { isProductOrderable as isPublicProductOrderable } from "./cartStock";
 import { absoluteUrl } from "./siteUrl";
+import { normalizeProductImages } from "./productImages";
 
 export type JsonLdValue =
   | string
@@ -40,6 +41,7 @@ export function productPath(product: Pick<Product, "slug">) {
 
 export function buildProductJsonLd(product: Product): JsonLdValue {
   const url = absoluteUrl(productPath(product));
+  const imageUrls = normalizeProductImages(product).map((image) => absoluteUrl(image.url));
 
   return {
     "@context": "https://schema.org",
@@ -47,7 +49,7 @@ export function buildProductJsonLd(product: Product): JsonLdValue {
     "@id": `${url}#product`,
     name: product.name,
     description: product.longDescription,
-    image: [absoluteUrl(product.image)],
+    image: imageUrls.length ? imageUrls : [absoluteUrl(product.image)],
     sku: product.id,
     category: productCategoryLabel(product),
     url,

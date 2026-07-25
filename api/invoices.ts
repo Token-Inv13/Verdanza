@@ -1,6 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { assertAdminUser } from "./_server/adminAuth.js";
-import { getAdminDb } from "./_server/firebaseAdmin.js";
+import { getAdminDb, getAdminStorageBucket } from "./_server/firebaseAdmin.js";
 import {
   assertMethod,
   sendJson,
@@ -18,10 +18,22 @@ import {
 } from "../src/lib/supplierInvoiceParsers.js";
 import { reserveProductInternalReference } from "./_server/productReferences.js";
 import {
+  assertProductDeleteConfirmation,
+  hasBlockingProductDependencies,
+  productDependencyMessage,
+  productStoragePathsForDeletion,
+  type ProductCleanupCounts,
+  type ProductDependencyCounts,
+} from "./_server/productDeletion.js";
+import {
   normalizeFixedPriceMode,
   serializeFixedPriceOptionsForMode,
   validateManualFixedPriceOptions,
 } from "../src/lib/fixedPriceOptions.js";
+import {
+  syncProductPrimaryImage,
+  validateProductImagesForProduct,
+} from "../src/lib/productImages.js";
 import type {
   BillingSettings,
   Invoice,
@@ -207,6 +219,12 @@ export default async function handler(
       return;
     }
 
+    if (body.action === "deleteProductAdmin") {
+      const result = await deleteProductAdmin(db, body, adminUser);
+      sendJson(response, result);
+      return;
+    }
+
     if (body.action === "saveSupplierProductAlias") {
       const result = await saveSupplierProductAlias(db, body.alias, adminUser);
       sendJson(response, result);
@@ -234,10 +252,14 @@ export default async function handler(
     sendJson(response, { error: "Action facture inconnue." }, 400);
   } catch (error) {
     console.error("invoices failed", error);
+    const details = error as { statusCode?: number; dependencies?: ProductDependencyCounts };
     sendJson(
       response,
-      { error: error instanceof Error ? error.message : "Operation facture impossible." },
-      400,
+      {
+        error: error instanceof Error ? error.message : "Operation facture impossible.",
+        ...(details.dependencies ? { dependencies: details.dependencies, blocked: true } : {}),
+      },
+      details.statusCode || 400,
     );
   }
 }
@@ -411,7 +433,7 @@ async function upsertProductAdmin(db: FirebaseFirestore.Firestore, rawProduct: u
   const id = String(input.id || input.slug || "").trim();
   if (!id) throw new Error("Identifiant produit requis.");
   const ref = db.collection("products").doc(id);
-  const payload = { ...input };
+  const payload = syncProductPrimaryImage({ ...input });
   payload.fixedPriceMode = normalizeFixedPriceMode(input.fixedPriceMode, input.category);
   payload.fixedPriceOptions = serializeFixedPriceOptionsForMode(
     payload.fixedPriceMode,
@@ -424,6 +446,10 @@ async function upsertProductAdmin(db: FirebaseFirestore.Firestore, rawProduct: u
   const blockingManualIssue = manualIssues.find((issue) => issue.severity === "error");
   if (blockingManualIssue) {
     throw new Error(`Formats prix fixe invalides : ${blockingManualIssue.message}`);
+  }
+  const imageValidation = validateProductImagesForProduct(id, payload.images || []);
+  if (!imageValidation.ok) {
+    throw new Error(`Images produit invalides : ${imageValidation.errors[0]}`);
   }
   delete (payload as Record<string, unknown>).id;
   delete (payload as Record<string, unknown>).internalReference;
@@ -452,6 +478,144 @@ async function upsertProductAdmin(db: FirebaseFirestore.Firestore, rawProduct: u
   });
 
   return { ok: true, productId };
+}
+
+async function deleteProductAdmin(
+  db: FirebaseFirestore.Firestore,
+  body: Record<string, unknown>,
+  adminUser: { email?: string | null; uid: string },
+) {
+  const productId = String(body.productId || "").trim();
+  if (!productId) throw new Error("Produit requis.");
+  const productRef = db.collection("products").doc(productId);
+  const productSnapshot = await productRef.get();
+  if (!productSnapshot.exists) throw new Error("Produit introuvable.");
+  const product = { id: productSnapshot.id, ...productSnapshot.data() } as Product;
+  assertProductDeleteConfirmation(product, String(body.confirmationReference || ""));
+
+  const dependencies = await findProductDependencies(db, productId);
+  if (hasBlockingProductDependencies(dependencies)) {
+    const error = productDependencyMessage(dependencies);
+    const blocked = new Error(error);
+    Object.assign(blocked, { statusCode: 409, dependencies });
+    throw blocked;
+  }
+
+  const cleanup = await buildProductCleanup(db, product);
+  const storagePaths = productStoragePathsForDeletion(product);
+  const batch = db.batch();
+  cleanup.favoriteRefs.forEach((ref) => batch.delete(ref));
+  cleanup.supplierProductAliasRefs.forEach((ref) => batch.delete(ref));
+  batch.delete(db.collection("productCosts").doc(productId));
+  cleanup.couponUpdates.forEach(({ ref, productIds }) => {
+    batch.set(ref, { productIds, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  });
+  if (product.internalReference) {
+    batch.set(
+      db.collection("productReferences").doc(product.internalReference),
+      {
+        productId,
+        deletedAt: FieldValue.serverTimestamp(),
+        deletedBy: adminUser.email || adminUser.uid,
+      },
+      { merge: true },
+    );
+  }
+  batch.delete(productRef);
+  await batch.commit();
+
+  const storage = await deleteProductStorageFiles(storagePaths);
+
+  return {
+    ok: true,
+    deletedProductId: productId,
+    dependencies,
+    cleaned: cleanup.counts,
+    storage,
+  };
+}
+
+async function findProductDependencies(
+  db: FirebaseFirestore.Firestore,
+  productId: string,
+): Promise<ProductDependencyCounts> {
+  const [orders, invoices, supplierPurchases, stockMovements, productReviews] =
+    await Promise.all([
+      countDocsWithProductInArray(db, "orders", productId, "items"),
+      countDocsWithProductInArray(db, "invoices", productId, "lines"),
+      countDocsWithProductInArray(db, "supplierPurchases", productId, "lines"),
+      countQuery(db.collection("stockMovements").where("productId", "==", productId)),
+      countQuery(db.collection("productReviews").where("productId", "==", productId)),
+    ]);
+  return { orders, invoices, supplierPurchases, stockMovements, productReviews };
+}
+
+async function buildProductCleanup(db: FirebaseFirestore.Firestore, product: Product) {
+  const productId = product.id;
+  const [favoritesSnapshot, aliasSnapshot, costSnapshot, couponSnapshot] = await Promise.all([
+    db.collection("favorites").where("productId", "==", productId).get(),
+    db.collection("supplierProductAliases").where("productId", "==", productId).get(),
+    db.collection("productCosts").doc(productId).get(),
+    db.collection("coupons").where("productIds", "array-contains", productId).get(),
+  ]);
+
+  const couponUpdates = couponSnapshot.docs
+    .map((entry) => {
+      const productIds = Array.isArray(entry.data().productIds)
+        ? entry.data().productIds.filter((entryProductId: unknown) => entryProductId !== productId)
+        : [];
+      return { ref: entry.ref, productIds };
+    });
+
+  const counts: ProductCleanupCounts = {
+    favorites: favoritesSnapshot.size,
+    productCosts: costSnapshot.exists ? 1 : 0,
+    supplierProductAliases: aliasSnapshot.size,
+    coupons: couponUpdates.length,
+    productReferenceReservations: product.internalReference ? 1 : 0,
+  };
+
+  return {
+    favoriteRefs: favoritesSnapshot.docs.map((entry) => entry.ref),
+    supplierProductAliasRefs: aliasSnapshot.docs.map((entry) => entry.ref),
+    couponUpdates,
+    counts,
+  };
+}
+
+async function deleteProductStorageFiles(paths: string[]) {
+  if (!paths.length) return { deleted: 0, failed: [] as string[] };
+  const bucket = getAdminStorageBucket();
+  const failed: string[] = [];
+  let deleted = 0;
+  for (const path of paths) {
+    try {
+      await bucket.file(path).delete({ ignoreNotFound: true });
+      deleted += 1;
+    } catch {
+      failed.push(path);
+    }
+  }
+  return { deleted, failed };
+}
+
+async function countDocsWithProductInArray(
+  db: FirebaseFirestore.Firestore,
+  collectionName: string,
+  productId: string,
+  arrayField: string,
+) {
+  const snapshot = await db.collection(collectionName).get();
+  return snapshot.docs.filter((entry) => {
+    const rows = entry.data()[arrayField];
+    if (!Array.isArray(rows)) return false;
+    return rows.some((row) => row && typeof row === "object" && row.productId === productId);
+  }).length;
+}
+
+async function countQuery(query: FirebaseFirestore.Query) {
+  const snapshot = await query.get();
+  return snapshot.size;
 }
 
 async function saveSupplierProductAlias(

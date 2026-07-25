@@ -19,6 +19,7 @@ import {
   normalizeFixedPriceOptions,
 } from "../lib/fixedPriceOptions";
 import { normalizeLegacyInternalReferences } from "../lib/productReferences";
+import { syncProductPrimaryImage } from "../lib/productImages";
 import type { Product } from "../types";
 
 export type ProductInput = Omit<Product, "id"> & { id?: string };
@@ -41,7 +42,7 @@ export function normalizeProduct(product: Product): Product {
   void stockLabel;
   const sanitized = normalized as Product;
 
-  return {
+  return syncProductPrimaryImage({
     ...sanitized,
     price: Number(sanitized.price || 0),
     compareAtPrice: Number(sanitized.compareAtPrice || 0) || undefined,
@@ -56,7 +57,7 @@ export function normalizeProduct(product: Product): Product {
     lowStockThreshold: Math.max(0, Math.floor(Number(sanitized.lowStockThreshold ?? 5))),
     isActive: sanitized.isActive !== false,
     isFeatured: sanitized.isFeatured === true,
-  };
+  });
 }
 
 function removeLegacyAvailabilityText(value: string) {
@@ -133,6 +134,50 @@ export async function upsertProduct(input: ProductInput) {
     return payload.productId || input.id || input.slug;
   }
   throw new Error("Session admin requise pour enregistrer un produit via l'API securisee.");
+}
+
+export async function deleteProductAdmin(input: {
+  productId: string;
+  confirmationReference: string;
+}) {
+  if (!db) throw new Error("Firebase is not configured.");
+  const token = await auth?.currentUser?.getIdToken();
+  if (!token) throw new Error("Session admin requise.");
+  const response = await fetch("/api/invoices", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      action: "deleteProductAdmin",
+      productId: input.productId,
+      confirmationReference: input.confirmationReference,
+    }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as {
+    ok?: boolean;
+    deletedProductId?: string;
+    blocked?: boolean;
+    dependencies?: Record<string, number>;
+    cleaned?: Record<string, number>;
+    storage?: { deleted: number; failed: string[] };
+    error?: string;
+  };
+  if (!response.ok) {
+    const details = payload.dependencies
+      ? Object.entries(payload.dependencies)
+          .filter(([, count]) => count > 0)
+          .map(([label, count]) => `${label}: ${count}`)
+          .join(", ")
+      : "";
+    throw new Error(
+      details
+        ? `${payload.error || "Suppression produit impossible."} (${details})`
+        : payload.error || "Suppression produit impossible.",
+    );
+  }
+  return payload;
 }
 
 export async function updateProductFlags(

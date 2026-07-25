@@ -1,5 +1,6 @@
 import { applicationDefault, cert, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 
 function getServiceAccount() {
   const encoded = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
@@ -36,11 +37,19 @@ export function getAdminDb() {
   return getFirestore();
 }
 
+export function getAdminStorageBucket() {
+  ensureAdminApp();
+  return getStorage().bucket();
+}
+
 function ensureAdminApp() {
   if (!getApps().length) {
     const serviceAccount = getServiceAccount();
+    const storageBucket =
+      process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET;
     initializeApp({
       credential: serviceAccount ? cert(serviceAccount) : applicationDefault(),
+      storageBucket,
     });
   }
 }

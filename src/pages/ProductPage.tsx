@@ -1,6 +1,6 @@
 import { Link, useParams } from "react-router-dom";
 import { ShoppingBag } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Seo } from "../components/Seo";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { JsonLd } from "../components/JsonLd";
@@ -20,6 +20,7 @@ import {
   isFixedPriceAdvantageous,
   resolveFixedPriceOptions,
 } from "../lib/fixedPriceOptions";
+import { normalizeProductImages } from "../lib/productImages";
 import { FavoriteButton } from "../components/FavoriteButton";
 import {
   buildProductJsonLd,
@@ -38,11 +39,16 @@ export function ProductPage() {
   const { products, isLoading } = useProducts();
   const product = slug ? products.find((entry) => entry.slug === slug) : undefined;
   const { addItem, addFixedPriceOption } = useCart();
+  const [selectedImageId, setSelectedImageId] = useState("");
 
   useEffect(() => {
     if (!product) return;
     trackViewItem(product);
   }, [product]);
+
+  useEffect(() => {
+    setSelectedImageId("");
+  }, [product?.id]);
 
   if (isLoading) {
     return (
@@ -79,6 +85,11 @@ export function ProductPage() {
   const isOrderable = isProductOrderable(product);
   const stockLabel = publicProductStockLabel(product);
   const fixedPriceOptions = resolveFixedPriceOptions(product);
+  const productImages = normalizeProductImages(product);
+  const selectedImage =
+    productImages.find((image) => image.id === selectedImageId) ||
+    productImages.find((image) => image.isPrimary) ||
+    productImages[0];
   const availableStock = availableProductStock(product);
   const path = productPath(product);
   const categoryName = productCategoryLabel(product);
@@ -142,13 +153,39 @@ export function ProductPage() {
           <div className="aspect-square rounded-lg border border-champagne/30 bg-cream p-8">
             <ProductImage
               variant="detail"
-              src={product.image}
-              alt={productImageAlt(product)}
+              src={selectedImage?.url || product.image}
+              alt={selectedImage?.alt || productImageAlt(product)}
               loading="eager"
               fetchPriority="high"
               className="mx-auto h-full w-full object-contain"
             />
           </div>
+          {productImages.length > 1 && (
+            <div className="grid grid-cols-3 gap-3">
+              {productImages.map((image) => {
+                const selected = image.id === selectedImage?.id;
+                return (
+                  <button
+                    key={image.id}
+                    type="button"
+                    className={`aspect-square rounded-md border bg-ivory p-2 transition ${
+                      selected ? "border-forest" : "border-forest/10 hover:border-forest/40"
+                    }`}
+                    aria-label={`Afficher ${image.alt}`}
+                    aria-pressed={selected}
+                    onClick={() => setSelectedImageId(image.id)}
+                  >
+                    <ProductImage
+                      variant="card"
+                      src={image.url}
+                      alt=""
+                      className="h-full w-full object-contain"
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {(isHydroponicFlower || isResin) && (
             <aside className="rounded-md border border-forest/10 bg-ivory p-5">
               <p className="font-display text-2xl text-forest">

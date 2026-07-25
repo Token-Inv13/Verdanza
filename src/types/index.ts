@@ -23,6 +23,7 @@ export type Product = {
   longDescription: string;
   image: string;
   imageAlt?: string;
+  images?: ProductImageAsset[];
   cbdRate: string;
   cbgRate: string;
   cbnRate?: string;
@@ -43,6 +44,15 @@ export type Product = {
   isFeatured: boolean;
   seoTitle: string;
   seoDescription: string;
+};
+
+export type ProductImageAsset = {
+  id: string;
+  url: string;
+  storagePath?: string;
+  alt: string;
+  sortOrder: number;
+  isPrimary: boolean;
 };
 
 export type FixedPriceMode = "automatic" | "manual" | "disabled";

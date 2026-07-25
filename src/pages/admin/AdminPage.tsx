@@ -2,11 +2,17 @@ import { FormEvent, useEffect, useMemo, useState, type KeyboardEvent, type React
 import { useSearchParams } from "react-router-dom";
 import { useAdminData } from "../../hooks/useAdminData";
 import {
+  deleteProductAdmin,
   updateProductFlags,
   updateProductStock,
   upsertProduct,
   type ProductInput,
 } from "../../services/productsService";
+import {
+  deleteProductImageByPath,
+  uploadProductImageAsset,
+  type ProductImageUploadProgress,
+} from "../../services/productImagesService";
 import {
   deleteCancelledOrder,
   retryOrderPurchaseAnalytics,
@@ -95,6 +101,7 @@ import type {
   PaymentStatus,
   Product,
   ProductCategory,
+  ProductImageAsset,
   ProductCost,
   FixedPriceMode,
   FixedPriceOption,
@@ -144,6 +151,13 @@ import {
   resolveFixedPriceOptions,
   validateManualFixedPriceOptions,
 } from "../../lib/fixedPriceOptions";
+import {
+  PRODUCT_IMAGE_MAX_COUNT,
+  ensureSinglePrimary,
+  normalizeProductImages,
+  syncProductPrimaryImage,
+  validateProductImagesForProduct,
+} from "../../lib/productImages";
 
 const emptyProduct: ProductInput = {
   slug: "",
@@ -262,6 +276,7 @@ export function AdminPage({ section }: { section: string }) {
   const [messageState, setMessageState] = useState({ text: "", scope: messageScope });
   const message = messageState.scope === messageScope ? messageState.text : "";
   const [editingProduct, setEditingProduct] = useState<ProductInput>(emptyProduct);
+  const [productImageStoragePathsToDelete, setProductImageStoragePathsToDelete] = useState<string[]>([]);
   const [editingCoupon, setEditingCoupon] = useState<CouponInput>(emptyCoupon);
   const [couponBannerAction, setCouponBannerAction] = useState<"none" | "create" | "link">("none");
   const [couponBannerTargetId, setCouponBannerTargetId] = useState("");
@@ -302,6 +317,16 @@ export function AdminPage({ section }: { section: string }) {
     setMessageState({ text, scope: messageScope });
   }
 
+  function editProduct(product: Product) {
+    setProductImageStoragePathsToDelete([]);
+    setEditingProduct(product);
+  }
+
+  function resetProductForm() {
+    setProductImageStoragePathsToDelete([]);
+    setEditingProduct(emptyProduct);
+  }
+
   async function handleDeleteCancelledOrder(orderId: string) {
     setMessage("");
     try {
@@ -336,7 +361,7 @@ export function AdminPage({ section }: { section: string }) {
       setMessage(`Formats prix fixe invalides : ${blockingManualIssues[0].message}`);
       return;
     }
-    await upsertProduct({
+    const productToSave = syncProductPrimaryImage({
       ...editingProduct,
       slug: editingProduct.slug || slugify(editingProduct.name),
       aromas: normalizeList(editingProduct.aromas),
@@ -344,9 +369,44 @@ export function AdminPage({ section }: { section: string }) {
       fixedPriceMode,
       fixedPriceOptions,
     });
-    setEditingProduct(emptyProduct);
+    const productId = productToSave.id || productToSave.slug;
+    const imageValidation = validateProductImagesForProduct(productId || "", productToSave.images || []);
+    if (!imageValidation.ok) {
+      setMessage(imageValidation.errors[0]);
+      return;
+    }
+    const savedProductId = await upsertProduct(productToSave);
+    const pathsToDelete = productImageStoragePathsToDelete.slice();
+    if (pathsToDelete.length) {
+      await Promise.allSettled(
+        pathsToDelete.map((path) => deleteProductImageByPath(path, savedProductId)),
+      );
+    }
+    resetProductForm();
     setMessage("Produit enregistre.");
     await refresh();
+  }
+
+  async function handleProductDelete(product: ProductInput, confirmationReference: string) {
+    setMessage("");
+    if (!product.id) {
+      setMessage("Produit non enregistre: aucune suppression definitive possible.");
+      return;
+    }
+    try {
+      const result = await deleteProductAdmin({
+        productId: product.id,
+        confirmationReference,
+      });
+      resetProductForm();
+      const storageWarning = result.storage?.failed?.length
+        ? ` Nettoyage Storage partiel: ${result.storage.failed.length} fichier(s) non supprime(s).`
+        : "";
+      setMessage(`Produit ${product.name} supprime definitivement.${storageWarning}`);
+      await refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Suppression produit impossible.");
+    }
   }
 
   async function handleFlagChange(product: Product, key: "isActive" | "isFeatured") {
@@ -706,12 +766,18 @@ export function AdminPage({ section }: { section: string }) {
             product={editingProduct}
             onChange={setEditingProduct}
             onSubmit={handleProductSubmit}
+            onImageStoragePathRemoved={(path) =>
+              setProductImageStoragePathsToDelete((current) =>
+                current.includes(path) ? current : [...current, path],
+              )
+            }
+            onDeleteProduct={handleProductDelete}
           />
           <section>
             <SourceLine source={productSource} />
             <ProductTable
               products={products}
-              onEdit={setEditingProduct}
+              onEdit={editProduct}
               onFlagChange={handleFlagChange}
             />
           </section>
@@ -898,11 +964,22 @@ function ProductForm({
   product,
   onChange,
   onSubmit,
+  onImageStoragePathRemoved,
+  onDeleteProduct,
 }: {
   product: ProductInput;
   onChange: (product: ProductInput) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onImageStoragePathRemoved: (path: string) => void;
+  onDeleteProduct: (product: ProductInput, confirmationReference: string) => Promise<void>;
 }) {
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const canDeleteProduct = Boolean(product.id && product.internalReference);
+
+  useEffect(() => {
+    setDeleteConfirmation("");
+  }, [product.id]);
+
   return (
     <form onSubmit={onSubmit} className="admin-card h-fit">
       <h2 className="font-display text-3xl text-forest">
@@ -1010,7 +1087,11 @@ function ProductForm({
         </div>
         <Input label="Origine" value={product.origin} onChange={(origin) => onChange({ ...product, origin })} />
         <Input label="Culture" value={product.cultureType} onChange={(cultureType) => onChange({ ...product, cultureType: cultureType as Product["cultureType"] })} />
-        <Input label="Image" value={product.image} onChange={(image) => onChange({ ...product, image })} />
+        <ProductImagesEditor
+          product={product}
+          onChange={(patch) => onChange({ ...product, ...patch })}
+          onStoragePathRemoved={onImageStoragePathRemoved}
+        />
         <Input label="Aromes, separes par virgule" value={product.aromas.join(", ")} onChange={(aromas) => onChange({ ...product, aromas: normalizeList(aromas) })} />
         <Input label="Tags, separes par virgule" value={product.tags.join(", ")} onChange={(tags) => onChange({ ...product, tags: normalizeList(tags) })} />
         <Input label="SEO title" value={product.seoTitle} onChange={(seoTitle) => onChange({ ...product, seoTitle })} />
@@ -1055,8 +1136,232 @@ function ProductForm({
         <button className="btn-primary" type="submit">
           Enregistrer
         </button>
+        {product.id && (
+          <div className="mt-6 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+            <h3 className="font-semibold">Supprimer definitivement le produit</h3>
+            <p className="mt-2 leading-6">
+              Action irreversible pour {product.name || "ce produit"}.
+              Reference actuelle : <span className="font-mono">{product.internalReference || "absente"}</span>.
+            </p>
+            {!product.internalReference && (
+              <p className="mt-2 font-semibold">
+                Suppression refusee tant que le produit ne possede pas de reference.
+              </p>
+            )}
+            {product.internalReference && (
+              <Input
+                label={`Saisissez ${product.internalReference} pour confirmer`}
+                value={deleteConfirmation}
+                onChange={setDeleteConfirmation}
+              />
+            )}
+            <button
+              type="button"
+              className="mt-3 rounded-md border border-red-300 bg-white px-4 py-2 font-semibold text-red-800 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!canDeleteProduct || deleteConfirmation !== product.internalReference}
+              onClick={() => void onDeleteProduct(product, deleteConfirmation)}
+            >
+              Supprimer definitivement le produit
+            </button>
+          </div>
+        )}
       </div>
     </form>
+  );
+}
+
+function ProductImagesEditor({
+  product,
+  onChange,
+  onStoragePathRemoved,
+}: {
+  product: ProductInput;
+  onChange: (patch: Pick<ProductInput, "images" | "image" | "imageAlt">) => void;
+  onStoragePathRemoved: (path: string) => void;
+}) {
+  const [uploadProgress, setUploadProgress] = useState<ProductImageUploadProgress | null>(null);
+  const [error, setError] = useState("");
+  const images = normalizeProductImages({
+    id: product.id || "",
+    name: product.name || "Produit",
+    image: product.image,
+    imageAlt: product.imageAlt,
+    images: product.images,
+  });
+  const targetProductId = product.id || product.slug || slugify(product.name || "");
+
+  function applyImages(nextImages: ProductImageAsset[]) {
+    const normalized = ensureSinglePrimary(nextImages);
+    const primary = normalized.find((image) => image.isPrimary) || normalized[0];
+    onChange({
+      images: normalized,
+      image: primary?.url || BRAND_LABEL,
+      imageAlt: primary?.alt || product.name || "Produit Verdanza",
+    });
+  }
+
+  async function handleFiles(files: FileList | null) {
+    setError("");
+    if (!files?.length) return;
+    if (!targetProductId) {
+      setError("Renseignez le nom ou le slug avant d'ajouter une image.");
+      return;
+    }
+    const incoming = Array.from(files);
+    if (images.length + incoming.length > PRODUCT_IMAGE_MAX_COUNT) {
+      setError(`Maximum ${PRODUCT_IMAGE_MAX_COUNT} images par produit.`);
+      return;
+    }
+    const uploaded: ProductImageAsset[] = [];
+    try {
+      for (const file of incoming) {
+        const image = await uploadProductImageAsset({
+          productId: targetProductId,
+          file,
+          alt: `${product.name || "Produit"} Verdanza`,
+          sortOrder: images.length + uploaded.length,
+          isPrimary: images.length + uploaded.length === 0,
+          onProgress: setUploadProgress,
+        });
+        uploaded.push(image);
+      }
+      applyImages([...images, ...uploaded]);
+      setUploadProgress(null);
+    } catch (uploadError) {
+      await Promise.allSettled(
+        uploaded
+          .filter((image) => image.storagePath)
+          .map((image) => deleteProductImageByPath(image.storagePath as string, targetProductId)),
+      );
+      setUploadProgress(null);
+      setError(uploadError instanceof Error ? uploadError.message : "Televersement impossible.");
+    }
+  }
+
+  function removeImage(image: ProductImageAsset) {
+    if (image.storagePath) onStoragePathRemoved(image.storagePath);
+    applyImages(images.filter((entry) => entry.id !== image.id));
+  }
+
+  function moveImage(index: number, direction: -1 | 1) {
+    const next = images.slice();
+    const target = index + direction;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    applyImages(next);
+  }
+
+  return (
+    <div className="rounded-md border border-forest/10 bg-cream p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="font-semibold text-forest">Images produit</h3>
+          <p className="mt-1 text-xs leading-5 text-ink/60">
+            JPEG, PNG ou WebP. Maximum {PRODUCT_IMAGE_MAX_COUNT} images, optimisation WebP avant envoi.
+          </p>
+        </div>
+        <label className="btn-secondary min-h-9 cursor-pointer px-3 py-2 text-xs">
+          Ajouter
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            className="sr-only"
+            onChange={(event) => {
+              void handleFiles(event.target.files);
+              event.currentTarget.value = "";
+            }}
+          />
+        </label>
+      </div>
+      <div
+        className="mt-3 rounded-md border border-dashed border-forest/20 bg-ivory p-4 text-center text-xs text-ink/60"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          void handleFiles(event.dataTransfer.files);
+        }}
+      >
+        Glissez-deposez des images ici.
+      </div>
+      {error && (
+        <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+          {error}
+        </p>
+      )}
+      {uploadProgress && (
+        <p className="mt-3 rounded-md border border-forest/10 bg-ivory p-3 text-xs text-forest">
+          {uploadProgress.fileName} - {uploadProgress.status} {uploadProgress.progress} %
+        </p>
+      )}
+      <div className="mt-4 grid gap-3">
+        {images.map((image, index) => (
+          <div key={image.id} className="rounded-md border border-forest/10 bg-ivory p-3">
+            <div className="flex gap-3">
+              <img
+                src={image.url}
+                alt=""
+                className="h-20 w-20 rounded-md border border-forest/10 object-cover"
+                loading="lazy"
+              />
+              <div className="min-w-0 flex-1 space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <AdminBadge tone={image.isPrimary ? "success" : "muted"}>
+                    {image.isPrimary ? "Principale" : `Image ${index + 1}`}
+                  </AdminBadge>
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-forest underline"
+                    onClick={() =>
+                      applyImages(images.map((entry) => ({ ...entry, isPrimary: entry.id === image.id })))
+                    }
+                  >
+                    Choisir comme principale
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs text-forest/70 underline disabled:opacity-40"
+                    disabled={index === 0}
+                    onClick={() => moveImage(index, -1)}
+                  >
+                    Monter
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs text-forest/70 underline disabled:opacity-40"
+                    disabled={index === images.length - 1}
+                    onClick={() => moveImage(index, 1)}
+                  >
+                    Descendre
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs text-red-700 underline"
+                    onClick={() => removeImage(image)}
+                  >
+                    Supprimer l'image
+                  </button>
+                </div>
+                <Input
+                  label="Texte alternatif"
+                  value={image.alt}
+                  onChange={(alt) =>
+                    applyImages(
+                      images.map((entry) => (entry.id === image.id ? { ...entry, alt } : entry)),
+                    )
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+        {!images.length && (
+          <p className="text-xs text-ink/55">
+            Aucune image configuree. Le placeholder existant sera utilise.
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
