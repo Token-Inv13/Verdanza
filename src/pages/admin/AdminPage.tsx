@@ -36,10 +36,12 @@ import {
 import {
   archivePromoBanner,
   deletePromoBanner,
+  findAssociatedPromoBanner,
   getBannerPlacements,
   promoBannerVisibility,
   promoBannerStatus,
   updatePromoBannerStatus,
+  upsertAssociatedPromoBanner,
   upsertPromoBanner,
   type PromoBannerInput,
 } from "../../services/promoBannersService";
@@ -327,6 +329,18 @@ export function AdminPage({ section }: { section: string }) {
     setEditingProduct(emptyProduct);
   }
 
+  function editCoupon(coupon: CouponInput) {
+    setEditingCoupon(coupon);
+    const associatedBanner = findAssociatedPromoBanner(promoBanners, coupon);
+    if (associatedBanner) {
+      setCouponBannerAction("link");
+      setCouponBannerTargetId(associatedBanner.id);
+      return;
+    }
+    setCouponBannerAction("none");
+    setCouponBannerTargetId("");
+  }
+
   async function handleDeleteCancelledOrder(orderId: string) {
     setMessage("");
     try {
@@ -466,25 +480,19 @@ export function AdminPage({ section }: { section: string }) {
     await upsertCoupon(couponPayload);
     const couponCode = normalizeCouponCode(couponPayload.code);
     const couponId = couponPayload.id || couponCode.toLowerCase();
+    const savedCoupon = {
+      ...couponPayload,
+      id: couponId,
+      code: couponCode,
+      usedCount: Number(couponPayload.usedCount || 0),
+      isActive: Boolean(couponPayload.isActive),
+    } as Coupon;
     if (couponBannerAction === "create") {
-      await upsertPromoBanner({
-        ...emptyPromoBanner,
-        id: `banner-${couponId}`,
+      await upsertAssociatedPromoBanner({
+        coupon: savedCoupon,
+        banners: promoBanners,
         title: couponPayload.label || couponCode,
-        message: couponDescription({
-          ...couponPayload,
-          id: couponId,
-          code: couponCode,
-          usedCount: Number(couponPayload.usedCount || 0),
-          isActive: Boolean(couponPayload.isActive),
-        } as Coupon),
-        type: "top_bar",
-        placement: "home",
-        placements: ["home"],
-        isActive: false,
-        isTemplate: false,
-        linkedCouponId: couponId,
-        variant: "promo",
+        message: couponDescription(savedCoupon),
       });
     }
     if (couponBannerAction === "link" && couponBannerTargetId) {
@@ -493,6 +501,7 @@ export function AdminPage({ section }: { section: string }) {
         await upsertPromoBanner({
           ...target,
           linkedCouponId: couponId,
+          linkedPromoCode: couponCode,
           deletedLinkedCouponId: "",
         });
       }
@@ -861,7 +870,7 @@ export function AdminPage({ section }: { section: string }) {
             <SourceLine source={couponSource} />
             <CouponsTable
               coupons={coupons}
-              onEdit={setEditingCoupon}
+              onEdit={editCoupon}
               onToggle={handleCouponToggle}
               onArchive={handleCouponArchive}
               onDelete={handleCouponDelete}

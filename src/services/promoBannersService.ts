@@ -26,6 +26,8 @@ export type PromoBannerInput = Omit<PromoBanner, "id" | "createdAt" | "updatedAt
   id?: string;
 };
 
+type CouponBannerLinkInput = Pick<Coupon, "code" | "label"> & { id?: string };
+
 export async function getPromoBannersWithFallback() {
   if (!db) return { banners: [], source: "empty" as const };
   try {
@@ -126,6 +128,78 @@ export async function upsertPromoBanner(input: PromoBannerInput) {
     },
     { merge: true },
   );
+}
+
+export async function upsertAssociatedPromoBanner(input: {
+  coupon: CouponBannerLinkInput;
+  banners: PromoBanner[];
+  title: string;
+  message: string;
+}) {
+  await upsertPromoBanner(buildAssociatedPromoBannerInput(input));
+}
+
+export function buildAssociatedPromoBannerInput(input: {
+  coupon: CouponBannerLinkInput;
+  banners: PromoBanner[];
+  title: string;
+  message: string;
+}): PromoBannerInput {
+  const couponId = associatedPromoBannerCouponId(input.coupon);
+  const couponCode = normalizePromoCode(input.coupon.code);
+  if (!couponId || !couponCode) throw new Error("Promotion associee invalide.");
+
+  const existing = findAssociatedPromoBanner(input.banners, input.coupon);
+  return {
+    ...(existing ?? {
+      type: "top_bar",
+      placement: "home",
+      placements: ["home"],
+      isActive: false,
+      startsAt: "",
+      endsAt: "",
+      priority: 10,
+      buttonLabel: "",
+      buttonUrl: "",
+      variant: "promo",
+      dismissible: false,
+      isArchived: false,
+      isTemplate: false,
+    }),
+    id: existing?.id || associatedPromoBannerId(couponId),
+    title: input.title,
+    message: input.message,
+    linkedCouponId: couponId,
+    linkedPromoCode: couponCode,
+    deletedLinkedCouponId: "",
+    isActive: existing ? existing.isActive : false,
+    variant: existing?.variant || "promo",
+  };
+}
+
+export function findAssociatedPromoBanner(
+  banners: PromoBanner[],
+  coupon: CouponBannerLinkInput,
+) {
+  const couponId = associatedPromoBannerCouponId(coupon);
+  const couponCode = normalizePromoCode(coupon.code);
+  const expectedId = couponId ? associatedPromoBannerId(couponId) : "";
+  return (
+    banners.find((banner) => couponId && banner.linkedCouponId === couponId) ||
+    banners.find(
+      (banner) => couponCode && normalizePromoCode(banner.linkedPromoCode || "") === couponCode,
+    ) ||
+    banners.find((banner) => expectedId && banner.id === expectedId)
+  );
+}
+
+export function associatedPromoBannerId(couponId: string) {
+  return `banner-${couponId}`;
+}
+
+export function associatedPromoBannerCouponId(coupon: CouponBannerLinkInput) {
+  const code = normalizePromoCode(coupon.code);
+  return String(coupon.id || code.toLowerCase()).trim();
 }
 
 export async function updatePromoBannerStatus(bannerId: string, isActive: boolean) {
@@ -332,6 +406,10 @@ function sanitizeBannerUrl(value: string) {
   if (url.startsWith("https://verdanza.fr")) return url;
   if (url.startsWith("https://verdanza-opal.vercel.app")) return url;
   return "";
+}
+
+function normalizePromoCode(value: string) {
+  return value.trim().toUpperCase().replace(/\s+/g, "");
 }
 
 function normalizeActiveState(banner: PromoBanner & { active?: unknown; enabled?: unknown; status?: unknown }) {

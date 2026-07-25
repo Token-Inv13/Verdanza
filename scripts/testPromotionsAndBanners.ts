@@ -4,7 +4,11 @@ import {
   automaticPromotionRulesFromCoupons,
   calculateCartPromotions,
 } from "../src/lib/cartPromotions.ts";
-import type { Coupon } from "../src/types/index.js";
+import {
+  buildAssociatedPromoBannerInput,
+  findAssociatedPromoBanner,
+} from "../src/services/promoBannersService.ts";
+import type { Coupon, PromoBanner } from "../src/types/index.js";
 
 type TestCase = {
   name: string;
@@ -91,6 +95,74 @@ const tests: TestCase[] = [
         rules: automaticPromotionRulesFromCoupons([{ ...fleurs20, maxUses: 1, usedCount: 1 }]),
       });
       assertEqual(result.promotionDiscountTotal, 0);
+    },
+  },
+  {
+    name: "promotion banner association is created and updated without duplicates",
+    run() {
+      const coupon: Coupon = {
+        id: "welcome10",
+        code: "WELCOME10",
+        label: "Welcome10",
+        discountType: "percent",
+        discountValue: 10,
+        minimumOrder: 15,
+        usedCount: 1,
+        isActive: true,
+      };
+
+      const created = buildAssociatedPromoBannerInput({
+        coupon,
+        banners: [],
+        title: coupon.label,
+        message: "Pourcentage : 10 % a partir de 15 EUR.",
+      });
+      assertEqual(created.id, "banner-welcome10");
+      assertEqual(created.linkedCouponId, "welcome10");
+      assertEqual(created.linkedPromoCode, "WELCOME10");
+      assertEqual(created.isActive, false);
+      assertEqual(created.isArchived, false);
+      assertEqual(created.isTemplate, false);
+
+      const adminBanners = [asPromoBanner(created)];
+      assertEqual(
+        findAssociatedPromoBanner(adminBanners, coupon)?.id,
+        "banner-welcome10",
+      );
+      assertEqual(adminBanners.filter((banner) => !banner.isTemplate).length, 1);
+
+      const secondSave = buildAssociatedPromoBannerInput({
+        coupon,
+        banners: adminBanners,
+        title: "Welcome10 ete",
+        message: "Pourcentage : 10 % a partir de 15 EUR.",
+      });
+      assertEqual(secondSave.id, "banner-welcome10");
+      assertEqual(secondSave.title, "Welcome10 ete");
+      assertEqual(
+        new Set([adminBanners[0].id, secondSave.id]).size,
+        1,
+      );
+
+      const existingLinked = asPromoBanner({
+        ...created,
+        id: "custom-welcome-banner",
+        linkedCouponId: "",
+        linkedPromoCode: "WELCOME10",
+        isActive: true,
+        placements: ["home", "shop"],
+      });
+      const updated = buildAssociatedPromoBannerInput({
+        coupon,
+        banners: [existingLinked],
+        title: "Welcome10",
+        message: "Message mis a jour.",
+      });
+      assertEqual(updated.id, "custom-welcome-banner");
+      assertEqual(updated.linkedCouponId, "welcome10");
+      assertEqual(updated.linkedPromoCode, "WELCOME10");
+      assertEqual(updated.isActive, true);
+      assertEqual(updated.placements?.join(","), "home,shop");
     },
   },
   {
@@ -207,6 +279,30 @@ function assertNotIncludes(source: string, unexpected: string) {
   if (source.includes(unexpected)) {
     throw new Error(`Expected source not to include: ${unexpected}`);
   }
+}
+
+function asPromoBanner(input: Partial<PromoBanner> & { id?: string }): PromoBanner {
+  return {
+    id: input.id || "banner",
+    title: input.title || "Banner",
+    message: input.message || "Message",
+    type: input.type || "top_bar",
+    placement: input.placement || "home",
+    placements: input.placements || ["home"],
+    isActive: input.isActive === true,
+    startsAt: input.startsAt || "",
+    endsAt: input.endsAt || "",
+    priority: Number(input.priority || 10),
+    buttonLabel: input.buttonLabel || "",
+    buttonUrl: input.buttonUrl || "",
+    linkedCouponId: input.linkedCouponId || "",
+    linkedPromoCode: input.linkedPromoCode || "",
+    deletedLinkedCouponId: input.deletedLinkedCouponId || "",
+    variant: input.variant || "promo",
+    dismissible: input.dismissible === true,
+    isArchived: input.isArchived === true,
+    isTemplate: input.isTemplate === true,
+  };
 }
 
 function missingDependencyFlagName() {
