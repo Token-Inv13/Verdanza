@@ -47,6 +47,7 @@
     "seed:admin": "node --import tsx scripts/bootstrapAdmin.ts",
     "seed:admin-auth": "node --import tsx scripts/bootstrapAdminAuth.ts",
     "repair:launch-promo-banner": "node --import tsx scripts/repairLaunchPromoBanner.ts",
+    "repair:welcome10-promo-banner": "node --import tsx scripts/repairWelcome10PromoBanner.ts",
     "migrate:fixed-price-formats:dry-run": "node --import tsx scripts/migrateFixedPriceFormats.ts",
     "migrate:fixed-price-formats:apply": "node --import tsx scripts/migrateFixedPriceFormats.ts --apply --confirm=verdanza-fixed-price-v1",
     "migrate:product-references-v2:dry-run": "node --import tsx scripts/migrateProductReferencesV2.ts",
