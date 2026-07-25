@@ -14,7 +14,7 @@ import {
   type PurchaseAnalyticsProcessResult,
 } from "./_server/purchaseAnalytics.js";
 import {
-  computeWeightedSupplierCosts,
+  computeWeightedSupplierCostsAsOf,
   resolveOrderItemPurchaseCost,
 } from "../src/lib/accountingCosts.js";
 import type {
@@ -345,8 +345,9 @@ async function capturePurchaseCostSnapshots({
   const supplierSnapshot = await transaction.get(
     db.collection("supplierPurchases").where("status", "==", "validated"),
   );
-  const weightedSupplierCosts = computeWeightedSupplierCosts(
+  const weightedSupplierCosts = computeWeightedSupplierCostsAsOf(
     supplierSnapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() }) as SupplierPurchase),
+    capturedAt,
   ).costByProductId;
   const missingSupplierCostIds = productIds.filter((productId) => !weightedSupplierCosts.has(productId));
   const manualCostEntries = await Promise.all(

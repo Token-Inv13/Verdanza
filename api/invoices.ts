@@ -1,8 +1,11 @@
+import { createHash } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
+import { PDFParse } from "pdf-parse";
 import { assertAdminUser } from "./_server/adminAuth.js";
 import { getAdminDb } from "./_server/firebaseAdmin.js";
 import {
   assertMethod,
+  readRawBody,
   sendJson,
   type VercelRequestLike,
   type VercelResponseLike,
@@ -11,6 +14,15 @@ import { renderInvoicePdf } from "./_server/invoicePdf.js";
 import { sendInvoiceToCustomerEmail } from "./_server/email.js";
 import { BRAND_LOGO } from "../src/lib/brandAssets.js";
 import { normalizeSupplierPurchaseInput } from "../src/lib/accountingCosts.js";
+import { buildCustomerInvoiceLines } from "../src/lib/customerInvoiceLines.js";
+import {
+  normalizeSupplierLabel,
+  normalizeText,
+  parseSupplierInvoiceText,
+} from "../src/lib/supplierInvoiceParsers.js";
+import {
+  formatProductInternalReference,
+} from "../src/lib/productReferences.js";
 import type {
   BillingSettings,
   Invoice,
@@ -18,6 +30,8 @@ import type {
   InvoiceStatus,
   Order,
   PaymentStatus,
+  Product,
+  SupplierProductAlias,
   SupplierPurchase,
 } from "../src/types/index.js";
 
@@ -122,6 +136,12 @@ export default async function handler(
     }
 
     if (assertMethod(request, response, "POST")) return;
+    if (isPdfAnalysisRequest(request)) {
+      const result = await analyzeSupplierInvoicePdf(db, request);
+      sendJson(response, result);
+      return;
+    }
+
     const body = parseJsonObject(request.body);
 
     if (body.action === "createFromOrder") {
@@ -188,6 +208,18 @@ export default async function handler(
       return;
     }
 
+    if (body.action === "upsertProductAdmin") {
+      const result = await upsertProductAdmin(db, body.product);
+      sendJson(response, result);
+      return;
+    }
+
+    if (body.action === "saveSupplierProductAlias") {
+      const result = await saveSupplierProductAlias(db, body.alias, adminUser);
+      sendJson(response, result);
+      return;
+    }
+
     if (body.action === "saveSupplierPurchase") {
       const result = await saveSupplierPurchase(db, body.purchase, adminUser);
       sendJson(response, result);
@@ -229,13 +261,7 @@ async function createInvoiceFromOrder(db: FirebaseFirestore.Firestore, orderId: 
   const order = { id: orderSnapshot.id, ...orderSnapshot.data() } as Order;
   const invoiceNumber = await nextInvoiceNumber(db);
   const now = new Date().toISOString();
-  const lines = order.items.map((item) => ({
-    id: item.productId,
-    label: item.name,
-    quantity: item.quantity,
-    unitPrice: Number(item.unitPrice || 0),
-    total: roundMoney(Number(item.unitPrice || 0) * Number(item.quantity || 0)),
-  }));
+  const lines = buildCustomerInvoiceLines(order);
   const invoiceRef = db.collection("invoices").doc();
   const invoice: Invoice = {
     id: invoiceRef.id,
@@ -360,6 +386,12 @@ async function saveSupplierPurchase(
   if (!normalized.invoiceNumber) throw new Error("Numero de facture fournisseur requis.");
   if (!normalized.invoiceDate) throw new Error("Date de facture fournisseur requise.");
   if (normalized.status === "cancelled") throw new Error("Utilisez l'action d'annulation dediee.");
+  if (normalized.status === "validated") {
+    const allProductsConfirmed = normalized.lines.every((line) => Boolean(line.productId));
+    if (!allProductsConfirmed) {
+      throw new Error("Validation refusee: chaque ligne fournisseur doit etre liee a un produit.");
+    }
+  }
 
   const now = new Date().toISOString();
   const ref = existingRef || db.collection("supplierPurchases").doc();
@@ -373,9 +405,165 @@ async function saveSupplierPurchase(
     updatedAt: now,
     updatedBy: adminUser.email || adminUser.uid,
     validatedAt: isValidation ? existing?.validatedAt || now : normalized.validatedAt,
+    sourceFileSha256: normalized.sourceFileSha256 || existing?.sourceFileSha256,
+    importedFromPdfAt: normalized.importedFromPdfAt || existing?.importedFromPdfAt,
   };
   await ref.set(payload, { merge: true });
   return { ok: true, purchaseId: ref.id };
+}
+
+async function upsertProductAdmin(db: FirebaseFirestore.Firestore, rawProduct: unknown) {
+  if (!rawProduct || typeof rawProduct !== "object") throw new Error("Produit invalide.");
+  const input = rawProduct as Partial<Product>;
+  const id = String(input.id || input.slug || "").trim();
+  if (!id) throw new Error("Identifiant produit requis.");
+  const ref = db.collection("products").doc(id);
+  const payload = { ...input };
+  delete (payload as Record<string, unknown>).id;
+  delete (payload as Record<string, unknown>).internalReference;
+
+  const productId = await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const existingReference = snapshot.data()?.internalReference;
+    const update: Record<string, unknown> = {
+      ...payload,
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    if (!snapshot.exists || !existingReference) {
+      update.internalReference = await nextProductInternalReference(db, transaction);
+      update.createdAt = FieldValue.serverTimestamp();
+    }
+    transaction.set(ref, update, { merge: true });
+    return id;
+  });
+
+  return { ok: true, productId };
+}
+
+async function nextProductInternalReference(
+  db: FirebaseFirestore.Firestore,
+  transaction: FirebaseFirestore.Transaction,
+) {
+  const counterRef = db.collection("counters").doc("productReferences");
+  const counterSnapshot = await transaction.get(counterRef);
+  const current = Number(counterSnapshot.data()?.value || 0);
+  const next = current + 1;
+  transaction.set(
+    counterRef,
+    {
+      value: next,
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+  return formatProductInternalReference(next);
+}
+
+async function saveSupplierProductAlias(
+  db: FirebaseFirestore.Firestore,
+  rawAlias: unknown,
+  adminUser: { email?: string | null; uid: string },
+) {
+  if (!rawAlias || typeof rawAlias !== "object") throw new Error("Alias fournisseur invalide.");
+  const input = rawAlias as Partial<SupplierProductAlias>;
+  const supplierName = String(input.supplierName || "").trim();
+  const originalLabel = String(input.originalLabel || "").trim();
+  const productId = String(input.productId || "").trim();
+  if (!supplierName || !originalLabel || !productId) {
+    throw new Error("Fournisseur, libelle et produit requis pour memoriser l'alias.");
+  }
+  const productSnapshot = await db.collection("products").doc(productId).get();
+  if (!productSnapshot.exists) throw new Error("Produit introuvable pour cet alias.");
+  const product = { id: productSnapshot.id, ...productSnapshot.data() } as Product;
+  const id = `${slugifyForId(supplierName)}-${slugifyForId(originalLabel)}`.slice(0, 180);
+  const now = new Date().toISOString();
+  await db.collection("supplierProductAliases").doc(id).set(
+    {
+      id,
+      supplierName,
+      normalizedSupplierName: normalizeText(supplierName),
+      originalLabel,
+      normalizedOriginalLabel: normalizeSupplierLabel(originalLabel),
+      productId,
+      productInternalReference: product.internalReference || "",
+      productName: product.name || "",
+      updatedAt: now,
+      updatedBy: adminUser.email || adminUser.uid,
+      createdAt: input.createdAt || now,
+      createdBy: input.createdBy || adminUser.email || adminUser.uid,
+    },
+    { merge: true },
+  );
+  return { ok: true, aliasId: id };
+}
+
+async function analyzeSupplierInvoicePdf(
+  db: FirebaseFirestore.Firestore,
+  request: VercelRequestLike,
+) {
+  const buffer = await pdfBufferFromRequest(request);
+  if (buffer.length > 5 * 1024 * 1024) throw new Error("PDF trop volumineux (5 Mo max).");
+  if (buffer.subarray(0, 4).toString("utf8") !== "%PDF") {
+    throw new Error("Fichier PDF invalide.");
+  }
+
+  const sha256 = createHash("sha256").update(buffer).digest("hex");
+  const parser = new PDFParse({ data: buffer });
+  const parsed = await parser.getText();
+  await parser.destroy();
+  const text = String(parsed.text || "").trim();
+  if (!text) throw new Error("PDF sans texte exploitable. OCR non pris en charge.");
+
+  const [productsSnapshot, aliasesSnapshot] = await Promise.all([
+    db.collection("products").get(),
+    db.collection("supplierProductAliases").get(),
+  ]);
+  const products = productsSnapshot.docs.map((entry) => ({
+    id: entry.id,
+    ...entry.data(),
+  })) as Product[];
+  const aliases = aliasesSnapshot.docs.map((entry) => ({
+    id: entry.id,
+    ...entry.data(),
+  })) as SupplierProductAlias[];
+  const result = parseSupplierInvoiceText(text, { products, aliases });
+  const duplicate = await supplierPurchaseDuplicate(db, {
+    sha256,
+    supplierName: result.purchase.supplierName || "",
+    invoiceNumber: result.purchase.invoiceNumber || "",
+  });
+
+  return {
+    ...result,
+    fileSha256: sha256,
+    duplicate,
+  };
+}
+
+async function supplierPurchaseDuplicate(
+  db: FirebaseFirestore.Firestore,
+  input: { sha256: string; supplierName: string; invoiceNumber: string },
+) {
+  const byHash = await db
+    .collection("supplierPurchases")
+    .where("sourceFileSha256", "==", input.sha256)
+    .limit(1)
+    .get();
+  if (!byHash.empty) return { found: true, reason: "file_hash", purchaseId: byHash.docs[0].id };
+
+  if (!input.supplierName || !input.invoiceNumber) return { found: false };
+  const byInvoice = await db
+    .collection("supplierPurchases")
+    .where("invoiceNumber", "==", input.invoiceNumber)
+    .limit(10)
+    .get();
+  const sameSupplier = byInvoice.docs.find(
+    (entry) => String(entry.data().supplierName || "") === input.supplierName,
+  );
+  if (sameSupplier) {
+    return { found: true, reason: "supplier_invoice_number", purchaseId: sameSupplier.id };
+  }
+  return { found: false };
 }
 
 async function deleteSupplierPurchase(db: FirebaseFirestore.Firestore, purchaseId: string) {
@@ -436,6 +624,8 @@ function normalizeSupplierPurchaseForResponse(purchase: Partial<SupplierPurchase
     createdAt: parseTimestamp(purchase.createdAt),
     updatedAt: parseTimestamp(purchase.updatedAt),
     validatedAt: parseTimestamp(purchase.validatedAt),
+    sourceFileSha256: purchase.sourceFileSha256 || "",
+    importedFromPdfAt: parseTimestamp(purchase.importedFromPdfAt),
     cancelledAt: parseTimestamp(purchase.cancelledAt),
     cancelledBy: purchase.cancelledBy || "",
     createdBy: purchase.createdBy || "",
@@ -479,6 +669,29 @@ function parseManualInvoice(value: unknown) {
     paymentStatus,
     internalNote: input.internalNote || "",
   };
+}
+
+function isPdfAnalysisRequest(request: VercelRequestLike) {
+  const contentType = String(request.headers["content-type"] || "");
+  return (
+    requestAction(request) === "analyzeSupplierInvoicePdf" &&
+    contentType.includes("application/pdf")
+  );
+}
+
+async function pdfBufferFromRequest(request: VercelRequestLike) {
+  if (Buffer.isBuffer(request.body)) return request.body;
+  if (request.body instanceof Uint8Array) return Buffer.from(request.body);
+  if (typeof request.body === "string") return Buffer.from(request.body, "binary");
+  return readRawBody(request);
+}
+
+function requestAction(request: VercelRequestLike) {
+  return new URL(request.url || "/", "https://verdanza.local").searchParams.get("action") || "";
+}
+
+function slugifyForId(value: string) {
+  return normalizeText(value).replace(/\s+/g, "-").slice(0, 96) || "alias";
 }
 
 function parseJsonObject(value: unknown): Record<string, unknown> {

@@ -10,6 +10,7 @@ export type CultureType =
 
 export type Product = {
   id: string;
+  internalReference?: string;
   slug: string;
   name: string;
   category: ProductCategory;
@@ -256,6 +257,7 @@ export type PaymentStatus = "to_confirm" | "payment_link_sent" | "pending" | "pa
 
 export type OrderItem = {
   productId: string;
+  productInternalReference?: string;
   name: string;
   quantity: number;
   unitPrice: number;
@@ -275,6 +277,21 @@ export type ProductCost = {
   updatedBy?: string;
 };
 
+export type SupplierProductAlias = {
+  id: string;
+  supplierName: string;
+  normalizedSupplierName: string;
+  originalLabel: string;
+  normalizedOriginalLabel: string;
+  productId: string;
+  productInternalReference?: string;
+  productName?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
+};
+
 export type SupplierPurchaseStatus = "draft" | "validated" | "cancelled";
 export type SupplierPurchaseCostBase = "HT" | "TTC";
 
@@ -282,6 +299,10 @@ export type SupplierPurchaseLine = {
   id: string;
   productId: string;
   productName?: string;
+  productInternalReference?: string;
+  supplierOriginalLabel?: string;
+  matchSource?: "alias" | "internal_reference" | "normalized_name" | "slug_variant" | "manual";
+  matchConfidence?: "confirmed" | "suggested" | "ambiguous" | "missing";
   quantityGrams: number;
   grossAmountExVat: number;
   vatRate: number;
@@ -311,6 +332,8 @@ export type SupplierPurchase = {
   createdAt?: string;
   updatedAt?: string;
   validatedAt?: string;
+  sourceFileSha256?: string;
+  importedFromPdfAt?: string;
   cancelledAt?: string;
   cancelledBy?: string;
   createdBy?: string;
@@ -475,6 +498,9 @@ export type InvoiceLine = {
   quantity: number;
   unitPrice: number;
   total: number;
+  note?: string;
+  isGift?: boolean;
+  promotionLabel?: string;
 };
 
 export type BillingSettings = {

@@ -57,7 +57,7 @@ export async function renderInvoicePdf(invoice: Invoice, settings: BillingSettin
   y -= 20;
 
   for (const line of invoice.lines) {
-    drawText(line.label, 40, y, 10, font, rgb(0, 0, 0));
+    drawText(line.isGift || line.note ? `${line.label} (${line.note || "Offert"})` : line.label, 40, y, 10, font, rgb(0, 0, 0));
     drawText(String(line.quantity), 330, y, 10, font, rgb(0, 0, 0));
     drawText(formatMoney(line.unitPrice), 385, y, 10, font, rgb(0, 0, 0));
     drawText(formatMoney(line.total), 480, y, 10, font, rgb(0, 0, 0));

@@ -230,6 +230,7 @@ export async function priceCheckout(
 
     orderItems.push({
       productId: product.id,
+      productInternalReference: product.internalReference || "",
       name: product.name,
       quantity: item.quantity,
       unitPrice: product.price,

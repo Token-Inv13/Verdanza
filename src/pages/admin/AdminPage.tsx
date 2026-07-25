@@ -56,9 +56,12 @@ import {
 } from "../../services/invoicesService";
 import { saveProductCostAdmin } from "../../services/productCostsService";
 import {
+  analyzeSupplierInvoicePdfAdmin,
   cancelSupplierPurchaseAdmin,
   deleteSupplierPurchaseAdmin,
+  saveSupplierProductAliasAdmin,
   saveSupplierPurchaseAdmin,
+  type SupplierInvoiceAnalysisResult,
 } from "../../services/supplierPurchasesService";
 import {
   getAdminPaymentLinks,
@@ -508,6 +511,12 @@ export function AdminPage({ section }: { section: string }) {
     await refresh();
   }
 
+  async function handleSupplierAliasSave(alias: { supplierName: string; originalLabel: string; productId: string }) {
+    await saveSupplierProductAliasAdmin(alias);
+    setMessage("Correspondance fournisseur memorisee.");
+    await refresh();
+  }
+
   async function handleSupplierPurchaseDelete(purchase: SupplierPurchase) {
     const confirmed = window.confirm(
       `Suppression definitive de l'achat fournisseur ${purchase.invoiceNumber || purchase.id}. Cette action est irreversible. Confirmer ?`,
@@ -810,6 +819,7 @@ export function AdminPage({ section }: { section: string }) {
           orders={orders}
           onSaveProductCost={handleProductCostSave}
           onSaveSupplierPurchase={handleSupplierPurchaseSave}
+          onSaveSupplierAlias={handleSupplierAliasSave}
           onDeleteSupplierPurchase={handleSupplierPurchaseDelete}
           onCancelSupplierPurchase={handleSupplierPurchaseCancel}
         />
@@ -1030,10 +1040,11 @@ function ProductTable({
   onFlagChange: (product: Product, key: "isActive" | "isFeatured") => Promise<void>;
 }) {
   const [categoryFilter, setCategoryFilter] = useState<ProductCategoryFilter>("all");
+  const [search, setSearch] = useState("");
   const categoryFilters = buildProductCategoryFilters(products);
-  const visibleProducts = products.filter((product) =>
-    productMatchesCategoryFilter(product, categoryFilter),
-  );
+  const visibleProducts = products
+    .filter((product) => productMatchesCategoryFilter(product, categoryFilter))
+    .filter((product) => productMatchesAdminSearch(product, search));
 
   return (
     <section className="overflow-hidden rounded-lg border border-forest/10 bg-ivory">
@@ -1055,6 +1066,14 @@ function ProductTable({
               </button>
             ))}
           </div>
+        </div>
+        <div className="mt-3 max-w-sm">
+          <Input
+            label="Recherche nom, slug ou reference"
+            value={search}
+            onChange={setSearch}
+            placeholder="VDZ-000001"
+          />
         </div>
       </div>
       {!products.length && (
@@ -1092,6 +1111,9 @@ function ProductTable({
                     <div>
                       <strong className="block text-forest">{product.name}</strong>
                       <span className="text-xs text-ink/50">{product.slug}</span>
+                      <span className="block text-xs font-mono text-ink/55">
+                        {product.internalReference || "Reference a attribuer"}
+                      </span>
                     </div>
                   </div>
                 </td>
@@ -1152,8 +1174,11 @@ function StockTable({
   ) => Promise<void>;
 }) {
   const [filter, setFilter] = useState<StockFilter>("all");
+  const [search, setSearch] = useState("");
   const stockFilters = buildStockFilters(products);
-  const visibleProducts = products.filter((product) => productMatchesStockFilter(product, filter));
+  const visibleProducts = products
+    .filter((product) => productMatchesStockFilter(product, filter))
+    .filter((product) => productMatchesAdminSearch(product, search));
 
   return (
     <section className="mt-8 grid gap-4">
@@ -1175,6 +1200,14 @@ function StockTable({
               </button>
             ))}
           </div>
+        </div>
+        <div className="mt-3 max-w-sm">
+          <Input
+            label="Recherche nom, slug ou reference"
+            value={search}
+            onChange={setSearch}
+            placeholder="VDZ-000001"
+          />
         </div>
       </div>
       {!visibleProducts.length && (
@@ -1215,6 +1248,9 @@ function StockRow({
         />
         <div>
           <h2 className="font-display text-2xl leading-tight text-forest">{product.name}</h2>
+          <span className="text-xs font-mono text-ink/50">
+            {product.internalReference || "Reference a attribuer"}
+          </span>
           <div className="mt-2 flex flex-wrap gap-2">
             <AdminBadge tone={product.isActive ? "success" : "muted"}>
               {product.isActive ? "Actif" : "Inactif"}
@@ -2999,7 +3035,7 @@ function CustomerOrdersPanel({ orders }: { orders: AdminOrderRow[] }) {
               </AdminBadge>
             </div>
             <p className="mt-2 text-xs text-ink/60">
-              {order.items.map((item) => `${item.name} x${item.quantity} g`).join(", ") || "Produits non renseignes"}
+              {order.items.map(formatOrderItemLine).join(", ") || "Produits non renseignes"}
             </p>
           </article>
         ))}
@@ -3243,6 +3279,7 @@ function AccountingPanel({
   orders,
   onSaveProductCost,
   onSaveSupplierPurchase,
+  onSaveSupplierAlias,
   onDeleteSupplierPurchase,
   onCancelSupplierPurchase,
 }: {
@@ -3254,6 +3291,7 @@ function AccountingPanel({
   orders: AdminOrderRow[];
   onSaveProductCost: (productId: string, purchasePricePerGram: number | null) => Promise<void>;
   onSaveSupplierPurchase: (purchase: Partial<SupplierPurchase>) => Promise<void>;
+  onSaveSupplierAlias: (alias: { supplierName: string; originalLabel: string; productId: string }) => Promise<void>;
   onDeleteSupplierPurchase: (purchase: SupplierPurchase) => Promise<void>;
   onCancelSupplierPurchase: (purchase: SupplierPurchase) => Promise<void>;
 }) {
@@ -3261,6 +3299,7 @@ function AccountingPanel({
   const todayInput = toDateInputValue(new Date());
   const [customStart, setCustomStart] = useState(todayInput);
   const [customEnd, setCustomEnd] = useState(todayInput);
+  const [costFilter, setCostFilter] = useState<ProductCostFilter>("all");
   const [editingSupplierPurchase, setEditingSupplierPurchase] =
     useState<Partial<SupplierPurchase> | null>(null);
   const productCostMap = useMemo(
@@ -3270,6 +3309,18 @@ function AccountingPanel({
   const weightedSupplierCosts = useMemo(
     () => computeWeightedSupplierCosts(supplierPurchases).costByProductId,
     [supplierPurchases],
+  );
+  const productCostFilters = useMemo(
+    () => buildProductCostFilters(products, productCostMap, weightedSupplierCosts),
+    [productCostMap, products, weightedSupplierCosts],
+  );
+  const filteredCostProducts = useMemo(
+    () => products.filter((product) => productMatchesProductCostFilter(product, productCostMap, weightedSupplierCosts, costFilter)),
+    [costFilter, productCostMap, products, weightedSupplierCosts],
+  );
+  const activeProductsMissingCost = useMemo(
+    () => products.filter((product) => product.isActive && !weightedSupplierCosts.has(product.id) && productCostMap.get(product.id)?.purchasePricePerGram == null),
+    [productCostMap, products, weightedSupplierCosts],
   );
   const periodRange = useMemo(
     () => currentLocalPeriodRange(period, customStart, customEnd),
@@ -3542,11 +3593,13 @@ function AccountingPanel({
         <SupplierPurchaseForm
           products={products}
           editingPurchase={editingSupplierPurchase}
+          onImportedPurchase={setEditingSupplierPurchase}
           onCancelEdit={() => setEditingSupplierPurchase(null)}
           onSave={async (purchase) => {
             await onSaveSupplierPurchase(purchase);
             setEditingSupplierPurchase(null);
           }}
+          onSaveAlias={onSaveSupplierAlias}
         />
         <SupplierPurchasesTable
           purchases={supplierPurchases}
@@ -3576,21 +3629,42 @@ function AccountingPanel({
             Ces valeurs sont stockées dans <span className="font-mono">productCosts</span> et utilisées uniquement si aucun coût fournisseur pondéré n'existe.
           </p>
         </div>
+        {!!activeProductsMissingCost.length && (
+          <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <strong className="block">Produits actifs sans cout.</strong>
+            <span className="mt-1 block">
+              {activeProductsMissingCost.map((product) => product.internalReference || product.name).join(", ")}
+            </span>
+          </div>
+        )}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {productCostFilters.map((filter) => (
+            <button
+              key={filter.value}
+              type="button"
+              className={costFilter === filter.value ? "btn-primary min-h-9 px-3 py-1.5 text-xs" : "btn-secondary min-h-9 px-3 py-1.5 text-xs"}
+              onClick={() => setCostFilter(filter.value)}
+            >
+              {filter.label} Â· {filter.count}
+            </button>
+          ))}
+        </div>
         <div className="mt-5 overflow-x-auto">
-          <table className="w-full min-w-[860px] text-left text-sm">
+          <table className="w-full min-w-[1180px] text-left text-sm">
             <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
               <tr>
-                {["Produit", "Catégorie", "Statut", "Prix d'achat / g", "Action"].map((header) => (
+                {["Produit", "Reference", "Categorie", "Statut", "Fournisseur pondere", "Fallback manuel", "Source utilisee", "Ecart", "Action"].map((header) => (
                   <th key={header} className="px-4 py-3 font-medium">{header}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {products.map((product) => (
+              {filteredCostProducts.map((product) => (
                 <ProductCostRow
                   key={product.id}
                   product={product}
                   cost={productCostMap.get(product.id)}
+                  supplierCost={weightedSupplierCosts.get(product.id)}
                   onSave={onSaveProductCost}
                 />
               ))}
@@ -3616,12 +3690,16 @@ const emptySupplierLine = (productId = ""): SupplierPurchaseLine => ({
 function SupplierPurchaseForm({
   products,
   editingPurchase,
+  onImportedPurchase,
   onSave,
+  onSaveAlias,
   onCancelEdit,
 }: {
   products: Product[];
   editingPurchase: Partial<SupplierPurchase> | null;
+  onImportedPurchase: (purchase: Partial<SupplierPurchase>) => void;
   onSave: (purchase: Partial<SupplierPurchase>) => Promise<void>;
+  onSaveAlias: (alias: { supplierName: string; originalLabel: string; productId: string }) => Promise<void>;
   onCancelEdit: () => void;
 }) {
   const firstProductId = products[0]?.id || "";
@@ -3684,6 +3762,7 @@ function SupplierPurchaseForm({
       lines: lines.map((line) => ({
         ...line,
         productName: productById.get(line.productId)?.name || line.productName || "",
+        productInternalReference: productById.get(line.productId)?.internalReference || line.productInternalReference || "",
         quantityGrams: Number(line.quantityGrams || 0),
         grossAmountExVat: Number(line.grossAmountExVat || 0),
         vatRate: Number(line.vatRate || vatRate || 0),
@@ -3714,6 +3793,8 @@ function SupplierPurchaseForm({
   }
 
   return (
+    <>
+    <SupplierInvoiceImportPanel onUseDraft={onImportedPurchase} />
     <form className="mt-5 rounded-lg border border-forest/10 bg-cream p-4" onSubmit={handleSubmit}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
@@ -3750,7 +3831,7 @@ function SupplierPurchaseForm({
         <table className="w-full min-w-[920px] text-left text-sm">
           <thead className="bg-ivory text-xs uppercase tracking-[0.14em] text-forest/70">
             <tr>
-              {["Produit", "Quantite g", "Montant HT", "TVA %", "Remise ligne", "Action"].map((header) => (
+              {["Produit", "Libelle fournisseur", "Quantite g", "Montant HT", "TVA %", "Remise ligne", "Alias", "Action"].map((header) => (
                 <th key={header} className="px-3 py-2 font-medium">{header}</th>
               ))}
             </tr>
@@ -3760,10 +3841,23 @@ function SupplierPurchaseForm({
               <tr key={line.id} className="border-t border-forest/10">
                 <td className="px-3 py-3">
                   <select className="input-field min-w-56" value={line.productId} onChange={(event) => updateLine(index, { productId: event.target.value })}>
+                    <option value="">Selectionner un produit</option>
                     {products.map((product) => (
-                      <option key={product.id} value={product.id}>{product.name}</option>
+                      <option key={product.id} value={product.id}>
+                        {product.internalReference ? `${product.internalReference} - ` : ""}{product.name}
+                      </option>
                     ))}
                   </select>
+                  {line.matchConfidence && (
+                    <span className="mt-1 block text-xs text-ink/50">
+                      {supplierMatchLabel(line.matchConfidence, line.matchSource)}
+                    </span>
+                  )}
+                </td>
+                <td className="px-3 py-3">
+                  <span className="block min-w-48 text-xs text-ink/60">
+                    {line.supplierOriginalLabel || "-"}
+                  </span>
                 </td>
                 <td className="px-3 py-3">
                   <input className="input-field max-w-32" type="number" min="0.001" step="0.001" value={line.quantityGrams || ""} onChange={(event) => updateLine(index, { quantityGrams: Number(event.target.value) })} />
@@ -3776,6 +3870,23 @@ function SupplierPurchaseForm({
                 </td>
                 <td className="px-3 py-3">
                   <input className="input-field max-w-32" type="number" min="0" step="0.01" value={line.lineDiscountAmount || ""} onChange={(event) => updateLine(index, { lineDiscountAmount: Number(event.target.value) })} />
+                </td>
+                <td className="px-3 py-3">
+                  {line.supplierOriginalLabel && line.productId ? (
+                    <button
+                      type="button"
+                      className="btn-secondary min-h-9 px-3 py-2 text-xs"
+                      onClick={() => void onSaveAlias({
+                        supplierName,
+                        originalLabel: line.supplierOriginalLabel || "",
+                        productId: line.productId,
+                      })}
+                    >
+                      Memoriser
+                    </button>
+                  ) : (
+                    <span className="text-xs text-ink/45">-</span>
+                  )}
                 </td>
                 <td className="px-3 py-3">
                   <button type="button" className="btn-secondary min-h-9 px-3 py-2 text-xs" onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))} disabled={lines.length <= 1}>
@@ -3807,6 +3918,123 @@ function SupplierPurchaseForm({
         </div>
       </div>
     </form>
+    </>
+  );
+}
+
+function SupplierInvoiceImportPanel({
+  onUseDraft,
+}: {
+  onUseDraft: (purchase: Partial<SupplierPurchase>) => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [analysis, setAnalysis] = useState<SupplierInvoiceAnalysisResult | null>(null);
+  const [error, setError] = useState("");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  async function handleAnalyze() {
+    if (!file) return;
+    setError("");
+    setIsAnalyzing(true);
+    try {
+      const result = await analyzeSupplierInvoicePdfAdmin(file);
+      setAnalysis(result);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Analyse PDF impossible.");
+      setAnalysis(null);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }
+
+  function handleUseDraft() {
+    if (!analysis) return;
+    onUseDraft({
+      ...analysis.purchase,
+      status: "draft",
+      sourceFileSha256: analysis.fileSha256,
+      importedFromPdfAt: new Date().toISOString(),
+    });
+  }
+
+  return (
+    <div className="mt-5 rounded-lg border border-forest/10 bg-ivory p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.16em] text-champagne">Import PDF fournisseur</p>
+          <h3 className="font-display text-2xl text-forest">Analyser une facture d'achat</h3>
+          <p className="mt-1 text-sm text-ink/60">
+            PDF texte uniquement, 5 Mo max. L'analyse cree un brouillon, jamais un achat valide.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <input
+            className="input-field max-w-72"
+            type="file"
+            accept="application/pdf"
+            onChange={(event) => {
+              setFile(event.target.files?.[0] || null);
+              setAnalysis(null);
+              setError("");
+            }}
+          />
+          <button
+            type="button"
+            className="btn-secondary min-h-10 px-4 py-2"
+            disabled={!file || isAnalyzing}
+            onClick={() => void handleAnalyze()}
+          >
+            {isAnalyzing ? "Analyse..." : "Analyser"}
+          </button>
+        </div>
+      </div>
+      {error && (
+        <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {error}
+        </p>
+      )}
+      {analysis && (
+        <div className="mt-4 rounded-md border border-forest/10 bg-cream p-3 text-sm">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <strong className="block text-forest">
+                {analysis.purchase.supplierName || "Fournisseur a verifier"} - {analysis.purchase.invoiceNumber || "numero manquant"}
+              </strong>
+              <span className="text-xs text-ink/55">
+                Parseur {analysis.parserName} - SHA-256 {analysis.fileSha256.slice(0, 12)}
+              </span>
+              {analysis.duplicate?.found && (
+                <span className="mt-1 block text-xs font-semibold text-red-700">
+                  Doublon detecte ({analysis.duplicate.reason}) : {analysis.duplicate.purchaseId}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              className="btn-primary min-h-9 px-3 py-2 text-xs"
+              disabled={analysis.isBlocked || analysis.duplicate?.found}
+              onClick={handleUseDraft}
+            >
+              Utiliser ce brouillon
+            </button>
+          </div>
+          {!!analysis.ignoredFreeLineLabels.length && (
+            <p className="mt-2 text-xs text-ink/55">
+              Lignes offertes fournisseur exclues : {analysis.ignoredFreeLineLabels.join(", ")}
+            </p>
+          )}
+          {!!analysis.issues.length && (
+            <ul className="mt-2 grid gap-1 text-xs text-ink/70">
+              {analysis.issues.map((issue) => (
+                <li key={`${issue.level}-${issue.message}`}>
+                  {issue.level.toUpperCase()} - {issue.message}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -3869,7 +4097,7 @@ function SupplierPurchasesTable({
                 <td className="px-4 py-4">
                   {purchase.lines.map((line) => (
                     <span key={line.id} className="block text-xs text-ink/60">
-                      {productById.get(line.productId)?.name || line.productName || line.productId} · {formatQuantity(Number(line.quantityGrams || 0))} g · {formatCurrency(Number(line.effectiveCostPerGram || 0))}/g
+                      {line.productInternalReference || productById.get(line.productId)?.internalReference || "Sans ref"} · {productById.get(line.productId)?.name || line.productName || line.productId} · {formatQuantity(Number(line.quantityGrams || 0))} g · {formatCurrency(Number(line.effectiveCostPerGram || 0))}/g
                     </span>
                   ))}
                 </td>
@@ -3909,10 +4137,12 @@ function SupplierPurchasesTable({
 function ProductCostRow({
   product,
   cost,
+  supplierCost,
   onSave,
 }: {
   product: Product;
   cost?: ProductCost;
+  supplierCost?: WeightedSupplierCost;
   onSave: (productId: string, purchasePricePerGram: number | null) => Promise<void>;
 }) {
   const [value, setValue] = useState(optionalNumberInputValue(cost?.purchasePricePerGram));
@@ -3923,6 +4153,18 @@ function ProductCostRow({
 
   const parsed = value.trim() === "" ? null : Number(value);
   const isInvalid = parsed !== null && (!Number.isFinite(parsed) || parsed < 0);
+  const manualCost = optionalProductCostValue(cost);
+  const supplierUnitCost = supplierCost?.weightedCostPerGram ?? null;
+  const usedCost = supplierUnitCost ?? manualCost;
+  const usedSource = supplierUnitCost != null
+    ? "Fournisseur pondere"
+    : manualCost != null
+      ? "Fallback manuel"
+      : "Cout manquant";
+  const gap = supplierUnitCost != null && manualCost != null ? manualCost - supplierUnitCost : null;
+  const gapRate = gap != null && supplierUnitCost != null && supplierUnitCost > 0
+    ? gap / supplierUnitCost
+    : null;
 
   return (
     <tr className="border-t border-forest/10">
@@ -3930,11 +4172,26 @@ function ProductCostRow({
         <strong className="block text-forest">{product.name}</strong>
         <span className="text-xs text-ink/50">{product.id}</span>
       </td>
+      <td className="px-4 py-4 font-mono text-xs text-ink/60">
+        {product.internalReference || "A attribuer"}
+      </td>
       <td className="px-4 py-4">{productCategoryLabel(product.category)}</td>
       <td className="px-4 py-4">
         <AdminBadge tone={product.isActive ? "success" : "muted"}>
           {product.isActive ? "Actif" : "Inactif"}
         </AdminBadge>
+      </td>
+      <td className="px-4 py-4">
+        {supplierUnitCost == null ? (
+          <span className="text-xs text-ink/45">-</span>
+        ) : (
+          <>
+            <strong className="block text-forest">{formatCurrency(supplierUnitCost)}/g</strong>
+            <span className="text-xs text-ink/50">
+              {formatQuantity(supplierCost?.totalQuantityGrams || 0)} g achetes
+            </span>
+          </>
+        )}
       </td>
       <td className="px-4 py-4">
         <input
@@ -3948,6 +4205,24 @@ function ProductCostRow({
         />
         {cost?.purchasePricePerGram == null && (
           <span className="mt-1 block text-xs text-amber-700">Coût non renseigné</span>
+        )}
+      </td>
+      <td className="px-4 py-4">
+        <AdminBadge tone={usedCost == null ? "danger" : supplierUnitCost != null ? "success" : "warning"}>
+          {usedSource}
+        </AdminBadge>
+        {usedCost != null && (
+          <span className="mt-1 block text-xs text-ink/55">{formatCurrency(usedCost)}/g</span>
+        )}
+      </td>
+      <td className="px-4 py-4">
+        {gap == null ? (
+          <span className="text-xs text-ink/45">-</span>
+        ) : (
+          <>
+            <span className="block">{formatCurrency(gap)}/g</span>
+            <span className="text-xs text-ink/50">{formatRate(gapRate)}</span>
+          </>
         )}
       </td>
       <td className="px-4 py-4">
@@ -4502,7 +4777,7 @@ function AdminOrders({
               <div className="mt-4 rounded-md bg-cream p-3 text-xs leading-5 text-ink/65">
                 <strong className="block text-forest">{order.delivery}</strong>
                 {order.items.length
-                  ? order.items.map((item) => `${item.name} x${item.quantity} g`).join(", ")
+                  ? order.items.map(formatOrderItemLine).join(", ")
                   : "Produits a renseigner"}
                 {order.promoApplied && (
                   <span className="mt-2 block text-forest">
@@ -4788,7 +5063,7 @@ function AdminOrders({
                 </td>
                 <td className="px-4 py-4">
                   {order.items.length
-                    ? order.items.map((item) => `${item.name} x${item.quantity} g`).join(", ")
+                    ? order.items.map(formatOrderItemLine).join(", ")
                     : "A renseigner"}
                   {order.promoApplied && (
                     <span className="mt-2 block text-xs leading-5 text-forest">
@@ -5115,7 +5390,7 @@ function DesktopOrderCard({
             <p className="text-xs uppercase tracking-[0.14em] text-forest/55">Produits</p>
             <strong className="mt-2 block text-forest">
               {order.items.length
-                ? order.items.map((item) => `${item.name} x${item.quantity} g`).join(", ")
+                ? order.items.map(formatOrderItemLine).join(", ")
                 : "A renseigner"}
             </strong>
             {order.promoApplied && (
@@ -5891,6 +6166,19 @@ function productMatchesCategoryFilter(product: Product, filter: ProductCategoryF
   return product.category === filter;
 }
 
+function productMatchesAdminSearch(product: Product, search: string) {
+  const query = search.trim().toLowerCase();
+  if (!query) return true;
+  return [
+    product.name,
+    product.slug,
+    product.id,
+    product.internalReference,
+  ]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes(query));
+}
+
 function buildProductCategoryFilters(products: Product[]): AdminFilterOption<ProductCategoryFilter>[] {
   const count = (value: ProductCategoryFilter) =>
     products.filter((product) => productMatchesCategoryFilter(product, value)).length;
@@ -6041,6 +6329,13 @@ type AccountingProductRow = {
   hasMissingCost: boolean;
   costSources: Set<string>;
 };
+
+type ProductCostFilter =
+  | "all"
+  | "supplier"
+  | "manual_fallback"
+  | "missing"
+  | "large_gap";
 
 function buildAccountingSummary(
   orders: AdminOrderRow[],
@@ -6255,6 +6550,11 @@ function formatQuantity(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(".", ",");
 }
 
+function formatOrderItemLine(item: { name: string; quantity: number; productInternalReference?: string }) {
+  const reference = item.productInternalReference ? `${item.productInternalReference} - ` : "";
+  return `${reference}${item.name} x${item.quantity} g`;
+}
+
 function formatAccountingValue(key: AccountingMetricKey, value: number) {
   void key;
   return formatCurrency(value);
@@ -6264,6 +6564,59 @@ function costSourceLabel(sources: Set<string>) {
   if (sources.has("supplier_weighted")) return "Fournisseur pondere";
   if (sources.has("manual_fallback")) return "Fallback manuel";
   return "Estime";
+}
+
+function buildProductCostFilters(
+  products: Product[],
+  productCostMap: Map<string, ProductCost>,
+  supplierCostMap: Map<string, WeightedSupplierCost>,
+): AdminFilterOption<ProductCostFilter>[] {
+  const count = (filter: ProductCostFilter) =>
+    products.filter((product) => productMatchesProductCostFilter(product, productCostMap, supplierCostMap, filter)).length;
+  return [
+    { value: "all", label: "Tous", count: products.length },
+    { value: "supplier", label: "Fournisseur", count: count("supplier") },
+    { value: "manual_fallback", label: "Fallback manuel", count: count("manual_fallback") },
+    { value: "missing", label: "Cout manquant", count: count("missing") },
+    { value: "large_gap", label: "Ecart important", count: count("large_gap") },
+  ];
+}
+
+function productMatchesProductCostFilter(
+  product: Product,
+  productCostMap: Map<string, ProductCost>,
+  supplierCostMap: Map<string, WeightedSupplierCost>,
+  filter: ProductCostFilter,
+) {
+  const supplierCost = supplierCostMap.get(product.id)?.weightedCostPerGram ?? null;
+  const manualCost = optionalProductCostValue(productCostMap.get(product.id));
+  if (filter === "all") return true;
+  if (filter === "supplier") return supplierCost != null;
+  if (filter === "manual_fallback") return supplierCost == null && manualCost != null;
+  if (filter === "missing") return supplierCost == null && manualCost == null;
+  if (filter === "large_gap") {
+    if (supplierCost == null || manualCost == null || supplierCost <= 0) return false;
+    return Math.abs((manualCost - supplierCost) / supplierCost) >= 0.15;
+  }
+  return true;
+}
+
+function optionalProductCostValue(cost?: ProductCost) {
+  const value = cost?.purchasePricePerGram;
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function supplierMatchLabel(
+  confidence?: SupplierPurchaseLine["matchConfidence"],
+  source?: SupplierPurchaseLine["matchSource"],
+) {
+  if (confidence === "confirmed") return `Correspondance confirmee (${source || "manuel"})`;
+  if (confidence === "suggested") return `Suggestion (${source || "nom"})`;
+  if (confidence === "ambiguous") return "Ambigu : selection manuelle requise";
+  if (confidence === "missing") return "Aucune correspondance";
+  return "";
 }
 function accountingDate(order: AdminOrderRow) {
   return parseAdminDate(
@@ -6782,6 +7135,7 @@ function Input({
   min,
   step,
   required,
+  placeholder,
 }: {
   label: string;
   value: string;
@@ -6790,6 +7144,7 @@ function Input({
   min?: string;
   step?: string;
   required?: boolean;
+  placeholder?: string;
 }) {
   return (
     <label className="text-sm font-medium text-forest">
@@ -6800,6 +7155,7 @@ function Input({
         min={min}
         step={step}
         required={required}
+        placeholder={placeholder}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />

@@ -1,5 +1,11 @@
 import { auth } from "../lib/firebase";
-import type { SupplierPurchase } from "../types";
+import type { SupplierInvoiceParseResult } from "../lib/supplierInvoiceParsers";
+import type { SupplierProductAlias, SupplierPurchase } from "../types";
+
+export type SupplierInvoiceAnalysisResult = SupplierInvoiceParseResult & {
+  fileSha256: string;
+  duplicate?: { found: boolean; reason?: string; purchaseId?: string };
+};
 
 export async function getSupplierPurchasesAdmin() {
   const token = await auth?.currentUser?.getIdToken();
@@ -39,6 +45,51 @@ export async function saveSupplierPurchaseAdmin(purchase: Partial<SupplierPurcha
     throw new Error(payload.error || "Enregistrement de l'achat fournisseur impossible.");
   }
   return payload.purchaseId || "";
+}
+
+export async function analyzeSupplierInvoicePdfAdmin(file: File) {
+  const token = await auth?.currentUser?.getIdToken();
+  if (!token) throw new Error("Connexion admin requise.");
+  if (file.type !== "application/pdf") throw new Error("PDF uniquement.");
+  if (file.size > 5 * 1024 * 1024) throw new Error("PDF trop volumineux (5 Mo max).");
+  const response = await fetch("/api/invoices?action=analyzeSupplierInvoicePdf", {
+    method: "POST",
+    headers: {
+      "content-type": "application/pdf",
+      authorization: `Bearer ${token}`,
+    },
+    body: file,
+  });
+  const payload = (await response.json().catch(() => ({}))) as SupplierInvoiceAnalysisResult & {
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new Error(payload.error || "Analyse PDF fournisseur impossible.");
+  }
+  return payload;
+}
+
+export async function saveSupplierProductAliasAdmin(
+  alias: Pick<SupplierProductAlias, "supplierName" | "originalLabel" | "productId">,
+) {
+  const token = await auth?.currentUser?.getIdToken();
+  if (!token) throw new Error("Connexion admin requise.");
+  const response = await fetch("/api/invoices", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ action: "saveSupplierProductAlias", alias }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as {
+    aliasId?: string;
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new Error(payload.error || "Memorisation de la correspondance impossible.");
+  }
+  return payload.aliasId || "";
 }
 
 export async function deleteSupplierPurchaseAdmin(purchaseId: string) {

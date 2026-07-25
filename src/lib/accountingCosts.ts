@@ -7,6 +7,10 @@ export type AccountingSupplierPurchaseLineLike = {
   id?: string;
   productId?: string;
   productName?: string;
+  productInternalReference?: string;
+  supplierOriginalLabel?: string;
+  matchSource?: "alias" | "internal_reference" | "normalized_name" | "slug_variant" | "manual";
+  matchConfidence?: "confirmed" | "suggested" | "ambiguous" | "missing";
   quantityGrams?: number;
   grossAmountExVat?: number;
   vatRate?: number;
@@ -36,6 +40,8 @@ export type AccountingSupplierPurchaseLike = {
   createdAt?: string;
   updatedAt?: string;
   validatedAt?: string;
+  sourceFileSha256?: string;
+  importedFromPdfAt?: string;
   cancelledAt?: string;
   cancelledBy?: string;
   createdBy?: string;
@@ -81,6 +87,10 @@ export function normalizeSupplierPurchaseInput(
       id: String(line.id || `line-${index + 1}`),
       productId,
       productName: line.productName ? String(line.productName) : "",
+      productInternalReference: line.productInternalReference ? String(line.productInternalReference) : "",
+      supplierOriginalLabel: line.supplierOriginalLabel ? String(line.supplierOriginalLabel) : "",
+      matchSource: line.matchSource,
+      matchConfidence: line.matchConfidence,
       quantityGrams,
       grossAmountExVat,
       vatRate,
@@ -142,6 +152,8 @@ export function normalizeSupplierPurchaseInput(
     createdAt: input.createdAt,
     updatedAt: input.updatedAt,
     validatedAt: input.validatedAt,
+    sourceFileSha256: input.sourceFileSha256,
+    importedFromPdfAt: input.importedFromPdfAt,
     cancelledAt: input.cancelledAt,
     cancelledBy: input.cancelledBy,
     createdBy: input.createdBy,
@@ -164,11 +176,24 @@ export function allocateProportionally(total: number, weights: number[]) {
 }
 
 export function computeWeightedSupplierCosts(purchases: AccountingSupplierPurchaseLike[]) {
+  return computeWeightedSupplierCostsAsOf(purchases);
+}
+
+export function computeWeightedSupplierCostsAsOf(
+  purchases: AccountingSupplierPurchaseLike[],
+  capturedAt?: string | Date,
+) {
+  const limit = capturedAt ? parseAccountingDate(capturedAt) : null;
   const totals = new Map<string, { quantity: number; cost: number }>();
   let validatedPurchaseTotal = 0;
 
   purchases
     .filter((purchase) => purchase.status === "validated")
+    .filter((purchase) => {
+      if (!limit) return true;
+      const invoiceDate = parseAccountingDate(purchase.invoiceDate);
+      return Boolean(invoiceDate && invoiceDate <= limit);
+    })
     .forEach((purchase) => {
       validatedPurchaseTotal += nonNegativeNumber(purchase.totalExVat);
       (purchase.lines || []).forEach((line) => {
@@ -287,4 +312,10 @@ function positiveNumber(value: unknown, errorMessage: string) {
 
 function normalizeSupplierStatus(value: unknown): AccountingSupplierPurchaseStatus {
   return value === "validated" || value === "cancelled" ? value : "draft";
+}
+
+function parseAccountingDate(value?: string | Date) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }

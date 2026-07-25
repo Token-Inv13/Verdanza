@@ -11,6 +11,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { auth } from "../lib/firebase";
 import { products as localProducts } from "../data/products";
 import { logFirestoreFallback } from "../lib/clientLog";
 import { collections } from "./collections";
@@ -107,6 +108,23 @@ export async function getProductsWithFallback() {
 
 export async function upsertProduct(input: ProductInput) {
   if (!db) throw new Error("Firebase is not configured.");
+  const token = await auth?.currentUser?.getIdToken();
+  if (token) {
+    const response = await fetch("/api/invoices", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ action: "upsertProductAdmin", product: input }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as {
+      productId?: string;
+      error?: string;
+    };
+    if (!response.ok) throw new Error(payload.error || "Enregistrement produit impossible.");
+    return payload.productId || input.id || input.slug;
+  }
   const id = input.id || input.slug;
   const productRef = doc(db, collections.products, id);
   const payload = {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   allocateProportionally,
   computeWeightedSupplierCosts,
+  computeWeightedSupplierCostsAsOf,
   estimateStockValue,
   normalizeSupplierPurchaseInput,
   resolveOrderItemPurchaseCost,
@@ -66,6 +67,35 @@ const weighted = computeWeightedSupplierCosts([
 assert.equal(weighted.costByProductId.get("amnesia")?.weightedCostPerGram, 0.9166);
 assert.equal(weighted.costByProductId.get("blue-dream")?.weightedCostPerGram, 0.9668);
 assert.equal(weighted.costByProductId.get("draft"), undefined);
+
+const laterPurchase = normalizeSupplierPurchaseInput({
+  ...purchase,
+  invoiceNumber: "FAC-2",
+  invoiceDate: "2026-08-01",
+  lines: [
+    {
+      id: "line-later",
+      productId: "amnesia",
+      quantityGrams: 100,
+      grossAmountExVat: 300,
+      vatRate: 20,
+      lineDiscountAmount: 0,
+    },
+  ],
+});
+const weightedAsOfPayment = computeWeightedSupplierCostsAsOf(
+  [purchase, laterPurchase],
+  "2026-07-26T10:00:00.000Z",
+);
+assert.equal(weightedAsOfPayment.costByProductId.get("amnesia")?.weightedCostPerGram, 0.9166);
+const weightedAfterLaterPurchase = computeWeightedSupplierCostsAsOf(
+  [purchase, laterPurchase],
+  "2026-08-02T10:00:00.000Z",
+);
+assert.notEqual(
+  weightedAfterLaterPurchase.costByProductId.get("amnesia")?.weightedCostPerGram,
+  weightedAsOfPayment.costByProductId.get("amnesia")?.weightedCostPerGram,
+);
 
 const manualCosts = new Map([
   ["amnesia", { purchasePricePerGram: 0.2 }],
