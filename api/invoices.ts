@@ -19,6 +19,11 @@ import {
 import {
   formatProductInternalReference,
 } from "../src/lib/productReferences.js";
+import {
+  fixedPriceOptionsForMode,
+  normalizeFixedPriceMode,
+  validateManualFixedPriceOptions,
+} from "../src/lib/fixedPriceOptions.js";
 import type {
   BillingSettings,
   Invoice,
@@ -409,6 +414,19 @@ async function upsertProductAdmin(db: FirebaseFirestore.Firestore, rawProduct: u
   if (!id) throw new Error("Identifiant produit requis.");
   const ref = db.collection("products").doc(id);
   const payload = { ...input };
+  payload.fixedPriceMode = normalizeFixedPriceMode(input.fixedPriceMode, input.category);
+  payload.fixedPriceOptions = fixedPriceOptionsForMode(
+    payload.fixedPriceMode,
+    input.fixedPriceOptions,
+  );
+  const manualIssues = validateManualFixedPriceOptions({
+    id,
+    ...(payload as Omit<Product, "id">),
+  } as Product);
+  const blockingManualIssue = manualIssues.find((issue) => issue.severity === "error");
+  if (blockingManualIssue) {
+    throw new Error(`Formats prix fixe invalides : ${blockingManualIssue.message}`);
+  }
   delete (payload as Record<string, unknown>).id;
   delete (payload as Record<string, unknown>).internalReference;
 

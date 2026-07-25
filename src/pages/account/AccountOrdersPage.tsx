@@ -12,6 +12,7 @@ import {
   paymentStatusLabel,
   visibleOrderSteps,
 } from "../../utils/orderStatus";
+import { orderItemSummaryLabel } from "../../lib/orderLineDisplay";
 
 export function AccountOrdersPage() {
   const { user } = useAuth();
@@ -82,7 +83,7 @@ export function AccountOrdersPage() {
               <p>
                 Produits :{" "}
                 {order.items
-                  .map((item) => `${item.name} x ${item.quantity}`)
+                  .map((item) => orderItemSummaryLabel(item))
                   .join(", ")}
               </p>
             </div>

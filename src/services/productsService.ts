@@ -15,6 +15,11 @@ import { auth } from "../lib/firebase";
 import { products as localProducts } from "../data/products";
 import { logFirestoreFallback } from "../lib/clientLog";
 import { collections } from "./collections";
+import {
+  fixedPriceOptionsForMode,
+  normalizeFixedPriceMode,
+  normalizeFixedPriceOptions,
+} from "../lib/fixedPriceOptions";
 import type { Product } from "../types";
 
 export type ProductInput = Omit<Product, "id"> & { id?: string };
@@ -45,6 +50,8 @@ export function normalizeProduct(product: Product): Product {
     shortDescription: removeLegacyAvailabilityText(sanitized.shortDescription),
     longDescription: removeLegacyAvailabilityText(sanitized.longDescription),
     seoDescription: removeLegacyAvailabilityText(sanitized.seoDescription),
+    fixedPriceMode: normalizeFixedPriceMode(sanitized.fixedPriceMode, sanitized.category),
+    fixedPriceOptions: normalizeFixedPriceOptions(sanitized.fixedPriceOptions),
     qualitySealEnabled: sanitized.qualitySealEnabled === true,
     lowStockThreshold: Math.max(0, Math.floor(Number(sanitized.lowStockThreshold ?? 5))),
     isActive: sanitized.isActive !== false,
@@ -129,11 +136,16 @@ export async function upsertProduct(input: ProductInput) {
   const productRef = doc(db, collections.products, id);
   const payload = {
     ...input,
+    fixedPriceMode: normalizeFixedPriceMode(input.fixedPriceMode, input.category),
     compareAtPrice: input.compareAtPrice || deleteField(),
     qualitySealEnabled: input.qualitySealEnabled === true,
     lowStockThreshold: input.lowStockThreshold ?? 5,
     updatedAt: serverTimestamp(),
   };
+  payload.fixedPriceOptions = fixedPriceOptionsForMode(
+    payload.fixedPriceMode,
+    input.fixedPriceOptions,
+  );
   await setDoc(productRef, payload, { merge: true });
   return id;
 }

@@ -10,20 +10,41 @@ import {
   availableProductStock,
   isProductOrderable,
 } from "../lib/cartStock";
+import {
+  cartItemKey,
+  fixedPriceEffectiveUnitPrice,
+  fixedPriceLineTotal,
+  fixedPriceQuantityGrams,
+  normalizeCartItems,
+  positiveInteger,
+  resolveFixedPriceOptions,
+  sameCartLine,
+} from "../lib/fixedPriceOptions";
 import { getProductsWithFallback } from "../services/productsService";
-import type { CartItem, Product } from "../types";
+import type { CartItem, FixedPriceOption, Product } from "../types";
 
 type CartLine = CartItem & {
+  lineKey: string;
   product: Product;
+  quantityGrams: number;
   lineTotal: number;
+  unitPrice: number;
+  fixedPriceOption?: FixedPriceOption;
 };
 
 type CartContextValue = {
   items: CartItem[];
   lines: CartLine[];
+  cartWarnings: string[];
+  hasBlockingCartIssues: boolean;
   itemCount: number;
   subtotal: number;
   addItem: (productId: string) => void;
+  addFixedPriceOption: (productId: string, fixedPriceOptionId: string) => void;
+  incrementLine: (lineKey: string) => void;
+  decrementLine: (lineKey: string) => void;
+  setLineQuantity: (lineKey: string, quantity: number) => void;
+  removeLine: (lineKey: string) => void;
   decrementItem: (productId: string) => void;
   setItemQuantity: (productId: string, quantity: number) => void;
   removeItem: (productId: string) => void;
@@ -38,7 +59,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
       const stored = localStorage.getItem(storageKey);
-      return stored ? (JSON.parse(stored) as CartItem[]) : [];
+      return stored ? normalizeCartItems(JSON.parse(stored)) : [];
     } catch {
       return [];
     }
@@ -67,21 +88,95 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
     const maxQuantity = availableProductStock(product);
     setItems((current) => {
-      const existing = current.find((item) => item.productId === productId);
-      if (!existing) return [...current, { productId, quantity: 1 }];
+      const target = { productId, quantity: 1, purchaseMode: "gram" as const };
+      const existing = current.find((item) => sameCartLine(item, target));
+      if (!existing) return [...current, target];
       return current.map((item) =>
-        item.productId === productId
+        sameCartLine(item, target)
           ? { ...item, quantity: Math.min(item.quantity + 1, maxQuantity) }
           : item,
       );
     });
   }, [catalog]);
 
+  const addFixedPriceOption = useCallback((productId: string, fixedPriceOptionId: string) => {
+    const product = catalog.find((entry) => entry.id === productId);
+    if (!isProductOrderable(product)) return;
+    const option = resolveFixedPriceOptions(product).find(
+      (entry) => entry.id === fixedPriceOptionId,
+    );
+    if (!option) return;
+    const maxQuantity = Math.floor(availableProductStock(product) / option.quantityGrams);
+    if (maxQuantity <= 0) return;
+    const target = {
+      productId,
+      quantity: 1,
+      purchaseMode: "fixed_price" as const,
+      fixedPriceOptionId,
+    };
+    setItems((current) => {
+      const existing = current.find((item) => sameCartLine(item, target));
+      if (!existing) return [...current, target];
+      return current.map((item) =>
+        sameCartLine(item, target)
+          ? { ...item, quantity: Math.min(item.quantity + 1, maxQuantity) }
+          : item,
+      );
+    });
+  }, [catalog]);
+
+  const updateLineQuantity = useCallback((
+    lineKey: string,
+    updater: (current: CartItem) => number,
+  ) => {
+    setItems((current) =>
+      current
+        .map((item) => {
+          if (cartItemKey(item) !== lineKey) return item;
+          const product = catalog.find((entry) => entry.id === item.productId);
+          const requested = positiveInteger(updater(item));
+          if (!isProductOrderable(product) || requested <= 0) return null;
+          if (item.purchaseMode === "fixed_price") {
+            const option = resolveFixedPriceOptions(product).find(
+              (entry) => entry.id === item.fixedPriceOptionId,
+            );
+            if (!option) return null;
+            const maxQuantity = Math.floor(availableProductStock(product) / option.quantityGrams);
+            const nextQuantity = Math.min(requested, maxQuantity);
+            return nextQuantity > 0 ? { ...item, quantity: nextQuantity } : null;
+          }
+          return {
+            ...item,
+            quantity: Math.min(requested, availableProductStock(product)),
+            purchaseMode: "gram" as const,
+          };
+        })
+        .filter((item): item is CartItem => Boolean(item)),
+    );
+  }, [catalog]);
+
+  const incrementLine = useCallback((lineKey: string) => {
+    updateLineQuantity(lineKey, (item) => item.quantity + 1);
+  }, [updateLineQuantity]);
+
+  const decrementLine = useCallback((lineKey: string) => {
+    updateLineQuantity(lineKey, (item) => item.quantity - 1);
+  }, [updateLineQuantity]);
+
+  const setLineQuantity = useCallback((lineKey: string, quantity: number) => {
+    updateLineQuantity(lineKey, () => quantity);
+  }, [updateLineQuantity]);
+
+  const removeLine = useCallback((lineKey: string) => {
+    setItems((current) => current.filter((item) => cartItemKey(item) !== lineKey));
+  }, []);
+
   const decrementItem = useCallback((productId: string) => {
+    const target = { productId, purchaseMode: "gram" as const };
     setItems((current) =>
       current
         .map((item) =>
-          item.productId === productId
+          sameCartLine(item, target)
             ? { ...item, quantity: item.quantity - 1 }
             : item,
         )
@@ -94,15 +189,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const product = catalog.find((entry) => entry.id === productId);
       const maxQuantity = isProductOrderable(product) ? availableProductStock(product) : 0;
       const nextQuantity = Math.min(Math.max(0, Math.floor(quantity)), maxQuantity);
+      const target = { productId, purchaseMode: "gram" as const };
 
       setItems((current) => {
         if (nextQuantity <= 0) {
-          return current.filter((item) => item.productId !== productId);
+          return current.filter((item) => !sameCartLine(item, target));
         }
-        const existing = current.find((item) => item.productId === productId);
-        if (!existing) return [...current, { productId, quantity: nextQuantity }];
+        const existing = current.find((item) => sameCartLine(item, target));
+        if (!existing) return [...current, { productId, quantity: nextQuantity, purchaseMode: "gram" }];
         return current.map((item) =>
-          item.productId === productId ? { ...item, quantity: nextQuantity } : item,
+          sameCartLine(item, target) ? { ...item, quantity: nextQuantity } : item,
         );
       });
     },
@@ -110,20 +206,56 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   );
 
   const removeItem = useCallback((productId: string) => {
-    setItems((current) => current.filter((item) => item.productId !== productId));
+    const target = { productId, purchaseMode: "gram" as const };
+    setItems((current) => current.filter((item) => !sameCartLine(item, target)));
   }, []);
 
   const clearCart = useCallback(() => setItems([]), []);
 
   const value = useMemo<CartContextValue>(() => {
+    const cartWarnings = catalog.length === 0 ? [] : items.flatMap((item) => {
+      if (item.purchaseMode !== "fixed_price") return [];
+      const product = catalog.find((entry) => entry.id === item.productId);
+      if (!product) return ["Un format prix fixe de votre panier n'est plus disponible."];
+      const fixedPriceOption = resolveFixedPriceOptions(product).find(
+        (entry) => entry.id === item.fixedPriceOptionId,
+      );
+      return fixedPriceOption
+        ? []
+        : [
+            `Le format choisi pour ${product.name} n'est plus disponible. Retirez la ligne et selectionnez a nouveau un format.`,
+          ];
+    });
     const lines = items
-      .map((item) => {
+      .map((item): CartLine | null => {
         const product = catalog.find((entry) => entry.id === item.productId);
         if (!product) return null;
+        if (item.purchaseMode === "fixed_price") {
+          const fixedPriceOption = resolveFixedPriceOptions(product).find(
+            (entry) => entry.id === item.fixedPriceOptionId,
+          );
+          if (!fixedPriceOption) return null;
+          const quantity = positiveInteger(item.quantity);
+          const quantityGrams = fixedPriceQuantityGrams(fixedPriceOption, quantity);
+          return {
+            ...item,
+            lineKey: cartItemKey(item),
+            product,
+            quantity,
+            quantityGrams,
+            lineTotal: fixedPriceLineTotal(fixedPriceOption, quantity),
+            unitPrice: fixedPriceEffectiveUnitPrice(fixedPriceOption),
+            fixedPriceOption,
+          };
+        }
         return {
           ...item,
+          purchaseMode: "gram" as const,
+          lineKey: cartItemKey(item),
           product,
+          quantityGrams: item.quantity,
           lineTotal: product.price * item.quantity,
+          unitPrice: product.price,
         };
       })
       .filter((line): line is CartLine => Boolean(line));
@@ -131,15 +263,35 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     return {
       items,
       lines,
-      itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
+      cartWarnings,
+      hasBlockingCartIssues: cartWarnings.length > 0,
+      itemCount: lines.reduce((sum, line) => sum + line.quantityGrams, 0),
       subtotal: lines.reduce((sum, line) => sum + line.lineTotal, 0),
       addItem,
+      addFixedPriceOption,
+      incrementLine,
+      decrementLine,
+      setLineQuantity,
+      removeLine,
       decrementItem,
       setItemQuantity,
       removeItem,
       clearCart,
     };
-  }, [addItem, catalog, clearCart, decrementItem, items, removeItem, setItemQuantity]);
+  }, [
+    addFixedPriceOption,
+    addItem,
+    catalog,
+    clearCart,
+    decrementItem,
+    decrementLine,
+    incrementLine,
+    items,
+    removeItem,
+    removeLine,
+    setItemQuantity,
+    setLineQuantity,
+  ]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

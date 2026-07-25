@@ -16,6 +16,8 @@ export type Product = {
   category: ProductCategory;
   price: number;
   compareAtPrice?: number;
+  fixedPriceMode?: FixedPriceMode;
+  fixedPriceOptions?: FixedPriceOption[];
   shortDescription: string;
   longDescription: string;
   image: string;
@@ -40,6 +42,19 @@ export type Product = {
   isFeatured: boolean;
   seoTitle: string;
   seoDescription: string;
+};
+
+export type FixedPriceMode = "automatic" | "manual" | "disabled";
+
+export type FixedPriceOption = {
+  id: string;
+  label?: string;
+  totalPrice: number;
+  quantityGrams: number;
+  isActive: boolean;
+  sortOrder?: number;
+  source?: "automatic" | "manual";
+  policyVersion?: number;
 };
 
 export type ProductFavorite = {
@@ -232,6 +247,8 @@ export type StockMovement = {
 export type CartItem = {
   productId: string;
   quantity: number;
+  purchaseMode?: "gram" | "fixed_price";
+  fixedPriceOptionId?: string;
 };
 
 export type Address = {
@@ -262,6 +279,12 @@ export type OrderItem = {
   name: string;
   quantity: number;
   unitPrice: number;
+  lineTotal?: number;
+  purchaseMode?: "gram" | "fixed_price";
+  fixedPriceOptionId?: string;
+  fixedPriceQuantity?: number;
+  fixedPriceTotal?: number;
+  fixedPriceGrams?: number;
   slug?: string;
   category?: ProductCategory;
   cultureType?: CultureType;

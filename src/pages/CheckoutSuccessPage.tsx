@@ -58,7 +58,7 @@ export function CheckoutSuccessPage() {
               <strong className="block">Résumé de commande</strong>
               {summary.items.map((item) => (
                 <p key={`${item.name}-${item.quantity}`}>
-                  {item.name} x {item.quantity} g - {formatMoney(item.total)}
+                  {item.name} x {item.displayQuantity || `${item.quantity} g`} - {formatMoney(item.total)}
                 </p>
               ))}
               <p>Mode de livraison : {summary.delivery}</p>
@@ -99,7 +99,7 @@ function readLastOrderSummary(orderId: string | null) {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as {
       orderId?: string;
-      items?: { name: string; quantity: number; total: number }[];
+      items?: { name: string; quantity: number; displayQuantity?: string; total: number }[];
       delivery?: string;
       deliveryNote?: string;
       preferredPaymentMethod?: string;

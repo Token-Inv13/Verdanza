@@ -25,6 +25,14 @@ import {
   evaluatePromotionRule,
   promotionRuleFromCouponDefinition,
 } from "../../src/lib/cartPromotions.js";
+import {
+  fixedPriceEffectiveUnitPrice,
+  fixedPriceLineTotal,
+  fixedPriceQuantityGrams,
+  positiveInteger,
+  resolveFixedPriceOptions,
+} from "../../src/lib/fixedPriceOptions.js";
+import { orderItemLineTotal } from "../../src/lib/orderLineDisplay.js";
 
 const preferredPaymentMethods: PreferredPaymentMethod[] = [
   "card_payment_link",
@@ -74,6 +82,8 @@ const fallbackDeliveryZones: DeliveryZone[] = [
 export type CheckoutRequestItem = {
   productId: string;
   quantity: number;
+  purchaseMode?: "gram" | "fixed_price";
+  fixedPriceOptionId?: string;
 };
 
 export type CheckoutCustomerInput = {
@@ -197,17 +207,18 @@ export async function priceCheckout(
   body: CheckoutRequestBody,
 ): Promise<PricedCheckout> {
   const orderItems: OrderItem[] = [];
+  const productStockById = new Map<string, number>();
+  const productNameById = new Map<string, string>();
 
   for (const item of body.items) {
-    if (
-      !item.productId ||
-      !Number.isInteger(item.quantity) ||
-      item.quantity < 1
-    ) {
+    const productId = String(item.productId || "").trim();
+    const purchaseMode = item.purchaseMode === "fixed_price" ? "fixed_price" : "gram";
+    const requestedQuantity = positiveInteger(item.quantity);
+    if (!productId || requestedQuantity < 1) {
       throw new Error("Quantite produit invalide.");
     }
 
-    const productRef = db.collection("products").doc(item.productId);
+    const productRef = db.collection("products").doc(productId);
     const productSnapshot = await productRef.get();
     if (!productSnapshot.exists) {
       throw new Error("Ce produit n'est plus disponible.");
@@ -221,27 +232,66 @@ export async function priceCheckout(
     if (!product.isActive) {
       throw new Error(`Produit inactif refuse : ${product.name}.`);
     }
-    if (product.stock < item.quantity) {
-      throw new Error(`Stock insuffisant pour ${product.name}.`);
-    }
     if (!Number.isFinite(product.price) || product.price <= 0) {
       throw new Error(`Prix produit invalide pour ${product.name}.`);
+    }
+    productStockById.set(product.id, Math.max(0, Math.floor(Number(product.stock || 0))));
+    productNameById.set(product.id, product.name);
+
+    if (purchaseMode === "fixed_price") {
+      const fixedPriceOptionId = String(item.fixedPriceOptionId || "").trim();
+      const option = resolveFixedPriceOptions(product).find(
+        (entry) => entry.id === fixedPriceOptionId,
+      );
+      if (!option) {
+        throw new Error(`Format prix fixe indisponible pour ${product.name}.`);
+      }
+      const quantityGrams = fixedPriceQuantityGrams(option, requestedQuantity);
+      if (product.stock < quantityGrams) {
+        throw new Error(`Stock insuffisant pour ${product.name}.`);
+      }
+      const lineTotal = fixedPriceLineTotal(option, requestedQuantity);
+      orderItems.push({
+        productId: product.id,
+        productInternalReference: product.internalReference || "",
+        name: product.name,
+        quantity: quantityGrams,
+        unitPrice: fixedPriceEffectiveUnitPrice(option),
+        lineTotal,
+        purchaseMode: "fixed_price",
+        fixedPriceOptionId: option.id,
+        fixedPriceQuantity: requestedQuantity,
+        fixedPriceTotal: option.totalPrice,
+        fixedPriceGrams: option.quantityGrams,
+        slug: product.slug,
+        category: product.category,
+        cultureType: product.cultureType,
+      });
+      continue;
+    }
+
+    if (product.stock < requestedQuantity) {
+      throw new Error(`Stock insuffisant pour ${product.name}.`);
     }
 
     orderItems.push({
       productId: product.id,
       productInternalReference: product.internalReference || "",
       name: product.name,
-      quantity: item.quantity,
+      quantity: requestedQuantity,
       unitPrice: product.price,
+      lineTotal: roundMoney(product.price * requestedQuantity),
+      purchaseMode: "gram",
       slug: product.slug,
       category: product.category,
       cultureType: product.cultureType,
     });
   }
 
+  assertRequestedStockTotals(orderItems, productStockById, productNameById);
+
   const subtotal = roundMoney(
-    orderItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
+    orderItems.reduce((sum, item) => sum + orderItemLineTotal(item), 0),
   );
   const delivery = await resolveDeliveryFee(db, body, subtotal);
   const coupon = body.couponCode
@@ -307,6 +357,26 @@ export async function priceCheckout(
   };
 }
 
+function assertRequestedStockTotals(
+  orderItems: OrderItem[],
+  productStockById: Map<string, number>,
+  productNameById: Map<string, string>,
+) {
+  const requestedByProduct = new Map<string, number>();
+  for (const item of orderItems) {
+    requestedByProduct.set(
+      item.productId,
+      Number(requestedByProduct.get(item.productId) || 0) + Number(item.quantity || 0),
+    );
+  }
+  for (const [productId, requestedQuantity] of requestedByProduct) {
+    const availableStock = Number(productStockById.get(productId) || 0);
+    if (requestedQuantity > availableStock) {
+      throw new Error(`Stock insuffisant pour ${productNameById.get(productId) || productId}.`);
+    }
+  }
+}
+
 async function listAutomaticCoupons(db: FirebaseFirestore.Firestore) {
   const snapshot = await db.collection("coupons").get();
   return snapshot.docs
@@ -365,7 +435,7 @@ async function resolveCoupon(
         allowedProductIds.includes(item.productId) ||
         allowedCategories.includes(product.category);
       if (productAllowed) {
-        eligibleSubtotal += item.unitPrice * item.quantity;
+        eligibleSubtotal += orderItemLineTotal(item);
       }
     }
   }

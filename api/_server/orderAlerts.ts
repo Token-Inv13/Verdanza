@@ -1,5 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import type { Order } from "../../src/types/index.js";
+import { orderItemSummaryLabel } from "../../src/lib/orderLineDisplay.js";
 
 export type AlertResult =
   | { status: "sent"; id?: string }
@@ -209,7 +210,7 @@ function deliveryLabel(order: Order) {
 
 function itemsSummary(order: Order) {
   return order.items
-    .map((item) => `${item.name} x${item.quantity}g`)
+    .map((item) => orderItemSummaryLabel(item))
     .join(", ")
     .slice(0, 240);
 }

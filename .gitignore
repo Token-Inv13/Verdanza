@@ -27,6 +27,8 @@ pnpm-debug.log*
 # Local QA artifacts
 tmp_logo_contact_sheet.png
 reports/firestore-cleanup/
+reports/fixed-price-migration/*.json
+reports/fixed-price-migration-tests/
 
 .vercel
 .env*

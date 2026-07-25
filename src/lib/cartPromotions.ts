@@ -12,6 +12,7 @@ export type PromotionCartLine = {
   category?: ProductCategory;
   quantity: number;
   unitPrice: number;
+  lineTotal?: number;
 };
 
 type PromotionLine = PromotionCartLine | OrderItem;
@@ -74,7 +75,7 @@ export function calculateCartPromotions(input: {
   const rules = input.rules ?? BUILT_IN_AUTOMATIC_PROMOTIONS;
   const subtotalBeforePromotion = roundMoney(
     input.lines.reduce(
-      (sum, line) => sum + Number(line.unitPrice || 0) * Number(line.quantity || 0),
+      (sum, line) => sum + promotionLineTotal(line),
       0,
     ),
   );
@@ -310,7 +311,7 @@ function categorySubtotal(
   return roundMoney(
     lines.reduce((sum, line) => {
       if (!line.category || !categories.has(line.category)) return sum;
-      return sum + Number(line.unitPrice || 0) * Number(line.quantity || 0);
+      return sum + promotionLineTotal(line);
     }, 0),
   );
 }
@@ -323,7 +324,7 @@ function productsSubtotal(
   return roundMoney(
     lines.reduce((sum, line) => {
       if (!eligibleProductIds.has(line.productId)) return sum;
-      return sum + Number(line.unitPrice || 0) * Number(line.quantity || 0);
+      return sum + promotionLineTotal(line);
     }, 0),
   );
 }
@@ -362,4 +363,10 @@ export function formatPromotionEuro(value: number) {
 
 function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function promotionLineTotal(line: PromotionLine) {
+  const configured = Number(line.lineTotal);
+  if (Number.isFinite(configured) && configured >= 0) return configured;
+  return Number(line.unitPrice || 0) * Number(line.quantity || 0);
 }

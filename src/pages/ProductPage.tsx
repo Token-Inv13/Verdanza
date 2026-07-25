@@ -10,9 +10,16 @@ import { useCart } from "../context/CartContext";
 import { useProducts } from "../hooks/useProducts";
 import { trackAddToCart, trackViewItem } from "../lib/analytics";
 import {
+  availableProductStock,
   isProductOrderable,
   publicProductStockLabel,
 } from "../lib/cartStock";
+import {
+  fixedPriceEffectiveUnitPrice,
+  fixedPriceOptionLabel,
+  isFixedPriceAdvantageous,
+  resolveFixedPriceOptions,
+} from "../lib/fixedPriceOptions";
 import { FavoriteButton } from "../components/FavoriteButton";
 import {
   buildProductJsonLd,
@@ -30,7 +37,7 @@ export function ProductPage() {
   const { slug } = useParams();
   const { products, isLoading } = useProducts();
   const product = slug ? products.find((entry) => entry.slug === slug) : undefined;
-  const { addItem } = useCart();
+  const { addItem, addFixedPriceOption } = useCart();
 
   useEffect(() => {
     if (!product) return;
@@ -71,6 +78,8 @@ export function ProductPage() {
 
   const isOrderable = isProductOrderable(product);
   const stockLabel = publicProductStockLabel(product);
+  const fixedPriceOptions = resolveFixedPriceOptions(product);
+  const availableStock = availableProductStock(product);
   const path = productPath(product);
   const categoryName = productCategoryLabel(product);
   const categoryPath = product.category === "flowers" ? "/fleurs-cbd" : "/resines-cbd";
@@ -268,6 +277,43 @@ export function ProductPage() {
             <p className="mt-3 text-sm font-semibold text-forest/70">
               {stockLabel}
             </p>
+          )}
+          {product.isActive !== false && fixedPriceOptions.length > 0 && (
+            <div className="mt-5 rounded-lg border border-champagne/30 bg-cream p-4">
+              <h2 className="font-display text-2xl text-forest">Formats prix fixe</h2>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {fixedPriceOptions.map((option) => {
+                  const optionAvailable = isOrderable && availableStock >= option.quantityGrams;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className="rounded-md border border-forest/15 bg-ivory px-4 py-3 text-left transition hover:border-forest disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={!optionAvailable}
+                      onClick={() => {
+                        addFixedPriceOption(product.id, option.id);
+                        trackAddToCart(product, option.quantityGrams);
+                      }}
+                    >
+                      <span className="block font-semibold text-forest">
+                        {fixedPriceOptionLabel(option)}
+                      </span>
+                      <span className="mt-1 block text-xs text-forest/65">
+                        {fixedPriceEffectiveUnitPrice(option).toFixed(2).replace(".", ",")} EUR/g
+                        {isFixedPriceAdvantageous(product, option)
+                          ? " - prix au gramme plus avantageux"
+                          : ""}
+                      </span>
+                      {!optionAvailable && (
+                        <span className="mt-1 block text-xs text-red-700">
+                          Stock insuffisant pour ce format
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
           <p className="mt-6 text-sm leading-6 text-ink/60">
             Produit réservé aux personnes majeures. Tenir hors de portée des

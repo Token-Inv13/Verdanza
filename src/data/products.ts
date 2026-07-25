@@ -7,6 +7,10 @@ export const products: Product[] = [
     name: "Golden Static",
     category: "resins",
     price: 5.5,
+    fixedPriceMode: "manual",
+    fixedPriceOptions: [
+      { id: "golden-static-50-10g", totalPrice: 50, quantityGrams: 10, isActive: true, source: "manual", sortOrder: 0 },
+    ],
     shortDescription:
       "Résine multi-cannabinoïdes CBD, CBG et CBN, texture crémeuse et profil herbacé puissant.",
     longDescription:
@@ -44,6 +48,7 @@ export const products: Product[] = [
     name: "Suprême Purple CBD",
     category: "resins",
     price: 5,
+    fixedPriceMode: "disabled",
     shortDescription:
       "Résine CBD premium française, compacte et légèrement friable, au profil terreux et fruité.",
     longDescription:
@@ -79,6 +84,12 @@ export const products: Product[] = [
     name: "Suprême 50 % CBD",
     category: "resins",
     price: 6,
+    fixedPriceMode: "manual",
+    fixedPriceOptions: [
+      { id: "supreme-50-cbd-40-7g", totalPrice: 40, quantityGrams: 7, isActive: true, source: "manual", sortOrder: 0 },
+      { id: "supreme-50-cbd-50-9g", totalPrice: 50, quantityGrams: 9, isActive: true, source: "manual", sortOrder: 1 },
+      { id: "supreme-50-cbd-60-11g", totalPrice: 60, quantityGrams: 11, isActive: true, source: "manual", sortOrder: 2 },
+    ],
     shortDescription:
       "Résine CBD premium fabriquée en Savoie, texture dense et profil floral délicat.",
     longDescription:
@@ -115,6 +126,11 @@ export const products: Product[] = [
     name: "Cookie Kush Indoor",
     category: "flowers",
     price: 4.5,
+    fixedPriceMode: "manual",
+    fixedPriceOptions: [
+      { id: "cookie-kush-30-7g", totalPrice: 30, quantityGrams: 7, isActive: true, source: "manual", sortOrder: 0 },
+      { id: "cookie-kush-50-12g", totalPrice: 50, quantityGrams: 12, isActive: true, source: "manual", sortOrder: 1 },
+    ],
     shortDescription:
       "Fleur CBD indoor italienne, gourmande et sucrée, à la présentation régulière.",
     longDescription:
@@ -150,6 +166,12 @@ export const products: Product[] = [
     name: "Petites Têtes OG Kush",
     category: "flowers",
     price: 4,
+    fixedPriceMode: "manual",
+    fixedPriceOptions: [
+      { id: "petites-tetes-og-kush-35-9g", totalPrice: 35, quantityGrams: 9, isActive: true, source: "manual", sortOrder: 0 },
+      { id: "petites-tetes-og-kush-45-12g", totalPrice: 45, quantityGrams: 12, isActive: true, source: "manual", sortOrder: 1 },
+      { id: "petites-tetes-og-kush-55-15g", totalPrice: 55, quantityGrams: 15, isActive: true, source: "manual", sortOrder: 2 },
+    ],
     shortDescription:
       "Fleur CBD greenhouse italienne, fraîche, intense et équilibrée, en petites têtes.",
     longDescription:
@@ -185,6 +207,12 @@ export const products: Product[] = [
     name: "Harlequin Greenhouse",
     category: "flowers",
     price: 4,
+    fixedPriceMode: "manual",
+    fixedPriceOptions: [
+      { id: "harlequin-greenhouse-35-9g", totalPrice: 35, quantityGrams: 9, isActive: true, source: "manual", sortOrder: 0 },
+      { id: "harlequin-greenhouse-45-12g", totalPrice: 45, quantityGrams: 12, isActive: true, source: "manual", sortOrder: 1 },
+      { id: "harlequin-greenhouse-55-15g", totalPrice: 55, quantityGrams: 15, isActive: true, source: "manual", sortOrder: 2 },
+    ],
     shortDescription:
       "Fleur CBD greenhouse italienne, naturelle et ronde, au profil boisé et torréfié.",
     longDescription:
@@ -220,6 +248,12 @@ export const products: Product[] = [
     name: "La Mousse",
     category: "resins",
     price: 2,
+    fixedPriceMode: "manual",
+    fixedPriceOptions: [
+      { id: "la-mousse-25-13g", totalPrice: 25, quantityGrams: 13, isActive: true, source: "manual", sortOrder: 0 },
+      { id: "la-mousse-30-16g", totalPrice: 30, quantityGrams: 16, isActive: true, source: "manual", sortOrder: 1 },
+      { id: "la-mousse-40-22g", totalPrice: 40, quantityGrams: 22, isActive: true, source: "manual", sortOrder: 2 },
+    ],
     shortDescription:
       "Mousse CBD française issue de trichomes, souple, légère, compacte et végétale.",
     longDescription:
@@ -291,6 +325,12 @@ export const products: Product[] = [
     name: "Le Beldia CBN + CBD",
     category: "resins",
     price: 6,
+    fixedPriceMode: "manual",
+    fixedPriceOptions: [
+      { id: "le-beldia-cbn-cbd-40-7g", totalPrice: 40, quantityGrams: 7, isActive: true, source: "manual", sortOrder: 0 },
+      { id: "le-beldia-cbn-cbd-50-9g", totalPrice: 50, quantityGrams: 9, isActive: true, source: "manual", sortOrder: 1 },
+      { id: "le-beldia-cbn-cbd-60-11g", totalPrice: 60, quantityGrams: 11, isActive: true, source: "manual", sortOrder: 2 },
+    ],
     shortDescription:
       "Résine CBD + CBN sélectionnée, texture malléable, profil terreux, épicé et boisé.",
     longDescription:
@@ -326,6 +366,12 @@ export const products: Product[] = [
     name: "Creamy Piatella CBD",
     category: "resins",
     price: 6,
+    fixedPriceMode: "manual",
+    fixedPriceOptions: [
+      { id: "creamy-piatella-cbd-40-7g", totalPrice: 40, quantityGrams: 7, isActive: true, source: "manual", sortOrder: 0 },
+      { id: "creamy-piatella-cbd-50-9g", totalPrice: 50, quantityGrams: 9, isActive: true, source: "manual", sortOrder: 1 },
+      { id: "creamy-piatella-cbd-60-11g", totalPrice: 60, quantityGrams: 11, isActive: true, source: "manual", sortOrder: 2 },
+    ],
     shortDescription:
       "Résine CBD travaillée, texture crémeuse, profil sucré, terreux et boisé.",
     longDescription:
@@ -361,6 +407,12 @@ export const products: Product[] = [
     name: "Mango Haze CBD",
     category: "flowers",
     price: 6,
+    fixedPriceMode: "manual",
+    fixedPriceOptions: [
+      { id: "mango-haze-cbd-40-7g", totalPrice: 40, quantityGrams: 7, isActive: true, source: "manual", sortOrder: 0 },
+      { id: "mango-haze-cbd-50-9g", totalPrice: 50, quantityGrams: 9, isActive: true, source: "manual", sortOrder: 1 },
+      { id: "mango-haze-cbd-60-11g", totalPrice: 60, quantityGrams: 11, isActive: true, source: "manual", sortOrder: 2 },
+    ],
     shortDescription:
       "Fleur CBD hydroponique cultivée en Suisse, au profil sucré, fruité et acidulé.",
     longDescription:
@@ -395,6 +447,12 @@ export const products: Product[] = [
     name: "Mandarine CBD",
     category: "flowers",
     price: 6,
+    fixedPriceMode: "manual",
+    fixedPriceOptions: [
+      { id: "mandarine-cbd-40-7g", totalPrice: 40, quantityGrams: 7, isActive: true, source: "manual", sortOrder: 0 },
+      { id: "mandarine-cbd-50-9g", totalPrice: 50, quantityGrams: 9, isActive: true, source: "manual", sortOrder: 1 },
+      { id: "mandarine-cbd-60-11g", totalPrice: 60, quantityGrams: 11, isActive: true, source: "manual", sortOrder: 2 },
+    ],
     shortDescription:
       "Fleur CBD hydroponique au profil frais et fruité, dominé par les agrumes, la mandarine et des notes citronnées.",
     longDescription:
@@ -429,6 +487,12 @@ export const products: Product[] = [
     name: "Amnesia CBD Hydroponique",
     category: "flowers",
     price: 6,
+    fixedPriceMode: "manual",
+    fixedPriceOptions: [
+      { id: "amnesia-cbd-hydroponique-40-7g", totalPrice: 40, quantityGrams: 7, isActive: true, source: "manual", sortOrder: 0 },
+      { id: "amnesia-cbd-hydroponique-50-9g", totalPrice: 50, quantityGrams: 9, isActive: true, source: "manual", sortOrder: 1 },
+      { id: "amnesia-cbd-hydroponique-60-11g", totalPrice: 60, quantityGrams: 11, isActive: true, source: "manual", sortOrder: 2 },
+    ],
     shortDescription:
       "Fleur CBD à la structure dense et résineuse, avec un profil tonique, boisé et intense.",
     longDescription:
@@ -463,6 +527,12 @@ export const products: Product[] = [
     name: "Blue Dream CBD",
     category: "flowers",
     price: 6,
+    fixedPriceMode: "manual",
+    fixedPriceOptions: [
+      { id: "blue-dream-cbd-40-7g", totalPrice: 40, quantityGrams: 7, isActive: true, source: "manual", sortOrder: 0 },
+      { id: "blue-dream-cbd-50-9g", totalPrice: 50, quantityGrams: 9, isActive: true, source: "manual", sortOrder: 1 },
+      { id: "blue-dream-cbd-60-11g", totalPrice: 60, quantityGrams: 11, isActive: true, source: "manual", sortOrder: 2 },
+    ],
     shortDescription:
       "Fleur CBD hydroponique aux notes citronnées, résineuses et fruitées.",
     longDescription:

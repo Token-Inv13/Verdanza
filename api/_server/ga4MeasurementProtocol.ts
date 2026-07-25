@@ -1,4 +1,5 @@
 import type { Order, OrderItem, ProductCategory } from "../../src/types/index.js";
+import { orderItemLineTotal } from "../../src/lib/orderLineDisplay.js";
 
 export type Ga4PurchaseResult =
   | { status: "sent" }
@@ -147,7 +148,7 @@ export function isPurchaseEligible(order: Order): order is Order & {
 export function netProductValue(order: Order) {
   const productSubtotal = roundMoney(
     (order.items || []).reduce(
-      (sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 0),
+      (sum, item) => sum + orderItemLineTotal(item),
       0,
     ),
   );
@@ -158,7 +159,7 @@ export function netProductValue(order: Order) {
 function buildPurchaseItems(order: Order): Ga4PurchaseItem[] {
   const productSubtotal = roundMoney(
     (order.items || []).reduce(
-      (sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 0),
+      (sum, item) => sum + orderItemLineTotal(item),
       0,
     ),
   );
@@ -188,14 +189,14 @@ function allocateDiscount(items: OrderItem[], discount: number) {
   const cents = Math.round(discount * 100);
   if (cents <= 0 || !items.length) return items.map(() => 0);
   const subtotalCents = items.reduce(
-    (sum, item) => sum + Math.round(Number(item.unitPrice || 0) * 100) * Number(item.quantity || 0),
+    (sum, item) => sum + Math.round(orderItemLineTotal(item) * 100),
     0,
   );
   if (subtotalCents <= 0) return items.map(() => 0);
   let allocated = 0;
   return items.map((item, index) => {
     if (index === items.length - 1) return roundMoney((cents - allocated) / 100);
-    const lineCents = Math.round(Number(item.unitPrice || 0) * 100) * Number(item.quantity || 0);
+    const lineCents = Math.round(orderItemLineTotal(item) * 100);
     const share = Math.floor((cents * lineCents) / subtotalCents);
     allocated += share;
     return roundMoney(share / 100);

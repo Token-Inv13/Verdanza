@@ -96,6 +96,8 @@ import type {
   Product,
   ProductCategory,
   ProductCost,
+  FixedPriceMode,
+  FixedPriceOption,
   PromoBanner,
   PromoBannerPlacement,
   PromoBannerType,
@@ -128,12 +130,28 @@ import {
   type WeightedSupplierCost,
 } from "../../lib/accountingCosts";
 import { formatLocalDeliveryEstimate } from "../../lib/deliveryEstimate";
+import {
+  orderItemLineTotal,
+  orderItemQuantityLabel,
+} from "../../lib/orderLineDisplay";
+import {
+  FIXED_PRICE_POLICY_VERSION,
+  fixedPriceOptionsForMode,
+  fixedPriceEffectiveUnitPrice,
+  fixedPriceOptionLabel,
+  isFixedPriceAdvantageous,
+  normalizeFixedPriceMode,
+  resolveFixedPriceOptions,
+  validateManualFixedPriceOptions,
+} from "../../lib/fixedPriceOptions";
 
 const emptyProduct: ProductInput = {
   slug: "",
   name: "",
   category: "flowers",
   price: 0,
+  fixedPriceMode: "automatic",
+  fixedPriceOptions: [],
   shortDescription: "",
   longDescription: "",
   image: BRAND_LABEL,
@@ -300,11 +318,31 @@ export function AdminPage({ section }: { section: string }) {
   async function handleProductSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
+    const fixedPriceMode = normalizeFixedPriceMode(
+      editingProduct.fixedPriceMode,
+      editingProduct.category,
+    );
+    const fixedPriceOptions = fixedPriceOptionsForMode(
+      fixedPriceMode,
+      editingProduct.fixedPriceOptions,
+    );
+    const manualIssues = validateManualFixedPriceOptions({
+      ...editingProduct,
+      fixedPriceMode,
+      fixedPriceOptions,
+    } as Product);
+    const blockingManualIssues = manualIssues.filter((issue) => issue.severity === "error");
+    if (blockingManualIssues.length > 0) {
+      setMessage(`Formats prix fixe invalides : ${blockingManualIssues[0].message}`);
+      return;
+    }
     await upsertProduct({
       ...editingProduct,
       slug: editingProduct.slug || slugify(editingProduct.name),
       aromas: normalizeList(editingProduct.aromas),
       tags: normalizeList(editingProduct.tags),
+      fixedPriceMode,
+      fixedPriceOptions,
     });
     setEditingProduct(emptyProduct);
     setMessage("Produit enregistre.");
@@ -921,6 +959,24 @@ function ProductForm({
             }
           />
         </div>
+        <FixedPriceOptionsEditor
+          product={product}
+          onModeChange={(fixedPriceMode) =>
+            onChange({
+              ...product,
+              fixedPriceMode,
+              fixedPriceOptions:
+                fixedPriceOptionsForMode(fixedPriceMode, product.fixedPriceOptions),
+            })
+          }
+          onChange={(fixedPriceOptions) =>
+            onChange({
+              ...product,
+              fixedPriceMode: "manual",
+              fixedPriceOptions,
+            })
+          }
+        />
         <Input
           label="Description courte"
           value={product.shortDescription}
@@ -985,6 +1041,242 @@ function ProductForm({
         </button>
       </div>
     </form>
+  );
+}
+
+function FixedPriceOptionsEditor({
+  product,
+  onModeChange,
+  onChange,
+}: {
+  product: ProductInput;
+  onModeChange: (mode: FixedPriceMode) => void;
+  onChange: (options: FixedPriceOption[]) => void;
+}) {
+  const options = product.fixedPriceOptions || [];
+  const mode = normalizeFixedPriceMode(product.fixedPriceMode, product.category);
+  const resolvedOptions = resolveFixedPriceOptions({
+    ...product,
+    fixedPriceMode: mode,
+    isActive: product.isActive !== false,
+  } as Product);
+  const manualIssues = validateManualFixedPriceOptions({
+    ...product,
+    fixedPriceMode: mode,
+    fixedPriceOptions: options,
+  } as Product);
+  const duplicateActiveTotals = new Set(
+    options
+      .filter((option) => option.isActive)
+      .map((option) => `${option.quantityGrams}:${option.totalPrice}`)
+      .filter((key, index, all) => all.indexOf(key) !== index),
+  );
+
+  function updateOption(index: number, patch: Partial<FixedPriceOption>) {
+    const next = [...options];
+    next[index] = { ...next[index], ...patch };
+    onChange(next);
+  }
+
+  return (
+    <div className="rounded-md border border-forest/10 bg-cream p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-forest">Formats prix fixe</h3>
+          <p className="mt-1 text-xs leading-5 text-ink/60">
+            Politique automatique v{FIXED_PRICE_POLICY_VERSION}. Le stock reste toujours decremente en grammes.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        {(["automatic", "manual", "disabled"] as FixedPriceMode[]).map((entry) => (
+          <button
+            key={entry}
+            type="button"
+            className={
+              mode === entry
+                ? "rounded-md border border-forest bg-forest px-3 py-2 text-sm font-semibold text-ivory"
+                : "rounded-md border border-forest/15 bg-ivory px-3 py-2 text-sm font-semibold text-forest"
+            }
+            onClick={() => onModeChange(entry)}
+          >
+            {entry === "automatic"
+              ? "Automatique"
+              : entry === "manual"
+                ? "Manuel"
+                : "Desactive"}
+          </button>
+        ))}
+      </div>
+
+      {mode === "automatic" && (
+        <div className="mt-4 rounded-md border border-forest/10 bg-ivory p-3">
+          <p className="text-xs leading-5 text-ink/60">
+            Les formats sont recalcules depuis le prix au gramme actuel. Ils ne sont pas
+            stockes comme grille manuelle.
+          </p>
+          <FixedPriceOptionsPreview product={product as Product} options={resolvedOptions} />
+        </div>
+      )}
+
+      {mode === "disabled" && (
+        <p className="mt-4 rounded-md border border-forest/10 bg-ivory p-3 text-xs leading-5 text-ink/60">
+          Aucun bouton de format fixe ne sera affiche publiquement pour ce produit.
+        </p>
+      )}
+
+      {mode === "manual" && (
+        <>
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+              onClick={() =>
+                onChange([
+                  ...options,
+                  {
+                    id: `format-${options.length + 1}`,
+                    totalPrice: 0,
+                    quantityGrams: 0,
+                    isActive: false,
+                    source: "manual",
+                    sortOrder: options.length,
+                  },
+                ])
+              }
+            >
+              Ajouter
+            </button>
+          </div>
+          {manualIssues.length > 0 && (
+            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+              {manualIssues.map((issue) => (
+                <p key={`${issue.optionId || "global"}-${issue.message}`}>
+                  {issue.message}
+                </p>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      {mode === "manual" && (
+        <div className="mt-4 grid gap-3">
+        {options.length === 0 && (
+          <p className="text-xs text-ink/55">Aucun format prix fixe configure.</p>
+        )}
+        {options.map((option, index) => {
+          const duplicateKey = `${option.quantityGrams}:${option.totalPrice}`;
+          const isDuplicateActive = option.isActive && duplicateActiveTotals.has(duplicateKey);
+          const isAdvantageous = isFixedPriceAdvantageous(product as Product, option);
+          return (
+            <div key={`${option.id}-${index}`} className="rounded-md border border-forest/10 bg-ivory p-3">
+              <div className="grid gap-3 md:grid-cols-4">
+                <Input
+                  label="Identifiant"
+                  value={option.id}
+                  onChange={(id) => updateOption(index, { id })}
+                />
+                <Input
+                  label="Libelle"
+                  value={option.label || ""}
+                  onChange={(label) => updateOption(index, { label })}
+                  placeholder={fixedPriceOptionLabel(option)}
+                />
+                <NumberInput
+                  label="Prix total"
+                  value={option.totalPrice}
+                  onChange={(totalPrice) => updateOption(index, { totalPrice })}
+                />
+                <NumberInput
+                  label="Grammes"
+                  value={option.quantityGrams}
+                  onChange={(quantityGrams) =>
+                    updateOption(index, { quantityGrams: Math.floor(quantityGrams) })
+                  }
+                />
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-forest/70">
+                <label className="flex items-center gap-2 font-medium">
+                  <input
+                    type="checkbox"
+                    checked={option.isActive}
+                    onChange={(event) => updateOption(index, { isActive: event.target.checked })}
+                  />
+                  Actif
+                </label>
+                <span>
+                  Prix effectif : {fixedPriceEffectiveUnitPrice(option).toFixed(2).replace(".", ",")} EUR/g
+                  {isAdvantageous ? " - avantageux" : ""}
+                </span>
+                <button
+                  type="button"
+                  className="text-red-700 underline"
+                  onClick={() => onChange(options.filter((_, optionIndex) => optionIndex !== index))}
+                >
+                  Supprimer ce format
+                </button>
+              </div>
+              {option.isActive && !isAdvantageous && (
+                <p className="mt-2 text-xs text-amber-800">
+                  Ce format actif n'est pas moins cher que le prix au gramme actuel.
+                </p>
+              )}
+              {isDuplicateActive && (
+                <p className="mt-2 text-xs text-red-700">
+                  Un format actif identique existe deja pour ce produit.
+                </p>
+              )}
+            </div>
+          );
+        })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FixedPriceOptionsPreview({
+  product,
+  options,
+}: {
+  product: Product;
+  options: ReturnType<typeof resolveFixedPriceOptions>;
+}) {
+  if (options.length === 0) {
+    return (
+      <p className="mt-3 text-xs text-amber-800">
+        Aucun format automatique coherent pour le prix et la categorie actuels.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-3 grid gap-2">
+      {options.map((option) => (
+        <div
+          key={option.id}
+          className="rounded-md border border-forest/10 bg-cream p-3 text-xs text-forest"
+        >
+          <p className="font-semibold">{fixedPriceOptionLabel(option)}</p>
+          <p className="mt-1 text-forest/70">
+            Prix effectif : {fixedPriceEffectiveUnitPrice(option).toFixed(2).replace(".", ",")} EUR/g
+          </p>
+          <p className="text-forest/70">
+            Economie : {option.savingAmount.toFixed(2).replace(".", ",")} EUR (
+            {(option.savingRate * 100).toFixed(1).replace(".", ",")} %)
+          </p>
+          <p className="text-forest/60">
+            Politique v{option.policyVersion || FIXED_PRICE_POLICY_VERSION} - {option.id}
+          </p>
+        </div>
+      ))}
+      {!product.isActive && (
+        <p className="text-xs text-amber-800">
+          Produit inactif : aucun format ne sera affiche publiquement.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -6494,13 +6786,13 @@ function buildAccountingSummary(
   paidOrders.forEach((order) => {
     const orderProductRevenue = orderProductNetRevenue(order);
     const grossLinesTotal = order.items.reduce(
-      (sum, item) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0),
+      (sum, item) => sum + orderItemLineTotal(item),
       0,
     );
 
     order.items.forEach((item) => {
       const quantity = Number(item.quantity || 0);
-      const grossLineRevenue = quantity * Number(item.unitPrice || 0);
+      const grossLineRevenue = orderItemLineTotal(item);
       const lineProductNetRevenue = grossLinesTotal > 0
         ? orderProductRevenue * (grossLineRevenue / grossLinesTotal)
         : 0;
@@ -6668,8 +6960,22 @@ function formatQuantity(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(".", ",");
 }
 
-function formatOrderItemLine(item: { name: string; quantity: number; productInternalReference?: string }) {
+function formatOrderItemLine(item: {
+  name: string;
+  quantity: number;
+  productInternalReference?: string;
+  purchaseMode?: "gram" | "fixed_price";
+  fixedPriceQuantity?: number;
+  fixedPriceGrams?: number;
+  fixedPriceTotal?: number;
+}) {
   const reference = item.productInternalReference ? `${item.productInternalReference} - ` : "";
+  if (item.purchaseMode === "fixed_price") {
+    const format = item.fixedPriceTotal
+      ? ` - format ${formatCurrency(item.fixedPriceTotal)}`
+      : "";
+    return `${reference}${item.name}${format} x ${orderItemQuantityLabel(item)}`;
+  }
   return `${reference}${item.name} x${item.quantity} g`;
 }
 

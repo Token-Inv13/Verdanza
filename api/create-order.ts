@@ -19,7 +19,13 @@ import {
   type EmailResult,
 } from "./_server/email.js";
 import { sendPostPaymentOrderAlerts } from "./_server/orderAlerts.js";
-import type { Invoice, Order } from "../src/types/index.js";
+import { buildCustomerInvoiceLines } from "../src/lib/customerInvoiceLines.js";
+import {
+  fixedPriceEffectiveUnitPrice,
+  fixedPriceLineTotal,
+  resolveFixedPriceOptions,
+} from "../src/lib/fixedPriceOptions.js";
+import type { Invoice, Order, Product } from "../src/types/index.js";
 
 export default async function handler(
   request: VercelRequestLike,
@@ -59,11 +65,13 @@ export default async function handler(
           }),
       );
       const productReads = await Promise.all(
-        priced.orderItems.map(async (item) => {
-          const productRef = db.collection("products").doc(item.productId);
-          const productSnapshot = await transaction.get(productRef);
-          return { item, productRef, productSnapshot };
-        }),
+        Array.from(new Set(priced.orderItems.map((item) => item.productId))).map(
+          async (productId) => {
+            const productRef = db.collection("products").doc(productId);
+            const productSnapshot = await transaction.get(productRef);
+            return { productId, productRef, productSnapshot };
+          },
+        ),
       );
 
       if (couponRef && couponSnapshot) {
@@ -85,34 +93,46 @@ export default async function handler(
         }
       }
 
-      for (const { item, productRef, productSnapshot } of productReads) {
+      for (const { productId, productRef, productSnapshot } of productReads) {
+        const matchingItems = priced.orderItems.filter((item) => item.productId === productId);
+        const requestedQuantity = matchingItems.reduce(
+          (sum, item) => sum + Number(item.quantity || 0),
+          0,
+        );
+        const productName = matchingItems[0]?.name || productId;
         if (!productSnapshot.exists) {
-          throw new Error(`Produit indisponible : ${item.name}.`);
+          throw new Error(`Produit indisponible : ${productName}.`);
         }
 
         const data = productSnapshot.data();
         const stock = Number(data?.stock ?? 0);
         if (data?.isActive !== true) {
-          throw new Error(`Produit indisponible : ${item.name}.`);
+          throw new Error(`Produit indisponible : ${productName}.`);
         }
-        if (stock < item.quantity) {
-          throw new Error(`Stock insuffisant pour ${item.name}.`);
+        if (stock < requestedQuantity) {
+          throw new Error(`Stock insuffisant pour ${productName}.`);
+        }
+        for (const item of matchingItems.filter((entry) => entry.purchaseMode === "fixed_price")) {
+          const product = { id: productSnapshot.id, ...data } as Product;
+          assertFixedPriceOrderItemStillMatchesProduct(item, product);
         }
 
         transaction.update(productRef, {
-          stock: stock - item.quantity,
+          stock: stock - requestedQuantity,
           updatedAt: FieldValue.serverTimestamp(),
         });
-        transaction.set(db.collection("stockMovements").doc(), {
-          productId: item.productId,
-          productName: item.name,
-          type: "sale",
-          quantity: -item.quantity,
-          note: `Commande manuelle ${orderRef.id}`,
-          createdAt: FieldValue.serverTimestamp(),
-          createdBy: "manual-checkout",
-          orderId: orderRef.id,
-        });
+        for (const item of matchingItems) {
+          transaction.set(db.collection("stockMovements").doc(), {
+            productId: item.productId,
+            productName: item.name,
+            type: "sale",
+            quantity: -item.quantity,
+            note: `Commande manuelle ${orderRef.id}`,
+            createdAt: FieldValue.serverTimestamp(),
+            createdBy: "manual-checkout",
+            orderId: orderRef.id,
+          });
+        }
       }
 
       if (priced.couponCode) {
@@ -175,6 +195,7 @@ export default async function handler(
       message.includes("Produit indisponible") ||
       message.includes("Produit inactif") ||
       message.includes("produit n'est plus disponible") ||
+      message.includes("Format prix fixe") ||
       message.includes("Quantite produit invalide");
     const safeBusinessError = stockOrProductError
       ? "Stock insuffisant ou produit indisponible. Veuillez ajuster votre panier avant de valider."
@@ -192,6 +213,29 @@ export default async function handler(
       },
       400,
     );
+  }
+}
+
+export function assertFixedPriceOrderItemStillMatchesProduct(
+  item: Order["items"][number],
+  product: Product,
+) {
+  if (item.purchaseMode !== "fixed_price") return;
+  const option = resolveFixedPriceOptions(product).find(
+    (entry) => entry.id === item.fixedPriceOptionId,
+  );
+  if (!option) {
+    throw new Error(`Format prix fixe indisponible pour ${item.name}.`);
+  }
+  const expectedQuantity = Number(item.fixedPriceQuantity || 0);
+  const expectedTotal = fixedPriceLineTotal(option, expectedQuantity);
+  if (
+    option.quantityGrams !== item.fixedPriceGrams ||
+    option.totalPrice !== item.fixedPriceTotal ||
+    expectedTotal !== item.lineTotal ||
+    fixedPriceEffectiveUnitPrice(option) !== item.unitPrice
+  ) {
+    throw new Error(`Format prix fixe modifie pour ${item.name}.`);
   }
 }
 
@@ -218,13 +262,7 @@ async function createDraftInvoiceForOrder(
     customerEmail: order.customerEmail,
     customerPhone: order.customerPhone,
     customerAddress: order.deliveryAddress,
-    lines: order.items.map((item) => ({
-      id: item.productId,
-      label: item.name,
-      quantity: item.quantity,
-      unitPrice: Number(item.unitPrice || 0),
-      total: roundMoney(Number(item.unitPrice || 0) * Number(item.quantity || 0)),
-    })),
+    lines: buildCustomerInvoiceLines(order),
     subtotal: Number(order.subtotal || 0),
     deliveryFee: Number(order.deliveryFee || 0),
     discountAmount: Number(order.discountAmount || 0),
@@ -262,10 +300,6 @@ async function nextInvoiceNumber(db: FirebaseFirestore.Firestore) {
     );
     return `VER-${year}-${String(next).padStart(4, "0")}`;
   });
-}
-
-function roundMoney(value: number) {
-  return Math.round(value * 100) / 100;
 }
 
 function preferredPaymentMethodLabel(method?: Order["preferredPaymentMethod"]) {

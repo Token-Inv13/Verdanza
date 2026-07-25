@@ -14,6 +14,7 @@ export type Ga4Item = {
 };
 
 export type AnalyticsPayload = Record<string, Primitive | Ga4Item[]>;
+type AnalyticsCartLine = { product: Product; quantity: number; quantityGrams?: number };
 
 export type AnalyticsEventName =
   | "page_view"
@@ -182,12 +183,12 @@ export function trackRemoveFromCart(product: Product, quantity = 1) {
   });
 }
 
-export function trackViewCart(lines: { product: Product; quantity: number }[], value: number) {
+export function trackViewCart(lines: AnalyticsCartLine[], value: number) {
   if (!lines.length) return;
   trackEvent("view_cart", {
     currency: "EUR",
     value: roundMoney(value),
-    items: lines.map((line) => productToGa4Item(line.product, line.quantity)),
+    items: lines.map((line) => productToGa4Item(line.product, analyticsLineQuantity(line))),
   });
 }
 
@@ -199,17 +200,17 @@ export function trackAddToWishlist(product: Product) {
   });
 }
 
-export function trackBeginCheckout(lines: { product: Product; quantity: number }[], value: number) {
+export function trackBeginCheckout(lines: AnalyticsCartLine[], value: number) {
   if (!lines.length) return;
   trackEvent("begin_checkout", {
     currency: "EUR",
     value: roundMoney(value),
-    items: lines.map((line) => productToGa4Item(line.product, line.quantity)),
+    items: lines.map((line) => productToGa4Item(line.product, analyticsLineQuantity(line))),
   });
 }
 
 export function trackAddShippingInfo(
-  lines: { product: Product; quantity: number }[],
+  lines: AnalyticsCartLine[],
   value: number,
   shippingTier: DeliveryMethod,
 ) {
@@ -218,7 +219,7 @@ export function trackAddShippingInfo(
     currency: "EUR",
     value: roundMoney(value),
     shipping_tier: shippingTier,
-    items: lines.map((line) => productToGa4Item(line.product, line.quantity)),
+    items: lines.map((line) => productToGa4Item(line.product, analyticsLineQuantity(line))),
   });
   trackEvent("delivery_method_selected", {
     delivery_method: shippingTier,
@@ -233,7 +234,7 @@ export function trackLocalDeliveryZoneSelected(zoneId: string, zoneName: string)
 }
 
 export function trackAddPaymentInfo(
-  lines: { product: Product; quantity: number }[],
+  lines: AnalyticsCartLine[],
   value: number,
   paymentMethod: string,
 ) {
@@ -242,12 +243,12 @@ export function trackAddPaymentInfo(
     currency: "EUR",
     value: roundMoney(value),
     payment_method: paymentMethod,
-    items: lines.map((line) => productToGa4Item(line.product, line.quantity)),
+    items: lines.map((line) => productToGa4Item(line.product, analyticsLineQuantity(line))),
   });
 }
 
 export function trackPaymentMethodSelected(
-  lines: { product: Product; quantity: number }[],
+  lines: AnalyticsCartLine[],
   value: number,
   preferredPaymentMethod: PreferredPaymentMethod,
   deliveryMethod: DeliveryMethod,
@@ -258,13 +259,13 @@ export function trackPaymentMethodSelected(
     delivery_method: deliveryMethod,
     currency: "EUR",
     value: roundMoney(value),
-    items: lines.map((line) => productToGa4Item(line.product, line.quantity)),
+    items: lines.map((line) => productToGa4Item(line.product, analyticsLineQuantity(line))),
   });
 }
 
 export function trackOrderSubmitted(input: {
   transactionId: string;
-  lines: { product: Product; quantity: number }[];
+  lines: AnalyticsCartLine[];
   value: number;
   coupon?: string;
   shippingTier: DeliveryMethod;
@@ -280,7 +281,7 @@ export function trackOrderSubmitted(input: {
     coupon: input.coupon,
     shipping_tier: input.shippingTier,
     preferred_payment_method: input.paymentMethod,
-    items: input.lines.map((line) => productToGa4Item(line.product, line.quantity)),
+    items: input.lines.map((line) => productToGa4Item(line.product, analyticsLineQuantity(line))),
   });
   if (typeof window !== "undefined" && analyticsAllowed) {
     window.sessionStorage.setItem(dedupeKey, "true");
@@ -321,6 +322,10 @@ export function trackBlogReadProgress(article: BlogArticle, threshold: 25 | 50 |
 
 function roundMoney(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function analyticsLineQuantity(line: AnalyticsCartLine) {
+  return Number(line.quantityGrams ?? line.quantity ?? 0);
 }
 
 function sanitizeDestinationPath(path: string) {

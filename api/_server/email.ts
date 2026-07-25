@@ -1,5 +1,6 @@
 import type { BillingSettings, Invoice, Order, OrderStatus } from "../../src/types/index.js";
 import { formatLocalDeliveryEstimate } from "../../src/lib/deliveryEstimate.js";
+import { orderItemLineTotal, orderItemSummaryLabel } from "../../src/lib/orderLineDisplay.js";
 
 export type EmailResult =
   | { status: "sent"; id?: string; recipients?: EmailRecipientResults }
@@ -373,8 +374,8 @@ function orderEmailHtml(order: Order, intro: string) {
   const rows = order.items
     .map(
       (item) =>
-        `<li>${escapeHtml(item.name)} x ${item.quantity} - ${formatMoney(
-          item.unitPrice * item.quantity,
+        `<li>${escapeHtml(orderItemSummaryLabel(item))} - ${formatMoney(
+          orderItemLineTotal(item),
         )}</li>`,
     )
     .join("");
@@ -402,7 +403,7 @@ function orderEmailHtml(order: Order, intro: string) {
 
 function orderEmailText(order: Order, intro: string) {
   const items = order.items
-    .map((item) => `${item.name} x ${item.quantity} - ${formatMoney(item.unitPrice * item.quantity)}`)
+    .map((item) => `${orderItemSummaryLabel(item)} - ${formatMoney(orderItemLineTotal(item))}`)
     .join("\n");
   return [
     "Verdanza",
@@ -482,7 +483,7 @@ function customerManualOrderEmailText(order: Order) {
     `Mode de reglement souhaite: ${preferredPaymentMethodLabel(order.preferredPaymentMethod)}`,
     "Résumé de votre commande:",
     order.items
-      .map((item) => `${item.name} x ${item.quantity} g - ${formatMoney(item.unitPrice * item.quantity)}`)
+      .map((item) => `${orderItemSummaryLabel(item)} - ${formatMoney(orderItemLineTotal(item))}`)
       .join("\n"),
     ...promoEmailTextLines(order),
     `Total estimé: ${formatMoney(Number(order.total || 0))}`,
@@ -511,7 +512,7 @@ function adminOrderEmailHtml(order: Order) {
       <p><strong>Action paiement :</strong> Lien de paiement à envoyer si CB souhaitée.</p>
       <p><strong>Produits :</strong></p>
       <ul>${order.items
-        .map((item) => `<li>${escapeHtml(item.name)} x ${item.quantity} g</li>`)
+        .map((item) => `<li>${escapeHtml(orderItemSummaryLabel(item))}</li>`)
         .join("")}</ul>
       ${promoEmailHtml(order)}
       <p><strong>Total estimé :</strong> ${formatMoney(Number(order.total || 0))}</p>
@@ -537,7 +538,7 @@ function adminOrderEmailText(order: Order) {
     `Mode de reglement souhaite: ${preferredPaymentMethodLabel(order.preferredPaymentMethod)}`,
     "Action paiement: lien de paiement a envoyer si CB souhaitee.",
     "Produits:",
-    order.items.map((item) => `${item.name} x ${item.quantity} g`).join("\n"),
+    order.items.map((item) => orderItemSummaryLabel(item)).join("\n"),
     ...promoEmailTextLines(order),
     `Total estimé: ${formatMoney(Number(order.total || 0))}`,
     order.customerMessage ? `Message client: ${order.customerMessage}` : "",

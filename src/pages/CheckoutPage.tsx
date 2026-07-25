@@ -20,6 +20,7 @@ import { rememberPendingOrderAnalyticsRevocation } from "../lib/orderAnalyticsRe
 import { getCartStockIssues } from "../lib/cartStock";
 import { calculateCartPromotions } from "../lib/cartPromotions";
 import { formatLocalDeliveryEstimate } from "../lib/deliveryEstimate";
+import { fixedPriceOptionLabel } from "../lib/fixedPriceOptions";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
 import {
   effectiveLocalDeliveryMinimum,
@@ -44,7 +45,14 @@ const paymentMethodLabels: Record<PreferredPaymentMethod, string> = {
 };
 
 export function CheckoutPage() {
-  const { itemCount, subtotal, items, lines } = useCart();
+  const {
+    itemCount,
+    subtotal,
+    items,
+    lines,
+    cartWarnings,
+    hasBlockingCartIssues,
+  } = useCart();
   const beginCheckoutSignature = useRef("");
   const shippingSignature = useRef("");
   const paymentSignature = useRef("");
@@ -128,8 +136,9 @@ export function CheckoutPage() {
       productId: line.productId,
       name: line.product.name,
       category: line.product.category,
-      quantity: line.quantity,
-      unitPrice: line.product.price,
+      quantity: line.quantityGrams,
+      unitPrice: line.unitPrice,
+      lineTotal: line.lineTotal,
     })),
   });
   const normalizedCouponCode = couponCode.trim().toUpperCase();
@@ -160,9 +169,10 @@ export function CheckoutPage() {
   const estimatedTotal = Math.max(0, subtotal + estimatedDeliveryFee - discountAmount);
   const stockIssues = useMemo(() => getCartStockIssues(lines), [lines]);
   const hasStockIssues = stockIssues.length > 0;
+  const hasCartIssues = hasStockIssues || hasBlockingCartIssues;
 
   useEffect(() => {
-    const signature = lines.map((line) => `${line.productId}:${line.quantity}`).join("|");
+    const signature = lines.map((line) => `${line.lineKey}:${line.quantity}`).join("|");
     if (!signature || beginCheckoutSignature.current === signature) return;
     beginCheckoutSignature.current = signature;
     trackBeginCheckout(lines, estimatedTotal);
@@ -171,7 +181,7 @@ export function CheckoutPage() {
   useEffect(() => {
     if (!lines.length) return;
     const zonePart = isLocalDelivery ? selectedZone?.id || "none" : "postal-france";
-    const signature = `${deliveryMethod}:${zonePart}:${lines.map((line) => `${line.productId}:${line.quantity}`).join("|")}`;
+    const signature = `${deliveryMethod}:${zonePart}:${lines.map((line) => `${line.lineKey}:${line.quantity}`).join("|")}`;
     if (shippingSignature.current === signature) return;
     shippingSignature.current = signature;
     trackAddShippingInfo(lines, estimatedTotal, deliveryMethod);
@@ -182,7 +192,7 @@ export function CheckoutPage() {
 
   useEffect(() => {
     if (!lines.length) return;
-    const signature = `${deliveryMethod}:${preferredPaymentMethod}:${lines.map((line) => `${line.productId}:${line.quantity}`).join("|")}`;
+    const signature = `${deliveryMethod}:${preferredPaymentMethod}:${lines.map((line) => `${line.lineKey}:${line.quantity}`).join("|")}`;
     if (paymentSignature.current === signature) return;
     paymentSignature.current = signature;
     trackPaymentMethodSelected(lines, estimatedTotal, preferredPaymentMethod, deliveryMethod);
@@ -229,7 +239,7 @@ export function CheckoutPage() {
   }, [couponCode]);
 
   useEffect(() => {
-    if (!lines.length || hasManualPromo) {
+    if (!lines.length || hasManualPromo || hasBlockingCartIssues) {
       setAutomaticQuote(null);
       return;
     }
@@ -248,7 +258,15 @@ export function CheckoutPage() {
     return () => {
       cancelled = true;
     };
-  }, [deliveryMethod, deliveryZone, hasManualPromo, items, lines.length, subtotal]);
+  }, [
+    deliveryMethod,
+    deliveryZone,
+    hasBlockingCartIssues,
+    hasManualPromo,
+    items,
+    lines.length,
+    subtotal,
+  ]);
 
   useEffect(() => {
     if (!quote?.promoApplied || !appliedCouponCode.trim()) return;
@@ -258,7 +276,7 @@ export function CheckoutPage() {
 
   useEffect(() => {
     const code = appliedCouponCode.trim().toUpperCase();
-    if (!lines.length || !code) {
+    if (!lines.length || !code || hasBlockingCartIssues) {
       setQuote(null);
       return;
     }
@@ -283,7 +301,15 @@ export function CheckoutPage() {
     return () => {
       cancelled = true;
     };
-  }, [appliedCouponCode, deliveryMethod, deliveryZone, items, lines.length, subtotal]);
+  }, [
+    appliedCouponCode,
+    deliveryMethod,
+    deliveryZone,
+    hasBlockingCartIssues,
+    items,
+    lines.length,
+    subtotal,
+  ]);
 
   useEffect(() => {
     if (!user) return;
@@ -310,6 +336,11 @@ export function CheckoutPage() {
     setPromoMessage("");
     setQuote(null);
     if (!code) return null;
+    if (hasBlockingCartIssues) {
+      const message = "Un format prix fixe de votre panier n'est plus disponible.";
+      setPromoMessage(message);
+      throw new Error(message);
+    }
     setIsCheckingPromo(true);
     try {
       const nextQuote = await quoteOrder({
@@ -351,7 +382,7 @@ export function CheckoutPage() {
     setIsSubmitting(true);
 
     try {
-      if (hasStockIssues) {
+      if (hasCartIssues) {
         throw new Error(
           "Certains produits dépassent le stock disponible. Veuillez ajuster votre panier avant de continuer.",
         );
@@ -449,8 +480,13 @@ export function CheckoutPage() {
           orderId: payload.orderId,
           orderType: "order",
           items: lines.map((line) => ({
-            name: line.product.name,
-            quantity: line.quantity,
+            name: line.fixedPriceOption
+              ? `${line.product.name} - ${fixedPriceOptionLabel(line.fixedPriceOption)}`
+              : line.product.name,
+            quantity: line.quantityGrams,
+            displayQuantity: line.fixedPriceOption
+              ? `${line.quantity} ${line.quantity > 1 ? "formats" : "format"}`
+              : `${line.quantity} g`,
             total: line.lineTotal,
           })),
           delivery:
@@ -764,9 +800,11 @@ export function CheckoutPage() {
             <h2 className="font-display text-3xl text-forest">Résumé</h2>
             <div className="mt-5 grid gap-3 text-sm">
               {lines.map((line) => (
-                <p key={line.productId} className="flex justify-between gap-4">
+                <p key={line.lineKey} className="flex justify-between gap-4">
                   <span>
-                    {line.product.name} x {line.quantity} g
+                    {line.fixedPriceOption
+                      ? `${line.product.name} - ${fixedPriceOptionLabel(line.fixedPriceOption)} x ${line.quantity} ${line.quantity > 1 ? "formats" : "format"}`
+                      : `${line.product.name} x ${line.quantity} g`}
                   </span>
                   <span>{formatEuro(line.lineTotal)}</span>
                 </p>
@@ -858,12 +896,15 @@ export function CheckoutPage() {
                 <span>Total estimé</span>
                 <span>{formatEuro(estimatedTotal)}</span>
               </p>
-              {hasStockIssues && (
+              {hasCartIssues && (
                 <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-800">
                   <p>Ajustez votre panier avant de valider.</p>
                   <ul className="mt-1 list-disc pl-5">
+                    {cartWarnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
                     {stockIssues.map((issue) => (
-                      <li key={issue.productId}>{issue.message}</li>
+                      <li key={issue.lineKey || issue.productId}>{issue.message}</li>
                     ))}
                   </ul>
                 </div>
@@ -892,7 +933,7 @@ export function CheckoutPage() {
               de conformité.
             </label>
             {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
-            <button className="btn-primary mt-6 w-full" disabled={isSubmitting || hasStockIssues}>
+            <button className="btn-primary mt-6 w-full" disabled={isSubmitting || hasCartIssues}>
               {isSubmitting ? "Validation..." : "Valider ma commande"}
             </button>
           </aside>

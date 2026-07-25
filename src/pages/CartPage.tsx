@@ -14,11 +14,22 @@ import {
 import { calculateCartPromotions } from "../lib/cartPromotions";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
 import { trackAddToCart, trackCtaClick, trackRemoveFromCart, trackViewCart } from "../lib/analytics";
+import { fixedPriceOptionLabel } from "../lib/fixedPriceOptions";
 
 const promoStorageKey = "verdanza-coupon-code";
 
 export function CartPage() {
-  const { items, lines, subtotal, addItem, decrementItem, setItemQuantity, removeItem } = useCart();
+  const {
+    items,
+    lines,
+    cartWarnings,
+    hasBlockingCartIssues,
+    subtotal,
+    incrementLine,
+    decrementLine,
+    setLineQuantity,
+    removeLine,
+  } = useCart();
   const trackedCartSignature = useRef("");
   const deliveryEstimate = 0;
   const [couponCode, setCouponCode] = useState(() =>
@@ -36,8 +47,9 @@ export function CartPage() {
       productId: line.productId,
       name: line.product.name,
       category: line.product.category,
-      quantity: line.quantity,
-      unitPrice: line.product.price,
+      quantity: line.quantityGrams,
+      unitPrice: line.unitPrice,
+      lineTotal: line.lineTotal,
     })),
   });
   const normalizedCouponCode = couponCode.trim().toUpperCase();
@@ -68,6 +80,7 @@ export function CartPage() {
   const total = Math.max(0, subtotal + (lines.length ? deliveryEstimate : 0) - discountAmount);
   const stockIssues = getCartStockIssues(lines);
   const hasStockIssues = stockIssues.length > 0;
+  const hasCartIssues = hasStockIssues || hasBlockingCartIssues;
 
   useEffect(() => {
     if (!couponCode.trim()) {
@@ -79,7 +92,7 @@ export function CartPage() {
   }, [couponCode]);
 
   useEffect(() => {
-    if (!lines.length || hasManualPromo) {
+    if (!lines.length || hasManualPromo || hasBlockingCartIssues) {
       setAutomaticQuote(null);
       return;
     }
@@ -98,11 +111,11 @@ export function CartPage() {
     return () => {
       cancelled = true;
     };
-  }, [hasManualPromo, items, lines.length, subtotal]);
+  }, [hasBlockingCartIssues, hasManualPromo, items, lines.length, subtotal]);
 
   useEffect(() => {
     const code = appliedCouponCode.trim().toUpperCase();
-    if (!lines.length || !code) {
+    if (!lines.length || !code || hasBlockingCartIssues) {
       setQuote(null);
       return;
     }
@@ -127,10 +140,10 @@ export function CartPage() {
     return () => {
       cancelled = true;
     };
-  }, [appliedCouponCode, items, lines.length, subtotal]);
+  }, [appliedCouponCode, hasBlockingCartIssues, items, lines.length, subtotal]);
 
   useEffect(() => {
-    const signature = lines.map((line) => `${line.productId}:${line.quantity}`).join("|");
+    const signature = lines.map((line) => `${line.lineKey}:${line.quantity}`).join("|");
     if (!signature || trackedCartSignature.current === signature) return;
     trackedCartSignature.current = signature;
     trackViewCart(lines, subtotal);
@@ -195,6 +208,16 @@ export function CartPage() {
         </p>
       </div>
       <PromoBannerSlot placement="cart" type="checkout_notice" className="mt-6 grid gap-3" />
+      {cartWarnings.length > 0 && (
+        <div className="mt-6 rounded-md border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-800">
+          <p>Certains formats prix fixe de votre panier ne sont plus disponibles.</p>
+          <ul className="mt-1 list-disc pl-5">
+            {cartWarnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {lines.length === 0 ? (
         <section className="mt-10 rounded-lg border border-forest/10 bg-cream p-8">
           <p>Votre panier est vide.</p>
@@ -219,12 +242,20 @@ export function CartPage() {
             {lines.map((line) => {
               const availableStock = availableProductStock(line.product);
               const stockIssue = getCartLineStockIssue(line);
-              const canIncrease = !stockIssue && line.quantity < availableStock;
+              const nextQuantityGrams =
+                line.purchaseMode === "fixed_price"
+                  ? line.quantityGrams + Number(line.fixedPriceOption?.quantityGrams || 0)
+                  : line.quantityGrams + 1;
+              const canIncrease = !stockIssue && nextQuantityGrams <= availableStock;
               const stockLabel = publicProductStockLabel(line.product);
+              const lineQuantityLabel =
+                line.purchaseMode === "fixed_price"
+                  ? `${line.quantity} ${line.quantity > 1 ? "formats" : "format"}`
+                  : `${line.quantity} g`;
 
               return (
                 <article
-                  key={line.productId}
+                  key={line.lineKey}
                   className="grid gap-4 rounded-lg border border-forest/10 bg-ivory p-4 sm:grid-cols-[120px_1fr_auto]"
                 >
                   <ProductImage
@@ -242,14 +273,26 @@ export function CartPage() {
                     <p className="mt-2 text-xs font-semibold text-forest/70">
                       {stockLabel}
                     </p>
+                    {line.fixedPriceOption && (
+                      <p className="mt-2 text-xs text-forest/70">
+                        {fixedPriceOptionLabel(line.fixedPriceOption)} - {line.quantityGrams} g au total
+                      </p>
+                    )}
                     {stockIssue && (
                       <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
                         <p>{stockIssue.message}</p>
-                        {availableStock > 0 && line.quantity > availableStock && (
+                        {availableStock > 0 && line.quantityGrams > availableStock && (
                           <button
                             type="button"
                             className="mt-2 underline"
-                            onClick={() => setItemQuantity(line.productId, availableStock)}
+                            onClick={() =>
+                              setLineQuantity(
+                                line.lineKey,
+                                line.fixedPriceOption
+                                  ? Math.floor(availableStock / line.fixedPriceOption.quantityGrams)
+                                  : availableStock,
+                              )
+                            }
                           >
                             Ajuster la quantité
                           </button>
@@ -260,29 +303,35 @@ export function CartPage() {
                       <button
                         className="icon-button"
                         onClick={() => {
-                          decrementItem(line.productId);
-                          trackRemoveFromCart(line.product);
+                          decrementLine(line.lineKey);
+                          trackRemoveFromCart(
+                            line.product,
+                            line.fixedPriceOption?.quantityGrams || 1,
+                          );
                         }}
                       >
                         <Minus size={16} />
                       </button>
-                      <span className="w-12 text-center">{line.quantity} g</span>
+                      <span className="min-w-16 text-center">{lineQuantityLabel}</span>
                       <button
                         className="icon-button disabled:cursor-not-allowed disabled:opacity-40"
                         disabled={!canIncrease}
                         onClick={() => {
-                          addItem(line.productId);
-                          trackAddToCart(line.product);
+                          incrementLine(line.lineKey);
+                          trackAddToCart(
+                            line.product,
+                            line.fixedPriceOption?.quantityGrams || 1,
+                          );
                         }}
-                        title={canIncrease ? "Ajouter 1 g" : "Stock maximum atteint"}
+                        title={canIncrease ? "Ajouter" : "Stock maximum atteint"}
                       >
                         <Plus size={16} />
                       </button>
                       <button
                         className="icon-button"
                         onClick={() => {
-                          removeItem(line.productId);
-                          trackRemoveFromCart(line.product, line.quantity);
+                          removeLine(line.lineKey);
+                          trackRemoveFromCart(line.product, line.quantityGrams);
                         }}
                       >
                         <Trash2 size={16} />
@@ -375,18 +424,21 @@ export function CartPage() {
                 <span>Total</span>
                 <span>{formatEuro(total)}</span>
               </p>
-              {hasStockIssues && (
+              {hasCartIssues && (
                 <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-800">
                   <p>Ajustez votre panier avant de continuer.</p>
                   <ul className="mt-1 list-disc pl-5">
+                    {cartWarnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
                     {stockIssues.map((issue) => (
-                      <li key={issue.productId}>{issue.message}</li>
+                      <li key={issue.lineKey || issue.productId}>{issue.message}</li>
                     ))}
                   </ul>
                 </div>
               )}
             </div>
-            {hasStockIssues ? (
+            {hasCartIssues ? (
               <button className="btn-primary mt-6 w-full justify-center opacity-60" disabled>
                 Continuer
               </button>
