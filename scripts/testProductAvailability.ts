@@ -148,13 +148,13 @@ test("Suprême 50 % CBD is public only with validated commercial data", () => {
     "expected explicit Suprême image alt",
   );
   expect(
-    supreme?.galleryImages?.some((image) => image.src === "/Fiche produit/Supreme/supreme-50-cbd-texture.webp"),
-    "expected Suprême texture image in gallery",
+    supreme?.shortDescription ===
+      "Résine CBD premium fabriquée en Savoie, texture dense et profil floral délicat.",
+    "expected compact Suprême card description",
   );
-  expect(
-    supreme?.galleryImages?.some((image) => image.src === "/Fiche produit/Supreme/supreme-50-cbd-fiche.png"),
-    "expected Suprême illustrated sheet in gallery",
-  );
+  expect(supreme?.origin === "France", "expected compact Suprême origin for product cards");
+  expect(supreme?.thcRate === "0 %", "expected compact Suprême THC label for product cards");
+  expect(!JSON.stringify(supreme).includes("supreme-50-cbd-fiche.png"), "Suprême must not expose the illustrated sheet");
   expect(!/cream/i.test(supreme?.image || ""), "Suprême image must not point to Creamy Piatella");
   expect(!/piatella/i.test(supreme?.image || ""), "Suprême image must not point to Creamy Piatella");
   expect(
@@ -162,12 +162,8 @@ test("Suprême 50 % CBD is public only with validated commercial data", () => {
     "expected validated Suprême main image file",
   );
   expect(
-    existsSync(join(process.cwd(), "public", "Fiche produit", "Supreme", "supreme-50-cbd-texture.webp")),
-    "expected validated Suprême texture image file",
-  );
-  expect(
-    existsSync(join(process.cwd(), "public", "Fiche produit", "Supreme", "supreme-50-cbd-fiche.png")),
-    "expected validated Suprême illustrated sheet file",
+    !existsSync(join(process.cwd(), "public", "Fiche produit", "Supreme", "supreme-50-cbd-fiche.png")),
+    "expected Suprême illustrated sheet to be absent",
   );
   expect(
     getLocalProducts().some((entry) => entry.id === supreme?.id),

@@ -20,10 +20,6 @@ export type Product = {
   longDescription: string;
   image: string;
   imageAlt?: string;
-  galleryImages?: {
-    src: string;
-    alt: string;
-  }[];
   cbdRate: string;
   cbgRate: string;
   cbnRate?: string;
