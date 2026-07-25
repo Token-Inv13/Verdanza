@@ -1,4 +1,5 @@
-import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
+import { FormEvent, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAdminData } from "../../hooks/useAdminData";
 import {
   updateProductFlags,
@@ -3218,6 +3219,20 @@ function BillingWarning({ settings }: { settings: BillingSettings }) {
 }
 
 type AccountingPeriodFilter = "week" | "month" | "year" | "custom";
+type AccountingTab = "synthese" | "marges" | "achats" | "couts";
+
+const accountingTabs: Array<{ value: AccountingTab; label: string }> = [
+  { value: "synthese", label: "Synthèse" },
+  { value: "marges", label: "Marges par produit" },
+  { value: "achats", label: "Achats fournisseurs" },
+  { value: "couts", label: "Coûts manuels / g" },
+];
+
+function normalizeAccountingTab(value: string | null): AccountingTab {
+  return value === "marges" || value === "achats" || value === "couts"
+    ? value
+    : "synthese";
+}
 
 function AccountingPanel({
   products,
@@ -3273,10 +3288,75 @@ function AccountingPanel({
     { value: "month", label: "Mois en cours" },
     { value: "year", label: "Année en cours" },
   ];
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedAccountingTab = normalizeAccountingTab(searchParams.get("tab"));
+
+  function setAccountingTab(tab: AccountingTab) {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", tab);
+    setSearchParams(nextParams);
+  }
+
+  function handleAccountingTabKeyDown(
+    event: KeyboardEvent<HTMLButtonElement>,
+    currentIndex: number,
+  ) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const lastIndex = accountingTabs.length - 1;
+    const nextIndex =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? lastIndex
+          : event.key === "ArrowRight"
+            ? currentIndex === lastIndex
+              ? 0
+              : currentIndex + 1
+            : currentIndex === 0
+              ? lastIndex
+              : currentIndex - 1;
+    setAccountingTab(accountingTabs[nextIndex].value);
+  }
 
   return (
     <section className="mt-8 grid gap-6">
       <SourceLine source={productCostsSource} />
+      <div className="overflow-x-auto rounded-lg border border-forest/10 bg-ivory p-2">
+        <div className="flex min-w-max gap-2" role="tablist" aria-label="Navigation comptabilité">
+          {accountingTabs.map((tab, index) => {
+            const selected = selectedAccountingTab === tab.value;
+            return (
+              <button
+                key={tab.value}
+                id={`accounting-tab-${tab.value}`}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                aria-controls={`accounting-panel-${tab.value}`}
+                tabIndex={selected ? 0 : -1}
+                className={
+                  selected
+                    ? "btn-primary min-h-10 px-4 py-2 text-sm"
+                    : "btn-secondary min-h-10 px-4 py-2 text-sm"
+                }
+                onClick={() => setAccountingTab(tab.value)}
+                onKeyDown={(event) => handleAccountingTabKeyDown(event, index)}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {selectedAccountingTab === "synthese" && (
+        <div
+          id="accounting-panel-synthese"
+          role="tabpanel"
+          aria-labelledby="accounting-tab-synthese"
+          className="grid gap-6"
+        >
       <div className="rounded-lg border border-forest/10 bg-ivory p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -3367,8 +3447,16 @@ function AccountingPanel({
           ))}
         </div>
       </section>
+        </div>
+      )}
 
-      <section className="admin-card">
+      {selectedAccountingTab === "marges" && (
+      <section
+        id="accounting-panel-marges"
+        role="tabpanel"
+        aria-labelledby="accounting-tab-marges"
+        className="admin-card"
+      >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.16em] text-champagne">
@@ -3431,8 +3519,15 @@ function AccountingPanel({
           </div>
         )}
       </section>
+      )}
 
-      <section className="admin-card">
+      {selectedAccountingTab === "achats" && (
+      <section
+        id="accounting-panel-achats"
+        role="tabpanel"
+        aria-labelledby="accounting-tab-achats"
+        className="admin-card"
+      >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.16em] text-champagne">
@@ -3461,17 +3556,24 @@ function AccountingPanel({
           onCancel={onCancelSupplierPurchase}
         />
       </section>
+      )}
 
-      <section className="admin-card">
+      {selectedAccountingTab === "couts" && (
+      <section
+        id="accounting-panel-couts"
+        role="tabpanel"
+        aria-labelledby="accounting-tab-couts"
+        className="admin-card"
+      >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.16em] text-champagne">
-              Coûts d'achat produits
+              Coûts manuels / g
             </p>
-            <h2 className="font-display text-3xl text-forest">Prix d'achat / g</h2>
+            <h2 className="font-display text-3xl text-forest">Fallback manuel par gramme</h2>
           </div>
           <p className="text-sm text-ink/60">
-            Ces valeurs sont stockées dans <span className="font-mono">productCosts</span>.
+            Ces valeurs sont stockées dans <span className="font-mono">productCosts</span> et utilisées uniquement si aucun coût fournisseur pondéré n'existe.
           </p>
         </div>
         <div className="mt-5 overflow-x-auto">
@@ -3496,6 +3598,7 @@ function AccountingPanel({
           </table>
         </div>
       </section>
+      )}
     </section>
   );
 }

@@ -32,6 +32,7 @@
     "typecheck:api": "tsc --noEmit --moduleResolution NodeNext --module NodeNext --target ES2022 --esModuleInterop --skipLibCheck --strict --types node api/create-review.ts api/create-order.ts api/quote-order.ts api/admin-payment-links.ts api/send-payment-link.ts api/update-order-status.ts api/retry-order-emails.ts api/revoke-order-analytics.ts api/contact.ts api/invoices.ts api/seed-launch-data.ts api/_server/adminAuth.ts api/_server/adminPaymentLinks.ts api/_server/checkout.ts api/_server/email.ts api/_server/firebaseAdmin.ts api/_server/ga4MeasurementProtocol.ts api/_server/purchaseAnalytics.ts api/_server/http.ts api/_server/invoicePdf.ts api/_server/orderAlerts.ts",
     "seed:products": "node --import tsx scripts/seedFirestoreProducts.ts",
     "seed:delivery-zones": "node --import tsx scripts/seedFirestoreDeliveryZones.ts",
+    "seed:supplier-purchases": "node --import tsx scripts/seedSupplierPurchases.ts",
     "seed:admin": "node --import tsx scripts/bootstrapAdmin.ts",
     "seed:admin-auth": "node --import tsx scripts/bootstrapAdminAuth.ts",
     "repair:launch-promo-banner": "node --import tsx scripts/repairLaunchPromoBanner.ts",
