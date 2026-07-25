@@ -3,12 +3,13 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { FixedPriceMode, FixedPriceOption, Product, ProductCategory } from "../src/types/index.js";
 import {
+  assertNoUndefinedDeep,
   fixedPriceEffectiveUnitPrice,
-  fixedPriceOptionsForMode,
   normalizeFixedPriceMode,
   normalizeFixedPriceOptions,
   resolveFixedPriceOptions,
   roundMoney,
+  serializeFixedPriceOptionsForMode,
   validateManualFixedPriceOptions,
 } from "../src/lib/fixedPriceOptions.js";
 import { getRequiredAdminDb } from "./_firebaseAdminScript.js";
@@ -190,6 +191,7 @@ export async function runFixedPriceMigration({
     for (const entry of toUpdate) {
       const payload = entry.payload;
       if (!payload) throw new Error(`Payload manquant pour ${entry.id}.`);
+      assertNoUndefinedDeep(payload);
       await collection.doc(entry.id).update(payload);
     }
   }
@@ -215,7 +217,7 @@ export function analyzeFixedPriceMigrationDocument(
 ): FixedPriceMigrationAnalysis {
   const proposed = {
     fixedPriceMode: migration.fixedPriceMode,
-    fixedPriceOptions: fixedPriceOptionsForMode(
+    fixedPriceOptions: serializeFixedPriceOptionsForMode(
       migration.fixedPriceMode,
       migration.fixedPriceOptions,
     ),
@@ -322,7 +324,10 @@ export function validateProposedConfiguration(migration: FixedPriceMigrationConf
 export function buildFixedPriceMigrationPayload(migration: FixedPriceMigrationConfig) {
   return {
     fixedPriceMode: migration.fixedPriceMode,
-    fixedPriceOptions: fixedPriceOptionsForMode(migration.fixedPriceMode, migration.fixedPriceOptions),
+    fixedPriceOptions: serializeFixedPriceOptionsForMode(
+      migration.fixedPriceMode,
+      migration.fixedPriceOptions,
+    ),
   };
 }
 

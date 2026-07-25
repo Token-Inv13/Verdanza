@@ -16,9 +16,9 @@ import { products as localProducts } from "../data/products";
 import { logFirestoreFallback } from "../lib/clientLog";
 import { collections } from "./collections";
 import {
-  fixedPriceOptionsForMode,
   normalizeFixedPriceMode,
   normalizeFixedPriceOptions,
+  serializeFixedPriceOptionsForMode,
 } from "../lib/fixedPriceOptions";
 import type { Product } from "../types";
 
@@ -142,7 +142,7 @@ export async function upsertProduct(input: ProductInput) {
     lowStockThreshold: input.lowStockThreshold ?? 5,
     updatedAt: serverTimestamp(),
   };
-  payload.fixedPriceOptions = fixedPriceOptionsForMode(
+  payload.fixedPriceOptions = serializeFixedPriceOptionsForMode(
     payload.fixedPriceMode,
     input.fixedPriceOptions,
   );

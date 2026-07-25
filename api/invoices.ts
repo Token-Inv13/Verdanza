@@ -20,8 +20,8 @@ import {
   formatProductInternalReference,
 } from "../src/lib/productReferences.js";
 import {
-  fixedPriceOptionsForMode,
   normalizeFixedPriceMode,
+  serializeFixedPriceOptionsForMode,
   validateManualFixedPriceOptions,
 } from "../src/lib/fixedPriceOptions.js";
 import type {
@@ -415,7 +415,7 @@ async function upsertProductAdmin(db: FirebaseFirestore.Firestore, rawProduct: u
   const ref = db.collection("products").doc(id);
   const payload = { ...input };
   payload.fixedPriceMode = normalizeFixedPriceMode(input.fixedPriceMode, input.category);
-  payload.fixedPriceOptions = fixedPriceOptionsForMode(
+  payload.fixedPriceOptions = serializeFixedPriceOptionsForMode(
     payload.fixedPriceMode,
     input.fixedPriceOptions,
   );

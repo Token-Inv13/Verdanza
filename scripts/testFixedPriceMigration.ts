@@ -3,6 +3,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
+  assertNoUndefinedDeep,
+  resolveFixedPriceOptions,
+  serializeFixedPriceOptionsForFirestore,
+  serializeFixedPriceOptionsForMode,
+} from "../src/lib/fixedPriceOptions.js";
+import type { FixedPriceOption, Product } from "../src/types/index.js";
+import {
   FIXED_PRICE_MIGRATION_CONFIRMATION,
   FIXED_PRICE_MIGRATION_PROJECT_ID,
   analyzeFixedPriceMigrationDocument,
@@ -139,6 +146,7 @@ test("legacy document needing migration gets targeted payload only", () => {
     "fixedPriceMode",
     "fixedPriceOptions",
   ]);
+  assertNoUndefinedDeep(analysis.payload);
 });
 
 test("all 13 configurations are commercially valid", () => {
@@ -148,11 +156,65 @@ test("all 13 configurations are commercially valid", () => {
   }
 });
 
+test("manual option without label omits label and undefined values", () => {
+  const input = [
+    { id: "fixed-30-8g", totalPrice: 30, quantityGrams: 8, isActive: true, sortOrder: 1, source: "manual" },
+  ];
+  const [serialized] = serializeFixedPriceOptionsForFirestore(input);
+  assert.ok(serialized);
+  assert.equal(Object.prototype.hasOwnProperty.call(serialized, "label"), false);
+  assertNoUndefinedDeep(serialized);
+});
+
+test("valid label is preserved and empty label is omitted", () => {
+  const serialized = serializeFixedPriceOptionsForFirestore([
+    { id: "fixed-label", label: "  Duo  ", totalPrice: 30, quantityGrams: 8, isActive: true, sortOrder: 1, source: "manual" },
+    { id: "fixed-empty-label", label: "   ", totalPrice: 40, quantityGrams: 11, isActive: true, sortOrder: 2, source: "manual" },
+  ]);
+  assert.equal(serialized[0]?.label, "Duo");
+  assert.equal(Object.prototype.hasOwnProperty.call(serialized[1], "label"), false);
+  assertNoUndefinedDeep(serialized);
+});
+
+test("multiple options and automatic options serialize without undefined", () => {
+  const automaticProduct = product({
+    fixedPriceMode: "automatic",
+    fixedPriceOptions: undefined,
+    price: 6,
+  });
+  const automaticOptions = resolveFixedPriceOptions(automaticProduct);
+  assert.ok(automaticOptions.length > 0);
+  const serializedAutomatic = serializeFixedPriceOptionsForFirestore(automaticOptions);
+  assert.ok(serializedAutomatic.some((option) => option.source === "automatic"));
+  assertNoUndefinedDeep(serializedAutomatic);
+});
+
 test("Supreme Purple is disabled with an empty payload option list", () => {
   const migration = fixedPriceFormatMigrations.find((entry) => entry.id === "resin-supreme-purple-cbd");
   assert.ok(migration);
   assert.equal(migration.fixedPriceMode, "disabled");
   assert.deepEqual(buildFixedPriceMigrationPayload(migration).fixedPriceOptions, []);
+  assert.deepEqual(serializeFixedPriceOptionsForMode("disabled", migration.fixedPriceOptions), []);
+});
+
+test("admin manual save uses the shared Firestore serialization", () => {
+  const manualOptions: FixedPriceOption[] = [
+    { id: "admin-30-8g", label: undefined, totalPrice: 30, quantityGrams: 8, isActive: true, sortOrder: 1, source: "manual" },
+  ];
+  const adminPayload = {
+    fixedPriceMode: "manual" as const,
+    fixedPriceOptions: serializeFixedPriceOptionsForMode("manual", manualOptions),
+  };
+  assert.deepEqual(adminPayload.fixedPriceOptions, serializeFixedPriceOptionsForFirestore(manualOptions));
+  assert.equal(Object.prototype.hasOwnProperty.call(adminPayload.fixedPriceOptions[0], "label"), false);
+  assertNoUndefinedDeep(adminPayload);
+});
+
+test("recursive assertion reports the exact undefined path", () => {
+  assert.throws(
+    () => assertNoUndefinedDeep({ fixedPriceOptions: [{ label: undefined }] }),
+    /payload\.fixedPriceOptions\.0\.label/,
+  );
 });
 
 test("apply requires explicit confirmation", async () => {
@@ -166,6 +228,20 @@ test("apply requires explicit confirmation", async () => {
       }),
     /Ecriture refusee sans --confirm/,
   );
+});
+
+test("apply with legacy documents prepares 13 sanitized update payloads", async () => {
+  const writes: string[] = [];
+  const result = await runFixedPriceMigration({
+    db: fakeDb(allDocuments("legacy"), writes),
+    projectId: FIXED_PRICE_MIGRATION_PROJECT_ID,
+    apply: true,
+    confirm: FIXED_PRICE_MIGRATION_CONFIRMATION,
+    backupDir,
+  });
+  assert.equal(result.summary.toUpdate, fixedPriceFormatMigrations.length);
+  assert.equal(result.summary.written, fixedPriceFormatMigrations.length);
+  assert.equal(writes.length, fixedPriceFormatMigrations.length);
 });
 
 test("apply writes only documents needing migration", async () => {
@@ -193,6 +269,17 @@ test("apply writes only documents needing migration", async () => {
   });
   assert.equal(mixedResult.summary.toUpdate, 1);
   assert.deepEqual(mixedWrites, [first.id]);
+});
+
+test("serialization is idempotent and does not mutate source objects", () => {
+  const source: FixedPriceOption[] = [
+    { id: "copy-30-8g", label: "Format", totalPrice: 30, quantityGrams: 8, isActive: true, sortOrder: 1, source: "manual" },
+  ];
+  const sourceBefore = structuredClone(source);
+  const first = serializeFixedPriceOptionsForFirestore(source);
+  const second = serializeFixedPriceOptionsForFirestore(first);
+  assert.deepEqual(first, second);
+  assert.deepEqual(source, sourceBefore);
 });
 
 function allDocuments(mode: "legacy" | "compliant") {
@@ -226,12 +313,40 @@ function fakeDb(docs: Record<string, Record<string, unknown> | undefined>, write
               "fixedPriceMode",
               "fixedPriceOptions",
             ]);
+            assertNoUndefinedDeep(payload);
             writes.push(id);
             docs[id] = { ...(docs[id] || {}), ...payload };
           },
         }),
       };
     },
+  };
+}
+
+function product(overrides: Partial<Product> = {}): Product {
+  return {
+    id: "resin-fixed",
+    slug: "resin-fixed",
+    name: "Resine fixe",
+    category: "resins",
+    price: 6,
+    shortDescription: "",
+    longDescription: "",
+    image: "",
+    cbdRate: "",
+    cbgRate: "",
+    thcRate: "",
+    origin: "",
+    cultureType: "Autre",
+    aromas: [],
+    tags: [],
+    stock: 100,
+    lowStockThreshold: 0,
+    isActive: true,
+    isFeatured: false,
+    seoTitle: "",
+    seoDescription: "",
+    ...overrides,
   };
 }
 

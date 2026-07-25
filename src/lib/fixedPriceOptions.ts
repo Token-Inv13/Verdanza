@@ -104,6 +104,57 @@ export function fixedPriceOptionsForMode(
   return mode === "manual" ? normalizeFixedPriceOptions(options) : [];
 }
 
+export function serializeFixedPriceOptionsForFirestore(options: unknown): FixedPriceOption[] {
+  return normalizeFixedPriceOptions(options).map((option) => {
+    const serialized: FixedPriceOption = {
+      id: option.id,
+      totalPrice: finiteMoney(option.totalPrice, `fixedPriceOptions.${option.id}.totalPrice`),
+      quantityGrams: positiveFiniteInteger(
+        option.quantityGrams,
+        `fixedPriceOptions.${option.id}.quantityGrams`,
+      ),
+      isActive: option.isActive !== false,
+    };
+    const sortOrder = Number(option.sortOrder);
+    if (Number.isFinite(sortOrder)) serialized.sortOrder = sortOrder;
+    if (option.source === "manual" || option.source === "automatic") {
+      serialized.source = option.source;
+    }
+    const policyVersion = Number(option.policyVersion);
+    if (Number.isFinite(policyVersion)) serialized.policyVersion = policyVersion;
+    const label = typeof option.label === "string" ? option.label.trim() : "";
+    if (label) serialized.label = label;
+    return serialized;
+  });
+}
+
+export function serializeFixedPriceOptionsForMode(
+  mode: FixedPriceMode,
+  options: unknown,
+): FixedPriceOption[] {
+  return mode === "manual" ? serializeFixedPriceOptionsForFirestore(options) : [];
+}
+
+export function assertNoUndefinedDeep(value: unknown, path = "payload") {
+  if (value === undefined) {
+    throw new Error(`Valeur undefined interdite dans ${path}.`);
+  }
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    throw new Error(`Valeur numerique non finie interdite dans ${path}.`);
+  }
+  if (typeof value === "function") {
+    throw new Error(`Fonction interdite dans ${path}.`);
+  }
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => assertNoUndefinedDeep(entry, `${path}.${index}`));
+    return;
+  }
+  Object.entries(value as Record<string, unknown>).forEach(([key, entry]) => {
+    assertNoUndefinedDeep(entry, `${path}.${key}`);
+  });
+}
+
 export function resolveFixedPriceOptions(product?: Product | null): FixedPriceResolvedOption[] {
   if (!product || product.isActive === false) return [];
   const mode = normalizeFixedPriceMode(product.fixedPriceMode, product.category);
@@ -271,6 +322,22 @@ export function positiveInteger(value: unknown) {
 
 export function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function finiteMoney(value: unknown, path: string) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    throw new Error(`Valeur monetaire invalide pour ${path}.`);
+  }
+  return roundMoney(number);
+}
+
+function positiveFiniteInteger(value: unknown, path: string) {
+  const number = Math.floor(Number(value));
+  if (!Number.isFinite(number) || number <= 0) {
+    throw new Error(`Quantite invalide pour ${path}.`);
+  }
+  return number;
 }
 
 function generateAutomaticFixedPriceOptions(product: Product): FixedPriceResolvedOption[] {
