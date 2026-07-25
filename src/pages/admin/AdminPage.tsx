@@ -236,8 +236,13 @@ export function AdminPage({ section }: { section: string }) {
     isLoading,
     refresh,
   } = useAdminData();
-  const [messageState, setMessageState] = useState({ text: "", section });
-  const message = messageState.section === section ? messageState.text : "";
+  const [searchParams] = useSearchParams();
+  const messageScope =
+    section === "Comptabilité"
+      ? `${section}:${normalizeAccountingTab(searchParams.get("tab"))}`
+      : section;
+  const [messageState, setMessageState] = useState({ text: "", scope: messageScope });
+  const message = messageState.scope === messageScope ? messageState.text : "";
   const [editingProduct, setEditingProduct] = useState<ProductInput>(emptyProduct);
   const [editingCoupon, setEditingCoupon] = useState<CouponInput>(emptyCoupon);
   const [couponBannerAction, setCouponBannerAction] = useState<"none" | "create" | "link">("none");
@@ -251,20 +256,20 @@ export function AdminPage({ section }: { section: string }) {
   }, [billingSettings]);
 
   useEffect(() => {
-    setMessageState({ text: "", section });
-  }, [section]);
+    setMessageState({ text: "", scope: messageScope });
+  }, [messageScope]);
 
   useEffect(() => {
     if (!message) return undefined;
     const timeoutId = window.setTimeout(() => {
       setMessageState((current) =>
-        current.section === section && current.text === message
-          ? { text: "", section }
+        current.scope === messageScope && current.text === message
+          ? { text: "", scope: messageScope }
           : current,
       );
     }, 4000);
     return () => window.clearTimeout(timeoutId);
-  }, [message, section]);
+  }, [message, messageScope]);
 
   const lowStockProducts = useMemo(
     () => products.filter((product) => product.stock <= product.lowStockThreshold),
@@ -276,7 +281,7 @@ export function AdminPage({ section }: { section: string }) {
   );
 
   function setMessage(text: string) {
-    setMessageState({ text, section });
+    setMessageState({ text, scope: messageScope });
   }
 
   async function handleDeleteCancelledOrder(orderId: string) {
@@ -539,6 +544,39 @@ export function AdminPage({ section }: { section: string }) {
     await refresh();
   }
 
+  async function handleManualInvoiceCreate(input: ManualInvoiceInput) {
+    const result = await createManualInvoice(input);
+    setMessage(`Facture brouillon ${result.invoiceNumber} creee.`);
+    await refresh();
+  }
+
+  async function handleInvoiceStatusUpdate(invoice: Invoice, status: InvoiceStatus) {
+    await updateInvoiceStatus(invoice.id, status);
+    setMessage(`Facture ${invoice.invoiceNumber} mise a jour.`);
+    await refresh();
+  }
+
+  async function handleInvoiceDownload(invoice: Invoice) {
+    await downloadInvoicePdf(invoice.id, invoice.invoiceNumber);
+  }
+
+  async function handleInvoiceSend(invoice: Invoice) {
+    if (!billingSettings.isManuallyValidated) {
+      const confirmed = window.confirm(billingSettings.validationWarning);
+      if (!confirmed) return;
+    }
+    await sendInvoiceEmail(invoice.id);
+    setMessage(`Facture ${invoice.invoiceNumber} envoyee.`);
+    await refresh();
+  }
+
+  async function handleBillingSettingsSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await saveBillingSettings(editingBilling);
+    setMessage("Paramètres de facturation enregistrés.");
+    await refresh();
+  }
+
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col justify-between gap-4 rounded-lg border border-forest/10 bg-ivory px-4 py-5 shadow-sm sm:px-6 md:flex-row md:items-end">
@@ -775,42 +813,6 @@ export function AdminPage({ section }: { section: string }) {
 
       {section === "Avis clients" && <AdminReviewsPanel />}
 
-      {section === "Factures" && (
-        <>
-          <SourceLine source={invoiceSource} />
-          <BillingWarning settings={billingSettings} />
-          <div className="mt-8 grid gap-6 xl:grid-cols-[420px_1fr]">
-            <ManualInvoiceForm
-              onCreate={async (input) => {
-                const result = await createManualInvoice(input);
-                setMessage(`Facture brouillon ${result.invoiceNumber} creee.`);
-                await refresh();
-              }}
-            />
-            <InvoicesPanel
-              invoices={invoices}
-              onStatus={async (invoice, status) => {
-                await updateInvoiceStatus(invoice.id, status);
-                setMessage(`Facture ${invoice.invoiceNumber} mise a jour.`);
-                await refresh();
-              }}
-              onDownload={async (invoice) => {
-                await downloadInvoicePdf(invoice.id, invoice.invoiceNumber);
-              }}
-              onSend={async (invoice) => {
-                if (!billingSettings.isManuallyValidated) {
-                  const confirmed = window.confirm(billingSettings.validationWarning);
-                  if (!confirmed) return;
-                }
-                await sendInvoiceEmail(invoice.id);
-                setMessage(`Facture ${invoice.invoiceNumber} envoyee.`);
-                await refresh();
-              }}
-            />
-          </div>
-        </>
-      )}
-
       {section === "Comptabilité" && (
         <AccountingPanel
           products={products}
@@ -821,29 +823,24 @@ export function AdminPage({ section }: { section: string }) {
           supplierPurchasesSource={supplierPurchasesSource}
           supplierPurchasesError={supplierPurchasesError}
           orders={orders}
+          invoices={invoices}
+          invoiceSource={invoiceSource}
+          billingSettings={billingSettings}
+          billingSource={billingSource}
+          editingBilling={editingBilling}
+          onBillingChange={setEditingBilling}
           onRetry={refresh}
+          onCreateManualInvoice={handleManualInvoiceCreate}
+          onInvoiceStatus={handleInvoiceStatusUpdate}
+          onInvoiceDownload={handleInvoiceDownload}
+          onInvoiceSend={handleInvoiceSend}
+          onBillingSubmit={handleBillingSettingsSubmit}
           onSaveProductCost={handleProductCostSave}
           onSaveSupplierPurchase={handleSupplierPurchaseSave}
           onSaveSupplierAlias={handleSupplierAliasSave}
           onDeleteSupplierPurchase={handleSupplierPurchaseDelete}
           onCancelSupplierPurchase={handleSupplierPurchaseCancel}
         />
-      )}
-
-      {(section === "Parametres de facturation" || section === "Paramètres de facturation") && (
-        <>
-          <SourceLine source={billingSource} />
-          <BillingSettingsPanel
-            settings={editingBilling}
-            onChange={setEditingBilling}
-            onSubmit={async (event) => {
-              event.preventDefault();
-              await saveBillingSettings(editingBilling);
-              setMessage("Paramètres de facturation enregistrés.");
-              await refresh();
-            }}
-          />
-        </>
       )}
 
       {["Parametres", "Paramètres"].includes(section) && (
@@ -3283,17 +3280,23 @@ function BillingWarning({ settings }: { settings: BillingSettings }) {
 }
 
 type AccountingPeriodFilter = "week" | "month" | "year" | "custom";
-type AccountingTab = "synthese" | "marges" | "achats" | "couts";
+type AccountingTab = "synthese" | "marges" | "achats" | "couts" | "factures" | "facturation";
 
 const accountingTabs: Array<{ value: AccountingTab; label: string }> = [
   { value: "synthese", label: "Synthèse" },
   { value: "marges", label: "Marges par produit" },
   { value: "achats", label: "Achats fournisseurs" },
   { value: "couts", label: "Coûts manuels / g" },
+  { value: "factures", label: "Factures" },
+  { value: "facturation", label: "Facturation" },
 ];
 
 function normalizeAccountingTab(value: string | null): AccountingTab {
-  return value === "marges" || value === "achats" || value === "couts"
+  return value === "marges" ||
+    value === "achats" ||
+    value === "couts" ||
+    value === "factures" ||
+    value === "facturation"
     ? value
     : "synthese";
 }
@@ -3307,7 +3310,18 @@ function AccountingPanel({
   supplierPurchasesSource,
   supplierPurchasesError,
   orders,
+  invoices,
+  invoiceSource,
+  billingSettings,
+  billingSource,
+  editingBilling,
+  onBillingChange,
   onRetry,
+  onCreateManualInvoice,
+  onInvoiceStatus,
+  onInvoiceDownload,
+  onInvoiceSend,
+  onBillingSubmit,
   onSaveProductCost,
   onSaveSupplierPurchase,
   onSaveSupplierAlias,
@@ -3322,7 +3336,18 @@ function AccountingPanel({
   supplierPurchasesSource: string;
   supplierPurchasesError: string;
   orders: AdminOrderRow[];
+  invoices: Invoice[];
+  invoiceSource: string;
+  billingSettings: BillingSettings;
+  billingSource: string;
+  editingBilling: BillingSettings;
+  onBillingChange: (settings: BillingSettings) => void;
   onRetry: () => Promise<void>;
+  onCreateManualInvoice: (input: ManualInvoiceInput) => Promise<void>;
+  onInvoiceStatus: (invoice: Invoice, status: InvoiceStatus) => Promise<void>;
+  onInvoiceDownload: (invoice: Invoice) => Promise<void>;
+  onInvoiceSend: (invoice: Invoice) => Promise<void>;
+  onBillingSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   onSaveProductCost: (productId: string, purchasePricePerGram: number | null) => Promise<void>;
   onSaveSupplierPurchase: (purchase: Partial<SupplierPurchase>) => Promise<void>;
   onSaveSupplierAlias: (alias: { supplierName: string; originalLabel: string; productId: string }) => Promise<void>;
@@ -3406,7 +3431,6 @@ function AccountingPanel({
 
   return (
     <section className="mt-8 grid gap-6">
-      <SourceLine source={productCostsSource} />
       <div className="overflow-x-auto rounded-lg border border-forest/10 bg-ivory p-2">
         <div className="flex min-w-max gap-2" role="tablist" aria-label="Navigation comptabilité">
           {accountingTabs.map((tab, index) => {
@@ -3659,6 +3683,7 @@ function AccountingPanel({
         aria-labelledby="accounting-tab-couts"
         className="admin-card"
       >
+        <SourceLine source={productCostsSource} />
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.16em] text-champagne">
@@ -3693,7 +3718,7 @@ function AccountingPanel({
               className={costFilter === filter.value ? "btn-primary min-h-9 px-3 py-1.5 text-xs" : "btn-secondary min-h-9 px-3 py-1.5 text-xs"}
               onClick={() => setCostFilter(filter.value)}
             >
-              {filter.label} Â· {filter.count}
+              {filter.label} · {filter.count}
             </button>
           ))}
         </div>
@@ -3721,6 +3746,49 @@ function AccountingPanel({
         </div>
         </>
         )}
+      </section>
+      )}
+
+      {selectedAccountingTab === "factures" && (
+      <section
+        id="accounting-panel-factures"
+        role="tabpanel"
+        aria-labelledby="accounting-tab-factures"
+        className="grid gap-6"
+      >
+        <SourceLine source={invoiceSource} />
+        <div className="admin-card">
+          <p className="text-xs uppercase tracking-[0.16em] text-champagne">
+            Factures
+          </p>
+          <h2 className="font-display text-3xl text-forest">Factures clients</h2>
+          <BillingWarning settings={billingSettings} />
+        </div>
+        <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
+          <ManualInvoiceForm onCreate={onCreateManualInvoice} />
+          <InvoicesPanel
+            invoices={invoices}
+            onStatus={onInvoiceStatus}
+            onDownload={onInvoiceDownload}
+            onSend={onInvoiceSend}
+          />
+        </div>
+      </section>
+      )}
+
+      {selectedAccountingTab === "facturation" && (
+      <section
+        id="accounting-panel-facturation"
+        role="tabpanel"
+        aria-labelledby="accounting-tab-facturation"
+        className="grid gap-6"
+      >
+        <SourceLine source={billingSource} />
+        <BillingSettingsPanel
+          settings={editingBilling}
+          onChange={onBillingChange}
+          onSubmit={onBillingSubmit}
+        />
       </section>
       )}
     </section>

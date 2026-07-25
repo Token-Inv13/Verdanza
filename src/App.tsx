@@ -1,5 +1,5 @@
 import { Suspense, lazy } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { MainLayout } from "./layouts/MainLayout";
 import { AnalyticsRouteTracker } from "./components/AnalyticsRouteTracker";
 import { ScrollToTop } from "./components/ScrollToTop";
@@ -147,11 +147,11 @@ export function App() {
             <Route path="avis" element={<AdminPage section="Avis clients" />} />
             <Route path="coupons" element={<AdminPage section="Coupons" />} />
             <Route path="bannieres" element={<AdminPage section="Bannieres" />} />
-            <Route path="factures" element={<AdminPage section="Factures" />} />
+            <Route path="factures" element={<Navigate to="/admin/comptabilite?tab=factures" replace />} />
             <Route path="comptabilite" element={<AdminPage section="Comptabilité" />} />
             <Route
               path="facturation"
-              element={<AdminPage section="Paramètres de facturation" />}
+              element={<Navigate to="/admin/comptabilite?tab=facturation" replace />}
             />
             <Route path="parametres" element={<AdminPage section="Paramètres" />} />
           </Route>
