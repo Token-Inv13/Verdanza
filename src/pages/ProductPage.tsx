@@ -15,8 +15,8 @@ import {
   publicProductStockLabel,
 } from "../lib/cartStock";
 import {
-  fixedPriceEffectiveUnitPrice,
-  fixedPriceOptionLabel,
+  fixedPriceOptionPublicLabel,
+  fixedPriceUnitPricePublicLabel,
   isFixedPriceAdvantageous,
   resolveFixedPriceOptions,
 } from "../lib/fixedPriceOptions";
@@ -280,7 +280,7 @@ export function ProductPage() {
           )}
           {product.isActive !== false && fixedPriceOptions.length > 0 && (
             <div className="mt-5 rounded-lg border border-champagne/30 bg-cream p-4">
-              <h2 className="font-display text-2xl text-forest">Formats prix fixe</h2>
+              <h2 className="font-display text-2xl text-forest">Formats au choix</h2>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 {fixedPriceOptions.map((option) => {
                   const optionAvailable = isOrderable && availableStock >= option.quantityGrams;
@@ -296,13 +296,10 @@ export function ProductPage() {
                       }}
                     >
                       <span className="block font-semibold text-forest">
-                        {fixedPriceOptionLabel(option)}
+                        {fixedPriceOptionPublicLabel(option)}
                       </span>
                       <span className="mt-1 block text-xs text-forest/65">
-                        {fixedPriceEffectiveUnitPrice(option).toFixed(2).replace(".", ",")} EUR/g
-                        {isFixedPriceAdvantageous(product, option)
-                          ? " - prix au gramme plus avantageux"
-                          : ""}
+                        {fixedPriceUnitPricePublicLabel(option)}
                       </span>
                       {!optionAvailable && (
                         <span className="mt-1 block text-xs text-red-700">
@@ -313,6 +310,11 @@ export function ProductPage() {
                   );
                 })}
               </div>
+              {fixedPriceOptions.some((option) => isFixedPriceAdvantageous(product, option)) && (
+                <p className="mt-3 text-xs text-forest/60">
+                  Prix au gramme plus avantageux selon le format choisi.
+                </p>
+              )}
             </div>
           )}
           <p className="mt-6 text-sm leading-6 text-ink/60">

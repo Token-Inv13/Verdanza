@@ -266,6 +266,20 @@ export function fixedPriceOptionLabel(option: FixedPriceOption) {
   return `${formatMoney(option.totalPrice)} - ${option.quantityGrams} g`;
 }
 
+export function fixedPriceOptionPublicLabel(option: FixedPriceOption) {
+  return `${formatPublicMoney(option.totalPrice)} · ${option.quantityGrams} g`;
+}
+
+export function fixedPriceUnitPricePublicLabel(option: FixedPriceOption) {
+  return `${formatPublicMoney(fixedPriceEffectiveUnitPrice(option))}/g`;
+}
+
+export function fixedPriceCartLineLabel(option: FixedPriceOption, quantity = 1) {
+  const count = positiveInteger(quantity);
+  if (count === 1) return `Format ${fixedPriceOptionPublicLabel(option)}`;
+  return `${count} × format ${formatPublicMoney(option.totalPrice)} · ${fixedPriceQuantityGrams(option, count)} g au total`;
+}
+
 export function fixedPriceEffectiveUnitPrice(option: FixedPriceOption) {
   return option.quantityGrams > 0
     ? roundMoney(Number(option.totalPrice || 0) / option.quantityGrams)
@@ -481,4 +495,8 @@ function normalizeFixedPriceOption(value: unknown, index: number): FixedPriceOpt
 
 function formatMoney(value: number) {
   return `${roundMoney(value).toFixed(2).replace(".", ",")} EUR`;
+}
+
+function formatPublicMoney(value: number) {
+  return `${roundMoney(value).toFixed(2).replace(".", ",")} €`;
 }

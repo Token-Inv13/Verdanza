@@ -20,7 +20,7 @@ import { rememberPendingOrderAnalyticsRevocation } from "../lib/orderAnalyticsRe
 import { getCartStockIssues } from "../lib/cartStock";
 import { calculateCartPromotions } from "../lib/cartPromotions";
 import { formatLocalDeliveryEstimate } from "../lib/deliveryEstimate";
-import { fixedPriceOptionLabel } from "../lib/fixedPriceOptions";
+import { fixedPriceCartLineLabel } from "../lib/fixedPriceOptions";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
 import {
   effectiveLocalDeliveryMinimum,
@@ -481,7 +481,7 @@ export function CheckoutPage() {
           orderType: "order",
           items: lines.map((line) => ({
             name: line.fixedPriceOption
-              ? `${line.product.name} - ${fixedPriceOptionLabel(line.fixedPriceOption)}`
+              ? `${line.product.name} - ${fixedPriceCartLineLabel(line.fixedPriceOption, line.quantity)}`
               : line.product.name,
             quantity: line.quantityGrams,
             displayQuantity: line.fixedPriceOption
@@ -803,7 +803,7 @@ export function CheckoutPage() {
                 <p key={line.lineKey} className="flex justify-between gap-4">
                   <span>
                     {line.fixedPriceOption
-                      ? `${line.product.name} - ${fixedPriceOptionLabel(line.fixedPriceOption)} x ${line.quantity} ${line.quantity > 1 ? "formats" : "format"}`
+                      ? `${line.product.name} - ${fixedPriceCartLineLabel(line.fixedPriceOption, line.quantity)}`
                       : `${line.product.name} x ${line.quantity} g`}
                   </span>
                   <span>{formatEuro(line.lineTotal)}</span>

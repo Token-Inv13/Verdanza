@@ -11,10 +11,13 @@ import {
   FIXED_PRICE_POLICY_VERSION,
   activeFixedPriceOptions,
   cartItemKey,
+  fixedPriceCartLineLabel,
   fixedPriceEffectiveUnitPrice,
   fixedPriceLineTotal,
+  fixedPriceOptionPublicLabel,
   fixedPriceOptionsForMode,
   fixedPriceQuantityGrams,
+  fixedPriceUnitPricePublicLabel,
   normalizeFixedPriceMode,
   normalizeCartItems,
   normalizeFixedPriceOptions,
@@ -95,6 +98,10 @@ test(
     expect(fixedPriceLineTotal(options[0], 1) === 30, "expected one fixed format to total 30 EUR");
     expect(fixedPriceLineTotal(options[0], 2) === 60, "expected two fixed formats to total 60 EUR");
     expect(fixedPriceQuantityGrams(options[0], 2) === 16, "expected two fixed formats to reserve 16 g");
+    expect(fixedPriceOptionPublicLabel(options[0]) === "30,00 € · 8 g", "expected public fixed option label");
+    expect(fixedPriceUnitPricePublicLabel(options[0]) === "3,75 €/g", "expected public fixed unit price label");
+    expect(fixedPriceCartLineLabel(options[0], 1) === "Format 30,00 € · 8 g", "expected one-format cart label");
+    expect(fixedPriceCartLineLabel(options[0], 2) === "2 × format 30,00 € · 16 g au total", "expected grouped fixed format cart label");
   },
 );
 

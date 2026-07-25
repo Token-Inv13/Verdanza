@@ -14,7 +14,7 @@ import {
 import { calculateCartPromotions } from "../lib/cartPromotions";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
 import { trackAddToCart, trackCtaClick, trackRemoveFromCart, trackViewCart } from "../lib/analytics";
-import { fixedPriceOptionLabel } from "../lib/fixedPriceOptions";
+import { fixedPriceCartLineLabel } from "../lib/fixedPriceOptions";
 
 const promoStorageKey = "verdanza-coupon-code";
 
@@ -275,7 +275,7 @@ export function CartPage() {
                     </p>
                     {line.fixedPriceOption && (
                       <p className="mt-2 text-xs text-forest/70">
-                        {fixedPriceOptionLabel(line.fixedPriceOption)} - {line.quantityGrams} g au total
+                        {fixedPriceCartLineLabel(line.fixedPriceOption, line.quantity)}
                       </p>
                     )}
                     {stockIssue && (
