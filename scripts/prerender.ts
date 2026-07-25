@@ -212,6 +212,7 @@ async function blockExternalServices(context: import("playwright").BrowserContex
     if (
       url.includes("identitytoolkit.googleapis.com") ||
       url.includes("firebaseinstallations.googleapis.com") ||
+      url.includes("firestore.googleapis.com") ||
       url.includes("google-analytics.com") ||
       url.includes("googletagmanager.com")
     ) {

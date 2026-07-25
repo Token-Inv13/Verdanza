@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   getCartLineStockIssue,
@@ -7,7 +7,9 @@ import {
 } from "../src/lib/cartStock.js";
 import { productAvailability } from "../src/lib/structuredData.js";
 import { formatLocalDeliveryEstimate } from "../src/lib/deliveryEstimate.js";
-import { normalizeProduct } from "../src/services/productsService.js";
+import { products } from "../src/data/products.js";
+import { productSeoRoutes } from "./seoRoutes.js";
+import { getLocalProducts, normalizeProduct } from "../src/services/productsService.js";
 import { priceCheckout, type CheckoutRequestBody } from "../api/_server/checkout.js";
 import type { Product } from "../src/types/index.js";
 
@@ -127,6 +129,56 @@ test("inactive product is unavailable and not orderable", () => {
   expect(!isProductOrderable(normalized), "expected inactive product to be blocked");
   expect(publicProductStockLabel(normalized) === "Indisponible", "expected unavailable label");
   expect(productAvailability(normalized) === "https://schema.org/OutOfStock", "expected OutOfStock JSON-LD");
+});
+
+test("Suprême 50 % CBD is public only with validated commercial data", () => {
+  const supreme = products.find((entry) => entry.id === "resin-supreme-50-cbd");
+
+  expect(Boolean(supreme), "expected Suprême 50 % CBD in local product data");
+  expect(supreme?.slug === "supreme-50-cbd", "expected stable Suprême slug");
+  expect(supreme?.category === "resins", "expected Suprême to stay in resins category");
+  expect(supreme?.isActive === true, "expected Suprême to be active after commercial validation");
+  expect(supreme?.isFeatured === false, "expected Suprême not to be featured");
+  expect(supreme?.price === 6, "expected Suprême sale price to be 6 EUR/g");
+  expect(supreme?.stock === 22, "expected Suprême stock to be 22 g");
+  expect(supreme?.lowStockThreshold === 10, "expected Suprême low-stock threshold to match active resins");
+  expect(supreme?.image === "/Fiche produit/Supreme/supreme-50-cbd.webp", "expected validated Suprême photo");
+  expect(
+    supreme?.imageAlt === "Résine CBD Suprême 50 % Verdanza, plaques brun caramel",
+    "expected explicit Suprême image alt",
+  );
+  expect(
+    supreme?.galleryImages?.some((image) => image.src === "/Fiche produit/Supreme/supreme-50-cbd-texture.webp"),
+    "expected Suprême texture image in gallery",
+  );
+  expect(
+    supreme?.galleryImages?.some((image) => image.src === "/Fiche produit/Supreme/supreme-50-cbd-fiche.png"),
+    "expected Suprême illustrated sheet in gallery",
+  );
+  expect(!/cream/i.test(supreme?.image || ""), "Suprême image must not point to Creamy Piatella");
+  expect(!/piatella/i.test(supreme?.image || ""), "Suprême image must not point to Creamy Piatella");
+  expect(
+    existsSync(join(process.cwd(), "public", "Fiche produit", "Supreme", "supreme-50-cbd.webp")),
+    "expected validated Suprême main image file",
+  );
+  expect(
+    existsSync(join(process.cwd(), "public", "Fiche produit", "Supreme", "supreme-50-cbd-texture.webp")),
+    "expected validated Suprême texture image file",
+  );
+  expect(
+    existsSync(join(process.cwd(), "public", "Fiche produit", "Supreme", "supreme-50-cbd-fiche.png")),
+    "expected validated Suprême illustrated sheet file",
+  );
+  expect(
+    getLocalProducts().some((entry) => entry.id === supreme?.id),
+    "active Suprême must be included in public local fallback products",
+  );
+  expect(
+    productSeoRoutes().some((route) => route.path === "/produits/supreme-50-cbd"),
+    "active Suprême must be prerendered and indexed",
+  );
+  expect(isProductOrderable(supreme), "active Suprême with stock must be orderable");
+  expect(publicProductStockLabel(supreme) === "Disponible", "expected available Suprême stock label");
 });
 
 test("admin refresh updates product availability without stale local state", () => {

@@ -10,7 +10,7 @@ import { ProductImage } from "./ProductImage";
 import { QualityBadge } from "./QualityBadge";
 
 function productImageAlt(product: Product) {
-  return `${product.name} - ${
+  return product.imageAlt || `${product.name} - ${
     product.category === "flowers" ? "Fleur CBD" : "Résine CBD"
   } Verdanza`;
 }

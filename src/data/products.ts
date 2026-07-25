@@ -55,6 +55,52 @@ export const products: Product[] = [
       "Suprême Purple CBD Verdanza, résine CBD française à 50 % de CBD, vendue au gramme.",
   },
   {
+    id: "resin-supreme-50-cbd",
+    slug: "supreme-50-cbd",
+    name: "Suprême 50 % CBD",
+    category: "resins",
+    price: 6,
+    shortDescription:
+      "La Suprême est une résine CBD premium fabriquée en Savoie, affichant une concentration de 50 % de CBD et 0 % de THC selon les données du fournisseur. Sa texture dense et malléable s'accompagne d'un profil floral délicat, léger et raffiné.",
+    longDescription:
+      "La Suprême 50 % CBD est une résine artisanale française élaborée en Savoie à partir d'extraits de chanvre sélectionnés. Sa formulation broad spectrum conserve naturellement plusieurs cannabinoïdes, notamment le CBN, le CBG et le CBC, sans THC annoncé. Visuellement, elle présente une teinte brun caramel doré, une surface compacte et un intérieur finement granuleux. Sa texture dense, homogène et malléable facilite sa manipulation et participe à son aspect qualitatif. Son profil aromatique se distingue par des notes florales légères et raffinées. Les arômes sont annoncés comme naturels et sans ajout artificiel. Conserver dans son emballage hermétique, dans un endroit frais et sec, à l'abri de la lumière, de la chaleur et des variations importantes de température.",
+    image: "/Fiche produit/Supreme/supreme-50-cbd.webp",
+    imageAlt: "Résine CBD Suprême 50 % Verdanza, plaques brun caramel",
+    galleryImages: [
+      {
+        src: "/Fiche produit/Supreme/supreme-50-cbd-texture.webp",
+        alt: "Texture dense et granuleuse de la résine CBD Suprême",
+      },
+      {
+        src: "/Fiche produit/Supreme/supreme-50-cbd-fiche.png",
+        alt: "Fiche illustrée Suprême 50 % CBD Verdanza",
+      },
+    ],
+    cbdRate: "50 %",
+    cbgRate: "Non communiqué",
+    thcRate: "0 % annoncé (selon analyse fournisseur)",
+    origin: "France - Savoie",
+    cultureType: "Autre",
+    texture: "Dense, homogène et malléable",
+    aromas: ["Floral", "Délicat", "Léger", "Raffiné"],
+    tags: ["résine", "cbd", "france", "savoie", "broad spectrum", "cbn", "cbg", "cbc"],
+    productTier: "Premium",
+    qualitySealEnabled: true,
+    whyChooseDescription:
+      "La Suprême se distingue par sa concentration annoncée de 50 % de CBD, sa formulation broad spectrum et son identité florale délicate. Elle complète les résines plus crémeuses, terreuses ou traditionnelles de la sélection Verdanza.",
+    advisedProfile:
+      "Pour les amateurs de résines premium françaises au profil floral léger et raffiné.",
+    experienceDescription:
+      "Une résine française au caractère fin et élégant, destinée aux clients qui recherchent une forte concentration en CBD et une identité aromatique légère.",
+    stock: 22,
+    lowStockThreshold: 10,
+    isActive: true,
+    isFeatured: false,
+    seoTitle: "Suprême 50 % CBD – Résine premium française | Verdanza",
+    seoDescription:
+      "Découvrez la Suprême, une résine CBD premium fabriquée en Savoie : 50 % de CBD, broad spectrum, 0 % de THC annoncé et profil floral délicat.",
+  },
+  {
     id: "flower-cookie-kush-indoor",
     slug: "cookie-kush-indoor",
     name: "Cookie Kush Indoor",

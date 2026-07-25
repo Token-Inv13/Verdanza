@@ -44,6 +44,22 @@ export const productImageVariants: Record<string, ProductImageVariantSet> = {
       height: 713,
     },
   },
+  "/Fiche produit/Supreme/supreme-50-cbd.webp": {
+    card: {
+      src: "/images/products/supreme-50-cbd-card-640.webp",
+      srcSet: "/images/products/supreme-50-cbd-card-320.webp 320w, /images/products/supreme-50-cbd-card-640.webp 640w",
+      sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
+      width: 640,
+      height: 640,
+    },
+    detail: {
+      src: "/images/products/supreme-50-cbd-detail.webp",
+      srcSet: "/images/products/supreme-50-cbd-detail.webp 713w",
+      sizes: "(min-width: 1024px) 45vw, 92vw",
+      width: 713,
+      height: 713,
+    },
+  },
   "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp": {
     card: {
       src: "/images/products/cookie-kush-indoor-card-640.webp",

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-23T14:29:32.656Z",
+  "generatedAt": "2026-07-25T12:58:49.682Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -64,6 +64,39 @@
           "width": 713,
           "height": 713,
           "bytes": 60928
+        }
+      ]
+    },
+    {
+      "productId": "resin-supreme-50-cbd",
+      "productName": "Suprême 50 % CBD",
+      "sourceUrl": "/Fiche produit/Supreme/supreme-50-cbd.webp",
+      "sourceFile": "public/Fiche produit/Supreme/supreme-50-cbd.webp",
+      "sourceBytes": 44754,
+      "sourceWidth": 713,
+      "sourceHeight": 713,
+      "format": "webp",
+      "hasAlpha": false,
+      "card": [
+        {
+          "src": "/images/products/supreme-50-cbd-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 6080
+        },
+        {
+          "src": "/images/products/supreme-50-cbd-card-640.webp",
+          "width": 640,
+          "height": 640,
+          "bytes": 22314
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/supreme-50-cbd-detail.webp",
+          "width": 713,
+          "height": 713,
+          "bytes": 34684
         }
       ]
     },
@@ -727,9 +760,9 @@
     }
   ],
   "totals": {
-    "productSourceBytes": 2119702,
-    "productCardLargestBytes": 1137922,
-    "productDetailBytes": 1684008,
+    "productSourceBytes": 2164456,
+    "productCardLargestBytes": 1160236,
+    "productDetailBytes": 1718692,
     "staticSourceBytes": 2197587,
     "staticLargestBytes": 114692,
     "blogImageBytes": 1540188

@@ -20,8 +20,8 @@ import {
   productPath,
 } from "../lib/structuredData";
 
-function productImageAlt(product: { name: string; category: string }) {
-  return `${product.name} - ${
+function productImageAlt(product: { name: string; category: string; imageAlt?: string }) {
+  return product.imageAlt || `${product.name} - ${
     product.category === "flowers" ? "Fleur CBD" : "Résine CBD"
   } Verdanza`;
 }
@@ -140,6 +140,26 @@ export function ProductPage() {
               className="mx-auto h-full w-full object-contain"
             />
           </div>
+          {!!product.galleryImages?.length && (
+            <div className="grid grid-cols-2 gap-3">
+              {product.galleryImages.map((image) => (
+                <div
+                  key={image.src}
+                  className="aspect-square overflow-hidden rounded-md border border-forest/10 bg-cream p-3"
+                >
+                  <img
+                    src={image.src}
+                    alt={image.alt}
+                    width={713}
+                    height={713}
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
           {(isHydroponicFlower || isResin) && (
             <aside className="rounded-md border border-forest/10 bg-ivory p-5">
               <p className="font-display text-2xl text-forest">
@@ -151,7 +171,7 @@ export function ProductPage() {
                   : `${product.texture || "Texture soignée"} · Sélection Verdanza`}
               </p>
               <p className="mt-3 text-sm leading-6 text-ink/60">
-                THC inférieur au seuil légal
+                THC : {product.thcRate}
               </p>
             </aside>
           )}

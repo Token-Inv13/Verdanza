@@ -40,6 +40,7 @@ export function productPath(product: Pick<Product, "slug">) {
 
 export function buildProductJsonLd(product: Product): JsonLdValue {
   const url = absoluteUrl(productPath(product));
+  const images = [product.image, ...(product.galleryImages?.map((image) => image.src) ?? [])];
 
   return {
     "@context": "https://schema.org",
@@ -47,7 +48,7 @@ export function buildProductJsonLd(product: Product): JsonLdValue {
     "@id": `${url}#product`,
     name: product.name,
     description: product.longDescription,
-    image: [absoluteUrl(product.image)],
+    image: images.map((image) => absoluteUrl(image)),
     sku: product.id,
     category: productCategoryLabel(product),
     url,

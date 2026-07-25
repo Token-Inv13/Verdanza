@@ -19,6 +19,11 @@ export type Product = {
   shortDescription: string;
   longDescription: string;
   image: string;
+  imageAlt?: string;
+  galleryImages?: {
+    src: string;
+    alt: string;
+  }[];
   cbdRate: string;
   cbgRate: string;
   cbnRate?: string;
