@@ -1906,16 +1906,16 @@ function StockRow({
   const [threshold, setThreshold] = useState(product.lowStockThreshold);
 
   return (
-    <article className="admin-card grid gap-4 md:grid-cols-[1fr_120px_140px_auto] md:items-end">
+    <article className="admin-card grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_100px_110px_auto] md:items-end">
       <div className="flex items-center gap-3">
         <img
           src={product.image || BRAND_LABEL}
           alt=""
-          className="h-16 w-16 rounded-md border border-forest/10 object-cover"
+          className="h-12 w-12 rounded-md border border-forest/10 object-cover"
           loading="lazy"
         />
         <div>
-          <h2 className="font-display text-2xl leading-tight text-forest">{product.name}</h2>
+          <h2 className="font-display text-xl leading-tight text-forest">{product.name}</h2>
           <span className="text-xs font-mono text-ink/50">
             {product.internalReference || "Reference a attribuer"}
           </span>
@@ -1924,7 +1924,7 @@ function StockRow({
               Ancienne reference : {product.legacyInternalReferences.join(", ")}
             </span>
           )}
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-1 flex flex-wrap gap-1.5">
             <AdminBadge tone={product.isActive ? "success" : "muted"}>
               {product.isActive ? "Actif" : "Inactif"}
             </AdminBadge>
@@ -1938,7 +1938,7 @@ function StockRow({
       <NumberInput label="Stock" value={stock} onChange={setStock} />
       <NumberInput label="Seuil" value={threshold} onChange={setThreshold} />
       <button
-        className="btn-primary"
+        className="btn-primary min-h-10 px-4 py-2 text-sm"
         onClick={() => void onStockChange(product, stock, threshold)}
       >
         Enregistrer
@@ -2057,6 +2057,7 @@ function DeliveryZoneCreateForm({
   const [customerMessage, setCustomerMessage] = useState("");
   const [adminNote, setAdminNote] = useState("");
   const [sortOrder, setSortOrder] = useState(nextSortOrder);
+  const [isOpen, setIsOpen] = useState(false);
   const publicEstimate = formatLocalDeliveryEstimate({
     estimatedDelayMinMinutes: optionalPositiveNumberFromInput(estimatedDelayMinMinutes),
     estimatedDelayMaxMinutes: optionalPositiveNumberFromInput(estimatedDelayMaxMinutes),
@@ -2090,6 +2091,7 @@ function DeliveryZoneCreateForm({
     setEstimatedDelayMaxMinutes("");
     setCustomerMessage("");
     setAdminNote("");
+    setIsOpen(false);
   }
 
   return (
@@ -2104,77 +2106,88 @@ function DeliveryZoneCreateForm({
             La zone est créée désactivée pour permettre une vérification avant publication client.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <AdminBadge tone="muted">Inactive</AdminBadge>
           <AdminBadge tone="muted">Désactivée</AdminBadge>
+          <button
+            type="button"
+            className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+            onClick={() => setIsOpen((current) => !current)}
+          >
+            {isOpen ? "Masquer" : "Afficher"}
+          </button>
         </div>
       </div>
-      <div className="grid gap-4 p-4 xl:grid-cols-[1.2fr_1fr_1fr]">
-        <div className="grid gap-3 rounded-lg border border-forest/10 bg-ivory p-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-forest/55">
-            Identité
-          </p>
-          <Input label="Nom" value={name} onChange={setName} />
-          <NumberInput label="Ordre" value={sortOrder} onChange={setSortOrder} />
-        </div>
-        <div className="grid gap-3 rounded-lg border border-forest/10 bg-ivory p-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-forest/55">
-            Seuils et visibilité
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <NumberInput label="Frais" value={fee} onChange={setFee} />
-            <NumberInput label="Minimum" value={minimumOrder} onChange={setMinimumOrder} />
+      {isOpen && (
+        <>
+          <div className="grid gap-4 p-4 xl:grid-cols-[1.2fr_1fr_1fr]">
+            <div className="grid gap-3 rounded-lg border border-forest/10 bg-ivory p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-forest/55">
+                Identité
+              </p>
+              <Input label="Nom" value={name} onChange={setName} />
+              <NumberInput label="Ordre" value={sortOrder} onChange={setSortOrder} />
+            </div>
+            <div className="grid gap-3 rounded-lg border border-forest/10 bg-ivory p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-forest/55">
+                Seuils et visibilité
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <NumberInput label="Frais" value={fee} onChange={setFee} />
+                <NumberInput label="Minimum" value={minimumOrder} onChange={setMinimumOrder} />
+              </div>
+              <label className="text-sm font-medium text-forest">
+                Visibilité
+                <select className="input-field mt-2" value="inactive" disabled>
+                  <option value="inactive">Inactif</option>
+                </select>
+              </label>
+              <label className="text-sm font-medium text-forest">
+                Statut client
+                <select className="input-field mt-2" value="disabled" disabled>
+                  <option value="disabled">Désactivée</option>
+                </select>
+              </label>
+            </div>
+            <div className="grid gap-3 rounded-lg border border-forest/10 bg-ivory p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-forest/55">
+                Délais et messages
+              </p>
+              <Input label="Délai interne historique" value={estimatedDelay} onChange={setEstimatedDelay} />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input
+                  label="Délai public min (minutes)"
+                  type="number"
+                  value={estimatedDelayMinMinutes}
+                  onChange={setEstimatedDelayMinMinutes}
+                />
+                <Input
+                  label="Délai public max (minutes)"
+                  type="number"
+                  value={estimatedDelayMaxMinutes}
+                  onChange={setEstimatedDelayMaxMinutes}
+                />
+              </div>
+              <p className="rounded-md border border-forest/10 bg-cream px-3 py-2 text-xs leading-5 text-ink/65">
+                Délai public : {publicEstimate}
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input label="Message client" value={customerMessage} onChange={setCustomerMessage} />
+                <Input label="Note interne" value={adminNote} onChange={setAdminNote} />
+              </div>
+            </div>
           </div>
-          <label className="text-sm font-medium text-forest">
-            Visibilité
-            <select className="input-field mt-2" value="inactive" disabled>
-              <option value="inactive">Inactif</option>
-            </select>
-          </label>
-          <label className="text-sm font-medium text-forest">
-            Statut client
-            <select className="input-field mt-2" value="disabled" disabled>
-              <option value="disabled">Désactivée</option>
-            </select>
-          </label>
-        </div>
-        <div className="grid gap-3 rounded-lg border border-forest/10 bg-ivory p-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-forest/55">
-            Délais et messages
-          </p>
-          <Input label="Délai interne historique" value={estimatedDelay} onChange={setEstimatedDelay} />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input
-              label="Délai public min (minutes)"
-              type="number"
-              value={estimatedDelayMinMinutes}
-              onChange={setEstimatedDelayMinMinutes}
-            />
-            <Input
-              label="Délai public max (minutes)"
-              type="number"
-              value={estimatedDelayMaxMinutes}
-              onChange={setEstimatedDelayMaxMinutes}
-            />
+          <div className="flex justify-end border-t border-forest/10 bg-cream/30 p-4">
+            <button
+              className="btn-primary min-w-44"
+              disabled={!name.trim()}
+              onClick={() => void handleCreate()}
+            >
+              Créer la zone
+            </button>
           </div>
-          <p className="rounded-md border border-forest/10 bg-cream px-3 py-2 text-xs leading-5 text-ink/65">
-            Délai public : {publicEstimate}
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input label="Message client" value={customerMessage} onChange={setCustomerMessage} />
-            <Input label="Note interne" value={adminNote} onChange={setAdminNote} />
-          </div>
-        </div>
-      </div>
-      <div className="flex justify-end border-t border-forest/10 bg-cream/30 p-4">
-        <button
-          className="btn-primary min-w-44"
-          disabled={!name.trim()}
-          onClick={() => void handleCreate()}
-        >
-          Créer la zone
-        </button>
-      </div>
+        </>
+      )}
     </article>
   );
 }
@@ -2210,6 +2223,7 @@ function DeliveryZoneRow({
   const [customerMessage, setCustomerMessage] = useState(zone.customerMessage || "");
   const [adminNote, setAdminNote] = useState(zone.adminNote || "");
   const [sortOrder, setSortOrder] = useState(zone.sortOrder || 0);
+  const [isEditing, setIsEditing] = useState(false);
   const isOpen = status === "open" && isActive;
   const publicEstimate = formatLocalDeliveryEstimate({
     estimatedDelayMinMinutes: optionalPositiveNumberFromInput(estimatedDelayMinMinutes),
@@ -2219,103 +2233,122 @@ function DeliveryZoneRow({
   const feeLabel = fee > 0 ? `${formatEuro(fee)} EUR` : "Offert";
 
   return (
-    <article className="admin-card grid gap-4 border-l-4 border-l-forest/10 md:grid-cols-2 xl:grid-cols-6 xl:items-end">
-      <div className="rounded-lg border border-forest/10 bg-cream/40 p-3 xl:col-span-2">
-        <p className="text-xs uppercase tracking-[0.14em] text-champagne">
-          {methodLabel}
-        </p>
-        <h3 className="mt-1 font-display text-2xl text-forest">{zone.name}</h3>
-        <div className="mb-3 mt-2 flex flex-wrap gap-2">
-          <AdminBadge tone={isActive ? "success" : "muted"}>
-            {isActive ? "Active" : "Inactive"}
-          </AdminBadge>
-          <AdminBadge tone={deliveryStatusTone(status, isActive)}>
-            {deliveryStatusLabel(status, isActive)}
-          </AdminBadge>
-        </div>
-        <div className="mb-3 grid gap-2 text-xs text-ink/60 sm:grid-cols-3">
-          <span>Frais : {feeLabel}</span>
-          <span>Minimum : {formatEuro(minimumOrder)} EUR</span>
-          <span>Ordre : {sortOrder}</span>
-        </div>
-        <Input label="Nom" value={name} onChange={setName} />
-      </div>
-      <NumberInput label="Frais" value={fee} onChange={setFee} />
-      <NumberInput label="Minimum" value={minimumOrder} onChange={setMinimumOrder} />
-      <NumberInput label="Ordre" value={sortOrder} onChange={setSortOrder} />
-      <Input label="Délai interne historique" value={estimatedDelay} onChange={setEstimatedDelay} />
-      {zone.method === "local_express" && (
-        <>
-          <Input
-            label="Délai public min (minutes)"
-            type="number"
-            value={estimatedDelayMinMinutes}
-            onChange={setEstimatedDelayMinMinutes}
-          />
-          <Input
-            label="Délai public max (minutes)"
-            type="number"
-            value={estimatedDelayMaxMinutes}
-            onChange={setEstimatedDelayMaxMinutes}
-          />
-          <p className="rounded-md border border-forest/10 bg-cream px-3 py-2 text-xs leading-5 text-ink/65 xl:col-span-3">
-            Délai public : {publicEstimate}
+    <article className="admin-card overflow-hidden p-0">
+      <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-[0.14em] text-champagne">
+            {methodLabel}
           </p>
-        </>
-      )}
-      <label className="text-sm font-medium text-forest">
-        Visibilité
-        <select
-          className="input-field mt-2"
-          value={isActive ? "active" : "inactive"}
-          onChange={(event) => setIsActive(event.target.value === "active")}
-        >
-          <option value="active">Actif</option>
-          <option value="inactive">Inactif</option>
-        </select>
-      </label>
-      <label className="text-sm font-medium text-forest xl:col-span-2">
-        Statut client
-        <select
-          className="input-field mt-2"
-          value={status}
-          onChange={(event) => setStatus(event.target.value as DeliveryZoneStatus)}
-        >
-          <option value="open">Ouverte</option>
-          <option value="temporarily_closed">Temporairement fermée</option>
-          <option value="coming_soon">Bientôt disponible</option>
-          <option value="disabled">Désactivée</option>
-        </select>
-      </label>
-      <Input label="Message client" value={customerMessage} onChange={setCustomerMessage} />
-      <Input label="Note interne" value={adminNote} onChange={setAdminNote} />
-      <div className="flex flex-wrap gap-2 xl:col-start-6">
-        <button
-          className="btn-primary"
-          onClick={() =>
-            void onSave(zone, {
-              name,
-              isActive,
-              isOpen,
-              status,
-              fee,
-              minimumOrder,
-              minimumOrderAmount: minimumOrder,
-              estimatedDelay,
-              estimatedDelayMinMinutes: optionalPositiveNumberFromInput(estimatedDelayMinMinutes),
-              estimatedDelayMaxMinutes: optionalPositiveNumberFromInput(estimatedDelayMaxMinutes),
-              customerMessage,
-              adminNote,
-              sortOrder,
-            })
-          }
-        >
-          Enregistrer
-        </button>
-        <button className="btn-secondary" onClick={() => void onDelete(zone)}>
-          Supprimer
-        </button>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <h3 className="font-display text-2xl text-forest">{zone.name}</h3>
+            <AdminBadge tone={isActive ? "success" : "muted"}>
+              {isActive ? "Active" : "Inactive"}
+            </AdminBadge>
+            <AdminBadge tone={deliveryStatusTone(status, isActive)}>
+              {deliveryStatusLabel(status, isActive)}
+            </AdminBadge>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-ink/60">
+            <span>Frais : {feeLabel}</span>
+            <span>Minimum : {formatEuro(minimumOrder)} EUR</span>
+            <span>Ordre : {sortOrder}</span>
+            {zone.method === "local_express" && <span>Délai public : {publicEstimate}</span>}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+            onClick={() => setIsEditing((current) => !current)}
+          >
+            {isEditing ? "Masquer" : "Modifier"}
+          </button>
+          {isEditing && (
+            <button
+              className="btn-primary min-h-9 px-3 py-1.5 text-xs"
+              onClick={() =>
+                void onSave(zone, {
+                  name,
+                  isActive,
+                  isOpen,
+                  status,
+                  fee,
+                  minimumOrder,
+                  minimumOrderAmount: minimumOrder,
+                  estimatedDelay,
+                  estimatedDelayMinMinutes: optionalPositiveNumberFromInput(estimatedDelayMinMinutes),
+                  estimatedDelayMaxMinutes: optionalPositiveNumberFromInput(estimatedDelayMaxMinutes),
+                  customerMessage,
+                  adminNote,
+                  sortOrder,
+                })
+              }
+            >
+              Enregistrer
+            </button>
+          )}
+          <button
+            className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+            onClick={() => void onDelete(zone)}
+          >
+            Supprimer
+          </button>
+        </div>
       </div>
+      {isEditing && (
+        <div className="grid gap-4 border-t border-forest/10 bg-cream/30 p-4 md:grid-cols-2 xl:grid-cols-6 xl:items-end">
+          <Input label="Nom" value={name} onChange={setName} />
+          <NumberInput label="Frais" value={fee} onChange={setFee} />
+          <NumberInput label="Minimum" value={minimumOrder} onChange={setMinimumOrder} />
+          <NumberInput label="Ordre" value={sortOrder} onChange={setSortOrder} />
+          <Input label="Délai interne historique" value={estimatedDelay} onChange={setEstimatedDelay} />
+          {zone.method === "local_express" && (
+            <>
+              <Input
+                label="Délai public min (minutes)"
+                type="number"
+                value={estimatedDelayMinMinutes}
+                onChange={setEstimatedDelayMinMinutes}
+              />
+              <Input
+                label="Délai public max (minutes)"
+                type="number"
+                value={estimatedDelayMaxMinutes}
+                onChange={setEstimatedDelayMaxMinutes}
+              />
+              <p className="rounded-md border border-forest/10 bg-cream px-3 py-2 text-xs leading-5 text-ink/65 xl:col-span-3">
+                Délai public : {publicEstimate}
+              </p>
+            </>
+          )}
+          <label className="text-sm font-medium text-forest">
+            Visibilité
+            <select
+              className="input-field mt-2"
+              value={isActive ? "active" : "inactive"}
+              onChange={(event) => setIsActive(event.target.value === "active")}
+            >
+              <option value="active">Actif</option>
+              <option value="inactive">Inactif</option>
+            </select>
+          </label>
+          <label className="text-sm font-medium text-forest xl:col-span-2">
+            Statut client
+            <select
+              className="input-field mt-2"
+              value={status}
+              onChange={(event) => setStatus(event.target.value as DeliveryZoneStatus)}
+            >
+              <option value="open">Ouverte</option>
+              <option value="temporarily_closed">Temporairement fermée</option>
+              <option value="coming_soon">Bientôt disponible</option>
+              <option value="disabled">Désactivée</option>
+            </select>
+          </label>
+          <Input label="Message client" value={customerMessage} onChange={setCustomerMessage} />
+          <Input label="Note interne" value={adminNote} onChange={setAdminNote} />
+        </div>
+      )}
     </article>
   );
 }
@@ -3419,7 +3452,7 @@ function CustomersTable({
               return (
                 <article
                   key={customer.id}
-                  className={`rounded-lg border p-4 transition ${
+                  className={`rounded-lg border p-3 transition ${
                     selected
                       ? "border-champagne bg-cream shadow-sm"
                       : "border-forest/10 bg-ivory hover:border-champagne/60"
@@ -3439,18 +3472,18 @@ function CustomersTable({
                     </div>
                     <AdminBadge tone={status.tone}>{status.label}</AdminBadge>
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                    <MiniCustomerMetric label="Commandes" value={String(stats.orderCount)} />
-                    <MiniCustomerMetric label="Total" value={`${formatEuro(stats.totalSpent)} EUR`} />
-                    <MiniCustomerMetric label="Derniere" value={stats.lastOrderLabel} />
-                    <MiniCustomerMetric label="Points" value={String(customer.loyaltyPoints || 0)} />
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink/60">
+                    <span>Commandes : {stats.orderCount}</span>
+                    <span>Total : {formatEuro(stats.totalSpent)} EUR</span>
+                    <span>Derniere : {stats.lastOrderLabel}</span>
+                    <span>Points : {customer.loyaltyPoints || 0}</span>
                   </div>
                   {customer.internalNote && (
-                    <p className="mt-3 line-clamp-2 rounded-md bg-ivory px-3 py-2 text-xs text-ink/65">
+                    <p className="mt-2 line-clamp-2 rounded-md bg-ivory px-3 py-2 text-xs text-ink/65">
                       {customer.internalNote}
                     </p>
                   )}
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
                       type="button"
@@ -3572,11 +3605,11 @@ function CustomerDetailPanel({
   }, [customer.id, customer.internalNote]);
 
   return (
-    <article className="rounded-lg border border-forest/10 bg-ivory p-4 shadow-sm lg:p-5">
-      <div className="flex flex-col justify-between gap-4 border-b border-forest/10 pb-4 xl:flex-row xl:items-start">
+    <article className="rounded-lg border border-forest/10 bg-ivory p-3 shadow-sm lg:p-4">
+      <div className="flex flex-col justify-between gap-3 border-b border-forest/10 pb-3 xl:flex-row xl:items-start">
         <div>
           <p className="text-xs uppercase tracking-[0.18em] text-champagne">Fiche client</p>
-          <h2 className="mt-1 font-display text-3xl text-forest">
+          <h2 className="mt-1 font-display text-2xl text-forest">
             {customer.displayName || "Client sans nom"}
           </h2>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -3618,17 +3651,17 @@ function CustomerDetailPanel({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         <MiniCustomerMetric label="Commandes" value={String(stats.orderCount)} />
         <MiniCustomerMetric label="Total depense" value={`${formatEuro(stats.totalSpent)} EUR`} />
         <MiniCustomerMetric label="Panier moyen" value={`${formatEuro(stats.averageCart)} EUR`} />
         <MiniCustomerMetric label="Derniere commande" value={stats.lastOrderLabel} />
       </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-2">
-        <section className="rounded-lg border border-forest/10 bg-cream p-4">
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        <section className="rounded-lg border border-forest/10 bg-cream p-3">
           <h3 className="font-semibold text-forest">Informations generales</h3>
-          <dl className="mt-3 space-y-2 text-sm text-ink/70">
+          <dl className="mt-3 space-y-1.5 text-sm text-ink/70">
             <InfoRow label="Email" value={customer.email || "Email non renseigne"} />
             <InfoRow label="Telephone" value={customer.phone || "Telephone non renseigne"} />
             <InfoRow label="Compte cree" value={formatAdminDate(customer.createdAt) || "Non renseigne"} />
@@ -3653,10 +3686,10 @@ function CustomerDetailPanel({
           </label>
         </section>
 
-        <section className="rounded-lg border border-forest/10 bg-cream p-4">
+        <section className="rounded-lg border border-forest/10 bg-cream p-3">
           <h3 className="font-semibold text-forest">Note interne</h3>
           <textarea
-            className="input-field mt-3 min-h-28"
+            className="input-field mt-3 min-h-20"
             value={draftNote}
             onChange={(event) => setDraftNote(event.currentTarget.value)}
             placeholder="Client prefere livraison locale le soir, a rappeler avant expedition..."
@@ -3678,7 +3711,7 @@ function CustomerDetailPanel({
         </section>
       </div>
 
-      <section className="mt-5 rounded-lg border border-forest/10 bg-cream p-4">
+      <section className="mt-4 rounded-lg border border-forest/10 bg-cream p-3">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
           <div>
             <h3 className="font-semibold text-forest">Promos attribuees</h3>
@@ -3709,7 +3742,7 @@ function CustomerDetailPanel({
             </button>
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           {(customer.assignedPromos || []).map((promo) => (
             <span key={`${promo.code}-${promo.assignedAt}`} className="rounded-full border border-forest/10 bg-ivory px-3 py-2 text-xs text-forest">
               {promo.code} {promo.isActive ? "actif" : "inactif"}
@@ -3721,7 +3754,7 @@ function CustomerDetailPanel({
         </div>
       </section>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-2">
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
         <CustomerOrdersPanel orders={orders} />
         <CustomerSignalsPanel
           favorites={details.favorites}
