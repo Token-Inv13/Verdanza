@@ -1060,11 +1060,6 @@ function ProductForm({
                 ? "Une reference sera generee automatiquement a l'enregistrement"
                 : "Generee automatiquement a l'enregistrement")}
           </span>
-          {!!product.legacyInternalReferences?.length && (
-            <span className="mt-1 block text-xs text-ink/55">
-              Ancienne reference : {product.legacyInternalReferences.join(", ")}
-            </span>
-          )}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <NumberInput
@@ -1792,11 +1787,6 @@ function ProductTable({
                       <span className="block text-xs font-mono text-ink/55">
                         {product.internalReference || "Reference a attribuer"}
                       </span>
-                      {!!product.legacyInternalReferences?.length && (
-                        <span className="block text-xs text-ink/45">
-                          Ancienne reference : {product.legacyInternalReferences.join(", ")}
-                        </span>
-                      )}
                     </div>
                   </div>
                 </td>
@@ -1934,11 +1924,6 @@ function StockRow({
           <span className="text-xs font-mono text-ink/50">
             {product.internalReference || "Reference a attribuer"}
           </span>
-          {!!product.legacyInternalReferences?.length && (
-            <span className="block text-xs text-ink/45">
-              Ancienne reference : {product.legacyInternalReferences.join(", ")}
-            </span>
-          )}
           <div className="mt-1 flex flex-wrap gap-1.5">
             <AdminBadge tone={product.isActive ? "success" : "muted"}>
               {product.isActive ? "Actif" : "Inactif"}
@@ -4254,15 +4239,6 @@ function AccountingPanel({
           <span className="mt-1 block">
             Certains produits vendus sur la période n'ont pas de coût d'achat renseigné :{" "}
             {summary.missingCostProducts.join(", ")}.
-          </span>
-        </div>
-      )}
-
-      {summary.hasUnfrozenHistoricalCosts && (
-        <div className="rounded-lg border border-champagne/40 bg-cream px-4 py-3 text-sm text-forest">
-          <strong className="block">Cout historique non fige.</strong>
-          <span className="mt-1 block">
-            Certaines anciennes commandes payees n'ont pas de snapshot de cout. Leur cout est encore estime depuis les couts produits actuels.
           </span>
         </div>
       )}
