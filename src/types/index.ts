@@ -262,6 +262,9 @@ export type OrderItem = {
   slug?: string;
   category?: ProductCategory;
   cultureType?: CultureType;
+  purchasePricePerGramSnapshot?: number | null;
+  purchaseCostTotalSnapshot?: number | null;
+  purchaseCostCapturedAt?: string;
 };
 
 export type ProductCost = {

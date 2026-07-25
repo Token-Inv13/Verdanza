@@ -119,9 +119,16 @@ export default async function handler(
         }
         update.paymentStatus = body.paymentStatus;
         if (body.paymentStatus === "paid" && order.paymentStatus !== "paid") {
-          update.paidAt = new Date().toISOString();
-          update.paymentConfirmedAt = update.paidAt;
+          const paidAt = new Date().toISOString();
+          update.paidAt = paidAt;
+          update.paymentConfirmedAt = paidAt;
           update.paymentConfirmedBy = admin.email;
+          update.items = await capturePurchaseCostSnapshots({
+            db,
+            transaction,
+            order,
+            capturedAt: paidAt,
+          });
         }
       }
       if (body.finalPaymentMethod !== undefined) {
@@ -307,6 +314,61 @@ export default async function handler(
       error instanceof Error ? error.message : "Mise a jour commande impossible.";
     sendJson(response, { error: message }, message === "Acces admin requis." ? 403 : 400);
   }
+}
+
+async function capturePurchaseCostSnapshots({
+  db,
+  transaction,
+  order,
+  capturedAt,
+}: {
+  db: FirebaseFirestore.Firestore;
+  transaction: FirebaseFirestore.Transaction;
+  order: Order;
+  capturedAt: string;
+}) {
+  const items = order.items || [];
+  const productIds = [
+    ...new Set(
+      items
+        .filter((item) => item.purchaseCostCapturedAt === undefined)
+        .map((item) => item.productId)
+        .filter(Boolean),
+    ),
+  ];
+  const costEntries = await Promise.all(
+    productIds.map(async (productId) => {
+      const snapshot = await transaction.get(db.collection("productCosts").doc(productId));
+      const rawCost = snapshot.data()?.purchasePricePerGram;
+      return [productId, optionalNonNegativeNumber(rawCost)] as const;
+    }),
+  );
+  const costByProductId = new Map(costEntries);
+
+  return items.map((item) => {
+    if (item.purchaseCostCapturedAt !== undefined) return item;
+    const purchasePricePerGram = costByProductId.get(item.productId) ?? null;
+    return {
+      ...item,
+      purchasePricePerGramSnapshot: purchasePricePerGram,
+      purchaseCostTotalSnapshot:
+        purchasePricePerGram == null
+          ? null
+          : roundMoney(Number(item.quantity || 0) * purchasePricePerGram),
+      purchaseCostCapturedAt: capturedAt,
+    };
+  });
+}
+
+function optionalNonNegativeNumber(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
+function roundMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 function parseBody(value: unknown): {
