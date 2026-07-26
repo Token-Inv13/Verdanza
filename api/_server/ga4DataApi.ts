@@ -183,7 +183,7 @@ async function loadStandardReport(
       loadAcquisitionRows(config, range, "sessionCampaignName", fetchImpl),
       loadPages(config, range, fetchImpl),
       loadFunnel(config, range, fetchImpl),
-      loadProducts(config, range, fetchImpl),
+      loadProducts(config, range, fetchImpl, notices),
       loadContent(config, range, fetchImpl, notices),
       loadDelivery(config, range, fetchImpl, notices),
       loadDevices(config, range, fetchImpl),
@@ -393,52 +393,49 @@ async function loadProducts(
   config: Ga4Config,
   range: AdminAnalyticsRange,
   fetchImpl: FetchLike,
+  notices: string[],
 ): Promise<AdminAnalyticsProductRow[]> {
-  const rows = await runReport(
+  const ecommerceRows = await runReport(
     config,
     {
       dateRanges: [{ startDate: range.startDate, endDate: range.endDate }],
-      dimensions: [{ name: "itemName" }, { name: "eventName" }],
-      metrics: [{ name: "eventCount" }],
-      dimensionFilter: andFilter([
-        publicTrafficFilter(),
-        inListFilter("eventName", [
-          "view_item",
-          "add_to_cart",
-          "add_to_wishlist",
-          "order_submitted",
-          "purchase",
-        ]),
-      ]),
+      dimensions: [{ name: "itemName" }],
+      metrics: [{ name: "itemsViewed" }, { name: "itemsAddedToCart" }, { name: "itemsPurchased" }],
+      dimensionFilter: publicTrafficFilter(),
+      orderBys: [{ metric: { metricName: "itemsViewed" }, desc: true }],
       limit: 100,
     },
     fetchImpl,
   );
+  const favoriteRows = await loadOptionalProductEventRows(
+    config,
+    range,
+    fetchImpl,
+    "add_to_wishlist",
+    notices,
+    "Favoris produits indisponibles : la propriete GA4 ne permet pas de croiser cet evenement avec les produits.",
+  );
+  const submittedRows = await loadOptionalProductEventRows(
+    config,
+    range,
+    fetchImpl,
+    "order_submitted",
+    notices,
+    "Commandes soumises par produit indisponibles : la propriete GA4 ne permet pas de croiser cet evenement avec les produits.",
+  );
+
   const byProduct = new Map<string, AdminAnalyticsProductRow>();
-  for (const row of rows) {
+  for (const row of ecommerceRows) {
     const name = cleanDimension(row.dimensions[0]);
-    if (!name || name === "(not set)") continue;
-    const eventName = row.dimensions[1] || "";
-    const current =
-      byProduct.get(name) ||
-      {
-        name,
-        views: 0,
-        addToCart: 0,
-        favorites: 0,
-        ordersSubmitted: 0,
-        paidPurchases: 0,
-        viewToCartRate: null,
-        cartToOrderRate: null,
-      };
-    const count = metricValue(row.metrics, "eventCount");
-    if (eventName === "view_item") current.views += count;
-    if (eventName === "add_to_cart") current.addToCart += count;
-    if (eventName === "add_to_wishlist") current.favorites += count;
-    if (eventName === "order_submitted") current.ordersSubmitted += count;
-    if (eventName === "purchase") current.paidPurchases += count;
+    if (!isUsableProductName(name)) continue;
+    const current = productAnalyticsRow(name);
+    current.views = metricValue(row.metrics, "itemsViewed");
+    current.addToCart = metricValue(row.metrics, "itemsAddedToCart");
+    current.paidPurchases = metricValue(row.metrics, "itemsPurchased");
     byProduct.set(name, current);
   }
+  mergeProductEventCounts(byProduct, favoriteRows, "favorites");
+  mergeProductEventCounts(byProduct, submittedRows, "ordersSubmitted");
   return [...byProduct.values()]
     .map((row) => ({
       ...row,
@@ -447,6 +444,61 @@ async function loadProducts(
     }))
     .sort((a, b) => b.views - a.views)
     .slice(0, 20);
+}
+
+async function loadOptionalProductEventRows(
+  config: Ga4Config,
+  range: AdminAnalyticsRange,
+  fetchImpl: FetchLike,
+  eventName: string,
+  notices: string[],
+  notice: string,
+) {
+  return runOptionalReport(
+    config,
+    {
+      dateRanges: [{ startDate: range.startDate, endDate: range.endDate }],
+      dimensions: [{ name: "itemName" }],
+      metrics: [{ name: "eventCount" }],
+      dimensionFilter: andFilter([publicTrafficFilter(), exactFilter("eventName", eventName)]),
+      orderBys: [{ metric: { metricName: "eventCount" }, desc: true }],
+      limit: 100,
+    },
+    fetchImpl,
+    notices,
+    notice,
+  );
+}
+
+function mergeProductEventCounts(
+  rows: Map<string, AdminAnalyticsProductRow>,
+  eventRows: ReportRow[],
+  field: "favorites" | "ordersSubmitted",
+) {
+  for (const row of eventRows) {
+    const name = cleanDimension(row.dimensions[0]);
+    if (!isUsableProductName(name)) continue;
+    const current = rows.get(name) || productAnalyticsRow(name);
+    current[field] += metricValue(row.metrics, "eventCount");
+    rows.set(name, current);
+  }
+}
+
+function productAnalyticsRow(name: string): AdminAnalyticsProductRow {
+  return {
+    name,
+    views: 0,
+    addToCart: 0,
+    favorites: 0,
+    ordersSubmitted: 0,
+    paidPurchases: 0,
+    viewToCartRate: null,
+    cartToOrderRate: null,
+  };
+}
+
+function isUsableProductName(name: string) {
+  return Boolean(name && name !== "Non renseigne");
 }
 
 async function loadContent(
@@ -682,8 +734,8 @@ async function runOptionalReport(
   try {
     return await runReport(config, body, fetchImpl);
   } catch (error) {
+    void error;
     notices.push(notice);
-    console.warn("GA4 optional report unavailable", error);
     return [];
   }
 }
@@ -696,7 +748,7 @@ async function runOptionalRealtimeReport(
   try {
     return await runRealtimeReport(config, body, fetchImpl);
   } catch (error) {
-    console.warn("GA4 realtime report unavailable", error);
+    void error;
     return [];
   }
 }

@@ -28,6 +28,22 @@ const mockFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   } else {
     assert.ok(bodyText.includes("unifiedScreenName"), "realtime reports must exclude admin screens");
   }
+  const dimensions = ((body.dimensions as { name: string }[] | undefined) || []).map((dimension) => dimension.name);
+  const metrics = ((body.metrics as { name: string }[] | undefined) || []).map((metric) => metric.name);
+  if (dimensions.some((dimension) => dimension.startsWith("customEvent:"))) {
+    return jsonResponse(
+      { error: { message: "Field customEvent:test is not a valid dimension." } },
+      false,
+      400,
+    );
+  }
+  if (dimensions.includes("itemName") && metrics.includes("eventCount")) {
+    return jsonResponse(
+      { error: { message: "Please remove eventCount to make the request compatible for example." } },
+      false,
+      400,
+    );
+  }
   return jsonResponse(mockGa4Report(body));
 };
 
@@ -53,7 +69,20 @@ assert.ok(report.acquisition.channels.length >= 1);
 assert.ok(report.pages.length >= 1);
 assert.ok(report.funnel.some((step) => step.eventName === "order_submitted"));
 assert.ok(report.products.some((product) => product.name === "Golden Static"));
+assert.ok(
+  report.notices.some((notice) => notice.includes("Commandes soumises par produit indisponibles")),
+  "incompatible product custom event report should produce a notice",
+);
+assert.equal(report.delivery.methods.length, 0);
 assert.ok(requests.some((request) => request.url.includes(":runRealtimeReport")));
+assert.ok(
+  !requests.some((request) => {
+    const dimensions = ((request.body.dimensions as { name: string }[] | undefined) || []).map((dimension) => dimension.name);
+    const metrics = ((request.body.metrics as { name: string }[] | undefined) || []).map((metric) => metric.name);
+    return dimensions.includes("itemName") && dimensions.includes("eventName") && metrics.includes("eventCount");
+  }),
+  "products report must not combine itemName, eventName and eventCount",
+);
 
 const cachedRequestCount = requests.length;
 await getAdminAnalyticsReport(
@@ -86,12 +115,8 @@ function mockGa4Report(body: Record<string, unknown>) {
   if (!dimensions.length && metrics.includes("activeUsers")) {
     return row([], metrics.map((name) => metricFixture(name)));
   }
-  if (dimensions.includes("eventName") && dimensions.includes("itemName")) {
-    return rows(
-      ["Golden Static", "view_item"],
-      ["Golden Static", "add_to_cart"],
-      ["Golden Static", "order_submitted"],
-    );
+  if (dimensions.includes("itemName")) {
+    return rows(["Golden Static"], ["Blue Dream"]);
   }
   if (dimensions.includes("eventName")) {
     return rows(
@@ -149,14 +174,17 @@ function metricFixture(name: string) {
     eventCount: 3,
     eventValue: 180,
     totalRevenue: 120,
+    itemsViewed: 12,
+    itemsAddedToCart: 4,
+    itemsPurchased: 2,
   };
   return values[name] ?? 1;
 }
 
-function jsonResponse(payload: unknown) {
+function jsonResponse(payload: unknown, ok = true, status = 200) {
   return {
-    ok: true,
-    status: 200,
+    ok,
+    status,
     json: async () => payload,
   } as Response;
 }
