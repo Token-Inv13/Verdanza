@@ -94,10 +94,6 @@ export function App() {
           />
           <Route path="produits/:slug" element={<ProductPage />} />
           <Route path="livraison" element={<DeliveryPage mode="overview" />} />
-          <Route
-            path="livraison-express-aix"
-            element={<DeliveryPage mode="local" />}
-          />
           <Route path="livraison-locale" element={<DeliveryPage mode="local" />} />
           <Route path="livraison-postale" element={<DeliveryPage mode="postal" />} />
           <Route

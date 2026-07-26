@@ -4,6 +4,13 @@
   "devCommand": "npm run dev -- --host 127.0.0.1",
   "outputDirectory": "dist",
   "cleanUrls": true,
+  "redirects": [
+    {
+      "source": "/livraison-express-aix",
+      "destination": "/livraison-locale",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/public-promo-banners",
