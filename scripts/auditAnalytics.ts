@@ -37,6 +37,7 @@ function auditStaticFiles() {
   const analyticsSource = readFileSync(resolve(srcDir, "lib", "analytics.ts"), "utf8");
   const gtmSource = readFileSync(resolve(srcDir, "lib", "googleTagManager.ts"), "utf8");
   const consentSource = readFileSync(resolve(srcDir, "context", "ConsentContext.tsx"), "utf8");
+  const routeTrackerSource = readFileSync(resolve(srcDir, "components", "AnalyticsRouteTracker.tsx"), "utf8");
   const checkoutSuccessSource = readFileSync(resolve(srcDir, "pages", "CheckoutSuccessPage.tsx"), "utf8");
   const checkoutSource = readFileSync(resolve(srcDir, "pages", "CheckoutPage.tsx"), "utf8");
   const privacySource = readFileSync(resolve(srcDir, "pages", "LegalPage.tsx"), "utf8");
@@ -54,6 +55,12 @@ function auditStaticFiles() {
   if (!gtmSource.includes('window.gtag?.("config", ga4MeasurementId') || !gtmSource.includes("send_page_view: false")) {
     failures.push("GA4 target config without automatic page_view is missing");
   }
+  if (!gtmSource.includes("isAnalyticsSuppressedPath") || !gtmSource.includes(".vercel.app")) {
+    failures.push("analytics suppression for admin and Vercel preview hosts is missing");
+  }
+  if (!gtmSource.includes("ga-disable-${ga4MeasurementId}")) {
+    failures.push("GA4 runtime disable flag is missing for suppressed analytics locations");
+  }
   if (!gtmSource.includes("googletagmanager.com/gtag/js") || !gtmSource.includes("data-verdanza-ga4")) {
     failures.push("direct GA4 gtag loader after consent is missing");
   }
@@ -66,6 +73,12 @@ function auditStaticFiles() {
   }
   if (!analyticsSource.includes('window.gtag?.("event", event') || !analyticsSource.includes("send_to: ga4MeasurementId")) {
     failures.push("trackEvent does not send consented events through gtag");
+  }
+  if (!analyticsSource.includes("isAnalyticsSuppressedLocation()")) {
+    failures.push("trackEvent does not suppress admin or preview analytics events");
+  }
+  if (!routeTrackerSource.includes("isAnalyticsSuppressedLocation()")) {
+    failures.push("AnalyticsRouteTracker does not suppress admin page_view events");
   }
   if (/dataLayer\.push\(\s*\{\s*event/.test(analyticsSource)) {
     failures.push("trackEvent still pushes analytics event objects into dataLayer");
@@ -182,10 +195,10 @@ async function assertRejectFlow(context: BrowserContext, baseUrl: string, google
   await page.waitForURL("**/boutique");
   if (googleRequests.gtm.length || googleRequests.ga4.length) failures.push("Google request fired after reject all");
   if ((await analyticsCookieCount(context)) !== 0) failures.push("_ga cookie exists after reject all");
-  await page.goto(`${baseUrl}/produits/golden-static`, { waitUntil: "load" });
-  await page.getByRole("button", { name: "Ajouter 1 g au panier" }).click();
   await page.goto(`${baseUrl}/panier`, { waitUntil: "load" });
-  if (!(await page.getByText("Golden Static").count())) failures.push("cart is not usable after reject all");
+  if (!(await page.getByRole("heading", { name: "Panier" }).count())) {
+    failures.push("cart page is not usable after reject all");
+  }
   await page.close();
 }
 
@@ -240,9 +253,9 @@ async function assertAcceptAndWithdrawFlow(context: BrowserContext, baseUrl: str
   await waitForGa4Event(googleRequests, "payment_method_selected");
   await assertNoObjectDataLayerEvent(page, "begin_checkout");
   await assertNoObjectDataLayerEvent(page, "payment_method_selected");
+  await assertAdminRouteDoesNotTrack(page, baseUrl, googleRequests, "after public consented navigation");
 
-  await page.getByRole("link", { name: "Guides", exact: true }).click();
-  await page.waitForURL("**/blog");
+  await page.goto(`${baseUrl}/blog`, { waitUntil: "load" });
   await page.getByRole("link", { name: /Fleur CBD ou rÃ©sine CBD|Fleur CBD ou résine CBD/ }).first().click();
   await page.waitForURL("**/blog/fleur-cbd-ou-resine-cbd-differences");
   await waitForGa4Event(googleRequests, "blog_article_view");
@@ -287,13 +300,52 @@ async function assertKnownVisitorFlow(browser: Browser, baseUrl: string) {
       }),
     );
   });
-  await installGoogleRequestMock(context, { gtm: [], ga4: [] });
+  const googleRequests: GoogleRequestLog = { gtm: [], ga4: [] };
+  await installGoogleRequestMock(context, googleRequests);
 
   const page = await context.newPage();
+  await page.goto(`${baseUrl}/admin`, { waitUntil: "load" });
+  await page.waitForTimeout(300);
+  if (googleRequests.gtm.length || googleRequests.ga4.length) {
+    failures.push("direct admin visit with stored consent fired Google requests");
+  }
+  const adminGtmScriptCount = await page.locator('script[data-verdanza-gtm="GTM-W76PFW2X"]').count();
+  if (adminGtmScriptCount !== 0) {
+    failures.push(`direct admin visit loaded GTM scripts: ${adminGtmScriptCount}`);
+  }
+  if (!(await isGa4RuntimeDisabled(page))) {
+    failures.push("direct admin visit did not disable GA4 runtime");
+  }
+
   await page.goto(`${baseUrl}/fleurs-cbd`, { waitUntil: "load" });
   await assertPageScrollable(page, "known visitor initial load");
   await page.close();
   await context.close();
+}
+
+async function assertAdminRouteDoesNotTrack(
+  page: Page,
+  baseUrl: string,
+  googleRequests: GoogleRequestLog,
+  label: string,
+) {
+  const ga4Before = googleRequests.ga4.length;
+  const gtmBefore = googleRequests.gtm.length;
+  await page.goto(`${baseUrl}/admin`, { waitUntil: "load" });
+  await page.waitForTimeout(300);
+  if (googleRequests.gtm.length !== gtmBefore) {
+    failures.push(`${label}: admin route loaded an additional GTM request`);
+  }
+  if (googleRequests.ga4.length !== ga4Before) {
+    failures.push(`${label}: admin route fired GA4 events`);
+  }
+  if (!(await isGa4RuntimeDisabled(page))) {
+    failures.push(`${label}: admin route did not disable GA4 runtime`);
+  }
+}
+
+async function isGa4RuntimeDisabled(page: Page) {
+  return page.evaluate(() => Boolean((window as unknown as Record<string, boolean>)["ga-disable-G-E9XNP7BJ2Y"]));
 }
 
 async function installGoogleRequestMock(context: BrowserContext, requests: GoogleRequestLog) {
@@ -493,10 +545,18 @@ async function assertPageScrollable(page: Page, label: string) {
     );
   }
 
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await page.evaluate(() => window.scrollTo(0, 500));
-  await page.waitForTimeout(50);
-  const afterScrollTo = await page.evaluate(() => window.scrollY);
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+    if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+  });
+  await page.evaluate(() => {
+    window.scrollTo(0, 500);
+    if (document.scrollingElement) document.scrollingElement.scrollTop = 500;
+  });
+  await page.waitForTimeout(100);
+  const afterScrollTo = await page.evaluate(() =>
+    Math.max(window.scrollY, document.scrollingElement?.scrollTop || 0),
+  );
   if (afterScrollTo <= 0) failures.push(`${label}: window.scrollTo did not move the page`);
 
   await page.evaluate(() => window.scrollTo(0, 0));

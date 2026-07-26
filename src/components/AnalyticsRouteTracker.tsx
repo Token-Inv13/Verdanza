@@ -2,6 +2,10 @@ import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { useConsent } from "../context/ConsentContext";
 import { trackPageView } from "../lib/analytics";
+import {
+  isAnalyticsSuppressedLocation,
+  updateAnalyticsConsent,
+} from "../lib/googleTagManager";
 
 export function AnalyticsRouteTracker() {
   const location = useLocation();
@@ -15,6 +19,12 @@ export function AnalyticsRouteTracker() {
       skippedFirstAfterConsent.current = false;
       return;
     }
+    if (isAnalyticsSuppressedLocation()) {
+      updateAnalyticsConsent(false);
+      lastTrackedRoute.current = route;
+      return;
+    }
+    updateAnalyticsConsent(true);
     if (!skippedFirstAfterConsent.current) {
       skippedFirstAfterConsent.current = true;
       lastTrackedRoute.current = route;

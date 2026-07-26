@@ -1,6 +1,10 @@
 import type { BlogArticle } from "../types/blog";
 import type { DeliveryMethod, PreferredPaymentMethod, Product } from "../types";
-import { ga4MeasurementId } from "./googleTagManager";
+import {
+  ga4MeasurementId,
+  isAnalyticsSuppressedLocation,
+  loadGoogleTagManager,
+} from "./googleTagManager";
 
 type Primitive = string | number | boolean | null | undefined;
 
@@ -78,7 +82,9 @@ export type Ga4MeasurementContext = {
 };
 
 export async function getGa4MeasurementContext(): Promise<Ga4MeasurementContext | null> {
-  if (typeof window === "undefined" || !analyticsAllowed || !window.gtag) return null;
+  if (typeof window === "undefined" || !analyticsAllowed || isAnalyticsSuppressedLocation() || !window.gtag) {
+    return null;
+  }
   const clientId = await getGtagValue("client_id", 900);
   if (!clientId || !isSafeGa4Id(clientId)) return null;
   const sessionId = await getGtagValue("session_id", 500);
@@ -92,7 +98,9 @@ export async function getGa4MeasurementContext(): Promise<Ga4MeasurementContext 
 
 export function trackEvent(event: AnalyticsEventName, payload: AnalyticsPayload = {}) {
   if (typeof window === "undefined" || !analyticsAllowed) return;
+  if (isAnalyticsSuppressedLocation()) return;
   if (containsBlockedKey(payload)) return;
+  loadGoogleTagManager();
   window.gtag?.("event", event, {
     send_to: ga4MeasurementId,
     ...payload,

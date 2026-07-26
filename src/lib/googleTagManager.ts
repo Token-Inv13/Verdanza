@@ -17,6 +17,28 @@ export const ga4MeasurementId =
   (import.meta.env.VITE_GA4_MEASUREMENT_ID as string | undefined)?.trim() ||
   defaultGa4MeasurementId;
 
+export function isAnalyticsSuppressedLocation() {
+  if (typeof window === "undefined") return false;
+  return (
+    isAnalyticsSuppressedPath(window.location.pathname) ||
+    isAnalyticsSuppressedHostname(window.location.hostname)
+  );
+}
+
+export function isAnalyticsSuppressedPath(pathname: string) {
+  return /^\/admin(?:\/|$)/.test(pathname);
+}
+
+export function isAnalyticsSuppressedHostname(hostname: string) {
+  return hostname.toLowerCase().endsWith(".vercel.app");
+}
+
+export function setGoogleAnalyticsRuntimeEnabled(enabled: boolean) {
+  if (typeof window === "undefined") return;
+  const disableKey = `ga-disable-${ga4MeasurementId}`;
+  (window as unknown as Record<string, boolean>)[disableKey] = !enabled;
+}
+
 export function initializeGoogleConsentMode() {
   if (typeof window === "undefined") return;
   window.dataLayer = window.dataLayer || [];
@@ -38,8 +60,10 @@ export function initializeGoogleConsentMode() {
 export function updateAnalyticsConsent(granted: boolean) {
   if (typeof window === "undefined") return;
   initializeGoogleConsentMode();
+  const effectiveGranted = granted && !isAnalyticsSuppressedLocation();
+  setGoogleAnalyticsRuntimeEnabled(effectiveGranted);
   window.gtag?.("consent", "update", {
-    analytics_storage: granted ? "granted" : "denied",
+    analytics_storage: effectiveGranted ? "granted" : "denied",
     ad_storage: "denied",
     ad_user_data: "denied",
     ad_personalization: "denied",
@@ -48,6 +72,11 @@ export function updateAnalyticsConsent(granted: boolean) {
 
 export function loadGoogleTagManager() {
   if (typeof window === "undefined" || typeof document === "undefined") return;
+  if (isAnalyticsSuppressedLocation()) {
+    setGoogleAnalyticsRuntimeEnabled(false);
+    return;
+  }
+  setGoogleAnalyticsRuntimeEnabled(true);
   if (!gtmId || window.verdanzaGtmLoaded) return;
   if (document.querySelector(`script[data-verdanza-gtm="${gtmId}"]`)) {
     window.verdanzaGtmLoaded = true;
