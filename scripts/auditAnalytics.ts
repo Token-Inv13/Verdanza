@@ -93,13 +93,32 @@ function auditStaticFiles() {
   if (!checkoutSource.includes("trackPaymentMethodSelected")) {
     failures.push("CheckoutPage does not track payment_method_selected");
   }
-  if (checkoutSource.includes("trackAddPaymentInfo")) {
-    failures.push("CheckoutPage still tracks add_payment_info for payment preference selection");
+  if (!checkoutSource.includes("trackAddPaymentInfo")) {
+    failures.push("CheckoutPage does not track add_payment_info for payment preference selection");
   }
   if (/trackEvent\(\s*["']purchase["']/.test(checkoutSuccessSource + checkoutSource)) {
     failures.push("client purchase event is still tracked in checkout pages");
   }
   if (!checkoutSource.includes("trackOrderSubmitted")) failures.push("CheckoutPage does not track order_submitted");
+  if (!analyticsSource.includes("delivery_method: shippingTier")) {
+    failures.push("shipping analytics does not expose delivery_method");
+  }
+  if (!analyticsSource.includes("delivery_zone: deliveryZone")) {
+    failures.push("shipping analytics does not expose delivery_zone");
+  }
+  if (!analyticsSource.includes("preferred_payment_method: paymentMethod")) {
+    failures.push("payment analytics does not expose preferred_payment_method");
+  }
+  if (!checkoutSource.includes("deliveryZone:")) {
+    failures.push("order_submitted does not receive the selected delivery zone");
+  }
+  if (!analyticsSource.includes('"blog_shop_click"') || !analyticsSource.includes("trackBlogShopClick")) {
+    failures.push("blog_shop_click helper is missing");
+  }
+  const blogArticleSource = readFileSync(resolve(srcDir, "pages", "BlogArticlePage.tsx"), "utf8");
+  if (!blogArticleSource.includes("trackBlogShopClick") || !blogArticleSource.includes("isShopDestinationPath")) {
+    failures.push("blog article shop links do not track blog_shop_click");
+  }
   for (const forbidden of ["customer.email", "customer.phone", "user.uid", "firebaseUid"]) {
     if (analyticsSource.includes(forbidden)) failures.push(`analytics source references PII marker: ${forbidden}`);
   }

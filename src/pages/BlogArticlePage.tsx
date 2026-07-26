@@ -15,7 +15,12 @@ import {
 import { buildBlogPostingJsonLd } from "../lib/structuredData";
 import { formatFrenchDate } from "../lib/dateFormat";
 import { staticImageVariants } from "../lib/generatedImageVariants";
-import { trackBlogArticleView, trackBlogReadProgress, trackCtaClick } from "../lib/analytics";
+import {
+  trackBlogArticleView,
+  trackBlogReadProgress,
+  trackBlogShopClick,
+  trackCtaClick,
+} from "../lib/analytics";
 
 function ctaCategoryForPath(path: string) {
   if (path.startsWith("/blog")) return "content";
@@ -28,6 +33,15 @@ function ctaCategoryForPath(path: string) {
 
 function ctaIdForPath(prefix: string, path: string) {
   return `${prefix}_${path.replace(/^\/+/, "").replace(/[^a-z0-9]+/gi, "_") || "home"}`;
+}
+
+function isShopDestinationPath(path: string) {
+  return (
+    path === "/boutique" ||
+    path === "/fleurs-cbd" ||
+    path === "/resines-cbd" ||
+    path.startsWith("/produits/")
+  );
 }
 
 export function BlogArticlePage() {
@@ -178,14 +192,17 @@ export function BlogArticlePage() {
                 key={link.to}
                 to={link.to}
                 className="btn-secondary min-h-10 py-2"
-                onClick={() =>
+                onClick={() => {
                   trackCtaClick({
                     ctaId: ctaIdForPath("blog_article_link", link.to),
                     ctaLocation: "blog_article_footer",
                     destinationPath: link.to,
                     ctaCategory: ctaCategoryForPath(link.to),
-                  })
-                }
+                  });
+                  if (isShopDestinationPath(link.to)) {
+                    trackBlogShopClick(article, link.to);
+                  }
+                }}
               >
                 {link.label}
               </Link>

@@ -41,7 +41,8 @@ export type AnalyticsEventName =
   | "delivery_method_selected"
   | "local_delivery_zone_selected"
   | "blog_article_view"
-  | "blog_read_progress";
+  | "blog_read_progress"
+  | "blog_shop_click";
 
 let analyticsAllowed = false;
 
@@ -221,21 +222,26 @@ export function trackAddShippingInfo(
   lines: AnalyticsCartLine[],
   value: number,
   shippingTier: DeliveryMethod,
+  deliveryZone?: string,
 ) {
   if (!lines.length) return;
   trackEvent("add_shipping_info", {
     currency: "EUR",
     value: roundMoney(value),
     shipping_tier: shippingTier,
+    delivery_method: shippingTier,
+    delivery_zone: deliveryZone,
     items: lines.map((line) => productToGa4Item(line.product, analyticsLineQuantity(line))),
   });
   trackEvent("delivery_method_selected", {
     delivery_method: shippingTier,
+    delivery_zone: deliveryZone,
   });
 }
 
 export function trackLocalDeliveryZoneSelected(zoneId: string, zoneName: string) {
   trackEvent("local_delivery_zone_selected", {
+    delivery_zone: zoneName || zoneId,
     zone_id: zoneId,
     zone_name: zoneName,
   });
@@ -245,12 +251,15 @@ export function trackAddPaymentInfo(
   lines: AnalyticsCartLine[],
   value: number,
   paymentMethod: string,
+  deliveryMethod?: DeliveryMethod,
 ) {
   if (!lines.length) return;
   trackEvent("add_payment_info", {
     currency: "EUR",
     value: roundMoney(value),
     payment_method: paymentMethod,
+    preferred_payment_method: paymentMethod,
+    delivery_method: deliveryMethod,
     items: lines.map((line) => productToGa4Item(line.product, analyticsLineQuantity(line))),
   });
 }
@@ -277,6 +286,7 @@ export function trackOrderSubmitted(input: {
   value: number;
   coupon?: string;
   shippingTier: DeliveryMethod;
+  deliveryZone?: string;
   paymentMethod: string;
 }) {
   if (!input.lines.length) return;
@@ -288,6 +298,8 @@ export function trackOrderSubmitted(input: {
     value: roundMoney(input.value),
     coupon: input.coupon,
     shipping_tier: input.shippingTier,
+    delivery_method: input.shippingTier,
+    delivery_zone: input.deliveryZone,
     preferred_payment_method: input.paymentMethod,
     items: input.lines.map((line) => productToGa4Item(line.product, analyticsLineQuantity(line))),
   });
@@ -325,6 +337,15 @@ export function trackBlogReadProgress(article: BlogArticle, threshold: 25 | 50 |
     article_title: article.title,
     article_category: article.category,
     progress_percent: threshold,
+  });
+}
+
+export function trackBlogShopClick(article: BlogArticle, destinationPath: string) {
+  trackEvent("blog_shop_click", {
+    article_slug: article.slug,
+    article_title: article.title,
+    article_category: article.category,
+    destination_path: sanitizeDestinationPath(destinationPath),
   });
 }
 

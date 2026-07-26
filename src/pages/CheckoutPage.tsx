@@ -8,6 +8,7 @@ import { deliveryZones as fallbackDeliveryZones } from "../data/deliveryZones";
 import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
 import type { DeliveryMethod, DeliveryZone, PreferredPaymentMethod } from "../types";
 import {
+  trackAddPaymentInfo,
   trackAddShippingInfo,
   trackContactClick,
   trackBeginCheckout,
@@ -187,7 +188,12 @@ export function CheckoutPage() {
     const signature = `${deliveryMethod}:${zonePart}:${lines.map((line) => `${line.lineKey}:${line.quantity}`).join("|")}`;
     if (shippingSignature.current === signature) return;
     shippingSignature.current = signature;
-    trackAddShippingInfo(lines, estimatedTotal, deliveryMethod);
+    trackAddShippingInfo(
+      lines,
+      estimatedTotal,
+      deliveryMethod,
+      isLocalDelivery ? selectedZone?.name || selectedZone?.id : "postal-france",
+    );
     if (isLocalDelivery && selectedZone) {
       trackLocalDeliveryZoneSelected(selectedZone.id, selectedZone.name);
     }
@@ -198,6 +204,7 @@ export function CheckoutPage() {
     const signature = `${deliveryMethod}:${preferredPaymentMethod}:${lines.map((line) => `${line.lineKey}:${line.quantity}`).join("|")}`;
     if (paymentSignature.current === signature) return;
     paymentSignature.current = signature;
+    trackAddPaymentInfo(lines, estimatedTotal, preferredPaymentMethod, deliveryMethod);
     trackPaymentMethodSelected(lines, estimatedTotal, preferredPaymentMethod, deliveryMethod);
   }, [deliveryMethod, estimatedTotal, lines, preferredPaymentMethod]);
 
@@ -468,6 +475,10 @@ export function CheckoutPage() {
         value: finalQuote?.total ?? estimatedTotal,
         coupon: finalQuote?.couponCode || undefined,
         shippingTier: deliveryMethod,
+        deliveryZone:
+          deliveryMethod === "local_express"
+            ? selectedZone?.name || selectedZone?.id
+            : "postal-france",
         paymentMethod: preferredPaymentMethod,
       });
 
