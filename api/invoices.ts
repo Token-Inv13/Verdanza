@@ -8,6 +8,7 @@ import {
   type VercelResponseLike,
 } from "./_server/http.js";
 import { renderInvoicePdf } from "./_server/invoicePdf.js";
+import { getAdminAnalyticsReport } from "./_server/ga4DataApi.js";
 import { sendInvoiceToCustomerEmail } from "./_server/email.js";
 import { BRAND_LOGO } from "../src/lib/brandAssets.js";
 import { normalizeSupplierPurchaseInput } from "../src/lib/accountingCosts.js";
@@ -126,6 +127,17 @@ export default async function handler(
             });
           }),
         });
+        return;
+      }
+      if (action === "analytics") {
+        const preset = query.get("preset") || "30d";
+        const analytics = await getAdminAnalyticsReport({
+          preset: preset === "7d" || preset === "90d" || preset === "custom" ? preset : "30d",
+          startDate: query.get("startDate") || undefined,
+          endDate: query.get("endDate") || undefined,
+          compare: query.get("compare") === "1",
+        });
+        sendJson(response, analytics);
         return;
       }
       if (action !== "pdf") {

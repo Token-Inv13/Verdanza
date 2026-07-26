@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAdminData } from "../../hooks/useAdminData";
 import {
@@ -63,6 +63,7 @@ import {
   updateInvoiceStatus,
   type ManualInvoiceInput,
 } from "../../services/invoicesService";
+import { getAdminAnalytics } from "../../services/adminAnalyticsService";
 import { saveProductCostAdmin } from "../../services/productCostsService";
 import {
   analyzeSupplierInvoicePdfAdmin,
@@ -121,6 +122,17 @@ import type {
   ReviewStatus,
   StatusHistoryEntry,
 } from "../../types";
+import type {
+  AdminAnalyticsContentRow,
+  AdminAnalyticsDeliveryRow,
+  AdminAnalyticsDeviceRow,
+  AdminAnalyticsFunnelStep,
+  AdminAnalyticsNamedRow,
+  AdminAnalyticsPageRow,
+  AdminAnalyticsPreset,
+  AdminAnalyticsProductRow,
+  AdminAnalyticsResponse,
+} from "../../types/adminAnalytics";
 import {
   orderStatusLabel,
   paymentProviderLabel,
@@ -799,6 +811,8 @@ export function AdminPage({ section }: { section: string }) {
           />
         </>
       )}
+
+      {section === "Analytics" && <AdminAnalyticsPanel />}
 
       {section === "Produits" && (
         <div className="mt-8 grid gap-6 xl:grid-cols-[420px_1fr]">
@@ -4006,6 +4020,512 @@ function BillingWarning({ settings }: { settings: BillingSettings }) {
         <p className="mt-2">Le regime TVA n'est pas confirme.</p>
       )}
     </div>
+  );
+}
+
+function AdminAnalyticsPanel() {
+  const today = new Date().toISOString().slice(0, 10);
+  const defaultStart = useMemo(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 29);
+    return date.toISOString().slice(0, 10);
+  }, []);
+  const [preset, setPreset] = useState<AdminAnalyticsPreset>("30d");
+  const [customStart, setCustomStart] = useState(defaultStart);
+  const [customEnd, setCustomEnd] = useState(today);
+  const [compare, setCompare] = useState(true);
+  const [analytics, setAnalytics] = useState<AdminAnalyticsResponse | null>(null);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState("");
+
+  const loadAnalytics = useCallback(async () => {
+    setIsLoadingAnalytics(true);
+    setAnalyticsError("");
+    try {
+      const payload = await getAdminAnalytics({
+        preset,
+        startDate: preset === "custom" ? customStart : undefined,
+        endDate: preset === "custom" ? customEnd : undefined,
+        compare,
+      });
+      setAnalytics(payload);
+    } catch (error) {
+      setAnalyticsError(error instanceof Error ? error.message : "Analytics indisponible.");
+    } finally {
+      setIsLoadingAnalytics(false);
+    }
+  }, [compare, customEnd, customStart, preset]);
+
+  useEffect(() => {
+    void loadAnalytics();
+  }, [loadAnalytics]);
+
+  const summary = analytics?.summary;
+
+  return (
+    <section className="mt-8 grid gap-6">
+      <div className="admin-card">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.16em] text-champagne">
+              Google Analytics 4
+            </p>
+            <h2 className="font-display text-3xl text-forest">Analytics</h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-ink/60">
+              Donnees agregees uniquement. Les routes admin et les domaines Vercel sont exclus des rapports.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn-secondary w-fit"
+            onClick={() => void loadAnalytics()}
+            disabled={isLoadingAnalytics}
+          >
+            {isLoadingAnalytics ? "Actualisation..." : "Actualiser"}
+          </button>
+        </div>
+        <div className="mt-5 flex flex-wrap gap-2">
+          {[
+            { value: "7d", label: "7 jours" },
+            { value: "30d", label: "30 jours" },
+            { value: "90d", label: "90 jours" },
+            { value: "custom", label: "Periode personnalisee" },
+          ].map((filter) => (
+            <button
+              key={filter.value}
+              type="button"
+              className={preset === filter.value ? "btn-primary min-h-9 px-3 py-1.5 text-xs" : "btn-secondary min-h-9 px-3 py-1.5 text-xs"}
+              onClick={() => setPreset(filter.value as AdminAnalyticsPreset)}
+            >
+              {filter.label}
+            </button>
+          ))}
+          <label className="inline-flex min-h-9 items-center gap-2 rounded-md border border-forest/15 bg-ivory px-3 py-1.5 text-xs font-semibold text-forest">
+            <input
+              type="checkbox"
+              checked={compare}
+              onChange={(event) => setCompare(event.target.checked)}
+            />
+            Comparer a la periode precedente
+          </label>
+        </div>
+        {preset === "custom" && (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <Input label="Date de debut" type="date" value={customStart} onChange={setCustomStart} />
+            <Input label="Date de fin" type="date" value={customEnd} onChange={setCustomEnd} />
+          </div>
+        )}
+        {analytics && (
+          <p className="mt-4 text-xs text-ink/55">
+            Periode : {analytics.range.label}. Fraicheur standard : {formatDateTime(analytics.freshness.standardFetchedAt)}.
+            Temps reel : {formatDateTime(analytics.freshness.realtimeFetchedAt)}.
+          </p>
+        )}
+      </div>
+
+      {analyticsError && (
+        <AdminDataError message={analyticsError} onRetry={loadAnalytics} />
+      )}
+
+      {isLoadingAnalytics && !analytics && (
+        <p className="text-sm text-forest/70">Chargement des donnees Analytics...</p>
+      )}
+
+      {analytics && !analytics.configured && (
+        <AdminEmptyState
+          title="Analytics GA4 non configure."
+          description="Renseignez GA4_PROPERTY_ID et les identifiants Google serveur dans les variables Vercel pour afficher les rapports."
+        />
+      )}
+
+      {analytics && !!analytics.notices.length && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong className="block">Informations GA4</strong>
+          <span className="mt-1 block">{analytics.notices.join(" ")}</span>
+        </div>
+      )}
+
+      {summary && (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <AnalyticsMetricCard label="Utilisateurs actifs" value={formatInteger(summary.activeUsers)} comparison={analytics.comparison?.activeUsers} />
+            <AnalyticsMetricCard label="Nouveaux utilisateurs" value={formatInteger(summary.newUsers)} comparison={analytics.comparison?.newUsers} />
+            <AnalyticsMetricCard label="Sessions" value={formatInteger(summary.sessions)} comparison={analytics.comparison?.sessions} />
+            <AnalyticsMetricCard label="Pages vues" value={formatInteger(summary.pageViews)} comparison={analytics.comparison?.pageViews} />
+            <AnalyticsMetricCard label="Taux d'engagement" value={formatRate(summary.engagementRate)} comparison={analytics.comparison?.engagementRate} formatter={formatRate} />
+            <AnalyticsMetricCard label="Duree moyenne d'engagement" value={formatDuration(summary.averageEngagementDurationSeconds)} comparison={analytics.comparison?.averageEngagementDurationSeconds} formatter={formatDuration} />
+            <AnalyticsMetricCard label="Commandes soumises" value={formatInteger(summary.orderSubmittedCount)} comparison={analytics.comparison?.orderSubmittedCount} />
+            <AnalyticsMetricCard label="Session vers commande" value={formatRate(summary.sessionToOrderRate)} comparison={analytics.comparison?.sessionToOrderRate} formatter={formatRate} />
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <AnalyticsMetricCard
+              label="Valeur des commandes soumises"
+              value={formatCurrency(summary.orderSubmittedValue)}
+              detail="Evenement order_submitted, non assimile a du chiffre d'affaires encaisse."
+              comparison={analytics.comparison?.orderSubmittedValue}
+              formatter={formatCurrency}
+            />
+            <AnalyticsMetricCard
+              label="Revenu reellement paye"
+              value={summary.purchaseRevenue == null ? "Non disponible" : formatCurrency(summary.purchaseRevenue)}
+              detail="Affiche uniquement si l'evenement purchase est disponible."
+              comparison={analytics.comparison?.purchaseRevenue ?? undefined}
+              formatter={formatCurrency}
+            />
+          </div>
+        </>
+      )}
+
+      {analytics && (
+        <>
+          <AnalyticsRealtimePanel analytics={analytics} />
+          <AnalyticsAcquisitionPanel rows={analytics.acquisition} />
+          <AnalyticsPagesPanel rows={analytics.pages} />
+          <AnalyticsFunnelPanel rows={analytics.funnel} />
+          <AnalyticsProductsPanel rows={analytics.products} />
+          <AnalyticsContentPanel rows={analytics.content} />
+          <AnalyticsDeliveryPanel rows={analytics.delivery} />
+          <AnalyticsDevicesPanel rows={analytics.devices} />
+        </>
+      )}
+    </section>
+  );
+}
+
+function AnalyticsMetricCard({
+  label,
+  value,
+  detail,
+  comparison,
+  formatter = formatInteger,
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+  comparison?: number | null;
+  formatter?: (value: number) => string;
+}) {
+  return (
+    <article className="admin-card min-h-32 border-forest/10 bg-ivory/95">
+      <p className="text-sm text-ink/55">{label}</p>
+      <strong className="mt-2 block font-display text-3xl text-forest">{value}</strong>
+      <span className="text-xs text-ink/50">
+        {detail || (comparison == null ? "Periode selectionnee" : `Precedent : ${formatter(comparison)}`)}
+      </span>
+    </article>
+  );
+}
+
+function AnalyticsRealtimePanel({ analytics }: { analytics: AdminAnalyticsResponse }) {
+  return (
+    <section className="admin-card">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.16em] text-champagne">Temps reel</p>
+          <h2 className="font-display text-3xl text-forest">30 dernieres minutes</h2>
+        </div>
+        <strong className="font-display text-3xl text-forest">
+          {formatInteger(analytics.realtime.activeUsers30Minutes)}
+        </strong>
+      </div>
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <AnalyticsSimpleList title="Pages actives" rows={analytics.realtime.pages} />
+        <AnalyticsSimpleList title="Sources principales" rows={analytics.realtime.sources} />
+      </div>
+    </section>
+  );
+}
+
+function AnalyticsSimpleList({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: { name: string; activeUsers: number }[];
+}) {
+  return (
+    <div className="rounded-md border border-forest/10 bg-cream p-4">
+      <h3 className="font-display text-2xl text-forest">{title}</h3>
+      {!rows.length ? (
+        <p className="mt-2 text-sm text-ink/60">Aucune donnee disponible.</p>
+      ) : (
+        <ul className="mt-3 grid gap-2 text-sm">
+          {rows.map((row) => (
+            <li key={row.name} className="flex items-center justify-between gap-3">
+              <span className="truncate">{row.name}</span>
+              <AdminBadge tone="gold">{formatInteger(row.activeUsers)}</AdminBadge>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function AnalyticsAcquisitionPanel({
+  rows,
+}: {
+  rows: AdminAnalyticsResponse["acquisition"];
+}) {
+  return (
+    <section className="admin-card">
+      <p className="text-xs uppercase tracking-[0.16em] text-champagne">Acquisition</p>
+      <h2 className="font-display text-3xl text-forest">Sources de trafic</h2>
+      <div className="mt-5 grid gap-4 xl:grid-cols-3">
+        <AnalyticsNamedTable title="Groupes de canaux" rows={rows.channels} />
+        <AnalyticsNamedTable title="Source / support" rows={rows.sourceMediums} />
+        <AnalyticsNamedTable title="Campagnes" rows={rows.campaigns} />
+      </div>
+    </section>
+  );
+}
+
+function AnalyticsNamedTable({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: AdminAnalyticsNamedRow[];
+}) {
+  return (
+    <div className="overflow-x-auto rounded-md border border-forest/10">
+      <table className="w-full min-w-[520px] text-left text-sm">
+        <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
+          <tr>
+            <th className="px-3 py-3 font-medium">{title}</th>
+            <th className="px-3 py-3 font-medium">Utilisateurs</th>
+            <th className="px-3 py-3 font-medium">Sessions</th>
+            <th className="px-3 py-3 font-medium">Commandes</th>
+            <th className="px-3 py-3 font-medium">Conversion</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length ? rows.map((row) => (
+            <tr key={row.name} className="border-t border-forest/10">
+              <td className="px-3 py-3">{row.name}</td>
+              <td className="px-3 py-3">{formatInteger(row.users)}</td>
+              <td className="px-3 py-3">{formatInteger(row.sessions)}</td>
+              <td className="px-3 py-3">{formatInteger(row.ordersSubmitted)}</td>
+              <td className="px-3 py-3">{formatRate(row.conversionRate)}</td>
+            </tr>
+          )) : (
+            <tr><td className="px-3 py-4 text-ink/60" colSpan={5}>Aucune donnee disponible.</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AnalyticsPagesPanel({ rows }: { rows: AdminAnalyticsPageRow[] }) {
+  return (
+    <AnalyticsTableSection title="Pages" eyebrow="Navigation">
+      <table className="w-full min-w-[900px] text-left text-sm">
+        <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
+          <tr>
+            {["Chemin", "Titre", "Vues", "Utilisateurs", "Engagement", "Duree moyenne"].map((header) => (
+              <th key={header} className="px-4 py-3 font-medium">{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {analyticsRowsOrEmpty(rows, 6, (row) => (
+            <tr key={`${row.path}-${row.title}`} className="border-t border-forest/10">
+              <td className="px-4 py-4 font-mono text-xs">{row.path}</td>
+              <td className="px-4 py-4">{row.title}</td>
+              <td className="px-4 py-4">{formatInteger(row.views)}</td>
+              <td className="px-4 py-4">{formatInteger(row.users)}</td>
+              <td className="px-4 py-4">{formatRate(row.engagementRate)}</td>
+              <td className="px-4 py-4">{formatDuration(row.averageEngagementDurationSeconds)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </AnalyticsTableSection>
+  );
+}
+
+function AnalyticsFunnelPanel({ rows }: { rows: AdminAnalyticsFunnelStep[] }) {
+  return (
+    <AnalyticsTableSection title="Tunnel" eyebrow="Conversion">
+      <table className="w-full min-w-[760px] text-left text-sm">
+        <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
+          <tr>
+            {["Etape", "Evenement", "Volume", "Passage precedent", "Passage depart"].map((header) => (
+              <th key={header} className="px-4 py-3 font-medium">{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {analyticsRowsOrEmpty(rows, 5, (row) => (
+            <tr key={row.eventName} className="border-t border-forest/10">
+              <td className="px-4 py-4">{row.label}</td>
+              <td className="px-4 py-4 font-mono text-xs">{row.eventName}</td>
+              <td className="px-4 py-4">{formatInteger(row.count)}</td>
+              <td className="px-4 py-4">{formatRate(row.rateFromPrevious)}</td>
+              <td className="px-4 py-4">{formatRate(row.rateFromStart)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </AnalyticsTableSection>
+  );
+}
+
+function AnalyticsProductsPanel({ rows }: { rows: AdminAnalyticsProductRow[] }) {
+  return (
+    <AnalyticsTableSection title="Produits" eyebrow="Catalogue">
+      <table className="w-full min-w-[980px] text-left text-sm">
+        <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
+          <tr>
+            {["Produit", "Vues", "Ajouts panier", "Favoris", "Commandes", "Achats payes", "Vue vers panier", "Panier vers commande"].map((header) => (
+              <th key={header} className="px-4 py-3 font-medium">{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {analyticsRowsOrEmpty(rows, 8, (row) => (
+            <tr key={row.name} className="border-t border-forest/10">
+              <td className="px-4 py-4">{row.name}</td>
+              <td className="px-4 py-4">{formatInteger(row.views)}</td>
+              <td className="px-4 py-4">{formatInteger(row.addToCart)}</td>
+              <td className="px-4 py-4">{formatInteger(row.favorites)}</td>
+              <td className="px-4 py-4">{formatInteger(row.ordersSubmitted)}</td>
+              <td className="px-4 py-4">{formatInteger(row.paidPurchases)}</td>
+              <td className="px-4 py-4">{formatRate(row.viewToCartRate)}</td>
+              <td className="px-4 py-4">{formatRate(row.cartToOrderRate)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </AnalyticsTableSection>
+  );
+}
+
+function AnalyticsContentPanel({ rows }: { rows: AdminAnalyticsContentRow[] }) {
+  return (
+    <AnalyticsTableSection title="Contenus" eyebrow="Blog">
+      <table className="w-full min-w-[900px] text-left text-sm">
+        <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
+          <tr>
+            {["Article", "Chemin", "Vues", "Article views", "Progression 50 %", "Progression 90 %", "Clics boutique"].map((header) => (
+              <th key={header} className="px-4 py-3 font-medium">{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {analyticsRowsOrEmpty(rows, 7, (row) => (
+            <tr key={row.path} className="border-t border-forest/10">
+              <td className="px-4 py-4">{row.title}</td>
+              <td className="px-4 py-4 font-mono text-xs">{row.path}</td>
+              <td className="px-4 py-4">{formatInteger(row.views)}</td>
+              <td className="px-4 py-4">{formatInteger(row.articleViews)}</td>
+              <td className="px-4 py-4">{formatNullableInteger(row.progress50)}</td>
+              <td className="px-4 py-4">{formatNullableInteger(row.progress90)}</td>
+              <td className="px-4 py-4">{formatNullableInteger(row.shopClicks)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </AnalyticsTableSection>
+  );
+}
+
+function AnalyticsDeliveryPanel({
+  rows,
+}: {
+  rows: AdminAnalyticsResponse["delivery"];
+}) {
+  return (
+    <section className="admin-card">
+      <p className="text-xs uppercase tracking-[0.16em] text-champagne">Livraison</p>
+      <h2 className="font-display text-3xl text-forest">Choix client</h2>
+      <div className="mt-5 grid gap-4 lg:grid-cols-3">
+        <AnalyticsCountTable title="Methodes" rows={rows.methods} />
+        <AnalyticsCountTable title="Zones locales" rows={rows.localZones} />
+        <AnalyticsCountTable title="Reglements selectionnes" rows={rows.paymentMethods} />
+      </div>
+    </section>
+  );
+}
+
+function AnalyticsCountTable({ title, rows }: { title: string; rows: AdminAnalyticsDeliveryRow[] }) {
+  return (
+    <div className="overflow-x-auto rounded-md border border-forest/10">
+      <table className="w-full min-w-[360px] text-left text-sm">
+        <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
+          <tr>
+            <th className="px-3 py-3 font-medium">{title}</th>
+            <th className="px-3 py-3 font-medium">Volume</th>
+          </tr>
+        </thead>
+        <tbody>
+          {analyticsRowsOrEmpty(rows, 2, (row) => (
+            <tr key={row.name} className="border-t border-forest/10">
+              <td className="px-3 py-3">{row.name}</td>
+              <td className="px-3 py-3">{formatInteger(row.count)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AnalyticsDevicesPanel({ rows }: { rows: AdminAnalyticsDeviceRow[] }) {
+  return (
+    <AnalyticsTableSection title="Appareils" eyebrow="Technique">
+      <table className="w-full min-w-[620px] text-left text-sm">
+        <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
+          <tr>
+            {["Appareil", "Utilisateurs", "Sessions", "Engagement"].map((header) => (
+              <th key={header} className="px-4 py-3 font-medium">{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {analyticsRowsOrEmpty(rows, 4, (row) => (
+            <tr key={row.device} className="border-t border-forest/10">
+              <td className="px-4 py-4">{row.device}</td>
+              <td className="px-4 py-4">{formatInteger(row.users)}</td>
+              <td className="px-4 py-4">{formatInteger(row.sessions)}</td>
+              <td className="px-4 py-4">{formatRate(row.engagementRate)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </AnalyticsTableSection>
+  );
+}
+
+function AnalyticsTableSection({
+  title,
+  eyebrow,
+  children,
+}: {
+  title: string;
+  eyebrow: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="admin-card">
+      <p className="text-xs uppercase tracking-[0.16em] text-champagne">{eyebrow}</p>
+      <h2 className="font-display text-3xl text-forest">{title}</h2>
+      <div className="mt-5 overflow-x-auto">{children}</div>
+    </section>
+  );
+}
+
+function analyticsRowsOrEmpty<T>(
+  rows: T[],
+  colSpan: number,
+  renderRow: (row: T) => ReactNode,
+) {
+  return rows.length ? rows.map(renderRow) : (
+    <tr>
+      <td className="px-4 py-4 text-ink/60" colSpan={colSpan}>Aucune donnee disponible.</td>
+    </tr>
   );
 }
 
@@ -7384,6 +7904,33 @@ function roundAccounting(value: number) {
 
 function formatRate(value: number | null) {
   return value == null ? "-" : `${(value * 100).toFixed(1).replace(".", ",")} %`;
+}
+
+function formatInteger(value: number) {
+  return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(value || 0);
+}
+
+function formatNullableInteger(value: number | null) {
+  return value == null ? "-" : formatInteger(value);
+}
+
+function formatDuration(value: number) {
+  const seconds = Math.max(0, Math.round(value || 0));
+  if (seconds < 60) return `${seconds} s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return remainingSeconds ? `${minutes} min ${remainingSeconds} s` : `${minutes} min`;
+}
+
+function formatDateTime(value?: string) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 function formatQuantity(value: number) {

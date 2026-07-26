@@ -5,6 +5,7 @@ import {
   BadgePercent,
   Boxes,
   Calculator,
+  LineChart,
   LogOut,
   Heart,
   Megaphone,
@@ -22,6 +23,7 @@ import { BRAND_LOGO, BRAND_LOGO_ALT } from "../lib/brandAssets";
 
 const adminNav = [
   { label: "Dashboard", to: "/admin", icon: BarChart3 },
+  { label: "Analytics", to: "/admin/analytics", icon: LineChart },
   { label: "Produits", to: "/admin/produits", icon: Package },
   { label: "Stocks", to: "/admin/stocks", icon: Boxes },
   { label: "Commandes", to: "/admin/commandes", icon: ShoppingCart },

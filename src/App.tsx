@@ -131,6 +131,7 @@ export function App() {
         <Route element={<AdminAuthGate />}>
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminPage section="Dashboard" />} />
+            <Route path="analytics" element={<AdminPage section="Analytics" />} />
             <Route path="produits" element={<AdminPage section="Produits" />} />
             <Route path="stocks" element={<AdminPage section="Stocks" />} />
             <Route path="commandes" element={<AdminPage section="Commandes" />} />
