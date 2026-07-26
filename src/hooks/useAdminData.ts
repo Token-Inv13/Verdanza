@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "../lib/firebase";
+import { loadFirebaseAuthApi } from "../lib/firebaseAuth";
 import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
 import { getAdminCustomersWithFallback } from "../services/adminCustomersService";
 import { getCouponsWithFallback } from "../services/couponsService";
@@ -40,11 +39,11 @@ export function useAdminData() {
   const [supplierPurchasesSource, setSupplierPurchasesSource] = useState<"firestore" | "empty" | "error">("empty");
   const [supplierPurchasesError, setSupplierPurchasesError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [isAuthReady, setIsAuthReady] = useState(!auth);
+  const [isAuthReady, setIsAuthReady] = useState(false);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
-    if (auth && !isAuthReady) return;
+    if (!isAuthReady) return;
     const [
       productResult,
       orderResult,
@@ -118,10 +117,25 @@ export function useAdminData() {
   }, [refresh]);
 
   useEffect(() => {
-    if (!auth) return undefined;
-    return onAuthStateChanged(auth, () => {
-      setIsAuthReady(true);
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+
+    void loadFirebaseAuthApi().then(({ auth, firebaseAuth }) => {
+      if (cancelled) return;
+      if (!auth) {
+        setIsAuthReady(true);
+        return;
+      }
+
+      unsubscribe = firebaseAuth.onAuthStateChanged(auth, () => {
+        setIsAuthReady(true);
+      });
     });
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, []);
 
   return {

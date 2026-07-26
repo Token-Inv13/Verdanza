@@ -5,7 +5,8 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import { auth, db } from "../lib/firebase";
+import { db } from "../lib/firebase";
+import { getFirebaseIdToken } from "../lib/firebaseAuth";
 import { collections } from "./collections";
 import type {
   Order,
@@ -172,7 +173,7 @@ export async function getAdminOrdersWithFallback() {
 }
 
 export async function retryOrderPurchaseAnalytics(orderId: string) {
-  const token = await auth?.currentUser?.getIdToken();
+  const token = await getFirebaseIdToken();
   if (!token) throw new Error("Connexion admin requise.");
   const response = await fetch("/api/retry-order-purchase-analytics", {
     method: "POST",
@@ -213,7 +214,7 @@ export async function updateOrderAdminFields(
     restore?: boolean;
   },
 ) {
-  const token = await auth?.currentUser?.getIdToken();
+  const token = await getFirebaseIdToken();
   if (!token) throw new Error("Connexion admin requise.");
   const response = await fetch("/api/update-order-status", {
     method: "POST",
@@ -230,7 +231,7 @@ export async function updateOrderAdminFields(
 }
 
 export async function deleteCancelledOrder(orderId: string) {
-  const token = await auth?.currentUser?.getIdToken();
+  const token = await getFirebaseIdToken();
   if (!token) throw new Error("Connexion admin requise.");
   const response = await fetch("/api/update-order-status", {
     method: "POST",

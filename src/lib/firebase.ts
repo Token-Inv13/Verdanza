@@ -1,5 +1,4 @@
 import { initializeApp, getApp, getApps } from "firebase/app";
-import { getAuth } from "firebase/auth";
 import { getFirestore, setLogLevel } from "firebase/firestore";
 
 const publicFirebaseFallback = {
@@ -44,7 +43,6 @@ if (viteEnv.PROD) {
   setLogLevel("silent");
 }
 
-export const auth = app ? getAuth(app) : null;
 export const db = app ? getFirestore(app) : null;
 
 export async function getFirebaseAnalytics() {

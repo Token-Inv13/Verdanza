@@ -1,8 +1,8 @@
-import { auth } from "../lib/firebase";
+import { getFirebaseIdToken } from "../lib/firebaseAuth";
 import type { ProductCost } from "../types";
 
 export async function getProductCostsAdmin() {
-  const token = await auth?.currentUser?.getIdToken();
+  const token = await getFirebaseIdToken();
   if (!token) return { costs: [], source: "empty" as const };
   const response = await fetch("/api/invoices?action=productCosts", {
     headers: { authorization: `Bearer ${token}` },
@@ -24,7 +24,7 @@ export async function saveProductCostAdmin(
   productId: string,
   purchasePricePerGram: number | null,
 ) {
-  const token = await auth?.currentUser?.getIdToken();
+  const token = await getFirebaseIdToken();
   if (!token) throw new Error("Connexion admin requise.");
   const response = await fetch("/api/invoices", {
     method: "POST",

@@ -1,4 +1,4 @@
-import { auth } from "../lib/firebase";
+import { getFirebaseIdToken } from "../lib/firebaseAuth";
 
 export type AdminPaymentLink = {
   id: string;
@@ -12,7 +12,7 @@ export type AdminPaymentLink = {
 };
 
 export async function getAdminPaymentLinks() {
-  const token = await auth?.currentUser?.getIdToken();
+  const token = await getFirebaseIdToken();
   if (!token) throw new Error("Connexion admin requise.");
   const response = await fetch("/api/admin-payment-links", {
     headers: {
@@ -36,7 +36,7 @@ export async function sendOrderPaymentLinkEmail(input: {
   paymentLinkAmount: number;
   paymentLinkCurrency: "EUR";
 }) {
-  const token = await auth?.currentUser?.getIdToken();
+  const token = await getFirebaseIdToken();
   if (!token) throw new Error("Connexion admin requise.");
   const response = await fetch("/api/send-payment-link", {
     method: "POST",

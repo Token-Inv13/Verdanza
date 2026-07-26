@@ -1,4 +1,4 @@
-import { auth } from "../lib/firebase";
+import { getFirebaseIdToken } from "../lib/firebaseAuth";
 import type { SupplierInvoiceParseResult } from "../lib/supplierInvoiceParsers";
 import type { SupplierProductAlias, SupplierPurchase } from "../types";
 
@@ -8,7 +8,7 @@ export type SupplierInvoiceAnalysisResult = SupplierInvoiceParseResult & {
 };
 
 export async function getSupplierPurchasesAdmin() {
-  const token = await auth?.currentUser?.getIdToken();
+  const token = await getFirebaseIdToken();
   if (!token) return { purchases: [], source: "empty" as const };
   const response = await fetch("/api/invoices?action=supplierPurchases", {
     headers: { authorization: `Bearer ${token}` },
@@ -27,7 +27,7 @@ export async function getSupplierPurchasesAdmin() {
 }
 
 export async function saveSupplierPurchaseAdmin(purchase: Partial<SupplierPurchase>) {
-  const token = await auth?.currentUser?.getIdToken();
+  const token = await getFirebaseIdToken();
   if (!token) throw new Error("Connexion admin requise.");
   const response = await fetch("/api/invoices", {
     method: "POST",
@@ -48,7 +48,7 @@ export async function saveSupplierPurchaseAdmin(purchase: Partial<SupplierPurcha
 }
 
 export async function analyzeSupplierInvoicePdfAdmin(file: File) {
-  const token = await auth?.currentUser?.getIdToken();
+  const token = await getFirebaseIdToken();
   if (!token) throw new Error("Connexion admin requise.");
   if (file.type !== "application/pdf") throw new Error("PDF uniquement.");
   if (file.size > 5 * 1024 * 1024) throw new Error("PDF trop volumineux (5 Mo max).");
@@ -72,7 +72,7 @@ export async function analyzeSupplierInvoicePdfAdmin(file: File) {
 export async function saveSupplierProductAliasAdmin(
   alias: Pick<SupplierProductAlias, "supplierName" | "originalLabel" | "productId">,
 ) {
-  const token = await auth?.currentUser?.getIdToken();
+  const token = await getFirebaseIdToken();
   if (!token) throw new Error("Connexion admin requise.");
   const response = await fetch("/api/invoices", {
     method: "POST",
@@ -93,7 +93,7 @@ export async function saveSupplierProductAliasAdmin(
 }
 
 export async function deleteSupplierPurchaseAdmin(purchaseId: string) {
-  const token = await auth?.currentUser?.getIdToken();
+  const token = await getFirebaseIdToken();
   if (!token) throw new Error("Connexion admin requise.");
   const response = await fetch("/api/invoices", {
     method: "POST",
@@ -110,7 +110,7 @@ export async function deleteSupplierPurchaseAdmin(purchaseId: string) {
 }
 
 export async function cancelSupplierPurchaseAdmin(purchaseId: string) {
-  const token = await auth?.currentUser?.getIdToken();
+  const token = await getFirebaseIdToken();
   if (!token) throw new Error("Connexion admin requise.");
   const response = await fetch("/api/invoices", {
     method: "POST",

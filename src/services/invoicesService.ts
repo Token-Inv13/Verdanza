@@ -7,7 +7,8 @@ import {
   query,
   setDoc,
 } from "firebase/firestore";
-import { auth, db } from "../lib/firebase";
+import { db } from "../lib/firebase";
+import { getFirebaseIdToken } from "../lib/firebaseAuth";
 import { BRAND_LOGO } from "../lib/brandAssets";
 import { collections } from "./collections";
 import type { BillingSettings, Invoice, InvoiceLine, InvoiceStatus, PaymentStatus } from "../types";
@@ -118,7 +119,7 @@ export async function sendInvoiceEmail(invoiceId: string) {
 }
 
 export async function downloadInvoicePdf(invoiceId: string, invoiceNumber: string) {
-  const token = await auth?.currentUser?.getIdToken();
+  const token = await getFirebaseIdToken();
   if (!token) throw new Error("Connexion admin requise.");
   const response = await fetch(`/api/invoices?action=pdf&invoiceId=${encodeURIComponent(invoiceId)}`, {
     headers: { authorization: `Bearer ${token}` },
@@ -139,7 +140,7 @@ export async function downloadInvoicePdf(invoiceId: string, invoiceNumber: strin
 }
 
 async function callInvoiceApi<T>(payload: Record<string, unknown>): Promise<T> {
-  const token = await auth?.currentUser?.getIdToken();
+  const token = await getFirebaseIdToken();
   if (!token) throw new Error("Connexion admin requise.");
   const response = await fetch("/api/invoices", {
     method: "POST",

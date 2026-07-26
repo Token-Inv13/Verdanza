@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      injectRegister: "script",
+      injectRegister: "inline",
       includeAssets: [
         "apple-touch-icon.png",
         "verdanza-badge.png",
@@ -129,10 +129,17 @@ export default defineConfig({
     }),
   ],
   build: {
+    modulePreload: {
+      resolveDependencies: (_filename, deps) =>
+        deps.filter((dependency) => !dependency.includes("vendor-firebase-auth")),
+    },
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
+          if (/[\\/]@firebase[\\/]auth|[\\/]firebase[\\/]auth/.test(id)) {
+            return "vendor-firebase-auth";
+          }
           if (id.includes("firebase")) return "vendor-firebase";
           if (id.includes("react") || id.includes("react-dom")) return "vendor-react";
           if (id.includes("lucide-react")) return "vendor-icons";

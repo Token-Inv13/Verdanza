@@ -12,7 +12,8 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { auth, db } from "../lib/firebase";
+import { db } from "../lib/firebase";
+import { getCurrentFirebaseUser } from "../lib/firebaseAuth";
 import { collections } from "./collections";
 import type {
   Coupon,
@@ -57,7 +58,7 @@ export async function adjustCustomerLoyalty(
   reason = "admin_adjustment",
 ) {
   if (!db) throw new Error("Firebase is not configured.");
-  const currentUser = auth?.currentUser;
+  const currentUser = await getCurrentFirebaseUser();
   const currentBalance = Number(customer.loyaltyPoints || 0);
   const nextBalance = mode === "set"
     ? Math.max(0, points)
@@ -96,7 +97,7 @@ export async function adjustCustomerLoyalty(
 
 export async function updateCustomerInternalNote(customerId: string, internalNote: string) {
   if (!db) throw new Error("Firebase is not configured.");
-  const currentUser = auth?.currentUser;
+  const currentUser = await getCurrentFirebaseUser();
   const updatePayload = {
     internalNote,
     updatedAt: serverTimestamp(),
@@ -119,7 +120,7 @@ export async function updateCustomerAdminStatus(
   data: { status?: CustomerProfile["status"]; archived?: boolean; hidden?: boolean },
 ) {
   if (!db) throw new Error("Firebase is not configured.");
-  const currentUser = auth?.currentUser;
+  const currentUser = await getCurrentFirebaseUser();
   const now = serverTimestamp();
   await updateDoc(doc(db, collections.customers, customerId), {
     ...data,
@@ -137,7 +138,7 @@ export async function assignPromoToCustomer(
   note: string,
 ) {
   if (!db) throw new Error("Firebase is not configured.");
-  const currentUser = auth?.currentUser;
+  const currentUser = await getCurrentFirebaseUser();
   const assignment: CustomerAssignedPromo = {
     code: coupon.code,
     couponId: coupon.id,

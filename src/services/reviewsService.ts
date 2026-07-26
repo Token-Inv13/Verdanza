@@ -6,7 +6,8 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { auth, db } from "../lib/firebase";
+import { db } from "../lib/firebase";
+import { getCurrentFirebaseUser } from "../lib/firebaseAuth";
 import type { OrderItem, ProductReview, ReviewStatus } from "../types";
 import { collections } from "./collections";
 
@@ -43,7 +44,7 @@ export async function createProductReview(input: {
   if (comment.length < 3 || comment.length > 1000) {
     throw new Error("Votre commentaire doit contenir entre 3 et 1000 caractères.");
   }
-  const currentUser = auth?.currentUser;
+  const currentUser = await getCurrentFirebaseUser();
   const token = await currentUser?.getIdToken();
   if (!token || currentUser?.uid !== input.userId) {
     throw new Error("Connexion requise.");

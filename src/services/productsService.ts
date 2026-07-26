@@ -10,7 +10,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { auth } from "../lib/firebase";
+import { getFirebaseIdToken } from "../lib/firebaseAuth";
 import { products as localProducts } from "../data/products";
 import { logFirestoreFallback } from "../lib/clientLog";
 import { collections } from "./collections";
@@ -116,7 +116,7 @@ export async function getProductsWithFallback() {
 
 export async function upsertProduct(input: ProductInput) {
   if (!db) throw new Error("Firebase is not configured.");
-  const token = await auth?.currentUser?.getIdToken();
+  const token = await getFirebaseIdToken();
   if (token) {
     const response = await fetch("/api/invoices", {
       method: "POST",
@@ -141,7 +141,7 @@ export async function deleteProductAdmin(input: {
   confirmationReference: string;
 }) {
   if (!db) throw new Error("Firebase is not configured.");
-  const token = await auth?.currentUser?.getIdToken();
+  const token = await getFirebaseIdToken();
   if (!token) throw new Error("Session admin requise.");
   const response = await fetch("/api/invoices", {
     method: "POST",

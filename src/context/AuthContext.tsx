@@ -4,26 +4,22 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import { useLocation } from "react-router-dom";
+import { isFirebaseConfigured } from "../lib/firebase";
 import {
-  createUserWithEmailAndPassword,
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  sendPasswordResetEmail,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  signOut as firebaseSignOut,
-  updateProfile,
-  type User,
-} from "firebase/auth";
-import { auth, isFirebaseConfigured } from "../lib/firebase";
+  getFirebaseAuth,
+  loadFirebaseAuthApi,
+  type FirebaseUser,
+} from "../lib/firebaseAuth";
 import { getAdminUserForAuthUser } from "../services/adminUsersService";
 import { ensureCustomerProfile } from "../services/customersService";
 import type { AdminUser, CustomerProfile } from "../types";
 
 type AuthContextValue = {
-  user: User | null;
+  user: FirebaseUser | null;
   adminUser: AdminUser | null;
   customerProfile: CustomerProfile | null;
   isAdmin: boolean;
@@ -40,13 +36,22 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function shouldLoadAuthImmediately(pathname: string) {
+  return /^(\/admin|\/compte|\/connexion|\/inscription|\/panier|\/checkout)(?:\/|$)/.test(
+    pathname,
+  );
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const location = useLocation();
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const hasStartedAuth = useRef(false);
 
   const refreshAdminUser = useCallback(async () => {
+    const auth = await getFirebaseAuth();
     if (!auth?.currentUser) {
       setAdminUser(null);
       return;
@@ -56,6 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshCustomerProfile = useCallback(async () => {
+    const auth = await getFirebaseAuth();
     if (!auth?.currentUser) {
       setCustomerProfile(null);
       return;
@@ -65,39 +71,71 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!auth) {
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+
+    if (!shouldLoadAuthImmediately(location.pathname) && !hasStartedAuth.current) {
       setIsLoading(false);
-      return undefined;
+      return () => {
+        cancelled = true;
+      };
     }
 
-    return onAuthStateChanged(auth, async (nextUser) => {
-      setUser(nextUser);
-      if (nextUser) {
-        const [record, profile] = await Promise.all([
-          getAdminUserForAuthUser(nextUser),
-          ensureCustomerProfile(nextUser),
-        ]);
-        setAdminUser(record?.isActive ? record : null);
-        setCustomerProfile(profile);
-      } else {
-        setAdminUser(null);
-        setCustomerProfile(null);
-      }
-      setIsLoading(false);
-    });
-  }, []);
+    hasStartedAuth.current = true;
+    setIsLoading(true);
+
+    const startAuth = () => {
+      void loadFirebaseAuthApi().then(({ auth, firebaseAuth }) => {
+        if (cancelled) return;
+        if (!auth) {
+          setIsLoading(false);
+          return;
+        }
+
+        unsubscribe = firebaseAuth.onAuthStateChanged(auth, async (nextUser) => {
+          setUser(nextUser);
+          if (nextUser) {
+            const [record, profile] = await Promise.all([
+              getAdminUserForAuthUser(nextUser),
+              ensureCustomerProfile(nextUser),
+            ]);
+            setAdminUser(record?.isActive ? record : null);
+            setCustomerProfile(profile);
+          } else {
+            setAdminUser(null);
+            setCustomerProfile(null);
+          }
+          setIsLoading(false);
+        });
+      });
+    };
+
+    startAuth();
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [location.pathname]);
 
   const signIn = useCallback(async (email: string, password: string) => {
+    const { auth, firebaseAuth } = await loadFirebaseAuthApi();
     if (!auth) throw new Error("Firebase is not configured.");
-    await signInWithEmailAndPassword(auth, email, password);
+    await firebaseAuth.signInWithEmailAndPassword(auth, email, password);
   }, []);
 
   const register = useCallback(
     async (email: string, password: string, displayName: string) => {
+      const { auth, firebaseAuth } = await loadFirebaseAuthApi();
       if (!auth) throw new Error("Firebase is not configured.");
-      const credential = await createUserWithEmailAndPassword(auth, email, password);
+      const credential = await firebaseAuth.createUserWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
       if (displayName.trim()) {
-        await updateProfile(credential.user, { displayName: displayName.trim() });
+        await firebaseAuth.updateProfile(credential.user, {
+          displayName: displayName.trim(),
+        });
       }
       await ensureCustomerProfile(credential.user);
     },
@@ -105,19 +143,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signInWithGoogle = useCallback(async () => {
+    const { auth, firebaseAuth } = await loadFirebaseAuthApi();
     if (!auth) throw new Error("Firebase is not configured.");
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    const provider = new firebaseAuth.GoogleAuthProvider();
+    await firebaseAuth.signInWithPopup(auth, provider);
   }, []);
 
   const resetPassword = useCallback(async (email: string) => {
+    const { auth, firebaseAuth } = await loadFirebaseAuthApi();
     if (!auth) throw new Error("Firebase is not configured.");
-    await sendPasswordResetEmail(auth, email);
+    await firebaseAuth.sendPasswordResetEmail(auth, email);
   }, []);
 
   const signOut = useCallback(async () => {
+    const { auth, firebaseAuth } = await loadFirebaseAuthApi();
     if (!auth) return;
-    await firebaseSignOut(auth);
+    await firebaseAuth.signOut(auth);
   }, []);
 
   const value = useMemo<AuthContextValue>(

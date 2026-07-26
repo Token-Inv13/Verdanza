@@ -1,8 +1,8 @@
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
-import { User } from "firebase/auth";
 import { db } from "../lib/firebase";
 import { collections } from "./collections";
 import type { AdminUser } from "../types";
+import type { User } from "firebase/auth";
 
 export async function getAdminUserForAuthUser(user: User | null) {
   if (!db || !user?.email) return null;
