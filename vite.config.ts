@@ -57,15 +57,47 @@ export default defineConfig({
           "verdanza-logo.png",
           "offline.html",
         ],
-        navigateFallback: "/offline.html",
-        navigateFallbackDenylist: [
-          /^\/api(?:\/|$)/,
-          /^\/checkout(?:\/|$)/,
-          /^\/panier(?:\/|$)/,
-          /^\/admin(?:\/|$)/,
-          /^\/compte(?:\/|$)/,
-        ],
+        navigateFallback: null,
         runtimeCaching: [
+          {
+            urlPattern: ({ request, url }) =>
+              request.mode === "navigate" &&
+              !/^\/api(?:\/|$)/.test(url.pathname) &&
+              !/^\/checkout(?:\/|$)/.test(url.pathname) &&
+              !/^\/panier(?:\/|$)/.test(url.pathname) &&
+              !/^\/admin(?:\/|$)/.test(url.pathname) &&
+              !/^\/compte(?:\/|$)/.test(url.pathname),
+            handler: "NetworkOnly",
+            options: {
+              plugins: [
+                {
+                  handlerDidError: async () => {
+                    const serviceWorkerGlobal = globalThis as unknown as {
+                      caches: {
+                        keys: () => Promise<string[]>;
+                        open: (cacheName: string) => Promise<{
+                          match: (
+                            request: string,
+                            options?: { ignoreSearch?: boolean },
+                          ) => Promise<Response | undefined>;
+                        }>;
+                      };
+                    };
+
+                    for (const cacheName of await serviceWorkerGlobal.caches.keys()) {
+                      const cache = await serviceWorkerGlobal.caches.open(cacheName);
+                      const offlineResponse = await cache.match("/offline.html", {
+                        ignoreSearch: true,
+                      });
+                      if (offlineResponse) return offlineResponse;
+                    }
+
+                    return undefined;
+                  },
+                },
+              ],
+            },
+          },
           {
             urlPattern: ({ request, url }) =>
               url.pathname.startsWith("/assets/") &&
