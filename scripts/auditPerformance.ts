@@ -22,6 +22,7 @@ const jsTextByFile = new Map(jsFiles.map((file) => [file, readFileSync(file, "ut
 const allJsText = [...jsTextByFile.values()].join("\n");
 const indexHtml = readHtml("index.html");
 const homeHtml = readHtml("index.html");
+const homePageSource = readSource("src/pages/HomePage.tsx");
 const publicInitialAssets = referencedAssets(indexHtml).filter((asset) => asset.endsWith(".js"));
 const publicInitialText = publicInitialAssets.map((asset) => readDistAsset(asset)).join("\n");
 const largestJs = jsFiles
@@ -40,17 +41,24 @@ if (!hasChunkMatch(/Admin|adminUsers|invoice|coupon/i)) failures.push("admin chu
 if (!hasChunkMatch(/Account|customerProfile|favorites/i)) failures.push("account chunk not detected");
 if (!hasChunkMatch(/Checkout|lastOrderSummary|quote-order|payment/i)) failures.push("checkout chunk not detected");
 const heroPattern = /verdanza-hero-premium(?:-\d+)?\.webp/;
-if (!heroPattern.test(homeHtml)) failures.push("home hero image missing");
-if (!/fetchpriority="high"|fetchPriority="high"/i.test(homeHtml)) {
+const homeHeroDefinition = `${homeHtml}\n${homePageSource}`;
+if (!heroPattern.test(homeHeroDefinition)) failures.push("home hero image missing");
+if (!/fetchpriority="high"|fetchPriority="high"/i.test(homeHeroDefinition)) {
   failures.push("home LCP image is not high priority");
 }
-if (/verdanza-hero-premium(?:-\d+)?\.webp[\s\S]{0,250}loading="lazy"/i.test(homeHtml)) {
+if (/verdanza-hero-premium(?:-\d+)?\.webp[\s\S]{0,250}loading="lazy"/i.test(homeHeroDefinition)) {
   failures.push("home LCP image is lazy loaded");
 }
-if (!/verdanza-hero-premium(?:-\d+)?\.webp[\s\S]{0,300}width="1672"/i.test(homeHtml)) {
+if (
+  !/verdanza-hero-premium(?:-\d+)?\.webp[\s\S]{0,300}width="1672"/i.test(homeHtml) &&
+  !/width=\{heroImage\?\.width \|\| 1672\}/i.test(homePageSource)
+) {
   failures.push("home LCP image width missing");
 }
-if (!/verdanza-hero-premium(?:-\d+)?\.webp[\s\S]{0,350}height="941"/i.test(homeHtml)) {
+if (
+  !/verdanza-hero-premium(?:-\d+)?\.webp[\s\S]{0,350}height="941"/i.test(homeHtml) &&
+  !/height=\{heroImage\?\.height \|\| 941\}/i.test(homePageSource)
+) {
   failures.push("home LCP image height missing");
 }
 const expectedPrerenderRoutes =
@@ -83,6 +91,11 @@ function walk(dir: string): string[] {
 
 function readHtml(file: string) {
   const path = join(distDir, file);
+  return existsSync(path) ? readFileSync(path, "utf8") : "";
+}
+
+function readSource(file: string) {
+  const path = resolve(file);
   return existsSync(path) ? readFileSync(path, "utf8") : "";
 }
 

@@ -3,20 +3,23 @@ import { staticImageVariants } from "../lib/generatedImageVariants";
 import { BRAND_BADGE, BRAND_LOGO_ALT } from "../lib/brandAssets";
 import { ensureBodyScrollUnlocked } from "../lib/bodyScrollLock";
 import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
-
-const key = "verdanza-age-confirmed";
+import {
+  AGE_GATE_CONFIRMED_EVENT,
+  AGE_GATE_STORAGE_KEY,
+  isAgeConfirmedLocally,
+} from "../lib/ageGate";
 
 export function AgeGate() {
   const badgeImage = staticImageVariants[BRAND_BADGE];
   const [isConfirmed, setIsConfirmed] = useState(() => {
-    return localStorage.getItem(key) === "true";
+    return isAgeConfirmedLocally();
   });
 
   useEffect(() => {
     if (isConfirmed) {
-      localStorage.setItem(key, "true");
+      localStorage.setItem(AGE_GATE_STORAGE_KEY, "true");
       ensureBodyScrollUnlocked();
-      window.dispatchEvent(new Event("verdanza:age-confirmed"));
+      window.dispatchEvent(new Event(AGE_GATE_CONFIRMED_EVENT));
     }
   }, [isConfirmed]);
 
@@ -43,7 +46,11 @@ export function AgeGate() {
           decoding="async"
           className="mx-auto mb-6 h-28 w-28 object-contain"
         />
-        <h2 id="age-gate-title" className="font-display text-4xl">
+        <h2
+          id="age-gate-title"
+          className="text-4xl font-semibold leading-tight"
+          style={{ fontFamily: "Georgia, serif" }}
+        >
           Accès réservé aux majeurs
         </h2>
         <p className="mt-4 text-sm leading-6 text-forest/75">

@@ -17,16 +17,23 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/png" href="/verdanza-badge.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <script>
+      try {
+        if (
+          window.location.pathname === "/" &&
+          window.localStorage.getItem("verdanza-age-confirmed") !== "true"
+        ) {
+          document.documentElement.classList.add("age-gate-pending");
+        }
+      } catch {
+        if (window.location.pathname === "/") {
+          document.documentElement.classList.add("age-gate-pending");
+        }
+      }
+    </script>
     <link
       rel="preload"
       href="/fonts/inter-latin-400-700.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin
-    />
-    <link
-      rel="preload"
-      href="/fonts/cormorant-garamond-latin-600-700.woff2"
       as="font"
       type="font/woff2"
       crossorigin

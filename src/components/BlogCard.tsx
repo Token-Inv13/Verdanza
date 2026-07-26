@@ -10,7 +10,11 @@ export function BlogCard({ article }: { article: BlogArticle }) {
 
   return (
     <article className="overflow-hidden rounded-lg border border-forest/10 bg-ivory shadow-sm">
-      <Link to={blogArticlePath(article)} className="block bg-cream">
+      <Link
+        to={blogArticlePath(article)}
+        className="block bg-cream"
+        aria-label={`Lire le guide ${article.title}`}
+      >
         <img
           src={image?.src || article.images.landscape}
           srcSet={image?.srcSet}

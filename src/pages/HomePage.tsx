@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Leaf, PackageCheck, ShieldCheck, Truck } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ProductCard } from "../components/ProductCard";
 import { PromoBannerSlot } from "../components/PromoBannerSlot";
 import { JsonLd } from "../components/JsonLd";
@@ -11,12 +11,18 @@ import { staticImageVariants } from "../lib/generatedImageVariants";
 import { buildHomeJsonLd } from "../lib/structuredData";
 import { trackCtaClick, trackViewItemList } from "../lib/analytics";
 import { DEFAULT_LOCAL_DELIVERY_ESTIMATE_LABEL } from "../lib/deliveryEstimate";
+import {
+  AGE_GATE_CONFIRMED_EVENT,
+  AGE_GATE_PENDING_CLASS,
+  isAgeConfirmedLocally,
+} from "../lib/ageGate";
 import type { BlogArticle } from "../types/blog";
 
 export function HomePage() {
   const { products } = useProducts();
   const featuredProducts = products.filter((product) => product.isFeatured);
   const trackedListSignature = useRef("");
+  const [isAgeConfirmed, setIsAgeConfirmed] = useState(isAgeConfirmedLocally);
   const heroImage = staticImageVariants["/images/verdanza-hero-premium.webp"];
   const contactEmail =
     (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
@@ -30,6 +36,18 @@ export function HomePage() {
     trackViewItemList("home_featured", "Sélection Verdanza", visibleProducts);
   }, [featuredProducts]);
 
+  useEffect(() => {
+    if (isAgeConfirmed) return undefined;
+    const markConfirmed = () => setIsAgeConfirmed(true);
+    window.addEventListener(AGE_GATE_CONFIRMED_EVENT, markConfirmed);
+    return () => window.removeEventListener(AGE_GATE_CONFIRMED_EVENT, markConfirmed);
+  }, [isAgeConfirmed]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle(AGE_GATE_PENDING_CLASS, !isAgeConfirmed);
+    return () => document.documentElement.classList.remove(AGE_GATE_PENDING_CLASS);
+  }, [isAgeConfirmed]);
+
   return (
     <>
       <Seo
@@ -40,18 +58,20 @@ export function HomePage() {
       />
       <JsonLd id="site-identity" data={buildHomeJsonLd(contactEmail)} />
       <main>
-        <section className="hero-section relative overflow-hidden">
-          <img
-            src={heroImage?.src || "/images/verdanza-hero-premium.webp"}
-            srcSet={heroImage?.srcSet}
-            sizes={heroImage?.sizes || "100vw"}
-            alt="Sélection CBD Verdanza"
-            width={heroImage?.width || 1672}
-            height={heroImage?.height || 941}
-            fetchPriority="high"
-            decoding="async"
-            className="absolute inset-0 h-full w-full object-cover"
-          />
+        <section className="hero-section relative overflow-hidden bg-forest">
+          {isAgeConfirmed && (
+            <img
+              src={heroImage?.src || "/images/verdanza-hero-premium.webp"}
+              srcSet={heroImage?.srcSet}
+              sizes={heroImage?.sizes || "100vw"}
+              alt="Sélection CBD Verdanza"
+              width={heroImage?.width || 1672}
+              height={heroImage?.height || 941}
+              fetchPriority="high"
+              decoding="async"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          )}
           <div className="absolute inset-0 bg-gradient-to-r from-forest/95 via-forest/78 to-forest/25" />
           <div className="container-page relative flex min-h-[620px] items-center py-12 md:min-h-[680px] md:py-14">
             <div className="max-w-3xl text-ivory">
@@ -60,7 +80,11 @@ export function HomePage() {
               </p>
               <h1
                 className="mt-5 text-4xl leading-tight sm:text-5xl md:text-6xl"
-                style={{ fontFamily: '"Playfair Display", Georgia, serif' }}
+                style={{
+                  fontFamily: isAgeConfirmed
+                    ? '"Playfair Display", Georgia, serif'
+                    : "Georgia, serif",
+                }}
               >
                 CBD sélectionné avec exigence
               </h1>
@@ -223,6 +247,7 @@ function HomeGuideCard({ article }: { article: BlogArticle }) {
       <Link
         to={path}
         className="block bg-cream"
+        aria-label={`Lire le guide ${article.title}`}
         onClick={() =>
           trackCtaClick({
             ctaId: `home_blog_article_${article.slug}`,
