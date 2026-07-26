@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { getProductsWithFallback } from "../services/productsService";
+import { getLocalProducts, getProductsWithFallback } from "../services/productsService";
 import type { Product } from "../types";
 
 export function useProducts() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(() => getLocalProducts());
   const [source, setSource] = useState<"firestore" | "local">("local");
   const [isLoading, setIsLoading] = useState(true);
 

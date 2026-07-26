@@ -4,7 +4,7 @@ import {
   ref,
   uploadBytesResumable,
 } from "firebase/storage";
-import { storage } from "../lib/firebase";
+import { getFirebaseStorage } from "../lib/firebase";
 import {
   PRODUCT_IMAGE_ALLOWED_MIME_TYPES,
   PRODUCT_IMAGE_MAX_FILE_SIZE_BYTES,
@@ -35,6 +35,7 @@ export async function uploadProductImageAsset({
   isPrimary: boolean;
   onProgress?: (progress: ProductImageUploadProgress) => void;
 }): Promise<ProductImageAsset> {
+  const storage = await getFirebaseStorage();
   if (!storage) throw new Error("Storage Firebase indisponible.");
   const safeProductId = sanitizeImageId(productId);
   if (!safeProductId) throw new Error("Identifiant produit requis avant l'ajout d'image.");
@@ -77,6 +78,7 @@ export async function uploadProductImageAsset({
 }
 
 export async function deleteProductImageByPath(storagePath: string, productId?: string) {
+  const storage = await getFirebaseStorage();
   if (!storage) throw new Error("Storage Firebase indisponible.");
   if (!isProductImageStoragePath(storagePath, productId)) {
     throw new Error("Chemin Storage image invalide.");

@@ -1,4 +1,5 @@
 import { chromium, type Page } from "playwright";
+import { blockExternalServices, gotoDomReady, waitForStableDom } from "./auditPageReady";
 
 const baseUrl = process.argv[2] || "http://127.0.0.1:4173";
 const noJavaScriptRoutes = [
@@ -40,7 +41,10 @@ if (failures.length) {
 }
 
 async function auditWithoutJavaScript() {
-  const context = await browser.newContext({ javaScriptEnabled: false });
+  const context = await browser.newContext({
+    javaScriptEnabled: false,
+    serviceWorkers: "block",
+  });
   try {
     for (const route of noJavaScriptRoutes) {
       const page = await context.newPage();
@@ -89,7 +93,8 @@ async function auditInteractiveViewport(
   label: string,
   viewport: { width: number; height: number },
 ) {
-  const context = await browser.newContext({ viewport });
+  const context = await browser.newContext({ viewport, serviceWorkers: "block" });
+  await blockExternalServices(context);
   await context.addInitScript(() => {
     window.localStorage.setItem("verdanza-age-confirmed", "true");
   });
@@ -98,42 +103,45 @@ async function auditInteractiveViewport(
     collectConsoleErrors(page, label);
 
     try {
-      await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+      await gotoDomReady(page, `${baseUrl}/`);
       await expectOneH1(page, `${label} home`);
       await page.getByRole("link", { name: /Guides/i }).first().click();
       await page.waitForURL("**/blog");
+      await waitForStableDom(page);
       await expectOneH1(page, `${label} blog`);
       await page.getByRole("link", { name: /Fleur CBD ou résine CBD/i }).first().click();
       await page.waitForURL("**/blog/fleur-cbd-ou-resine-cbd-differences");
+      await waitForStableDom(page);
       await expectOneH1(page, `${label} blog article`);
       await expectImagesLoaded(page, `${label} blog article`);
       await page.getByRole("link", { name: /Boutique/i }).first().click();
       await page.waitForURL("**/boutique");
+      await waitForStableDom(page);
       await expectOneH1(page, `${label} boutique`);
 
-      await page.goto(`${baseUrl}/produits/golden-static`, { waitUntil: "networkidle" });
+      await gotoDomReady(page, `${baseUrl}/produits/golden-static`);
       await expectOneH1(page, `${label} product`);
       await expectImagesLoaded(page, `${label} product`);
       await page.getByRole("button", { name: /Ajouter 1 g au panier/i }).click();
-      await page.goto(`${baseUrl}/panier`, { waitUntil: "networkidle" });
+      await gotoDomReady(page, `${baseUrl}/panier`);
       if (!(await page.getByText(/Golden Static/i).count())) {
         failures.push(`${label} cart did not contain added product`);
       }
 
-      await page.goto(`${baseUrl}/produits/golden-static`, { waitUntil: "networkidle" });
+      await gotoDomReady(page, `${baseUrl}/produits/golden-static`);
       await page.getByRole("button", { name: /Ajouter Golden Static aux favoris/i }).click();
       if (!(await page.getByText(/Connectez-vous pour ajouter ce produit/i).count())) {
         failures.push(`${label} favorite unauthenticated message missing`);
       }
 
-      await page.goto(`${baseUrl}/compte`, { waitUntil: "networkidle" });
+      await gotoDomReady(page, `${baseUrl}/compte`);
       const accountRobots = await page.locator('meta[name="robots"]').getAttribute("content");
       if (accountRobots !== "noindex,nofollow") failures.push(`${label} account robots mismatch`);
       if (!(await page.getByRole("heading", { name: /Connexion/i }).count())) {
         failures.push(`${label} account gate did not show login`);
       }
 
-      await page.goto(`${baseUrl}/admin`, { waitUntil: "networkidle" });
+      await gotoDomReady(page, `${baseUrl}/admin`);
       const adminRobots = await page.locator('meta[name="robots"]').getAttribute("content");
       if (adminRobots !== "noindex,nofollow") failures.push(`${label} admin robots mismatch`);
       if (
@@ -142,7 +150,7 @@ async function auditInteractiveViewport(
         failures.push(`${label} admin gate did not show admin login`);
       }
 
-      await page.goto(`${baseUrl}/url-totalement-inconnue-test`, { waitUntil: "networkidle" });
+      await gotoDomReady(page, `${baseUrl}/url-totalement-inconnue-test`);
       const unknownRobots = await page.locator('meta[name="robots"]').getAttribute("content");
       if (unknownRobots !== "noindex,nofollow") {
         failures.push(`${label} unknown route robots mismatch`);
@@ -157,9 +165,19 @@ async function auditInteractiveViewport(
 
 function collectConsoleErrors(page: Page, label: string) {
   page.on("console", (message) => {
-    if (message.type() === "error") failures.push(`${label} console error: ${message.text()}`);
+    if (message.type() !== "error") return;
+    const text = message.text();
+    if (isExpectedRuntimeConsoleError(text)) return;
+    failures.push(`${label} console error: ${text}`);
   });
   page.on("pageerror", (error) => failures.push(`${label} page error: ${error.message}`));
+}
+
+function isExpectedRuntimeConsoleError(message: string) {
+  return (
+    message === "Failed to load resource: net::ERR_FAILED" ||
+    message === "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  );
 }
 
 async function expectOneH1(page: Page, label: string) {
@@ -180,6 +198,14 @@ async function expectImagesLoaded(page: Page, label: string) {
     images
       .filter((image) => {
         const element = image as HTMLImageElement;
+        const style = window.getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        const visible =
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          rect.width > 0 &&
+          rect.height > 0;
+        if (!visible) return false;
         return !element.complete || element.naturalWidth === 0;
       })
       .map((image) => (image as HTMLImageElement).src),

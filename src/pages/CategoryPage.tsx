@@ -81,7 +81,7 @@ export function CategoryPage({
         type="shop_card"
         className="mt-6 grid gap-3"
       />
-      {isLoading ? (
+      {isLoading && categoryProducts.length === 0 ? (
         <p className="mt-6 text-forest/70">Chargement des produits...</p>
       ) : (
         <div className="product-grid mt-6">

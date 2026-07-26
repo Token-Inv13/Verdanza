@@ -1,8 +1,6 @@
 import { initializeApp, getApp, getApps } from "firebase/app";
-import { getAnalytics, isSupported } from "firebase/analytics";
 import { getAuth } from "firebase/auth";
 import { getFirestore, setLogLevel } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
 
 const publicFirebaseFallback = {
   apiKey: "AIzaSyCI5h39eTGGn-bd0jOCP9onIMjtP-qmcWc",
@@ -48,11 +46,17 @@ if (viteEnv.PROD) {
 
 export const auth = app ? getAuth(app) : null;
 export const db = app ? getFirestore(app) : null;
-export const storage = app ? getStorage(app) : null;
 
 export async function getFirebaseAnalytics() {
   if (!app) return null;
   if (typeof window === "undefined") return null;
+  const { getAnalytics, isSupported } = await import("firebase/analytics");
   const supported = await isSupported();
   return supported ? getAnalytics(app) : null;
+}
+
+export async function getFirebaseStorage() {
+  if (!app) return null;
+  const { getStorage } = await import("firebase/storage");
+  return getStorage(app);
 }

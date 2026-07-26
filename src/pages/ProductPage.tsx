@@ -50,7 +50,7 @@ export function ProductPage() {
     setSelectedImageId("");
   }, [product?.id]);
 
-  if (isLoading) {
+  if (isLoading && !product) {
     return (
       <main className="container-page py-16">
         <p className="text-forest/70">Chargement du produit...</p>

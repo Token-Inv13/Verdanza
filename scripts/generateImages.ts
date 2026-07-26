@@ -74,6 +74,17 @@ const staticTargets = [
     ],
     sizes: "180px",
   },
+  {
+    key: "/images/brand/verdanza-quality-seal.png",
+    sourceUrl: "/images/brand/verdanza-quality-seal.png",
+    outputBase: "/images/brand/verdanza-quality-seal",
+    variants: [
+      { name: "96", width: 96, quality: 82 },
+      { name: "180", width: 180, quality: 84 },
+      { name: "320", width: 320, quality: 84 },
+    ],
+    sizes: "64px",
+  },
 ];
 const blogImageSources: Record<
   string,
@@ -181,7 +192,7 @@ for (const product of products) {
 }
 
 const staticReport = [];
-const staticManifestEntries: string[] = [];
+const staticManifestEntries = new Map<string, string>();
 for (const target of staticTargets) {
   const sourceFile = publicPath(target.sourceUrl);
   if (!existsSync(sourceFile)) throw new Error(`Missing static image: ${target.sourceUrl}`);
@@ -209,7 +220,7 @@ for (const target of staticTargets) {
     hasAlpha: Boolean(sourceMetadata.hasAlpha),
     variants: generated,
   });
-  staticManifestEntries.push(`  ${JSON.stringify(target.key)}: {
+  staticManifestEntries.set(target.key, `  ${JSON.stringify(target.key)}: {
     src: ${JSON.stringify(largest.src)},
     srcSet: ${JSON.stringify(srcSet(generated))},
     sizes: ${JSON.stringify(target.sizes)},
@@ -257,7 +268,7 @@ for (const article of blogArticles) {
             height: ratio.height,
           });
     generated.push(output);
-    staticManifestEntries.push(`  ${JSON.stringify(output.src)}: {
+    staticManifestEntries.set(output.src, `  ${JSON.stringify(output.src)}: {
     src: ${JSON.stringify(output.src)},
     srcSet: ${JSON.stringify(`${output.src} ${output.width}w`)},
     sizes: ${JSON.stringify(ratio.sizes)},
@@ -309,7 +320,7 @@ ${productManifestEntries.join(",\n")}
 };
 
 export const staticImageVariants: Record<string, ResponsiveImageVariant> = {
-${staticManifestEntries.join(",\n")}
+${[...staticManifestEntries.values()].join(",\n")}
 };
 `,
 );

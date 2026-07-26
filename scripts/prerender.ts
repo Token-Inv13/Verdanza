@@ -28,7 +28,10 @@ await new Promise<void>((resolveServer) => {
 
 const browser = await chromium.launch();
 try {
-  const context = await browser.newContext({ javaScriptEnabled: true });
+  const context = await browser.newContext({
+    javaScriptEnabled: true,
+    serviceWorkers: "block",
+  });
   await blockExternalServices(context);
 
   for (const route of prerenderSeoRoutes()) {
@@ -76,6 +79,16 @@ async function renderRoute(
   await page.waitForSelector("h1", { timeout: 10000 });
   await page.waitForFunction(
     `() => !document.body.textContent?.includes("Chargement")`,
+    undefined,
+    { timeout: 10000 },
+  );
+  await page.waitForFunction(
+    `() => Boolean(
+      document.title &&
+      document.querySelector('meta[name="description"]')?.content &&
+      document.querySelector('link[rel="canonical"]')?.href &&
+      document.querySelector('meta[name="robots"]')?.content
+    )`,
     undefined,
     { timeout: 10000 },
   );

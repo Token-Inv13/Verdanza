@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import { blockExternalServices, gotoDomReady } from "./auditPageReady";
 import { allSeoRoutes, canonicalUrl } from "./seoRoutes";
 
 const baseUrl = process.argv[2] || "http://127.0.0.1:4173";
@@ -24,13 +25,15 @@ const sitemapXml = await fetchText(`${baseUrl}/sitemap.xml`);
 const sitemapUrls = new Set([...sitemapXml.matchAll(/<loc>(.*?)<\/loc>/g)].map((match) => match[1]));
 
 const browser = await chromium.launch();
-const page = await browser.newPage();
+const context = await browser.newContext({ serviceWorkers: "block" });
+await blockExternalServices(context);
+const page = await context.newPage();
 const rows = [];
 
 for (const route of routes) {
   const url = `${baseUrl}${route.path}`;
   const initialHtml = await fetchText(url);
-  const response = await page.goto(url, { waitUntil: "networkidle" });
+  const response = await gotoDomReady(page, url);
   const dom = await readDomMeta(page);
   const initial = readInitialMeta(initialHtml);
   const expectedCanonical = canonicalUrl(route.path);
@@ -65,6 +68,7 @@ for (const route of routes) {
   });
 }
 
+await context.close();
 await browser.close();
 
 const failures = rows.filter((row) => {

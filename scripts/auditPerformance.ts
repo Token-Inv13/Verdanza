@@ -55,8 +55,13 @@ if (!/verdanza-hero-premium(?:-\d+)?\.webp[\s\S]{0,350}height="941"/i.test(homeH
 }
 const expectedPrerenderRoutes =
   prerenderSeoRoutes().length + prerenderFallbackSeoRoutes().length + 1;
-if (expectedPrerenderRoutes !== 54) {
-  failures.push(`expected 54 prerendered routes, found ${expectedPrerenderRoutes}`);
+const prerenderedHtmlFiles = existsSync(distDir)
+  ? walk(distDir).filter((file) => file.endsWith(".html")).length
+  : 0;
+if (prerenderedHtmlFiles < expectedPrerenderRoutes) {
+  failures.push(
+    `expected at least ${expectedPrerenderRoutes} prerendered HTML files, found ${prerenderedHtmlFiles}`,
+  );
 }
 if (!existsSync(join(distDir, "404.html"))) failures.push("missing 404.html");
 checkHtmlText();

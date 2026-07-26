@@ -59,7 +59,7 @@ export function ProductCard({
 
   return (
     <article
-      className="group relative cursor-pointer overflow-hidden rounded-lg border border-forest/10 bg-ivory shadow-sm transition hover:-translate-y-1 hover:shadow-soft focus-within:ring-2 focus-within:ring-champagne/60"
+      className="group relative flex min-h-[560px] cursor-pointer flex-col overflow-hidden rounded-lg border border-forest/10 bg-ivory shadow-sm transition hover:-translate-y-1 hover:shadow-soft focus-within:ring-2 focus-within:ring-champagne/60"
       role="link"
       tabIndex={0}
       aria-label={`Voir la fiche ${product.name}`}
@@ -69,7 +69,7 @@ export function ProductCard({
       <FavoriteButton product={product} className="absolute right-3 top-3 z-10" />
       <Link
         to={productUrl}
-        className="block bg-cream p-6"
+        className="block aspect-square bg-cream p-6"
         onClick={() => trackSelectItem(product, itemListId, itemListName)}
       >
         <ProductImage
@@ -78,10 +78,10 @@ export function ProductCard({
           alt={productImageAlt(product)}
           loading={priorityImage ? "eager" : "lazy"}
           fetchPriority={priorityImage ? "high" : "auto"}
-          className="mx-auto h-48 w-full object-contain transition group-hover:scale-105"
+          className="mx-auto h-full w-full object-contain transition group-hover:scale-105"
         />
       </Link>
-      <div className="space-y-4 p-5">
+      <div className="flex flex-1 flex-col space-y-4 p-5">
         <div>
           <div className="flex items-start justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -119,7 +119,7 @@ export function ProductCard({
             <dd>{product.thcRate}</dd>
           </div>
         </dl>
-        <div className="flex items-center justify-between gap-3">
+        <div className="mt-auto flex min-h-[76px] items-end justify-between gap-3">
           <span className="font-display text-2xl text-forest">
             {product.price.toFixed(2).replace(".", ",")} EUR/g
           </span>
