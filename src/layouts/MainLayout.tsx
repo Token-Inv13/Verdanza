@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { AgeGate } from "../components/AgeGate";
 import { ComplianceNote } from "../components/ComplianceNote";
 import { CookieConsentBanner } from "../components/CookieConsentBanner";
+import { FloatingContactButton } from "../components/FloatingContactButton";
 import { PromoBannersProvider, PromoBannerSlot } from "../components/PromoBannerSlot";
 import { useConsent } from "../context/ConsentContext";
 import { staticImageVariants } from "../lib/generatedImageVariants";
@@ -228,6 +229,7 @@ export function MainLayout() {
           )}
         </div>
       </footer>
+      <FloatingContactButton />
       <CookieConsentBanner />
     </div>
   );

@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { ContactActions } from "../components/ContactActions";
 import { PromoBannerSlot } from "../components/PromoBannerSlot";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
@@ -568,6 +569,18 @@ export function CheckoutPage() {
             {contactEmail}
           </a>
         </p>
+        <div className="mt-4 rounded-md border border-forest/10 bg-ivory p-4">
+          <p className="font-semibold text-forest">
+            Besoin d'aide pour la livraison ou votre commande ?
+          </p>
+          <ContactActions
+            source="checkout"
+            variant="compact"
+            showContactLink={false}
+            phoneLabel="Appeler"
+            className="mt-3"
+          />
+        </div>
       </section>
 
       <PromoBannerSlot placement="checkout" type="checkout_notice" className="mt-6 grid gap-3" />

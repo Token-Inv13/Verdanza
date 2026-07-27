@@ -38,11 +38,25 @@ export type AnalyticsEventName =
   | "sign_up"
   | "cta_click"
   | "contact_click"
+  | "contact_help_open"
+  | "contact_phone_click"
+  | "contact_sms_click"
+  | "contact_phone_copy"
+  | "contact_form_click"
   | "delivery_method_selected"
   | "local_delivery_zone_selected"
   | "blog_article_view"
   | "blog_read_progress"
   | "blog_shop_click";
+
+export type ContactHelpSource =
+  | "global_floating_button"
+  | "contact_page"
+  | "local_delivery_page"
+  | "cart"
+  | "checkout"
+  | "product_page"
+  | "home";
 
 let analyticsAllowed = false;
 
@@ -320,6 +334,22 @@ export function trackContactClick(contactMethod: string, linkLocation: string) {
   trackEvent("contact_click", {
     contact_method: contactMethod,
     link_location: linkLocation,
+  });
+}
+
+export function trackContactHelpAction(
+  event: Extract<
+    AnalyticsEventName,
+    | "contact_help_open"
+    | "contact_phone_click"
+    | "contact_sms_click"
+    | "contact_phone_copy"
+    | "contact_form_click"
+  >,
+  source: ContactHelpSource,
+) {
+  trackEvent(event, {
+    contact_source: source,
   });
 }
 

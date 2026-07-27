@@ -1,6 +1,8 @@
 import { FormEvent, useState } from "react";
 import { Breadcrumbs } from "../components/Breadcrumbs";
+import { ContactActions } from "../components/ContactActions";
 import { Seo } from "../components/Seo";
+import { verdanzaPublicContact } from "../config/publicContact";
 import { trackContactClick } from "../lib/analytics";
 import { DEFAULT_LOCAL_DELIVERY_ESTIMATE_LABEL } from "../lib/deliveryEstimate";
 import { getActiveSocialLinks } from "../lib/socialLinks";
@@ -80,6 +82,7 @@ export function ContentPage({ variant }: { variant: keyof typeof content }) {
         <h1>{page.title}</h1>
         <p>{page.text}</p>
       </div>
+      {variant === "contact" && <ContactQuickCard />}
       {variant === "contact" && contactEmail && (
         <p className="mt-6 text-sm text-forest/80">
           Email direct :{" "}
@@ -107,6 +110,32 @@ export function ContentPage({ variant }: { variant: keyof typeof content }) {
         </div>
       )}
     </main>
+  );
+}
+
+function ContactQuickCard() {
+  return (
+    <section className="mt-8 rounded-lg border border-champagne/30 bg-cream p-6 sm:p-8">
+      <h2 className="font-display text-3xl leading-tight text-forest">
+        Besoin d'une réponse rapide ?
+      </h2>
+      <p className="mt-4 max-w-3xl text-sm leading-6 text-ink/70">
+        Contactez Verdanza par téléphone ou SMS pour une question concernant une
+        livraison, votre zone locale ou une commande en cours.
+      </p>
+      <p className="mt-3 text-sm font-semibold text-forest">
+        {verdanzaPublicContact.displayPhone}
+      </p>
+      <div className="mt-5">
+        <ContactActions
+          source="contact_page"
+          phoneLabel={`Appeler le ${verdanzaPublicContact.displayPhone}`}
+          contactLabel="Utiliser le formulaire"
+          contactPath="#contact-form"
+          className="grid gap-1"
+        />
+      </div>
+    </section>
   );
 }
 
@@ -260,6 +289,7 @@ function ContactForm() {
 
   return (
     <form
+      id="contact-form"
       onSubmit={handleSubmit}
       className="mt-10 grid gap-4 rounded-lg border border-forest/10 bg-cream p-6"
     >

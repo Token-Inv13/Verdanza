@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Breadcrumbs } from "../components/Breadcrumbs";
+import { ContactActions } from "../components/ContactActions";
 import { Seo } from "../components/Seo";
 import {
   LOCAL_DELIVERY_MINIMUM,
@@ -281,6 +282,23 @@ function LocalDeliveryPage() {
               selon les disponibilités du jour. {deliveryEstimate}
             </p>
           </div>
+        </div>
+
+        <div className="mb-6 rounded-lg border border-champagne/30 bg-cream p-5">
+          <h3 className="font-display text-2xl leading-tight text-forest">
+            Vous avez un doute sur votre zone de livraison ?
+          </h3>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-ink/70">
+            Contactez-nous pour vérifier si la livraison express est disponible
+            à votre adresse.
+          </p>
+          <ContactActions
+            source="local_delivery_page"
+            variant="compact"
+            showContactLink={false}
+            phoneLabel="Appeler Verdanza"
+            className="mt-4"
+          />
         </div>
 
         {state.status === "loading" && (

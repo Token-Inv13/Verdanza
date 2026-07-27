@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Minus, Plus, Trash2 } from "lucide-react";
+import { ContactActions } from "../components/ContactActions";
 import { ProductImage } from "../components/ProductImage";
 import { PromoBannerSlot } from "../components/PromoBannerSlot";
 import { Seo } from "../components/Seo";
@@ -458,6 +459,18 @@ export function CartPage() {
                 Continuer
               </Link>
             )}
+            <div className="mt-5 rounded-md border border-forest/10 bg-ivory p-4">
+              <p className="text-sm font-semibold text-forest">
+                Une question avant de commander ?
+              </p>
+              <ContactActions
+                source="cart"
+                variant="compact"
+                showContactLink={false}
+                phoneLabel="Contacter Verdanza"
+                className="mt-3"
+              />
+            </div>
           </aside>
         </div>
       )}
