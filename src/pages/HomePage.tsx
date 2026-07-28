@@ -173,26 +173,6 @@ export function HomePage() {
           ))}
         </section>
 
-        <section className="container-page pb-12">
-          <div className="rounded-md border border-forest/10 bg-ivory p-6 shadow-sm">
-            <h2 className="font-display text-2xl text-forest">
-              À propos de l’application Verdanza CBD
-            </h2>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-ink/70">
-              Verdanza CBD est une boutique en ligne de fleurs et résines CBD.
-              La connexion avec Google permet uniquement de créer ou retrouver
-              un compte client Verdanza à partir du nom et de l’adresse e-mail
-              associés au compte Google.
-            </p>
-            <Link
-              to="/confidentialite"
-              className="mt-3 inline-flex text-sm font-semibold text-forest underline decoration-champagne underline-offset-4"
-            >
-              Consulter la politique de confidentialité
-            </Link>
-          </div>
-        </section>
-
         <section className="container-page py-14">
           <div className="section-heading">
             <h2>Sélection Verdanza</h2>

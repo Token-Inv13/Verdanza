@@ -161,6 +161,21 @@ export function MainLayout() {
               contrôlés, avec livraison postale en France et livraison locale
               selon zone disponible.
             </p>
+            <p className="mt-4 max-w-md text-xs leading-5 text-ink/55">
+              <strong className="font-semibold text-forest/75">
+                Connexion Google.
+              </strong>{" "}
+              Verdanza CBD est une boutique en ligne de fleurs et résines CBD.
+              La connexion Google permet uniquement de créer ou retrouver votre
+              compte client à partir du nom et de l’adresse e-mail associés à
+              votre compte Google.{" "}
+              <NavLink
+                to="/confidentialite"
+                className="font-semibold text-forest/75 underline decoration-champagne underline-offset-4"
+              >
+                Confidentialité
+              </NavLink>
+            </p>
           </div>
           <div className="grid gap-2 text-sm text-forest/80">
             <strong className="text-forest">Informations</strong>
