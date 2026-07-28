@@ -86,12 +86,12 @@ export function HomePage() {
                     : "Georgia, serif",
                 }}
               >
-                CBD sélectionné avec exigence
+                Verdanza, boutique en ligne de CBD
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-ivory/82 md:mt-6 md:text-lg md:leading-8">
-                Fleurs et résines CBD sélectionnées avec soin, disponibles en
-                livraison postale en France et en livraison locale selon les
-                zones ouvertes.
+                Verdanza propose une boutique en ligne de fleurs et résines CBD
+                sélectionnées avec soin, avec livraison postale en France et
+                livraison locale selon les zones ouvertes.
               </p>
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap md:mt-8">
                 <Link
