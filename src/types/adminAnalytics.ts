@@ -56,11 +56,9 @@ export type AdminAnalyticsProductRow = {
   name: string;
   views: number;
   addToCart: number;
-  favorites: number;
-  ordersSubmitted: number;
+  favorites: number | null;
+  ordersSubmitted: number | null;
   paidPurchases: number;
-  viewToCartRate: number | null;
-  cartToOrderRate: number | null;
 };
 
 export type AdminAnalyticsContentRow = {

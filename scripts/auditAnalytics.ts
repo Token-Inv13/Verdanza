@@ -90,6 +90,12 @@ function auditStaticFiles() {
   if (!analyticsSource.includes("payment_method_selected")) {
     failures.push("payment_method_selected is missing");
   }
+  if (!analyticsSource.includes('"generate_lead"')) {
+    failures.push("generate_lead is missing");
+  }
+  if (!analyticsSource.includes("lead_method:") || !analyticsSource.includes("lead_source:")) {
+    failures.push("generate_lead does not expose its non-PII contact context");
+  }
   if (!checkoutSource.includes("trackPaymentMethodSelected")) {
     failures.push("CheckoutPage does not track payment_method_selected");
   }

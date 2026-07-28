@@ -234,21 +234,21 @@ async function loadSummary(
     "order_submitted",
     "purchase",
   ]);
-  const values = firstMetrics(
-    await runReport(
-      config,
-      {
-        dateRanges: [{ startDate: range.startDate, endDate: range.endDate }],
-        dimensions: [{ name: "eventName" }],
-        metrics: [{ name: "eventCount" }, { name: "eventValue" }, { name: "totalRevenue" }],
-        dimensionFilter: andFilter([
-          publicTrafficFilter(),
-          inListFilter("eventName", ["order_submitted", "purchase"]),
-        ]),
-      },
-      fetchImpl,
-    ),
+  const valueRows = await runReport(
+    config,
+    {
+      dateRanges: [{ startDate: range.startDate, endDate: range.endDate }],
+      dimensions: [{ name: "eventName" }],
+      metrics: [{ name: "eventCount" }, { name: "eventValue" }, { name: "totalRevenue" }],
+      dimensionFilter: andFilter([
+        publicTrafficFilter(),
+        inListFilter("eventName", ["order_submitted", "purchase"]),
+      ]),
+    },
+    fetchImpl,
   );
+  const orderSubmittedMetrics = metricsForDimension(valueRows, "order_submitted");
+  const purchaseMetrics = metricsForDimension(valueRows, "purchase");
   const sessions = metricValue(traffic, "sessions");
   const orderSubmittedCount = events.get("order_submitted") || 0;
   const purchaseCount = events.get("purchase") || 0;
@@ -264,9 +264,9 @@ async function loadSummary(
       : 0,
     orderSubmittedCount,
     sessionToOrderRate: ratio(orderSubmittedCount, sessions),
-    orderSubmittedValue: metricValue(values, "eventValue"),
+    orderSubmittedValue: metricValue(orderSubmittedMetrics, "eventValue"),
     purchaseCount,
-    purchaseRevenue: purchaseCount ? metricValue(values, "totalRevenue") : null,
+    purchaseRevenue: purchaseCount ? metricValue(purchaseMetrics, "totalRevenue") : null,
   };
 }
 
@@ -407,7 +407,7 @@ async function loadProducts(
     },
     fetchImpl,
   );
-  const favoriteRows = await loadOptionalProductEventRows(
+  const favoriteReport = await loadOptionalProductEventRows(
     config,
     range,
     fetchImpl,
@@ -415,7 +415,7 @@ async function loadProducts(
     notices,
     "Favoris produits indisponibles : la propriete GA4 ne permet pas de croiser cet evenement avec les produits.",
   );
-  const submittedRows = await loadOptionalProductEventRows(
+  const submittedReport = await loadOptionalProductEventRows(
     config,
     range,
     fetchImpl,
@@ -434,14 +434,13 @@ async function loadProducts(
     current.paidPurchases = metricValue(row.metrics, "itemsPurchased");
     byProduct.set(name, current);
   }
-  mergeProductEventCounts(byProduct, favoriteRows, "favorites");
-  mergeProductEventCounts(byProduct, submittedRows, "ordersSubmitted");
+  mergeProductEventCounts(byProduct, favoriteReport.rows, "favorites");
+  mergeProductEventCounts(byProduct, submittedReport.rows, "ordersSubmitted");
+  for (const row of byProduct.values()) {
+    if (favoriteReport.available && row.favorites == null) row.favorites = 0;
+    if (submittedReport.available && row.ordersSubmitted == null) row.ordersSubmitted = 0;
+  }
   return [...byProduct.values()]
-    .map((row) => ({
-      ...row,
-      viewToCartRate: ratioOrNull(row.addToCart, row.views),
-      cartToOrderRate: ratioOrNull(row.ordersSubmitted, row.addToCart),
-    }))
     .sort((a, b) => b.views - a.views)
     .slice(0, 20);
 }
@@ -454,20 +453,25 @@ async function loadOptionalProductEventRows(
   notices: string[],
   notice: string,
 ) {
-  return runOptionalReport(
-    config,
-    {
-      dateRanges: [{ startDate: range.startDate, endDate: range.endDate }],
-      dimensions: [{ name: "itemName" }],
-      metrics: [{ name: "eventCount" }],
-      dimensionFilter: andFilter([publicTrafficFilter(), exactFilter("eventName", eventName)]),
-      orderBys: [{ metric: { metricName: "eventCount" }, desc: true }],
-      limit: 100,
-    },
-    fetchImpl,
-    notices,
-    notice,
-  );
+  try {
+    const rows = await runReport(
+      config,
+      {
+        dateRanges: [{ startDate: range.startDate, endDate: range.endDate }],
+        dimensions: [{ name: "itemName" }],
+        metrics: [{ name: "eventCount" }],
+        dimensionFilter: andFilter([publicTrafficFilter(), exactFilter("eventName", eventName)]),
+        orderBys: [{ metric: { metricName: "eventCount" }, desc: true }],
+        limit: 100,
+      },
+      fetchImpl,
+    );
+    return { rows, available: true };
+  } catch (error) {
+    void error;
+    notices.push(notice);
+    return { rows: [], available: false };
+  }
 }
 
 function mergeProductEventCounts(
@@ -479,7 +483,7 @@ function mergeProductEventCounts(
     const name = cleanDimension(row.dimensions[0]);
     if (!isUsableProductName(name)) continue;
     const current = rows.get(name) || productAnalyticsRow(name);
-    current[field] += metricValue(row.metrics, "eventCount");
+    current[field] = (current[field] ?? 0) + metricValue(row.metrics, "eventCount");
     rows.set(name, current);
   }
 }
@@ -489,11 +493,9 @@ function productAnalyticsRow(name: string): AdminAnalyticsProductRow {
     name,
     views: 0,
     addToCart: 0,
-    favorites: 0,
-    ordersSubmitted: 0,
+    favorites: null,
+    ordersSubmitted: null,
     paidPurchases: 0,
-    viewToCartRate: null,
-    cartToOrderRate: null,
   };
 }
 
@@ -570,9 +572,33 @@ async function loadDelivery(
   notices: string[],
 ): Promise<AdminAnalyticsResponse["delivery"]> {
   const [methods, localZones, paymentMethods] = await Promise.all([
-    loadCustomDimensionRows(config, range, "customEvent:delivery_method", fetchImpl, notices, "Methode de livraison"),
-    loadCustomDimensionRows(config, range, "customEvent:delivery_zone", fetchImpl, notices, "Zone locale"),
-    loadCustomDimensionRows(config, range, "customEvent:preferred_payment_method", fetchImpl, notices, "Mode de reglement"),
+    loadCustomDimensionRows(
+      config,
+      range,
+      "customEvent:delivery_method",
+      "delivery_method_selected",
+      fetchImpl,
+      notices,
+      "Methode de livraison",
+    ),
+    loadCustomDimensionRows(
+      config,
+      range,
+      "customEvent:delivery_zone",
+      "local_delivery_zone_selected",
+      fetchImpl,
+      notices,
+      "Zone locale",
+    ),
+    loadCustomDimensionRows(
+      config,
+      range,
+      "customEvent:preferred_payment_method",
+      "payment_method_selected",
+      fetchImpl,
+      notices,
+      "Mode de reglement",
+    ),
   ]);
   return { methods, localZones, paymentMethods };
 }
@@ -581,6 +607,7 @@ async function loadCustomDimensionRows(
   config: Ga4Config,
   range: AdminAnalyticsRange,
   dimension: string,
+  eventName: string,
   fetchImpl: FetchLike,
   notices: string[],
   label: string,
@@ -591,7 +618,10 @@ async function loadCustomDimensionRows(
       dateRanges: [{ startDate: range.startDate, endDate: range.endDate }],
       dimensions: [{ name: dimension }],
       metrics: [{ name: "eventCount" }],
-      dimensionFilter: publicTrafficFilter(),
+      dimensionFilter: andFilter([
+        publicTrafficFilter(),
+        exactFilter("eventName", eventName),
+      ]),
       orderBys: [{ metric: { metricName: "eventCount" }, desc: true }],
       limit: 12,
     },
@@ -599,10 +629,15 @@ async function loadCustomDimensionRows(
     notices,
     `${label} indisponible : la dimension personnalisee GA4 n'est pas publiee ou n'a pas encore de donnees.`,
   );
-  return rows.map((row) => ({
-    name: cleanDimension(row.dimensions[0]),
-    count: metricValue(row.metrics, "eventCount"),
-  }));
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const name = cleanDimension(row.dimensions[0]);
+    if (!isUsableDimensionValue(name)) continue;
+    counts.set(name, (counts.get(name) || 0) + metricValue(row.metrics, "eventCount"));
+  }
+  return [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((left, right) => right.count - left.count);
 }
 
 async function loadDevices(
@@ -859,18 +894,21 @@ function metricValue(metrics: ReportMetric[], name: string) {
   return Number(metrics.find((metric) => metric.name === name)?.value || 0);
 }
 
+function metricsForDimension(rows: ReportRow[], value: string, dimensionIndex = 0) {
+  return rows.find((row) => row.dimensions[dimensionIndex] === value)?.metrics || [];
+}
+
 function ratio(numerator: number, denominator: number) {
   if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return 0;
   return numerator / denominator;
 }
 
-function ratioOrNull(numerator: number, denominator: number) {
-  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return null;
-  return numerator / denominator;
-}
-
 function cleanDimension(value: string) {
   return value && value !== "(not set)" ? value : "Non renseigne";
+}
+
+function isUsableDimensionValue(value: string) {
+  return Boolean(value && value !== "Non renseigne");
 }
 
 function publicTrafficFilter() {

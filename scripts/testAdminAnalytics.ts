@@ -31,6 +31,30 @@ const mockFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const dimensions = ((body.dimensions as { name: string }[] | undefined) || []).map((dimension) => dimension.name);
   const metrics = ((body.metrics as { name: string }[] | undefined) || []).map((metric) => metric.name);
   if (dimensions.some((dimension) => dimension.startsWith("customEvent:"))) {
+    const customDimension = dimensions.find((dimension) => dimension.startsWith("customEvent:"));
+    if (customDimension !== "customEvent:progress_percent") {
+      const expectedEventByDimension: Record<string, string> = {
+        "customEvent:delivery_method": "delivery_method_selected",
+        "customEvent:delivery_zone": "local_delivery_zone_selected",
+        "customEvent:preferred_payment_method": "payment_method_selected",
+      };
+      assert.ok(
+        bodyText.includes(expectedEventByDimension[customDimension || ""]),
+        `${customDimension} must be restricted to its dedicated event`,
+      );
+      return jsonResponse({
+        rows: [
+          {
+            dimensionValues: [{ value: "(not set)" }],
+            metricValues: [{ value: "999" }],
+          },
+          {
+            dimensionValues: [{ value: customDimension === "customEvent:delivery_method" ? "postal" : "configured-value" }],
+            metricValues: [{ value: "5" }],
+          },
+        ],
+      });
+    }
     return jsonResponse(
       { error: { message: "Field customEvent:test is not a valid dimension." } },
       false,
@@ -64,6 +88,7 @@ assert.equal(report.comparisonRange?.startDate, "2026-07-13");
 assert.equal(report.summary.activeUsers, 42);
 assert.equal(report.summary.sessions, 60);
 assert.equal(report.summary.orderSubmittedCount, 3);
+assert.equal(report.summary.orderSubmittedValue, 180);
 assert.equal(report.summary.purchaseRevenue, 120);
 assert.ok(report.acquisition.channels.length >= 1);
 assert.ok(report.pages.length >= 1);
@@ -73,7 +98,8 @@ assert.ok(
   report.notices.some((notice) => notice.includes("Commandes soumises par produit indisponibles")),
   "incompatible product custom event report should produce a notice",
 );
-assert.equal(report.delivery.methods.length, 0);
+assert.deepEqual(report.delivery.methods, [{ name: "postal", count: 5 }]);
+assert.ok(!report.delivery.methods.some((row) => row.name === "Non renseigne"));
 assert.ok(requests.some((request) => request.url.includes(":runRealtimeReport")));
 assert.ok(
   !requests.some((request) => {
@@ -119,6 +145,28 @@ function mockGa4Report(body: Record<string, unknown>) {
     return rows(["Golden Static"], ["Blue Dream"]);
   }
   if (dimensions.includes("eventName")) {
+    if (metrics.includes("totalRevenue")) {
+      return {
+        rows: [
+          {
+            dimensionValues: [{ value: "purchase" }],
+            metricValues: [
+              { value: "2" },
+              { value: "120" },
+              { value: "120" },
+            ],
+          },
+          {
+            dimensionValues: [{ value: "order_submitted" }],
+            metricValues: [
+              { value: "3" },
+              { value: "180" },
+              { value: "0" },
+            ],
+          },
+        ],
+      };
+    }
     return rows(
       ["order_submitted"],
       ["purchase"],

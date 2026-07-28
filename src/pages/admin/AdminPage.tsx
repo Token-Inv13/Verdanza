@@ -4348,11 +4348,15 @@ function AnalyticsPagesPanel({ rows }: { rows: AdminAnalyticsPageRow[] }) {
 
 function AnalyticsFunnelPanel({ rows }: { rows: AdminAnalyticsFunnelStep[] }) {
   return (
-    <AnalyticsTableSection title="Tunnel" eyebrow="Conversion">
+    <AnalyticsTableSection
+      title="Parcours d'evenements"
+      eyebrow="Activite non sequentielle"
+      description="Chaque ligne est un volume d'evenements independant. Un meme utilisateur peut declencher plusieurs fois une etape : les ratios comparent les volumes, pas des utilisateurs uniques."
+    >
       <table className="w-full min-w-[760px] text-left text-sm">
         <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
           <tr>
-            {["Etape", "Evenement", "Volume", "Passage precedent", "Passage depart"].map((header) => (
+            {["Etape", "Evenement", "Volume", "Ratio volume precedent", "Ratio volume depart"].map((header) => (
               <th key={header} className="px-4 py-3 font-medium">{header}</th>
             ))}
           </tr>
@@ -4375,26 +4379,28 @@ function AnalyticsFunnelPanel({ rows }: { rows: AdminAnalyticsFunnelStep[] }) {
 
 function AnalyticsProductsPanel({ rows }: { rows: AdminAnalyticsProductRow[] }) {
   return (
-    <AnalyticsTableSection title="Produits" eyebrow="Catalogue">
-      <table className="w-full min-w-[980px] text-left text-sm">
+    <AnalyticsTableSection
+      title="Produits"
+      eyebrow="Catalogue"
+      description="Volumes GA4 d'articles : pour les produits au poids, une unite ajoutee peut correspondre a un gramme. Ces nombres ne sont donc pas des visiteurs ni des taux de conversion."
+    >
+      <table className="w-full min-w-[760px] text-left text-sm">
         <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
           <tr>
-            {["Produit", "Vues", "Ajouts panier", "Favoris", "Commandes", "Achats payes", "Vue vers panier", "Panier vers commande"].map((header) => (
+            {["Produit", "Unites vues", "Unites ajoutees", "Favoris", "Commandes", "Unites achetees"].map((header) => (
               <th key={header} className="px-4 py-3 font-medium">{header}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {analyticsRowsOrEmpty(rows, 8, (row) => (
+          {analyticsRowsOrEmpty(rows, 6, (row) => (
             <tr key={row.name} className="border-t border-forest/10">
               <td className="px-4 py-4">{row.name}</td>
               <td className="px-4 py-4">{formatInteger(row.views)}</td>
               <td className="px-4 py-4">{formatInteger(row.addToCart)}</td>
-              <td className="px-4 py-4">{formatInteger(row.favorites)}</td>
-              <td className="px-4 py-4">{formatInteger(row.ordersSubmitted)}</td>
+              <td className="px-4 py-4">{formatNullableInteger(row.favorites)}</td>
+              <td className="px-4 py-4">{formatNullableInteger(row.ordersSubmitted)}</td>
               <td className="px-4 py-4">{formatInteger(row.paidPurchases)}</td>
-              <td className="px-4 py-4">{formatRate(row.viewToCartRate)}</td>
-              <td className="px-4 py-4">{formatRate(row.cartToOrderRate)}</td>
             </tr>
           ))}
         </tbody>
@@ -4502,16 +4508,19 @@ function AnalyticsDevicesPanel({ rows }: { rows: AdminAnalyticsDeviceRow[] }) {
 function AnalyticsTableSection({
   title,
   eyebrow,
+  description,
   children,
 }: {
   title: string;
   eyebrow: string;
+  description?: string;
   children: ReactNode;
 }) {
   return (
     <section className="admin-card">
       <p className="text-xs uppercase tracking-[0.16em] text-champagne">{eyebrow}</p>
       <h2 className="font-display text-3xl text-forest">{title}</h2>
+      {description && <p className="mt-2 max-w-4xl text-sm leading-6 text-ink/60">{description}</p>}
       <div className="mt-5 overflow-x-auto">{children}</div>
     </section>
   );

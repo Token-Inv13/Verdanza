@@ -47,7 +47,8 @@ export type AnalyticsEventName =
   | "local_delivery_zone_selected"
   | "blog_article_view"
   | "blog_read_progress"
-  | "blog_shop_click";
+  | "blog_shop_click"
+  | "generate_lead";
 
 export type ContactHelpSource =
   | "global_floating_button"
@@ -335,6 +336,10 @@ export function trackContactClick(contactMethod: string, linkLocation: string) {
     contact_method: contactMethod,
     link_location: linkLocation,
   });
+  trackEvent("generate_lead", {
+    lead_method: contactMethod,
+    lead_source: linkLocation,
+  });
 }
 
 export function trackContactHelpAction(
@@ -351,6 +356,16 @@ export function trackContactHelpAction(
   trackEvent(event, {
     contact_source: source,
   });
+  if (
+    event === "contact_phone_click" ||
+    event === "contact_sms_click" ||
+    event === "contact_phone_copy"
+  ) {
+    trackEvent("generate_lead", {
+      lead_method: event.replace(/^contact_/, "").replace(/_click$/, ""),
+      lead_source: source,
+    });
+  }
 }
 
 export function trackBlogArticleView(article: BlogArticle) {
