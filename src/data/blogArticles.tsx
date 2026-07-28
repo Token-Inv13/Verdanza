@@ -1679,7 +1679,6 @@ export const blogArticles: BlogArticle[] = [
           { to: "/produits/cookie-kush-indoor", label: "Cookie Kush Indoor" },
           { to: "/produits/harlequin-greenhouse", label: "Harlequin Greenhouse" },
           { to: "/produits/mango-haze-cbd", label: "Mango Haze CBD" },
-          { to: "/produits/plutonium-cbd-hydroponique", label: "Plutonium CBD" },
           { to: "/fleurs-cbd", label: "Voir toutes les fleurs" },
         ],
       },

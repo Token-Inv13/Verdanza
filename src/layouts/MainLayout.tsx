@@ -169,6 +169,7 @@ export function MainLayout() {
               { to: "/livraison-postale", label: "Livraison en France" },
               { to: "/livraison-locale", label: "Express local Aix" },
               { to: "/blog", label: "Guides CBD" },
+              { to: "/a-propos", label: "À propos" },
               { to: "/faq", label: "FAQ" },
               { to: "/contact", label: "Contact" },
             ].map((item) => (

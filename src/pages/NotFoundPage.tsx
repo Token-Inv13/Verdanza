@@ -7,6 +7,7 @@ export function NotFoundPage() {
       <Seo
         title="Page introuvable - Verdanza CBD"
         description="Cette page Verdanza n'existe pas ou a ete deplacee."
+        canonical={null}
         noindex
       />
       <section className="max-w-2xl rounded-lg border border-forest/10 bg-cream p-8">

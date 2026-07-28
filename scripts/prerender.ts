@@ -123,6 +123,7 @@ async function renderRoute(
 
   const expectedIndexable = options.expectedIndexable ?? route.indexable;
   const expectedCanonical = canonicalUrl(options.expectedCanonicalPath || route.path);
+  const expectCanonical = route.kind !== "fallback";
   const robotsNoindex = checks.robots.includes("noindex");
   const isAccountGate = route.kind === "private";
   const isAdminChildGate = route.kind === "admin" && route.path !== "/admin";
@@ -134,17 +135,25 @@ async function renderRoute(
   assertNonEmpty(html, `HTML for ${route.path}`);
   assertNonEmpty(checks.title, `title for ${route.path}`);
   assertNonEmpty(checks.description, `description for ${route.path}`);
-  assertNonEmpty(checks.canonical, `canonical for ${route.path}`);
+  if (expectCanonical) {
+    assertNonEmpty(checks.canonical, `canonical for ${route.path}`);
+  } else if (checks.canonical) {
+    throw new Error(`Fallback route ${route.path} should not render a canonical.`);
+  }
   assertNonEmpty(checks.robots, `robots for ${route.path}`);
   assertNonEmpty(checks.ogTitle, `og:title for ${route.path}`);
   assertNonEmpty(checks.ogDescription, `og:description for ${route.path}`);
-  assertNonEmpty(checks.ogUrl, `og:url for ${route.path}`);
+  if (expectCanonical) {
+    assertNonEmpty(checks.ogUrl, `og:url for ${route.path}`);
+  } else if (checks.ogUrl) {
+    throw new Error(`Fallback route ${route.path} should not render og:url.`);
+  }
   assertNonEmpty(checks.ogType, `og:type for ${route.path}`);
   assertNonEmpty(checks.twitterCard, `twitter:card for ${route.path}`);
   assertNonEmpty(checks.twitterTitle, `twitter:title for ${route.path}`);
   assertNonEmpty(checks.twitterDescription, `twitter:description for ${route.path}`);
 
-  if (!expectedCanonicalMatches) {
+  if (expectCanonical && !expectedCanonicalMatches) {
     throw new Error(
       `Canonical mismatch for ${route.path}: expected ${expectedCanonical}, got ${checks.canonical}`,
     );

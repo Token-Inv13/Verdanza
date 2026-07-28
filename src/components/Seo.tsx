@@ -19,7 +19,7 @@ export function Seo({
   title: string;
   description: string;
   path?: string;
-  canonical?: string;
+  canonical?: string | null;
   noindex?: boolean;
   ogTitle?: string;
   ogDescription?: string;
@@ -30,7 +30,7 @@ export function Seo({
   articleAuthor?: string;
 }) {
   useEffect(() => {
-    const href = canonicalUrl(canonical || path);
+    const href = canonical === null ? "" : canonicalUrl(canonical || path);
     const socialTitle = ogTitle || title;
     const socialDescription = ogDescription || description;
     const imageUrl = image ? absoluteUrl(image) : "";
@@ -40,7 +40,11 @@ export function Seo({
     setMeta("robots", noindex ? "noindex,nofollow" : "index,follow");
     setProperty("og:title", socialTitle);
     setProperty("og:description", socialDescription);
-    setProperty("og:url", href);
+    if (href) {
+      setProperty("og:url", href);
+    } else {
+      removeProperty("og:url");
+    }
     setProperty("og:type", ogType);
     setMeta("twitter:card", imageUrl ? "summary_large_image" : "summary");
     setMeta("twitter:title", socialTitle);
@@ -61,7 +65,11 @@ export function Seo({
       removeProperty("article:modified_time");
       removeProperty("article:author");
     }
-    setCanonical(href);
+    if (href) {
+      setCanonical(href);
+    } else {
+      removeCanonical();
+    }
   }, [
     articleAuthor,
     articleModifiedTime,
@@ -153,4 +161,10 @@ function setCanonical(href: string) {
     document.head.appendChild(link);
   }
   link.href = href;
+}
+
+function removeCanonical() {
+  document.querySelectorAll<HTMLLinkElement>('link[rel="canonical"]').forEach((link) => {
+    link.remove();
+  });
 }

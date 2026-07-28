@@ -6,6 +6,11 @@
   "cleanUrls": true,
   "redirects": [
     {
+      "source": "/produits/plutonium-cbd-hydroponique",
+      "destination": "/fleurs-cbd",
+      "permanent": true
+    },
+    {
       "source": "/livraison-express-aix",
       "destination": "/livraison-locale",
       "permanent": true

@@ -64,6 +64,7 @@ export function ProductPage() {
         <Seo
           title="Produit introuvable - Verdanza CBD"
           description="Ce produit Verdanza n'est pas disponible."
+          canonical={null}
           noindex
         />
         <Breadcrumbs
