@@ -5,7 +5,15 @@ import { useAuth } from "../context/AuthContext";
 import { Seo } from "./Seo";
 
 export function AdminAuthGate() {
-  const { isLoading, isAdmin, user, isFirebaseConfigured, signIn, resetPassword } = useAuth();
+  const {
+    isLoading,
+    isAdmin,
+    user,
+    isFirebaseConfigured,
+    signIn,
+    signInWithGoogle,
+    resetPassword,
+  } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -68,6 +76,23 @@ export function AdminAuthGate() {
     }
   }
 
+  async function handleGoogleSignIn() {
+    setError("");
+    setMessage("");
+    setIsSubmitting(true);
+    try {
+      await signInWithGoogle();
+    } catch (signInError) {
+      setError(
+        signInError instanceof Error
+          ? signInError.message
+          : "Connexion Google impossible.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <div className="grid min-h-screen place-items-center bg-cream px-4">
       <Seo
@@ -121,6 +146,19 @@ export function AdminAuthGate() {
         {message && <p className="mt-4 text-sm text-forest">{message}</p>}
         <button className="btn-primary mt-6 w-full" disabled={isSubmitting}>
           {isSubmitting ? "Connexion..." : "Se connecter"}
+        </button>
+        <div className="my-5 flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-ink/40">
+          <span className="h-px flex-1 bg-forest/10" />
+          ou
+          <span className="h-px flex-1 bg-forest/10" />
+        </div>
+        <button
+          type="button"
+          className="btn-secondary w-full"
+          onClick={() => void handleGoogleSignIn()}
+          disabled={isSubmitting}
+        >
+          Continuer avec Google
         </button>
         <button
           type="button"
