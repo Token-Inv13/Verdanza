@@ -90,6 +90,10 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" }
 > = {
+  "terpenes-profils-aromatiques-cbd": {
+    label: "Terpènes et arômes CBD",
+    kind: "aroma",
+  },
   "cbd-conduite-france": {
     label: "CBD et conduite",
     kind: "driving",

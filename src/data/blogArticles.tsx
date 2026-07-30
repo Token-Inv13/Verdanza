@@ -6,6 +6,226 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "terpenes-profils-aromatiques-cbd",
+    title: "Terpènes et profils aromatiques CBD : comment les lire ?",
+    seoTitle: "Terpènes CBD et profils aromatiques : guide de lecture | Verdanza",
+    description:
+      "Comprendre les terpènes et les profils aromatiques d'une fleur ou d'une résine CBD : notes, intensité, équilibre et limites de lecture.",
+    excerpt:
+      "Un guide simple pour lire les notes aromatiques d'une fiche CBD sans confondre description sensorielle, qualité globale et promesse d'effet.",
+    category: "Guide produits",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-07-30T09:00:00+02:00",
+    dateModified: "2026-07-30T09:00:00+02:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/terpenes-profils-aromatiques-cbd-1x1.webp",
+      landscape: "/images/blog/terpenes-profils-aromatiques-cbd-4x3.webp",
+      wide: "/images/blog/terpenes-profils-aromatiques-cbd-16x9.webp",
+    },
+    relatedSlugs: [
+      "choisir-fleur-cbd-profil-aromatique",
+      "fleur-cbd-ou-resine-cbd-differences",
+      "comment-lire-analyse-cbd",
+    ],
+    links: [
+      { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+      { to: "/resines-cbd", label: "Voir les résines CBD" },
+      {
+        to: "/blog/choisir-fleur-cbd-profil-aromatique",
+        label: "Choisir une fleur par profil aromatique",
+      },
+      { to: "/blog/comment-lire-analyse-cbd", label: "Lire une analyse CBD" },
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Sur une fiche CBD, les terpènes et les notes aromatiques servent à
+            décrire l'identité sensorielle d'une référence. Ils aident à lire un
+            produit avec plus de précision, mais ils ne remplacent ni une analyse
+            de lot, ni l'observation de la texture, ni les informations de
+            conformité. Ce guide explique comment utiliser ces indications sans
+            leur donner un rôle qu'elles n'ont pas.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Repère Verdanza : un profil aromatique décrit des odeurs, des notes
+            et un équilibre général. Il ne doit pas être lu comme une promesse
+            d'effet, une garantie de qualité ou une indication médicale.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "terpenes-definition",
+        text: "Que sont les terpènes ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les terpènes sont des composés aromatiques présents dans de nombreux
+            végétaux. Dans l'univers du chanvre, ils participent aux notes
+            perçues autour d'une fleur ou d'une résine : agrumes, pin, épices,
+            fruits, notes végétales, terreuses ou gourmandes selon les lots et
+            les références.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "profil-aromatique",
+        text: "Qu'est-ce qu'un profil aromatique ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Un profil aromatique rassemble les impressions principales d'une
+            référence. Il peut être court, avec deux ou trois notes dominantes,
+            ou plus détaillé lorsqu'une fiche distingue l'attaque, le fond et
+            l'équilibre global. Pour comparer deux produits, il faut lire ces
+            mots comme une description, pas comme une mesure scientifique.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Exemples de familles aromatiques souvent utilisées.",
+          headers: ["Famille", "Exemples de notes", "Lecture utile"],
+          rows: [
+            [
+              "Fruitée",
+              "agrumes, fruits jaunes, fruits mûrs",
+              "Souvent utilisée pour décrire une impression vive ou ronde.",
+            ],
+            [
+              "Végétale",
+              "herbe fraîche, chlorophylle, chanvre",
+              "À lire avec l'aspect et le mode de culture indiqués.",
+            ],
+            [
+              "Boisée",
+              "pin, résineux, bois sec",
+              "Peut apparaître sur des fleurs comme sur certaines résines.",
+            ],
+            [
+              "Épicée",
+              "poivre, notes chaudes, fond plus marqué",
+              "Ne signifie pas automatiquement intensité globale plus forte.",
+            ],
+            [
+              "Gourmande",
+              "crémeux, biscuité, douceur aromatique",
+              "Dépend beaucoup de la référence et du vocabulaire de fiche.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "intensite-equilibre",
+        text: "Intensité, équilibre et dominante",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Trois mots reviennent souvent : intensité, équilibre et dominante.
+            L'intensité indique qu'une note est plus ou moins présente.
+            L'équilibre décrit la manière dont les notes se répondent. La
+            dominante signale l'axe principal de lecture, par exemple fruité,
+            végétal ou boisé.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "une dominante ne résume pas tout le produit ;",
+          "une note secondaire peut changer la lecture générale ;",
+          "une intensité aromatique n'est pas un taux de CBD ;",
+          "deux fiches peuvent utiliser des mots proches pour des profils différents ;",
+          "le lot, la conservation et la présentation influencent aussi la perception.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "fleurs-resines",
+        text: "Fleurs et résines : même logique de lecture ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les <Link to="/fleurs-cbd">fleurs CBD</Link> sont souvent décrites à
+            partir de leur variété, de leur aspect, de leur culture et de leurs
+            notes dominantes. Les <Link to="/resines-cbd">résines CBD</Link>{" "}
+            peuvent mettre davantage l'accent sur la texture, la préparation et
+            une impression aromatique plus compacte ou plus ronde. Dans les deux
+            cas, la fiche reste la référence principale.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "limites",
+        text: "Ce que les terpènes ne disent pas",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Un profil terpénique ou aromatique ne suffit pas à conclure sur la
+            qualité globale d'un produit. Il ne remplace pas la{" "}
+            <Link to="/blog/comment-lire-analyse-cbd">lecture d'une analyse CBD</Link>,
+            les informations de conformité, l'origine, le mode de culture ou la
+            présentation réelle du lot.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "lire-fiche",
+        text: "Comment lire une fiche Verdanza",
+      },
+      {
+        type: "list",
+        items: [
+          "repérer la catégorie : fleur, résine ou autre format ;",
+          "lire les notes aromatiques comme une description sensorielle ;",
+          "distinguer les arômes des taux mesurés ;",
+          "vérifier les informations de lot quand elles sont disponibles ;",
+          "comparer les références avec le même niveau de prudence.",
+        ],
+      },
+      {
+        type: "links",
+        title: "Compléter la lecture",
+        links: [
+          {
+            to: "/blog/choisir-fleur-cbd-profil-aromatique",
+            label: "Choisir une fleur par profil aromatique",
+          },
+          {
+            to: "/blog/fleur-cbd-ou-resine-cbd-differences",
+            label: "Comparer fleur et résine",
+          },
+          { to: "/qualite-conformite", label: "Qualité et conformité" },
+        ],
+      },
+    ],
+  },
+  {
     slug: "cbd-conduite-france",
     title: "CBD et conduite en France : ce qu'il faut savoir",
     seoTitle: "CBD et conduite en France : loi, THC et précautions - Verdanza",
