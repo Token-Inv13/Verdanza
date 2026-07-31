@@ -36,6 +36,7 @@
     "test:product-references": "node --import tsx scripts/testProductReferences.ts",
     "test:product-reference-migration": "node --import tsx scripts/testProductReferenceMigration.ts",
     "test:admin-product-images-deletion": "node --import tsx scripts/testAdminProductImagesDeletion.ts",
+    "test:admin-archives": "node --import tsx scripts/testAdminArchives.ts",
     "test:admin-analytics": "node --import tsx scripts/testAdminAnalytics.ts",
     "test:api-import": "node --import tsx scripts/testInvoicesApiImport.ts",
     "prerender": "node --import tsx scripts/prerender.ts",

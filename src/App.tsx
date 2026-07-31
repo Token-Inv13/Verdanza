@@ -20,6 +20,7 @@ const AdminLayout = lazy(() =>
 const AdminPage = lazy(() =>
   import("./pages/admin/AdminPage").then((module) => ({ default: module.AdminPage })),
 );
+const AdminArchivesPage = lazy(() => import("./pages/admin/AdminArchivesPage"));
 const AdminAuthGate = lazy(() =>
   import("./components/AdminAuthGate").then((module) => ({ default: module.AdminAuthGate })),
 );
@@ -144,6 +145,7 @@ export function App() {
             <Route path="avis" element={<AdminPage section="Avis clients" />} />
             <Route path="coupons" element={<AdminPage section="Coupons" />} />
             <Route path="bannieres" element={<AdminPage section="Bannieres" />} />
+            <Route path="archives" element={<AdminArchivesPage />} />
             <Route path="factures" element={<Navigate to="/admin/comptabilite?tab=factures" replace />} />
             <Route path="comptabilite" element={<AdminPage section="Comptabilité" />} />
             <Route

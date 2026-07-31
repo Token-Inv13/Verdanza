@@ -64,6 +64,11 @@ import {
   type ManualInvoiceInput,
 } from "../../services/invoicesService";
 import { getAdminAnalytics } from "../../services/adminAnalyticsService";
+import {
+  visibleAdminCoupons,
+  visibleAdminInvoices,
+  visibleAdminPromoBanners,
+} from "../../lib/adminArchives";
 import { saveProductCostAdmin } from "../../services/productCostsService";
 import {
   analyzeSupplierInvoicePdfAdmin,
@@ -319,6 +324,12 @@ export function AdminPage({ section }: { section: string }) {
     return () => window.clearTimeout(timeoutId);
   }, [message, messageScope]);
 
+  const visibleCoupons = useMemo(() => visibleAdminCoupons(coupons), [coupons]);
+  const visiblePromoBanners = useMemo(
+    () => visibleAdminPromoBanners(promoBanners),
+    [promoBanners],
+  );
+  const visibleInvoices = useMemo(() => visibleAdminInvoices(invoices), [invoices]);
   const lowStockProducts = useMemo(
     () => products.filter((product) => product.stock <= product.lowStockThreshold),
     [products],
@@ -860,7 +871,7 @@ export function AdminPage({ section }: { section: string }) {
           <SourceLine source={orderSource} />
           <AdminOrders
             orders={orders}
-            invoices={invoices}
+            invoices={visibleInvoices}
             orderSource={orderSource}
             onDelete={async (orderId) => {
               if (orderSource !== "firestore") {
@@ -903,7 +914,7 @@ export function AdminPage({ section }: { section: string }) {
         <div className="mt-8 grid gap-6 xl:grid-cols-[420px_1fr]">
           <CouponForm
             coupon={editingCoupon}
-            banners={promoBanners}
+            banners={visiblePromoBanners}
             bannerAction={couponBannerAction}
             bannerTargetId={couponBannerTargetId}
             onChange={setEditingCoupon}
@@ -914,7 +925,7 @@ export function AdminPage({ section }: { section: string }) {
           <section>
             <SourceLine source={couponSource} />
             <CouponsTable
-              coupons={coupons}
+              coupons={visibleCoupons}
               onEdit={editCoupon}
               onToggle={handleCouponToggle}
               onArchive={handleCouponArchive}
@@ -928,15 +939,15 @@ export function AdminPage({ section }: { section: string }) {
         <div className="mt-8 grid gap-6 xl:grid-cols-[420px_1fr]">
           <PromoBannerForm
             banner={editingPromoBanner}
-            coupons={coupons}
+            coupons={visibleCoupons}
             onChange={setEditingPromoBanner}
             onSubmit={handlePromoBannerSubmit}
           />
           <section>
             <SourceLine source={promoBannerSource} />
             <PromoBannersTable
-              banners={promoBanners}
-              coupons={coupons}
+              banners={visiblePromoBanners}
+              coupons={visibleCoupons}
               onEdit={setEditingPromoBanner}
               onToggle={handlePromoBannerToggle}
               onArchive={handlePromoBannerArchive}
@@ -981,7 +992,7 @@ export function AdminPage({ section }: { section: string }) {
           supplierPurchasesSource={supplierPurchasesSource}
           supplierPurchasesError={supplierPurchasesError}
           orders={orders}
-          invoices={invoices}
+          invoices={visibleInvoices}
           invoiceSource={invoiceSource}
           billingSettings={billingSettings}
           billingSource={billingSource}

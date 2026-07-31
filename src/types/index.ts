@@ -193,6 +193,7 @@ export type Coupon = {
   isArchived?: boolean;
   isTemplate?: boolean;
   internalNote?: string;
+  archivedAt?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -583,6 +584,9 @@ export type Invoice = {
   validatedAt?: string;
   sentAt?: string;
   sentTo?: string;
+  archived?: boolean;
+  isArchived?: boolean;
+  archivedAt?: string;
   createdAt: string;
   updatedAt: string;
 };

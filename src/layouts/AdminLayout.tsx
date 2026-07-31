@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useState } from "react";
 import {
+  Archive,
   BarChart3,
   BadgePercent,
   Boxes,
@@ -30,6 +31,7 @@ const adminNav = [
   { label: "Livraisons", to: "/admin/livraisons", icon: Truck },
   { label: "Promos", to: "/admin/coupons", icon: BadgePercent },
   { label: "Bannieres", to: "/admin/bannieres", icon: Megaphone },
+  { label: "Archives", to: "/admin/archives", icon: Archive },
   { label: "Comptabilité", to: "/admin/comptabilite", icon: Calculator },
   { label: "Clients", to: "/admin/clients", icon: Users },
   { label: "Favoris", to: "/admin/favoris", icon: Heart },
