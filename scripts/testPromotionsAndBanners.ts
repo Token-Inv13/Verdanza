@@ -7,6 +7,7 @@ import {
 import {
   buildAssociatedPromoBannerInput,
   findAssociatedPromoBanner,
+  sanitizeBannerUrl,
 } from "../src/services/promoBannersService.ts";
 import { buildCouponWritePayload } from "../src/services/couponsService.ts";
 import type { Coupon, PromoBanner } from "../src/types/index.js";
@@ -164,6 +165,18 @@ const tests: TestCase[] = [
       assertEqual(updated.linkedPromoCode, "WELCOME10");
       assertEqual(updated.isActive, true);
       assertEqual(updated.placements?.join(","), "home,shop");
+    },
+  },
+  {
+    name: "promo banner URLs use the canonical public host",
+    run() {
+      assertEqual(
+        sanitizeBannerUrl("https://verdanza-opal.vercel.app/boutique?source=banner#fleurs"),
+        "https://verdanza.fr/boutique?source=banner#fleurs",
+      );
+      assertEqual(sanitizeBannerUrl("https://verdanza.fr/fleurs-cbd"), "https://verdanza.fr/fleurs-cbd");
+      assertEqual(sanitizeBannerUrl("/resines-cbd"), "/resines-cbd");
+      assertEqual(sanitizeBannerUrl("https://verdanza.fr.example.com/phishing"), "");
     },
   },
   {

@@ -399,12 +399,14 @@ function normalizeBannerVariant(value: string): PromoBannerVariant {
   return "default";
 }
 
-function sanitizeBannerUrl(value: string) {
+export function sanitizeBannerUrl(value: string) {
   const url = value.trim();
   if (!url) return "";
   if (url.startsWith("/")) return url;
-  if (url.startsWith("https://verdanza.fr")) return url;
-  if (url.startsWith("https://verdanza-opal.vercel.app")) return url;
+  if (/^https:\/\/verdanza\.fr(?:\/|$)/.test(url)) return url;
+  if (/^https:\/\/verdanza-opal\.vercel\.app(?:\/|$)/.test(url)) {
+    return url.replace("https://verdanza-opal.vercel.app", "https://verdanza.fr");
+  }
   return "";
 }
 

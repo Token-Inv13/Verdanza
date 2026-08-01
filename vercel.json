@@ -6,6 +6,50 @@
   "cleanUrls": true,
   "redirects": [
     {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.verdanza.fr"
+        }
+      ],
+      "destination": "https://verdanza.fr/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "verdanza-cbd.fr"
+        }
+      ],
+      "destination": "https://verdanza.fr/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.verdanza-cbd.fr"
+        }
+      ],
+      "destination": "https://verdanza.fr/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "verdanza-opal.vercel.app"
+        }
+      ],
+      "destination": "https://verdanza.fr/:path*",
+      "permanent": true
+    },
+    {
       "source": "/produits/plutonium-cbd-hydroponique",
       "destination": "/fleurs-cbd",
       "permanent": true
