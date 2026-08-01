@@ -153,16 +153,21 @@ import {
 import { BRAND_LABEL } from "../../lib/brandAssets";
 import {
   computeWeightedSupplierCosts,
-  estimateStockValue,
   normalizeSupplierPurchaseInput,
-  resolveOrderItemPurchaseCost,
   type WeightedSupplierCost,
 } from "../../lib/accountingCosts";
-import { formatLocalDeliveryEstimate } from "../../lib/deliveryEstimate";
 import {
-  orderItemLineTotal,
-  orderItemQuantityLabel,
-} from "../../lib/orderLineDisplay";
+  buildAccountingSummary,
+  type AccountingMetricKey,
+} from "../../lib/accountingSummary";
+import {
+  currentAccountingPeriodRange,
+  previousAccountingPeriodRange,
+  toAccountingDateInputValue,
+  type AccountingPeriodFilter,
+} from "../../lib/accountingPeriods";
+import { formatLocalDeliveryEstimate } from "../../lib/deliveryEstimate";
+import { orderItemQuantityLabel } from "../../lib/orderLineDisplay";
 import {
   FIXED_PRICE_POLICY_VERSION,
   fixedPriceOptionsForMode,
@@ -4553,8 +4558,14 @@ function analyticsRowsOrEmpty<T>(
   );
 }
 
-type AccountingPeriodFilter = "week" | "month" | "year" | "custom";
 type AccountingTab = "synthese" | "marges" | "achats" | "couts" | "factures" | "facturation";
+
+type ProductCostFilter =
+  | "all"
+  | "supplier"
+  | "manual_fallback"
+  | "missing"
+  | "large_gap";
 
 const accountingTabs: Array<{ value: AccountingTab; label: string }> = [
   { value: "synthese", label: "Synthèse" },
@@ -4629,7 +4640,7 @@ function AccountingPanel({
   onCancelSupplierPurchase: (purchase: SupplierPurchase) => Promise<void>;
 }) {
   const [period, setPeriod] = useState<AccountingPeriodFilter>("month");
-  const todayInput = toDateInputValue(new Date());
+  const todayInput = toAccountingDateInputValue();
   const [customStart, setCustomStart] = useState(todayInput);
   const [customEnd, setCustomEnd] = useState(todayInput);
   const [costFilter, setCostFilter] = useState<ProductCostFilter>("all");
@@ -4655,16 +4666,29 @@ function AccountingPanel({
     () => products.filter((product) => product.isActive && !weightedSupplierCosts.has(product.id) && productCostMap.get(product.id)?.purchasePricePerGram == null),
     [productCostMap, products, weightedSupplierCosts],
   );
-  const periodRange = useMemo(
-    () => currentLocalPeriodRange(period, customStart, customEnd),
-    [customEnd, customStart, period],
-  );
+  const periodSelection = useMemo(() => {
+    try {
+      return {
+        range: currentAccountingPeriodRange(period, customStart, customEnd),
+        error: "",
+      };
+    } catch (error) {
+      return {
+        range: currentAccountingPeriodRange("custom", todayInput, todayInput),
+        error:
+          error instanceof Error
+            ? error.message
+            : "Période personnalisée invalide.",
+      };
+    }
+  }, [customEnd, customStart, period, todayInput]);
+  const periodRange = periodSelection.range;
   const summary = useMemo(
     () => buildAccountingSummary(orders, products, productCostMap, supplierPurchases, weightedSupplierCosts, periodRange),
     [orders, periodRange, productCostMap, products, supplierPurchases, weightedSupplierCosts],
   );
   const previousSummary = useMemo(
-    () => buildAccountingSummary(orders, products, productCostMap, supplierPurchases, weightedSupplierCosts, previousPeriodRange(periodRange)),
+    () => buildAccountingSummary(orders, products, productCostMap, supplierPurchases, weightedSupplierCosts, previousAccountingPeriodRange(periodRange)),
     [orders, periodRange, productCostMap, products, supplierPurchases, weightedSupplierCosts],
   );
   const periodFilters: Array<{ value: AccountingPeriodFilter; label: string }> = [
@@ -4700,7 +4724,9 @@ function AccountingPanel({
             : currentIndex === 0
               ? lastIndex
               : currentIndex - 1;
-    setAccountingTab(accountingTabs[nextIndex].value);
+    const nextTab = accountingTabs[nextIndex];
+    setAccountingTab(nextTab.value);
+    document.getElementById(`accounting-tab-${nextTab.value}`)?.focus();
   }
 
   return (
@@ -4748,9 +4774,12 @@ function AccountingPanel({
             </p>
             <h2 className="font-display text-3xl text-forest">Synthèse de période</h2>
             <p className="mt-1 text-sm text-ink/60">{summary.periodLabel}</p>
+            <p className="mt-1 max-w-2xl text-xs text-ink/50">
+              Synthèse de pilotage interne fondée sur les commandes et règlements enregistrés dans Verdanza.
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {periodFilters.concat({ value: "custom", label: "Periode personnalisee" }).map((filter) => (
+            {periodFilters.concat({ value: "custom", label: "Période personnalisée" }).map((filter) => (
               <button
                 key={filter.value}
                 type="button"
@@ -4764,17 +4793,62 @@ function AccountingPanel({
         </div>
         {period === "custom" && (
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <Input label="Date de debut" type="date" value={customStart} onChange={setCustomStart} />
+            <Input label="Date de début" type="date" value={customStart} onChange={setCustomStart} />
             <Input label="Date de fin" type="date" value={customEnd} onChange={setCustomEnd} />
           </div>
         )}
+        {periodSelection.error && (
+          <p className="mt-3 text-sm text-red-700" role="alert">
+            {periodSelection.error}
+          </p>
+        )}
       </div>
 
-      {!summary.totalOrders && (
+      {!summary.createdOrdersCount && !summary.paidOrdersCount && (
         <AdminEmptyState
-          title="Aucune commande sur cette période."
-          description="Changez de période ou revenez lorsque des commandes seront enregistrées."
+          title="Aucune activité datée sur cette période."
+          description="Aucune commande créée ni aucun règlement daté ne correspond à cette période."
         />
+      )}
+
+      {!!summary.paymentDateQualityCounts.legacy_estimated && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong className="block">
+            {summary.paymentDateQualityCounts.legacy_estimated} règlement(s) historique(s) utilisent une date estimée.
+          </strong>
+          <span className="mt-1 block">
+            Commandes concernées : {summary.historicalPaymentDateIssues
+              .filter((issue) => issue.quality === "legacy_estimated")
+              .map((issue) => issue.orderId)
+              .join(", ")}. Aucune donnée historique n'est modifiée.
+          </span>
+        </div>
+      )}
+
+      {!!summary.paymentDateQualityCounts.missing && (
+        <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">
+          <strong className="block">
+            {summary.paymentDateQualityCounts.missing} règlement(s) historique(s) sans date exploitable.
+          </strong>
+          <span className="mt-1 block">
+            Commandes concernées : {summary.historicalPaymentDateIssues
+              .filter((issue) => issue.quality === "missing")
+              .map((issue) => issue.orderId)
+              .join(", ")}.
+          </span>
+        </div>
+      )}
+
+      {!!summary.supplierPurchaseFallbackCount && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {summary.supplierPurchaseFallbackCount} achat(s) fournisseur utilisent la date de facture faute de date de validation.
+        </div>
+      )}
+
+      {!!summary.supplierPurchaseMissingDateCount && (
+        <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">
+          {summary.supplierPurchaseMissingDateCount} achat(s) fournisseur validés n'ont aucune date exploitable et sont exclus des périodes.
+        </div>
       )}
 
       {!!summary.missingCostProducts.length && (
@@ -4788,7 +4862,7 @@ function AccountingPanel({
       )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {summary.metrics.map((metric) => (
+        {accountingSummaryMetrics(summary).map((metric) => (
           <article key={metric.label} className="admin-card min-h-32 border-forest/10 bg-ivory/95">
             <p className="text-sm text-ink/55">{metric.label}</p>
             <strong className="mt-2 block font-display text-3xl text-forest">
@@ -4805,17 +4879,17 @@ function AccountingPanel({
             <p className="text-xs uppercase tracking-[0.16em] text-champagne">
               Comparaison
             </p>
-            <h2 className="font-display text-3xl text-forest">Periode precedente</h2>
+            <h2 className="font-display text-3xl text-forest">Période précédente</h2>
           </div>
           <p className="text-sm text-ink/60">{previousSummary.periodLabel}</p>
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {summary.comparisonMetrics.map((metric) => (
+          {accountingComparisonMetrics(summary).map((metric) => (
             <article key={metric.key} className="rounded-md border border-forest/10 bg-cream p-4">
               <p className="text-sm text-ink/55">{metric.label}</p>
               <strong className="mt-2 block text-2xl text-forest">{metric.value}</strong>
               <span className="text-xs text-ink/50">
-                Precedent : {formatAccountingValue(metric.key, previousSummary.comparisonValues[metric.key])}
+                Précédent : {formatAccountingValue(metric.key, previousSummary.comparisonValues[metric.key])}
               </span>
             </article>
           ))}
@@ -7783,244 +7857,8 @@ function paymentStatusTone(
   return "neutral";
 }
 
-type AccountingPeriodRange = {
-  start: Date;
-  end: Date;
-};
-
-type AccountingMetricKey =
-  | "productNetRevenue"
-  | "deliveryRevenue"
-  | "collectedRevenue"
-  | "supplierPurchasesTotal"
-  | "estimatedProductCost"
-  | "estimatedStockValue"
-  | "grossMargin";
-
-type AccountingProductRow = {
-  productId: string;
-  productName: string;
-  quantitySold: number;
-  productNetRevenue: number;
-  purchaseCost: number;
-  grossMargin: number;
-  grossMarkupRate: number | null;
-  grossMarginRate: number | null;
-  hasEstimatedCost: boolean;
-  hasMissingCost: boolean;
-  costSources: Set<string>;
-};
-
-type ProductCostFilter =
-  | "all"
-  | "supplier"
-  | "manual_fallback"
-  | "missing"
-  | "large_gap";
-
-function buildAccountingSummary(
-  orders: AdminOrderRow[],
-  products: Product[],
-  productCostMap: Map<string, ProductCost>,
-  supplierPurchases: SupplierPurchase[],
-  weightedSupplierCosts: Map<string, WeightedSupplierCost>,
-  range: AccountingPeriodRange,
-) {
-  const productNameById = new Map(products.map((product) => [product.id, product.name]));
-  const supplierPurchasesTotal = supplierPurchases
-    .filter((purchase) => purchase.status === "validated")
-    .filter((purchase) => {
-      const date = parseAdminDate(purchase.validatedAt || purchase.invoiceDate);
-      return Boolean(date && date >= range.start && date < range.end);
-    })
-    .reduce((sum, purchase) => sum + Number(purchase.totalExVat || 0), 0);
-  const estimatedStockValue = estimateStockValue(products, weightedSupplierCosts);
-  const periodOrders = orders.filter((order) => {
-    if (isCancelledOrDeletedOrder(order)) return false;
-    const date = accountingDate(order);
-    return Boolean(date && date >= range.start && date < range.end);
-  });
-  const paidOrders = periodOrders.filter((order) => order.paymentStatus === "paid");
-  const receivableOrders = periodOrders.filter((order) =>
-    ["to_confirm", "payment_link_sent", "pending"].includes(order.paymentStatus),
-  );
-  const collectedRevenue = paidOrders.reduce((sum, order) => sum + orderTotalAmount(order), 0);
-  const receivableAmount = receivableOrders.reduce((sum, order) => sum + orderTotalAmount(order), 0);
-  const discounts = paidOrders.reduce((sum, order) => sum + orderDiscountAmount(order), 0);
-  const productNetRevenue = paidOrders.reduce((sum, order) => sum + orderProductNetRevenue(order), 0);
-  const deliveryRevenue = paidOrders.reduce((sum, order) => sum + Number(order.deliveryFee || 0), 0);
-  const missingCostIds = new Set<string>();
-  const productRowsById = new Map<string, AccountingProductRow>();
-  let hasUnfrozenHistoricalCosts = false;
-  let estimatedProductCost = 0;
-
-  paidOrders.forEach((order) => {
-    const orderProductRevenue = orderProductNetRevenue(order);
-    const grossLinesTotal = order.items.reduce(
-      (sum, item) => sum + orderItemLineTotal(item),
-      0,
-    );
-
-    order.items.forEach((item) => {
-      const quantity = Number(item.quantity || 0);
-      const grossLineRevenue = orderItemLineTotal(item);
-      const lineProductNetRevenue = grossLinesTotal > 0
-        ? orderProductRevenue * (grossLineRevenue / grossLinesTotal)
-        : 0;
-      const costResult = orderItemPurchaseCost(item, weightedSupplierCosts, productCostMap);
-
-      if (costResult.status === "missing") missingCostIds.add(item.productId);
-      if (costResult.status === "estimated") hasUnfrozenHistoricalCosts = true;
-      estimatedProductCost += costResult.cost;
-
-      const existing = productRowsById.get(item.productId) ?? {
-        productId: item.productId,
-        productName: productNameById.get(item.productId) || item.name || item.productId,
-        quantitySold: 0,
-        productNetRevenue: 0,
-        purchaseCost: 0,
-        grossMargin: 0,
-        grossMarkupRate: null,
-        grossMarginRate: null,
-        hasEstimatedCost: false,
-        hasMissingCost: false,
-        costSources: new Set<string>(),
-      };
-      existing.quantitySold += quantity;
-      existing.productNetRevenue += lineProductNetRevenue;
-      existing.purchaseCost += costResult.cost;
-      existing.hasEstimatedCost ||= costResult.status === "estimated";
-      existing.hasMissingCost ||= costResult.status === "missing";
-      if (costResult.source) existing.costSources.add(costResult.source);
-      productRowsById.set(item.productId, existing);
-    });
-  });
-
-  const grossMargin = productNetRevenue - estimatedProductCost;
-  const grossMarkupRate = productNetRevenue > 0 ? grossMargin / productNetRevenue : null;
-  const grossMarginRate = estimatedProductCost > 0 ? grossMargin / estimatedProductCost : null;
-  const localOrders = periodOrders.filter((order) => order.deliveryMethod === "local_express").length;
-  const postalOrders = periodOrders.filter((order) => order.deliveryMethod === "postal").length;
-  const missingCostProducts = [...missingCostIds].map(
-    (productId) => productNameById.get(productId) || productId,
-  );
-  const productRows = [...productRowsById.values()]
-    .map((row) => {
-      const productGrossMargin = row.productNetRevenue - row.purchaseCost;
-      return {
-        ...row,
-        quantitySold: roundAccounting(row.quantitySold),
-        productNetRevenue: roundAccounting(row.productNetRevenue),
-        purchaseCost: roundAccounting(row.purchaseCost),
-        grossMargin: roundAccounting(productGrossMargin),
-        grossMarkupRate: row.hasMissingCost || row.productNetRevenue <= 0
-          ? null
-          : productGrossMargin / row.productNetRevenue,
-        grossMarginRate: row.hasMissingCost || row.purchaseCost <= 0
-          ? null
-          : productGrossMargin / row.purchaseCost,
-      };
-    })
-    .sort((left, right) => right.productNetRevenue - left.productNetRevenue);
-  const comparisonValues: Record<AccountingMetricKey, number> = {
-    productNetRevenue,
-    deliveryRevenue,
-    collectedRevenue,
-    supplierPurchasesTotal,
-    estimatedProductCost,
-    estimatedStockValue,
-    grossMargin,
-  };
-
-  return {
-    periodLabel: `${formatLocalDate(range.start)} - ${formatLocalDate(new Date(range.end.getTime() - 1))}`,
-    totalOrders: periodOrders.length,
-    missingCostProducts,
-    hasUnfrozenHistoricalCosts,
-    productRows,
-    comparisonValues,
-    comparisonMetrics: [
-      { key: "productNetRevenue" as const, label: "CA produits net", value: formatCurrency(productNetRevenue) },
-      { key: "collectedRevenue" as const, label: "CA total encaisse", value: formatCurrency(collectedRevenue) },
-      { key: "estimatedProductCost" as const, label: "Cout des marchandises vendues", value: formatCurrency(estimatedProductCost) },
-      { key: "grossMargin" as const, label: "Marge brute", value: formatCurrency(grossMargin) },
-    ],
-    metrics: [
-      { label: "CA produits net encaisse", value: formatCurrency(productNetRevenue), detail: "Hors frais de livraison, apres remises" },
-      { label: "Frais de livraison encaisses", value: formatCurrency(deliveryRevenue), detail: "Commandes payees uniquement" },
-      { label: "Remises accordees", value: formatCurrency(discounts), detail: "Remises sur commandes payees" },
-      { label: "CA total encaisse", value: formatCurrency(collectedRevenue), detail: "Produits + livraison, commandes payees" },
-      { label: "Achats fournisseurs valides", value: formatCurrency(supplierPurchasesTotal), detail: "Factures fournisseur validees sur la periode" },
-      { label: "Commandes totales", value: String(periodOrders.length), detail: "Commandes non annulees sur la periode" },
-      { label: "Commandes payees", value: String(paidOrders.length), detail: "paymentStatus paid" },
-      { label: "Panier moyen paye", value: formatCurrency(paidOrders.length ? collectedRevenue / paidOrders.length : 0), detail: "Commandes payees uniquement" },
-      { label: "Reste a encaisser", value: formatCurrency(receivableAmount), detail: "A confirmer, lien envoye ou en attente" },
-      { label: "Cout des marchandises vendues", value: formatCurrency(estimatedProductCost), detail: missingCostProducts.length ? "Incomplet : couts manquants" : "Cout des quantites vendues sur la periode" },
-      { label: "Valeur stock estimee", value: formatCurrency(estimatedStockValue), detail: "Stock admin actuel x cout fournisseur pondere" },
-      { label: "Marge brute", value: formatCurrency(grossMargin), detail: missingCostProducts.length ? "Incomplete" : "CA produits net - couts d'achat" },
-      { label: "Taux de marque brute", value: formatRate(grossMarkupRate), detail: "Marge brute / CA produits net" },
-      { label: "Taux de marge brute", value: formatRate(grossMarginRate), detail: "Marge brute / cout d'achat" },
-      { label: "Local / postal", value: `${localOrders} / ${postalOrders}`, detail: "Repartition des commandes" },
-    ],
-  };
-}
-
-function currentLocalPeriodRange(
-  period: AccountingPeriodFilter,
-  customStart?: string,
-  customEnd?: string,
-): AccountingPeriodRange {
-  const now = new Date();
-  if (period === "custom") {
-    const start = parseDateInput(customStart) || new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endBase = parseDateInput(customEnd) || start;
-    const end = new Date(endBase.getFullYear(), endBase.getMonth(), endBase.getDate() + 1);
-    if (end <= start) {
-      return { start, end: new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1) };
-    }
-    return { start, end };
-  }
-  if (period === "year") {
-    return { start: new Date(now.getFullYear(), 0, 1), end: new Date(now.getFullYear() + 1, 0, 1) };
-  }
-  if (period === "week") {
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const day = start.getDay() || 7;
-    start.setDate(start.getDate() - day + 1);
-    return { start, end: new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7) };
-  }
-  return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: new Date(now.getFullYear(), now.getMonth() + 1, 1) };
-}
-
-function previousPeriodRange(range: AccountingPeriodRange): AccountingPeriodRange {
-  const duration = Math.max(1, range.end.getTime() - range.start.getTime());
-  return { start: new Date(range.start.getTime() - duration), end: new Date(range.start.getTime()) };
-}
-
-function parseDateInput(value?: string) {
-  if (!value) return null;
-  const [year, month, day] = value.split("-").map(Number);
-  if (!year || !month || !day) return null;
-  return new Date(year, month - 1, day);
-}
-
 function toDateInputValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function orderItemPurchaseCost(
-  item: AdminOrderRow["items"][number],
-  weightedSupplierCosts: Map<string, WeightedSupplierCost>,
-  productCostMap: Map<string, ProductCost>,
-): { cost: number; status: "fixed" | "estimated" | "missing"; source: string | null } {
-  return resolveOrderItemPurchaseCost(item, weightedSupplierCosts, productCostMap);
-}
-
-function roundAccounting(value: number) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+  return toAccountingDateInputValue(date);
 }
 
 function formatRate(value: number | null) {
@@ -8078,8 +7916,138 @@ function formatOrderItemLine(item: {
 }
 
 function formatAccountingValue(key: AccountingMetricKey, value: number) {
-  void key;
+  if (key === "createdOrdersCount" || key === "paidOrdersCount") {
+    return formatInteger(value);
+  }
   return formatCurrency(value);
+}
+
+function accountingSummaryMetrics(
+  summary: ReturnType<typeof buildAccountingSummary>,
+) {
+  return [
+    {
+      label: "CA produits encaissé",
+      value: formatCurrency(summary.productNetRevenue),
+      detail: "Produits après remises des règlements datés sur la période",
+    },
+    {
+      label: "Frais de livraison encaissés",
+      value: formatCurrency(summary.deliveryRevenue),
+      detail: "Livraison des règlements datés sur la période",
+    },
+    {
+      label: "Remises accordées",
+      value: formatCurrency(summary.discounts),
+      detail: "Remises des règlements datés sur la période",
+    },
+    {
+      label: "CA total encaissé",
+      value: formatCurrency(summary.collectedRevenue),
+      detail: "Produits et livraison des règlements datés",
+    },
+    {
+      label: "Achats fournisseurs validés",
+      value: formatCurrency(summary.supplierPurchasesTotal),
+      detail: "Date de validation, sinon date de facture signalée",
+    },
+    {
+      label: "Commandes créées",
+      value: String(summary.createdOrdersCount),
+      detail: "Date de création dans la période",
+    },
+    {
+      label: "Commandes encaissées",
+      value: String(summary.paidOrdersCount),
+      detail: "Date d'encaissement dans la période",
+    },
+    {
+      label: "Panier moyen payé",
+      value: formatCurrency(summary.averagePaidOrder),
+      detail: "CA total encaissé / règlements datés",
+    },
+    {
+      label: "Reste à encaisser — commandes créées sur la période",
+      value: formatCurrency(summary.receivableAmount),
+      detail: `${summary.receivableOrdersCreatedInPeriodCount} commande(s) de la période`,
+    },
+    {
+      label: "Encours actuel total",
+      value: formatCurrency(summary.currentReceivableAmount),
+      detail: `${summary.currentReceivableOrdersCount} commande(s), indépendant de la période`,
+    },
+    {
+      label: "Coût des marchandises vendues",
+      value: formatCurrency(summary.estimatedProductCost),
+      detail: summary.missingCostProducts.length
+        ? "Incomplet : coûts manquants"
+        : "Coût des quantités encaissées sur la période",
+    },
+    {
+      label: "Stock actuel estimé",
+      value: formatCurrency(summary.estimatedStockValue),
+      detail: "Photographie actuelle — indépendante de la période",
+    },
+    {
+      label: "Marge brute encaissée",
+      value: formatCurrency(summary.grossMargin),
+      detail: summary.missingCostProducts.length
+        ? "Incomplète"
+        : "CA produits encaissé - coûts d'achat",
+    },
+    {
+      label: "Taux de marque brut",
+      value: formatRate(summary.grossMarkupRate),
+      detail: "Marge brute / CA produits encaissé",
+    },
+    {
+      label: "Taux de marge brut",
+      value: formatRate(summary.grossMarginRate),
+      detail: "Marge brute / coût d'achat",
+    },
+    {
+      label: "Répartition locale / postale des commandes créées",
+      value: `${summary.localOrders} / ${summary.postalOrders}`,
+      detail: "Commandes créées dans la période",
+    },
+  ];
+}
+
+function accountingComparisonMetrics(
+  summary: ReturnType<typeof buildAccountingSummary>,
+) {
+  return [
+    {
+      key: "collectedRevenue" as const,
+      label: "CA total encaissé",
+      value: formatCurrency(summary.collectedRevenue),
+    },
+    {
+      key: "createdOrdersCount" as const,
+      label: "Commandes créées",
+      value: formatInteger(summary.createdOrdersCount),
+    },
+    {
+      key: "paidOrdersCount" as const,
+      label: "Commandes encaissées",
+      value: formatInteger(summary.paidOrdersCount),
+    },
+    {
+      key: "estimatedProductCost" as const,
+      label: "Coût des ventes encaissées",
+      value: formatCurrency(summary.estimatedProductCost),
+    },
+    {
+      key: "grossMargin" as const,
+      label: "Marge brute encaissée",
+      value: formatCurrency(summary.grossMargin),
+    },
+    {
+      key: "supplierPurchasesTotal" as const,
+      label: "Achats fournisseurs validés",
+      value: formatCurrency(summary.supplierPurchasesTotal),
+    },
+  ];
 }
 
 function costSourceLabel(sources: Set<string>) {
@@ -8140,64 +8108,8 @@ function supplierMatchLabel(
   if (confidence === "missing") return "Aucune correspondance";
   return "";
 }
-function accountingDate(order: AdminOrderRow) {
-  return parseAdminDate(
-    order.paymentStatus === "paid"
-      ? order.paymentConfirmedAt || order.updatedAt || order.createdAt
-      : order.updatedAt || order.createdAt,
-  );
-}
-
-function parseAdminDate(value: unknown) {
-  if (!value) return null;
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
-  if (typeof value === "string") {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-  if (typeof value === "object") {
-    const candidate = value as { toDate?: () => Date; seconds?: number; _seconds?: number };
-    if (typeof candidate.toDate === "function") return candidate.toDate();
-    const seconds = candidate.seconds ?? candidate._seconds;
-    if (typeof seconds === "number") return new Date(seconds * 1000);
-  }
-  return null;
-}
-
-function isCancelledOrDeletedOrder(order: AdminOrderRow) {
-  return order.orderStatus === "cancelled" || Boolean(order.deletedAt);
-}
-
-function orderTotalAmount(order: AdminOrderRow) {
-  return parseEuro(order.total);
-}
-
-function orderDiscountAmount(order: AdminOrderRow) {
-  return Number(order.discountAmount ?? order.promotionDiscountTotal ?? 0);
-}
-
-function orderProductNetRevenue(order: AdminOrderRow) {
-  const subtotalAfterPromotion = Number(order.subtotalAfterPromotion);
-  if (Number.isFinite(subtotalAfterPromotion) && subtotalAfterPromotion > 0) {
-    return subtotalAfterPromotion;
-  }
-  const subtotal = Number(order.subtotalBeforePromotion ?? order.subtotalBeforeDiscount ?? order.subtotal ?? 0);
-  if (Number.isFinite(subtotal) && subtotal > 0) {
-    return Math.max(0, subtotal - orderDiscountAmount(order));
-  }
-  return Math.max(0, orderTotalAmount(order) - Number(order.deliveryFee || 0));
-}
-
 function formatCurrency(value: number) {
   return `${formatEuro(value)} EUR`;
-}
-
-function formatLocalDate(date: Date) {
-  return new Intl.DateTimeFormat("fr-FR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
 }
 
 function buildDashboardMetrics(

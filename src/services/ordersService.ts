@@ -35,6 +35,7 @@ export type AdminOrderRow = {
   preferredPaymentMethod?: PreferredPaymentMethod;
   finalPaymentMethod?: FinalPaymentMethod;
   paymentConfirmedAt?: string;
+  paidAt?: string;
   paymentConfirmedBy?: string;
   orderStatus: OrderStatus | string;
   deliveryMethod?: Order["deliveryMethod"];
@@ -116,6 +117,7 @@ export async function getAdminOrdersWithFallback() {
         preferredPaymentMethod: order.preferredPaymentMethod,
         finalPaymentMethod: order.finalPaymentMethod,
         paymentConfirmedAt: order.paymentConfirmedAt,
+        paidAt: order.paidAt,
         paymentConfirmedBy: order.paymentConfirmedBy,
         orderStatus: order.orderStatus,
         deliveryMethod: order.deliveryMethod,

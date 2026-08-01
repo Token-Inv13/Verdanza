@@ -31,6 +31,7 @@
     "test:fixed-price-migration": "node --import tsx scripts/testFixedPriceMigration.ts",
     "test:promotions": "node --import tsx scripts/testPromotionsAndBanners.ts",
     "test:supplier-purchases": "node --import tsx scripts/testSupplierPurchases.ts",
+    "test:accounting-periods": "node --import tsx scripts/testAccountingPeriods.ts",
     "test:supplier-invoice-import": "node --import tsx scripts/testSupplierInvoiceImport.ts",
     "test:supplier-invoice-pdf": "node --import tsx scripts/testSupplierInvoicePdfExtraction.ts",
     "test:customer-invoices": "node --import tsx scripts/testCustomerInvoices.ts",
