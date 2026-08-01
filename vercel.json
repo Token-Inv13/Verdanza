@@ -6,6 +6,17 @@
   "cleanUrls": true,
   "redirects": [
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.verdanza.fr"
+        }
+      ],
+      "destination": "https://verdanza.fr/",
+      "permanent": true
+    },
+    {
       "source": "/:path*",
       "has": [
         {
@@ -14,6 +25,17 @@
         }
       ],
       "destination": "https://verdanza.fr/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "verdanza-cbd.fr"
+        }
+      ],
+      "destination": "https://verdanza.fr/",
       "permanent": true
     },
     {
@@ -28,6 +50,17 @@
       "permanent": true
     },
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.verdanza-cbd.fr"
+        }
+      ],
+      "destination": "https://verdanza.fr/",
+      "permanent": true
+    },
+    {
       "source": "/:path*",
       "has": [
         {
@@ -36,6 +69,17 @@
         }
       ],
       "destination": "https://verdanza.fr/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "verdanza-opal.vercel.app"
+        }
+      ],
+      "destination": "https://verdanza.fr/",
       "permanent": true
     },
     {

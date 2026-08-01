@@ -57,7 +57,7 @@ async function auditStaticConfiguration() {
   const redirects = vercelConfig.redirects || [];
 
   for (const host of configuredRedirectHosts) {
-    const matches = redirects.filter(
+    const pathMatches = redirects.filter(
       (redirect) =>
         redirect.source === "/:path*" &&
         redirect.destination === `${canonicalOrigin}/:path*` &&
@@ -66,8 +66,20 @@ async function auditStaticConfiguration() {
           (condition) => condition.type === "host" && condition.value === host,
         ),
     );
-    if (matches.length !== 1) {
+    if (pathMatches.length !== 1) {
       failures.push(`expected one explicit permanent host redirect for ${host}`);
+    }
+    const rootMatches = redirects.filter(
+      (redirect) =>
+        redirect.source === "/" &&
+        redirect.destination === `${canonicalOrigin}/` &&
+        redirect.permanent === true &&
+        redirect.has?.some(
+          (condition) => condition.type === "host" && condition.value === host,
+        ),
+    );
+    if (rootMatches.length !== 1) {
+      failures.push(`expected one explicit permanent root redirect for ${host}`);
     }
   }
   if (
