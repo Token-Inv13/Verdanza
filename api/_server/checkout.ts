@@ -34,6 +34,7 @@ import {
 } from "../../src/lib/fixedPriceOptions.js";
 import { orderItemLineTotal } from "../../src/lib/orderLineDisplay.js";
 import { omitUndefinedDeep } from "./firestoreSerialization.js";
+import type { PublicSubmissionSecurityContext } from "./publicRateLimit.js";
 
 const preferredPaymentMethods: PreferredPaymentMethod[] = [
   "card_payment_link",
@@ -112,6 +113,8 @@ export type CheckoutRequestBody = {
   preferredPaymentMethod?: PreferredPaymentMethod;
   complianceAccepted?: boolean;
   analyticsContext?: CheckoutAnalyticsContext;
+  company?: string;
+  submissionSecurity?: PublicSubmissionSecurityContext;
   customer: CheckoutCustomerInput;
 };
 

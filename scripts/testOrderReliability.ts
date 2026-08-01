@@ -272,6 +272,22 @@ function test(name: string, run: () => void | Promise<void>) {
   tests.push({ name, run });
 }
 
+test("les metadonnees anti-abus ne modifient pas l'idempotence commerciale", () => {
+  const fingerprint = checkoutPayloadFingerprint(body);
+  const protectedBody: CheckoutRequestBody = {
+    ...body,
+    company: "",
+    submissionSecurity: {
+      anonymousId: "00000000-0000-4000-8000-000000000999",
+      formStartedAt: Date.UTC(2026, 7, 1, 10, 0, 0),
+    },
+  };
+  assert.equal(checkoutPayloadFingerprint(protectedBody), fingerprint);
+  const payload = orderPayload(protectedBody, priced);
+  assert.equal("company" in payload, false);
+  assert.equal("submissionSecurity" in payload, false);
+});
+
 test("checkoutRequestId valide uniquement un UUID sûr", () => {
   assert.equal(validateCheckoutRequestId(checkoutRequestId), checkoutRequestId);
   assert.throws(() => validateCheckoutRequestId("client@example.test"));

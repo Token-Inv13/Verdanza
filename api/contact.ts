@@ -5,6 +5,13 @@ import {
   type VercelRequestLike,
   type VercelResponseLike,
 } from "./_server/http.js";
+import {
+  assessPublicSubmissionTrap,
+  enforcePublicSubmissionRateLimit,
+  sendPublicRateLimitResponse,
+  sendPublicSubmissionTrapResponse,
+  type PublicSubmissionSecurityContext,
+} from "./_server/publicRateLimit.js";
 
 type ContactBody = {
   name?: string;
@@ -13,6 +20,7 @@ type ContactBody = {
   subject?: string;
   message?: string;
   company?: string;
+  submissionSecurity?: PublicSubmissionSecurityContext;
 };
 
 export default async function handler(
@@ -29,6 +37,22 @@ export default async function handler(
     }
 
     const payload = validateContactBody(body);
+    const trap = assessPublicSubmissionTrap({ context: body.submissionSecurity });
+    if (trap) {
+      sendPublicSubmissionTrapResponse(response, "/api/contact", false, trap);
+      return;
+    }
+    const rateLimit = await enforcePublicSubmissionRateLimit({
+      route: "/api/contact",
+      request,
+      email: payload.email,
+      anonymousId: body.submissionSecurity?.anonymousId,
+      authenticated: false,
+    });
+    if (!rateLimit.allowed) {
+      sendPublicRateLimitResponse(response, rateLimit);
+      return;
+    }
     const result = await sendContactMessageEmail(payload);
 
     if (result.status === "failed") {

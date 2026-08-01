@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { ContactActions } from "../components/ContactActions";
 import { Seo } from "../components/Seo";
@@ -6,6 +6,7 @@ import { verdanzaPublicContact } from "../config/publicContact";
 import { trackContactClick } from "../lib/analytics";
 import { DEFAULT_LOCAL_DELIVERY_ESTIMATE_LABEL } from "../lib/deliveryEstimate";
 import { getActiveSocialLinks } from "../lib/socialLinks";
+import { publicSubmissionSecurityContext } from "../lib/publicSubmissionSecurity";
 
 const content = {
   quality: {
@@ -243,6 +244,7 @@ function SocialLinksSection() {
 }
 
 function ContactForm() {
+  const formStartedAt = useRef(Date.now());
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -263,7 +265,10 @@ function ContactForm() {
       const response = await fetch("/api/contact", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          submissionSecurity: publicSubmissionSecurityContext(formStartedAt.current),
+        }),
       });
       const payload = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) throw new Error(payload.error || "Message non envoye.");
@@ -277,6 +282,7 @@ function ContactForm() {
         message: "",
         company: "",
       });
+      formStartedAt.current = Date.now();
     } catch (contactError) {
       setStatus("idle");
       setError(

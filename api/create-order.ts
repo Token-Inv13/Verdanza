@@ -35,6 +35,12 @@ import {
   runEmailSideEffect,
   validateCheckoutRequestId,
 } from "./_server/orderSideEffects.js";
+import {
+  assessPublicSubmissionTrap,
+  enforcePublicSubmissionRateLimit,
+  sendPublicRateLimitResponse,
+  sendPublicSubmissionTrapResponse,
+} from "./_server/publicRateLimit.js";
 import { buildCustomerInvoiceLines } from "../src/lib/customerInvoiceLines.js";
 import {
   fixedPriceEffectiveUnitPrice,
@@ -64,6 +70,35 @@ export default async function handler(
     );
     if (existingRequest) {
       await sendExistingOrderResponse(db, response, existingRequest.orderId);
+      return;
+    }
+
+    const trap = assessPublicSubmissionTrap({
+      honeypot: body.company,
+      context: body.submissionSecurity,
+    });
+    if (trap) {
+      sendPublicSubmissionTrapResponse(
+        response,
+        "/api/create-order",
+        Boolean(body.authToken),
+        trap,
+      );
+      return;
+    }
+
+    const rateLimit = await enforcePublicSubmissionRateLimit({
+      route: "/api/create-order",
+      request,
+      email: body.customer.email,
+      anonymousId: body.submissionSecurity?.anonymousId,
+      authenticated: Boolean(body.authToken),
+      attemptId: checkoutRequestId,
+      attemptPayloadFingerprint: payloadFingerprint,
+      db,
+    });
+    if (!rateLimit.allowed) {
+      sendPublicRateLimitResponse(response, rateLimit);
       return;
     }
 

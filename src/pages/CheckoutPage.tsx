@@ -30,6 +30,7 @@ import {
   isPostalShippingFree,
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../config/deliveryRules";
+import { publicSubmissionSecurityContext } from "../lib/publicSubmissionSecurity";
 
 const contactEmail =
   (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
@@ -63,6 +64,7 @@ export function CheckoutPage() {
   const shippingSignature = useRef("");
   const paymentSignature = useRef("");
   const checkoutRequestId = useRef(getOrCreateCheckoutRequestId());
+  const formStartedAt = useRef(Date.now());
   const { user, customerProfile } = useAuth();
   const navigate = useNavigate();
   const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>(fallbackDeliveryZones);
@@ -84,6 +86,7 @@ export function CheckoutPage() {
   const [complianceAccepted, setComplianceAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [company, setCompany] = useState("");
   const [customer, setCustomer] = useState({
     email: "",
     phone: "",
@@ -441,6 +444,8 @@ export function CheckoutPage() {
           customerMessage: customerMessage.trim() || undefined,
           preferredPaymentMethod,
           complianceAccepted,
+          company,
+          submissionSecurity: publicSubmissionSecurityContext(formStartedAt.current),
           customer: {
             email: customer.email,
             phone: customer.phone,
@@ -539,7 +544,8 @@ export function CheckoutPage() {
           checkoutError.message.includes("tentative") ||
           checkoutError.message.includes("Vérifiez vos commandes") ||
           checkoutError.message.includes("Livraison locale disponible") ||
-          checkoutError.message.includes("zone de livraison"))
+          checkoutError.message.includes("zone de livraison") ||
+          checkoutError.message.includes("Trop de tentatives"))
           ? checkoutError.message
           : checkoutErrorMessage;
       setError(message);
@@ -626,6 +632,15 @@ export function CheckoutPage() {
           onSubmit={handleSubmit}
           className="mt-10 grid gap-8 lg:grid-cols-[1fr_380px]"
         >
+          <label className="hidden" aria-hidden="true">
+            Societe
+            <input
+              value={company}
+              onChange={(event) => setCompany(event.target.value)}
+              tabIndex={-1}
+              autoComplete="off"
+            />
+          </label>
           <section className="grid gap-6">
             <div className="rounded-lg border border-forest/10 bg-ivory p-6">
               <h2 className="font-display text-3xl text-forest">Contact</h2>
