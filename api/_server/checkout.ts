@@ -33,6 +33,7 @@ import {
   resolveFixedPriceOptions,
 } from "../../src/lib/fixedPriceOptions.js";
 import { orderItemLineTotal } from "../../src/lib/orderLineDisplay.js";
+import { omitUndefinedDeep } from "./firestoreSerialization.js";
 
 const preferredPaymentMethods: PreferredPaymentMethod[] = [
   "card_payment_link",
@@ -585,7 +586,7 @@ export function orderPayload(
     normalizePreferredPaymentMethod(body.preferredPaymentMethod) || "card_payment_link";
   const orderStatus = "contact_required";
 
-  return {
+  return omitUndefinedDeep({
     checkoutRequestId: body.checkoutRequestId ?? null,
     orderType: "order",
     customerId: customerId ?? null,
@@ -661,7 +662,7 @@ export function orderPayload(
     internalNote: "",
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
-  };
+  });
 }
 
 function normalizePreferredPaymentMethod(method?: PreferredPaymentMethod) {

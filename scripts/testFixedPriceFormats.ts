@@ -47,6 +47,20 @@ function expect(condition: unknown, message: string) {
   if (!condition) throw new Error(message);
 }
 
+function assertNoUndefined(value: unknown, path = "$") {
+  expect(value !== undefined, `undefined detected in ${path}`);
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => assertNoUndefined(entry, `${path}[${index}]`));
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return;
+  for (const [key, entry] of Object.entries(value)) {
+    assertNoUndefined(entry, `${path}.${key}`);
+  }
+}
+
 const fixedProduct = product({
   fixedPriceMode: "manual",
   fixedPriceOptions: [
@@ -295,6 +309,78 @@ test(
         ),
       "Format prix fixe modifie",
     );
+  },
+);
+
+test(
+  "WELCOME10 fixed format and local delivery serialize without undefined",
+  [
+    "WELCOME10 sur un produit a prix fixe",
+    "livraison locale serialisee pour Firestore",
+    "promotion sans eligibleCategory serialisee sans undefined",
+  ],
+  async () => {
+    const checkout = {
+      ...checkoutBody([
+        {
+          productId: "resin-fixed",
+          quantity: 1,
+          purchaseMode: "fixed_price",
+          fixedPriceOptionId: "format-8g-30",
+        },
+      ]),
+      deliveryMethod: "local_express" as const,
+      deliveryZone: "local-aix",
+      couponCode: "WELCOME10",
+    };
+    const priced = await priceCheckout(
+      fakeDb({
+        products: { "resin-fixed": fixedProduct },
+        coupons: {
+          welcome10: {
+            code: "WELCOME10",
+            label: "WELCOME10",
+            discountType: "percent",
+            discountValue: 10,
+            minimumOrder: 15,
+            usedCount: 0,
+            isActive: true,
+          },
+        },
+        deliveryZones: {
+          "local-aix": {
+            id: "local-aix",
+            name: "Aix-en-Provence centre",
+            method: "local_express",
+            isActive: true,
+            isOpen: true,
+            status: "open",
+            fee: 0,
+            minimumOrder: 20,
+            minimumOrderAmount: 20,
+            estimatedDelay: "Livraison locale",
+            slots: ["18:00-22:00"],
+          },
+        },
+      }),
+      checkout,
+    );
+    const rawPromotion = priced.appliedPromotions[0];
+    expect(Boolean(rawPromotion), "expected WELCOME10 promotion snapshot");
+    expect(rawPromotion?.eligibleCategory === undefined, "expected optional category to be absent");
+
+    const payload = orderPayload(checkout, priced);
+    const savedPromotion = (payload.appliedPromotions as Array<Record<string, unknown>>)[0];
+    expect(payload.deliveryMethod === "local_express", "expected local delivery in payload");
+    expect(
+      (payload.items as OrderItem[])[0]?.purchaseMode === "fixed_price",
+      "expected fixed format in payload",
+    );
+    expect(
+      !Object.prototype.hasOwnProperty.call(savedPromotion, "eligibleCategory"),
+      "expected eligibleCategory to be omitted",
+    );
+    assertNoUndefined(payload);
   },
 );
 

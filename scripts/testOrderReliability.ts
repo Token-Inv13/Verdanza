@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
   commitCheckoutOrder,
 } from "../api/create-order.js";
+import { orderPayload } from "../api/_server/checkout.js";
 import {
   sendAdminNotificationEmails,
   sendTransactionalEmail,
 } from "../api/_server/email.js";
 import { sendOrderCreationAlerts } from "../api/_server/orderAlerts.js";
+import { omitUndefinedDeep } from "../api/_server/firestoreSerialization.js";
 import {
   CheckoutRequestConflictError,
   checkoutPayloadFingerprint,
@@ -191,6 +194,20 @@ function setNestedValue(target: StoredDocument, path: string, value: unknown) {
   cursor[segments.at(-1) || path] = value;
 }
 
+function assertNoUndefined(value: unknown, path = "$") {
+  assert.notEqual(value, undefined, `undefined détecté dans ${path}`);
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => assertNoUndefined(entry, `${path}[${index}]`));
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return;
+  for (const [key, entry] of Object.entries(value)) {
+    assertNoUndefined(entry, `${path}.${key}`);
+  }
+}
+
 const checkoutRequestId = "017f22e2-79b0-4d29-aad7-2f6f3f012345";
 const body: CheckoutRequestBody = {
   checkoutRequestId,
@@ -259,6 +276,145 @@ test("checkoutRequestId valide uniquement un UUID sûr", () => {
   assert.equal(validateCheckoutRequestId(checkoutRequestId), checkoutRequestId);
   assert.throws(() => validateCheckoutRequestId("client@example.test"));
   assert.throws(() => validateCheckoutRequestId("x".repeat(200)));
+});
+
+test("la sérialisation Firestore omet récursivement undefined sans altérer les instances", () => {
+  const date = new Date("2026-08-01T16:27:00.000Z");
+  const timestamp = Timestamp.fromDate(date);
+  const sentinel = FieldValue.serverTimestamp();
+  const customInstance = new (class FirebaseLikeInstance {
+    readonly value = "preserved";
+  })();
+  const sanitized = omitUndefinedDeep({
+    absent: undefined,
+    nullValue: null,
+    falseValue: false,
+    zeroValue: 0,
+    emptyValue: "",
+    array: [1, undefined, { absent: undefined, kept: "yes" }],
+    nested: { absent: undefined, kept: "yes" },
+    date,
+    timestamp,
+    sentinel,
+    customInstance,
+  });
+
+  assert.equal("absent" in sanitized, false);
+  assert.deepEqual(sanitized.array, [1, { kept: "yes" }]);
+  assert.deepEqual(sanitized.nested, { kept: "yes" });
+  assert.equal(sanitized.nullValue, null);
+  assert.equal(sanitized.falseValue, false);
+  assert.equal(sanitized.zeroValue, 0);
+  assert.equal(sanitized.emptyValue, "");
+  assert.equal(sanitized.date, date);
+  assert.equal(sanitized.timestamp, timestamp);
+  assert.equal(sanitized.sentinel, sentinel);
+  assert.equal(sanitized.customInstance, customInstance);
+  assertNoUndefined(sanitized);
+});
+
+test("WELCOME10, prix fixe et livraison locale produisent un document sans undefined", () => {
+  const localFixedBody: CheckoutRequestBody = {
+    ...body,
+    couponCode: "WELCOME10",
+    analyticsContext: {
+      consentGranted: true,
+      consentCapturedAt: "2026-08-01T16:27:00.000Z",
+      clientId: "123456789.1234567890",
+    },
+  };
+  const localFixedPriced: PricedCheckout = {
+    ...priced,
+    couponCode: "WELCOME10",
+    couponId: "welcome10",
+    discountType: "percent",
+    discountValue: 10,
+    orderItems: [
+      {
+        productId: "flower-1",
+        name: "Fleur format fixe",
+        quantity: 8,
+        unitPrice: 3.75,
+        lineTotal: 30,
+        purchaseMode: "fixed_price",
+        fixedPriceOptionId: "format-8g-30",
+        fixedPriceQuantity: 1,
+        fixedPriceTotal: 30,
+        fixedPriceGrams: 8,
+        slug: undefined,
+        category: undefined,
+        cultureType: undefined,
+      },
+    ],
+    appliedPromotions: [
+      {
+        id: "welcome10",
+        label: "WELCOME10",
+        type: "percentage_cart_discount",
+        applicationMode: "code",
+        discountAmount: 3,
+        eligibleCategory: undefined,
+        eligibleCategories: undefined,
+        productIds: undefined,
+        couponId: "welcome10",
+        couponCode: "WELCOME10",
+      },
+    ],
+  };
+
+  const payload = orderPayload(localFixedBody, localFixedPriced);
+  const promotion = (payload.appliedPromotions as Array<Record<string, unknown>>)[0];
+  const analytics = payload.analytics as Record<string, unknown>;
+  const item = (payload.items as Array<Record<string, unknown>>)[0];
+
+  assert.equal(payload.deliveryMethod, "local_express");
+  assert.equal(item.purchaseMode, "fixed_price");
+  assert.equal("eligibleCategory" in promotion, false);
+  assert.equal("eligibleCategories" in promotion, false);
+  assert.equal("productIds" in promotion, false);
+  assert.equal("slug" in item, false);
+  assert.equal("category" in item, false);
+  assert.equal("cultureType" in item, false);
+  assert.equal("sessionId" in analytics, false);
+  assert.equal("revocationTokenHash" in analytics, false);
+  assertNoUndefined(payload);
+});
+
+test("les champs promotion et Analytics présents restent inchangés", () => {
+  const analyticsBody: CheckoutRequestBody = {
+    ...body,
+    analyticsContext: {
+      consentGranted: true,
+      consentCapturedAt: "2026-08-01T16:27:00.000Z",
+      clientId: "123456789.1234567890",
+      sessionId: "1785594456",
+    },
+  };
+  const pricedWithCategory: PricedCheckout = {
+    ...priced,
+    appliedPromotions: [
+      {
+        id: "flowers-category",
+        label: "Fleurs",
+        type: "percentage_category_discount",
+        discountAmount: 2,
+        eligibleCategory: "flowers",
+      },
+    ],
+  };
+  const payload = orderPayload(
+    analyticsBody,
+    pricedWithCategory,
+    undefined,
+    "revocation-token-hash",
+  );
+  const promotion = (payload.appliedPromotions as Array<Record<string, unknown>>)[0];
+  const analytics = payload.analytics as Record<string, unknown>;
+
+  assert.equal(promotion.eligibleCategory, "flowers");
+  assert.equal(analytics.sessionId, "1785594456");
+  assert.equal(analytics.revocationTokenHash, "revocation-token-hash");
+  assertNoUndefined(payload);
 });
 
 test("deux POST simultanés ne créent qu'une commande", async () => {
