@@ -96,7 +96,7 @@ export async function sendAdminManualOrderEmail(order: Order) {
   });
 }
 
-async function sendAdminNotificationEmails(input: {
+export async function sendAdminNotificationEmails(input: {
   kind: TransactionalEmailKind;
   orderId: string;
   to: string[];
@@ -262,7 +262,7 @@ export async function sendPaymentLinkEmail(
   });
 }
 
-async function sendTransactionalEmail(input: {
+export async function sendTransactionalEmail(input: {
   kind: TransactionalEmailKind;
   orderId: string;
   to: string | string[];
@@ -271,6 +271,7 @@ async function sendTransactionalEmail(input: {
   text: string;
   idempotencyKey: string;
   attachments?: Array<{ filename: string; content: string }>;
+  timeoutMs?: number;
 }): Promise<EmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
@@ -284,6 +285,8 @@ async function sendTransactionalEmail(input: {
     return { status: "skipped", reason: "email_not_configured" };
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), input.timeoutMs ?? 7_000);
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -300,6 +303,7 @@ async function sendTransactionalEmail(input: {
         text: input.text,
         attachments: input.attachments,
       }),
+      signal: controller.signal,
     });
     const payload = (await response.json().catch(() => ({}))) as { id?: string; message?: string };
     if (!response.ok) {
@@ -321,16 +325,22 @@ async function sendTransactionalEmail(input: {
     });
     return { status: "sent", id: payload.id };
   } catch (error) {
+    const reason =
+      error instanceof Error && error.name === "AbortError"
+        ? "timeout"
+        : "network_error";
     console.warn("Email transactionnel en erreur", {
       kind: input.kind,
       orderId: input.orderId,
       to: redactRecipients(input.to),
-      reason: error instanceof Error ? error.message : "email_failed",
+      reason,
     });
     return {
       status: "failed",
-      reason: error instanceof Error ? error.message : "email_failed",
+      reason,
     };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -339,9 +349,9 @@ function classifyResendError(status: number, message?: string) {
     status === 403 &&
     message?.includes("You can only send testing emails to your own email address")
   ) {
-    return "resend_testing_recipient_blocked";
+    return "provider_rejected";
   }
-  return message || `HTTP ${status}`;
+  return status >= 400 && status < 500 ? "provider_rejected" : "http_error";
 }
 
 function redactEmail(email: string) {

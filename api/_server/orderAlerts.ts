@@ -1,6 +1,11 @@
 import { FieldValue } from "firebase-admin/firestore";
 import type { Order } from "../../src/types/index.js";
 import { orderItemSummaryLabel } from "../../src/lib/orderLineDisplay.js";
+import {
+  claimOrderSideEffectTask,
+  persistOrderSideEffectResult,
+  type OrderSideEffectTaskName,
+} from "./orderSideEffects.js";
 
 export type AlertResult =
   | { status: "sent"; id?: string }
@@ -9,7 +14,7 @@ export type AlertResult =
 
 type AlertChannel = "sms" | "whatsapp";
 
-export async function sendPostPaymentOrderAlerts(
+export async function sendOrderCreationAlerts(
   db: FirebaseFirestore.Firestore,
   orderId: string,
 ) {
@@ -17,44 +22,32 @@ export async function sendPostPaymentOrderAlerts(
   const orderSnapshot = await orderRef.get();
   if (!orderSnapshot.exists) {
     console.warn("Alertes commande ignorees: commande introuvable", { orderId });
-    return;
+    return {};
   }
 
   const order = { id: orderSnapshot.id, ...orderSnapshot.data() } as Order;
-  const updates: Record<string, unknown> = {};
-
-  if (!order.alerts?.adminSmsSentAt) {
-    const smsResult = await sendAdminOrderSms(order);
-    Object.assign(updates, alertResultUpdate("adminSms", smsResult));
-  } else {
-    console.info("Alerte SMS admin deja marquee envoyee", { orderId });
-  }
-
-  if (!order.alerts?.adminWhatsappSentAt) {
-    const whatsappResult = await sendAdminOrderWhatsapp(order);
-    Object.assign(updates, alertResultUpdate("adminWhatsapp", whatsappResult));
-  } else {
-    console.info("Alerte WhatsApp admin deja marquee envoyee", { orderId });
-  }
-
-  if (Object.keys(updates).length) {
-    await orderRef.update({
-      ...updates,
-      "alerts.lastAttemptedAt": FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-  }
+  const [sms, whatsapp] = await Promise.all([
+    processAlertTask(db, order, "admin_sms", "adminSms", sendAdminOrderSms),
+    processAlertTask(
+      db,
+      order,
+      "admin_whatsapp",
+      "adminWhatsapp",
+      sendAdminOrderWhatsapp,
+    ),
+  ]);
+  return { sms, whatsapp };
 }
 
-async function sendAdminOrderSms(order: Order): Promise<AlertResult> {
+export async function sendAdminOrderSms(order: Order): Promise<AlertResult> {
   const from = process.env.TWILIO_SMS_FROM;
   const to = process.env.ADMIN_ALERT_PHONE;
   if (!from || !to) {
     console.info("Alerte SMS admin ignoree", {
       orderId: order.id,
-      reason: "sms_not_configured",
+      reason: "config_missing",
     });
-    return { status: "skipped", reason: "sms_not_configured" };
+    return { status: "skipped", reason: "config_missing" };
   }
 
   return sendTwilioMessage({
@@ -66,15 +59,15 @@ async function sendAdminOrderSms(order: Order): Promise<AlertResult> {
   });
 }
 
-async function sendAdminOrderWhatsapp(order: Order): Promise<AlertResult> {
+export async function sendAdminOrderWhatsapp(order: Order): Promise<AlertResult> {
   const from = process.env.TWILIO_WHATSAPP_FROM;
   const to = process.env.ADMIN_ALERT_WHATSAPP;
   if (!from || !to) {
     console.info("Alerte WhatsApp admin ignoree", {
       orderId: order.id,
-      reason: "whatsapp_not_configured",
+      reason: "config_missing",
     });
-    return { status: "skipped", reason: "whatsapp_not_configured" };
+    return { status: "skipped", reason: "config_missing" };
   }
 
   return sendTwilioMessage({
@@ -99,11 +92,13 @@ async function sendTwilioMessage(input: {
     console.info("Alerte telephone admin ignoree", {
       channel: input.channel,
       orderId: input.orderId,
-      reason: "twilio_not_configured",
+      reason: "config_missing",
     });
-    return { status: "skipped", reason: "twilio_not_configured" };
+    return { status: "skipped", reason: "config_missing" };
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 7_000);
   try {
     const body = new URLSearchParams({
       From: input.from,
@@ -119,6 +114,7 @@ async function sendTwilioMessage(input: {
           "content-type": "application/x-www-form-urlencoded",
         },
         body,
+        signal: controller.signal,
       },
     );
     const payload = (await response.json().catch(() => ({}))) as {
@@ -131,11 +127,15 @@ async function sendTwilioMessage(input: {
         channel: input.channel,
         orderId: input.orderId,
         status: response.status,
-        reason: payload.message || `HTTP ${response.status}`,
+        reason: response.status >= 400 && response.status < 500
+          ? "provider_rejected"
+          : "http_error",
       });
       return {
         status: "failed",
-        reason: payload.message || `HTTP ${response.status}`,
+        reason: response.status >= 400 && response.status < 500
+          ? "provider_rejected"
+          : "http_error",
         statusCode: response.status,
       };
     }
@@ -147,14 +147,41 @@ async function sendTwilioMessage(input: {
     });
     return { status: "sent", id: payload.sid };
   } catch (error) {
-    const reason = error instanceof Error ? error.message : "phone_alert_failed";
+    const reason =
+      error instanceof Error && error.name === "AbortError"
+        ? "timeout"
+        : "network_error";
     console.warn("Alerte telephone admin en erreur", {
       channel: input.channel,
       orderId: input.orderId,
       reason,
     });
     return { status: "failed", reason };
+  } finally {
+    clearTimeout(timeout);
   }
+}
+
+async function processAlertTask(
+  db: FirebaseFirestore.Firestore,
+  order: Order,
+  task: OrderSideEffectTaskName,
+  prefix: "adminSms" | "adminWhatsapp",
+  send: (order: Order) => Promise<AlertResult>,
+) {
+  const claimed = await claimOrderSideEffectTask(db, order.id, task);
+  if (!claimed) return { status: "skipped", reason: "task_not_claimed" } as AlertResult;
+  let result: AlertResult;
+  try {
+    result = await send(order);
+  } catch {
+    result = { status: "failed", reason: "network_error" };
+  }
+  await persistOrderSideEffectResult(db, order.id, task, result, {
+    ...alertResultUpdate(prefix, result),
+    "alerts.lastAttemptedAt": FieldValue.serverTimestamp(),
+  });
+  return result;
 }
 
 function adminAlertText(order: Order) {

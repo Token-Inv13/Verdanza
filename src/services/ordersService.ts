@@ -193,6 +193,37 @@ export async function retryOrderPurchaseAnalytics(orderId: string) {
   return payload.analyticsPurchase;
 }
 
+export type RetryOrderEmailTarget = "client" | "admin" | "all";
+
+export type RetryOrderEmailsResult = {
+  ok: boolean;
+  client?: "sent" | "partial" | "failed" | "skipped";
+  admin?: "sent" | "partial" | "failed" | "skipped";
+  error?: string;
+};
+
+export async function retryOrderEmails(
+  orderId: string,
+  target: RetryOrderEmailTarget,
+) {
+  const token = await getFirebaseIdToken();
+  if (!token) throw new Error("Connexion admin requise.");
+  const response = await fetch("/api/retry-order-emails", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ orderId, target }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as RetryOrderEmailsResult;
+  if (response.status === 502 && payload.ok === false) return payload;
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.error || "Relance e-mail impossible.");
+  }
+  return payload;
+}
+
 export async function updateOrderAdminFields(
   orderId: string,
   data: {

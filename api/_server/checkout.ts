@@ -100,6 +100,7 @@ export type CheckoutAnalyticsContext = {
 };
 
 export type CheckoutRequestBody = {
+  checkoutRequestId?: string;
   items: CheckoutRequestItem[];
   deliveryMethod: DeliveryMethod;
   deliveryZone?: string;
@@ -585,6 +586,7 @@ export function orderPayload(
   const orderStatus = "contact_required";
 
   return {
+    checkoutRequestId: body.checkoutRequestId ?? null,
     orderType: "order",
     customerId: customerId ?? null,
     customerEmail: body.customer.email,

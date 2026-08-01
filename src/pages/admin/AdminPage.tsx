@@ -15,9 +15,11 @@ import {
 } from "../../services/productImagesService";
 import {
   deleteCancelledOrder,
+  retryOrderEmails,
   retryOrderPurchaseAnalytics,
   updateOrderAdminFields,
   type AdminOrderRow,
+  type RetryOrderEmailTarget,
 } from "../../services/ordersService";
 import {
   createDeliveryZoneAdmin,
@@ -804,6 +806,7 @@ export function AdminPage({ section }: { section: string }) {
           <AdminOrders
             orders={orders}
             orderSource={orderSource}
+            onRefresh={refresh}
             onDelete={async (orderId) => {
               if (orderSource !== "firestore") {
                 setMessage("Aucune commande supprimable.");
@@ -873,6 +876,7 @@ export function AdminPage({ section }: { section: string }) {
             orders={orders}
             invoices={visibleInvoices}
             orderSource={orderSource}
+            onRefresh={refresh}
             onDelete={async (orderId) => {
               if (orderSource !== "firestore") {
                 setMessage("Aucune commande supprimable.");
@@ -5873,10 +5877,7 @@ type AdminOrderListItem = {
   deletedAt?: string;
   archivedAt?: string;
   hiddenAt?: string;
-  emails?: {
-    adminNotificationStatus?: string;
-    adminNotificationRecipients?: Record<string, { status: string; reason?: string }>;
-  };
+  emails?: AdminOrderRow["emails"];
   analytics?: OrderAnalytics;
 };
 
@@ -5904,6 +5905,7 @@ function AdminOrders({
   invoices = [],
   orderSource,
   onCreateInvoice,
+  onRefresh,
   onUpdate,
   onDelete,
 }: {
@@ -5911,12 +5913,14 @@ function AdminOrders({
   invoices?: Invoice[];
   orderSource: "firestore" | "empty";
   onCreateInvoice?: (orderId: string) => Promise<void>;
+  onRefresh?: () => Promise<void>;
   onUpdate: (orderId: string, data: AdminOrderUpdateInput) => Promise<void>;
   onDelete: (orderId: string) => Promise<void>;
 }) {
   const [filter, setFilter] = useState("active");
   const [paymentLinks, setPaymentLinks] = useState<AdminPaymentLink[]>([]);
   const [paymentLinkMessage, setPaymentLinkMessage] = useState("");
+  const [emailRetrying, setEmailRetrying] = useState("");
   const invoiceByOrderId = new Map(invoices.map((invoice) => [invoice.orderId, invoice]));
   const filteredOrders = orders.filter((order) => orderMatchesAdminFilter(order, filter));
   const filterGroups = [
@@ -6003,6 +6007,42 @@ function AdminOrders({
       setPaymentLinkMessage(
         error instanceof Error ? error.message : "Relance purchase GA4 impossible.",
       );
+    }
+  }
+
+  async function handleRetryOrderEmails(
+    orderId: string,
+    target: RetryOrderEmailTarget,
+  ) {
+    const targetLabel =
+      target === "client"
+        ? "la confirmation client"
+        : target === "admin"
+          ? "les notifications administrateur"
+          : "tous les e-mails de la commande";
+    if (!window.confirm(`Relancer ${targetLabel} ?`)) return;
+    const retryKey = `${orderId}:${target}`;
+    setEmailRetrying(retryKey);
+    try {
+      const result = await retryOrderEmails(orderId, target);
+      const details = [
+        result.client ? `client : ${result.client}` : "",
+        result.admin ? `administrateur : ${result.admin}` : "",
+      ]
+        .filter(Boolean)
+        .join(" ; ");
+      setPaymentLinkMessage(
+        result.ok
+          ? `Relance e-mail terminee (${details}).`
+          : `Relance e-mail en echec (${details || result.error || "echec"}).`,
+      );
+      await onRefresh?.();
+    } catch (error) {
+      setPaymentLinkMessage(
+        error instanceof Error ? error.message : "Relance e-mail impossible.",
+      );
+    } finally {
+      setEmailRetrying("");
     }
   }
 
@@ -6171,6 +6211,16 @@ function AdminOrders({
                 onUpdate={onUpdate}
                 onSendEmail={handleSendPaymentLinkEmail}
               />
+              <div className="mt-4 rounded-md border border-forest/10 bg-cream p-3 text-xs text-ink/65">
+                <strong className="block text-forest">Notifications</strong>
+                <NotificationStatus order={order} />
+                <EmailRetryActions
+                  orderId={order.id}
+                  disabled={orderSource !== "firestore"}
+                  retrying={emailRetrying}
+                  onRetry={handleRetryOrderEmails}
+                />
+              </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <a className="btn-secondary min-h-9 px-3 py-1.5 text-xs" href={telLink(order.customerPhone)}>
                   Appeler
@@ -6256,6 +6306,8 @@ function AdminOrders({
               onUpdate={onUpdate}
               onDelete={onDelete}
               onSendEmail={handleSendPaymentLinkEmail}
+              onRetryOrderEmails={handleRetryOrderEmails}
+              emailRetrying={emailRetrying}
               onRetryPurchaseAnalytics={handleRetryPurchaseAnalytics}
             />
           ))}
@@ -6581,6 +6633,8 @@ function DesktopOrderCard({
   onUpdate,
   onDelete,
   onSendEmail,
+  onRetryOrderEmails,
+  emailRetrying,
   onRetryPurchaseAnalytics,
 }: {
   order: AdminOrderListItem;
@@ -6597,6 +6651,11 @@ function DesktopOrderCard({
     paymentLinkAmount: number;
     paymentLinkCurrency: "EUR";
   }) => Promise<void>;
+  onRetryOrderEmails: (
+    orderId: string,
+    target: RetryOrderEmailTarget,
+  ) => Promise<void>;
+  emailRetrying: string;
   onRetryPurchaseAnalytics: (orderId: string) => Promise<void>;
 }) {
   const isArchived = order.archived || order.hidden;
@@ -6910,6 +6969,12 @@ function DesktopOrderCard({
         <div>
           <strong className="block text-forest">Notifications</strong>
           <NotificationStatus order={order} />
+          <EmailRetryActions
+            orderId={order.id}
+            disabled={orderSource !== "firestore"}
+            retrying={emailRetrying}
+            onRetry={onRetryOrderEmails}
+          />
         </div>
         <div>
           <strong className="block text-forest">Historique</strong>
@@ -7264,30 +7329,58 @@ function PaymentLinkActions({
   );
 }
 
+function EmailRetryActions({
+  orderId,
+  disabled,
+  retrying,
+  onRetry,
+}: {
+  orderId: string;
+  disabled: boolean;
+  retrying: string;
+  onRetry: (orderId: string, target: RetryOrderEmailTarget) => Promise<void>;
+}) {
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {([
+        ["client", "Relancer client"],
+        ["admin", "Relancer admins"],
+        ["all", "Tout relancer"],
+      ] as const).map(([target, label]) => (
+        <button
+          key={target}
+          className="btn-secondary min-h-8 px-2 py-1 text-xs"
+          disabled={disabled || Boolean(retrying)}
+          onClick={() => void onRetry(orderId, target)}
+          type="button"
+        >
+          {retrying === `${orderId}:${target}` ? "Relance..." : label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function NotificationStatus({
   order,
 }: {
-  order: {
-    emails?: {
-      adminNotificationStatus?: string;
-      adminNotificationRecipients?: Record<string, { status: string; reason?: string }>;
-    };
-  };
+  order: { emails?: AdminOrderRow["emails"] };
 }) {
-  const status = order.emails?.adminNotificationStatus;
+  const clientStatus = order.emails?.orderConfirmationStatus;
+  const adminStatus = order.emails?.adminNotificationStatus;
   const recipients = order.emails?.adminNotificationRecipients || {};
-  if (!status) return <span>Aucune donnée</span>;
-  const label =
-    status === "sent"
-      ? "Envoyée"
-      : status === "partial"
-        ? "Partielle"
-        : status === "failed"
-          ? "Échouée"
-          : "Ignorée";
+  if (!clientStatus && !adminStatus) return <span>Aucune donnée</span>;
+  const hasWarning = [clientStatus, adminStatus].some(
+    (status) => status && status !== "sent",
+  );
   return (
-    <div className="grid gap-1">
-      <strong className="text-forest">{label}</strong>
+    <div
+      className={`mt-1 grid gap-1 rounded-md p-2 ${
+        hasWarning ? "border border-red-200 bg-red-50 text-red-800" : "text-forest"
+      }`}
+    >
+      <span>Client : {emailStatusLabel(clientStatus)}</span>
+      <span>Administrateurs : {emailStatusLabel(adminStatus)}</span>
       {Object.entries(recipients).map(([email, result]) => (
         <span key={email}>
           {email} : {result.status}
@@ -7296,6 +7389,14 @@ function NotificationStatus({
       ))}
     </div>
   );
+}
+
+function emailStatusLabel(status?: string) {
+  if (status === "sent") return "envoyé";
+  if (status === "partial") return "partiel";
+  if (status === "failed") return "échec";
+  if (status === "skipped") return "ignoré";
+  return "en attente";
 }
 
 function SourceCard({

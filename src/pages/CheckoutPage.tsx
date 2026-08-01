@@ -37,6 +37,7 @@ const contactEmail =
 const checkoutErrorMessage =
   "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza par email.";
 const promoStorageKey = "verdanza-coupon-code";
+const checkoutRequestStorageKey = "verdanza:checkout-request-id";
 
 type CheckoutSelectablePaymentMethod = Exclude<
   PreferredPaymentMethod,
@@ -61,6 +62,7 @@ export function CheckoutPage() {
   const beginCheckoutSignature = useRef("");
   const shippingSignature = useRef("");
   const paymentSignature = useRef("");
+  const checkoutRequestId = useRef(getOrCreateCheckoutRequestId());
   const { user, customerProfile } = useAuth();
   const navigate = useNavigate();
   const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>(fallbackDeliveryZones);
@@ -428,6 +430,7 @@ export function CheckoutPage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          checkoutRequestId: checkoutRequestId.current,
           items,
           authToken,
           analyticsContext,
@@ -469,6 +472,7 @@ export function CheckoutPage() {
         payload.orderId,
         payload.analyticsRevocationToken,
       );
+      window.sessionStorage.removeItem(checkoutRequestStorageKey);
 
       trackOrderSubmitted({
         transactionId: payload.orderId,
@@ -532,6 +536,8 @@ export function CheckoutPage() {
           checkoutError.message.includes("produit indisponible") ||
           checkoutError.message.includes("Produit indisponible") ||
           checkoutError.message.includes("produits dépassent le stock") ||
+          checkoutError.message.includes("tentative") ||
+          checkoutError.message.includes("Vérifiez vos commandes") ||
           checkoutError.message.includes("Livraison locale disponible") ||
           checkoutError.message.includes("zone de livraison"))
           ? checkoutError.message
@@ -959,6 +965,14 @@ export function CheckoutPage() {
       )}
     </main>
   );
+}
+
+function getOrCreateCheckoutRequestId() {
+  const existing = window.sessionStorage.getItem(checkoutRequestStorageKey);
+  if (existing) return existing;
+  const requestId = window.crypto.randomUUID();
+  window.sessionStorage.setItem(checkoutRequestStorageKey, requestId);
+  return requestId;
 }
 
 function DeliveryChoice({

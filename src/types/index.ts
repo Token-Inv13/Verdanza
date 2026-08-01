@@ -446,6 +446,7 @@ export type OrderAlerts = {
 
 export type Order = {
   id: string;
+  checkoutRequestId?: string;
   orderType?: OrderType;
   customerId?: string;
   customerEmail: string;

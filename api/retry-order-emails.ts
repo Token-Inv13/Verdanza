@@ -9,7 +9,13 @@ import {
 import {
   sendAdminManualOrderEmail,
   sendManualOrderConfirmationEmail,
+  type EmailResult,
 } from "./_server/email.js";
+import {
+  ensureOrderSideEffectsOutbox,
+  resetOrderSideEffectTask,
+  runEmailSideEffect,
+} from "./_server/orderSideEffects.js";
 import type { Order } from "../src/types/index.js";
 
 type RetryTarget = "all" | "client" | "admin";
@@ -35,14 +41,56 @@ export default async function handler(
     const orderSnapshot = await db.collection("orders").doc(body.orderId).get();
     if (!orderSnapshot.exists) throw new Error("Commande introuvable.");
     const order = { id: orderSnapshot.id, ...orderSnapshot.data() } as Order;
+    await ensureOrderSideEffectsOutbox(db, order.id);
 
+    let client: EmailResult | undefined;
+    let admin: EmailResult | undefined;
+    const tasks: Promise<void>[] = [];
     if (body.target === "all" || body.target === "client") {
-      await sendManualOrderConfirmationEmail(order);
+      tasks.push(
+        resetOrderSideEffectTask(db, order.id, "customer_confirmation_email").then(
+          async () => {
+            client = await runEmailSideEffect({
+              db,
+              orderId: order.id,
+              task: "customer_confirmation_email",
+              prefix: "orderConfirmation",
+              send: sendManualOrderConfirmationEmail,
+            });
+          },
+        ),
+      );
     }
     if (body.target === "all" || body.target === "admin") {
-      await sendAdminManualOrderEmail(order);
+      tasks.push(
+        resetOrderSideEffectTask(db, order.id, "admin_notification_email").then(
+          async () => {
+            admin = await runEmailSideEffect({
+              db,
+              orderId: order.id,
+              task: "admin_notification_email",
+              prefix: "adminNotification",
+              send: sendAdminManualOrderEmail,
+            });
+          },
+        ),
+      );
     }
-    sendJson(response, { ok: true });
+    await Promise.all(tasks);
+    const results = [client, admin].filter(Boolean) as EmailResult[];
+    const ok = results.some(
+      (result) => result.status === "sent" || result.status === "partial",
+    );
+    sendJson(
+      response,
+      {
+        ok,
+        ...(client ? { client: client.status } : {}),
+        ...(admin ? { admin: admin.status } : {}),
+        ...(!ok ? { error: "email_delivery_failed" } : {}),
+      },
+      ok ? 200 : 502,
+    );
   } catch (error) {
     console.error("retry-order-emails failed", error);
     const message =
