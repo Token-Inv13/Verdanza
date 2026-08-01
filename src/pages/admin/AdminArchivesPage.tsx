@@ -96,9 +96,9 @@ export default function AdminArchivesPage() {
   }
 
   return (
-    <section className="grid gap-6">
-      <header className="admin-card flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+    <section className="grid min-w-0 gap-6">
+      <header className="admin-card flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <p className="text-xs uppercase tracking-[0.18em] text-champagne">Verdanza</p>
           <h1 className="font-display text-4xl text-forest md:text-5xl">Archives</h1>
           <p className="mt-2 max-w-3xl text-sm text-ink/60">
@@ -114,7 +114,7 @@ export default function AdminArchivesPage() {
         </button>
       </header>
 
-      <section className="rounded-lg border border-forest/10 bg-ivory">
+      <section className="min-w-0 overflow-hidden rounded-lg border border-forest/10 bg-ivory">
         <div className="border-b border-forest/10 bg-cream/70 p-4">
           <div className="overflow-x-auto pb-1">
             <div className="flex min-w-max gap-2">
