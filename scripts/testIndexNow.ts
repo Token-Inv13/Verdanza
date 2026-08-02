@@ -1,4 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   buildIndexNowBatch,
   buildIndexNowPayload,
@@ -72,8 +74,13 @@ await run("accepts deleted URL outside sitemap", () => {
 await run("dry-run does not call network", () => {
   const batch = buildIndexNowBatch(parseIndexNowArgs(["--all-indexable", "--dry-run"]));
   const output = formatDryRun(batch);
+  const sitemapXml = readFileSync(resolve("public", "sitemap.xml"), "utf8");
+  const sitemapUrls = [...sitemapXml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(
+    (match) => match[1],
+  );
   if (!output.includes("No external request sent")) throw new Error("missing dry-run marker");
-  if (!output.includes("URL count: 25")) throw new Error("missing URL count");
+  if (!output.includes(`URL count: ${sitemapUrls.length}`)) throw new Error("missing URL count");
+  assertEqual(batch.urls, sitemapUrls);
 });
 
 for (const status of [200, 202, 403, 422, 429]) {

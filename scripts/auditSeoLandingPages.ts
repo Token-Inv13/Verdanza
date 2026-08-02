@@ -241,7 +241,31 @@ function flattenJsonLd(value: unknown): Record<string, unknown>[] {
 }
 
 function hasHref(html: string, href: string) {
-  return new RegExp(`<a[^>]+href=["']${escapeRegExp(href)}["']`, "i").test(html);
+  const expected = new URL(href, "https://verdanza.fr");
+  const hrefs = [...html.matchAll(/<a[^>]+href=["']([^"']+)["']/gi)].map(
+    (match) => match[1],
+  );
+
+  return hrefs.some((candidate) => {
+    const parsed = new URL(candidate, "https://verdanza.fr");
+    if (
+      parsed.origin !== expected.origin ||
+      parsed.pathname !== expected.pathname ||
+      parsed.search !== expected.search
+    ) {
+      return false;
+    }
+    return !parsed.hash || fragmentExists(parsed.pathname, parsed.hash);
+  });
+}
+
+function fragmentExists(pathname: string, hash: string) {
+  const targetFile = outputPathForRoute(pathname);
+  if (!existsSync(targetFile)) return false;
+  const fragment = decodeURIComponent(hash.replace(/^#/, ""));
+  if (!fragment) return false;
+  const targetHtml = readFileSync(targetFile, "utf8");
+  return new RegExp(`\\sid=["']${escapeRegExp(fragment)}["']`, "i").test(targetHtml);
 }
 
 function metaContent(html: string, name: string) {

@@ -8,28 +8,38 @@ import {
   sitemapUrls,
   type SeoRoute,
 } from "./seoRoutes";
+import { startAuditStaticServer } from "./auditStaticServer";
 
 const distDir = resolve("dist");
 const sitemap = new Set(sitemapUrls());
 const rows = [];
+const fallbackRoutes = prerenderFallbackSeoRoutes();
+const server = await startAuditStaticServer({
+  notFoundPaths: fallbackRoutes.map((route) => route.path),
+});
 
-for (const route of prerenderSeoRoutes()) {
-  rows.push(auditRoute(route, outputPathForRoute(route.path)));
+try {
+  for (const route of prerenderSeoRoutes()) {
+    rows.push(await auditRoute(route, outputPathForRoute(route.path)));
+  }
+  for (const route of fallbackRoutes) {
+    rows.push(await auditRoute(route, outputPathForRoute(route.path)));
+  }
+  rows.push(
+    await auditRoute(fallbackSeoRoute(), join(distDir, "404.html"), {
+      requestPath: "/__prerender-unknown-route__",
+    }),
+  );
+} finally {
+  await server.close();
 }
-for (const route of prerenderFallbackSeoRoutes()) {
-  rows.push(auditRoute(route, outputPathForRoute(route.path)));
-}
-rows.push(
-  auditRoute(fallbackSeoRoute(), join(distDir, "404.html"), {
-    expectedCanonicalPath: "/route-introuvable-test",
-  }),
-);
 
 const failures = rows.filter((row) => row.failures.length);
 
 console.table(
   rows.map((row) => ({
     path: row.path,
+    status: row.status,
     file: row.fileExists,
     title: Boolean(row.title),
     canonical: row.canonical,
@@ -53,14 +63,18 @@ if (failures.length) {
   console.log("\nPrerender audit passed.");
 }
 
-function auditRoute(
+async function auditRoute(
   route: SeoRoute,
   filePath: string,
-  options: { expectedCanonicalPath?: string } = {},
+  options: { requestPath?: string } = {},
 ) {
   const failures: string[] = [];
   const html = existsSync(filePath) ? readFileSync(filePath, "utf8") : "";
-  const expectedCanonical = canonicalUrl(options.expectedCanonicalPath || route.path);
+  const requestPath = options.requestPath || route.path;
+  const response = await fetch(`${server.baseUrl}${requestPath}`, { redirect: "manual" });
+  const status = response.status;
+  const isNotFound = route.kind === "fallback";
+  const expectedCanonical = canonicalUrl(route.path);
   const title = firstMatch(html, /<title>(.*?)<\/title>/is);
   const description = metaContent(html, "description");
   const canonical = firstMatch(html, /<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i);
@@ -75,16 +89,22 @@ function auditRoute(
   if (!html.trim()) failures.push("empty html");
   if (!title) failures.push("missing title");
   if (!description) failures.push("missing description");
-  if (!canonical) failures.push("missing canonical");
+  if (!isNotFound && !canonical) failures.push("missing canonical");
+  if (isNotFound && canonical) failures.push("404 canonical present");
   if (!robots) failures.push("missing robots");
   if (!metaProperty(html, "og:title")) failures.push("missing og:title");
   if (!metaProperty(html, "og:description")) failures.push("missing og:description");
-  if (!metaProperty(html, "og:url")) failures.push("missing og:url");
+  const ogUrl = metaProperty(html, "og:url");
+  if (!isNotFound && !ogUrl) failures.push("missing og:url");
+  if (isNotFound && ogUrl) failures.push("404 og:url present");
   if (!metaProperty(html, "og:type")) failures.push("missing og:type");
   if (!metaContent(html, "twitter:card")) failures.push("missing twitter:card");
   if (!metaContent(html, "twitter:title")) failures.push("missing twitter:title");
   if (!metaContent(html, "twitter:description")) failures.push("missing twitter:description");
   if (route.indexable && canonical !== expectedCanonical) failures.push("canonical mismatch");
+  if (status !== (isNotFound ? 404 : 200)) {
+    failures.push(`HTTP status ${status}, expected ${isNotFound ? 404 : 200}`);
+  }
   if (route.indexable && noindex) failures.push("indexable noindex");
   if (!route.indexable && !noindex) failures.push("noindex missing");
   if (route.indexable && !inSitemap) failures.push("missing sitemap URL");
@@ -94,7 +114,8 @@ function auditRoute(
   if (containsPrivateData(html)) failures.push("private data marker");
 
   return {
-    path: route.path,
+    path: requestPath,
+    status,
     fileExists: existsSync(filePath),
     title,
     canonical,

@@ -72,11 +72,15 @@ async function auditWithoutJavaScript() {
       const scripts = await page.locator("script[src]").evaluateAll((items) =>
         items.map((script) => (script as HTMLScriptElement).src),
       );
+      const isNotFound = status === 404;
 
       if (![200, 404].includes(status)) failures.push(`${route} no-JS status ${status}`);
       if (!title) failures.push(`${route} no-JS missing title`);
-      if (!canonical) failures.push(`${route} no-JS missing canonical`);
+      if (!isNotFound && !canonical) failures.push(`${route} no-JS missing canonical`);
       if (!robots) failures.push(`${route} no-JS missing robots`);
+      if (isNotFound && !robots?.includes("noindex")) {
+        failures.push(`${route} no-JS 404 missing noindex`);
+      }
       if (h1Count !== 1) failures.push(`${route} no-JS h1 count ${h1Count}`);
       if (mainTextLength < 20) failures.push(`${route} no-JS content too short`);
       for (const asset of [...cssLinks, ...scripts]) {
@@ -96,6 +100,16 @@ async function auditInteractiveViewport(
 ) {
   const context = await browser.newContext({ viewport, serviceWorkers: "block" });
   await blockExternalServices(context);
+  if (isLoopbackUrl(baseUrl)) {
+    await context.route("**/api/**", async (route) => {
+      const pathname = new URL(route.request().url()).pathname;
+      if (["/api/quote-order", "/api/public-promo-banners"].includes(pathname)) {
+        await route.abort();
+        return;
+      }
+      await route.continue();
+    });
+  }
   await context.addInitScript(() => {
     window.localStorage.setItem("verdanza-age-confirmed", "true");
   });
@@ -245,17 +259,27 @@ function collectConsoleErrors(page: Page, label: string) {
   page.on("console", (message) => {
     if (message.type() !== "error") return;
     const text = message.text();
-    if (isExpectedRuntimeConsoleError(text)) return;
-    failures.push(`${label} console error: ${text}`);
+    if (isExpectedRuntimeConsoleError(text, message.location().url)) return;
+    failures.push(`${label} console error: ${text} @ ${message.location().url || "unknown"}`);
   });
   page.on("pageerror", (error) => failures.push(`${label} page error: ${error.message}`));
 }
 
-function isExpectedRuntimeConsoleError(message: string) {
-  return (
-    message === "Failed to load resource: net::ERR_FAILED" ||
-    message === "Failed to load resource: the server responded with a status of 404 (Not Found)"
-  );
+function isExpectedRuntimeConsoleError(message: string, sourceUrl: string) {
+  if (message === "Failed to load resource: net::ERR_FAILED") return true;
+  if (!message.startsWith("Failed to load resource: the server responded with a status of 404")) {
+    return false;
+  }
+  try {
+    return new URL(sourceUrl).pathname === "/url-totalement-inconnue-test";
+  } catch {
+    return false;
+  }
+}
+
+function isLoopbackUrl(url: string) {
+  const hostname = new URL(url).hostname;
+  return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1";
 }
 
 async function expectOneH1(page: Page, label: string) {

@@ -1,8 +1,11 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
+import { chromium } from "playwright";
 import { publishedBlogArticles } from "../src/data/blogArticles";
 import { products } from "../src/data/products";
 import { productImageVariants, staticImageVariants } from "../src/lib/generatedImageVariants";
+import { blockExternalServices, gotoDomReady } from "./auditPageReady";
+import { startAuditStaticServer } from "./auditStaticServer";
 
 type PublicImage = {
   url: string;
@@ -72,7 +75,7 @@ if (existsSync(distDir)) {
     if (/[A-Z]:\\|\\\\/.test(html)) failures.push(`windows path found in ${normalize(file)}`);
     if (/Ãƒ|Ã¢â‚¬â„¢|ï¿½/.test(html)) failures.push(`corrupted UTF-8 text in ${normalize(file)}`);
   }
-  auditRenderedImages();
+  await auditRenderedImages();
 }
 
 console.log("Image inventory");
@@ -129,14 +132,13 @@ function auditVariantSet(label: string, variant: { src: string; srcSet: string; 
   }
 }
 
-function auditRenderedImages() {
-  const homeHtml = readDistHtml("index.html");
-  if (!homeHtml.includes("/images/verdanza-hero-premium-")) {
-    failures.push("home hero optimized srcSet missing from initial HTML");
-  }
-  if (!/fetchpriority="high"/i.test(homeHtml)) failures.push("home hero fetchpriority high missing");
-  if (/verdanza-hero-premium-[^"]+[\s\S]{0,240}loading="lazy"/i.test(homeHtml)) {
-    failures.push("home hero is lazy loaded");
+async function auditRenderedImages() {
+  const heroVariants = staticImageVariants["/images/verdanza-hero-premium.webp"];
+  if (!heroVariants) {
+    failures.push("home hero optimized variants missing");
+  } else {
+    auditBuiltVariantSet("home hero", heroVariants, 160 * 1024);
+    await auditRuntimeHero(heroVariants);
   }
 
   const productHtml = readDistHtml("produits/golden-static.html");
@@ -167,6 +169,99 @@ function auditRenderedImages() {
     if (!html.includes("fetchpriority=\"high\"")) {
       failures.push(`article hero image priority missing: ${article.slug}`);
     }
+  }
+}
+
+function auditBuiltVariantSet(
+  label: string,
+  variant: { src: string; srcSet: string; sizes: string; width: number; height: number },
+  maxBytes: number,
+) {
+  const urls = new Set([variant.src, ...parseSrcSet(variant.srcSet).map((candidate) => candidate.src)]);
+  for (const url of urls) {
+    const file = resolve(distDir, decodeURIComponent(url).replace(/^\/+/, ""));
+    if (!existsSync(file)) {
+      failures.push(`missing built variant for ${label}: ${url}`);
+      continue;
+    }
+    const bytes = statSync(file).size;
+    if (bytes > maxBytes) {
+      failures.push(`${label} built variant too large: ${url} ${Math.round(bytes / 1024)} KB`);
+    }
+  }
+}
+
+async function auditRuntimeHero(variant: {
+  src: string;
+  srcSet: string;
+  sizes: string;
+  width: number;
+  height: number;
+}) {
+  const server = await startAuditStaticServer();
+  const browser = await chromium.launch();
+  const context = await browser.newContext({ serviceWorkers: "block" });
+  const consoleErrors: string[] = [];
+
+  try {
+    await context.addInitScript(() => {
+      window.localStorage.setItem("verdanza-age-confirmed", "true");
+    });
+    await blockExternalServices(context);
+    await context.route("**/api/public-promo-banners", (route) => route.abort());
+    const page = await context.newPage();
+    page.on("console", (message) => {
+      if (message.type() === "error" && message.text() !== "Failed to load resource: net::ERR_FAILED") {
+        consoleErrors.push(`${message.text()} @ ${message.location().url || "unknown"}`);
+      }
+    });
+    page.on("pageerror", (error) => consoleErrors.push(error.message));
+
+    await gotoDomReady(page, `${server.baseUrl}/`);
+    const hero = page.locator('img[src*="verdanza-hero-premium"]');
+    if ((await hero.count()) !== 1) {
+      failures.push(`home hero runtime count ${await hero.count()}`);
+      return;
+    }
+    await hero.waitFor({ state: "visible", timeout: 10000 });
+    await page.waitForFunction(
+      () => {
+        const image = document.querySelector<HTMLImageElement>(
+          'img[src*="verdanza-hero-premium"]',
+        );
+        return Boolean(image?.complete && image.naturalWidth > 0);
+      },
+      undefined,
+      { timeout: 10000 },
+    );
+    const rendered = await hero.evaluate((image: HTMLImageElement) => ({
+      src: image.getAttribute("src") || "",
+      srcSet: image.getAttribute("srcset") || "",
+      sizes: image.getAttribute("sizes") || "",
+      fetchPriority: image.getAttribute("fetchpriority") || "",
+      loading: image.getAttribute("loading") || "",
+      width: image.getAttribute("width") || "",
+      height: image.getAttribute("height") || "",
+      naturalWidth: image.naturalWidth,
+      naturalHeight: image.naturalHeight,
+    }));
+
+    if (rendered.src !== variant.src) failures.push(`home hero runtime src mismatch: ${rendered.src}`);
+    if (rendered.srcSet !== variant.srcSet) failures.push("home hero runtime srcSet mismatch");
+    if (rendered.sizes !== variant.sizes) failures.push("home hero runtime sizes mismatch");
+    if (rendered.fetchPriority !== "high") failures.push("home hero runtime fetchpriority high missing");
+    if (rendered.loading === "lazy") failures.push("home hero is lazy loaded at runtime");
+    if (Number(rendered.width) !== variant.width || Number(rendered.height) !== variant.height) {
+      failures.push("home hero runtime dimensions mismatch");
+    }
+    if (!rendered.naturalWidth || !rendered.naturalHeight) failures.push("home hero runtime image not loaded");
+    if (consoleErrors.length) {
+      failures.push(`home hero runtime console errors: ${consoleErrors.join(" | ")}`);
+    }
+  } finally {
+    await context.close();
+    await browser.close();
+    await server.close();
   }
 }
 
