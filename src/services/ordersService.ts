@@ -15,6 +15,7 @@ import type {
   OrderStatus,
   OrderType,
   PaymentLinkChannel,
+  PaymentLinkDeliverySummary,
   PaymentProvider,
   FinalPaymentMethod,
   PreferredPaymentMethod,
@@ -55,6 +56,8 @@ export type AdminOrderRow = {
   paymentLinkSentAt?: string;
   paymentLinkSentBy?: string;
   paymentLinkChannel?: PaymentLinkChannel;
+  paymentLinkDelivery?: PaymentLinkDeliverySummary;
+  paymentLinkDeliveryHistory?: PaymentLinkDeliverySummary[];
   customerMessage?: string;
   items: OrderItem[];
   subtotal?: number;
@@ -137,6 +140,8 @@ export async function getAdminOrdersWithFallback() {
         paymentLinkSentAt: order.paymentLinkSentAt,
         paymentLinkSentBy: order.paymentLinkSentBy,
         paymentLinkChannel: order.paymentLinkChannel,
+        paymentLinkDelivery: order.paymentLinkDelivery,
+        paymentLinkDeliveryHistory: order.paymentLinkDeliveryHistory || [],
         customerMessage: order.customerMessage,
         items: order.items || [],
         subtotal: order.subtotal,

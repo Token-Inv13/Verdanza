@@ -1,4 +1,8 @@
 import { getFirebaseIdToken } from "../lib/firebaseAuth";
+import type {
+  PaymentLinkDeliveryIntent,
+  PaymentLinkDeliveryStatus,
+} from "../types";
 
 export type AdminPaymentLink = {
   id: string;
@@ -31,6 +35,8 @@ export async function getAdminPaymentLinks() {
 
 export async function sendOrderPaymentLinkEmail(input: {
   orderId: string;
+  paymentLinkRequestId: string;
+  intent: PaymentLinkDeliveryIntent;
   paymentLinkUrl: string;
   paymentLinkLabel: string;
   paymentLinkAmount: number;
@@ -46,8 +52,44 @@ export async function sendOrderPaymentLinkEmail(input: {
     },
     body: JSON.stringify(input),
   });
-  const payload = (await response.json().catch(() => ({}))) as { error?: string };
+  const payload = (await response.json().catch(() => ({}))) as {
+    error?: string;
+    code?: string;
+    delivery?: PaymentLinkDeliveryResponse;
+  };
   if (!response.ok) {
-    throw new Error(payload.error || "Envoi du lien de paiement impossible.");
+    throw new PaymentLinkDeliveryError(
+      payload.error || "Envoi du lien de paiement impossible.",
+      payload.delivery,
+      payload.code,
+    );
   }
+  if (!payload.delivery) {
+    throw new Error("Statut d’envoi indisponible.");
+  }
+  return payload.delivery;
+}
+
+export type PaymentLinkDeliveryResponse = {
+  status: PaymentLinkDeliveryStatus;
+  requestId: string;
+  attempts: number;
+  providerId?: string;
+  errorCode?: string;
+  existing: boolean;
+};
+
+export class PaymentLinkDeliveryError extends Error {
+  constructor(
+    message: string,
+    readonly delivery?: PaymentLinkDeliveryResponse,
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = "PaymentLinkDeliveryError";
+  }
+}
+
+export function createPaymentLinkRequestId() {
+  return crypto.randomUUID();
 }

@@ -247,6 +247,7 @@ export async function sendInvoiceToCustomerEmail(
 export async function sendPaymentLinkEmail(
   order: Order,
   input: {
+    paymentLinkRequestId: string;
     paymentLinkUrl: string;
     paymentLinkLabel: string;
     paymentLinkAmount: number;
@@ -263,7 +264,7 @@ export async function sendPaymentLinkEmail(
     subject: `Lien de paiement Verdanza pour votre commande ${shortOrderId(order.id)}`,
     html: paymentLinkEmailHtml(order, input),
     text: paymentLinkEmailText(order, input),
-    idempotencyKey: `payment-link-${order.id}-${input.paymentLinkLabel}-${Date.now()}`,
+    idempotencyKey: `payment-link-${order.id}-${input.paymentLinkRequestId}`,
   });
 }
 

@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAdminData } from "../../hooks/useAdminData";
 import {
@@ -82,9 +82,12 @@ import {
   type SupplierInvoiceAnalysisResult,
 } from "../../services/supplierPurchasesService";
 import {
+  createPaymentLinkRequestId,
   getAdminPaymentLinks,
+  PaymentLinkDeliveryError,
   sendOrderPaymentLinkEmail,
   type AdminPaymentLink,
+  type PaymentLinkDeliveryResponse,
 } from "../../services/paymentLinksService";
 import {
   getAdminFavoriteStats,
@@ -110,6 +113,8 @@ import type {
   PaymentProvider,
   PreferredPaymentMethod,
   PaymentLinkChannel,
+  PaymentLinkDeliveryIntent,
+  PaymentLinkDeliverySummary,
   PaymentStatus,
   Product,
   ProductCategory,
@@ -5961,6 +5966,8 @@ type AdminOrderListItem = {
   paymentLinkSentAt?: string;
   paymentLinkSentBy?: string;
   paymentLinkChannel?: PaymentLinkChannel;
+  paymentLinkDelivery?: PaymentLinkDeliverySummary;
+  paymentLinkDeliveryHistory?: PaymentLinkDeliverySummary[];
   customerMessage?: string;
   items: { name: string; quantity: number }[];
   subtotal?: number;
@@ -6078,21 +6085,25 @@ function AdminOrders({
 
   async function handleSendPaymentLinkEmail(input: {
     orderId: string;
+    paymentLinkRequestId: string;
+    intent: PaymentLinkDeliveryIntent;
     paymentLinkUrl: string;
     paymentLinkLabel: string;
     paymentLinkAmount: number;
     paymentLinkCurrency: "EUR";
   }) {
     try {
-      await sendOrderPaymentLinkEmail(input);
-      setPaymentLinkMessage("Lien de paiement envoyé au client.");
-      await onUpdate(input.orderId, {});
+      const delivery = await sendOrderPaymentLinkEmail(input);
+      setPaymentLinkMessage(paymentLinkDeliveryMessage(delivery));
+      await onRefresh?.();
+      return delivery;
     } catch (error) {
       setPaymentLinkMessage(
         error instanceof Error
           ? error.message
           : "Envoi email impossible. Copiez le message manuellement.",
       );
+      throw error;
     }
   }
 
@@ -6748,11 +6759,13 @@ function DesktopOrderCard({
   onDelete: (orderId: string) => Promise<void>;
   onSendEmail: (input: {
     orderId: string;
+    paymentLinkRequestId: string;
+    intent: PaymentLinkDeliveryIntent;
     paymentLinkUrl: string;
     paymentLinkLabel: string;
     paymentLinkAmount: number;
     paymentLinkCurrency: "EUR";
-  }) => Promise<void>;
+  }) => Promise<PaymentLinkDeliveryResponse>;
   onRetryOrderEmails: (
     orderId: string,
     target: RetryOrderEmailTarget,
@@ -7197,6 +7210,8 @@ function PaymentLinkActions({
     paymentLinkSent?: boolean;
     paymentLinkSentAt?: string;
     paymentLinkChannel?: PaymentLinkChannel;
+    paymentLinkDelivery?: PaymentLinkDeliverySummary;
+    paymentLinkDeliveryHistory?: PaymentLinkDeliverySummary[];
   };
   orderSource: "firestore" | "empty";
   paymentLinks: AdminPaymentLink[];
@@ -7214,11 +7229,13 @@ function PaymentLinkActions({
   ) => Promise<void>;
   onSendEmail: (input: {
     orderId: string;
+    paymentLinkRequestId: string;
+    intent: PaymentLinkDeliveryIntent;
     paymentLinkUrl: string;
     paymentLinkLabel: string;
     paymentLinkAmount: number;
     paymentLinkCurrency: "EUR";
-  }) => Promise<void>;
+  }) => Promise<PaymentLinkDeliveryResponse>;
 }) {
   const matchingLink = paymentLinks.find((link) => link.amount === parseEuro(order.total));
   const savedKnownLink = paymentLinks.find((link) => link.url === order.paymentLinkUrl);
@@ -7228,6 +7245,14 @@ function PaymentLinkActions({
   const [selectedUrl, setSelectedUrl] = useState(initialUrl);
   const [customUrl, setCustomUrl] = useState(savedKnownLink ? "" : order.paymentLinkUrl || "");
   const [customAmount, setCustomAmount] = useState(order.paymentLinkAmount || parseEuro(order.total));
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [localDelivery, setLocalDelivery] = useState<PaymentLinkDeliveryResponse>();
+  const pendingRequestRef = useRef<{
+    id: string;
+    intent: PaymentLinkDeliveryIntent;
+    payloadFingerprint: string;
+  } | undefined>(undefined);
+  const sendingRef = useRef(false);
   const selectedLink = paymentLinks.find((link) => link.url === selectedUrl);
   const customLink =
     selectedUrl === "custom" && customUrl.trim() && customAmount > 0
@@ -7241,6 +7266,14 @@ function PaymentLinkActions({
   const activeLink = selectedLink || customLink;
   const disabled = orderSource !== "firestore" || !activeLink;
   const exactMatchMissing = Boolean(paymentLinks.length && !order.paymentLinkUrl && !matchingLink);
+  const latestDelivery = localDelivery || order.paymentLinkDelivery;
+  const hasPreviousEmail = Boolean(
+    order.paymentLinkDeliveryHistory?.some(
+      (entry) => entry.channel === "email" && entry.status === "sent",
+    ) ||
+      order.paymentLinkDelivery?.status === "sent" ||
+      (order.paymentLinkSent && order.paymentLinkChannel === "email"),
+  );
 
   useEffect(() => {
     const knownLink = paymentLinks.find((link) => link.url === order.paymentLinkUrl);
@@ -7248,6 +7281,13 @@ function PaymentLinkActions({
     setCustomUrl(knownLink ? "" : order.paymentLinkUrl || "");
     setCustomAmount(order.paymentLinkAmount || parseEuro(order.total));
   }, [order.id, order.paymentLinkAmount, order.paymentLinkUrl, order.total, matchingLink?.url, paymentLinks]);
+
+  useEffect(() => {
+    pendingRequestRef.current = undefined;
+    sendingRef.current = false;
+    setIsSendingEmail(false);
+    setLocalDelivery(undefined);
+  }, [order.id]);
 
   async function markSent(channel: PaymentLinkChannel) {
     if (!activeLink) return;
@@ -7260,6 +7300,83 @@ function PaymentLinkActions({
       paymentLinkChannel: channel,
       paymentStatus: "payment_link_sent",
     });
+  }
+
+  async function sendEmail() {
+    if (!activeLink || sendingRef.current) return;
+    const payloadFingerprint = [
+      activeLink.url,
+      activeLink.amount.toFixed(2),
+      activeLink.currency,
+      "email",
+    ].join("|");
+    let pending = pendingRequestRef.current;
+
+    if (
+      !pending &&
+      order.paymentLinkDelivery &&
+      order.paymentLinkDelivery.status !== "sent" &&
+      order.paymentLinkDelivery.requestId &&
+      order.paymentLinkUrl === activeLink.url &&
+      order.paymentLinkDelivery.amount === activeLink.amount &&
+      order.paymentLinkDelivery.currency === activeLink.currency
+    ) {
+      pending = {
+        id: order.paymentLinkDelivery.requestId,
+        intent: order.paymentLinkDelivery.intent,
+        payloadFingerprint,
+      };
+      pendingRequestRef.current = pending;
+    }
+
+    if (!pending || pending.payloadFingerprint !== payloadFingerprint) {
+      const intent: PaymentLinkDeliveryIntent = hasPreviousEmail ? "resend" : "initial";
+      if (
+        intent === "resend" &&
+        !window.confirm(
+          "Confirmer le renvoi d’un nouveau lien de paiement par e-mail ?",
+        )
+      ) {
+        return;
+      }
+      pending = {
+        id: createPaymentLinkRequestId(),
+        intent,
+        payloadFingerprint,
+      };
+      pendingRequestRef.current = pending;
+    }
+
+    sendingRef.current = true;
+    setIsSendingEmail(true);
+    try {
+      const delivery = await onSendEmail({
+        orderId: order.id,
+        paymentLinkRequestId: pending.id,
+        intent: pending.intent,
+        paymentLinkUrl: activeLink.url,
+        paymentLinkLabel: activeLink.label,
+        paymentLinkAmount: activeLink.amount,
+        paymentLinkCurrency: activeLink.currency,
+      });
+      setLocalDelivery(delivery);
+      if (delivery.status === "sent") pendingRequestRef.current = undefined;
+    } catch (error) {
+      if (error instanceof PaymentLinkDeliveryError && error.delivery) {
+        setLocalDelivery(error.delivery);
+      }
+      if (
+        error instanceof PaymentLinkDeliveryError &&
+        (error.code === "payment_link_request_conflict" ||
+          error.code?.startsWith("order_") ||
+          error.code === "resend_confirmation_required")
+      ) {
+        pendingRequestRef.current = undefined;
+      }
+    } finally {
+      sendingRef.current = false;
+      setIsSendingEmail(false);
+    }
   }
 
   return (
@@ -7332,6 +7449,33 @@ function PaymentLinkActions({
           {order.paymentLinkSentAt ? ` - ${order.paymentLinkSentAt}` : ""}
         </p>
       )}
+      {latestDelivery && (
+        <p className="mt-2 rounded border border-forest/10 bg-white/60 px-2 py-1 text-[11px] text-ink/65">
+          Dernière tentative e-mail : {paymentLinkDeliveryStatusLabel(latestDelivery.status)}
+          {latestDelivery.attempts > 0 ? ` · essai ${latestDelivery.attempts}` : ""}
+          {latestDelivery.errorCode
+            ? ` · ${paymentLinkDeliveryErrorLabel(latestDelivery.errorCode)}`
+            : ""}
+        </p>
+      )}
+      {!!order.paymentLinkDeliveryHistory?.length && (
+        <details className="mt-2 text-[11px] text-ink/60">
+          <summary className="cursor-pointer font-medium text-forest">
+            Historique des envois e-mail ({order.paymentLinkDeliveryHistory.length})
+          </summary>
+          <ul className="mt-2 grid gap-1">
+            {order.paymentLinkDeliveryHistory.map((entry) => (
+              <li key={entry.requestId} className="rounded border border-forest/10 bg-white/60 px-2 py-1">
+                {entry.intent === "resend" ? "Renvoi" : "Envoi initial"} ·{" "}
+                {paymentLinkDeliveryStatusLabel(entry.status)} · essai {entry.attempts}
+                {entry.completedAt || entry.lastAttemptAt
+                  ? ` · ${formatAdminDate(entry.completedAt || entry.lastAttemptAt)}`
+                  : ""}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       <div className="mt-3 flex flex-wrap gap-2">
         <button
           className="btn-secondary min-h-8 px-2 py-1 text-xs"
@@ -7403,20 +7547,17 @@ function PaymentLinkActions({
         </a>
         <button
           className="btn-secondary min-h-8 px-2 py-1 text-xs"
-          disabled={disabled || !order.customerEmail}
-          onClick={() =>
-            activeLink &&
-            void onSendEmail({
-              orderId: order.id,
-              paymentLinkUrl: activeLink.url,
-              paymentLinkLabel: activeLink.label,
-              paymentLinkAmount: activeLink.amount,
-              paymentLinkCurrency: activeLink.currency,
-            })
-          }
+          disabled={disabled || !order.customerEmail || isSendingEmail}
+          onClick={() => void sendEmail()}
           type="button"
         >
-          Email
+          {isSendingEmail
+            ? "Envoi en cours…"
+            : hasPreviousEmail
+              ? "Renvoyer le lien"
+              : latestDelivery && latestDelivery.status !== "sent"
+                ? "Réessayer l’envoi"
+                : "Envoyer par e-mail"}
         </button>
         <button
           className="btn-secondary min-h-8 px-2 py-1 text-xs"
@@ -8489,6 +8630,42 @@ function paymentLinkMessage(order: {
     return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée. Vous pouvez régler ${amount} par carte bancaire via ce lien : ${link}, ou confirmer avec nous le mode de règlement souhaité.`;
   }
   return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée. Vous pouvez régler ${amount} par carte bancaire via ce lien : ${link}. Dès réception du paiement, nous préparerons votre commande. Merci, Verdanza.`;
+}
+
+function paymentLinkDeliveryMessage(delivery: PaymentLinkDeliveryResponse) {
+  if (delivery.status === "sent") {
+    return delivery.existing
+      ? "Ce lien de paiement avait déjà été envoyé ; aucun doublon n’a été créé."
+      : "Lien de paiement envoyé au client.";
+  }
+  if (delivery.status === "sending") {
+    return "Cet envoi est déjà en cours. Réessayez plus tard avec la même tentative.";
+  }
+  if (delivery.status === "unknown") {
+    return "Réponse du prestataire incertaine. Réessayez : la même tentative sera réutilisée sans créer un nouvel envoi chez Resend.";
+  }
+  return `Envoi non confirmé : ${paymentLinkDeliveryErrorLabel(delivery.errorCode)}`;
+}
+
+function paymentLinkDeliveryStatusLabel(status: PaymentLinkDeliverySummary["status"]) {
+  if (status === "pending") return "en attente";
+  if (status === "sending") return "en cours";
+  if (status === "sent") return "envoyé";
+  if (status === "failed") return "échec confirmé";
+  return "résultat incertain";
+}
+
+function paymentLinkDeliveryErrorLabel(code?: string) {
+  if (!code) return "erreur non précisée";
+  if (code === "timeout") return "délai du prestataire dépassé";
+  if (code === "network_error") return "réponse réseau incertaine";
+  if (code === "http_error") return "réponse du prestataire incertaine";
+  if (code === "provider_rejected") return "envoi refusé par le prestataire";
+  if (code === "customer_email_absent") return "adresse e-mail client absente";
+  if (code.endsWith("_after_provider_call")) {
+    return "état de la commande modifié pendant l’envoi";
+  }
+  return "envoi non confirmé";
 }
 
 function paymentChannelLabel(channel?: PaymentLinkChannel) {

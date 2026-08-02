@@ -118,6 +118,27 @@ export type FinalPaymentMethod =
   | "bank_transfer"
   | "other";
 export type PaymentLinkChannel = "email" | "whatsapp" | "sms" | "other";
+export type PaymentLinkDeliveryIntent = "initial" | "resend";
+export type PaymentLinkDeliveryStatus =
+  | "pending"
+  | "sending"
+  | "sent"
+  | "failed"
+  | "unknown";
+export type PaymentLinkDeliverySummary = {
+  requestId: string;
+  intent: PaymentLinkDeliveryIntent;
+  status: PaymentLinkDeliveryStatus;
+  channel: "email";
+  amount: number;
+  currency: "EUR";
+  attempts: number;
+  createdAt?: string;
+  lastAttemptAt?: string;
+  completedAt?: string;
+  providerId?: string;
+  errorCode?: string;
+};
 export type DeliveryFeeStatus = "free" | "to_confirm" | "configured";
 
 export type DeliveryZone = {
@@ -485,6 +506,8 @@ export type Order = {
   paymentLinkSentAt?: string;
   paymentLinkSentBy?: string;
   paymentLinkChannel?: PaymentLinkChannel;
+  paymentLinkDelivery?: PaymentLinkDeliverySummary;
+  paymentLinkDeliveryHistory?: PaymentLinkDeliverySummary[];
   customerMessage?: string;
   orderStatus: OrderStatus;
   deliveryMethod: DeliveryMethod;
