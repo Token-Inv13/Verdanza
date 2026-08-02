@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { Menu, ShoppingBag, UserRound } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { AgeGate } from "../components/AgeGate";
@@ -24,6 +24,8 @@ const navItems = [
   { label: "Qualité", to: "/qualite-conformite" },
 ];
 
+const mobileMenuId = "mobile-navigation-menu";
+
 function ctaCategoryForPath(path: string) {
   if (path.startsWith("/blog")) return "content";
   if (path.startsWith("/livraison")) return "delivery";
@@ -41,6 +43,7 @@ function ctaIdForPath(prefix: string, path: string) {
 
 export function MainLayout() {
   const [open, setOpen] = useState(false);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const { itemCount } = useCart();
   const { user } = useAuth();
   const consent = useConsent();
@@ -49,6 +52,19 @@ export function MainLayout() {
     (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
     "contact@verdanza.fr";
   const socialLinks = getActiveSocialLinks();
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      mobileMenuButtonRef.current?.focus();
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [open]);
 
   return (
     <div className="min-h-screen bg-ivory text-ink">
@@ -105,16 +121,23 @@ export function MainLayout() {
               {itemCount > 0 && <span className="ml-1 text-xs">{itemCount}</span>}
             </NavLink>
             <button
+              ref={mobileMenuButtonRef}
+              type="button"
               className="icon-button lg:hidden"
               onClick={() => setOpen((value) => !value)}
-              aria-label="Menu"
+              aria-controls={mobileMenuId}
+              aria-expanded={open}
+              aria-label={open ? "Fermer le menu mobile" : "Ouvrir le menu mobile"}
             >
               <Menu size={18} />
             </button>
           </div>
         </div>
         {open && (
-          <nav className="container-page grid gap-3 border-t border-forest/10 pb-5 pt-2 text-sm text-forest lg:hidden">
+          <nav
+            id={mobileMenuId}
+            className="container-page grid gap-3 border-t border-forest/10 pb-5 pt-2 text-sm text-forest lg:hidden"
+          >
             {navItems.map((item) => (
               <NavLink
                 key={item.to}

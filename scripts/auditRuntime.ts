@@ -106,6 +106,9 @@ async function auditInteractiveViewport(
     try {
       await gotoDomReady(page, `${baseUrl}/`);
       await expectOneH1(page, `${label} home`);
+      if (label === "mobile") {
+        await auditMobileMenu(page, label);
+      }
       await page.getByRole("link", { name: /Guides/i }).first().click();
       await page.waitForURL("**/blog");
       await waitForStableDom(page);
@@ -177,6 +180,64 @@ async function auditInteractiveViewport(
     }
   } finally {
     await context.close();
+  }
+}
+
+async function auditMobileMenu(page: Page, label: string) {
+  const menuButton = page.getByRole("button", { name: "Ouvrir le menu mobile" });
+  if ((await menuButton.count()) !== 1) {
+    failures.push(`${label} mobile menu button missing`);
+    return;
+  }
+
+  if ((await menuButton.getAttribute("aria-expanded")) !== "false") {
+    failures.push(`${label} mobile menu closed aria-expanded mismatch`);
+  }
+
+  const controlledPanelId = await menuButton.getAttribute("aria-controls");
+  if (!controlledPanelId) {
+    failures.push(`${label} mobile menu aria-controls missing`);
+    return;
+  }
+
+  const toggleButton = page.locator(`button[aria-controls="${controlledPanelId}"]`);
+  await toggleButton.click();
+  const closeButton = page.getByRole("button", { name: "Fermer le menu mobile" });
+  if ((await closeButton.getAttribute("aria-expanded")) !== "true") {
+    failures.push(`${label} mobile menu open aria-expanded mismatch`);
+  }
+
+  const menuPanel = page.locator(`#${controlledPanelId}`);
+  if ((await menuPanel.count()) !== 1) {
+    failures.push(`${label} mobile menu aria-controls target missing`);
+    return;
+  }
+
+  const openWidths = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  if (openWidths.scrollWidth > openWidths.clientWidth) {
+    failures.push(
+      `${label} mobile menu overflow ${openWidths.scrollWidth} > ${openWidths.clientWidth}`,
+    );
+  }
+
+  await page.keyboard.press("Escape");
+  if ((await toggleButton.getAttribute("aria-expanded")) !== "false") {
+    failures.push(`${label} mobile menu Escape did not close`);
+  }
+  if (!(await toggleButton.evaluate((button) => document.activeElement === button))) {
+    failures.push(`${label} mobile menu Escape did not restore focus`);
+  }
+
+  await toggleButton.click();
+  await page.locator(`#${controlledPanelId}`).getByRole("link", { name: "Accueil" }).click();
+  if ((await toggleButton.getAttribute("aria-expanded")) !== "false") {
+    failures.push(`${label} mobile menu link activation did not close`);
+  }
+  if ((await page.locator(`#${controlledPanelId}`).count()) !== 0) {
+    failures.push(`${label} mobile menu panel remained after link activation`);
   }
 }
 
