@@ -1,15 +1,11 @@
 import { chromium } from "playwright";
 import { blockExternalServices, gotoDomReady } from "./auditPageReady";
-import { allSeoRoutes, canonicalUrl, prerenderFallbackSeoRoutes } from "./seoRoutes";
+import { allSeoRoutes, canonicalUrl } from "./seoRoutes";
 import { startAuditStaticServer } from "./auditStaticServer";
 
 const routes = allSeoRoutes();
 const requestedBaseUrl = process.argv[2];
-const auditServer = requestedBaseUrl
-  ? undefined
-  : await startAuditStaticServer({
-      notFoundPaths: prerenderFallbackSeoRoutes().map((route) => route.path),
-    });
+const auditServer = requestedBaseUrl ? undefined : await startAuditStaticServer();
 const baseUrl = requestedBaseUrl || auditServer?.baseUrl || "";
 
 type PageMeta = {
@@ -96,7 +92,9 @@ const failures = rows.filter((row) => {
   const robotsNoindex = row.robots.includes("noindex");
   const initialRobotsNoindex = row.initialRobots.includes("noindex");
   const isNotFound = row.kind === "fallback";
-  const expectedStatus = isNotFound ? 404 : 200;
+  // Registered fallback fixtures are prerendered files and therefore return 200
+  // on Vercel. The synthetic, genuinely unknown URL below must remain a 404.
+  const expectedStatus = 200;
   return (
     row.status !== expectedStatus ||
     row.initialStatus !== expectedStatus ||
