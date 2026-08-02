@@ -14,12 +14,20 @@ const distDir = resolve("dist");
 const sitemap = new Set(sitemapUrls());
 const rows = [];
 const fallbackRoutes = prerenderFallbackSeoRoutes();
+const prerenderRoutes = prerenderSeoRoutes();
+const requiredAdminDeepLinks = ["/admin/analytics", "/admin/comptabilite"];
 const server = await startAuditStaticServer({
   notFoundPaths: fallbackRoutes.map((route) => route.path),
 });
 
 try {
-  for (const route of prerenderSeoRoutes()) {
+  for (const path of requiredAdminDeepLinks) {
+    const route = prerenderRoutes.find((candidate) => candidate.path === path);
+    if (!route || route.kind !== "admin" || route.indexable) {
+      throw new Error(`Required private Admin prerender route is missing or invalid: ${path}`);
+    }
+  }
+  for (const route of prerenderRoutes) {
     rows.push(await auditRoute(route, outputPathForRoute(route.path)));
   }
   for (const route of fallbackRoutes) {

@@ -147,6 +147,12 @@ export const staticSeoRoutes: SeoRoute[] = [
   },
   { path: "/admin", kind: "admin", component: "AdminLayout/AdminPage", indexable: false },
   {
+    path: "/admin/analytics",
+    kind: "admin",
+    component: "AdminPage(Analytics)",
+    indexable: false,
+  },
+  {
     path: "/admin/produits",
     kind: "admin",
     component: "AdminPage(Produits)",
@@ -171,6 +177,12 @@ export const staticSeoRoutes: SeoRoute[] = [
   { path: "/admin/coupons", kind: "admin", component: "AdminPage(Coupons)", indexable: false },
   { path: "/admin/bannieres", kind: "admin", component: "AdminPage(Bannieres)", indexable: false },
   { path: "/admin/archives", kind: "admin", component: "AdminArchivesPage", indexable: false },
+  {
+    path: "/admin/comptabilite",
+    kind: "admin",
+    component: "AdminPage(Comptabilite)",
+    indexable: false,
+  },
   { path: "/admin/factures", kind: "admin", component: "AdminPage(Factures)", indexable: false },
   {
     path: "/admin/facturation",
