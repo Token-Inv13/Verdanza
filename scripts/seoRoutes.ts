@@ -101,6 +101,12 @@ export const staticSeoRoutes: SeoRoute[] = [
   { path: "/retours", kind: "public-indexable", component: "LegalPage", indexable: true },
   { path: "/connexion", kind: "public-noindex", component: "AuthPage(login)", indexable: false },
   {
+    path: "/auth/action",
+    kind: "public-noindex",
+    component: "FirebaseAuthActionPage",
+    indexable: false,
+  },
+  {
     path: "/inscription",
     kind: "public-noindex",
     component: "AuthPage(register)",

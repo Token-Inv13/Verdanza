@@ -18,6 +18,7 @@ const noJavaScriptRoutes = [
   "/produits/supreme-purple-cbd",
   "/produits/mango-haze-cbd",
   "/connexion",
+  "/auth/action",
   "/url-totalement-inconnue-test",
 ];
 
@@ -149,6 +150,22 @@ async function auditInteractiveViewport(
       ) {
         failures.push(`${label} admin gate did not show admin login`);
       }
+
+      await gotoDomReady(
+        page,
+        `${baseUrl}/auth/action?mode=unsupported&oobCode=runtime-secret&continueUrl=https%3A%2F%2Fevil.example`,
+      );
+      const authActionRobots = await page.locator('meta[name="robots"]').getAttribute("content");
+      if (authActionRobots !== "noindex,nofollow") {
+        failures.push(`${label} auth action robots mismatch`);
+      }
+      if (await page.getByRole("heading", { name: "Accès réservé aux majeurs" }).count()) {
+        failures.push(`${label} auth action is blocked by the age gate`);
+      }
+      if (new URL(page.url()).search) {
+        failures.push(`${label} auth action retained sensitive query parameters in the URL`);
+      }
+      await expectOneH1(page, `${label} auth action`);
 
       await gotoDomReady(page, `${baseUrl}/url-totalement-inconnue-test`);
       const unknownRobots = await page.locator('meta[name="robots"]').getAttribute("content");

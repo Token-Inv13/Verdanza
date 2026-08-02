@@ -26,7 +26,7 @@ export function isAnalyticsSuppressedLocation() {
 }
 
 export function isAnalyticsSuppressedPath(pathname: string) {
-  return /^\/admin(?:\/|$)/.test(pathname);
+  return /^(?:\/admin(?:\/|$)|\/auth\/action(?:\/|$))/.test(pathname);
 }
 
 export function isAnalyticsSuppressedHostname(hostname: string) {

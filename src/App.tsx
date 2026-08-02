@@ -53,6 +53,11 @@ const AccountFavoritesPage = lazy(() =>
 const AuthPage = lazy(() =>
   import("./pages/AuthPage").then((module) => ({ default: module.AuthPage })),
 );
+const FirebaseAuthActionPage = lazy(() =>
+  import("./pages/FirebaseAuthActionPage").then((module) => ({
+    default: module.FirebaseAuthActionPage,
+  })),
+);
 const CartPage = lazy(() =>
   import("./pages/CartPage").then((module) => ({ default: module.CartPage })),
 );
@@ -79,6 +84,7 @@ export function App() {
       <AnalyticsRouteTracker />
       <ScrollToTop />
       <Routes>
+        <Route path="/auth/action" element={<FirebaseAuthActionPage />} />
         <Route element={<MainLayout />}>
           <Route index element={<HomePage />} />
           <Route path="boutique" element={<ShopPage />} />

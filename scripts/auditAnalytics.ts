@@ -58,6 +58,9 @@ function auditStaticFiles() {
   if (!gtmSource.includes("isAnalyticsSuppressedPath") || !gtmSource.includes(".vercel.app")) {
     failures.push("analytics suppression for admin and Vercel preview hosts is missing");
   }
+  if (!gtmSource.includes("\\/auth\\/action")) {
+    failures.push("analytics suppression for Firebase Auth action links is missing");
+  }
   if (!gtmSource.includes("ga-disable-${ga4MeasurementId}")) {
     failures.push("GA4 runtime disable flag is missing for suppressed analytics locations");
   }
@@ -340,6 +343,21 @@ async function assertKnownVisitorFlow(browser: Browser, baseUrl: string) {
   }
   if (!(await isGa4RuntimeDisabled(page))) {
     failures.push("direct admin visit did not disable GA4 runtime");
+  }
+
+  await page.goto(
+    `${baseUrl}/auth/action?mode=unsupported&oobCode=analytics-secret&continueUrl=https%3A%2F%2Fevil.example`,
+    { waitUntil: "load" },
+  );
+  await page.waitForTimeout(300);
+  if (googleRequests.gtm.length || googleRequests.ga4.length) {
+    failures.push("direct auth action visit with stored consent fired Google requests");
+  }
+  if (new URL(page.url()).search) {
+    failures.push("auth action visit retained sensitive query parameters in the URL");
+  }
+  if (!(await isGa4RuntimeDisabled(page))) {
+    failures.push("direct auth action visit did not disable GA4 runtime");
   }
 
   await page.goto(`${baseUrl}/fleurs-cbd`, { waitUntil: "load" });

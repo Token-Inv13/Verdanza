@@ -14,6 +14,7 @@ import {
   loadFirebaseAuthApi,
   type FirebaseUser,
 } from "../lib/firebaseAuth";
+import { firebaseAuthActionCodeSettings } from "../lib/firebaseAuthActions";
 import { getAdminUserForAuthUser } from "../services/adminUsersService";
 import { ensureCustomerProfile } from "../services/customersService";
 import type { AdminUser, CustomerProfile } from "../types";
@@ -37,7 +38,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function shouldLoadAuthImmediately(pathname: string) {
-  return /^(\/admin|\/compte|\/connexion|\/inscription|\/panier|\/checkout)(?:\/|$)/.test(
+  return /^(\/admin|\/compte|\/connexion|\/inscription|\/panier|\/checkout|\/auth\/action)(?:\/|$)/.test(
     pathname,
   );
 }
@@ -152,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resetPassword = useCallback(async (email: string) => {
     const { auth, firebaseAuth } = await loadFirebaseAuthApi();
     if (!auth) throw new Error("Firebase is not configured.");
-    await firebaseAuth.sendPasswordResetEmail(auth, email);
+    await firebaseAuth.sendPasswordResetEmail(auth, email, firebaseAuthActionCodeSettings);
   }, []);
 
   const signOut = useCallback(async () => {

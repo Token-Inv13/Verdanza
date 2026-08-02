@@ -31,6 +31,8 @@ export async function getFirebaseAuth() {
       authInstance = firebaseAuth.getAuth(firebaseApp);
     }
 
+    authInstance.languageCode = "fr";
+
     return authInstance;
   });
 
