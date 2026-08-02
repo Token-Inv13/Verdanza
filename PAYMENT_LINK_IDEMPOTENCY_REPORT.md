@@ -57,10 +57,14 @@ Le test dédié couvre : deux POST simultanés, réponse HTTP perdue, timeout su
 
 ## Production
 
-- Commit : à renseigner après publication
-- Déploiement Vercel : à renseigner après publication
-- Statut : à renseigner après publication
-- Validation sans envoi : à renseigner après publication
+- Commit fonctionnel : `04ab2f31d9b3aca40d93278af6404da52c2a0660` (`fix: make payment link delivery idempotent`)
+- Déploiement Vercel fonctionnel : `dpl_7rv83zthQV5LoY7VVdHhLWMk6zzj`
+- Statut : `READY`, cible Production, alias `verdanza.fr` attaché sans erreur
+- `GET /api/send-payment-link` : HTTP 405
+- `POST /api/send-payment-link` sans authentification et avec payload vide : HTTP 401
+- `GET /admin` : HTTP 200
+- Erreurs runtime Vercel sur `/api/send-payment-link` après déploiement : aucune
+- Admin authentifié contrôlé en lecture seule à 390 px et 1280 px : contrôles de paiement présents, aucun débordement horizontal, aucune erreur ou alerte console
 
 Aucun e-mail ni lien de paiement réel n’a été envoyé pendant les tests ou la validation.
 
