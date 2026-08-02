@@ -38,6 +38,7 @@
     "test:product-references": "node --import tsx scripts/testProductReferences.ts",
     "test:product-reference-migration": "node --import tsx scripts/testProductReferenceMigration.ts",
     "test:admin-product-images-deletion": "node --import tsx scripts/testAdminProductImagesDeletion.ts",
+    "test:admin-products-responsive": "node --import tsx scripts/testAdminProductsResponsive.ts",
     "test:admin-archives": "node --import tsx scripts/testAdminArchives.ts",
     "test:admin-analytics": "node --import tsx scripts/testAdminAnalytics.ts",
     "test:order-reliability": "node --import tsx scripts/testOrderReliability.ts",

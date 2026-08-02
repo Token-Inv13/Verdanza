@@ -840,7 +840,7 @@ export function AdminPage({ section }: { section: string }) {
       {section === "Analytics" && <AdminAnalyticsPanel />}
 
       {section === "Produits" && (
-        <div className="mt-8 grid gap-6 xl:grid-cols-[420px_1fr]">
+        <div className="mt-8 grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
           <ProductForm
             product={editingProduct}
             onChange={setEditingProduct}
@@ -852,7 +852,7 @@ export function AdminPage({ section }: { section: string }) {
             }
             onDeleteProduct={handleProductDelete}
           />
-          <section>
+          <section className="min-w-0">
             <SourceLine source={productSource} />
             <ProductTable
               products={products}
@@ -1061,7 +1061,7 @@ function ProductForm({
   }, [product.id]);
 
   return (
-    <form onSubmit={onSubmit} className="admin-card h-fit">
+    <form onSubmit={onSubmit} className="admin-card min-w-0 h-fit">
       <h2 className="font-display text-3xl text-forest">
         {product.id ? "Éditer produit" : "Créer produit"}
       </h2>
