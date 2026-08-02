@@ -17,6 +17,7 @@ import {
   computeWeightedSupplierCostsAsOf,
   resolveOrderItemPurchaseCost,
 } from "../src/lib/accountingCosts.js";
+import { applyOrderCancellationInTransaction } from "./_server/orderCancellation.js";
 import type {
   Order,
   OrderStatus,
@@ -73,6 +74,7 @@ export default async function handler(
     let previousStatus: OrderStatus | null = null;
     let purchaseAnalyticsQueued = false;
     let purchaseAnalyticsResult: PurchaseAnalyticsProcessResult | null = null;
+    let missingPromotionIds: string[] = [];
 
     await db.runTransaction(async (transaction) => {
       const orderRef = db.collection("orders").doc(body.orderId);
@@ -115,6 +117,23 @@ export default async function handler(
       const update: Record<string, unknown> = {
         updatedAt: FieldValue.serverTimestamp(),
       };
+
+      if (body.orderStatus === "cancelled") {
+        if (body.paymentStatus && body.paymentStatus !== "cancelled") {
+          throw new Error(
+            "Une commande annulee ne peut pas conserver un reglement actif.",
+          );
+        }
+        const cancellation = await applyOrderCancellationInTransaction({
+          db,
+          transaction,
+          order,
+          adminUid: admin.uid,
+          now: new Date().toISOString(),
+        });
+        Object.assign(update, cancellation.orderUpdate);
+        missingPromotionIds = cancellation.missingPromotionIds;
+      }
 
       if (body.internalNote !== undefined) {
         update.internalNote = body.internalNote;
@@ -219,58 +238,6 @@ export default async function handler(
         });
       }
 
-      if (
-        body.orderStatus === "cancelled" &&
-        order.orderStatus !== "cancelled" &&
-        !order.stockRestoredAt
-      ) {
-        const now = new Date().toISOString();
-        for (const item of order.items || []) {
-          const quantity = Number(item.quantity || 0);
-          if (!item.productId || quantity <= 0) continue;
-          const productRef = db.collection("products").doc(item.productId);
-          transaction.update(productRef, {
-            stock: FieldValue.increment(quantity),
-            updatedAt: FieldValue.serverTimestamp(),
-          });
-          transaction.set(db.collection("stockMovements").doc(), {
-            productId: item.productId,
-            productName: item.name,
-            type: "order_cancelled",
-            quantity,
-            note: `Annulation commande ${order.id}`,
-            createdAt: FieldValue.serverTimestamp(),
-            createdBy: admin.uid,
-            orderId: order.id,
-          });
-        }
-        update.stockRestoredAt = now;
-        update.cancelledAt = now;
-        if (!body.paymentStatus) update.paymentStatus = "cancelled";
-        const couponRestoreId = order.promoId || (order.couponCode ? order.couponCode.toLowerCase() : "");
-        if (couponRestoreId && !order.couponRestoredAt) {
-          transaction.set(
-            db.collection("coupons").doc(couponRestoreId),
-            {
-              usedCount: FieldValue.increment(-1),
-              updatedAt: FieldValue.serverTimestamp(),
-            },
-            { merge: true },
-          );
-          update.couponRestoredAt = now;
-        }
-        if (order.invoiceId) {
-          transaction.set(
-            db.collection("invoices").doc(order.invoiceId),
-            {
-              status: "cancelled",
-              updatedAt: now,
-            },
-            { merge: true },
-          );
-        }
-      }
-
       if (body.paymentStatus === "paid") {
         purchaseAnalyticsQueued = await enqueuePurchaseAnalyticsForPaidTransition({
           db,
@@ -294,6 +261,13 @@ export default async function handler(
         internalNote: body.internalNote ?? order.internalNote,
       };
     });
+
+    if (missingPromotionIds.length) {
+      console.warn("order cancellation promotion documents missing", {
+        orderId: body.orderId,
+        promotionIds: missingPromotionIds,
+      });
+    }
 
     if (updatedOrder && body.orderStatus && previousStatus && body.orderStatus !== previousStatus) {
       const result = await sendOrderStatusUpdateEmail(

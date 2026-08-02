@@ -515,6 +515,24 @@ export type Order = {
   cancelledAt?: string;
   stockRestoredAt?: string;
   couponRestoredAt?: string;
+  promotionsRestoredAt?: string;
+  restoredPromotionIds?: string[];
+  missingPromotionIds?: string[];
+  promotionRestoration?: {
+    requestedPromotionIds: string[];
+    restoredPromotionIds: string[];
+    missingPromotionIds: string[];
+    alreadyRestoredPromotionIds: string[];
+    restoredAt: string;
+    restoredByUid: string;
+  };
+  linkedInvoiceCancellation?: {
+    invoiceId: string;
+    status: "cancelled" | "already_cancelled" | "missing";
+    checkedAt: string;
+    changedAt?: string;
+    changedByUid: string;
+  };
   createdAt: string;
   updatedAt: string;
 };

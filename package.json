@@ -41,6 +41,7 @@
     "test:admin-archives": "node --import tsx scripts/testAdminArchives.ts",
     "test:admin-analytics": "node --import tsx scripts/testAdminAnalytics.ts",
     "test:order-reliability": "node --import tsx scripts/testOrderReliability.ts",
+    "test:order-cancellation-consistency": "node --import tsx scripts/testOrderCancellationConsistency.ts",
     "test:public-rate-limits": "node --import tsx scripts/testPublicRateLimits.ts",
     "test:api-import": "node --import tsx scripts/testInvoicesApiImport.ts",
     "prerender": "node --import tsx scripts/prerender.ts",

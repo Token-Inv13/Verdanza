@@ -1,5 +1,6 @@
 import type { BillingSettings, Invoice, Order, OrderStatus } from "../../src/types/index.js";
 import { formatLocalDeliveryEstimate } from "../../src/lib/deliveryEstimate.js";
+import { invoiceDocumentSendBlock } from "../../src/lib/invoiceSendPolicy.js";
 import { orderItemLineTotal, orderItemSummaryLabel } from "../../src/lib/orderLineDisplay.js";
 
 export type EmailResult =
@@ -219,6 +220,10 @@ export async function sendInvoiceToCustomerEmail(
   settings: BillingSettings,
   pdfBuffer: Buffer,
 ) {
+  const sendBlock = invoiceDocumentSendBlock(invoice);
+  if (sendBlock) {
+    return { status: "skipped", reason: sendBlock.code } satisfies EmailResult;
+  }
   if (!invoice.customerEmail) {
     return { status: "skipped", reason: "customer_email_absent" } satisfies EmailResult;
   }

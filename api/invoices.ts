@@ -35,6 +35,13 @@ import {
   syncProductPrimaryImage,
   validateProductImagesForProduct,
 } from "../src/lib/productImages.js";
+import {
+  assertInvoiceSendable,
+} from "../src/lib/invoiceSendPolicy.js";
+import {
+  executeGuardedInvoiceSend,
+  finalizeAcceptedInvoiceSend,
+} from "./_server/invoiceEmailSend.js";
 import type {
   BillingSettings,
   Invoice,
@@ -190,19 +197,20 @@ export default async function handler(
 
     if (body.action === "sendEmail") {
       const invoice = await getInvoice(db, String(body.invoiceId || ""));
+      const linkedOrder = await getLinkedOrder(db, invoice);
+      assertInvoiceSendable(invoice, linkedOrder);
       if (!invoice.customerEmail) throw new Error("Email client absent.");
       const settings = await getBillingSettings(db);
       const pdf = await renderInvoicePdf(invoice, settings);
-      const result = await sendInvoiceToCustomerEmail(invoice, settings, Buffer.from(pdf));
-      if (result.status !== "sent") {
-        throw new Error(result.reason || "Envoi facture impossible.");
-      }
-      const now = new Date().toISOString();
-      await db.collection("invoices").doc(invoice.id).update({
-        status: invoice.status === "draft" ? "sent" : "sent",
-        sentAt: now,
-        sentTo: invoice.customerEmail,
-        updatedAt: now,
+      await executeGuardedInvoiceSend({
+        invoice,
+        linkedOrder,
+        send: () => sendInvoiceToCustomerEmail(invoice, settings, Buffer.from(pdf)),
+        finalize: () => finalizeAcceptedInvoiceSend({
+          db,
+          invoiceId: invoice.id,
+          sentTo: invoice.customerEmail || "",
+        }),
       });
       sendJson(response, { ok: true });
       return;
@@ -264,16 +272,32 @@ export default async function handler(
     sendJson(response, { error: "Action facture inconnue." }, 400);
   } catch (error) {
     console.error("invoices failed", error);
-    const details = error as { statusCode?: number; dependencies?: ProductDependencyCounts };
+    const details = error as {
+      statusCode?: number;
+      code?: string;
+      dependencies?: ProductDependencyCounts;
+    };
     sendJson(
       response,
       {
         error: error instanceof Error ? error.message : "Operation facture impossible.",
+        ...(details.code ? { code: details.code } : {}),
         ...(details.dependencies ? { dependencies: details.dependencies, blocked: true } : {}),
       },
       details.statusCode || 400,
     );
   }
+}
+
+async function getLinkedOrder(
+  db: FirebaseFirestore.Firestore,
+  invoice: Invoice,
+) {
+  if (!invoice.orderId) return undefined;
+  const snapshot = await db.collection("orders").doc(invoice.orderId).get();
+  return snapshot.exists
+    ? ({ id: snapshot.id, ...snapshot.data() } as Order)
+    : null;
 }
 
 async function createInvoiceFromOrder(db: FirebaseFirestore.Firestore, orderId: string) {

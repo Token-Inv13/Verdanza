@@ -71,6 +71,7 @@ import {
   visibleAdminInvoices,
   visibleAdminPromoBanners,
 } from "../../lib/adminArchives";
+import { invoiceSendBlock } from "../../lib/invoiceSendPolicy";
 import { saveProductCostAdmin } from "../../services/productCostsService";
 import {
   analyzeSupplierInvoicePdfAdmin,
@@ -5107,6 +5108,7 @@ function AccountingPanel({
           <ManualInvoiceForm onCreate={onCreateManualInvoice} />
           <InvoicesPanel
             invoices={invoices}
+            orders={orders}
             onStatus={onInvoiceStatus}
             onDownload={onInvoiceDownload}
             onSend={onInvoiceSend}
@@ -5831,15 +5833,21 @@ function ManualInvoiceForm({ onCreate }: { onCreate: (input: ManualInvoiceInput)
 
 function InvoicesPanel({
   invoices,
+  orders,
   onStatus,
   onDownload,
   onSend,
 }: {
   invoices: Invoice[];
+  orders: AdminOrderRow[];
   onStatus: (invoice: Invoice, status: InvoiceStatus) => Promise<void>;
   onDownload: (invoice: Invoice) => Promise<void>;
   onSend: (invoice: Invoice) => Promise<void>;
 }) {
+  const orderById = useMemo(
+    () => new Map(orders.map((order) => [order.id, order])),
+    [orders],
+  );
   return (
     <section className="overflow-hidden rounded-lg border border-forest/10 bg-ivory">
       {!invoices.length && (
@@ -5857,7 +5865,12 @@ function InvoicesPanel({
             </tr>
           </thead>
           <tbody>
-            {invoices.map((invoice) => (
+            {invoices.map((invoice) => {
+              const sendBlock = invoiceSendBlock(
+                invoice,
+                invoice.orderId ? orderById.get(invoice.orderId) || null : undefined,
+              );
+              return (
               <tr key={invoice.id} className="border-t border-forest/10">
                 <td className="px-4 py-4">
                   <strong className="block text-forest">{invoice.invoiceNumber}</strong>
@@ -5885,11 +5898,26 @@ function InvoicesPanel({
                 <td className="px-4 py-4">
                   <div className="flex flex-wrap gap-2">
                     <button className="btn-secondary min-h-9 px-3 py-2" onClick={() => void onDownload(invoice)}>PDF</button>
-                    <button className="btn-primary min-h-9 px-3 py-2" onClick={() => void onSend(invoice)}>Envoyer</button>
+                    <button
+                      className="btn-primary min-h-9 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={Boolean(sendBlock)}
+                      title={sendBlock?.message}
+                      onClick={() => void onSend(invoice)}
+                    >
+                      Envoyer
+                    </button>
                   </div>
+                  {sendBlock && (
+                    <span className="mt-2 block max-w-56 text-xs text-red-700">
+                      {sendBlock.code === "invoice_cancelled"
+                        ? "Facture annulée — envoi indisponible"
+                        : sendBlock.message}
+                    </span>
+                  )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
