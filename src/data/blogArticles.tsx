@@ -6,6 +6,258 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "aspect-fleur-cbd-couleur-structure",
+    title: "Fleur CBD : comment lire son aspect sans surinterpréter ?",
+    seoTitle: "Aspect d'une fleur CBD : couleur et structure | Verdanza",
+    description:
+      "Apprendre à observer une fleur CBD : couleur, structure, manucure et densité apparente, sans confondre aspect visuel et preuve de qualité.",
+    excerpt:
+      "Couleur, forme, feuilles et densité donnent des repères descriptifs. Ce guide aide à les lire sans en tirer de conclusions que seule une analyse de lot peut confirmer.",
+    category: "Guide produits",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-08-03T11:00:00+02:00",
+    dateModified: "2026-08-03T11:00:00+02:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/aspect-fleur-cbd-couleur-structure-1x1.webp",
+      landscape: "/images/blog/aspect-fleur-cbd-couleur-structure-4x3.webp",
+      wide: "/images/blog/aspect-fleur-cbd-couleur-structure-16x9.webp",
+    },
+    relatedSlugs: [
+      "indoor-greenhouse-hydroponique-differences",
+      "comment-lire-analyse-cbd",
+      "conserver-fleurs-resines-cbd",
+    ],
+    links: [
+      { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/comment-lire-analyse-cbd",
+        label: "Lire une analyse CBD",
+      },
+      {
+        to: "/blog/conserver-fleurs-resines-cbd",
+        label: "Conserver fleurs et résines CBD",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            L'aspect d'une <Link to="/fleurs-cbd">fleur CBD</Link> donne des
+            repères utiles pour la décrire : couleur dominante, forme,
+            présence de petites feuilles, densité apparente ou régularité de la
+            manucure. Ces observations restent visuelles. Elles ne permettent
+            pas, à elles seules, de connaître la composition, la conformité ou
+            la qualité globale d'un lot.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Repère Verdanza : une photo et un examen visuel décrivent un produit.
+            Pour vérifier des teneurs en cannabinoïdes ou la conformité d'un
+            lot, il faut consulter les informations de traçabilité et l'analyse
+            correspondante.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "pourquoi-aspect-varie",
+        text: "Pourquoi l'aspect d'une fleur CBD varie-t-il ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Deux fleurs peuvent présenter des silhouettes très différentes sans
+            que l'une soit automatiquement meilleure que l'autre. La variété,
+            l'environnement de culture, la position de la fleur sur la plante,
+            le séchage, le tri et la conservation participent à l'aspect final.
+            Des écarts peuvent également exister entre deux lots d'une même
+            référence, car il s'agit d'un produit végétal.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Repères pour décrire une fleur sans conclure trop vite.",
+          headers: ["Élément observé", "Ce qu'il décrit", "Ce qu'il ne prouve pas"],
+          rows: [
+            [
+              "Couleur",
+              "La teinte dominante et ses nuances.",
+              "Le taux de CBD ou la conformité du lot.",
+            ],
+            [
+              "Structure",
+              "Une fleur compacte, allongée, aérée ou irrégulière.",
+              "La méthode de culture à elle seule.",
+            ],
+            [
+              "Manucure",
+              "La quantité visible de petites feuilles et de tiges.",
+              "La composition mesurée du produit.",
+            ],
+            [
+              "Aspect résineux",
+              "La présence visible de trichomes en surface.",
+              "Une teneur précise en cannabinoïdes ou en terpènes.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "couleur-nuances",
+        text: "Couleur et nuances : décrire avant d'interpréter",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une fleur peut aller du vert clair au vert profond, avec parfois des
+            nuances violettes, orangées, brunes ou dorées. Les pistils peuvent
+            aussi créer des contrastes. L'éclairage, la balance des couleurs de
+            l'appareil et l'écran modifient fortement le rendu : une photo de
+            catalogue ne doit donc pas servir de référence colorimétrique
+            absolue.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "structure-densite",
+        text: "Structure et densité apparente",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une structure compacte rassemble les parties de la fleur dans un
+            volume serré. Une structure plus aérée laisse davantage d'espace
+            entre elles. Cette différence peut accompagner la morphologie de la
+            variété ou son environnement de culture. Elle ne permet pas de
+            déduire un taux de CBD, une intensité aromatique ou une méthode de
+            culture avec certitude.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "manucure-trichomes",
+        text: "Manucure, petites feuilles et trichomes",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La manucure désigne le retrait des feuilles et des tiges les plus
+            visibles autour de la fleur. Une présentation très nette et une
+            présentation plus végétale peuvent toutes deux être décrites sans
+            jugement automatique. Les trichomes, qui donnent parfois un aspect
+            poudré ou brillant, restent eux aussi un indice visuel : leur
+            présence ne remplace pas une mesure de laboratoire.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "observer la proportion de fleur, de petites feuilles et de tige ;",
+          "distinguer un détail naturel d'un signe d'altération ;",
+          "éviter d'estimer une teneur à partir d'une surface brillante ;",
+          "tenir compte du cadrage et du grossissement de la photo ;",
+          "comparer des images prises dans des conditions proches.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "fraicheur-alteration",
+        text: "Aspect normal ou signe d'altération ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les variations naturelles ne doivent pas être confondues avec une
+            altération. Une zone cotonneuse, un dépôt inhabituel, une odeur
+            anormale ou une humidité manifestement excessive appellent à ne pas
+            utiliser le produit et à contacter le vendeur. À l'inverse, une
+            teinte sombre ou une structure irrégulière n'est pas, isolément, une
+            preuve de défaut.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            En cas de doute à la réception, conservez l'emballage et les
+            informations de lot, prenez des photos sous une lumière neutre et
+            contactez Verdanza avant toute autre manipulation.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "croiser-informations",
+        text: "Croiser l'image avec la fiche et l'analyse",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La lecture la plus fiable combine plusieurs niveaux d'information :
+            la photo pour la présentation, la fiche pour la variété, le profil
+            aromatique et la culture annoncée, puis l'analyse pour les données
+            mesurées. Le guide sur les{" "}
+            <Link to="/blog/indoor-greenhouse-hydroponique-differences">
+              méthodes de culture
+            </Link>{" "}
+            aide à comprendre le vocabulaire, tandis que celui sur la{" "}
+            <Link to="/blog/comment-lire-analyse-cbd">lecture d'une analyse CBD</Link>{" "}
+            détaille les unités, le lot et les limites de mesure.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "checklist-visuelle",
+        text: "Checklist de lecture visuelle",
+      },
+      {
+        type: "list",
+        items: [
+          "décrire la couleur sans l'associer automatiquement à la qualité ;",
+          "noter si la structure paraît compacte, aérée ou irrégulière ;",
+          "observer la manucure sans en déduire la composition ;",
+          "vérifier que la photo correspond bien à la référence consultée ;",
+          "croiser l'aspect avec la fiche, le lot et l'analyse disponible ;",
+          "appliquer de bonnes conditions de conservation après réception.",
+        ],
+      },
+      {
+        type: "links",
+        title: "Compléter vos repères",
+        links: [
+          { to: "/blog/comment-lire-analyse-cbd", label: "Lire une analyse CBD" },
+          {
+            to: "/blog/conserver-fleurs-resines-cbd",
+            label: "Bien conserver fleurs et résines",
+          },
+          { to: "/qualite-conformite", label: "Qualité et conformité" },
+        ],
+      },
+    ],
+  },
+  {
     slug: "terpenes-profils-aromatiques-cbd",
     title: "Terpènes et profils aromatiques CBD : comment les lire ?",
     seoTitle: "Terpènes CBD et profils aromatiques : guide de lecture | Verdanza",

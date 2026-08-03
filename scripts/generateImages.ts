@@ -90,6 +90,14 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" }
 > = {
+  "aspect-fleur-cbd-couleur-structure": {
+    label: "Aspect d'une fleur CBD",
+    sources: [
+      "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
+      "/Fiche produit/Harlequin (sous-serre)/harlequin_zoom.webp",
+      "/Fiche produit/Mandarine/mandarine_zoom.webp",
+    ],
+  },
   "terpenes-profils-aromatiques-cbd": {
     label: "Terpènes et arômes CBD",
     kind: "aroma",

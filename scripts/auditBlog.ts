@@ -17,7 +17,7 @@ const sitemap = existsSync(resolve("public/sitemap.xml"))
   : "";
 const articleMainTexts: string[] = [];
 
-if (published.length !== 8) failures.push(`published article count ${published.length}, expected 8`);
+if (published.length !== 9) failures.push(`published article count ${published.length}, expected 9`);
 expectUnique("slugs", published.map((article) => article.slug));
 expectUnique("SEO titles", published.map((article) => article.seoTitle));
 expectUnique("descriptions", published.map((article) => article.description));
