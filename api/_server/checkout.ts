@@ -553,9 +553,25 @@ async function resolveDeliveryFee(
         "Sélectionnez une adresse proposée dans la liste pour vérifier la livraison locale.",
       );
     }
-    if (eligibility.reason === "outside_active_radius_zones") {
+    if (eligibility.reason === "outside_radius") {
       throw new Error(
         "Cette adresse se situe hors de notre zone de livraison locale. La livraison postale en France reste disponible.",
+      );
+    }
+    if (
+      eligibility.reason === "missing_address_coordinates" ||
+      eligibility.reason === "invalid_address_coordinates"
+    ) {
+      throw new Error(
+        "Cette adresse n’a pas pu être vérifiée. Sélectionnez de nouveau une adresse proposée dans la liste.",
+      );
+    }
+    if (
+      eligibility.reason === "invalid_zone_coordinates" ||
+      eligibility.reason === "no_active_local_zone"
+    ) {
+      throw new Error(
+        "La livraison locale est temporairement indisponible. La livraison postale en France reste disponible.",
       );
     }
     throw new Error(

@@ -5,11 +5,12 @@ import {
   type AddressSearchStatus,
   type AddressSuggestion,
 } from "../services/addressAutocompleteService";
+import type { DeliveryEligibilityReason } from "../lib/deliveryEligibility";
 
 type AddressAutocompleteProps = {
   value: string;
   selectedAddress?: AddressSuggestion | null;
-  eligibility: "pending" | "eligible" | "outside";
+  eligibility: DeliveryEligibilityReason;
   eligibleMessage?: string;
   onChange: (value: string) => void;
   onSelect: (suggestion: AddressSuggestion) => void;
@@ -188,7 +189,7 @@ export function AddressAutocomplete({
 function addressFeedback(input: {
   value: string;
   selectedAddress?: AddressSuggestion | null;
-  eligibility: "pending" | "eligible" | "outside";
+  eligibility: DeliveryEligibilityReason;
   status: AddressSearchStatus;
   loading: boolean;
   eligibleMessage?: string;
@@ -201,10 +202,32 @@ function addressFeedback(input: {
       isError: false,
     };
   }
-  if (input.selectedAddress && input.eligibility === "outside") {
+  if (input.selectedAddress && input.eligibility === "outside_radius") {
     return {
       message:
         "Cette adresse se situe hors de notre zone de livraison locale. La livraison postale en France reste disponible.",
+      isError: true,
+    };
+  }
+  if (
+    input.selectedAddress &&
+    (input.eligibility === "missing_address_coordinates" ||
+      input.eligibility === "invalid_address_coordinates")
+  ) {
+    return {
+      message:
+        "Cette adresse n’a pas pu être vérifiée. Sélectionnez de nouveau une adresse proposée dans la liste.",
+      isError: true,
+    };
+  }
+  if (
+    input.selectedAddress &&
+    (input.eligibility === "invalid_zone_coordinates" ||
+      input.eligibility === "no_active_local_zone")
+  ) {
+    return {
+      message:
+        "La livraison locale est temporairement indisponible. La livraison postale en France reste disponible.",
       isError: true,
     };
   }

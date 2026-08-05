@@ -35,6 +35,7 @@ import {
 import { publicSubmissionSecurityContext } from "../lib/publicSubmissionSecurity";
 import { invalidateAddressVerification } from "../lib/checkoutAddress";
 import {
+  type DeliveryEligibilityReason,
   evaluateDeliveryEligibility,
   enforceEligibleDeliveryMethod,
   isAutomaticRadiusZone,
@@ -157,11 +158,7 @@ export function CheckoutPage() {
   const localDeliveryEstimate = formatLocalDeliveryEstimate(
     selectedZone ?? openLocalDeliveryZones[0],
   );
-  const addressEligibilityState = !selectedAddress
-    ? "pending"
-    : deliveryEligibility.eligible
-      ? "eligible"
-      : "outside";
+  const addressEligibilityState = deliveryEligibility.reason;
   const eligibleAddressMessage = selectedZone
     ? `Adresse éligible à la livraison locale. ${selectedZone.fee > 0 ? `Frais : ${formatEuro(selectedZone.fee)}.` : "Livraison offerte"} dès ${effectiveLocalDeliveryMinimum(selectedZone.minimumOrderAmount ?? selectedZone.minimumOrder).toFixed(0)} € · ${localDeliveryEstimate}`
     : undefined;
@@ -462,7 +459,7 @@ export function CheckoutPage() {
       throw new Error(message);
     }
     if (deliveryMethod === "local_express" && !deliveryEligibility.eligible) {
-      const message = "Sélectionnez une adresse proposée avant d’utiliser la livraison locale.";
+      const message = deliveryEligibilityMessage(deliveryEligibility.reason);
       setPromoMessage(message);
       throw new Error(message);
     }
@@ -520,9 +517,7 @@ export function CheckoutPage() {
         throw new Error("Le minimum de commande pour la livraison postale est de 15 €.");
       }
       if (deliveryMethod === "local_express" && !deliveryEligibility.eligible) {
-        throw new Error(
-          "Sélectionnez une adresse proposée dans la liste pour vérifier la livraison locale.",
-        );
+        throw new Error(deliveryEligibilityMessage(deliveryEligibility.reason));
       }
       if (deliveryMethod === "local_express" && !selectedZone) {
         throw new Error(
@@ -1141,10 +1136,26 @@ function buildCheckoutAddress(
           latitude: selectedAddress.latitude,
           longitude: selectedAddress.longitude,
           verifiedAt: selectedAddress.verifiedAt,
-          verificationProvider: selectedAddress.provider,
+          verificationProvider: selectedAddress.verificationProvider,
         }
       : {}),
   };
+}
+
+function deliveryEligibilityMessage(reason: DeliveryEligibilityReason) {
+  if (reason === "outside_radius") {
+    return "Cette adresse se situe hors de notre zone de livraison locale. La livraison postale en France reste disponible.";
+  }
+  if (
+    reason === "missing_address_coordinates" ||
+    reason === "invalid_address_coordinates"
+  ) {
+    return "Cette adresse n’a pas pu être vérifiée. Sélectionnez de nouveau une adresse proposée dans la liste.";
+  }
+  if (reason === "invalid_zone_coordinates" || reason === "no_active_local_zone") {
+    return "La livraison locale est temporairement indisponible. La livraison postale en France reste disponible.";
+  }
+  return "Sélectionnez une adresse proposée dans la liste pour vérifier la livraison locale.";
 }
 
 function DeliveryChoice({

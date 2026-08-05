@@ -73,6 +73,7 @@ import {
   visibleAdminPromoBanners,
 } from "../../lib/adminArchives";
 import { invoiceSendBlock } from "../../lib/invoiceSendPolicy";
+import { kilometersToMeters } from "../../lib/deliveryEligibility";
 import { saveProductCostAdmin } from "../../services/productCostsService";
 import {
   analyzeSupplierInvoicePdfAdmin,
@@ -2136,9 +2137,7 @@ function DeliveryZoneCreateForm({
         centerLabel,
         centerLatitude: optionalNumberFromInput(centerLatitude),
         centerLongitude: optionalNumberFromInput(centerLongitude),
-        radiusMeters: optionalPositiveNumberFromInput(radiusKm)
-          ? Number(radiusKm) * 1_000
-          : undefined,
+        radiusMeters: kilometersToMeters(radiusKm),
         addressValidationEnabled,
       });
     } catch (error) {
@@ -2410,9 +2409,7 @@ function DeliveryZoneRow({
                   centerLabel,
                   centerLatitude: optionalNumberFromInput(centerLatitude),
                   centerLongitude: optionalNumberFromInput(centerLongitude),
-                  radiusMeters: optionalPositiveNumberFromInput(radiusKm)
-                    ? Number(radiusKm) * 1_000
-                    : undefined,
+                  radiusMeters: kilometersToMeters(radiusKm),
                   addressValidationEnabled,
                 })
                   .catch((error) =>

@@ -5,7 +5,9 @@ import {
   enforceEligibleDeliveryMethod,
   evaluateDeliveryEligibility,
   haversineDistanceMeters,
+  kilometersToMeters,
 } from "../src/lib/deliveryEligibility.js";
+import { normalizeAddressCoordinates } from "../src/lib/addressCoordinates.js";
 import { invalidateAddressVerification } from "../src/lib/checkoutAddress.js";
 import {
   AddressAutocompleteCoordinator,
@@ -15,6 +17,7 @@ import type { Address, DeliveryZone } from "../src/types/index.js";
 import { validateDeliveryZoneAdminInput } from "../src/services/deliveryZonesService.js";
 
 const center = { latitude: 43.529649, longitude: 5.447913 };
+const nearbyAddressCoordinates = { latitude: 43.522725, longitude: 5.428038 };
 const earthRadiusMeters = 6_371_008.8;
 const verifiedAddress: Address = {
   firstName: "Client",
@@ -74,10 +77,22 @@ assert.equal(
   false,
   "an address outside the radius must be rejected",
 );
+assert.equal(kilometersToMeters(15), 15_000, "15 km must normalize to 15,000 meters");
+assert.equal(kilometersToMeters("15"), 15_000, "numeric radius strings are supported");
 assert.equal(
   evaluateDeliveryEligibility([radiusZone({ isActive: false })], verifiedAddress).reason,
   "no_active_local_zone",
   "inactive zones must be ignored",
+);
+assert.equal(
+  evaluateDeliveryEligibility([radiusZone({ isOpen: false })], verifiedAddress).reason,
+  "no_active_local_zone",
+  "closed zones must be ignored",
+);
+assert.equal(
+  evaluateDeliveryEligibility([radiusZone()], verifiedAddress).reason,
+  "eligible",
+  "an active and open zone must be used",
 );
 
 const selectedByPriority = evaluateDeliveryEligibility(
@@ -103,7 +118,7 @@ const legacyZone: DeliveryZone = {
 };
 assert.equal(
   evaluateDeliveryEligibility([legacyZone], verifiedAddress, legacyZone.id).reason,
-  "eligible_legacy",
+  "eligible",
   "legacy zones without new fields remain compatible",
 );
 
@@ -114,6 +129,81 @@ assert.equal(
   "postal",
   "postal delivery remains selected when local delivery cannot be verified",
 );
+const missingCoordinates = evaluateDeliveryEligibility(
+  [radiusZone()],
+  {
+    verificationProvider: "geoplateforme_ban",
+    verifiedAt: "2026-08-05T10:00:00.000Z",
+  },
+);
+assert.equal(missingCoordinates.reason, "missing_address_coordinates");
+assert.notEqual(missingCoordinates.reason, "outside_radius");
+
+const invalidCoordinates = evaluateDeliveryEligibility(
+  [radiusZone()],
+  {
+    latitude: 95,
+    longitude: 5.4,
+    verificationProvider: "geoplateforme_ban",
+    verifiedAt: "2026-08-05T10:00:00.000Z",
+  },
+);
+assert.equal(invalidCoordinates.reason, "invalid_address_coordinates");
+assert.equal(
+  evaluateDeliveryEligibility(
+    [radiusZone({ centerLatitude: undefined })],
+    verifiedAddress,
+  ).reason,
+  "invalid_zone_coordinates",
+  "invalid zone coordinates must not be reported as outside the radius",
+);
+
+assert.deepEqual(
+  normalizeAddressCoordinates({ latitude: "43.522725", longitude: "5.428038" }),
+  nearbyAddressCoordinates,
+  "numeric coordinate strings must be normalized",
+);
+assert.equal(
+  evaluateDeliveryEligibility(
+    [radiusZone()],
+    {
+      latitude: "43.522725",
+      longitude: "5.428038",
+      verificationProvider: "geoplateforme_ban",
+      verifiedAt: "2026-08-05T10:00:00.000Z",
+    } as unknown as Address,
+  ).reason,
+  "eligible",
+  "numeric coordinate strings must remain eligible after normalization",
+);
+assert.deepEqual(
+  normalizeAddressCoordinates({ lat: 43.522725, lon: 5.428038 }),
+  nearbyAddressCoordinates,
+);
+assert.deepEqual(
+  normalizeAddressCoordinates({ geometry: { coordinates: [5.428038, 43.522725] } }),
+  nearbyAddressCoordinates,
+);
+assert.equal(
+  normalizeAddressCoordinates({ x: 43.522725, y: 5.428038 }),
+  null,
+  "inverted metropolitan x/y coordinates must be rejected, not silently swapped",
+);
+assert.equal(
+  evaluateDeliveryEligibility(
+    [radiusZone()],
+    {
+      latitude: 5.428038,
+      longitude: 43.522725,
+      verificationProvider: "geoplateforme_ban",
+      verifiedAt: "2026-08-05T10:00:00.000Z",
+    },
+  ).reason,
+  "invalid_address_coordinates",
+  "inverted selected-address coordinates must be rejected before Haversine",
+);
+assert.equal(normalizeAddressCoordinates({ x: 0, y: 0 }), null);
+assert.equal(normalizeAddressCoordinates({ x: "not-a-number", y: 43.5 }), null);
 
 const invalidated = invalidateAddressVerification(verifiedAddress, {
   line1: "2 Rue des Tests",
@@ -128,13 +218,17 @@ const validApiPayload = {
   status: "OK",
   results: [
     {
-      x: 5.4,
-      y: 43.5,
-      fulltext: "1 Rue des Tests, 13000 Ville-Test",
-      housenumber: "1",
-      street: "Rue des Tests",
-      zipcode: "13000",
-      city: "Ville-Test",
+      x: 5.428038,
+      y: 43.522725,
+      country: "StreetAddress",
+      city: "Aix-en-Provence",
+      oldcity: "",
+      kind: "housenumber",
+      zipcode: "13090",
+      street: "Rue  Edouard Herriot",
+      metropole: true,
+      fulltext: "20 Rue  Edouard Herriot, 13090 Aix-en-Provence",
+      classification: 7,
     },
   ],
 };
@@ -147,7 +241,7 @@ function jsonResponse(payload: unknown, status = 200) {
 }
 
 let requestedUrl = "";
-const suggestions = await fetchAddressSuggestions("1 rue", {
+const suggestions = await fetchAddressSuggestions("20 rue Édouard-Herriot", {
   signal: new AbortController().signal,
   fetchImpl: (async (input) => {
     requestedUrl = String(input);
@@ -155,10 +249,25 @@ const suggestions = await fetchAddressSuggestions("1 rue", {
   }) as typeof fetch,
 });
 assert.equal(suggestions.length, 1);
+assert.equal(suggestions[0].latitude, nearbyAddressCoordinates.latitude);
+assert.equal(suggestions[0].longitude, nearbyAddressCoordinates.longitude);
+assert.equal(suggestions[0].verificationProvider, "geoplateforme_ban");
 assert.match(requestedUrl, /type=StreetAddress/);
 assert.match(requestedUrl, /terr=METROPOLE/);
 assert.match(requestedUrl, /maximumResponses=5/);
 assert.match(requestedUrl, /lonlat=5\.447913%2C43\.529649/);
+
+const nearbyEligibility = evaluateDeliveryEligibility(
+  [radiusZone()],
+  { ...suggestions[0], verifiedAt: "2026-08-05T10:00:00.000Z" },
+);
+assert.equal(nearbyEligibility.reason, "eligible");
+assert.ok(
+  Number(nearbyEligibility.distanceMeters) >= 1_700 &&
+    Number(nearbyEligibility.distanceMeters) <= 1_900,
+  `Edouard-Herriot distance must be between 1,700 and 1,900 meters, got ${nearbyEligibility.distanceMeters}`,
+);
+assert.equal(nearbyEligibility.radiusMeters, 15_000);
 
 const noSuggestions = await new AddressAutocompleteCoordinator(
   (async () => jsonResponse({ status: "OK", results: [] })) as typeof fetch,
@@ -174,6 +283,11 @@ for (const [name, fetchImpl] of [
     "adresse test",
   );
   assert.equal(result.status, "unavailable", `${name} must expose a safe unavailable state`);
+  assert.equal(
+    enforceEligibleDeliveryMethod("local_express", noAddress),
+    "postal",
+    `${name} must leave postal delivery available`,
+  );
 }
 
 let autocompleteCall = 0;
@@ -236,4 +350,6 @@ assert.match(componentSource, /ArrowUp/);
 assert.match(componentSource, /event\.key === "Enter"/);
 assert.match(componentSource, /event\.key === "Escape"/);
 
-console.log("Address autocomplete and delivery radius tests passed.");
+console.log(
+  `Address autocomplete and delivery radius tests passed: reference distance ${nearbyEligibility.distanceMeters?.toFixed(2)} m, eligible.`,
+);

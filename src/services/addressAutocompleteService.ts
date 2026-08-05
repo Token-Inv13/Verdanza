@@ -1,3 +1,5 @@
+import { normalizeAddressCoordinates } from "../lib/addressCoordinates.js";
+
 export const GEOPLATFORM_COMPLETION_URL =
   "https://data.geopf.fr/geocodage/completion/";
 export const AIX_CENTER_LON_LAT = "5.447913,43.529649";
@@ -14,7 +16,7 @@ export type AddressSuggestion = {
   city: string;
   latitude: number;
   longitude: number;
-  provider: "geoplateforme_ban";
+  verificationProvider: "geoplateforme_ban";
 };
 
 export type AddressSearchStatus =
@@ -160,18 +162,12 @@ function parseSuggestion(value: unknown): AddressSuggestion | null {
   const label = stringValue(result.fulltext);
   const city = stringValue(result.city);
   const postalCode = stringValue(result.zipcode);
-  const latitude = Number(result.y);
-  const longitude = Number(result.x);
+  const coordinates = normalizeAddressCoordinates(result);
   if (
     !label ||
     !city ||
     !postalCode ||
-    !Number.isFinite(latitude) ||
-    !Number.isFinite(longitude) ||
-    latitude < -90 ||
-    latitude > 90 ||
-    longitude < -180 ||
-    longitude > 180
+    !coordinates
   ) {
     return null;
   }
@@ -180,16 +176,16 @@ function parseSuggestion(value: unknown): AddressSuggestion | null {
   const line1 = [houseNumber, street].filter(Boolean).join(" ") || label.split(",")[0]?.trim();
   if (!line1) return null;
   return {
-    id: `${longitude}:${latitude}:${label}`,
+    id: `${coordinates.longitude}:${coordinates.latitude}:${label}`,
     label,
     line1,
     houseNumber,
     street,
     postalCode,
     city,
-    latitude,
-    longitude,
-    provider: "geoplateforme_ban",
+    latitude: coordinates.latitude,
+    longitude: coordinates.longitude,
+    verificationProvider: "geoplateforme_ban",
   };
 }
 
