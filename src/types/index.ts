@@ -141,6 +141,8 @@ export type PaymentLinkDeliverySummary = {
 };
 export type DeliveryFeeStatus = "free" | "to_confirm" | "configured";
 
+export type DeliveryZoneValidationMode = "legacy" | "radius";
+
 export type DeliveryZone = {
   id: string;
   name: string;
@@ -159,6 +161,12 @@ export type DeliveryZone = {
   customerMessage?: string;
   adminNote?: string;
   sortOrder?: number;
+  validationMode?: DeliveryZoneValidationMode;
+  centerLabel?: string;
+  centerLatitude?: number;
+  centerLongitude?: number;
+  radiusMeters?: number;
+  addressValidationEnabled?: boolean;
   isArchived?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -292,6 +300,23 @@ export type Address = {
   postalCode: string;
   city: string;
   country: string;
+  normalizedLabel?: string;
+  houseNumber?: string;
+  street?: string;
+  latitude?: number;
+  longitude?: number;
+  verifiedAt?: string;
+  verificationProvider?: "geoplateforme_ban";
+};
+
+export type DeliveryAddressValidation = {
+  zoneId: string;
+  zoneName: string;
+  validationMode: DeliveryZoneValidationMode;
+  distanceMeters?: number;
+  radiusMeters?: number;
+  verifiedAt: string;
+  provider: "geoplateforme_ban";
 };
 
 export type OrderStatus =
@@ -513,6 +538,8 @@ export type Order = {
   deliveryMethod: DeliveryMethod;
   deliveryAddress: Address;
   deliveryZone?: string;
+  deliveryZoneId?: string;
+  deliveryAddressValidation?: DeliveryAddressValidation;
   deliverySlot?: string;
   deliveryMinimumApplied?: number;
   postalFreeShippingApplied?: boolean;

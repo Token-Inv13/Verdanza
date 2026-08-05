@@ -8,6 +8,7 @@ import type {
   Coupon,
   PreferredPaymentMethod,
   DeliveryFeeStatus,
+  DeliveryAddressValidation,
   AppliedPromotion,
 } from "../../src/types/index.js";
 import {
@@ -19,6 +20,10 @@ import {
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../../src/config/deliveryRules.js";
 import { formatLocalDeliveryEstimate } from "../../src/lib/deliveryEstimate.js";
+import {
+  evaluateDeliveryEligibility,
+  isDeliveryZoneAvailable,
+} from "../../src/lib/deliveryEligibility.js";
 import {
   automaticPromotionRulesFromCoupons,
   calculateCartPromotions,
@@ -137,6 +142,8 @@ export type PricedCheckout = {
   totalAfterDiscount: number;
   total: number;
   deliveryZoneName?: string;
+  deliveryZoneId?: string;
+  deliveryAddressValidation?: DeliveryAddressValidation;
   deliveryMinimumApplied: number;
   postalFreeShippingApplied: boolean;
   deliveryFeeStatus: DeliveryFeeStatus;
@@ -353,6 +360,8 @@ export async function priceCheckout(
     totalAfterDiscount: total,
     total,
     deliveryZoneName: effectiveDelivery.zoneName,
+    deliveryZoneId: effectiveDelivery.zoneId,
+    deliveryAddressValidation: effectiveDelivery.addressValidation,
     deliveryMinimumApplied: effectiveDelivery.minimumApplied,
     postalFreeShippingApplied: effectiveDelivery.postalFreeShippingApplied,
     deliveryFeeStatus: effectiveDelivery.deliveryFeeStatus,
@@ -486,6 +495,8 @@ async function resolveDeliveryFee(
   postalFreeShippingApplied: boolean;
   deliveryFeeStatus: DeliveryFeeStatus;
   deliveryNote: string;
+  zoneId: string;
+  addressValidation?: DeliveryAddressValidation;
 }> {
   if (body.deliveryMethod === "postal") {
     const zone = await getDeliveryZone(db, body.deliveryZone ?? "postal-france");
@@ -519,6 +530,7 @@ async function resolveDeliveryFee(
       deliveryNote: freeShipping
         ? "Livraison postale offerte."
         : `Frais postaux confirmés avec le client après validation. Livraison postale offerte à partir de ${POSTAL_FREE_SHIPPING_THRESHOLD} € d'achat.`,
+      zoneId: selectedZone.id,
     };
   }
 
@@ -526,17 +538,26 @@ async function resolveDeliveryFee(
     throw new Error("Zone de livraison locale requise.");
   }
 
-  const zone = await getDeliveryZone(db, body.deliveryZone);
-  const fallbackZone = fallbackDeliveryZones.find(
-    (entry) => entry.id === body.deliveryZone || entry.name === body.deliveryZone,
+  const firestoreZones = await getDeliveryZones(db);
+  const zones = firestoreZones.length ? firestoreZones : fallbackDeliveryZones;
+  const eligibility = evaluateDeliveryEligibility(
+    zones,
+    body.customer.address,
+    body.deliveryZone,
   );
-  const selectedZone = zone ?? fallbackZone;
+  const selectedZone = eligibility.zone;
 
-  if (
-    !selectedZone ||
-    selectedZone.method !== "local_express" ||
-    !isDeliveryZoneAvailable(selectedZone)
-  ) {
+  if (!eligibility.eligible || !selectedZone) {
+    if (eligibility.reason === "address_not_selected") {
+      throw new Error(
+        "Sélectionnez une adresse proposée dans la liste pour vérifier la livraison locale.",
+      );
+    }
+    if (eligibility.reason === "outside_active_radius_zones") {
+      throw new Error(
+        "Cette adresse se situe hors de notre zone de livraison locale. La livraison postale en France reste disponible.",
+      );
+    }
     throw new Error(
       "La zone de livraison sélectionnée n’est actuellement pas disponible. Veuillez choisir une autre zone ou contacter Verdanza.",
     );
@@ -555,17 +576,20 @@ async function resolveDeliveryFee(
     postalFreeShippingApplied: false,
     deliveryFeeStatus: selectedZone.fee > 0 ? "configured" : "free",
     deliveryNote: `${formatLocalDeliveryEstimate(selectedZone)} Minimum local : ${minimumOrder.toFixed(0)} € d'achat.`,
+    zoneId: selectedZone.id,
+    addressValidation: {
+      zoneId: selectedZone.id,
+      zoneName: selectedZone.name,
+      validationMode: selectedZone.validationMode === "radius" ? "radius" : "legacy",
+      distanceMeters:
+        eligibility.distanceMeters === undefined
+          ? undefined
+          : Math.round(eligibility.distanceMeters),
+      radiusMeters: eligibility.radiusMeters,
+      verifiedAt: body.customer.address.verifiedAt as string,
+      provider: "geoplateforme_ban",
+    },
   };
-}
-
-function isDeliveryZoneAvailable(zone?: DeliveryZone | null) {
-  if (!zone) return false;
-  return (
-    zone.isActive !== false &&
-    zone.isOpen !== false &&
-    (zone.status || "open") === "open" &&
-    zone.isArchived !== true
-  );
 }
 
 async function getDeliveryZone(
@@ -575,6 +599,17 @@ async function getDeliveryZone(
   const snapshot = await db.collection("deliveryZones").doc(zoneId).get();
   if (!snapshot.exists) return null;
   return { id: snapshot.id, ...snapshot.data() } as DeliveryZone;
+}
+
+async function getDeliveryZones(db: FirebaseFirestore.Firestore): Promise<DeliveryZone[]> {
+  const collectionRef = db.collection("deliveryZones") as FirebaseFirestore.CollectionReference & {
+    get?: () => Promise<FirebaseFirestore.QuerySnapshot>;
+  };
+  if (typeof collectionRef.get !== "function") return [];
+  const snapshot = await collectionRef.get();
+  return snapshot.docs.map(
+    (entry) => ({ id: entry.id, ...entry.data() }) as DeliveryZone,
+  );
 }
 
 export function orderPayload(
@@ -631,6 +666,8 @@ export function orderPayload(
     deliveryMethod: body.deliveryMethod,
     deliveryAddress: body.customer.address,
     deliveryZone: priced.deliveryZoneName ?? body.deliveryZone ?? null,
+    deliveryZoneId: priced.deliveryZoneId ?? body.deliveryZone ?? null,
+    deliveryAddressValidation: priced.deliveryAddressValidation ?? null,
     deliverySlot: body.deliverySlot ?? null,
     deliveryMinimumApplied: priced.deliveryMinimumApplied,
     postalFreeShippingApplied: priced.postalFreeShippingApplied,

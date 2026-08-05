@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
+import { MapPin } from "lucide-react";
 import { useAdminData } from "../../hooks/useAdminData";
 import {
   deleteProductAdmin,
@@ -2097,6 +2098,13 @@ function DeliveryZoneCreateForm({
   const [customerMessage, setCustomerMessage] = useState("");
   const [adminNote, setAdminNote] = useState("");
   const [sortOrder, setSortOrder] = useState(nextSortOrder);
+  const [validationMode, setValidationMode] = useState<"legacy" | "radius">("legacy");
+  const [centerLabel, setCenterLabel] = useState("");
+  const [centerLatitude, setCenterLatitude] = useState("");
+  const [centerLongitude, setCenterLongitude] = useState("");
+  const [radiusKm, setRadiusKm] = useState("");
+  const [addressValidationEnabled, setAddressValidationEnabled] = useState(false);
+  const [validationError, setValidationError] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const publicEstimate = formatLocalDeliveryEstimate({
     estimatedDelayMinMinutes: optionalPositiveNumberFromInput(estimatedDelayMinMinutes),
@@ -2108,21 +2116,35 @@ function DeliveryZoneCreateForm({
   }, [nextSortOrder]);
 
   async function handleCreate() {
-    await onCreate({
-      name,
-      isActive: false,
-      isOpen: false,
-      status: "disabled",
-      fee,
-      minimumOrder,
-      minimumOrderAmount: minimumOrder,
-      estimatedDelay,
-      estimatedDelayMinMinutes: optionalPositiveNumberFromInput(estimatedDelayMinMinutes),
-      estimatedDelayMaxMinutes: optionalPositiveNumberFromInput(estimatedDelayMaxMinutes),
-      customerMessage,
-      adminNote,
-      sortOrder,
-    });
+    setValidationError("");
+    try {
+      await onCreate({
+        name,
+        isActive: false,
+        isOpen: false,
+        status: "disabled",
+        fee,
+        minimumOrder,
+        minimumOrderAmount: minimumOrder,
+        estimatedDelay,
+        estimatedDelayMinMinutes: optionalPositiveNumberFromInput(estimatedDelayMinMinutes),
+        estimatedDelayMaxMinutes: optionalPositiveNumberFromInput(estimatedDelayMaxMinutes),
+        customerMessage,
+        adminNote,
+        sortOrder,
+        validationMode,
+        centerLabel,
+        centerLatitude: optionalNumberFromInput(centerLatitude),
+        centerLongitude: optionalNumberFromInput(centerLongitude),
+        radiusMeters: optionalPositiveNumberFromInput(radiusKm)
+          ? Number(radiusKm) * 1_000
+          : undefined,
+        addressValidationEnabled,
+      });
+    } catch (error) {
+      setValidationError(error instanceof Error ? error.message : "La zone est invalide.");
+      return;
+    }
     setName("");
     setFee(0);
     setMinimumOrder(LOCAL_DELIVERY_MINIMUM);
@@ -2131,6 +2153,12 @@ function DeliveryZoneCreateForm({
     setEstimatedDelayMaxMinutes("");
     setCustomerMessage("");
     setAdminNote("");
+    setValidationMode("legacy");
+    setCenterLabel("");
+    setCenterLatitude("");
+    setCenterLongitude("");
+    setRadiusKm("");
+    setAddressValidationEnabled(false);
     setIsOpen(false);
   }
 
@@ -2167,6 +2195,40 @@ function DeliveryZoneCreateForm({
               </p>
               <Input label="Nom" value={name} onChange={setName} />
               <NumberInput label="Ordre" value={sortOrder} onChange={setSortOrder} />
+              <label className="text-sm font-medium text-forest">
+                Mode de validation
+                <select
+                  className="input-field mt-2"
+                  value={validationMode}
+                  onChange={(event) => setValidationMode(event.target.value as "legacy" | "radius")}
+                >
+                  <option value="legacy">Mode historique</option>
+                  <option value="radius">Rayon géographique</option>
+                </select>
+              </label>
+              {validationMode === "radius" && (
+                <>
+                  <Input label="Centre géographique" value={centerLabel} onChange={setCenterLabel} />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input label="Latitude" type="number" min="-90" max="90" step="0.000001" value={centerLatitude} onChange={setCenterLatitude} />
+                    <Input label="Longitude" type="number" min="-180" max="180" step="0.000001" value={centerLongitude} onChange={setCenterLongitude} />
+                  </div>
+                  <Input label="Rayon maximal (km)" type="number" min="0.01" step="0.1" value={radiusKm} onChange={setRadiusKm} />
+                  <label className="flex items-center gap-2 text-sm font-medium text-forest">
+                    <input
+                      type="checkbox"
+                      checked={addressValidationEnabled}
+                      onChange={(event) => setAddressValidationEnabled(event.target.checked)}
+                    />
+                    Validation automatique des adresses
+                  </label>
+                  {Number(radiusKm) > 0 && centerLabel.trim() && (
+                    <p className="rounded-md border border-forest/10 bg-cream px-3 py-2 text-xs leading-5 text-ink/65">
+                      Rayon de {Number(radiusKm).toLocaleString("fr-FR")} km autour de {centerLabel.trim()}
+                    </p>
+                  )}
+                </>
+              )}
             </div>
             <div className="grid gap-3 rounded-lg border border-forest/10 bg-ivory p-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-forest/55">
@@ -2218,6 +2280,9 @@ function DeliveryZoneCreateForm({
             </div>
           </div>
           <div className="flex justify-end border-t border-forest/10 bg-cream/30 p-4">
+            {validationError && (
+              <p className="mr-auto self-center text-sm text-red-700" role="alert">{validationError}</p>
+            )}
             <button
               className="btn-primary min-w-44"
               disabled={!name.trim()}
@@ -2263,6 +2328,19 @@ function DeliveryZoneRow({
   const [customerMessage, setCustomerMessage] = useState(zone.customerMessage || "");
   const [adminNote, setAdminNote] = useState(zone.adminNote || "");
   const [sortOrder, setSortOrder] = useState(zone.sortOrder || 0);
+  const [validationMode, setValidationMode] = useState<"legacy" | "radius">(
+    zone.validationMode === "radius" ? "radius" : "legacy",
+  );
+  const [centerLabel, setCenterLabel] = useState(zone.centerLabel || "");
+  const [centerLatitude, setCenterLatitude] = useState(coordinateInputValue(zone.centerLatitude));
+  const [centerLongitude, setCenterLongitude] = useState(coordinateInputValue(zone.centerLongitude));
+  const [radiusKm, setRadiusKm] = useState(
+    zone.radiusMeters ? String(zone.radiusMeters / 1_000) : "",
+  );
+  const [addressValidationEnabled, setAddressValidationEnabled] = useState(
+    zone.addressValidationEnabled === true,
+  );
+  const [validationError, setValidationError] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const isOpen = status === "open" && isActive;
   const publicEstimate = formatLocalDeliveryEstimate({
@@ -2280,6 +2358,9 @@ function DeliveryZoneRow({
             {methodLabel}
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
+            {zone.validationMode === "radius" && (
+              <MapPin aria-hidden="true" className="h-5 w-5 text-champagne" />
+            )}
             <h3 className="font-display text-2xl text-forest">{zone.name}</h3>
             <AdminBadge tone={isActive ? "success" : "muted"}>
               {isActive ? "Active" : "Inactive"}
@@ -2293,6 +2374,9 @@ function DeliveryZoneRow({
             <span>Minimum : {formatEuro(minimumOrder)} EUR</span>
             <span>Ordre : {sortOrder}</span>
             {zone.method === "local_express" && <span>Délai public : {publicEstimate}</span>}
+            {validationMode === "radius" && Number(radiusKm) > 0 && centerLabel.trim() && (
+              <span>Rayon de {Number(radiusKm).toLocaleString("fr-FR")} km autour de {centerLabel.trim()}</span>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -2306,7 +2390,8 @@ function DeliveryZoneRow({
           {isEditing && (
             <button
               className="btn-primary min-h-9 px-3 py-1.5 text-xs"
-              onClick={() =>
+              onClick={() => {
+                setValidationError("");
                 void onSave(zone, {
                   name,
                   isActive,
@@ -2321,8 +2406,19 @@ function DeliveryZoneRow({
                   customerMessage,
                   adminNote,
                   sortOrder,
+                  validationMode,
+                  centerLabel,
+                  centerLatitude: optionalNumberFromInput(centerLatitude),
+                  centerLongitude: optionalNumberFromInput(centerLongitude),
+                  radiusMeters: optionalPositiveNumberFromInput(radiusKm)
+                    ? Number(radiusKm) * 1_000
+                    : undefined,
+                  addressValidationEnabled,
                 })
-              }
+                  .catch((error) =>
+                    setValidationError(error instanceof Error ? error.message : "La zone est invalide."),
+                  );
+              }}
             >
               Enregistrer
             </button>
@@ -2342,6 +2438,35 @@ function DeliveryZoneRow({
           <NumberInput label="Minimum" value={minimumOrder} onChange={setMinimumOrder} />
           <NumberInput label="Ordre" value={sortOrder} onChange={setSortOrder} />
           <Input label="Délai interne historique" value={estimatedDelay} onChange={setEstimatedDelay} />
+          {zone.method === "local_express" && (
+            <label className="text-sm font-medium text-forest">
+              Mode de validation
+              <select
+                className="input-field mt-2"
+                value={validationMode}
+                onChange={(event) => setValidationMode(event.target.value as "legacy" | "radius")}
+              >
+                <option value="legacy">Mode historique</option>
+                <option value="radius">Rayon géographique</option>
+              </select>
+            </label>
+          )}
+          {zone.method === "local_express" && validationMode === "radius" && (
+            <>
+              <Input label="Centre géographique" value={centerLabel} onChange={setCenterLabel} />
+              <Input label="Latitude" type="number" min="-90" max="90" step="0.000001" value={centerLatitude} onChange={setCenterLatitude} />
+              <Input label="Longitude" type="number" min="-180" max="180" step="0.000001" value={centerLongitude} onChange={setCenterLongitude} />
+              <Input label="Rayon maximal (km)" type="number" min="0.01" step="0.1" value={radiusKm} onChange={setRadiusKm} />
+              <label className="flex items-center gap-2 text-sm font-medium text-forest xl:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={addressValidationEnabled}
+                  onChange={(event) => setAddressValidationEnabled(event.target.checked)}
+                />
+                Validation automatique des adresses
+              </label>
+            </>
+          )}
           {zone.method === "local_express" && (
             <>
               <Input
@@ -2387,6 +2512,9 @@ function DeliveryZoneRow({
           </label>
           <Input label="Message client" value={customerMessage} onChange={setCustomerMessage} />
           <Input label="Note interne" value={adminNote} onChange={setAdminNote} />
+          {validationError && (
+            <p className="text-sm text-red-700 xl:col-span-6" role="alert">{validationError}</p>
+          )}
         </div>
       )}
     </article>
@@ -8772,6 +8900,7 @@ function Input({
   onChange,
   type = "text",
   min,
+  max,
   step,
   required,
   placeholder,
@@ -8781,6 +8910,7 @@ function Input({
   onChange: (value: string) => void;
   type?: string;
   min?: string;
+  max?: string;
   step?: string;
   required?: boolean;
   placeholder?: string;
@@ -8792,6 +8922,7 @@ function Input({
         className="input-field mt-2"
         type={type}
         min={min}
+        max={max}
         step={step}
         required={required}
         placeholder={placeholder}
@@ -8833,6 +8964,16 @@ function optionalNumberInputValue(value?: number | null) {
 function optionalPositiveNumberFromInput(value: string) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function optionalNumberFromInput(value: string) {
+  if (!value.trim()) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function coordinateInputValue(value?: number | null) {
+  return Number.isFinite(Number(value)) ? String(value) : "";
 }
 
 function Textarea({

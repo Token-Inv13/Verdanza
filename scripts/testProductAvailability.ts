@@ -359,6 +359,11 @@ function checkoutBody(productId: string): CheckoutRequestBody {
         postalCode: "13090",
         city: "Aix-en-Provence",
         country: "France",
+        normalizedLabel: "1 rue Test, 13090 Aix-en-Provence",
+        latitude: 43.5,
+        longitude: 5.4,
+        verifiedAt: "2026-08-05T10:00:00.000Z",
+        verificationProvider: "geoplateforme_ban",
       },
     },
   };

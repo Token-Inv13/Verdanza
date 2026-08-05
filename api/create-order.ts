@@ -168,7 +168,9 @@ export default async function handler(
       message.includes("Code promo") ||
       message.includes("code promo") ||
       message.includes("Promotion automatique") ||
-      message.includes("livraison postale")
+      message.includes("livraison postale") ||
+      message.toLowerCase().includes("adresse") ||
+      message.includes("zone de livraison")
       ? message
       : "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza par email à contact@verdanza.fr.";
     const isConflict = error instanceof CheckoutRequestConflictError;

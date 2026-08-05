@@ -12,6 +12,7 @@ import {
 } from "./_server/checkout.js";
 import type {
   Coupon,
+  Address,
   DeliveryMethod,
   PromoBanner,
   PromoBannerPlacement,
@@ -217,6 +218,7 @@ function parseQuoteBody(value: unknown): CheckoutRequestBody {
     deliveryMethod?: DeliveryMethod;
     deliveryZone?: string;
     couponCode?: string;
+    address?: Address;
   };
 
   if (!Array.isArray(body.items) || !body.items.length) {
@@ -238,7 +240,7 @@ function parseQuoteBody(value: unknown): CheckoutRequestBody {
       phone: "0000000000",
       firstName: "Devis",
       lastName: "Verdanza",
-      address: {
+      address: body.address || {
         firstName: "Devis",
         lastName: "Verdanza",
         line1: "Adresse devis",
@@ -260,6 +262,7 @@ function safeQuoteError(message: string) {
     return "Le minimum de commande pour ce code promo n'est pas atteint.";
   }
   if (message.includes("livraison postale")) return message;
+  if (message.toLowerCase().includes("adresse") || message.includes("zone de livraison")) return message;
   if (message.includes("non applicable")) return "Ce code promo n'est pas applicable a ce panier.";
   return "Impossible de verifier ce code promo pour le moment.";
 }

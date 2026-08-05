@@ -372,6 +372,12 @@ test(
     const payload = orderPayload(checkout, priced);
     const savedPromotion = (payload.appliedPromotions as Array<Record<string, unknown>>)[0];
     expect(payload.deliveryMethod === "local_express", "expected local delivery in payload");
+    expect(payload.deliveryZoneId === "local-aix", "expected stable delivery zone id in payload");
+    expect(
+      (payload.deliveryAddressValidation as { provider?: string })?.provider ===
+        "geoplateforme_ban",
+      "expected address verification provider in payload",
+    );
     expect(
       (payload.items as OrderItem[])[0]?.purchaseMode === "fixed_price",
       "expected fixed format in payload",
@@ -779,6 +785,11 @@ function checkoutBody(items: Array<Record<string, unknown>>): CheckoutRequestBod
         postalCode: "13090",
         city: "Aix-en-Provence",
         country: "France",
+        normalizedLabel: "1 rue Test, 13090 Aix-en-Provence",
+        latitude: 43.5,
+        longitude: 5.4,
+        verifiedAt: "2026-08-05T10:00:00.000Z",
+        verificationProvider: "geoplateforme_ban",
       },
     },
   };

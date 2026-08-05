@@ -1,13 +1,15 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ContactActions } from "../components/ContactActions";
+import { AddressAutocomplete } from "../components/AddressAutocomplete";
 import { PromoBannerSlot } from "../components/PromoBannerSlot";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { deliveryZones as fallbackDeliveryZones } from "../data/deliveryZones";
 import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
-import type { DeliveryMethod, DeliveryZone, PreferredPaymentMethod } from "../types";
+import type { Address, DeliveryMethod, DeliveryZone, PreferredPaymentMethod } from "../types";
+import type { AddressSuggestion } from "../services/addressAutocompleteService";
 import {
   trackAddPaymentInfo,
   trackAddShippingInfo,
@@ -31,6 +33,12 @@ import {
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../config/deliveryRules";
 import { publicSubmissionSecurityContext } from "../lib/publicSubmissionSecurity";
+import { invalidateAddressVerification } from "../lib/checkoutAddress";
+import {
+  evaluateDeliveryEligibility,
+  enforceEligibleDeliveryMethod,
+  isAutomaticRadiusZone,
+} from "../lib/deliveryEligibility";
 
 const contactEmail =
   (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
@@ -70,6 +78,10 @@ export function CheckoutPage() {
   const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>(fallbackDeliveryZones);
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("postal");
   const [deliveryZone, setDeliveryZone] = useState("");
+  const [addressInput, setAddressInput] = useState("");
+  const [selectedAddress, setSelectedAddress] = useState<
+    (AddressSuggestion & { verifiedAt: string }) | null
+  >(null);
   const [couponCode, setCouponCode] = useState(() =>
     window.localStorage.getItem(promoStorageKey) || "",
   );
@@ -107,22 +119,52 @@ export function CheckoutPage() {
         .sort((left, right) => Number(left.sortOrder || 0) - Number(right.sortOrder || 0)),
     [deliveryZones],
   );
-  const selectedZone = useMemo(
-    () => openLocalDeliveryZones.find((zone) => zone.id === deliveryZone),
-    [deliveryZone, openLocalDeliveryZones],
+  const automaticRadiusZones = useMemo(
+    () => openLocalDeliveryZones.filter(isAutomaticRadiusZone),
+    [openLocalDeliveryZones],
+  );
+  const legacyLocalDeliveryZones = useMemo(
+    () =>
+      automaticRadiusZones.length
+        ? []
+        : openLocalDeliveryZones.filter(
+            (zone) => (zone.validationMode ?? "legacy") === "legacy",
+          ),
+    [automaticRadiusZones.length, openLocalDeliveryZones],
+  );
+  const deliveryEligibility = useMemo(
+    () => evaluateDeliveryEligibility(openLocalDeliveryZones, selectedAddress, deliveryZone),
+    [deliveryZone, openLocalDeliveryZones, selectedAddress],
+  );
+  const selectedZone = deliveryEligibility.zone;
+  const resolvedDeliveryZoneId = selectedZone?.id || "";
+  const deliveryAddress = useMemo(
+    () => buildCheckoutAddress(customer, selectedAddress),
+    [customer, selectedAddress],
   );
   const postalZone = useMemo(
     () => deliveryZones.find((zone) => zone.id === "postal-france" && zone.isActive !== false),
     [deliveryZones],
   );
   const isLocalDelivery = deliveryMethod === "local_express";
-  const localDeliveryUnavailable = openLocalDeliveryZones.length === 0;
+  const quoteDeliveryAddress = isLocalDelivery && deliveryEligibility.eligible
+    ? deliveryAddress
+    : undefined;
+  const localDeliveryUnavailable = !deliveryEligibility.eligible;
   const localDeliveryMinimum = effectiveLocalDeliveryMinimum(
     selectedZone?.minimumOrderAmount ?? selectedZone?.minimumOrder,
   );
   const localDeliveryEstimate = formatLocalDeliveryEstimate(
     selectedZone ?? openLocalDeliveryZones[0],
   );
+  const addressEligibilityState = !selectedAddress
+    ? "pending"
+    : deliveryEligibility.eligible
+      ? "eligible"
+      : "outside";
+  const eligibleAddressMessage = selectedZone
+    ? `Adresse éligible à la livraison locale. ${selectedZone.fee > 0 ? `Frais : ${formatEuro(selectedZone.fee)}.` : "Livraison offerte"} dès ${effectiveLocalDeliveryMinimum(selectedZone.minimumOrderAmount ?? selectedZone.minimumOrder).toFixed(0)} € · ${localDeliveryEstimate}`
+    : undefined;
   const postalDeliveryMinimum = effectivePostalDeliveryMinimum(
     postalZone?.minimumOrderAmount ?? postalZone?.minimumOrder,
   );
@@ -225,19 +267,28 @@ export function CheckoutPage() {
   }, []);
 
   useEffect(() => {
-    if (!openLocalDeliveryZones.length) {
+    if (automaticRadiusZones.length) {
+      if (deliveryZone) setDeliveryZone("");
+      return;
+    }
+    if (!legacyLocalDeliveryZones.length) {
       if (deliveryMethod === "local_express") setDeliveryMethod("postal");
       setDeliveryZone("");
       return;
     }
-    if (!deliveryZone || !openLocalDeliveryZones.some((zone) => zone.id === deliveryZone)) {
-      setDeliveryZone(openLocalDeliveryZones[0].id);
+    if (!deliveryZone || !legacyLocalDeliveryZones.some((zone) => zone.id === deliveryZone)) {
+      setDeliveryZone(legacyLocalDeliveryZones[0].id);
     }
-  }, [deliveryMethod, deliveryZone, openLocalDeliveryZones]);
+  }, [automaticRadiusZones.length, deliveryMethod, deliveryZone, legacyLocalDeliveryZones]);
 
   useEffect(() => {
     setPreferredPaymentMethod("card_payment_link");
   }, [deliveryMethod]);
+
+  useEffect(() => {
+    const safeMethod = enforceEligibleDeliveryMethod(deliveryMethod, deliveryEligibility);
+    if (safeMethod !== deliveryMethod) setDeliveryMethod(safeMethod);
+  }, [deliveryEligibility, deliveryMethod]);
 
   useEffect(() => {
     if (!couponCode.trim()) {
@@ -249,7 +300,12 @@ export function CheckoutPage() {
   }, [couponCode]);
 
   useEffect(() => {
-    if (!lines.length || hasManualPromo || hasBlockingCartIssues) {
+    if (
+      !lines.length ||
+      hasManualPromo ||
+      hasBlockingCartIssues ||
+      (deliveryMethod === "local_express" && !deliveryEligibility.eligible)
+    ) {
       setAutomaticQuote(null);
       return;
     }
@@ -257,7 +313,8 @@ export function CheckoutPage() {
     quoteOrder({
       items,
       deliveryMethod,
-      deliveryZone: deliveryMethod === "local_express" ? deliveryZone : "postal-france",
+      deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : "postal-france",
+      address: quoteDeliveryAddress,
     })
       .then((nextQuote) => {
         if (!cancelled) setAutomaticQuote(nextQuote);
@@ -270,11 +327,13 @@ export function CheckoutPage() {
     };
   }, [
     deliveryMethod,
-    deliveryZone,
+    quoteDeliveryAddress,
+    deliveryEligibility.eligible,
     hasBlockingCartIssues,
     hasManualPromo,
     items,
     lines.length,
+    resolvedDeliveryZoneId,
     subtotal,
   ]);
 
@@ -282,11 +341,16 @@ export function CheckoutPage() {
     if (!quote?.promoApplied || !appliedCouponCode.trim()) return;
     void handleApplyPromo(false).catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deliveryMethod, deliveryZone, subtotal]);
+  }, [deliveryMethod, resolvedDeliveryZoneId, subtotal]);
 
   useEffect(() => {
     const code = appliedCouponCode.trim().toUpperCase();
-    if (!lines.length || !code || hasBlockingCartIssues) {
+    if (
+      !lines.length ||
+      !code ||
+      hasBlockingCartIssues ||
+      (deliveryMethod === "local_express" && !deliveryEligibility.eligible)
+    ) {
       setQuote(null);
       return;
     }
@@ -294,7 +358,8 @@ export function CheckoutPage() {
     quoteOrder({
       items,
       deliveryMethod,
-      deliveryZone: deliveryMethod === "local_express" ? deliveryZone : "postal-france",
+      deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : "postal-france",
+      address: quoteDeliveryAddress,
       couponCode: code,
     })
       .then((nextQuote) => {
@@ -314,10 +379,12 @@ export function CheckoutPage() {
   }, [
     appliedCouponCode,
     deliveryMethod,
-    deliveryZone,
+    quoteDeliveryAddress,
+    deliveryEligibility.eligible,
     hasBlockingCartIssues,
     items,
     lines.length,
+    resolvedDeliveryZoneId,
     subtotal,
   ]);
 
@@ -340,6 +407,49 @@ export function CheckoutPage() {
     }));
   }, [customerProfile, user]);
 
+  function invalidateSelectedAddress(
+    patch: Partial<Pick<typeof customer, "line1" | "postalCode" | "city" | "country">>,
+  ) {
+    const invalidatedAddress = invalidateAddressVerification(deliveryAddress, patch);
+    if (selectedAddress) {
+      setSelectedAddress(null);
+      if (deliveryMethod === "local_express") setDeliveryMethod("postal");
+    }
+    setCustomer((current) => ({
+      ...current,
+      line1: invalidatedAddress.line1,
+      postalCode: invalidatedAddress.postalCode,
+      city: invalidatedAddress.city,
+      country: invalidatedAddress.country,
+      ...patch,
+    }));
+  }
+
+  function handleAddressInputChange(value: string) {
+    setAddressInput(value);
+    invalidateSelectedAddress({
+      line1: value,
+      ...(selectedAddress ? { postalCode: "", city: "" } : {}),
+    });
+  }
+
+  function handleAddressSelect(suggestion: AddressSuggestion) {
+    const verifiedAt = new Date().toISOString();
+    setAddressInput(suggestion.label);
+    setSelectedAddress({ ...suggestion, verifiedAt });
+    setCustomer((current) => ({
+      ...current,
+      line1: suggestion.line1,
+      postalCode: suggestion.postalCode,
+      city: suggestion.city,
+      country: "France",
+    }));
+  }
+
+  function handleAddressPartChange(field: "postalCode" | "city", value: string) {
+    invalidateSelectedAddress({ [field]: value });
+  }
+
   async function handleApplyPromo(showSuccess = true) {
     const code = couponCode.trim().toUpperCase();
     setCouponCode(code);
@@ -351,12 +461,18 @@ export function CheckoutPage() {
       setPromoMessage(message);
       throw new Error(message);
     }
+    if (deliveryMethod === "local_express" && !deliveryEligibility.eligible) {
+      const message = "Sélectionnez une adresse proposée avant d’utiliser la livraison locale.";
+      setPromoMessage(message);
+      throw new Error(message);
+    }
     setIsCheckingPromo(true);
     try {
       const nextQuote = await quoteOrder({
         items,
         deliveryMethod,
-        deliveryZone: deliveryMethod === "local_express" ? deliveryZone : "postal-france",
+        deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : "postal-france",
+        address: quoteDeliveryAddress,
         couponCode: code,
       });
       setQuote(nextQuote);
@@ -403,6 +519,11 @@ export function CheckoutPage() {
       if (isBelowPostalMinimum) {
         throw new Error("Le minimum de commande pour la livraison postale est de 15 €.");
       }
+      if (deliveryMethod === "local_express" && !deliveryEligibility.eligible) {
+        throw new Error(
+          "Sélectionnez une adresse proposée dans la liste pour vérifier la livraison locale.",
+        );
+      }
       if (deliveryMethod === "local_express" && !selectedZone) {
         throw new Error(
           "La zone de livraison sélectionnée n’est actuellement pas disponible. Veuillez choisir une autre zone ou contacter Verdanza.",
@@ -418,13 +539,15 @@ export function CheckoutPage() {
         ? await quoteOrder({
             items,
             deliveryMethod,
-            deliveryZone: deliveryMethod === "local_express" ? deliveryZone : "postal-france",
+            deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : "postal-france",
+            address: quoteDeliveryAddress,
             couponCode: normalizedAppliedCouponCode,
           })
         : await quoteOrder({
             items,
             deliveryMethod,
-            deliveryZone: deliveryMethod === "local_express" ? deliveryZone : "postal-france",
+            deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : "postal-france",
+            address: quoteDeliveryAddress,
           });
 
       const authToken = user ? await user.getIdToken() : undefined;
@@ -439,7 +562,7 @@ export function CheckoutPage() {
           analyticsContext,
           deliveryMethod,
           deliveryZone:
-            deliveryMethod === "local_express" ? deliveryZone : "postal-france",
+            deliveryMethod === "local_express" ? resolvedDeliveryZoneId : "postal-france",
           couponCode: hasManualPromo ? normalizedAppliedCouponCode : undefined,
           customerMessage: customerMessage.trim() || undefined,
           preferredPaymentMethod,
@@ -451,15 +574,7 @@ export function CheckoutPage() {
             phone: customer.phone,
             firstName: customer.firstName,
             lastName: customer.lastName,
-            address: {
-              firstName: customer.firstName,
-              lastName: customer.lastName,
-              line1: customer.line1,
-              line2: customer.line2,
-              postalCode: customer.postalCode,
-              city: customer.city,
-              country: customer.country,
-            },
+            address: deliveryAddress,
           },
         }),
       });
@@ -545,6 +660,7 @@ export function CheckoutPage() {
           checkoutError.message.includes("Vérifiez vos commandes") ||
           checkoutError.message.includes("Livraison locale disponible") ||
           checkoutError.message.includes("zone de livraison") ||
+          checkoutError.message.toLowerCase().includes("adresse") ||
           checkoutError.message.includes("Trop de tentatives"))
           ? checkoutError.message
           : checkoutErrorMessage;
@@ -671,6 +787,39 @@ export function CheckoutPage() {
 
             <div className="rounded-lg border border-forest/10 bg-ivory p-6">
               <h2 className="font-display text-3xl text-forest">Livraison</h2>
+              <div className="mt-5 grid min-w-0 gap-4 md:grid-cols-2">
+                <AddressAutocomplete
+                  value={addressInput}
+                  selectedAddress={selectedAddress}
+                  eligibility={addressEligibilityState}
+                  eligibleMessage={eligibleAddressMessage}
+                  onChange={handleAddressInputChange}
+                  onSelect={handleAddressSelect}
+                />
+                <CheckoutInput
+                  label="Complément"
+                  required={false}
+                  value={customer.line2}
+                  onChange={(line2) => setCustomer({ ...customer, line2 })}
+                />
+                <CheckoutInput
+                  label="Code postal"
+                  value={customer.postalCode}
+                  onChange={(postalCode) => handleAddressPartChange("postalCode", postalCode)}
+                />
+                <CheckoutInput
+                  label="Ville"
+                  value={customer.city}
+                  onChange={(city) => handleAddressPartChange("city", city)}
+                />
+                {!isLocalDelivery && (
+                  <CheckoutInput
+                    label="Pays"
+                    value={customer.country}
+                    onChange={(country) => setCustomer({ ...customer, country })}
+                  />
+                )}
+              </div>
               <div className="mt-5 grid gap-3 md:grid-cols-2">
                 <DeliveryChoice
                   checked={deliveryMethod === "postal"}
@@ -691,7 +840,7 @@ export function CheckoutPage() {
                 />
               </div>
 
-              {localDeliveryUnavailable && (
+              {openLocalDeliveryZones.length === 0 && (
                 <p className="mt-4 rounded-md border border-champagne/40 bg-cream p-3 text-sm leading-6 text-forest">
                   Livraison locale temporairement indisponible. Vous pouvez choisir
                   la livraison postale ou contacter Verdanza par email à{" "}
@@ -706,23 +855,27 @@ export function CheckoutPage() {
                 </p>
               )}
 
-              {isLocalDelivery && (
+              {isLocalDelivery && selectedZone && (
                 <div className="mt-5">
-                  <label className="block text-sm font-medium text-forest">
-                    Zone locale
-                    <select
-                      className="input-field mt-2"
-                      value={deliveryZone}
-                      onChange={(event) => setDeliveryZone(event.target.value)}
-                    >
-                      {openLocalDeliveryZones.map((zone) => (
-                        <option key={zone.id} value={zone.id}>
-                          {zone.name}
-                          {zone.customerMessage ? ` - ${zone.customerMessage}` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  {legacyLocalDeliveryZones.length > 0 ? (
+                    <label className="block text-sm font-medium text-forest">
+                      Zone locale historique
+                      <select
+                        className="input-field mt-2"
+                        value={deliveryZone}
+                        onChange={(event) => setDeliveryZone(event.target.value)}
+                      >
+                        {legacyLocalDeliveryZones.map((zone) => (
+                          <option key={zone.id} value={zone.id}>
+                            {zone.name}
+                            {zone.customerMessage ? ` - ${zone.customerMessage}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <p className="text-sm font-medium text-forest">Zone locale : {selectedZone.name}</p>
+                  )}
                   <p className="mt-3 rounded-md border border-champagne/30 bg-cream p-3 text-sm leading-6 text-forest">
                     {localDeliveryEstimate}
                   </p>
@@ -755,36 +908,6 @@ export function CheckoutPage() {
                 </p>
               )}
 
-              <div className="mt-5 grid gap-4 md:grid-cols-2">
-                <CheckoutInput
-                  label="Adresse"
-                  value={customer.line1}
-                  onChange={(line1) => setCustomer({ ...customer, line1 })}
-                />
-                <CheckoutInput
-                  label="Complément"
-                  required={false}
-                  value={customer.line2}
-                  onChange={(line2) => setCustomer({ ...customer, line2 })}
-                />
-                <CheckoutInput
-                  label="Code postal"
-                  value={customer.postalCode}
-                  onChange={(postalCode) => setCustomer({ ...customer, postalCode })}
-                />
-                <CheckoutInput
-                  label="Ville"
-                  value={customer.city}
-                  onChange={(city) => setCustomer({ ...customer, city })}
-                />
-                {!isLocalDelivery && (
-                  <CheckoutInput
-                    label="Pays"
-                    value={customer.country}
-                    onChange={(country) => setCustomer({ ...customer, country })}
-                  />
-                )}
-              </div>
             </div>
 
             <div className="rounded-lg border border-forest/10 bg-ivory p-6">
@@ -988,6 +1111,40 @@ function getOrCreateCheckoutRequestId() {
   const requestId = window.crypto.randomUUID();
   window.sessionStorage.setItem(checkoutRequestStorageKey, requestId);
   return requestId;
+}
+
+function buildCheckoutAddress(
+  customer: {
+    firstName: string;
+    lastName: string;
+    line1: string;
+    line2: string;
+    postalCode: string;
+    city: string;
+    country: string;
+  },
+  selectedAddress: (AddressSuggestion & { verifiedAt: string }) | null,
+): Address {
+  return {
+    firstName: customer.firstName,
+    lastName: customer.lastName,
+    line1: customer.line1,
+    line2: customer.line2 || undefined,
+    postalCode: customer.postalCode,
+    city: customer.city,
+    country: customer.country,
+    ...(selectedAddress
+      ? {
+          normalizedLabel: selectedAddress.label,
+          houseNumber: selectedAddress.houseNumber,
+          street: selectedAddress.street,
+          latitude: selectedAddress.latitude,
+          longitude: selectedAddress.longitude,
+          verifiedAt: selectedAddress.verifiedAt,
+          verificationProvider: selectedAddress.provider,
+        }
+      : {}),
+  };
 }
 
 function DeliveryChoice({

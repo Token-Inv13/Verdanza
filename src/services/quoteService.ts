@@ -4,6 +4,7 @@ import type {
   CouponDiscountType,
   DeliveryFeeStatus,
   DeliveryMethod,
+  Address,
 } from "../types";
 
 export type OrderQuote = {
@@ -30,6 +31,7 @@ export async function quoteOrder(input: {
   items: CartItem[];
   deliveryMethod: DeliveryMethod;
   deliveryZone?: string;
+  address?: Address;
   couponCode?: string;
 }) {
   const response = await fetch("/api/quote-order", {
@@ -39,6 +41,7 @@ export async function quoteOrder(input: {
       items: input.items,
       deliveryMethod: input.deliveryMethod,
       deliveryZone: input.deliveryZone,
+      address: input.address,
       couponCode: input.couponCode?.trim() || undefined,
     }),
   });
