@@ -9,11 +9,8 @@ import {
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../config/deliveryRules";
 import { trackCtaClick } from "../lib/analytics";
-import {
-  DEFAULT_LOCAL_DELIVERY_ESTIMATE_LABEL,
-  formatLocalDeliveryEstimate,
-} from "../lib/deliveryEstimate";
 import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
+import { formatLocalDeliveryEstimate } from "../lib/deliveryEstimate";
 import type { DeliveryZone } from "../types";
 
 type DeliveryZonesState =
@@ -22,9 +19,9 @@ type DeliveryZonesState =
   | { status: "error"; zones: DeliveryZone[] };
 
 const deliverySteps = [
-  "Choisissez vos produits dans la boutique.",
-  "Sélectionnez une zone locale ouverte au moment de la commande.",
-  "Validez votre demande : Verdanza confirme la disponibilité, le règlement et le créneau.",
+  "Ajoutez vos produits au panier.",
+  "Vérifiez votre adresse, puis sélectionnez votre adresse. Verdanza vérifie automatiquement votre éligibilité à la livraison locale.",
+  "Si la livraison locale est disponible, elle est offerte et généralement effectuée en environ 1 h après confirmation.",
 ];
 
 function ctaCategoryForPath(path: string) {
@@ -72,15 +69,16 @@ function DeliveryOverviewPage() {
 
       <section className="mt-10 grid gap-5 lg:grid-cols-2">
         <DeliveryModeCard
-          title="Livraison locale Aix-en-Provence"
+          title="Livraison express à Aix-en-Provence"
           items={[
-            "Disponible selon les zones ouvertes.",
-            `Minimum local : ${formatCurrency(LOCAL_DELIVERY_MINIMUM)}.`,
-            DEFAULT_LOCAL_DELIVERY_ESTIMATE_LABEL,
-            "Sélection possible au moment de la commande si votre zone est ouverte.",
+            "Livraison offerte",
+            "Environ 1 h",
+            "De 11 h à 1 h du matin",
+            "Jusqu’à 15 km autour du centre d’Aix-en-Provence",
+            "Minimum de commande : 20 €",
           ]}
-          ctaLabel="Voir les zones locales"
-          ctaPath="/livraison-locale#zones-ouvertes"
+          ctaLabel="Vérifier mon adresse"
+          ctaPath="/panier"
           ctaId="delivery_overview_local"
         />
         <DeliveryModeCard
@@ -125,7 +123,7 @@ function PostalDeliveryPage() {
         <SummaryCard label="Minimum postal" value={formatCurrency(POSTAL_DELIVERY_MINIMUM)} />
         <SummaryCard
           label="Livraison offerte"
-          value={`Dès ${formatCurrency(POSTAL_FREE_SHIPPING_THRESHOLD)}`}
+          value={`À partir de ${formatCurrency(POSTAL_FREE_SHIPPING_THRESHOLD)} d'achat`}
         />
         <SummaryCard label="Suivi" value="Selon le mode choisi" />
       </section>
@@ -140,7 +138,7 @@ function PostalDeliveryPage() {
           ].map((step, index) => (
             <article key={step} className="rounded-md border border-forest/10 bg-ivory p-4">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-champagne">
-                Etape {index + 1}
+                Étape {index + 1}
               </span>
               <p className="mt-2 text-sm leading-6 text-ink/70">{step}</p>
             </article>
@@ -166,7 +164,7 @@ function PostalDeliveryPage() {
             })
           }
         >
-          Voir les zones locales
+          Voir la livraison locale
         </Link>
       </section>
     </main>
@@ -244,8 +242,8 @@ function LocalDeliveryPage() {
         <h1>Livraison locale Aix-en-Provence</h1>
         <p>
           Les zones de livraison locale sont mises à jour par Verdanza selon les
-          disponibilités. Si votre zone est ouverte, vous pourrez la sélectionner au moment
-          de la commande.
+          disponibilités. Si votre adresse est éligible, la livraison locale peut être
+          confirmée automatiquement au moment de la commande.
         </p>
       </div>
 

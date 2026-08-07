@@ -198,7 +198,7 @@ function addressFeedback(input: {
     return {
       message:
         input.eligibleMessage ||
-        "Adresse éligible à la livraison locale. Livraison offerte dès 20 € · Délai estimé : 1 à 2 h.",
+        "Adresse éligible à la livraison locale. Livraison offerte dès 20 € · Délai estimé : environ 1 h.",
       isError: false,
     };
   }
