@@ -20,7 +20,7 @@ type DeliveryZonesState =
 const deliverySteps = [
   "Ajoutez vos produits au panier.",
   "Vérifiez votre adresse, puis sélectionnez votre adresse. Verdanza vérifie automatiquement votre éligibilité à la livraison locale.",
-  "Si la livraison locale est disponible, elle est offerte et généralement effectuée en environ 1 h après confirmation.",
+  "Si la livraison locale est disponible, elle est offerte et généralement en environ 1 h après confirmation, selon disponibilité.",
 ];
 
 function ctaCategoryForPath(path: string) {

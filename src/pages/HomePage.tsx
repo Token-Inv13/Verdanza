@@ -91,7 +91,7 @@ export function HomePage() {
               <p className="mt-5 max-w-2xl text-base leading-7 text-ivory/82 md:mt-6 md:text-lg md:leading-8">
                 Verdanza propose une boutique en ligne de fleurs et résines CBD
                 sélectionnées avec soin, avec livraison postale en France et
-                livraison locale selon les zones ouvertes.
+                livraison locale selon votre zone.
               </p>
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap md:mt-8">
                 <Link
