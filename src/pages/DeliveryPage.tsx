@@ -10,7 +10,6 @@ import {
 } from "../config/deliveryRules";
 import { trackCtaClick } from "../lib/analytics";
 import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
-import { formatLocalDeliveryEstimate } from "../lib/deliveryEstimate";
 import type { DeliveryZone } from "../types";
 
 type DeliveryZonesState =
@@ -149,8 +148,8 @@ function PostalDeliveryPage() {
       <section className="mt-10 rounded-lg border border-champagne/30 bg-cream p-6 sm:p-8">
         <h2 className="font-display text-3xl text-forest">Alternative locale</h2>
         <p className="mt-4 max-w-3xl leading-7 text-ink/70">
-          Si vous êtes autour d'Aix-en-Provence, la livraison locale peut être
-          disponible selon les zones ouvertes.
+          Si vous êtes autour d'Aix-en-Provence, la livraison locale peut être disponible selon
+          votre zone d'adresse.
         </p>
         <Link
           className="btn-secondary mt-6 inline-flex"
@@ -195,40 +194,23 @@ function LocalDeliveryPage() {
     };
   }, []);
 
-  const { openZones, closedZones } = useMemo(() => {
+  const localZones = useMemo(() => {
     const localZones = state.zones
       .filter((zone) => zone.method === "local_express" && zone.isActive && !zone.isArchived)
       .sort((left, right) => Number(left.sortOrder || 0) - Number(right.sortOrder || 0));
 
-    return {
-      openZones: localZones.filter((zone) => isOpenZone(zone)),
-      closedZones: localZones.filter((zone) => !isOpenZone(zone)),
-    };
+    return localZones;
   }, [state.zones]);
 
-  const referenceZone = openZones[0] || closedZones[0];
-  const minimum = openZones.length
-    ? Math.min(
-        ...openZones.map((zone) =>
-          Number(zone.minimumOrderAmount ?? zone.minimumOrder ?? LOCAL_DELIVERY_MINIMUM),
-        ),
-      )
-    : LOCAL_DELIVERY_MINIMUM;
-  const deliveryEstimate = formatLocalDeliveryEstimate(referenceZone);
-
-  useEffect(() => {
-    if (window.location.hash !== "#zones-ouvertes") return undefined;
-    const timeout = window.setTimeout(() => {
-      document.getElementById("zones-ouvertes")?.scrollIntoView({ block: "start" });
-    }, 0);
-    return () => window.clearTimeout(timeout);
-  }, [state.status, openZones.length]);
+  const referenceZone = localZones.find((zone) => isOpenZone(zone)) || localZones[0];
+  const minimum = Number(referenceZone?.minimumOrderAmount ?? referenceZone?.minimumOrder ?? LOCAL_DELIVERY_MINIMUM);
+  const localZoneStatus = referenceZone && isOpenZone(referenceZone) ? "Ouverte" : "Fermée";
 
   return (
     <main className="container-page py-12">
       <Seo
         title="Livraison locale CBD à Aix-en-Provence - Verdanza"
-        description="Consultez les zones ouvertes, horaires et conditions de livraison locale Verdanza autour d'Aix-en-Provence."
+        description="Consultez les horaires et conditions de la livraison locale Verdanza autour d'Aix-en-Provence."
         path="/livraison-locale"
       />
       <Breadcrumbs
@@ -241,16 +223,15 @@ function LocalDeliveryPage() {
       <div className="page-intro">
         <h1>Livraison locale Aix-en-Provence</h1>
         <p>
-          Les zones de livraison locale sont mises à jour par Verdanza selon les
-          disponibilités. Si votre adresse est éligible, la livraison locale peut être
-          confirmée automatiquement au moment de la commande.
+          Les zones de livraison locale sont mises à jour par Verdanza selon les disponibilités. Si votre adresse
+          est éligible, la livraison locale peut être confirmée automatiquement au moment de la commande.
         </p>
       </div>
 
       <section className="mt-8 grid gap-4 md:grid-cols-3">
-        <SummaryCard label="Minimum local" value={formatCurrency(minimum)} />
-        <SummaryCard label="Délai estimatif" value={deliveryEstimate} />
-        <SummaryCard label="Zones ouvertes" value={`${openZones.length}`} />
+        <SummaryCard label="Minimum de commande" value={formatCurrency(minimum)} />
+        <SummaryCard label="Délai estimé" value="≈ 1 h" />
+        <SummaryCard label="Horaires de livraison" value="11 h → 1 h" />
       </section>
 
       <section className="mt-10 rounded-lg border border-forest/10 bg-cream p-6 sm:p-8">
@@ -271,25 +252,26 @@ function LocalDeliveryPage() {
         </p>
       </section>
 
-      <section id="zones-ouvertes" className="mt-12 scroll-mt-24">
-        <div className="section-heading mb-5">
-          <div>
-            <h2>Zones actuellement ouvertes</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-ink/65">
-              Les zones ci-dessous sont ouvertes à la livraison locale. Elles peuvent évoluer
-              selon les disponibilités du jour. {deliveryEstimate}
-            </p>
+      <section className="mt-12">
+        <div className="mb-6 rounded-lg border border-forest/10 bg-cream p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <h3 className="font-display text-2xl leading-tight text-forest">
+              Aix-en-Provence et ses alentours
+            </h3>
+            <span
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                localZoneStatus === "Ouverte"
+                  ? "border-forest/15 bg-forest/5 text-forest"
+                  : "border-champagne/40 bg-cream text-ink/65"
+              }`}
+            >
+              {localZoneStatus}
+            </span>
           </div>
-        </div>
-
-        <div className="mb-6 rounded-lg border border-champagne/30 bg-cream p-5">
-          <h3 className="font-display text-2xl leading-tight text-forest">
-            Vous avez un doute sur votre zone de livraison ?
-          </h3>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-ink/70">
-            Contactez-nous pour vérifier si la livraison express est disponible
-            à votre adresse.
-          </p>
+          <p className="text-sm font-medium leading-6 text-forest">Livraison offerte · environ 1 h</p>
+          <p className="mt-2 text-sm leading-6 text-ink/70">De 11 h à 1 h du matin</p>
+          <p className="mt-2 text-sm leading-6 text-ink/70">Jusqu’à 15 km autour du centre d’Aix-en-Provence</p>
+          <p className="mt-2 text-sm leading-6 text-ink/70">Minimum de commande : {formatCurrency(minimum)}</p>
           <ContactActions
             source="local_delivery_page"
             variant="compact"
@@ -312,34 +294,13 @@ function LocalDeliveryPage() {
           </div>
         )}
 
-        {state.status === "ready" && openZones.length === 0 && (
+        {state.status === "ready" && !referenceZone && (
           <div className="rounded-lg border border-forest/10 bg-ivory p-6 text-sm text-ink/65">
             La livraison locale n'est pas ouverte actuellement. Vous pouvez utiliser la
             livraison postale ou revenir plus tard.
           </div>
         )}
-
-        {openZones.length > 0 && (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {openZones.map((zone) => (
-              <DeliveryZoneCard key={zone.id} zone={zone} statusLabel="Ouverte" />
-            ))}
-          </div>
-        )}
       </section>
-
-      {closedZones.length > 0 && (
-        <section className="mt-10">
-          <h2 className="font-display text-3xl text-forest">
-            Zones temporairement indisponibles
-          </h2>
-          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {closedZones.map((zone) => (
-              <DeliveryZoneCard key={zone.id} zone={zone} statusLabel="Fermée" subdued />
-            ))}
-          </div>
-        </section>
-      )}
 
       <section className="mt-12 rounded-lg border border-champagne/30 bg-cream p-6 sm:p-8">
         <h2 className="font-display text-3xl text-forest">Livraison postale en alternative</h2>
@@ -461,52 +422,6 @@ function DeliveryModeCard({
           {ctaLabel}
         </Link>
       </div>
-    </article>
-  );
-}
-
-function DeliveryZoneCard({
-  zone,
-  statusLabel,
-  subdued = false,
-}: {
-  zone: DeliveryZone;
-  statusLabel: "Ouverte" | "Fermée";
-  subdued?: boolean;
-}) {
-  return (
-    <article className={`feature-panel ${subdued ? "opacity-75" : ""}`}>
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="font-display text-2xl leading-tight text-forest">{zone.name}</h3>
-        <span
-          className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-            statusLabel === "Ouverte"
-              ? "border-forest/15 bg-forest/5 text-forest"
-              : "border-champagne/40 bg-cream text-ink/65"
-          }`}
-        >
-          {statusLabel}
-        </span>
-      </div>
-      <dl className="mt-4 space-y-2 text-sm leading-6 text-ink/70">
-        <div>
-          <dt className="font-semibold text-forest">Minimum</dt>
-          <dd>{formatCurrency(Number(zone.minimumOrderAmount ?? zone.minimumOrder ?? 0))}</dd>
-        </div>
-        <div>
-          <dt className="font-semibold text-forest">Frais</dt>
-          <dd>{formatCurrency(Number(zone.fee || 0))}</dd>
-        </div>
-        <div>
-          <dt className="font-semibold text-forest">Délai estimatif</dt>
-          <dd>{formatLocalDeliveryEstimate(zone)}</dd>
-        </div>
-      </dl>
-      {zone.customerMessage && (
-        <p className="mt-4 rounded-md bg-cream px-4 py-3 text-sm leading-6 text-ink/65">
-          {zone.customerMessage}
-        </p>
-      )}
     </article>
   );
 }

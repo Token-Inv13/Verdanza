@@ -875,10 +875,10 @@ export function CheckoutPage() {
                     {localDeliveryEstimate}
                   </p>
                   <Link
-                    to="/livraison-locale#zones-ouvertes"
+                    to="/livraison-locale"
                     className="mt-2 inline-flex text-sm font-medium text-forest underline decoration-champagne underline-offset-4"
                   >
-                    Voir les zones de livraison locale
+                    En savoir plus sur la livraison locale
                   </Link>
                 </div>
               )}
