@@ -5,7 +5,12 @@ import { ContactActions } from "../components/ContactActions";
 import { Seo } from "../components/Seo";
 import {
   LOCAL_DELIVERY_MINIMUM,
+  POSTAL_DELIVERY_ESTIMATE,
+  POSTAL_DELIVERY_FEE,
   POSTAL_DELIVERY_MINIMUM,
+  POSTAL_DELIVERY_NAME,
+  POSTAL_DELIVERY_PREPARATION,
+  POSTAL_DELIVERY_SIGNATURE,
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../config/deliveryRules";
 import { trackCtaClick } from "../lib/analytics";
@@ -81,11 +86,12 @@ function DeliveryOverviewPage() {
           ctaId="delivery_overview_local"
         />
         <DeliveryModeCard
-          title="Livraison postale en France"
+          title={`${POSTAL_DELIVERY_NAME} à domicile`}
           items={[
-            `Disponible en France à partir de ${formatCurrency(POSTAL_DELIVERY_MINIMUM)} d'achat.`,
-            `Livraison offerte à partir de ${formatCurrency(POSTAL_FREE_SHIPPING_THRESHOLD)}.`,
-            "Frais et suivi confirmés après validation de la commande.",
+            `France métropolitaine, minimum ${formatCurrency(POSTAL_DELIVERY_MINIMUM)}.`,
+            `${formatCurrency(POSTAL_DELIVERY_FEE)}, offerte dès ${formatCurrency(POSTAL_FREE_SHIPPING_THRESHOLD)} de sous-total éligible.`,
+            POSTAL_DELIVERY_ESTIMATE,
+            POSTAL_DELIVERY_SIGNATURE,
           ]}
           ctaLabel="Voir la livraison postale"
           ctaPath="/livraison-postale"
@@ -101,7 +107,7 @@ function PostalDeliveryPage() {
     <main className="container-page py-12">
       <Seo
         title="Livraison postale CBD en France - Verdanza"
-        description="Consultez les conditions de livraison postale Verdanza en France : minimum de commande, livraison offerte et confirmation après validation."
+        description="Livraison Colissimo à domicile en France métropolitaine : frais fixes, suivi inclus, délai estimé et franco connus avant validation."
         path="/livraison-postale"
       />
       <Breadcrumbs
@@ -111,29 +117,31 @@ function PostalDeliveryPage() {
         ]}
       />
       <div className="page-intro">
-        <h1>Livraison postale</h1>
+        <h1>{POSTAL_DELIVERY_NAME} à domicile</h1>
         <p>
-          Verdanza propose une livraison postale en France, avec confirmation des
-          modalités après validation de la commande.
+          Livraison en France métropolitaine avec suivi inclus. Les frais et le total
+          exact de la commande sont affichés avant validation.
         </p>
       </div>
 
-      <section className="mt-8 grid gap-4 md:grid-cols-3">
+      <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard label="Minimum postal" value={formatCurrency(POSTAL_DELIVERY_MINIMUM)} />
+        <SummaryCard label="Frais Colissimo" value={formatCurrency(POSTAL_DELIVERY_FEE)} />
         <SummaryCard
           label="Livraison offerte"
-          value={`À partir de ${formatCurrency(POSTAL_FREE_SHIPPING_THRESHOLD)} d'achat`}
+          value={`Dès ${formatCurrency(POSTAL_FREE_SHIPPING_THRESHOLD)} de sous-total éligible`}
         />
-        <SummaryCard label="Suivi" value="Selon le mode choisi" />
+        <SummaryCard label="Délai estimé" value="2 à 3 jours ouvrés" />
       </section>
 
       <section className="mt-10 rounded-lg border border-forest/10 bg-cream p-6 sm:p-8">
         <h2 className="font-display text-3xl text-forest">Fonctionnement</h2>
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[
             "Ajoutez vos produits au panier.",
-            "Sélectionnez la livraison postale au moment de la commande.",
-            "Après validation, Verdanza confirme les modalités d'expédition et le règlement.",
+            `Sélectionnez ${POSTAL_DELIVERY_NAME} : ${formatCurrency(POSTAL_DELIVERY_FEE)}, ou offerte dès ${formatCurrency(POSTAL_FREE_SHIPPING_THRESHOLD)} de sous-total éligible.`,
+            "Vérifiez les frais et le total exact calculés par le serveur avant de valider.",
+            "Recevez le suivi Colissimo après la prise en charge du colis.",
           ].map((step, index) => (
             <article key={step} className="rounded-md border border-forest/10 bg-ivory p-4">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-champagne">
@@ -142,6 +150,16 @@ function PostalDeliveryPage() {
               <p className="mt-2 text-sm leading-6 text-ink/70">{step}</p>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="mt-10 rounded-lg border border-forest/10 bg-ivory p-6 sm:p-8">
+        <h2 className="font-display text-3xl text-forest">Délais et modalités</h2>
+        <div className="mt-4 grid gap-3 text-sm leading-6 text-ink/70">
+          <p>{POSTAL_DELIVERY_PREPARATION}</p>
+          <p>{POSTAL_DELIVERY_ESTIMATE}</p>
+          <p>Acheminement : environ 2 jours ouvrables après prise en charge.</p>
+          <p>{POSTAL_DELIVERY_SIGNATURE}</p>
         </div>
       </section>
 

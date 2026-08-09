@@ -14,6 +14,14 @@ import { collections } from "./collections";
 import {
   effectiveLocalDeliveryMinimum,
   effectivePostalDeliveryMinimum,
+  POSTAL_DELIVERY_ESTIMATE,
+  POSTAL_DELIVERY_FEE,
+  POSTAL_DELIVERY_MINIMUM,
+  POSTAL_DELIVERY_NAME,
+  POSTAL_DELIVERY_PREPARATION,
+  POSTAL_DELIVERY_SIGNATURE,
+  POSTAL_DELIVERY_ZONE_ID,
+  POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../config/deliveryRules";
 import type { DeliveryZone } from "../types";
 
@@ -44,8 +52,16 @@ export async function getDeliveryZonesWithFallback() {
   if (!db) return { zones: localDeliveryZones, source: "local" as const };
   try {
     const snapshot = await getDocs(collection(db, collections.deliveryZones));
-    const zones = snapshot.docs.map((entry) =>
+    const firestoreZones = snapshot.docs.map((entry) =>
       normalizeDeliveryZone({ id: entry.id, ...entry.data() } as DeliveryZone),
+    );
+    const postalFallback = localDeliveryZones.find(
+      (zone) => zone.id === POSTAL_DELIVERY_ZONE_ID,
+    );
+    const zones = (
+      firestoreZones.some((zone) => zone.id === POSTAL_DELIVERY_ZONE_ID) || !postalFallback
+        ? firestoreZones
+        : [postalFallback, ...firestoreZones]
     ).sort((left, right) => Number(left.sortOrder || 0) - Number(right.sortOrder || 0));
     return {
       zones: zones.length ? zones : localDeliveryZones,
@@ -84,7 +100,11 @@ export async function updateDeliveryZoneAdmin(
   data: DeliveryZoneAdminInput,
 ) {
   if (!db) throw new Error("Firebase is not configured.");
-  const normalized = validateDeliveryZoneAdminInput(data);
+  const validated = validateDeliveryZoneAdminInput(data);
+  const normalized =
+    zoneId === POSTAL_DELIVERY_ZONE_ID
+      ? canonicalPostalDeliveryZoneAdminInput(validated)
+      : validated;
   await updateDoc(doc(db, collections.deliveryZones, zoneId), {
     ...deliveryZoneWriteFields(normalized),
     updatedAt: serverTimestamp(),
@@ -127,7 +147,7 @@ function normalizeDeliveryZone(zone: DeliveryZone): DeliveryZone {
     zone.method === "postal"
       ? effectivePostalDeliveryMinimum(rawMinimum)
       : effectiveLocalDeliveryMinimum(rawMinimum);
-  return {
+  const normalized: DeliveryZone = {
     ...zone,
     slug: zone.slug || slugify(zone.name),
     status,
@@ -144,6 +164,36 @@ function normalizeDeliveryZone(zone: DeliveryZone): DeliveryZone {
     addressValidationEnabled: zone.addressValidationEnabled === true,
     sortOrder: Number(zone.sortOrder || 0),
   };
+  if (zone.id !== POSTAL_DELIVERY_ZONE_ID) return normalized;
+  return {
+    ...normalized,
+    name: POSTAL_DELIVERY_NAME,
+    method: "postal",
+    fee: POSTAL_DELIVERY_FEE,
+    minimumOrder: POSTAL_DELIVERY_MINIMUM,
+    minimumOrderAmount: POSTAL_DELIVERY_MINIMUM,
+    estimatedDelay: POSTAL_DELIVERY_ESTIMATE,
+    slots: ["Colissimo France à domicile, sans signature"],
+    customerMessage: postalCustomerMessage(),
+  };
+}
+
+function canonicalPostalDeliveryZoneAdminInput(
+  data: DeliveryZoneAdminInput,
+): DeliveryZoneAdminInput {
+  return {
+    ...data,
+    name: POSTAL_DELIVERY_NAME,
+    fee: POSTAL_DELIVERY_FEE,
+    minimumOrder: POSTAL_DELIVERY_MINIMUM,
+    minimumOrderAmount: POSTAL_DELIVERY_MINIMUM,
+    estimatedDelay: POSTAL_DELIVERY_ESTIMATE,
+    customerMessage: postalCustomerMessage(),
+  };
+}
+
+function postalCustomerMessage() {
+  return `${POSTAL_DELIVERY_ESTIMATE} ${POSTAL_DELIVERY_PREPARATION} ${POSTAL_DELIVERY_SIGNATURE} Frais de ${POSTAL_DELIVERY_FEE.toFixed(2).replace(".", ",")} EUR, offerts dès ${POSTAL_FREE_SHIPPING_THRESHOLD} EUR de sous-total éligible.`;
 }
 
 export function validateDeliveryZoneAdminInput(

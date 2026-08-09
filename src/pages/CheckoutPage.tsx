@@ -28,8 +28,14 @@ import { fixedPriceCartLineLabel } from "../lib/fixedPriceOptions";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
 import {
   effectiveLocalDeliveryMinimum,
-  effectivePostalDeliveryMinimum,
   isPostalShippingFree,
+  postalDeliveryFee,
+  POSTAL_DELIVERY_ESTIMATE,
+  POSTAL_DELIVERY_FEE,
+  POSTAL_DELIVERY_MINIMUM,
+  POSTAL_DELIVERY_NAME,
+  POSTAL_DELIVERY_SIGNATURE,
+  POSTAL_DELIVERY_ZONE_ID,
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../config/deliveryRules";
 import { publicSubmissionSecurityContext } from "../lib/publicSubmissionSecurity";
@@ -91,6 +97,8 @@ export function CheckoutPage() {
   );
   const [quote, setQuote] = useState<OrderQuote | null>(null);
   const [automaticQuote, setAutomaticQuote] = useState<OrderQuote | null>(null);
+  const [manualQuoteContextKey, setManualQuoteContextKey] = useState("");
+  const [automaticQuoteContextKey, setAutomaticQuoteContextKey] = useState("");
   const [promoMessage, setPromoMessage] = useState("");
   const [isCheckingPromo, setIsCheckingPromo] = useState(false);
   const [customerMessage, setCustomerMessage] = useState("");
@@ -99,6 +107,7 @@ export function CheckoutPage() {
   const [complianceAccepted, setComplianceAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [serverQuoteError, setServerQuoteError] = useState("");
   const [company, setCompany] = useState("");
   const [customer, setCustomer] = useState({
     email: "",
@@ -143,14 +152,12 @@ export function CheckoutPage() {
     () => buildCheckoutAddress(customer, selectedAddress),
     [customer, selectedAddress],
   );
-  const postalZone = useMemo(
-    () => deliveryZones.find((zone) => zone.id === "postal-france" && zone.isActive !== false),
-    [deliveryZones],
-  );
   const isLocalDelivery = deliveryMethod === "local_express";
-  const quoteDeliveryAddress = isLocalDelivery && deliveryEligibility.eligible
-    ? deliveryAddress
-    : undefined;
+  const quoteDeliveryAddress = isLocalDelivery
+    ? deliveryEligibility.eligible
+      ? deliveryAddress
+      : undefined
+    : deliveryAddress;
   const localDeliveryUnavailable = !deliveryEligibility.eligible;
   const localDeliveryMinimum = effectiveLocalDeliveryMinimum(
     selectedZone?.minimumOrderAmount ?? selectedZone?.minimumOrder,
@@ -162,9 +169,7 @@ export function CheckoutPage() {
   const eligibleAddressMessage = selectedZone
     ? `Adresse éligible à la livraison locale. ${selectedZone.fee > 0 ? `Frais : ${formatEuro(selectedZone.fee)}.` : "Livraison offerte"} dès ${effectiveLocalDeliveryMinimum(selectedZone.minimumOrderAmount ?? selectedZone.minimumOrder).toFixed(0)} € · ${localDeliveryEstimate}`
     : undefined;
-  const postalDeliveryMinimum = effectivePostalDeliveryMinimum(
-    postalZone?.minimumOrderAmount ?? postalZone?.minimumOrder,
-  );
+  const postalDeliveryMinimum = POSTAL_DELIVERY_MINIMUM;
   const isBelowLocalMinimum =
     isLocalDelivery && itemCount > 0 && subtotal < localDeliveryMinimum;
   const isBelowPostalMinimum =
@@ -175,11 +180,9 @@ export function CheckoutPage() {
     0,
     POSTAL_FREE_SHIPPING_THRESHOLD - subtotal,
   );
-  const rawEstimatedDeliveryFee = isLocalDelivery
+  const fallbackEstimatedDeliveryFee = isLocalDelivery
     ? selectedZone?.fee ?? 0
-    : postalZone?.fee ?? 0;
-  const estimatedDeliveryFee =
-    !isLocalDelivery && postalShippingFree ? 0 : rawEstimatedDeliveryFee;
+    : postalDeliveryFee(subtotal);
   const automaticPromotions = calculateCartPromotions({
     lines: lines.map((line) => ({
       productId: line.productId,
@@ -192,30 +195,49 @@ export function CheckoutPage() {
   });
   const normalizedCouponCode = couponCode.trim().toUpperCase();
   const normalizedAppliedCouponCode = appliedCouponCode.trim().toUpperCase();
+  const quoteContextKey = JSON.stringify({
+    items,
+    deliveryMethod,
+    deliveryZone:
+      deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
+    address: quoteDeliveryAddress,
+  });
+  const currentManualQuote =
+    manualQuoteContextKey === `${quoteContextKey}|coupon:${normalizedAppliedCouponCode}`
+      ? quote
+      : null;
+  const currentAutomaticQuote =
+    automaticQuoteContextKey === quoteContextKey ? automaticQuote : null;
   const hasManualPromo = Boolean(
-    quote?.promoApplied &&
+    currentManualQuote?.promoApplied &&
       normalizedAppliedCouponCode &&
-      quote.couponCode?.toUpperCase() === normalizedAppliedCouponCode,
+      currentManualQuote.couponCode?.toUpperCase() === normalizedAppliedCouponCode,
   );
+  const activeQuote = hasManualPromo ? currentManualQuote : currentAutomaticQuote;
   const automaticAppliedPromotions = hasManualPromo
     ? []
-    : automaticQuote
-      ? automaticQuote.appliedPromotions || []
+    : currentAutomaticQuote
+      ? currentAutomaticQuote.appliedPromotions || []
       : automaticPromotions.appliedPromotions;
   const automaticDiscountAmount = hasManualPromo
     ? 0
     : Number(
-        automaticQuote
-          ? automaticQuote.promotionDiscountTotal || automaticQuote.discountAmount || 0
+        currentAutomaticQuote
+          ? currentAutomaticQuote.promotionDiscountTotal || currentAutomaticQuote.discountAmount || 0
           : automaticPromotions.promotionDiscountTotal,
       );
-  const automaticProgressMessages = automaticQuote
-    ? automaticQuote.promotionProgressMessages || []
+  const automaticProgressMessages = currentAutomaticQuote
+    ? currentAutomaticQuote.promotionProgressMessages || []
     : automaticPromotions.progressMessages;
   const discountAmount = hasManualPromo
-    ? Number(quote?.discountAmount || 0)
+    ? Number(currentManualQuote?.discountAmount || 0)
     : automaticDiscountAmount;
-  const estimatedTotal = Math.max(0, subtotal + estimatedDeliveryFee - discountAmount);
+  const estimatedDeliveryFee = activeQuote?.deliveryFee ?? fallbackEstimatedDeliveryFee;
+  const displayedPostalShippingFree =
+    activeQuote?.postalFreeShippingApplied ?? postalShippingFree;
+  const estimatedTotal =
+    activeQuote?.total ?? Math.max(0, subtotal + estimatedDeliveryFee - discountAmount);
+  const serverQuoteReady = Boolean(activeQuote);
   const stockIssues = useMemo(() => getCartStockIssues(lines), [lines]);
   const hasStockIssues = stockIssues.length > 0;
   const hasCartIssues = hasStockIssues || hasBlockingCartIssues;
@@ -229,7 +251,7 @@ export function CheckoutPage() {
 
   useEffect(() => {
     if (!lines.length) return;
-    const zonePart = isLocalDelivery ? selectedZone?.id || "none" : "postal-france";
+    const zonePart = isLocalDelivery ? selectedZone?.id || "none" : POSTAL_DELIVERY_ZONE_ID;
     const signature = `${deliveryMethod}:${zonePart}:${lines.map((line) => `${line.lineKey}:${line.quantity}`).join("|")}`;
     if (shippingSignature.current === signature) return;
     shippingSignature.current = signature;
@@ -237,7 +259,7 @@ export function CheckoutPage() {
       lines,
       estimatedTotal,
       deliveryMethod,
-      isLocalDelivery ? selectedZone?.name || selectedZone?.id : "postal-france",
+      isLocalDelivery ? selectedZone?.name || selectedZone?.id : POSTAL_DELIVERY_NAME,
     );
     if (isLocalDelivery && selectedZone) {
       trackLocalDeliveryZoneSelected(selectedZone.id, selectedZone.name);
@@ -292,6 +314,7 @@ export function CheckoutPage() {
       window.localStorage.removeItem(promoStorageKey);
       setAppliedCouponCode("");
       setQuote(null);
+      setManualQuoteContextKey("");
       setPromoMessage("");
     }
   }, [couponCode]);
@@ -304,20 +327,37 @@ export function CheckoutPage() {
       (deliveryMethod === "local_express" && !deliveryEligibility.eligible)
     ) {
       setAutomaticQuote(null);
+      setAutomaticQuoteContextKey("");
+      setServerQuoteError("");
       return;
     }
     let cancelled = false;
+    const requestContextKey = quoteContextKey;
+    setAutomaticQuote(null);
+    setAutomaticQuoteContextKey("");
+    setServerQuoteError("");
     quoteOrder({
       items,
       deliveryMethod,
-      deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : "postal-france",
+      deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
       address: quoteDeliveryAddress,
     })
       .then((nextQuote) => {
-        if (!cancelled) setAutomaticQuote(nextQuote);
+        if (!cancelled) {
+          setAutomaticQuote(nextQuote);
+          setAutomaticQuoteContextKey(requestContextKey);
+        }
       })
-      .catch(() => {
-        if (!cancelled) setAutomaticQuote(null);
+      .catch((quoteError) => {
+        if (!cancelled) {
+          setAutomaticQuote(null);
+          setAutomaticQuoteContextKey("");
+          setServerQuoteError(
+            quoteError instanceof Error
+              ? quoteError.message
+              : "Le total serveur ne peut pas être calculé pour le moment.",
+          );
+        }
       });
     return () => {
       cancelled = true;
@@ -325,6 +365,7 @@ export function CheckoutPage() {
   }, [
     deliveryMethod,
     quoteDeliveryAddress,
+    quoteContextKey,
     deliveryEligibility.eligible,
     hasBlockingCartIssues,
     hasManualPromo,
@@ -349,25 +390,31 @@ export function CheckoutPage() {
       (deliveryMethod === "local_express" && !deliveryEligibility.eligible)
     ) {
       setQuote(null);
+      setManualQuoteContextKey("");
       return;
     }
     let cancelled = false;
+    const requestContextKey = `${quoteContextKey}|coupon:${code}`;
+    setQuote(null);
+    setManualQuoteContextKey("");
     quoteOrder({
       items,
       deliveryMethod,
-      deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : "postal-france",
+      deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
       address: quoteDeliveryAddress,
       couponCode: code,
     })
       .then((nextQuote) => {
         if (cancelled) return;
         setQuote(nextQuote);
+        setManualQuoteContextKey(requestContextKey);
         setCouponCode(nextQuote.couponCode || code);
       })
       .catch(() => {
         if (cancelled) return;
         setAppliedCouponCode("");
         setQuote(null);
+        setManualQuoteContextKey("");
         window.localStorage.removeItem(promoStorageKey);
       });
     return () => {
@@ -377,6 +424,7 @@ export function CheckoutPage() {
     appliedCouponCode,
     deliveryMethod,
     quoteDeliveryAddress,
+    quoteContextKey,
     deliveryEligibility.eligible,
     hasBlockingCartIssues,
     items,
@@ -452,6 +500,7 @@ export function CheckoutPage() {
     setCouponCode(code);
     setPromoMessage("");
     setQuote(null);
+    setManualQuoteContextKey("");
     if (!code) return null;
     if (hasBlockingCartIssues) {
       const message = "Un format prix fixe de votre panier n'est plus disponible.";
@@ -465,20 +514,23 @@ export function CheckoutPage() {
     }
     setIsCheckingPromo(true);
     try {
+      const requestContextKey = `${quoteContextKey}|coupon:${code}`;
       const nextQuote = await quoteOrder({
         items,
         deliveryMethod,
-        deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : "postal-france",
+        deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
         address: quoteDeliveryAddress,
         couponCode: code,
       });
       setQuote(nextQuote);
+      setManualQuoteContextKey(requestContextKey);
       setAppliedCouponCode(nextQuote.couponCode || code);
       window.localStorage.setItem(promoStorageKey, code);
       if (showSuccess) setPromoMessage("Code promo appliqué.");
       return nextQuote;
     } catch (error) {
       setAppliedCouponCode("");
+      setManualQuoteContextKey("");
       window.localStorage.removeItem(promoStorageKey);
       const message =
         error instanceof Error ? error.message : "Ce code promo n'est pas valide.";
@@ -495,6 +547,7 @@ export function CheckoutPage() {
     if (nextCode.trim().toUpperCase() !== normalizedAppliedCouponCode) {
       setAppliedCouponCode("");
       setQuote(null);
+      setManualQuoteContextKey("");
       window.localStorage.removeItem(promoStorageKey);
     }
   }
@@ -509,6 +562,9 @@ export function CheckoutPage() {
         throw new Error(
           "Certains produits dépassent le stock disponible. Veuillez ajuster votre panier avant de continuer.",
         );
+      }
+      if (!activeQuote) {
+        throw new Error("Le total serveur doit être calculé avant de valider la commande.");
       }
       if (isBelowLocalMinimum) {
         throw new Error("Le minimum de commande pour la livraison locale est de 20 €.");
@@ -534,14 +590,14 @@ export function CheckoutPage() {
         ? await quoteOrder({
             items,
             deliveryMethod,
-            deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : "postal-france",
+            deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
             address: quoteDeliveryAddress,
             couponCode: normalizedAppliedCouponCode,
           })
         : await quoteOrder({
             items,
             deliveryMethod,
-            deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : "postal-france",
+            deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
             address: quoteDeliveryAddress,
           });
 
@@ -557,7 +613,7 @@ export function CheckoutPage() {
           analyticsContext,
           deliveryMethod,
           deliveryZone:
-            deliveryMethod === "local_express" ? resolvedDeliveryZoneId : "postal-france",
+            deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
           couponCode: hasManualPromo ? normalizedAppliedCouponCode : undefined,
           customerMessage: customerMessage.trim() || undefined,
           preferredPaymentMethod,
@@ -592,13 +648,13 @@ export function CheckoutPage() {
       trackOrderSubmitted({
         transactionId: payload.orderId,
         lines,
-        value: finalQuote?.total ?? estimatedTotal,
+        value: finalQuote.total,
         coupon: finalQuote?.couponCode || undefined,
         shippingTier: deliveryMethod,
         deliveryZone:
           deliveryMethod === "local_express"
             ? selectedZone?.name || selectedZone?.id
-            : "postal-france",
+            : POSTAL_DELIVERY_NAME,
         paymentMethod: preferredPaymentMethod,
       });
 
@@ -620,20 +676,19 @@ export function CheckoutPage() {
           delivery:
             deliveryMethod === "local_express"
               ? selectedZone?.name || "Livraison locale"
-              : "Livraison postale en France",
-          deliveryNote:
-            deliveryMethod === "local_express"
-              ? `${localDeliveryEstimate} Minimum local : ${localDeliveryMinimum.toFixed(0)} € d'achat.`
-              : postalShippingFree
-                ? "Livraison postale offerte."
-                : "Frais postaux confirmés avec vous après validation de la commande.",
+              : `${POSTAL_DELIVERY_NAME} à domicile`,
+          deliveryMethod,
+          subtotal: finalQuote.subtotal,
+          deliveryFee: finalQuote.deliveryFee,
+          postalFreeShippingApplied: finalQuote.postalFreeShippingApplied,
+          deliveryNote: finalQuote.deliveryNote,
           preferredPaymentMethod: paymentMethodLabels[preferredPaymentMethod],
           couponCode: finalQuote?.couponCode || undefined,
           discountAmount: finalQuote?.discountAmount || automaticDiscountAmount || 0,
           appliedPromotions: finalQuote?.appliedPromotions?.length
             ? finalQuote.appliedPromotions
             : automaticAppliedPromotions,
-          total: finalQuote?.total ?? estimatedTotal,
+          total: finalQuote.total,
         }),
       );
 
@@ -818,8 +873,8 @@ export function CheckoutPage() {
               <div className="mt-5 grid gap-3 md:grid-cols-2">
                 <DeliveryChoice
                   checked={deliveryMethod === "postal"}
-                  title="Livraison postale en France"
-                  text="Livraison postale disponible en France à partir de 15 € d'achat. Livraison postale offerte à partir de 60 €."
+                  title={`${POSTAL_DELIVERY_NAME} à domicile`}
+                  text={`${formatEuro(POSTAL_DELIVERY_FEE)}, offerte dès ${POSTAL_FREE_SHIPPING_THRESHOLD} EUR de sous-total éligible. ${POSTAL_DELIVERY_ESTIMATE}`}
                   onChange={() => setDeliveryMethod("postal")}
                 />
                 <DeliveryChoice
@@ -892,14 +947,17 @@ export function CheckoutPage() {
 
               {!isLocalDelivery && (
                 <p className="mt-4 rounded-md border border-champagne/30 bg-cream p-3 text-sm leading-6 text-forest">
-                  Livraison postale disponible en France à partir de 15 € d'achat.
-                  Livraison postale offerte à partir de 60 €.
+                  {POSTAL_DELIVERY_NAME} à domicile en France métropolitaine. Frais fixes :{" "}
+                  {formatEuro(POSTAL_DELIVERY_FEE)}. Livraison offerte dès{" "}
+                  {POSTAL_FREE_SHIPPING_THRESHOLD} EUR de sous-total éligible.
                   <br />
                   {isBelowPostalMinimum
                     ? `Ajoutez ${amountUntilPostalMinimum.toFixed(2).replace(".", ",")} € pour atteindre le minimum de commande postale.`
-                    : postalShippingFree
-                      ? "Livraison postale offerte."
-                      : `Commande postale possible. Ajoutez ${amountUntilFreePostalShipping.toFixed(2).replace(".", ",")} € pour bénéficier de la livraison postale offerte. Frais postaux confirmés avec vous après validation de la commande.`}
+                    : displayedPostalShippingFree
+                      ? "Livraison Colissimo offerte."
+                      : `Commande postale possible. Ajoutez ${amountUntilFreePostalShipping.toFixed(2).replace(".", ",")} € pour bénéficier de la livraison offerte.`}
+                  <br />
+                  {POSTAL_DELIVERY_ESTIMATE} {POSTAL_DELIVERY_SIGNATURE}
                 </p>
               )}
 
@@ -916,7 +974,7 @@ export function CheckoutPage() {
               <p className="mt-3 rounded-md border border-champagne/30 bg-cream p-3 text-sm leading-6 text-forest">
                 {isLocalDelivery
                   ? "Pour la livraison locale, le règlement sera confirmé avec vous après validation de la commande. Vous pourrez régler selon les modalités proposées par Verdanza. Si vous souhaitez payer par carte bancaire, un lien de paiement pourra vous être envoyé."
-                  : "Pour la livraison postale, la commande sera confirmée par Verdanza avant expédition. Si vous souhaitez payer par carte bancaire, un lien de paiement vous sera envoyé par email et/ou message après confirmation du montant final."}
+                  : "Pour la livraison postale, les frais Colissimo et le total affichés sont définitifs. Verdanza confirme ensuite la disponibilité avant expédition. Si vous souhaitez payer par carte bancaire, un lien de paiement vous sera envoyé par email et/ou message."}
               </p>
               <label className="mt-5 block text-sm font-medium text-forest">
                 Mode de règlement souhaité
@@ -967,24 +1025,21 @@ export function CheckoutPage() {
                 </p>
               ))}
               <p className="flex justify-between border-t border-forest/10 pt-3">
-                <span>Sous-total estimé</span>
+                <span>Sous-total produits</span>
                 <span>{formatEuro(subtotal)}</span>
               </p>
               <p className="flex justify-between">
-                <span>Livraison estimée</span>
+                <span>{isLocalDelivery ? "Livraison locale" : POSTAL_DELIVERY_NAME}</span>
                 <span>
-                  {!isLocalDelivery && postalShippingFree
+                  {!isLocalDelivery && displayedPostalShippingFree
                     ? "Offerte"
-                    : !isLocalDelivery
-                      ? "À confirmer"
-                      : formatEuro(estimatedDeliveryFee)}
+                    : formatEuro(estimatedDeliveryFee)}
                 </span>
               </p>
               {!isLocalDelivery && (
                 <p className="text-xs leading-5 text-ink/55">
-                  {postalShippingFree
-                    ? "Livraison postale offerte."
-                    : "Frais postaux confirmés avec vous après validation de la commande."}
+                  {activeQuote?.deliveryNote ||
+                    `${POSTAL_DELIVERY_ESTIMATE} ${POSTAL_DELIVERY_SIGNATURE}`}
                 </p>
               )}
               <label className="grid gap-2 border-t border-forest/10 pt-3 text-sm font-medium text-forest">
@@ -1050,9 +1105,17 @@ export function CheckoutPage() {
                   </p>
                 ))}
               <p className="flex justify-between text-lg font-semibold text-forest">
-                <span>Total estimé</span>
+                <span>Total de la commande</span>
                 <span>{formatEuro(estimatedTotal)}</span>
               </p>
+              {!serverQuoteReady && !isBelowPostalMinimum && !isBelowLocalMinimum && (
+                <p className="text-xs leading-5 text-ink/55">
+                  Calcul du total par le serveur en cours…
+                </p>
+              )}
+              {serverQuoteError && !isBelowPostalMinimum && !isBelowLocalMinimum && (
+                <p className="text-xs leading-5 text-red-700">{serverQuoteError}</p>
+              )}
               {hasCartIssues && (
                 <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-800">
                   <p>Ajustez votre panier avant de valider.</p>
@@ -1090,8 +1153,21 @@ export function CheckoutPage() {
               de conformité.
             </label>
             {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
-            <button className="btn-primary mt-6 w-full" disabled={isSubmitting || hasCartIssues}>
-              {isSubmitting ? "Validation..." : "Valider ma commande"}
+            <button
+              className="btn-primary mt-6 w-full"
+              disabled={
+                isSubmitting ||
+                hasCartIssues ||
+                !serverQuoteReady ||
+                isBelowPostalMinimum ||
+                isBelowLocalMinimum
+              }
+            >
+              {isSubmitting
+                ? "Validation..."
+                : !serverQuoteReady
+                  ? "Calcul du total..."
+                  : "Valider ma commande"}
             </button>
           </aside>
         </form>

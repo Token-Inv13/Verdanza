@@ -41,10 +41,9 @@ export function CheckoutSuccessPage() {
             Prochaine étape : confirmation et règlement
           </strong>
           <p className="mt-2">
-            Nous allons vérifier les disponibilités, le mode de livraison et le
-            montant final. Si vous souhaitez régler par carte bancaire, un lien
-            de paiement vous sera envoyé par email et/ou message après
-            confirmation de votre commande.
+            {summary?.deliveryMethod === "postal"
+              ? "Les frais Colissimo et le total ci-dessous sont déterminés. Nous vérifions les disponibilités avant expédition. Si vous souhaitez régler par carte bancaire, un lien de paiement vous sera envoyé par email et/ou message."
+              : "Nous allons vérifier les disponibilités, le mode de livraison et le règlement. Si vous souhaitez régler par carte bancaire, un lien de paiement vous sera envoyé par email et/ou message après confirmation de votre commande."}
           </p>
         </div>
         {orderId && (
@@ -63,12 +62,17 @@ export function CheckoutSuccessPage() {
               ))}
               <p>Mode de livraison : {summary.delivery}</p>
               <p>{summary.deliveryNote}</p>
+              <p>Sous-total produits : {formatMoney(summary.subtotal)}</p>
+              <p>
+                Frais de livraison :{" "}
+                {summary.deliveryFee === 0 ? "Offerte" : formatMoney(summary.deliveryFee)}
+              </p>
               <p>
                 Mode de règlement souhaité :{" "}
                 {summary.preferredPaymentMethod ||
                   "Carte bancaire via lien de paiement après confirmation"}
               </p>
-              <p>Total estimé : {formatMoney(summary.total)}</p>
+              <p>Total de la commande : {formatMoney(summary.total)}</p>
             </div>
           )}
           <p>
@@ -82,7 +86,7 @@ export function CheckoutSuccessPage() {
             </a>
           </p>
           {!summary && (
-            <p>Total estimé : indiqué dans le récapitulatif email et dans votre compte.</p>
+            <p>Total de la commande : indiqué dans le récapitulatif email et dans votre compte.</p>
           )}
         </div>
         <Link to="/boutique" className="btn-primary mt-8 inline-flex">
@@ -102,15 +106,21 @@ function readLastOrderSummary(orderId: string | null) {
       orderId?: string;
       items?: { name: string; quantity: number; displayQuantity?: string; total: number }[];
       delivery?: string;
+      deliveryMethod?: "postal" | "local_express";
       deliveryNote?: string;
+      subtotal?: number;
+      deliveryFee?: number;
       preferredPaymentMethod?: string;
       total?: number;
     };
     if (parsed.orderId !== orderId || !Array.isArray(parsed.items)) return null;
     return {
       items: parsed.items,
-      delivery: parsed.delivery || "À confirmer",
+      delivery: parsed.delivery || "Livraison sélectionnée",
+      deliveryMethod: parsed.deliveryMethod,
       deliveryNote: parsed.deliveryNote || "",
+      subtotal: Number(parsed.subtotal || 0),
+      deliveryFee: Number(parsed.deliveryFee || 0),
       preferredPaymentMethod:
         parsed.preferredPaymentMethod ||
         "Carte bancaire via lien de paiement après confirmation",

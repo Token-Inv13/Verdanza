@@ -1,4 +1,11 @@
 import type { BillingSettings, Invoice, Order, OrderStatus } from "../../src/types/index.js";
+import {
+  POSTAL_DELIVERY_ESTIMATE,
+  POSTAL_DELIVERY_FEE,
+  POSTAL_DELIVERY_PREPARATION,
+  POSTAL_DELIVERY_SIGNATURE,
+  POSTAL_FREE_SHIPPING_THRESHOLD,
+} from "../../src/config/deliveryRules.js";
 import { formatLocalDeliveryEstimate } from "../../src/lib/deliveryEstimate.js";
 import { invoiceDocumentSendBlock } from "../../src/lib/invoiceSendPolicy.js";
 import { orderItemLineTotal, orderItemSummaryLabel } from "../../src/lib/orderLineDisplay.js";
@@ -406,11 +413,13 @@ function orderEmailHtml(order: Order, intro: string) {
       <p><strong>Commande :</strong> ${escapeHtml(shortOrderId(order.id))}</p>
       <ul>${rows}</ul>
       ${promoEmailHtml(order)}
-      <p><strong>Total estimé :</strong> ${formatMoney(Number(order.total || 0))}</p>
+      <p><strong>Sous-total produits :</strong> ${formatMoney(Number(order.subtotal || 0))}</p>
+      <p><strong>Frais de livraison :</strong> ${escapeHtml(deliveryFeeLabel(order))}</p>
+      <p><strong>Total de la commande :</strong> ${formatMoney(Number(order.total || 0))}</p>
       <p><strong>Livraison :</strong> ${escapeHtml(order.deliveryZone || order.deliveryMethod)}</p>
       <p><strong>Information livraison :</strong> ${escapeHtml(deliveryInfoText(order))}</p>
       <p><strong>Mode de règlement souhaité :</strong> ${escapeHtml(preferredPaymentMethodLabel(order.preferredPaymentMethod))}</p>
-      <p>Votre commande est en attente de confirmation par l'équipe Verdanza. Après vérification des disponibilités et du mode de livraison, nous vous confirmerons le montant final. Si vous avez choisi ou souhaitez un paiement par carte bancaire, un lien de paiement vous sera envoyé par email et/ou message.</p>
+      <p>${escapeHtml(orderConfirmationNextStep(order))}</p>
       <p><strong>Contact Verdanza :</strong> ${escapeHtml(contactEmail())}</p>
       ${accountUrl ? `<p><a href="${accountUrl}">Voir mes commandes</a></p>` : ""}
     </div>
@@ -428,11 +437,13 @@ function orderEmailText(order: Order, intro: string) {
     `Commande: ${shortOrderId(order.id)}`,
     items,
     ...promoEmailTextLines(order),
-    `Total estimé: ${formatMoney(Number(order.total || 0))}`,
+    `Sous-total produits: ${formatMoney(Number(order.subtotal || 0))}`,
+    `Frais de livraison: ${deliveryFeeLabel(order)}`,
+    `Total de la commande: ${formatMoney(Number(order.total || 0))}`,
     `Livraison: ${order.deliveryZone || order.deliveryMethod}`,
     `Information livraison: ${deliveryInfoText(order)}`,
     `Mode de reglement souhaite: ${preferredPaymentMethodLabel(order.preferredPaymentMethod)}`,
-    "Votre commande est en attente de confirmation par l'equipe Verdanza. Apres verification des disponibilites et du mode de livraison, nous vous confirmerons le montant final. Si vous avez choisi ou souhaitez un paiement par carte bancaire, un lien de paiement vous sera envoye par email et/ou message.",
+    orderConfirmationNextStep(order),
     `Contact Verdanza: ${contactEmail()}`,
   ].join("\n");
 }
@@ -490,7 +501,7 @@ function customerManualOrderEmailText(order: Order) {
     "",
     "Votre commande a bien été transmise à Verdanza.",
     "",
-    "Votre commande est en attente de confirmation par l'equipe Verdanza. Apres verification des disponibilites et du mode de livraison, nous vous confirmerons le montant final. Si vous avez choisi ou souhaitez un paiement par carte bancaire, un lien de paiement vous sera envoye par email et/ou message.",
+    orderConfirmationNextStep(order),
     "",
     "Contact Verdanza:",
     `Email: ${contactEmail()}`,
@@ -502,7 +513,11 @@ function customerManualOrderEmailText(order: Order) {
       .map((item) => `${orderItemSummaryLabel(item)} - ${formatMoney(orderItemLineTotal(item))}`)
       .join("\n"),
     ...promoEmailTextLines(order),
-    `Total estimé: ${formatMoney(Number(order.total || 0))}`,
+    `Livraison: ${order.deliveryZone || order.deliveryMethod}`,
+    `Information livraison: ${deliveryInfoText(order)}`,
+    `Sous-total produits: ${formatMoney(Number(order.subtotal || 0))}`,
+    `Frais de livraison: ${deliveryFeeLabel(order)}`,
+    `Total de la commande: ${formatMoney(Number(order.total || 0))}`,
     "",
     "Merci,",
     "Verdanza",
@@ -522,8 +537,8 @@ function adminOrderEmailHtml(order: Order) {
       <p><strong>Adresse :</strong> ${escapeHtml(formatAddress(address))}</p>
       <p><strong>Livraison :</strong> ${escapeHtml(order.deliveryZone || order.deliveryMethod)}</p>
       <p><strong>Minimum appliqué :</strong> ${escapeHtml(String(order.deliveryMinimumApplied ?? (order.deliveryMethod === "postal" ? 15 : 20)))} €</p>
-      <p><strong>Livraison postale offerte :</strong> ${order.deliveryMethod === "postal" && order.postalFreeShippingApplied ? "Oui" : "Non"}</p>
-      <p><strong>Frais postaux à confirmer :</strong> ${order.deliveryMethod === "postal" && !order.postalFreeShippingApplied ? "Oui" : "Non"}</p>
+      <p><strong>Frais de livraison :</strong> ${escapeHtml(deliveryFeeLabel(order))}</p>
+      <p><strong>Information livraison :</strong> ${escapeHtml(deliveryInfoText(order))}</p>
       <p><strong>Mode de règlement souhaité :</strong> ${escapeHtml(preferredPaymentMethodLabel(order.preferredPaymentMethod))}</p>
       <p><strong>Action paiement :</strong> Lien de paiement à envoyer si CB souhaitée.</p>
       <p><strong>Produits :</strong></p>
@@ -531,7 +546,7 @@ function adminOrderEmailHtml(order: Order) {
         .map((item) => `<li>${escapeHtml(orderItemSummaryLabel(item))}</li>`)
         .join("")}</ul>
       ${promoEmailHtml(order)}
-      <p><strong>Total estimé :</strong> ${formatMoney(Number(order.total || 0))}</p>
+      <p><strong>Total de la commande :</strong> ${formatMoney(Number(order.total || 0))}</p>
       ${order.customerMessage ? `<p><strong>Message client :</strong> ${escapeHtml(order.customerMessage)}</p>` : ""}
       ${adminUrl() ? `<p><a href="${adminUrl()}">Ouvrir le cockpit admin</a></p>` : ""}
     </div>
@@ -549,14 +564,14 @@ function adminOrderEmailText(order: Order) {
     `Adresse: ${formatAddress(order.deliveryAddress)}`,
     `Livraison: ${order.deliveryZone || order.deliveryMethod}`,
     `Minimum applique: ${order.deliveryMinimumApplied ?? (order.deliveryMethod === "postal" ? 15 : 20)} EUR`,
-    `Livraison postale offerte: ${order.deliveryMethod === "postal" && order.postalFreeShippingApplied ? "Oui" : "Non"}`,
-    `Frais postaux a confirmer: ${order.deliveryMethod === "postal" && !order.postalFreeShippingApplied ? "Oui" : "Non"}`,
+    `Frais de livraison: ${deliveryFeeLabel(order)}`,
+    `Information livraison: ${deliveryInfoText(order)}`,
     `Mode de reglement souhaite: ${preferredPaymentMethodLabel(order.preferredPaymentMethod)}`,
     "Action paiement: lien de paiement a envoyer si CB souhaitee.",
     "Produits:",
     order.items.map((item) => orderItemSummaryLabel(item)).join("\n"),
     ...promoEmailTextLines(order),
-    `Total estimé: ${formatMoney(Number(order.total || 0))}`,
+    `Total de la commande: ${formatMoney(Number(order.total || 0))}`,
     order.customerMessage ? `Message client: ${order.customerMessage}` : "",
     adminUrl() ? `Admin: ${adminUrl()}` : "",
   ]
@@ -743,14 +758,35 @@ function preferredPaymentMethodLabel(method?: Order["preferredPaymentMethod"]) {
 }
 
 function deliveryInfoText(order: Order) {
-  if (order.deliveryNote) return order.deliveryNote;
   if (order.deliveryMethod === "postal") {
-    if (order.postalFreeShippingApplied) {
-      return "Livraison postale offerte.";
+    if (order.deliveryFeeStatus === "to_confirm") {
+      return "Commande antérieure à la tarification Colissimo actuelle ; vérification administrative requise.";
     }
-    return "Livraison postale à partir de 15 € d'achat. Elle est offerte à partir de 60 €. Si votre commande est inférieure à 60 €, les frais postaux seront confirmés avec vous après validation.";
+    const feeText = order.postalFreeShippingApplied || Number(order.deliveryFee || 0) === 0
+      ? `Livraison Colissimo offerte dès ${POSTAL_FREE_SHIPPING_THRESHOLD} € de sous-total éligible.`
+      : `Livraison Colissimo à domicile : ${POSTAL_DELIVERY_FEE.toFixed(2).replace(".", ",")} €.`;
+    return `${feeText} ${POSTAL_DELIVERY_ESTIMATE} ${POSTAL_DELIVERY_PREPARATION} ${POSTAL_DELIVERY_SIGNATURE}`;
   }
+  if (order.deliveryNote) return order.deliveryNote;
   return `${formatLocalDeliveryEstimate()} Minimum local : 20 € d'achat.`;
+}
+
+function deliveryFeeLabel(order: Order) {
+  if (order.deliveryMethod === "postal" && order.deliveryFeeStatus === "to_confirm") {
+    return "Ancienne commande : montant non déterminé";
+  }
+  const fee = Number(order.deliveryFee || 0);
+  return fee > 0 ? formatMoney(fee) : "Offerte";
+}
+
+function orderConfirmationNextStep(order: Order) {
+  if (order.deliveryMethod === "postal") {
+    if (order.deliveryFeeStatus === "to_confirm") {
+      return "Cette commande est antérieure à la tarification Colissimo actuelle. L'équipe Verdanza vérifiera manuellement ses modalités avant le règlement.";
+    }
+    return "Les frais Colissimo et le total ci-dessus sont déterminés. L'équipe Verdanza vérifie les disponibilités avant expédition. Si vous avez choisi ou souhaitez un paiement par carte bancaire, un lien de paiement vous sera envoyé par email et/ou message.";
+  }
+  return "Votre commande est en attente de confirmation par l'équipe Verdanza. Après vérification des disponibilités et du mode de livraison, nous vous confirmerons le montant final. Si vous avez choisi ou souhaitez un paiement par carte bancaire, un lien de paiement vous sera envoyé par email et/ou message.";
 }
 
 function orderEmailTitle() {

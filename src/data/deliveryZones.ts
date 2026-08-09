@@ -3,7 +3,14 @@ import {
   DEFAULT_LOCAL_DELIVERY_ESTIMATE_MAX_MINUTES,
   DEFAULT_LOCAL_DELIVERY_ESTIMATE_MIN_MINUTES,
   LOCAL_DELIVERY_MINIMUM,
+  POSTAL_DELIVERY_ESTIMATE,
+  POSTAL_DELIVERY_FEE,
   POSTAL_DELIVERY_MINIMUM,
+  POSTAL_DELIVERY_NAME,
+  POSTAL_DELIVERY_PREPARATION,
+  POSTAL_DELIVERY_SIGNATURE,
+  POSTAL_DELIVERY_ZONE_ID,
+  POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../config/deliveryRules.js";
 
 export const aixRadiusDeliveryZone: DeliveryZone = {
@@ -36,19 +43,18 @@ export const aixRadiusDeliveryZone: DeliveryZone = {
 
 export const deliveryZones: DeliveryZone[] = [
   {
-    id: "postal-france",
-    name: "Livraison postale en France",
+    id: POSTAL_DELIVERY_ZONE_ID,
+    name: POSTAL_DELIVERY_NAME,
     method: "postal",
     isActive: true,
     isOpen: true,
     status: "open",
-    fee: 0,
+    fee: POSTAL_DELIVERY_FEE,
     minimumOrder: POSTAL_DELIVERY_MINIMUM,
     minimumOrderAmount: POSTAL_DELIVERY_MINIMUM,
-    estimatedDelay: "Expédition suivie en France",
-    slots: ["Expédition suivie"],
-    customerMessage:
-      "Livraison postale en France à partir de 15 EUR. Livraison offerte à partir de 60 EUR.",
+    estimatedDelay: POSTAL_DELIVERY_ESTIMATE,
+    slots: ["Colissimo France à domicile, sans signature"],
+    customerMessage: `${POSTAL_DELIVERY_ESTIMATE} ${POSTAL_DELIVERY_PREPARATION} ${POSTAL_DELIVERY_SIGNATURE} Frais de ${POSTAL_DELIVERY_FEE.toFixed(2).replace(".", ",")} EUR, offerts dès ${POSTAL_FREE_SHIPPING_THRESHOLD} EUR de sous-total éligible.`,
     sortOrder: 0,
   },
   aixRadiusDeliveryZone,

@@ -6077,6 +6077,7 @@ type AdminOrderListItem = {
   orderStatus: string;
   deliveryMethod?: string;
   delivery: string;
+  deliveryFee?: number;
   deliveryMinimumApplied?: number;
   postalFreeShippingApplied?: boolean;
   deliveryFeeStatus?: string;
@@ -6706,9 +6707,11 @@ function AdminOrders({
                           : "border-champagne/40 bg-cream text-forest"
                       }`}
                     >
-                      {order.postalFreeShippingApplied
-                        ? "Livraison offerte"
-                        : "Frais postaux à confirmer"}
+                      {order.deliveryFeeStatus === "to_confirm"
+                        ? "Ancienne commande : frais non déterminés"
+                        : order.postalFreeShippingApplied
+                          ? "Livraison offerte"
+                          : `Frais postaux : ${formatEuro(Number(order.deliveryFee || 0))} EUR`}
                     </span>
                   )}
                   {order.deliveryNote && (
@@ -7042,9 +7045,11 @@ function DesktopOrderCard({
                     : "border-champagne/40 bg-cream text-forest"
                 }`}
               >
-                {order.postalFreeShippingApplied
-                  ? "Livraison offerte"
-                  : "Frais postaux a confirmer"}
+                {order.deliveryFeeStatus === "to_confirm"
+                  ? "Ancienne commande : frais non déterminés"
+                  : order.postalFreeShippingApplied
+                    ? "Livraison offerte"
+                    : `Frais postaux : ${formatEuro(Number(order.deliveryFee || 0))} EUR`}
               </span>
             )}
             {order.deliveryAddress && (

@@ -16,6 +16,15 @@ import { calculateCartPromotions } from "../lib/cartPromotions";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
 import { trackAddToCart, trackCtaClick, trackRemoveFromCart, trackViewCart } from "../lib/analytics";
 import { fixedPriceCartLineLabel } from "../lib/fixedPriceOptions";
+import {
+  isPostalShippingFree,
+  postalDeliveryFee,
+  POSTAL_DELIVERY_ESTIMATE,
+  POSTAL_DELIVERY_FEE,
+  POSTAL_DELIVERY_SIGNATURE,
+  POSTAL_DELIVERY_ZONE_ID,
+  POSTAL_FREE_SHIPPING_THRESHOLD,
+} from "../config/deliveryRules";
 
 const promoStorageKey = "verdanza-coupon-code";
 
@@ -32,7 +41,6 @@ export function CartPage() {
     removeLine,
   } = useCart();
   const trackedCartSignature = useRef("");
-  const deliveryEstimate = 0;
   const [couponCode, setCouponCode] = useState(() =>
     window.localStorage.getItem(promoStorageKey) || "",
   );
@@ -60,6 +68,7 @@ export function CartPage() {
       normalizedAppliedCouponCode &&
       quote.couponCode?.toUpperCase() === normalizedAppliedCouponCode,
   );
+  const activeQuote = hasManualPromo ? quote : automaticQuote;
   const automaticAppliedPromotions = hasManualPromo
     ? []
     : automaticQuote
@@ -78,7 +87,11 @@ export function CartPage() {
   const discountAmount = hasManualPromo
     ? Number(quote?.discountAmount || 0)
     : automaticDiscountAmount;
-  const total = Math.max(0, subtotal + (lines.length ? deliveryEstimate : 0) - discountAmount);
+  const fallbackDeliveryFee = lines.length ? postalDeliveryFee(subtotal) : 0;
+  const deliveryFee = activeQuote?.deliveryFee ?? fallbackDeliveryFee;
+  const postalShippingFree =
+    activeQuote?.postalFreeShippingApplied ?? isPostalShippingFree(subtotal);
+  const total = activeQuote?.total ?? Math.max(0, subtotal + deliveryFee - discountAmount);
   const stockIssues = getCartStockIssues(lines);
   const hasStockIssues = stockIssues.length > 0;
   const hasCartIssues = hasStockIssues || hasBlockingCartIssues;
@@ -98,10 +111,11 @@ export function CartPage() {
       return;
     }
     let cancelled = false;
+    setAutomaticQuote(null);
     quoteOrder({
       items,
       deliveryMethod: "postal",
-      deliveryZone: "postal-france",
+      deliveryZone: POSTAL_DELIVERY_ZONE_ID,
     })
       .then((nextQuote) => {
         if (!cancelled) setAutomaticQuote(nextQuote);
@@ -121,10 +135,11 @@ export function CartPage() {
       return;
     }
     let cancelled = false;
+    setQuote(null);
     quoteOrder({
       items,
       deliveryMethod: "postal",
-      deliveryZone: "postal-france",
+      deliveryZone: POSTAL_DELIVERY_ZONE_ID,
       couponCode: code,
     })
       .then((nextQuote) => {
@@ -161,7 +176,7 @@ export function CartPage() {
       const nextQuote = await quoteOrder({
         items,
         deliveryMethod: "postal",
-        deliveryZone: "postal-france",
+        deliveryZone: POSTAL_DELIVERY_ZONE_ID,
         couponCode: code,
       });
       setQuote(nextQuote);
@@ -414,12 +429,14 @@ export function CartPage() {
                   </p>
                 ))}
               <p className="flex justify-between">
-                <span>Livraison estimée</span>
-                <span>
-                  {deliveryEstimate > 0
-                    ? formatEuro(deliveryEstimate)
-                    : "Calculée à l'étape suivante"}
-                </span>
+                <span>Colissimo France</span>
+                <span>{postalShippingFree ? "Offerte" : formatEuro(deliveryFee)}</span>
+              </p>
+              <p className="text-xs leading-5 text-ink/55">
+                {postalShippingFree
+                  ? `Offerte dès ${POSTAL_FREE_SHIPPING_THRESHOLD} EUR de sous-total éligible.`
+                  : `Frais fixes : ${formatEuro(POSTAL_DELIVERY_FEE)}. Offerte dès ${POSTAL_FREE_SHIPPING_THRESHOLD} EUR de sous-total éligible.`}{" "}
+                {POSTAL_DELIVERY_ESTIMATE} {POSTAL_DELIVERY_SIGNATURE}
               </p>
               <p className="flex justify-between border-t border-forest/10 pt-3 text-lg font-semibold text-forest">
                 <span>Total</span>

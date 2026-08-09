@@ -17,7 +17,15 @@ import {
   effectiveLocalDeliveryMinimum,
   effectivePostalDeliveryMinimum,
   isPostalShippingFree,
-  POSTAL_FREE_SHIPPING_THRESHOLD,
+  postalDeliveryFee,
+  postalDeliveryNote,
+  POSTAL_DELIVERY_ESTIMATE,
+  POSTAL_DELIVERY_FEE,
+  POSTAL_DELIVERY_MINIMUM,
+  POSTAL_DELIVERY_NAME,
+  POSTAL_DELIVERY_PREPARATION,
+  POSTAL_DELIVERY_SIGNATURE,
+  POSTAL_DELIVERY_ZONE_ID,
 } from "../../src/config/deliveryRules.js";
 import { formatLocalDeliveryEstimate } from "../../src/lib/deliveryEstimate.js";
 import {
@@ -49,14 +57,17 @@ const preferredPaymentMethods: PreferredPaymentMethod[] = [
 
 const fallbackDeliveryZones: DeliveryZone[] = [
   {
-    id: "postal-france",
-    name: "Livraison postale en France",
+    id: POSTAL_DELIVERY_ZONE_ID,
+    name: POSTAL_DELIVERY_NAME,
     method: "postal",
     isActive: true,
-    fee: 0,
-    minimumOrder: 15,
-    estimatedDelay: "Expedition suivie en France",
-    slots: ["Expedition suivie"],
+    isOpen: true,
+    status: "open",
+    fee: POSTAL_DELIVERY_FEE,
+    minimumOrder: POSTAL_DELIVERY_MINIMUM,
+    minimumOrderAmount: POSTAL_DELIVERY_MINIMUM,
+    estimatedDelay: POSTAL_DELIVERY_ESTIMATE,
+    slots: ["Colissimo France a domicile, sans signature"],
   },
   ...[
     "Aix-en-Provence centre",
@@ -332,7 +343,7 @@ export async function priceCheckout(
           fee: 0,
           postalFreeShippingApplied: true,
           deliveryFeeStatus: "free" as DeliveryFeeStatus,
-          deliveryNote: "Livraison postale offerte par code promo.",
+          deliveryNote: `Livraison Colissimo offerte par code promo. ${POSTAL_DELIVERY_ESTIMATE} ${POSTAL_DELIVERY_PREPARATION} ${POSTAL_DELIVERY_SIGNATURE}`,
         }
       : delivery;
   const beforeDiscount = roundMoney(subtotal + effectiveDelivery.fee);
@@ -499,11 +510,19 @@ async function resolveDeliveryFee(
   addressValidation?: DeliveryAddressValidation;
 }> {
   if (body.deliveryMethod === "postal") {
-    const zone = await getDeliveryZone(db, body.deliveryZone ?? "postal-france");
+    assertMetropolitanFrancePostalAddress(body.customer.address);
+    const requestedZoneId = body.deliveryZone ?? POSTAL_DELIVERY_ZONE_ID;
+    if (requestedZoneId !== POSTAL_DELIVERY_ZONE_ID) {
+      throw new Error("Zone de livraison postale invalide.");
+    }
+    const zone = await getDeliveryZone(db, POSTAL_DELIVERY_ZONE_ID);
     const fallbackZone = fallbackDeliveryZones.find(
-      (entry) => entry.id === (body.deliveryZone ?? "postal-france"),
+      (entry) => entry.id === POSTAL_DELIVERY_ZONE_ID,
     );
-    const selectedZone = isDeliveryZoneAvailable(zone) ? zone : fallbackZone;
+    if (zone && (zone.method !== "postal" || !isDeliveryZoneAvailable(zone))) {
+      throw new Error("Livraison postale indisponible pour le moment.");
+    }
+    const selectedZone = zone ?? fallbackZone;
 
     if (
       !selectedZone ||
@@ -517,20 +536,20 @@ async function resolveDeliveryFee(
       selectedZone.minimumOrderAmount ?? selectedZone.minimumOrder,
     );
     if (subtotal < minimumOrder) {
-      throw new Error("Le minimum de commande pour la livraison postale est de 15 €.");
+      throw new Error(
+        `Le minimum de commande pour la livraison postale est de ${POSTAL_DELIVERY_MINIMUM} €.`,
+      );
     }
 
     const freeShipping = isPostalShippingFree(subtotal);
     return {
-      fee: freeShipping ? 0 : selectedZone.fee,
-      zoneName: selectedZone.name,
+      fee: postalDeliveryFee(subtotal),
+      zoneName: POSTAL_DELIVERY_NAME,
       minimumApplied: minimumOrder,
       postalFreeShippingApplied: freeShipping,
-      deliveryFeeStatus: freeShipping ? "free" : "to_confirm",
-      deliveryNote: freeShipping
-        ? "Livraison postale offerte."
-        : `Frais postaux confirmés avec le client après validation. Livraison postale offerte à partir de ${POSTAL_FREE_SHIPPING_THRESHOLD} € d'achat.`,
-      zoneId: selectedZone.id,
+      deliveryFeeStatus: freeShipping ? "free" : "configured",
+      deliveryNote: postalDeliveryNote(subtotal),
+      zoneId: POSTAL_DELIVERY_ZONE_ID,
     };
   }
 
@@ -606,6 +625,20 @@ async function resolveDeliveryFee(
       provider: "geoplateforme_ban",
     },
   };
+}
+
+function assertMetropolitanFrancePostalAddress(address: Address) {
+  const country = String(address.country || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+  const postalCode = String(address.postalCode || "").trim().toUpperCase();
+  const isFrance = country === "france" || country === "fr" || country === "france metropolitaine";
+  const isMetropolitanPostalCode = /^(?:0[1-9]|[1-8]\d|9[0-5])\d{3}$/.test(postalCode);
+  if (!isFrance || !isMetropolitanPostalCode) {
+    throw new Error("La livraison postale Colissimo est disponible uniquement en France métropolitaine.");
+  }
 }
 
 async function getDeliveryZone(
