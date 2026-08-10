@@ -6,6 +6,7 @@ const blogIndexLastmod = publishedBlogArticles
   .map((article) => article.dateModified)
   .sort()
   .at(-1);
+const livraisonLocaleLastmod = "2026-08-11T09:00:00+02:00";
 
 export type SeoRouteKind =
   | "public-indexable"
@@ -64,12 +65,19 @@ export const staticSeoRoutes: SeoRoute[] = [
     kind: "public-indexable",
     component: "DeliveryPage(local)",
     indexable: true,
+    lastmod: livraisonLocaleLastmod,
   },
   {
     path: "/livraison-postale",
     kind: "public-indexable",
     component: "DeliveryPage(postal)",
     indexable: true,
+  },
+  {
+    path: "/preview/livraison-zones",
+    kind: "public-noindex",
+    component: "DeliveryZonesPreviewPage",
+    indexable: false,
   },
   {
     path: "/qualite-conformite",
