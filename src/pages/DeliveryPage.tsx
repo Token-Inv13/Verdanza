@@ -393,7 +393,7 @@ function LocalDeliveryPage() {
           <article className="rounded-md border border-forest/10 bg-ivory p-5">
             <h3 className="font-display text-2xl text-forest">Livraison postale</h3>
             <p className="mt-3 text-sm leading-6 text-ink/70">
-              Disponible en France métropolitaine dès {formatCurrency(POSTAL_DELIVERY_MINIMUM)}
+              Disponible en France métropolitaine dès {formatCurrency(POSTAL_DELIVERY_MINIMUM)}{" "}
               de commande. Les frais sont de {formatCurrency(POSTAL_DELIVERY_FEE)} et la
               livraison est offerte dès {formatCurrency(POSTAL_FREE_SHIPPING_THRESHOLD)} de
               sous-total éligible.
