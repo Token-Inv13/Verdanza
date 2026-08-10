@@ -6,6 +6,257 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "aspect-resine-cbd-texture-couleur",
+    title: "Résine CBD : comment lire texture, couleur et présentation ?",
+    seoTitle: "Aspect d'une résine CBD : texture et couleur | Verdanza",
+    description:
+      "Apprendre à décrire une résine CBD par sa texture, sa couleur et son grain, sans confondre apparence, composition mesurée et qualité du lot.",
+    excerpt:
+      "Souple, friable, crémeuse, claire ou foncée : l'apparence d'une résine donne des repères descriptifs, mais ne remplace ni la fiche du produit ni l'analyse du lot.",
+    category: "Guide produits",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-08-10T11:00:00+02:00",
+    dateModified: "2026-08-10T11:00:00+02:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/aspect-resine-cbd-texture-couleur-1x1.webp",
+      landscape: "/images/blog/aspect-resine-cbd-texture-couleur-4x3.webp",
+      wide: "/images/blog/aspect-resine-cbd-texture-couleur-16x9.webp",
+    },
+    relatedSlugs: [
+      "fleur-cbd-ou-resine-cbd-differences",
+      "conserver-fleurs-resines-cbd",
+      "comment-lire-analyse-cbd",
+    ],
+    links: [
+      { to: "/resines-cbd", label: "Voir les résines CBD" },
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/comment-lire-analyse-cbd",
+        label: "Lire une analyse CBD",
+      },
+      {
+        to: "/blog/conserver-fleurs-resines-cbd",
+        label: "Conserver fleurs et résines CBD",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            L'aspect d'une <Link to="/resines-cbd">résine CBD</Link> peut être
+            décrit avec des mots simples : couleur, grain, souplesse, caractère
+            friable ou surface plus homogène. Ces observations aident à comparer
+            des présentations. Elles ne suffisent pas à déterminer la composition,
+            la conformité ou la qualité globale d'un lot.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Repère Verdanza : une photo montre la présentation d'un produit à un
+            instant donné. Les teneurs annoncées et les informations de
+            traçabilité doivent être vérifiées sur la fiche et l'analyse du lot.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "pourquoi-aspect-varie",
+        text: "Pourquoi l'aspect d'une résine CBD varie-t-il ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La matière végétale utilisée, le tamisage ou la filtration annoncée,
+            la pression, la température de travail et la conservation participent
+            à la présentation finale. Une même référence peut aussi évoluer
+            légèrement d'un lot à l'autre. La température ambiante compte : une
+            résine peut paraître plus ferme au frais et plus souple lorsqu'elle se
+            réchauffe.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Repères pour décrire une résine sans conclure trop vite.",
+          headers: ["Élément observé", "Ce qu'il décrit", "Ce qu'il ne prouve pas"],
+          rows: [
+            [
+              "Couleur",
+              "Une teinte claire, dorée, brune, sombre ou nuancée.",
+              "La teneur en CBD ou la conformité du lot.",
+            ],
+            [
+              "Texture",
+              "Un aspect friable, souple, dense, malléable ou crémeux.",
+              "La méthode de fabrication exacte à elle seule.",
+            ],
+            [
+              "Grain",
+              "Une structure fine, poudreuse, granuleuse ou homogène.",
+              "La pureté ou la concentration mesurée.",
+            ],
+            [
+              "Surface",
+              "Un rendu mat, satiné, lisse ou irrégulier.",
+              "Un profil aromatique ou une qualité supérieure.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "couleur-nuances",
+        text: "Couleur et nuances : tenir compte de la lumière",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une résine peut présenter des tons beige, blond, doré, caramel ou
+            brun, parfois avec un cœur différent de la surface. L'éclairage, la
+            balance des blancs et l'écran changent fortement le rendu d'une
+            photo. Une couleur claire n'établit pas automatiquement une
+            filtration plus fine, pas plus qu'une couleur sombre ne signale à
+            elle seule un défaut.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "vocabulaire-texture",
+        text: "Friable, souple ou crémeuse : un vocabulaire descriptif",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les mots employés sur une fiche servent d'abord à décrire la façon
+            dont la résine se présente. Ils ne constituent ni une échelle de
+            qualité universelle ni une mesure de laboratoire. Pour comparer deux
+            références, il faut vérifier que les descriptions portent sur des
+            produits conservés dans des conditions proches.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "friable : le bloc se divise facilement en fragments ;",
+          "souple ou malléable : la forme change sous une légère pression ;",
+          "dense ou compacte : la matière présente peu d'espaces visibles ;",
+          "poudreuse ou granuleuse : le grain reste perceptible en surface ;",
+          "crémeuse : la présentation paraît lisse et très souple.",
+        ],
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Ces termes décrivent un état observé, sensible notamment à la
+            température et au stockage. Ils ne permettent pas d'estimer un taux
+            de cannabinoïdes.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "fabrication-et-apparence",
+        text: "Ce que l'apparence dit de la fabrication — et ses limites",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Des mentions comme tamisage, filtration, pressage ou affinage
+            décrivent des étapes annoncées par le fabricant. L'aspect peut être
+            cohérent avec ce vocabulaire, mais il ne permet pas de reconstituer
+            seul le procédé. Une information de fabrication fiable doit rester
+            rattachée à la fiche, au fournisseur et au lot concerné.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "variation-ou-alteration",
+        text: "Variation normale ou signe d'altération ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une variation de couleur ou de fermeté peut être naturelle ou liée à
+            la température. En revanche, une zone cotonneuse, un dépôt inhabituel,
+            une odeur anormale ou une humidité manifestement excessive appellent
+            à ne pas utiliser le produit et à contacter le vendeur. Conserver
+            l'emballage et le numéro de lot facilite alors la vérification.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "croiser-informations",
+        text: "Croiser l'aspect, la fiche et l'analyse du lot",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une lecture complète combine la photo pour la présentation, la fiche
+            pour le vocabulaire de texture et de fabrication, puis l'analyse pour
+            les valeurs mesurées. Le guide sur la{" "}
+            <Link to="/blog/comment-lire-analyse-cbd">lecture d'une analyse CBD</Link>{" "}
+            aide à vérifier le lot, les unités et les limites de mesure. Celui sur
+            la{" "}
+            <Link to="/blog/conserver-fleurs-resines-cbd">
+              conservation des fleurs et résines
+            </Link>{" "}
+            détaille les précautions de stockage utiles après réception.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "checklist-visuelle",
+        text: "Checklist pour lire une résine sans surinterpréter",
+      },
+      {
+        type: "list",
+        items: [
+          "décrire la couleur sans lui attribuer automatiquement un niveau de qualité ;",
+          "noter la texture à température comparable ;",
+          "distinguer le grain visible d'une mesure de pureté ;",
+          "vérifier que la photo correspond bien à la référence consultée ;",
+          "croiser l'apparence avec la fiche, le lot et l'analyse disponible ;",
+          "signaler au vendeur tout dépôt, odeur ou humidité inhabituels.",
+        ],
+      },
+      {
+        type: "links",
+        title: "Compléter vos repères",
+        links: [
+          { to: "/blog/comment-lire-analyse-cbd", label: "Lire une analyse CBD" },
+          {
+            to: "/blog/fleur-cbd-ou-resine-cbd-differences",
+            label: "Comparer fleur et résine",
+          },
+          {
+            to: "/blog/conserver-fleurs-resines-cbd",
+            label: "Bien conserver fleurs et résines",
+          },
+          { to: "/qualite-conformite", label: "Qualité et conformité" },
+        ],
+      },
+    ],
+  },
+  {
     slug: "aspect-fleur-cbd-couleur-structure",
     title: "Fleur CBD : comment lire son aspect sans surinterpréter ?",
     seoTitle: "Aspect d'une fleur CBD : couleur et structure | Verdanza",

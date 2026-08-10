@@ -90,6 +90,14 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" }
 > = {
+  "aspect-resine-cbd-texture-couleur": {
+    label: "Aspect d'une résine CBD",
+    sources: [
+      "/Fiche produit/Golden static/goldenstatic.webp",
+      "/Fiche produit/La%20mousse/mousse1.webp",
+      "/Fiche produit/Creamy%20Piatella/piatella.webp",
+    ],
+  },
   "aspect-fleur-cbd-couleur-structure": {
     label: "Aspect d'une fleur CBD",
     sources: [
