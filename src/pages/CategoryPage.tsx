@@ -76,6 +76,24 @@ export function CategoryPage({
       <div className="page-intro">
         <h1>{content.title}</h1>
       </div>
+      <p className="mt-3 max-w-3xl text-sm leading-6 text-ink/70">
+        Retrouvez nos informations de livraison locale pour la zone d’Aix-en-Provence via{" "}
+        <Link
+          to="/livraison-locale"
+          className="text-sm font-semibold text-forest underline decoration-champagne underline-offset-4"
+          onClick={() =>
+            trackCtaClick({
+              ctaId: "category_delivery_local_link",
+              ctaLocation: "category_page",
+              destinationPath: "/livraison-locale",
+              ctaCategory: "delivery",
+            })
+          }
+        >
+          Livraison CBD à Aix-en-Provence
+        </Link>
+        .
+      </p>
       <PromoBannerSlot
         placement={category === "flowers" ? "flowers" : "resins"}
         type="shop_card"

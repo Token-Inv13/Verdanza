@@ -26,7 +26,6 @@ Sources recommandées :
 - `google`
 - `tiktok`
 - `whatsapp`
-- `google`
 - `newsletter`
 - `sms`
 - `qr`
