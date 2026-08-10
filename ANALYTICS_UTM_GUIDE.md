@@ -85,13 +85,13 @@ https://verdanza.fr/produits/mango-haze-cbd?utm_source=tiktok&utm_medium=social&
 WhatsApp vers la livraison locale :
 
 ```text
-https://verdanza.fr/livraison-express-aix?utm_source=whatsapp&utm_medium=messaging&utm_campaign=livraison_aix&utm_content=message
+https://verdanza.fr/livraison-locale?utm_source=whatsapp&utm_medium=messaging&utm_campaign=livraison_aix&utm_content=message
 ```
 
 Fiche Google vers la livraison locale :
 
 ```text
-https://verdanza.fr/livraison-express-aix?utm_source=google&utm_medium=organic&utm_campaign=google_business_profile&utm_content=profile
+https://verdanza.fr/livraison-locale?utm_source=google&utm_medium=organic&utm_campaign=google_business_profile&utm_content=profile
 ```
 
 QR code boutique physique ou flyer :

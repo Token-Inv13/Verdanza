@@ -79,18 +79,19 @@ paymentProvider: "manual"
 
 Livraison locale Aix-en-Provence et alentours :
 
-- disponible 7j/7 ;
+- rayon jusqu'a 15 km autour du centre d'Aix-en-Provence ;
+- livraison locale offerte, selon disponibilite ;
 - de 11h a 01h ;
 - minimum de commande : 20 EUR ;
-- reglement confirme directement avec le client apres validation.
+- adresse verifiee automatiquement avant confirmation.
 
 Livraison postale en France :
 
 - adresse complete requise ;
 - minimum de commande : 15 EUR ;
-- livraison postale offerte a partir de 60 EUR ;
-- en dessous de 60 EUR, les frais postaux sont confirmes directement avec le client apres validation ;
-- disponibilites et reglement confirmes directement avec le client apres validation.
+- frais fixes : 5,49 EUR ;
+- livraison postale offerte a partir de 50 EUR de sous-total eligible ;
+- delai estime : 2 a 3 jours ouvres, avec suivi Colissimo.
 
 ## Emails
 

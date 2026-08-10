@@ -123,18 +123,18 @@ export function HomePage() {
                   Livraison en France
                 </Link>
                 <Link
-                  to="/livraison-locale#zones-ouvertes"
+                  to="/livraison-locale#zone-livraison"
                   className="btn-secondary border-ivory/35 bg-ivory/10 text-ivory hover:bg-ivory hover:text-forest"
                   onClick={() =>
                     trackCtaClick({
                       ctaId: "home_hero_local_delivery",
                       ctaLocation: "home_hero",
-                      destinationPath: "/livraison-locale#zones-ouvertes",
+                      destinationPath: "/livraison-locale#zone-livraison",
                       ctaCategory: "delivery",
                     })
                   }
                 >
-                  Livraison locale express
+                  Livraison CBD Aix
                 </Link>
               </div>
             </div>

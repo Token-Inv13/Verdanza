@@ -1,7 +1,9 @@
 import type { Product } from "../types";
 import type { BlogArticle } from "../types/blog";
+import { verdanzaPublicContact } from "../config/publicContact";
 import { BRAND_OG_IMAGE } from "./brandAssets";
 import { isProductOrderable as isPublicProductOrderable } from "./cartStock";
+import { getActiveSocialLinks } from "./socialLinks";
 import { absoluteUrl } from "./siteUrl";
 import { normalizeProductImages } from "./productImages";
 
@@ -69,22 +71,26 @@ export function buildProductJsonLd(product: Product): JsonLdValue {
 }
 
 export function buildHomeJsonLd(contactEmail?: string): JsonLdValue {
+  const contactPoint: Record<string, JsonLdValue> = {
+    "@type": "ContactPoint",
+    contactType: "customer service",
+    telephone: verdanzaPublicContact.internationalPhone,
+    availableLanguage: "fr",
+  };
   const store: Record<string, JsonLdValue> = {
     "@type": "OnlineStore",
     "@id": organizationId,
     name: "Verdanza",
     url: absoluteUrl("/"),
     logo: absoluteUrl(BRAND_OG_IMAGE),
+    telephone: verdanzaPublicContact.internationalPhone,
+    sameAs: getActiveSocialLinks().map((link) => link.url),
+    contactPoint,
   };
 
   if (contactEmail) {
     store.email = contactEmail;
-    store.contactPoint = {
-      "@type": "ContactPoint",
-      contactType: "customer service",
-      email: contactEmail,
-      availableLanguage: "fr",
-    };
+    contactPoint.email = contactEmail;
   }
 
   return {

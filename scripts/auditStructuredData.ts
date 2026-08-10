@@ -3,6 +3,7 @@ import { join, resolve } from "node:path";
 import { blogArticlePath, publishedBlogArticles } from "../src/data/blogArticles";
 import { products } from "../src/data/products";
 import type { Product } from "../src/types";
+import { verdanzaPublicContact } from "../src/config/publicContact";
 import {
   absoluteUrl,
 } from "../src/lib/siteUrl";
@@ -12,6 +13,7 @@ import {
   productPath,
   type JsonLdValue,
 } from "../src/lib/structuredData";
+import { getActiveSocialLinks } from "../src/lib/socialLinks";
 import {
   fallbackSeoRoute,
   prerenderFallbackSeoRoutes,
@@ -102,8 +104,13 @@ function auditRoute(route: SeoRoute, filePath: string) {
   } else if (isNoindex) {
     expectCount(typeCounts, "Product", 0, failures);
     expectCount(typeCounts, "Offer", 0, failures);
-    expectCount(typeCounts, "BreadcrumbList", 0, failures);
     expectCount(typeCounts, "OnlineStore", 0, failures);
+    const breadcrumbCount = typeCounts.BreadcrumbList || 0;
+    if (breadcrumbCount > 1) {
+      failures.push(`BreadcrumbList count ${breadcrumbCount}, expected at most 1`);
+    } else if (breadcrumbCount === 1) {
+      auditBreadcrumb(nodes, expectedBreadcrumbItems(route.path), canonical, failures);
+    }
   } else {
     expectCount(typeCounts, "Product", 0, failures);
     expectCount(typeCounts, "BreadcrumbList", 1, failures);
@@ -212,6 +219,19 @@ function auditHome(nodes: Record<string, JsonLdValue>[], failures: string[]) {
   if (store?.name !== "Verdanza") failures.push("OnlineStore name mismatch");
   if (store?.url !== absoluteUrl("/")) failures.push("OnlineStore url mismatch");
   if (store?.logo !== absoluteUrl("/verdanza-logo.png")) failures.push("OnlineStore logo mismatch");
+  if (store?.telephone !== verdanzaPublicContact.internationalPhone) {
+    failures.push("OnlineStore telephone mismatch");
+  }
+  const expectedSameAs = getActiveSocialLinks().map((link) => link.url);
+  if (!Array.isArray(store?.sameAs) || JSON.stringify(store.sameAs) !== JSON.stringify(expectedSameAs)) {
+    failures.push("OnlineStore sameAs mismatch");
+  }
+  if (
+    !isRecord(store?.contactPoint) ||
+    store.contactPoint.telephone !== verdanzaPublicContact.internationalPhone
+  ) {
+    failures.push("OnlineStore contactPoint mismatch");
+  }
 }
 
 function auditProduct(
@@ -368,7 +388,11 @@ function expectedBreadcrumbItems(path: string, product?: Product) {
     ],
     "/livraison-locale": [
       { name: "Accueil", path: "/" },
-      { name: "Livraison locale Aix-en-Provence", path: "/livraison-locale" },
+      { name: "Livraison CBD Aix-en-Provence", path: "/livraison-locale" },
+    ],
+    "/preview/livraison-zones": [
+      { name: "Accueil", path: "/" },
+      { name: "Preview", path: "/preview/livraison-zones" },
     ],
     "/livraison-postale": [
       { name: "Accueil", path: "/" },

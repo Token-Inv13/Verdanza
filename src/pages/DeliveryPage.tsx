@@ -4,6 +4,7 @@ import { Breadcrumbs } from "../components/Breadcrumbs";
 import { ContactActions } from "../components/ContactActions";
 import { Seo } from "../components/Seo";
 import {
+  effectiveLocalDeliveryMinimum,
   LOCAL_DELIVERY_MINIMUM,
   POSTAL_DELIVERY_ESTIMATE,
   POSTAL_DELIVERY_FEE,
@@ -24,8 +25,9 @@ type DeliveryZonesState =
 
 const deliverySteps = [
   "Ajoutez vos produits au panier.",
-  "Vérifiez votre adresse, puis sélectionnez votre adresse. Verdanza vérifie automatiquement votre éligibilité à la livraison locale.",
-  "Si la livraison locale est disponible, elle est offerte et généralement en environ 1 h après confirmation, selon disponibilité.",
+  "Saisissez puis sélectionnez votre adresse afin qu’elle soit reconnue comme une adresse vérifiée.",
+  "Verdanza calcule automatiquement si cette adresse se trouve dans le rayon de livraison locale.",
+  "Si la livraison locale est disponible, elle est offerte et généralement réalisée en environ 1 h après confirmation.",
 ];
 
 function ctaCategoryForPath(path: string) {
@@ -73,7 +75,7 @@ function DeliveryOverviewPage() {
 
       <section className="mt-10 grid gap-5 lg:grid-cols-2">
         <DeliveryModeCard
-          title="Livraison express à Aix-en-Provence"
+          title="Livraison CBD à Aix-en-Provence"
           items={[
             "Livraison offerte",
             "Environ 1 h",
@@ -81,8 +83,8 @@ function DeliveryOverviewPage() {
             "Jusqu’à 15 km autour du centre d’Aix-en-Provence",
             "Minimum de commande : 20 €",
           ]}
-          ctaLabel="Vérifier mon adresse"
-          ctaPath="/panier"
+          ctaLabel="Voir la livraison locale"
+          ctaPath="/livraison-locale#zone-livraison"
           ctaId="delivery_overview_local"
         />
         <DeliveryModeCard
@@ -221,44 +223,50 @@ function LocalDeliveryPage() {
   }, [state.zones]);
 
   const referenceZone = localZones.find((zone) => isOpenZone(zone)) || localZones[0];
-  const minimum = Number(referenceZone?.minimumOrderAmount ?? referenceZone?.minimumOrder ?? LOCAL_DELIVERY_MINIMUM);
+  const minimum = effectiveLocalDeliveryMinimum(
+    referenceZone?.minimumOrderAmount ?? referenceZone?.minimumOrder ?? LOCAL_DELIVERY_MINIMUM,
+  );
   const localZoneStatus = referenceZone && isOpenZone(referenceZone) ? "Ouverte" : "Fermée";
 
   return (
     <main className="container-page py-12">
       <Seo
-        title="Livraison locale CBD à Aix-en-Provence - Verdanza"
-        description="Consultez les horaires et conditions de la livraison locale Verdanza autour d'Aix-en-Provence."
+        title="Livraison CBD Aix-en-Provence et alentours | Verdanza"
+        description="Livraison locale de CBD à Aix-en-Provence et alentours, offerte dans un rayon jusqu’à 15 km dès 20 € de commande, selon disponibilité."
         path="/livraison-locale"
       />
       <Breadcrumbs
         items={[
           { name: "Accueil", path: "/" },
-          { name: "Livraison locale Aix-en-Provence", path: "/livraison-locale", current: true },
+          { name: "Livraison CBD Aix-en-Provence", path: "/livraison-locale", current: true },
         ]}
       />
 
       <div className="page-intro">
-        <h1>Livraison locale Aix-en-Provence</h1>
+        <h1>Livraison CBD à Aix-en-Provence et alentours</h1>
         <p>
-          Les zones de livraison locale sont mises à jour par Verdanza selon les disponibilités. Si votre adresse
-          est éligible, la livraison locale peut être confirmée automatiquement au moment de la commande.
+          Verdanza propose une livraison locale offerte autour d’Aix-en-Provence, dans un
+          rayon allant jusqu’à 15 km du centre-ville. L’éligibilité dépend de l’adresse exacte
+          et de la disponibilité au moment de la commande.
         </p>
       </div>
 
-      <section className="mt-8 grid gap-4 md:grid-cols-3">
+      <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard label="Zone locale" value="Jusqu’à 15 km" />
         <SummaryCard label="Minimum de commande" value={formatCurrency(minimum)} />
-        <SummaryCard label="Délai estimé" value="≈ 1 h" />
-        <SummaryCard label="Horaires de livraison" value="11 h → 1 h" />
+        <SummaryCard label="Frais de livraison" value="Offerte" />
+        <SummaryCard label="Disponibilité" value="Selon créneaux" />
       </section>
 
       <section className="mt-10 rounded-lg border border-forest/10 bg-cream p-6 sm:p-8">
-        <h2 className="font-display text-3xl text-forest">Fonctionnement</h2>
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <h2 className="font-display text-3xl text-forest">
+          Comment fonctionne la livraison CBD à Aix ?
+        </h2>
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {deliverySteps.map((step, index) => (
             <article key={step} className="rounded-md border border-forest/10 bg-ivory p-4">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-champagne">
-                Etape {index + 1}
+                Étape {index + 1}
               </span>
               <p className="mt-2 text-sm leading-6 text-ink/70">{step}</p>
             </article>
@@ -270,11 +278,21 @@ function LocalDeliveryPage() {
         </p>
       </section>
 
-      <section className="mt-12">
-        <div className="mb-6 rounded-lg border border-forest/10 bg-cream p-5">
+      <section id="zone-livraison" className="mt-12 scroll-mt-24">
+        <h2 className="font-display text-3xl text-forest">
+          Zone de livraison autour d’Aix-en-Provence
+        </h2>
+        <p className="mt-4 max-w-3xl leading-7 text-ink/70">
+          La zone couvre les adresses situées jusqu’à 15 km du centre d’Aix-en-Provence.
+          Elle est déterminée par la distance réelle de l’adresse sélectionnée, et non par
+          le seul nom de la commune ou du quartier. Une adresse en limite de rayon doit donc
+          être vérifiée dans le panier.
+        </p>
+
+        <div className="mt-6 rounded-lg border border-forest/10 bg-cream p-5">
           <div className="mb-4 flex items-start justify-between gap-3">
             <h3 className="font-display text-2xl leading-tight text-forest">
-              Aix-en-Provence et ses alentours
+              Aix-en-Provence et alentours · rayon jusqu’à 15 km
             </h3>
             <span
               className={`rounded-full border px-3 py-1 text-xs font-semibold ${
@@ -286,10 +304,13 @@ function LocalDeliveryPage() {
               {localZoneStatus}
             </span>
           </div>
-          <p className="text-sm font-medium leading-6 text-forest">Livraison offerte · environ 1 h</p>
+          <p className="text-sm font-medium leading-6 text-forest">
+            Livraison locale offerte · minimum {formatCurrency(minimum)}
+          </p>
           <p className="mt-2 text-sm leading-6 text-ink/70">De 11 h à 1 h du matin</p>
-          <p className="mt-2 text-sm leading-6 text-ink/70">Jusqu’à 15 km autour du centre d’Aix-en-Provence</p>
-          <p className="mt-2 text-sm leading-6 text-ink/70">Minimum de commande : {formatCurrency(minimum)}</p>
+          <p className="mt-2 text-sm leading-6 text-ink/70">
+            Délai généralement d’environ 1 h après confirmation, selon disponibilité.
+          </p>
           <ContactActions
             source="local_delivery_page"
             variant="compact"
@@ -320,12 +341,65 @@ function LocalDeliveryPage() {
         )}
       </section>
 
+      <section className="mt-12 rounded-lg border border-forest/10 bg-ivory p-6 sm:p-8">
+        <h2 className="font-display text-3xl text-forest">Conditions et disponibilité</h2>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <article className="rounded-md border border-forest/10 bg-cream p-5">
+            <h3 className="font-display text-2xl text-forest">Avant la commande</h3>
+            <p className="mt-3 text-sm leading-6 text-ink/70">
+              Le sous-total éligible doit atteindre {formatCurrency(LOCAL_DELIVERY_MINIMUM)}.
+              Saisissez une adresse complète puis sélectionnez-la dans les suggestions : cette
+              étape permet la vérification automatique du rayon.
+            </p>
+          </article>
+          <article className="rounded-md border border-forest/10 bg-cream p-5">
+            <h3 className="font-display text-2xl text-forest">Au moment de la validation</h3>
+            <p className="mt-3 text-sm leading-6 text-ink/70">
+              L’ouverture de la zone et les créneaux disponibles sont contrôlés au moment de
+              la commande. Une adresse éligible au rayon ne garantit pas qu’un créneau soit
+              encore disponible.
+            </p>
+          </article>
+        </div>
+        <Link
+          className="btn-primary mt-6 inline-flex"
+          to="/boutique"
+          onClick={() =>
+            trackCtaClick({
+              ctaId: "local_delivery_conditions_shop",
+              ctaLocation: "local_delivery_conditions",
+              destinationPath: "/boutique",
+              ctaCategory: "shop_navigation",
+            })
+          }
+        >
+          Choisir mes produits
+        </Link>
+      </section>
+
       <section className="mt-12 rounded-lg border border-champagne/30 bg-cream p-6 sm:p-8">
-        <h2 className="font-display text-3xl text-forest">Livraison postale en alternative</h2>
-        <p className="mt-4 max-w-3xl leading-7 text-ink/70">
-          La livraison postale est disponible en France à partir de {POSTAL_DELIVERY_MINIMUM} EUR
-          d'achat et offerte à partir de {POSTAL_FREE_SHIPPING_THRESHOLD} EUR.
-        </p>
+        <h2 className="font-display text-3xl text-forest">
+          Livraison locale ou livraison postale : quelle différence ?
+        </h2>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <article className="rounded-md border border-forest/10 bg-ivory p-5">
+            <h3 className="font-display text-2xl text-forest">Livraison locale</h3>
+            <p className="mt-3 text-sm leading-6 text-ink/70">
+              Réservée aux adresses éligibles dans le rayon jusqu’à 15 km, avec un minimum de
+              {` ${formatCurrency(LOCAL_DELIVERY_MINIMUM)}`}. Elle est offerte et dépend des
+              créneaux disponibles.
+            </p>
+          </article>
+          <article className="rounded-md border border-forest/10 bg-ivory p-5">
+            <h3 className="font-display text-2xl text-forest">Livraison postale</h3>
+            <p className="mt-3 text-sm leading-6 text-ink/70">
+              Disponible en France métropolitaine dès {formatCurrency(POSTAL_DELIVERY_MINIMUM)}
+              de commande. Les frais sont de {formatCurrency(POSTAL_DELIVERY_FEE)} et la
+              livraison est offerte dès {formatCurrency(POSTAL_FREE_SHIPPING_THRESHOLD)} de
+              sous-total éligible.
+            </p>
+          </article>
+        </div>
         <div className="mt-5 flex flex-wrap gap-3">
           <Link
             className="btn-primary"
@@ -355,6 +429,41 @@ function LocalDeliveryPage() {
           >
             Voir la livraison postale
           </Link>
+        </div>
+      </section>
+
+      <section className="mt-12">
+        <h2 className="font-display text-3xl text-forest">
+          Questions fréquentes sur la livraison CBD à Aix-en-Provence
+        </h2>
+        <div className="mt-5 grid gap-3">
+          {[
+            {
+              question: "Comment savoir si mon adresse est éligible ?",
+              answer:
+                "Dans le panier, saisissez votre adresse complète puis sélectionnez la suggestion correspondante. La distance avec le centre d’Aix-en-Provence est alors vérifiée automatiquement.",
+            },
+            {
+              question: "La livraison locale couvre-t-elle toute la commune d’Aix ?",
+              answer:
+                "L’éligibilité repose sur un rayon allant jusqu’à 15 km autour du centre d’Aix-en-Provence. Selon sa position exacte, une adresse peut donc être incluse ou non.",
+            },
+            {
+              question: "La livraison locale est-elle gratuite ?",
+              answer: `Oui. Elle est offerte pour toute commande locale éligible atteignant le minimum de ${formatCurrency(LOCAL_DELIVERY_MINIMUM)}.`,
+            },
+            {
+              question: "Que faire si la livraison locale n’est pas disponible ?",
+              answer: `Vous pouvez choisir la livraison postale en France métropolitaine dès ${formatCurrency(POSTAL_DELIVERY_MINIMUM)} de commande. Elle coûte ${formatCurrency(POSTAL_DELIVERY_FEE)} et devient offerte dès ${formatCurrency(POSTAL_FREE_SHIPPING_THRESHOLD)}.`,
+            },
+          ].map((item) => (
+            <details key={item.question} className="rounded-lg border border-forest/10 bg-ivory p-5">
+              <summary className="cursor-pointer font-semibold text-forest">
+                {item.question}
+              </summary>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-ink/70">{item.answer}</p>
+            </details>
+          ))}
         </div>
       </section>
 
