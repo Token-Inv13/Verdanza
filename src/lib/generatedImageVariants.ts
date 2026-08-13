@@ -283,6 +283,27 @@ export const staticImageVariants: Record<string, ResponsiveImageVariant> = {
     width: 320,
     height: 320,
   },
+  "/images/blog/etiquette-numero-lot-cbd-tracabilite-1x1.webp": {
+    src: "/images/blog/etiquette-numero-lot-cbd-tracabilite-1x1.webp",
+    srcSet: "/images/blog/etiquette-numero-lot-cbd-tracabilite-1x1.webp 900w",
+    sizes: "(min-width: 1024px) 420px, 92vw",
+    width: 900,
+    height: 900,
+  },
+  "/images/blog/etiquette-numero-lot-cbd-tracabilite-4x3.webp": {
+    src: "/images/blog/etiquette-numero-lot-cbd-tracabilite-4x3.webp",
+    srcSet: "/images/blog/etiquette-numero-lot-cbd-tracabilite-4x3.webp 1200w",
+    sizes: "(min-width: 1024px) 520px, 92vw",
+    width: 1200,
+    height: 900,
+  },
+  "/images/blog/etiquette-numero-lot-cbd-tracabilite-16x9.webp": {
+    src: "/images/blog/etiquette-numero-lot-cbd-tracabilite-16x9.webp",
+    srcSet: "/images/blog/etiquette-numero-lot-cbd-tracabilite-16x9.webp 1600w",
+    sizes: "100vw",
+    width: 1600,
+    height: 900,
+  },
   "/images/blog/aspect-resine-cbd-texture-couleur-1x1.webp": {
     src: "/images/blog/aspect-resine-cbd-texture-couleur-1x1.webp",
     srcSet: "/images/blog/aspect-resine-cbd-texture-couleur-1x1.webp 900w",

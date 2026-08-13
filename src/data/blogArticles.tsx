@@ -6,6 +6,266 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "etiquette-numero-lot-cbd-tracabilite",
+    title: "Étiquette et numéro de lot CBD : comment vérifier la traçabilité ?",
+    seoTitle: "Étiquette et numéro de lot CBD : guide | Verdanza",
+    description:
+      "Savoir repérer le numéro de lot, relier l'étiquette à l'analyse CBD et vérifier la cohérence des informations de traçabilité avant de comparer un produit.",
+    excerpt:
+      "Numéro de lot, dénomination, analyse et coordonnées : ce guide aide à relier les informations utiles sans confondre emballage soigné et preuve de conformité.",
+    category: "Guide qualité",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-08-13T15:30:00+02:00",
+    dateModified: "2026-08-13T15:30:00+02:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/etiquette-numero-lot-cbd-tracabilite-1x1.webp",
+      landscape: "/images/blog/etiquette-numero-lot-cbd-tracabilite-4x3.webp",
+      wide: "/images/blog/etiquette-numero-lot-cbd-tracabilite-16x9.webp",
+    },
+    relatedSlugs: [
+      "comment-lire-analyse-cbd",
+      "denominations-cbd-cbn-cbg",
+      "conserver-fleurs-resines-cbd",
+    ],
+    links: [
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/comment-lire-analyse-cbd",
+        label: "Lire une analyse CBD",
+      },
+      {
+        to: "/blog/denominations-cbd-cbn-cbg",
+        label: "Comprendre CBD, CBN et CBG",
+      },
+      {
+        to: "/blog/conserver-fleurs-resines-cbd",
+        label: "Conserver fleurs et résines CBD",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une étiquette de produit CBD rassemble plusieurs repères :
+            dénomination, numéro de lot, composition annoncée, responsable du
+            produit et parfois un lien vers une analyse. Les lire ensemble aide
+            à identifier le produit consulté et à retrouver les informations
+            qui correspondent réellement au lot.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Repère Verdanza : la présentation de l'emballage ne prouve pas à
+            elle seule la composition ou la conformité. La vérification repose
+            sur la cohérence entre l'étiquette, la fiche, le numéro de lot et
+            l'analyse disponible.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "role-numero-lot",
+        text: "À quoi sert le numéro de lot ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le numéro de lot est un identifiant attribué à un ensemble de
+            produits issus d'une même série. Il permet de rattacher un
+            emballage à des documents et à un suivi précis. Deux sachets portant
+            le même nom commercial peuvent provenir de lots différents : leurs
+            photographies, leurs dates ou leurs valeurs mesurées ne doivent donc
+            pas être supposées identiques.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Les principaux repères à croiser sur un produit CBD.",
+          headers: ["Information", "Ce qu'elle permet de vérifier", "Point d'attention"],
+          rows: [
+            [
+              "Dénomination",
+              "Le type et le nom du produit présenté.",
+              "Ne pas la confondre avec une mesure de composition.",
+            ],
+            [
+              "Numéro de lot",
+              "Le rattachement à une série et à son analyse.",
+              "L'identifiant doit être lisible et cohérent entre les supports.",
+            ],
+            [
+              "Composition annoncée",
+              "Les ingrédients ou caractéristiques déclarés.",
+              "Vérifier les unités et la portée exacte des valeurs.",
+            ],
+            [
+              "Responsable du produit",
+              "L'interlocuteur indiqué pour une demande de vérification.",
+              "Chercher des coordonnées suffisamment précises.",
+            ],
+            [
+              "Conditions de conservation",
+              "Les précautions prévues pour préserver le produit.",
+              "Les appliquer sans les remplacer par une règle générale.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "retrouver-identifiant",
+        text: "Où chercher l'identifiant de lot ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Selon le conditionnement, l'identifiant peut être imprimé sur une
+            étiquette, apposé près d'une fermeture, inscrit au dos du sachet ou
+            associé à un code donnant accès à un document. Les mentions
+            « lot », « batch » ou une suite alphanumérique sont fréquentes. Un
+            code QR n'est toutefois qu'un moyen d'accès : il faut encore
+            vérifier le document ouvert et le lot auquel il se rapporte.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "relier-analyse",
+        text: "Relier l'étiquette à l'analyse correspondante",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une analyse utile doit pouvoir être rapprochée du produit consulté.
+            Commencez par comparer l'identifiant de lot, puis la dénomination et
+            les dates lorsqu'elles sont indiquées. Le guide sur la{" "}
+            <Link to="/blog/comment-lire-analyse-cbd">
+              lecture d'une analyse CBD
+            </Link>{" "}
+            détaille ensuite les unités, les cannabinoïdes recherchés et les
+            limites de mesure.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "comparer le numéro de lot de l'emballage et celui du document ;",
+          "vérifier que la dénomination correspond au produit consulté ;",
+          "identifier la date de l'analyse et le laboratoire mentionné ;",
+          "lire les unités avant de rapprocher deux valeurs ;",
+          "distinguer une valeur mesurée d'une simple mention commerciale.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "coherence-denominations-unites",
+        text: "Dénominations et unités : contrôler la cohérence",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les sigles CBD, CBN, CBG ou THC désignent des cannabinoïdes
+            différents. Une valeur associée à l'un ne décrit pas les autres.
+            De même, un pourcentage et une valeur en milligrammes ne se
+            comparent pas directement sans connaître la base de calcul. Le
+            guide sur les{" "}
+            <Link to="/blog/denominations-cbd-cbn-cbg">
+              dénominations CBD, CBN et CBG
+            </Link>{" "}
+            aide à séparer les sigles de leurs valeurs mesurées.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "informations-divergentes",
+        text: "Que faire si les informations ne correspondent pas ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Si le lot est absent, illisible ou différent de celui de l'analyse,
+            il vaut mieux suspendre la comparaison et demander une précision au
+            vendeur. Conserver une photo de l'étiquette, du produit et du
+            document consulté permet de formuler une demande factuelle. Une
+            différence n'explique pas à elle seule son origine : elle signale
+            d'abord qu'une vérification est nécessaire.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Un nom commercial identique ne garantit pas que deux documents
+            concernent le même lot. L'identifiant du lot reste le point de
+            rapprochement prioritaire.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "checklist-reception",
+        text: "Checklist de traçabilité à la réception",
+      },
+      {
+        type: "list",
+        items: [
+          "repérer la dénomination exacte et le numéro de lot ;",
+          "vérifier que l'emballage est lisible et correspond à la commande ;",
+          "retrouver l'analyse associée lorsque celle-ci est fournie ;",
+          "croiser le lot, les dates, les unités et les cannabinoïdes indiqués ;",
+          "conserver l'emballage et l'identifiant en cas de question ;",
+          "contacter le vendeur si un repère manque ou reste incohérent.",
+        ],
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Après cette vérification, les indications propres au produit
+            restent prioritaires pour son stockage. Le guide consacré à la{" "}
+            <Link to="/blog/conserver-fleurs-resines-cbd">
+              conservation des fleurs et résines CBD
+            </Link>{" "}
+            permet de compléter ces repères sans remplacer les mentions de
+            l'emballage.
+          </>
+        ),
+      },
+      {
+        type: "links",
+        title: "Compléter la vérification",
+        links: [
+          { to: "/blog/comment-lire-analyse-cbd", label: "Lire une analyse CBD" },
+          {
+            to: "/blog/denominations-cbd-cbn-cbg",
+            label: "Comprendre CBD, CBN et CBG",
+          },
+          {
+            to: "/blog/conserver-fleurs-resines-cbd",
+            label: "Conserver fleurs et résines CBD",
+          },
+          { to: "/qualite-conformite", label: "Qualité et conformité" },
+        ],
+      },
+    ],
+  },
+  {
     slug: "aspect-resine-cbd-texture-couleur",
     title: "Résine CBD : comment lire texture, couleur et présentation ?",
     seoTitle: "Aspect d'une résine CBD : texture et couleur | Verdanza",

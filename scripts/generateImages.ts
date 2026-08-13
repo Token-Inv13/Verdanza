@@ -90,6 +90,10 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" }
 > = {
+  "etiquette-numero-lot-cbd-tracabilite": {
+    label: "Étiquette et numéro de lot CBD",
+    kind: "analysis",
+  },
   "aspect-resine-cbd-texture-couleur": {
     label: "Aspect d'une résine CBD",
     sources: [
