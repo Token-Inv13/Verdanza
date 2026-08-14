@@ -6,10 +6,8 @@ import {
   useMemo,
   useState,
 } from "react";
-import {
-  availableProductStock,
-  isProductOrderable,
-} from "../lib/cartStock";
+import { isProductOrderable } from "../lib/cartStock";
+import { remainingProductStock } from "../lib/productPurchaseOptions";
 import {
   cartItemKey,
   fixedPriceEffectiveUnitPrice,
@@ -83,17 +81,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addItem = useCallback((productId: string) => {
     const product = catalog.find((entry) => entry.id === productId);
-    if (!isProductOrderable(product)) {
+    if (!product || !isProductOrderable(product)) {
       return;
     }
-    const maxQuantity = availableProductStock(product);
     setItems((current) => {
+      if (remainingProductStock(product, current) < 1) return current;
       const target = { productId, quantity: 1, purchaseMode: "gram" as const };
       const existing = current.find((item) => sameCartLine(item, target));
       if (!existing) return [...current, target];
       return current.map((item) =>
         sameCartLine(item, target)
-          ? { ...item, quantity: Math.min(item.quantity + 1, maxQuantity) }
+          ? { ...item, quantity: item.quantity + 1 }
           : item,
       );
     });
@@ -101,13 +99,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addFixedPriceOption = useCallback((productId: string, fixedPriceOptionId: string) => {
     const product = catalog.find((entry) => entry.id === productId);
-    if (!isProductOrderable(product)) return;
+    if (!product || !isProductOrderable(product)) return;
     const option = resolveFixedPriceOptions(product).find(
       (entry) => entry.id === fixedPriceOptionId,
     );
     if (!option) return;
-    const maxQuantity = Math.floor(availableProductStock(product) / option.quantityGrams);
-    if (maxQuantity <= 0) return;
     const target = {
       productId,
       quantity: 1,
@@ -115,11 +111,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       fixedPriceOptionId,
     };
     setItems((current) => {
+      if (remainingProductStock(product, current) < option.quantityGrams) return current;
       const existing = current.find((item) => sameCartLine(item, target));
       if (!existing) return [...current, target];
       return current.map((item) =>
         sameCartLine(item, target)
-          ? { ...item, quantity: Math.min(item.quantity + 1, maxQuantity) }
+          ? { ...item, quantity: item.quantity + 1 }
           : item,
       );
     });
@@ -135,19 +132,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           if (cartItemKey(item) !== lineKey) return item;
           const product = catalog.find((entry) => entry.id === item.productId);
           const requested = positiveInteger(updater(item));
-          if (!isProductOrderable(product) || requested <= 0) return null;
+          if (!product || !isProductOrderable(product) || requested <= 0) return null;
+          const availableForLine = remainingProductStock(product, current, lineKey);
           if (item.purchaseMode === "fixed_price") {
             const option = resolveFixedPriceOptions(product).find(
               (entry) => entry.id === item.fixedPriceOptionId,
             );
             if (!option) return null;
-            const maxQuantity = Math.floor(availableProductStock(product) / option.quantityGrams);
+            const maxQuantity = Math.floor(availableForLine / option.quantityGrams);
             const nextQuantity = Math.min(requested, maxQuantity);
             return nextQuantity > 0 ? { ...item, quantity: nextQuantity } : null;
           }
           return {
             ...item,
-            quantity: Math.min(requested, availableProductStock(product)),
+            quantity: Math.min(requested, availableForLine),
             purchaseMode: "gram" as const,
           };
         })
@@ -187,11 +185,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const setItemQuantity = useCallback(
     (productId: string, quantity: number) => {
       const product = catalog.find((entry) => entry.id === productId);
-      const maxQuantity = isProductOrderable(product) ? availableProductStock(product) : 0;
-      const nextQuantity = Math.min(Math.max(0, Math.floor(quantity)), maxQuantity);
+      const requested = Math.max(0, Math.floor(quantity));
       const target = { productId, purchaseMode: "gram" as const };
 
       setItems((current) => {
+        const maxQuantity = product && isProductOrderable(product)
+          ? remainingProductStock(product, current, cartItemKey(target))
+          : 0;
+        const nextQuantity = Math.min(requested, maxQuantity);
         if (nextQuantity <= 0) {
           return current.filter((item) => !sameCartLine(item, target));
         }

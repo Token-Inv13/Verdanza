@@ -55,9 +55,12 @@ export function FloatingContactButton() {
   }
 
   const needsCookieBannerOffset = !consent.hasDecision && !consent.preferencesOpen;
+  const needsProductPurchaseOffset = location.pathname.startsWith("/produits/");
   const positionClass = needsCookieBannerOffset
     ? "bottom-auto top-[calc(env(safe-area-inset-top)+5.5rem)] sm:top-auto sm:bottom-[calc(env(safe-area-inset-bottom)+16rem)] lg:bottom-[calc(env(safe-area-inset-bottom)+10rem)]"
-    : "bottom-[calc(env(safe-area-inset-bottom)+1rem)]";
+    : needsProductPurchaseOffset
+      ? "bottom-[calc(env(safe-area-inset-bottom)+6rem)]"
+      : "bottom-[calc(env(safe-area-inset-bottom)+1rem)]";
 
   return (
     <div

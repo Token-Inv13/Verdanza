@@ -1,6 +1,6 @@
 import { Link, useParams } from "react-router-dom";
-import { ShoppingBag } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Check, ShoppingBag } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Seo } from "../components/Seo";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { JsonLd } from "../components/JsonLd";
@@ -9,18 +9,18 @@ import { QualityBadge } from "../components/QualityBadge";
 import { useCart } from "../context/CartContext";
 import { useProducts } from "../hooks/useProducts";
 import { trackAddToCart, trackViewItem } from "../lib/analytics";
+import { publicProductStockLabel } from "../lib/cartStock";
 import {
-  availableProductStock,
-  isProductOrderable,
-  publicProductStockLabel,
-} from "../lib/cartStock";
-import {
-  fixedPriceOptionPublicLabel,
-  fixedPriceUnitPricePublicLabel,
   isFixedPriceAdvantageous,
   resolveFixedPriceOptions,
 } from "../lib/fixedPriceOptions";
 import { normalizeProductImages } from "../lib/productImages";
+import {
+  formatProductPrice,
+  productPurchaseCtaLabel,
+  productPurchaseOptionLabel,
+  resolveProductPurchaseOptions,
+} from "../lib/productPurchaseOptions";
 import { FavoriteButton } from "../components/FavoriteButton";
 import {
   buildProductJsonLd,
@@ -38,8 +38,11 @@ export function ProductPage() {
   const { slug } = useParams();
   const { products, isLoading } = useProducts();
   const product = slug ? products.find((entry) => entry.slug === slug) : undefined;
-  const { addItem, addFixedPriceOption } = useCart();
+  const { addItem, addFixedPriceOption, items } = useCart();
   const [selectedImageId, setSelectedImageId] = useState("");
+  const [selectedPurchaseOptionId, setSelectedPurchaseOptionId] = useState("gram");
+  const [purchaseBlockVisible, setPurchaseBlockVisible] = useState(true);
+  const purchaseBlockRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!product) return;
@@ -48,6 +51,20 @@ export function ProductPage() {
 
   useEffect(() => {
     setSelectedImageId("");
+    setSelectedPurchaseOptionId("gram");
+    setPurchaseBlockVisible(true);
+  }, [product?.id]);
+
+  useEffect(() => {
+    const purchaseBlock = purchaseBlockRef.current;
+    if (!purchaseBlock || typeof IntersectionObserver === "undefined") return undefined;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setPurchaseBlockVisible(entry.isIntersecting),
+      { threshold: 0.15 },
+    );
+    observer.observe(purchaseBlock);
+    return () => observer.disconnect();
   }, [product?.id]);
 
   if (isLoading && !product) {
@@ -83,15 +100,23 @@ export function ProductPage() {
     );
   }
 
-  const isOrderable = isProductOrderable(product);
   const stockLabel = publicProductStockLabel(product);
   const fixedPriceOptions = resolveFixedPriceOptions(product);
+  const purchaseOptions = resolveProductPurchaseOptions(product, items);
+  const selectedPurchaseOption =
+    purchaseOptions.find(
+      (option) => option.id === selectedPurchaseOptionId && option.available,
+    ) || purchaseOptions.find((option) => option.available);
+  const purchaseAvailabilityLabel = selectedPurchaseOption
+    ? stockLabel
+    : stockLabel !== "Disponible"
+      ? stockLabel
+      : "Stock déjà réservé dans votre panier";
   const productImages = normalizeProductImages(product);
   const selectedImage =
     productImages.find((image) => image.id === selectedImageId) ||
     productImages.find((image) => image.isPrimary) ||
     productImages[0];
-  const availableStock = availableProductStock(product);
   const path = productPath(product);
   const categoryName = productCategoryLabel(product);
   const categoryPath = product.category === "flowers" ? "/fleurs-cbd" : "/resines-cbd";
@@ -123,17 +148,27 @@ export function ProductPage() {
           ["Texture", product.texture || "À confirmer"],
           ["Stock", stockLabel],
         ]
-    : [
-        ["CBD", product.cbdRate],
-        ["CBG", product.cbgRate],
-        ["THC", product.thcRate],
-        ["Origine", product.origin],
-        ["Culture", product.cultureType],
-        ["Stock", stockLabel],
-      ];
+      : [
+          ["CBD", product.cbdRate],
+          ["CBG", product.cbgRate],
+          ["THC", product.thcRate],
+          ["Origine", product.origin],
+          ["Culture", product.cultureType],
+          ["Stock", stockLabel],
+        ];
+
+  function handleAddToCart() {
+    if (!product || !selectedPurchaseOption) return;
+    if (selectedPurchaseOption.fixedPriceOptionId) {
+      addFixedPriceOption(product.id, selectedPurchaseOption.fixedPriceOptionId);
+    } else {
+      addItem(product.id);
+    }
+    trackAddToCart(product, selectedPurchaseOption.quantityGrams);
+  }
 
   return (
-    <main className="container-page py-12">
+    <main className="container-page pb-28 pt-12 lg:pb-12">
       <Seo
         title={product.seoTitle}
         description={product.seoDescription}
@@ -149,9 +184,100 @@ export function ProductPage() {
           { name: product.name, path, current: true },
         ]}
       />
-      <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
-        <div className="space-y-4">
-          <div className="aspect-square rounded-lg border border-champagne/30 bg-cream p-8">
+      <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-x-10">
+        <section className="lg:col-start-2 lg:row-start-1">
+          <p className="text-sm uppercase tracking-[0.18em] text-champagne">
+            {product.category === "flowers" ? "Fleur CBD" : "Résine CBD"}
+          </p>
+          <div className="mt-3 flex items-start justify-between gap-4">
+            <h1 className="font-display text-4xl leading-none text-forest sm:text-5xl">
+              {product.name}
+            </h1>
+            <FavoriteButton product={product} className="shrink-0" />
+          </div>
+          <p className="mt-5 text-lg leading-8 text-ink/70">{product.shortDescription}</p>
+
+          <div
+            ref={purchaseBlockRef}
+            className="mt-6 rounded-lg border border-champagne/35 bg-cream p-4 shadow-sm sm:p-5"
+          >
+            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-forest/10 pb-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink/45">
+                  Prix au gramme
+                </p>
+                <p className="mt-1 font-display text-4xl leading-none text-forest">
+                  {formatProductPrice(product.price)}
+                </p>
+              </div>
+              <span className="rounded-full border border-forest/15 bg-ivory px-3 py-1.5 text-xs font-semibold text-forest">
+                {purchaseAvailabilityLabel}
+              </span>
+            </div>
+
+            {purchaseOptions.length > 0 && (
+              <fieldset className="mt-4">
+                <legend className="font-display text-2xl text-forest">Choisir un format</legend>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {purchaseOptions.map((option) => {
+                    const selected = option.id === selectedPurchaseOption?.id;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={`relative min-h-[76px] rounded-md border px-3 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-champagne focus:ring-offset-2 ${
+                          selected
+                            ? "border-forest/55 bg-sage/25 text-forest shadow-[inset_0_0_0_1px_rgba(11,61,46,0.08)]"
+                            : "border-forest/15 bg-ivory text-forest hover:border-forest/30 hover:bg-sage/10"
+                        } disabled:cursor-not-allowed disabled:border-forest/10 disabled:bg-cream/50 disabled:text-ink/35 disabled:opacity-100 disabled:hover:border-forest/10 disabled:hover:bg-cream/50`}
+                        aria-pressed={selected}
+                        disabled={!option.available}
+                        title={option.available ? undefined : "Stock insuffisant pour ce format"}
+                        onClick={() => setSelectedPurchaseOptionId(option.id)}
+                      >
+                        {selected && (
+                          <Check
+                            size={15}
+                            className="absolute right-2 top-2 text-forest/70"
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span className="block font-semibold">{option.quantityGrams} g</span>
+                        <span className="mt-1 block text-sm text-forest/65">
+                          {formatProductPrice(option.totalPrice)}
+                        </span>
+                        {!option.available && (
+                          <span className="mt-1 block text-[11px] leading-tight">Stock insuffisant</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            )}
+            {fixedPriceOptions.some((option) => isFixedPriceAdvantageous(product, option)) && (
+              <p className="mt-3 text-xs text-forest/60">
+                Prix au gramme plus avantageux selon le format choisi.
+              </p>
+            )}
+            <button
+              type="button"
+              className="btn-primary mt-4 w-full disabled:cursor-not-allowed disabled:bg-forest/45 disabled:text-ivory/80"
+              disabled={!selectedPurchaseOption}
+              onClick={handleAddToCart}
+            >
+              <ShoppingBag size={18} aria-hidden="true" />
+              {selectedPurchaseOption
+                ? `Ajouter ${productPurchaseCtaLabel(selectedPurchaseOption)}`
+                : stockLabel !== "Disponible"
+                  ? stockLabel
+                  : "Stock restant insuffisant"}
+            </button>
+          </div>
+        </section>
+
+        <div className="space-y-4 lg:col-start-1 lg:row-span-2 lg:row-start-1">
+          <div className="aspect-square rounded-lg border border-champagne/30 bg-cream p-6 sm:p-8">
             <ProductImage
               variant="detail"
               src={selectedImage?.url || product.image}
@@ -162,67 +288,42 @@ export function ProductPage() {
             />
           </div>
           {productImages.length > 1 && (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-3" aria-label={`Galerie ${product.name}`}>
               {productImages.map((image) => {
                 const selected = image.id === selectedImage?.id;
                 return (
                   <button
                     key={image.id}
                     type="button"
-                    className={`aspect-square rounded-md border bg-ivory p-2 transition ${
-                      selected ? "border-forest" : "border-forest/10 hover:border-forest/40"
+                    className={`aspect-square rounded-md border bg-ivory p-2 transition focus:outline-none focus:ring-2 focus:ring-champagne focus:ring-offset-2 ${
+                      selected ? "border-forest ring-1 ring-forest" : "border-forest/10 hover:border-forest/40"
                     }`}
                     aria-label={`Afficher ${image.alt}`}
                     aria-pressed={selected}
                     onClick={() => setSelectedImageId(image.id)}
                   >
-                    <ProductImage
-                      variant="card"
-                      src={image.url}
-                      alt=""
-                      className="h-full w-full object-contain"
-                    />
+                    <ProductImage variant="card" src={image.url} alt="" className="h-full w-full object-contain" />
                   </button>
                 );
               })}
             </div>
           )}
-          {(isHydroponicFlower || isResin) && (
-            <aside className="rounded-md border border-forest/10 bg-ivory p-5">
-              <p className="font-display text-2xl text-forest">
-                {product.category === "flowers" ? "Fleur CBD" : "Résine CBD"}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-forest/80">
-                {product.category === "flowers"
-                  ? "Hydroponique · Sélection Verdanza"
-                  : `${product.texture || "Texture soignée"} · Sélection Verdanza`}
-              </p>
-              <p className="mt-3 text-sm leading-6 text-ink/60">
-                THC : {product.thcRate}
-              </p>
-            </aside>
-          )}
         </div>
-        <section>
-          <p className="text-sm uppercase tracking-[0.18em] text-champagne">
-            {product.category === "flowers" ? "Fleur CBD" : "Résine CBD"}
-          </p>
-          <div className="mt-3 flex items-start justify-between gap-4">
-            <h1 className="font-display text-5xl text-forest">{product.name}</h1>
-            <FavoriteButton product={product} className="shrink-0" />
+
+        <section className="lg:col-start-2 lg:row-start-2">
+          <div>
+            <h2 className="font-display text-2xl text-forest">Description détaillée</h2>
+            <p className="mt-2 leading-7 text-ink/70">{product.longDescription}</p>
           </div>
-          <p className="mt-5 text-lg leading-8 text-ink/70">{product.longDescription}</p>
-          <div className="mt-8 flex items-start gap-4">
-            <div className="grid flex-1 gap-3 sm:grid-cols-2">
+          <div className="mt-7 flex items-start gap-4">
+            <dl className="grid flex-1 gap-3 sm:grid-cols-2">
               {keyFacts.map(([label, value]) => (
                 <div key={label} className="rounded-md border border-forest/10 bg-ivory p-4">
-                  <dt className="text-xs uppercase tracking-[0.14em] text-ink/45">
-                    {label}
-                  </dt>
+                  <dt className="text-xs uppercase tracking-[0.14em] text-ink/45">{label}</dt>
                   <dd className="mt-1 text-forest">{value}</dd>
                 </div>
               ))}
-            </div>
+            </dl>
             {product.qualitySealEnabled && (
               <QualityBadge variant="standard" className="mt-1 hidden sm:block" />
             )}
@@ -234,9 +335,7 @@ export function ProductPage() {
             <h2 className="font-display text-2xl text-forest">Arômes</h2>
             <div className="mt-3 flex flex-wrap gap-2">
               {product.aromas.map((aroma) => (
-                <span key={aroma} className="tag">
-                  {aroma}
-                </span>
+                <span key={aroma} className="tag">{aroma}</span>
               ))}
             </div>
           </div>
@@ -245,26 +344,18 @@ export function ProductPage() {
               <h2 className="font-display text-2xl text-forest">
                 Pourquoi choisir cette {product.category === "flowers" ? "fleur" : "résine"} ?
               </h2>
-              <p className="mt-2 leading-7 text-ink/70">
-                {product.whyChooseDescription}
-              </p>
+              <p className="mt-2 leading-7 text-ink/70">{product.whyChooseDescription}</p>
             </div>
           )}
           {product.advisedProfile && (
             <div className="mt-5 rounded-md border border-forest/10 bg-cream p-5">
-              <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-champagne">
-                Profil conseillé
-              </h2>
-              <p className="mt-2 leading-7 text-forest">
-                {product.advisedProfile}
-              </p>
+              <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-champagne">Profil conseillé</h2>
+              <p className="mt-2 leading-7 text-forest">{product.advisedProfile}</p>
             </div>
           )}
           {isHydroponicFlower && (
             <div className="mt-7">
-              <h2 className="font-display text-2xl text-forest">
-                Qualité & culture
-              </h2>
+              <h2 className="font-display text-2xl text-forest">Qualité & culture</h2>
               <p className="mt-2 leading-7 text-ink/70">
                 Cette fleur est issue d'une culture hydroponique, une méthode qui
                 permet de mieux contrôler l'environnement de production. Elle est
@@ -283,76 +374,8 @@ export function ProductPage() {
           )}
           {product.experienceDescription && (
             <div className="mt-7 border-l-2 border-champagne pl-5">
-              <h2 className="font-display text-2xl text-forest">
-                Expérience Verdanza
-              </h2>
-              <p className="mt-2 leading-7 text-ink/70">
-                {product.experienceDescription}
-              </p>
-            </div>
-          )}
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <span className="font-display text-4xl text-forest">
-              {product.price.toFixed(2).replace(".", ",")} EUR/g
-            </span>
-            {isOrderable ? (
-              <button
-                className="btn-primary"
-                onClick={() => {
-                  addItem(product.id);
-                  trackAddToCart(product);
-                }}
-              >
-                <ShoppingBag size={18} /> Ajouter 1 g au panier
-              </button>
-            ) : (
-              <span className="rounded-md border border-champagne/40 bg-cream px-5 py-3 font-semibold text-forest">
-                {stockLabel}
-              </span>
-            )}
-          </div>
-          {isOrderable && (
-            <p className="mt-3 text-sm font-semibold text-forest/70">
-              {stockLabel}
-            </p>
-          )}
-          {product.isActive !== false && fixedPriceOptions.length > 0 && (
-            <div className="mt-5 rounded-lg border border-champagne/30 bg-cream p-4">
-              <h2 className="font-display text-2xl text-forest">Formats au choix</h2>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                {fixedPriceOptions.map((option) => {
-                  const optionAvailable = isOrderable && availableStock >= option.quantityGrams;
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      className="rounded-md border border-forest/15 bg-ivory px-4 py-3 text-left transition hover:border-forest disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={!optionAvailable}
-                      onClick={() => {
-                        addFixedPriceOption(product.id, option.id);
-                        trackAddToCart(product, option.quantityGrams);
-                      }}
-                    >
-                      <span className="block font-semibold text-forest">
-                        {fixedPriceOptionPublicLabel(option)}
-                      </span>
-                      <span className="mt-1 block text-xs text-forest/65">
-                        {fixedPriceUnitPricePublicLabel(option)}
-                      </span>
-                      {!optionAvailable && (
-                        <span className="mt-1 block text-xs text-red-700">
-                          Stock insuffisant pour ce format
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              {fixedPriceOptions.some((option) => isFixedPriceAdvantageous(product, option)) && (
-                <p className="mt-3 text-xs text-forest/60">
-                  Prix au gramme plus avantageux selon le format choisi.
-                </p>
-              )}
+              <h2 className="font-display text-2xl text-forest">Expérience Verdanza</h2>
+              <p className="mt-2 leading-7 text-ink/70">{product.experienceDescription}</p>
             </div>
           )}
           <p className="mt-6 text-sm leading-6 text-ink/60">
@@ -362,6 +385,29 @@ export function ProductPage() {
           </p>
         </section>
       </div>
+
+      {selectedPurchaseOption && !purchaseBlockVisible && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-champagne/35 bg-ivory/95 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 shadow-[0_-12px_35px_rgba(11,61,46,0.12)] backdrop-blur">
+          <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold uppercase tracking-[0.12em] text-forest/55">
+                {product.name}
+              </p>
+              <p className="font-display text-xl text-forest">
+                {productPurchaseOptionLabel(selectedPurchaseOption)}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn-primary min-h-11 shrink-0 px-5 py-2.5"
+              aria-label={`Ajouter ${productPurchaseOptionLabel(selectedPurchaseOption)} de ${product.name} au panier`}
+              onClick={handleAddToCart}
+            >
+              Ajouter
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

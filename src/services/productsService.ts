@@ -60,6 +60,35 @@ export function normalizeProduct(product: Product): Product {
   });
 }
 
+function productImagesWithLocalFallback(product: Product) {
+  const currentImages = Array.isArray(product.images) ? product.images : [];
+  if (currentImages.length > 1) return currentImages;
+
+  const localGallery = localProducts.find((entry) => entry.id === product.id)?.images || [];
+  if (localGallery.length <= 1) return currentImages;
+
+  const localPrimary = localGallery.find((image) => image.isPrimary) || localGallery[0];
+  const currentPrimary = currentImages[0] || {
+    id: "catalog-primary",
+    url: product.image,
+    alt: product.imageAlt || `${product.name} Verdanza`,
+    sortOrder: 0,
+    isPrimary: true,
+  };
+  const additionalImages = localGallery.filter(
+    (image) => image.url !== localPrimary?.url && image.url !== currentPrimary.url,
+  );
+
+  return [
+    { ...currentPrimary, sortOrder: 0, isPrimary: true },
+    ...additionalImages.map((image, index) => ({
+      ...image,
+      sortOrder: index + 1,
+      isPrimary: false,
+    })),
+  ];
+}
+
 function removeLegacyAvailabilityText(value: string) {
   return value
     .replace(legacyComingSoonLabelPattern, "")
@@ -82,9 +111,20 @@ export async function getFirestoreProducts(activeOnly = true) {
     : collection(db, collections.products);
   const snapshot = await getDocs(productsQuery);
   return snapshot.docs
-    .map((entry) =>
-      normalizeProduct({ id: entry.id, ...(entry.data() as Omit<Product, "id">) }),
-    )
+    .map((entry) => {
+      const firestoreProduct = {
+        id: entry.id,
+        ...(entry.data() as Omit<Product, "id">),
+      };
+      return normalizeProduct(
+        activeOnly
+          ? {
+              ...firestoreProduct,
+              images: productImagesWithLocalFallback(firestoreProduct),
+            }
+          : firestoreProduct,
+      );
+    })
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
