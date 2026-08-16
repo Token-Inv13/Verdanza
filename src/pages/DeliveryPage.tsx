@@ -54,8 +54,8 @@ function DeliveryOverviewPage() {
   return (
     <main className="container-page py-12">
       <Seo
-        title="Livraison CBD en France et Aix-en-Provence - Verdanza"
-        description="Découvrez les modes de livraison Verdanza : livraison locale autour d'Aix-en-Provence et livraison postale en France."
+        title="Modes de livraison Verdanza : locale et postale"
+        description="Comparez les modes de livraison Verdanza : service local selon l’adresse et les créneaux disponibles, ou livraison postale en France métropolitaine."
         path="/livraison"
       />
       <Breadcrumbs
@@ -66,24 +66,22 @@ function DeliveryOverviewPage() {
       />
 
       <div className="page-intro">
-        <h1>Livraison Verdanza</h1>
+        <h1>Modes de livraison Verdanza</h1>
         <p>
-          Verdanza propose deux modes de livraison selon votre situation : livraison
-          locale autour d'Aix-en-Provence ou livraison postale en France.
+          Choisissez le mode adapté à votre adresse : un service local soumis à
+          éligibilité et disponibilité, ou une expédition postale en France métropolitaine.
         </p>
       </div>
 
       <section className="mt-10 grid gap-5 lg:grid-cols-2">
         <DeliveryModeCard
-          title="Livraison CBD à Aix-en-Provence"
+          title="Service local selon votre adresse"
           items={[
-            "Livraison offerte",
-            "Environ 1 h",
-            "De 11 h à 1 h du matin",
-            "Jusqu’à 15 km autour du centre d’Aix-en-Provence",
-            "Minimum de commande : 20 €",
+            "Éligibilité calculée à partir de l’adresse sélectionnée",
+            "Disponibilité et créneaux vérifiés lors de la commande",
+            "Zone et conditions détaillées sur la page locale dédiée",
           ]}
-          ctaLabel="Voir la livraison locale"
+          ctaLabel="Consulter la livraison locale"
           ctaPath="/livraison-locale#zone-livraison"
           ctaId="delivery_overview_local"
         />
@@ -99,6 +97,23 @@ function DeliveryOverviewPage() {
           ctaPath="/livraison-postale"
           ctaId="delivery_overview_postal"
         />
+      </section>
+
+      <section className="mt-10 rounded-lg border border-forest/10 bg-cream p-6 sm:p-8">
+        <h2 className="font-display text-3xl text-forest">
+          Comment choisir votre mode de livraison ?
+        </h2>
+        <div className="mt-4 grid gap-4 leading-7 text-ink/70 md:grid-cols-2">
+          <p>
+            Le service local convient lorsqu’une adresse est reconnue comme éligible et
+            qu’un créneau est disponible. La page locale dédiée explique la zone et la
+            vérification effectuée pendant la commande.
+          </p>
+          <p>
+            La livraison postale dessert la France métropolitaine. Sa page dédiée présente
+            le minimum de commande, les frais, le seuil de gratuité et le délai estimé.
+          </p>
+        </div>
       </section>
     </main>
   );
@@ -245,9 +260,10 @@ function LocalDeliveryPage() {
       <div className="page-intro">
         <h1>Livraison CBD à Aix-en-Provence et alentours</h1>
         <p>
-          Verdanza propose une livraison locale offerte autour d’Aix-en-Provence, dans un
-          rayon allant jusqu’à 15 km du centre-ville. L’éligibilité dépend de l’adresse exacte
-          et de la disponibilité au moment de la commande.
+          Verdanza propose une livraison locale de CBD à domicile autour d’Aix-en-Provence,
+          offerte dans un rayon allant jusqu’à 15 km du centre-ville dès 20 € de commande.
+          L’éligibilité dépend de l’adresse exacte et de la disponibilité au moment de la
+          commande.
         </p>
       </div>
 
@@ -468,10 +484,19 @@ function LocalDeliveryPage() {
       </section>
 
       <section className="mt-12">
-        <h2 className="font-display text-3xl text-forest">Liens utiles</h2>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <h2 className="font-display text-3xl text-forest">
+          Préparer une commande en livraison locale
+        </h2>
+        <p className="mt-4 max-w-3xl leading-7 text-ink/70">
+          Retrouvez l’ensemble du catalogue dans la boutique, ou accédez directement aux
+          fleurs CBD et aux résines CBD disponibles. La remise à domicile reste soumise à la
+          vérification de votre adresse et des créneaux au moment de la commande.
+        </p>
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {[
             { to: "/boutique", label: "Parcourir la boutique" },
+            { to: "/fleurs-cbd", label: "Choisir des fleurs CBD" },
+            { to: "/resines-cbd", label: "Choisir des résines CBD" },
             { to: "/livraison-postale", label: "Livraison postale" },
             { to: "/qualite-conformite", label: "Qualité & conformité" },
             { to: "/contact", label: "Contact" },

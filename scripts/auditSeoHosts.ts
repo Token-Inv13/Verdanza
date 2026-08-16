@@ -82,6 +82,17 @@ async function auditStaticConfiguration() {
       failures.push(`expected one explicit permanent root redirect for ${host}`);
     }
   }
+  const legacyLocalDeliveryRedirects = redirects.filter(
+    (redirect) =>
+      redirect.source === "/livraison-express-aix" &&
+      redirect.destination === "/livraison-locale" &&
+      redirect.permanent === true,
+  );
+  if (legacyLocalDeliveryRedirects.length !== 1) {
+    failures.push(
+      "expected one permanent /livraison-express-aix redirect to /livraison-locale",
+    );
+  }
   if (
     redirects.some((redirect) =>
       redirect.has?.some(

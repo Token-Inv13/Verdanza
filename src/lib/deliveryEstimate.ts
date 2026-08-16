@@ -12,8 +12,9 @@ export function formatLocalDeliveryEstimate(zone?: DeliveryEstimateSource) {
     zone?.estimatedDelayMaxMinutes,
   );
   const delayLabel = formatLocalDeliveryDelay(minMinutes, maxMinutes);
+  const delayPhrase = delayLabel.startsWith("environ ") ? delayLabel : `en ${delayLabel}`;
 
-  return `Livraison locale généralement en ${delayLabel} après confirmation, selon la disponibilité.`;
+  return `Livraison locale généralement ${delayPhrase} après confirmation, selon la disponibilité.`;
 }
 
 export const DEFAULT_LOCAL_DELIVERY_ESTIMATE_LABEL = formatLocalDeliveryEstimate();

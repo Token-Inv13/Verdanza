@@ -1,5 +1,6 @@
 import { ProductCard } from "../components/ProductCard";
 import { useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import { PromoBannerSlot } from "../components/PromoBannerSlot";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
@@ -22,7 +23,7 @@ export function ShopPage() {
     <main className="container-page py-12">
       <Seo
         title="Boutique Verdanza CBD"
-        description="Catalogue Verdanza CBD : fleurs et résines sélectionnées disponibles au gramme, livraison express Aix-en-Provence et alentours."
+        description="Catalogue Verdanza CBD : fleurs et résines sélectionnées disponibles au gramme, avec livraison locale selon l’adresse ou livraison postale."
         path="/boutique"
       />
       <Breadcrumbs
@@ -35,7 +36,17 @@ export function ShopPage() {
         <h1>Boutique CBD</h1>
         <p>
           Sélection réelle Verdanza : fleurs et résines CBD sélectionnées disponibles
-          au gramme, avec livraison express locale à Aix-en-Provence et alentours.
+          au gramme, avec livraison locale selon votre adresse ou livraison postale.
+        </p>
+        <p className="mt-3 text-sm leading-6 text-ink/65">
+          Vous souhaitez une remise à domicile autour d’Aix ? Consultez la{" "}
+          <Link
+            to="/livraison-locale"
+            className="font-semibold text-forest underline decoration-champagne/70 underline-offset-4"
+          >
+            zone et les conditions de livraison locale
+          </Link>
+          .
         </p>
       </div>
       <PromoBannerSlot placement="shop" type="shop_card" className="mt-6 grid gap-3" />

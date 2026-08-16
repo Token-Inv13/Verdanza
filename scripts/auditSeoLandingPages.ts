@@ -1,6 +1,6 @@
 ﻿import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { staticSeoRoutes, canonicalUrl } from "./seoRoutes";
+import { staticSeoRoutes, canonicalUrl, productSeoRoutes } from "./seoRoutes";
 
 type LandingAudit = {
   path: string;
@@ -12,6 +12,14 @@ type LandingAudit = {
 
 const distDir = resolve("dist");
 const pages = [
+  {
+    path: "/boutique",
+    titleIncludes: ["Boutique Verdanza CBD"],
+    descriptionIncludes: ["fleurs et résines", "livraison locale", "livraison postale"],
+    h2: [],
+    links: ["/livraison-locale"],
+    textMarkers: ["zone et les conditions de livraison locale", "Disponible"],
+  },
   {
     path: "/decouvrir-verdanza",
     titleIncludes: ["Découvrir Verdanza", "Fleurs et résines CBD"],
@@ -57,18 +65,35 @@ const pages = [
       "Conditions et disponibilité",
       "Livraison locale ou livraison postale : quelle différence ?",
       "Questions fréquentes sur la livraison CBD à Aix-en-Provence",
-      "Liens utiles",
+      "Préparer une commande en livraison locale",
     ],
-    links: ["/boutique", "/livraison-postale", "/qualite-conformite", "/contact"],
-    textMarkers: ["adresse vérifiée", "jusqu’à 15 km", "Minimum de commande", "5,49 EUR"],
+    links: [
+      "/boutique",
+      "/fleurs-cbd",
+      "/resines-cbd",
+      "/livraison-postale",
+      "/qualite-conformite",
+      "/contact",
+    ],
+    textMarkers: [
+      "livraison locale de CBD à domicile",
+      "adresse vérifiée",
+      "jusqu’à 15 km",
+      "Minimum de commande",
+      "5,49 EUR",
+    ],
   },
   {
     path: "/livraison",
-    titleIncludes: ["Livraison CBD", "Verdanza"],
-    descriptionIncludes: ["livraison locale", "livraison postale"],
-    h2: ["Livraison CBD à Aix-en-Provence", "Colissimo France à domicile"],
+    titleIncludes: ["Modes de livraison Verdanza", "locale et postale"],
+    descriptionIncludes: ["modes de livraison Verdanza", "service local", "livraison postale"],
+    h2: [
+      "Service local selon votre adresse",
+      "Colissimo France à domicile",
+      "Comment choisir votre mode de livraison ?",
+    ],
     links: ["/livraison-locale", "/livraison-postale"],
-    textMarkers: ["Jusqu’à 15 km", "Minimum de commande : 20 €", "5,49 EUR", "offerte dès 50,00 EUR"],
+    textMarkers: ["éligibilité calculée", "5,49 EUR", "offerte dès 50,00 EUR"],
   },
   {
     path: "/livraison-postale",
@@ -118,6 +143,8 @@ const corruptedCharacterPattern = /Ã|â€™|�/;
 
 const audits = pages.map(auditPage);
 const failures = audits.filter((audit) => audit.failures.length);
+const productDeliveryAudits = productSeoRoutes().map((route) => auditProductDeliveryLink(route.path));
+const productDeliveryFailures = productDeliveryAudits.filter((audit) => audit.failures.length);
 
 console.table(
   audits.map((audit) => ({
@@ -129,10 +156,18 @@ console.table(
   })),
 );
 
-if (failures.length) {
+console.table(
+  productDeliveryAudits.map((audit) => ({
+    path: audit.path,
+    localDeliveryBlock: audit.failures.length === 0,
+    failures: audit.failures.length,
+  })),
+);
+
+if (failures.length || productDeliveryFailures.length) {
   console.error("\nSEO landing page audit failures:");
   console.table(
-    failures.map((audit) => ({
+    [...failures, ...productDeliveryFailures].map((audit) => ({
       path: audit.path,
       failures: audit.failures.join(" | "),
     })),
@@ -140,6 +175,24 @@ if (failures.length) {
   process.exitCode = 1;
 } else {
   console.log("\nSEO landing page audit passed.");
+}
+
+function auditProductDeliveryLink(path: string) {
+  const failures: string[] = [];
+  const filePath = outputPathForRoute(path);
+  const html = existsSync(filePath) ? readFileSync(filePath, "utf8") : "";
+  const mainHtml = html.match(/<main[\s\S]*?<\/main>/i)?.[0] || "";
+  const mainText = stripTags(mainHtml);
+
+  if (!html.trim()) failures.push("missing prerendered HTML");
+  if (!mainText.includes("Livraison locale autour d’Aix-en-Provence")) {
+    failures.push("local delivery block missing");
+  }
+  if (!hasHref(mainHtml, "/livraison-locale")) {
+    failures.push("missing internal link: /livraison-locale");
+  }
+
+  return { path, failures };
 }
 
 function auditPage(page: (typeof pages)[number]): LandingAudit {

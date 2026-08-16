@@ -208,7 +208,7 @@ test("checkout accepts active positive-stock product despite legacy fields", asy
 test("local delivery estimate uses global default and optional zone override", () => {
   expect(
     formatLocalDeliveryEstimate() ===
-      "Livraison locale généralement sous 1 à 2 h après confirmation, selon la zone et la disponibilité.",
+      "Livraison locale généralement environ 1 h après confirmation, selon la disponibilité.",
     "expected default local delivery estimate",
   );
   expect(
@@ -222,7 +222,7 @@ test("local delivery estimate uses global default and optional zone override", (
     formatLocalDeliveryEstimate({
       estimatedDelayMinMinutes: 0,
       estimatedDelayMaxMinutes: -15,
-    }).includes("1 à 2 h"),
+    }).includes("environ 1 h"),
     "expected invalid values to fall back to the global estimate",
   );
   expect(
@@ -267,7 +267,7 @@ test("checkout local delivery note uses public estimate from delivery zone data"
 
   expect(
     priced.deliveryNote.includes(
-      "Livraison locale généralement sous 1 à 2 h après confirmation, selon la zone et la disponibilité.",
+      "Livraison locale généralement environ 1 h après confirmation, selon la disponibilité.",
     ),
     "expected checkout delivery note to use public local estimate",
   );

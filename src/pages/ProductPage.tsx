@@ -6,6 +6,7 @@ import { Breadcrumbs } from "../components/Breadcrumbs";
 import { JsonLd } from "../components/JsonLd";
 import { ProductImage } from "../components/ProductImage";
 import { QualityBadge } from "../components/QualityBadge";
+import { LocalDeliveryNote } from "../components/LocalDeliveryNote";
 import { useCart } from "../context/CartContext";
 import { useProducts } from "../hooks/useProducts";
 import { trackAddToCart, trackViewItem } from "../lib/analytics";
@@ -378,6 +379,7 @@ export function ProductPage() {
               <p className="mt-2 leading-7 text-ink/70">{product.experienceDescription}</p>
             </div>
           )}
+          <LocalDeliveryNote category={product.category} />
           <p className="mt-6 text-sm leading-6 text-ink/60">
             Produit réservé aux personnes majeures. Tenir hors de portée des
             enfants. Ce produit n'est pas destiné à remplacer un traitement

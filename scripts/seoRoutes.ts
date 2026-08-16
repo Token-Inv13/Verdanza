@@ -6,7 +6,7 @@ const blogIndexLastmod = publishedBlogArticles
   .map((article) => article.dateModified)
   .sort()
   .at(-1);
-const livraisonLocaleLastmod = "2026-08-11T00:30:41+02:00";
+const livraisonLocaleLastmod = "2026-08-17T00:47:11+02:00";
 
 export type SeoRouteKind =
   | "public-indexable"
