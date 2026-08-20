@@ -90,6 +90,10 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" }
 > = {
+  "infusions-feuilles-chanvre-reglement-ue-2027": {
+    label: "Infusions de chanvre : cadre UE",
+    kind: "analysis",
+  },
   "etiquette-numero-lot-cbd-tracabilite": {
     label: "Étiquette et numéro de lot CBD",
     kind: "analysis",

@@ -6,6 +6,318 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "infusions-feuilles-chanvre-reglement-ue-2027",
+    title: "Infusions de feuilles de chanvre : ce que change le règlement européen en 2027",
+    seoTitle: "Infusions de chanvre : règlement UE 2027 | Verdanza",
+    description:
+      "Le règlement UE 2026/1828 fixe dès 2027 des teneurs maximales de THC pour les feuilles de chanvre à infuser et les infusions prêtes à boire.",
+    excerpt:
+      "Champ d'application, seuils, calendrier et mentions d'étiquetage : les repères utiles pour lire ce nouveau cadre sans l'étendre aux fleurs, résines ou extraits CBD.",
+    category: "Actualité réglementaire",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-08-20T17:15:00+02:00",
+    dateModified: "2026-08-20T17:15:00+02:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-1x1.webp",
+      landscape: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-4x3.webp",
+      wide: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-16x9.webp",
+    },
+    relatedSlugs: [
+      "comment-lire-analyse-cbd",
+      "etiquette-numero-lot-cbd-tracabilite",
+      "denominations-cbd-cbn-cbg",
+    ],
+    links: [
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/comment-lire-analyse-cbd",
+        label: "Lire une analyse CBD",
+      },
+      {
+        to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+        label: "Vérifier l'étiquette et le lot",
+      },
+      {
+        to: "/blog/denominations-cbd-cbn-cbg",
+        label: "Comprendre CBD, CBN et CBG",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le règlement (UE) 2026/1828 du 28 juillet 2026 ajoute des teneurs
+            maximales pour la somme du delta-9-THC et du delta-9-THCA dans deux
+            catégories précises : les feuilles de chanvre destinées à une
+            infusion dans l'eau et les infusions de feuilles de chanvre prêtes
+            à boire. Publié le 29 juillet 2026, le texte s'appliquera à partir
+            du 1er janvier 2027.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Point essentiel : ce règlement alimentaire ne fixe pas une règle
+            générale pour toutes les fleurs, résines, huiles ou extraits CBD.
+            Son périmètre est limité aux deux catégories d'infusion qu'il
+            désigne, sans écarter d'éventuelles règles nationales plus strictes.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "ce-que-fixe-reglement",
+        text: "Ce que fixe précisément le règlement européen",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le texte complète la section consacrée aux équivalents de
+            delta-9-THC dans le règlement (UE) 2023/915 sur les contaminants
+            présents dans les denrées alimentaires. La valeur contrôlée n'est
+            pas le CBD : il s'agit de la somme du delta-9-THC et du
+            delta-9-THCA, exprimée en équivalents de delta-9-THC.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Nouvelles teneurs maximales applicables à partir du 1er janvier 2027.",
+          headers: ["Catégorie visée", "Teneur maximale", "Précision du texte"],
+          rows: [
+            [
+              "Feuilles de chanvre destinées à l'infusion dans l'eau",
+              "40 mg/kg",
+              "Des mentions spécifiques doivent figurer dans le champ visuel principal de l'étiquette.",
+            ],
+            [
+              "Infusions de feuilles de chanvre prêtes à boire",
+              "0,02 mg/kg",
+              "Le seuil inclut les infusions prêtes à boire qui ne reposent pas exclusivement sur des feuilles de chanvre.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Dans ce cadre, les « équivalents de delta-9-THC » correspondent à
+            l'addition du delta-9-THC et de 0,877 fois la teneur en
+            delta-9-THCA lorsque les deux substances sont mesurées séparément.
+            Cette méthode de calcul explique pourquoi il faut lire à la fois
+            les cannabinoïdes recherchés, les unités et la manière dont le
+            résultat est exprimé sur une analyse.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "produits-concernes",
+        text: "Quels produits sont concernés ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le considérant 6 vise les feuilles de chanvre pour infusion dans
+            l'eau lorsqu'elles ne sont pas accompagnées de sommités florifères
+            ou fructifères. Le second cas concerne les boissons prêtes à boire
+            préparées avec des feuilles de chanvre, y compris lorsqu'elles
+            contiennent aussi d'autres plantes.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "les feuilles de chanvre vendues spécifiquement pour préparer une infusion dans l'eau ;",
+          "les infusions de feuilles de chanvre déjà préparées et prêtes à boire ;",
+          "les mélanges prêts à boire dans lesquels les feuilles de chanvre ne sont pas l'unique plante ;",
+          "uniquement les catégories et usages décrits par le règlement.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "ce-que-texte-ne-change-pas",
+        text: "Ce que ce texte ne permet pas de conclure",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les seuils de 40 mg/kg et 0,02 mg/kg ne doivent pas être repris
+            comme des seuils généraux pour les fleurs CBD, les résines, les
+            huiles, les cosmétiques ou les extraits. Le règlement ne crée pas
+            non plus une autorisation générale de mise sur le marché : il
+            précise expressément que des règles nationales plus restrictives
+            peuvent continuer à s'appliquer dans certains États membres.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Un seuil de contaminant et le statut de mise sur le marché répondent
+            à des questions différentes. Respecter une teneur maximale ne suffit
+            donc pas, à lui seul, à établir qu'un produit remplit toutes les
+            règles qui lui sont applicables.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "mentions-etiquetage",
+        text: "Quelles mentions d'étiquetage sont prévues ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Pour les feuilles destinées à l'infusion, le règlement impose des
+            mentions dans le champ visuel principal. Elles doivent indiquer que
+            le produit est réservé à une infusion dans l'eau, qu'il ne doit pas
+            être consommé par les nourrissons et les enfants en bas âge, et
+            qu'aucun ingrédient gras ne doit être ajouté pendant le trempage.
+            Ces formulations sont des obligations d'étiquetage prévues par le
+            texte, pas une recommandation générale applicable à d'autres
+            produits au chanvre.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "calendrier-2026-2027",
+        text: "Le calendrier à retenir",
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Les principales dates du règlement (UE) 2026/1828.",
+          headers: ["Date", "Étape", "Conséquence"],
+          rows: [
+            [
+              "29 juillet 2026",
+              "Publication au Journal officiel de l'Union européenne",
+              "Le texte officiel devient accessible dans toutes les langues de l'Union.",
+            ],
+            [
+              "18 août 2026",
+              "Entrée en vigueur",
+              "Vingt jours après la publication au Journal officiel.",
+            ],
+            [
+              "1er janvier 2027",
+              "Début d'application des nouvelles teneurs",
+              "Les seuils et mentions prévus pour les catégories visées deviennent applicables.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le règlement prévoit aussi une transition : les denrées légalement
+            mises sur le marché avant le 1er janvier 2027 peuvent y rester
+            jusqu'à leur date de durabilité minimale ou leur date limite de
+            consommation. Cette disposition transitoire ne remplace pas les
+            autres contrôles applicables au produit.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "lire-etiquette-analyse",
+        text: "Comment lire une étiquette et une analyse sans confondre les cadres ?",
+      },
+      {
+        type: "list",
+        items: [
+          "identifier d'abord la catégorie exacte du produit et sa présentation ;",
+          "vérifier si le document concerne des feuilles seules ou une infusion prête à boire ;",
+          "repérer le numéro de lot qui relie l'emballage au document d'analyse ;",
+          "contrôler les unités avant de comparer une valeur au seuil correspondant ;",
+          "distinguer le CBD du delta-9-THC, du delta-9-THCA et de leur somme exprimée en équivalents ;",
+          "éviter d'appliquer ces seuils à une fleur, une résine ou un extrait non visé par le texte.",
+        ],
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le guide Verdanza sur la{" "}
+            <Link to="/blog/comment-lire-analyse-cbd">
+              lecture d'une analyse CBD
+            </Link>{" "}
+            détaille les colonnes, les unités et les limites de mesure. Pour
+            vérifier que le document correspond au bon produit, consultez aussi
+            le guide sur l'{" "}
+            <Link to="/blog/etiquette-numero-lot-cbd-tracabilite">
+              étiquette et le numéro de lot
+            </Link>
+            .
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "sources-officielles",
+        text: "Sources officielles consultées",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Cette synthèse s'appuie sur le{" "}
+            <a
+              href="https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32026R1828"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              règlement (UE) 2026/1828
+            </a>{" "}
+            et sur le{" "}
+            <a
+              href="https://eur-lex.europa.eu/legal-content/FR/ALL/?uri=CELEX:32023R0915"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              règlement (UE) 2023/915
+            </a>{" "}
+            qui définit le calcul des équivalents de delta-9-THC. Les textes
+            officiels restent la référence en cas de mise à jour ou de doute
+            sur leur portée.
+          </>
+        ),
+      },
+      {
+        type: "links",
+        title: "Approfondir les vérifications",
+        links: [
+          { to: "/blog/comment-lire-analyse-cbd", label: "Lire une analyse CBD" },
+          {
+            to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+            label: "Vérifier l'étiquette et le lot",
+          },
+          {
+            to: "/blog/denominations-cbd-cbn-cbg",
+            label: "Comprendre les dénominations",
+          },
+          { to: "/qualite-conformite", label: "Qualité et conformité" },
+        ],
+      },
+    ],
+  },
+  {
     slug: "etiquette-numero-lot-cbd-tracabilite",
     title: "Étiquette et numéro de lot CBD : comment vérifier la traçabilité ?",
     seoTitle: "Étiquette et numéro de lot CBD : guide | Verdanza",
