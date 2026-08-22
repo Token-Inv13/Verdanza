@@ -77,6 +77,15 @@ const CheckoutSuccessPage = lazy(() =>
 const LegalPage = lazy(() =>
   import("./pages/LegalPage").then((module) => ({ default: module.LegalPage })),
 );
+const ContestPage = lazy(() =>
+  import("./pages/ContestPage").then((module) => ({ default: module.ContestPage })),
+);
+const ContestPrizePage = lazy(() =>
+  import("./pages/ContestPrizePage").then((module) => ({
+    default: module.ContestPrizePage,
+  })),
+);
+const AdminContestsPage = lazy(() => import("./pages/admin/AdminContestsPage"));
 
 export function App() {
   return (
@@ -110,6 +119,8 @@ export function App() {
           <Route path="a-propos" element={<ContentPage variant="about" />} />
           <Route path="faq" element={<ContentPage variant="faq" />} />
           <Route path="contact" element={<ContentPage variant="contact" />} />
+          <Route path="concours" element={<ContestPage />} />
+          <Route path="concours/gain/:token" element={<ContestPrizePage />} />
           <Route path="panier" element={<CartPage />} />
           <Route path="connexion" element={<AuthPage mode="login" />} />
           <Route path="inscription" element={<AuthPage mode="register" />} />
@@ -151,6 +162,7 @@ export function App() {
             <Route path="avis" element={<AdminPage section="Avis clients" />} />
             <Route path="coupons" element={<AdminPage section="Coupons" />} />
             <Route path="bannieres" element={<AdminPage section="Bannieres" />} />
+            <Route path="concours" element={<AdminContestsPage />} />
             <Route path="archives" element={<AdminArchivesPage />} />
             <Route path="factures" element={<Navigate to="/admin/comptabilite?tab=factures" replace />} />
             <Route path="comptabilite" element={<AdminPage section="Comptabilité" />} />

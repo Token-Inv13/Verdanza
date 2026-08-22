@@ -27,7 +27,8 @@ type TransactionalEmailKind =
   | "order_status_update"
   | "contact_message"
   | "invoice"
-  | "payment_link";
+  | "payment_link"
+  | "contest_prize";
 
 const statusLabels: Record<OrderStatus, string> = {
   new: "Nouvelle commande",
@@ -272,6 +273,49 @@ export async function sendPaymentLinkEmail(
     html: paymentLinkEmailHtml(order, input),
     text: paymentLinkEmailText(order, input),
     idempotencyKey: `payment-link-${order.id}-${input.paymentLinkRequestId}`,
+  });
+}
+
+export async function sendContestPrizeEmail(input: {
+  contestId: string;
+  contestTitle: string;
+  winnerEmail: string;
+  winnerDisplayName: string;
+  prizeValue: number;
+  expiresAt: string;
+  claimUrl: string;
+  invitationId: string;
+}) {
+  if (!isValidEmail(input.winnerEmail)) {
+    return { status: "skipped", reason: "winner_email_invalid" } satisfies EmailResult;
+  }
+  const formattedValue = `${input.prizeValue.toFixed(2).replace(".", ",")} EUR`;
+  const formattedExpiry = new Intl.DateTimeFormat("fr-FR", {
+    dateStyle: "long",
+  }).format(new Date(input.expiresAt));
+  return sendTransactionalEmail({
+    kind: "contest_prize",
+    orderId: input.contestId,
+    to: input.winnerEmail,
+    subject: `Votre gain Verdanza - ${input.contestTitle}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111111">
+        <h1 style="color:#0B3D2E">Felicitations ${escapeHtml(input.winnerDisplayName)} !</h1>
+        <p>Votre participation a ete validee comme gagnante du concours <strong>${escapeHtml(input.contestTitle)}</strong>.</p>
+        <p>Votre gain est un bon Verdanza de <strong>${escapeHtml(formattedValue)}</strong>, valable jusqu'au ${escapeHtml(formattedExpiry)}.</p>
+        <p><a href="${escapeHtml(input.claimUrl)}" style="display:inline-block;background:#0B3D2E;color:#FAF8F2;padding:12px 18px;text-decoration:none;border-radius:6px">Consulter mon gain</a></p>
+        <p>Ce lien est personnel. Ne le partagez pas.</p>
+      </div>
+    `,
+    text: [
+      `Felicitations ${input.winnerDisplayName} !`,
+      `Vous avez gagne le concours ${input.contestTitle}.`,
+      `Gain : ${formattedValue}.`,
+      `Valable jusqu'au ${formattedExpiry}.`,
+      `Consulter votre gain : ${input.claimUrl}`,
+      "Ce lien est personnel. Ne le partagez pas.",
+    ].join("\n"),
+    idempotencyKey: `contest-prize-${input.contestId}-${input.invitationId}`,
   });
 }
 

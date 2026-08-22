@@ -20,6 +20,7 @@ const navItems = [
   { label: "Fleurs CBD", to: "/fleurs-cbd" },
   { label: "Résines CBD", to: "/resines-cbd" },
   { label: "Guides", to: "/blog" },
+  { label: "Concours", to: "/concours" },
   { label: "Livraison", to: "/livraison" },
   { label: "Qualité", to: "/qualite-conformite" },
 ];
@@ -28,6 +29,7 @@ const mobileMenuId = "mobile-navigation-menu";
 
 function ctaCategoryForPath(path: string) {
   if (path.startsWith("/blog")) return "content";
+  if (path.startsWith("/concours")) return "contest";
   if (path.startsWith("/livraison")) return "delivery";
   if (path === "/boutique") return "shop_navigation";
   if (path === "/fleurs-cbd" || path === "/resines-cbd") return "category_navigation";
@@ -207,6 +209,7 @@ export function MainLayout() {
               { to: "/livraison-postale", label: "Livraison en France" },
               { to: "/livraison-locale", label: "Livraison CBD Aix" },
               { to: "/blog", label: "Guides CBD" },
+              { to: "/concours", label: "Jeu-concours" },
               { to: "/a-propos", label: "À propos" },
               { to: "/faq", label: "FAQ" },
               { to: "/contact", label: "Contact" },

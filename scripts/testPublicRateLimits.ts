@@ -482,6 +482,7 @@ test("la reponse 429 est generique et conserve Retry-After", () => {
 test("les seuils sont centralises et documentables", () => {
   assert.equal(publicRateLimitRules["/api/create-order"].length, 6);
   assert.equal(publicRateLimitRules["/api/contact"].length, 6);
+  assert.equal(publicRateLimitRules["/api/contests"].length, 6);
   assert.equal(publicRateLimitsCollection, "securityRateLimits");
 });
 

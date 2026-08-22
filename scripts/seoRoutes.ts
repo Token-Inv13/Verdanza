@@ -88,6 +88,19 @@ export const staticSeoRoutes: SeoRoute[] = [
     indexable: true,
   },
   {
+    path: "/concours",
+    kind: "public-indexable",
+    component: "ContestPage",
+    indexable: true,
+  },
+  {
+    path: "/concours/gain/token-test",
+    kind: "private",
+    component: "ContestPrizePage",
+    indexable: false,
+    dynamic: true,
+  },
+  {
     path: "/mentions-legales",
     kind: "public-indexable",
     component: "LegalPage",
@@ -179,6 +192,7 @@ export const staticSeoRoutes: SeoRoute[] = [
   { path: "/admin/coupons", kind: "admin", component: "AdminPage(Coupons)", indexable: false },
   { path: "/admin/bannieres", kind: "admin", component: "AdminPage(Bannieres)", indexable: false },
   { path: "/admin/archives", kind: "admin", component: "AdminArchivesPage", indexable: false },
+  { path: "/admin/concours", kind: "admin", component: "AdminContestsPage", indexable: false },
   {
     path: "/admin/comptabilite",
     kind: "admin",

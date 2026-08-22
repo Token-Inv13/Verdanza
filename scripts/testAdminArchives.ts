@@ -31,10 +31,20 @@ const archivedCoupon = couponFixture({
   isArchived: true,
   archivedAt: "2026-07-29T10:00:00.000Z",
 });
+const contestCoupon = couponFixture({
+  id: "contest-prize",
+  code: "VDZ-PRIVATE",
+  source: "contest",
+});
 assert.equal(isArchivedCoupon(archivedCoupon), true);
 assert.deepEqual(visibleAdminCoupons([activeCoupon, archivedCoupon]).map((coupon) => coupon.id), [
   "welcome10",
 ]);
+assert.deepEqual(
+  visibleAdminCoupons([activeCoupon, contestCoupon]).map((coupon) => coupon.id),
+  ["welcome10"],
+  "contest prize coupons stay out of the generic promotions module",
+);
 assert.equal(couponArchiveItem(archivedCoupon).canRestore, false);
 
 const activeBanner = bannerFixture({ id: "banner-active", title: "Active banner" });

@@ -48,6 +48,7 @@ import {
 import { orderItemLineTotal } from "../../src/lib/orderLineDisplay.js";
 import { omitUndefinedDeep } from "./firestoreSerialization.js";
 import type { PublicSubmissionSecurityContext } from "./publicRateLimit.js";
+import { contestEmailHash } from "./contests.js";
 
 const preferredPaymentMethods: PreferredPaymentMethod[] = [
   "card_payment_link",
@@ -141,6 +142,7 @@ export type PricedCheckout = {
   discountAmount: number;
   couponCode?: string;
   couponId?: string;
+  contestPrizeId?: string;
   discountType?: Coupon["discountType"];
   discountValue?: number;
   promoApplied: boolean;
@@ -169,6 +171,7 @@ type ResolvedCoupon = {
   discountAmount: number;
   freeShippingApplied: boolean;
   appliedPromotion?: AppliedPromotion;
+  contestPrizeId?: string;
 };
 
 export function parseCheckoutBody(value: unknown): CheckoutRequestBody {
@@ -322,6 +325,7 @@ export async function priceCheckout(
         subtotal,
         orderItems,
         body.deliveryMethod,
+        body.customer.email,
       )
     : null;
   const automaticPromotions = coupon
@@ -360,6 +364,7 @@ export async function priceCheckout(
     discountAmount,
     couponCode: coupon?.code,
     couponId: coupon?.id,
+    contestPrizeId: coupon?.contestPrizeId,
     discountType: coupon?.discountType,
     discountValue: coupon?.discountValue,
     promoApplied: Boolean(coupon || automaticPromotions.appliedPromotions.length),
@@ -413,6 +418,7 @@ async function resolveCoupon(
   subtotal: number,
   orderItems: OrderItem[],
   deliveryMethod: DeliveryMethod,
+  customerEmail: string,
 ): Promise<ResolvedCoupon | null> {
   const code = rawCode.trim().toUpperCase().replace(/\s+/g, "");
   if (!code) return null;
@@ -438,6 +444,16 @@ async function resolveCoupon(
   if (endsAt && now > endsAt) throw new Error("Code promo expire.");
   if (coupon.maxUses && coupon.usedCount >= coupon.maxUses) {
     throw new Error("Code promo deja utilise au maximum.");
+  }
+  if (coupon.source === "contest") {
+    const expectedEmailHash = String(coupon.redeemableByEmailHash || "");
+    if (!coupon.contestId || !expectedEmailHash) {
+      throw new Error("Code promo concours invalide.");
+    }
+    const submittedEmailHash = contestEmailHash(coupon.contestId, customerEmail);
+    if (submittedEmailHash !== expectedEmailHash) {
+      throw new Error("Ce code promo est reserve au gagnant concerne.");
+    }
   }
   if (subtotal < Number(coupon.minimumOrder || 0)) {
     throw new Error(
@@ -492,6 +508,7 @@ async function resolveCoupon(
     discountAmount,
     freeShippingApplied: coupon.discountType === "free_shipping",
     appliedPromotion: appliedPromotion || undefined,
+    contestPrizeId: coupon.contestPrizeId,
   };
 }
 

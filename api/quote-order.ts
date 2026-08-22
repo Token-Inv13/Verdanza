@@ -218,6 +218,7 @@ function parseQuoteBody(value: unknown): CheckoutRequestBody {
     deliveryMethod?: DeliveryMethod;
     deliveryZone?: string;
     couponCode?: string;
+    email?: string;
     address?: Address;
   };
 
@@ -236,7 +237,7 @@ function parseQuoteBody(value: unknown): CheckoutRequestBody {
     complianceAccepted: true,
     preferredPaymentMethod: "card_payment_link",
     customer: {
-      email: "quote@verdanza.fr",
+      email: String(body.email || "quote@verdanza.fr").trim(),
       phone: "0000000000",
       firstName: "Devis",
       lastName: "Verdanza",

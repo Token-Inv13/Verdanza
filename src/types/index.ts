@@ -222,10 +222,16 @@ export type Coupon = {
   isArchived?: boolean;
   isTemplate?: boolean;
   internalNote?: string;
+  source?: "contest";
+  contestId?: string;
+  contestPrizeId?: string;
+  redeemableByEmailHash?: string;
   archivedAt?: string;
   createdAt?: string;
   updatedAt?: string;
 };
+
+export * from "./contests.js";
 
 export type PromoBannerType = "top_bar" | "shop_card" | "checkout_notice" | "modal";
 export type PromoBannerPlacement =

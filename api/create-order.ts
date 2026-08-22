@@ -48,6 +48,10 @@ import {
   resolveFixedPriceOptions,
 } from "../src/lib/fixedPriceOptions.js";
 import type { Invoice, Order, Product } from "../src/types/index.js";
+import {
+  assertContestPrizeRedeemable,
+  contestCollections,
+} from "./_server/contests.js";
 
 export default async function handler(
   request: VercelRequestLike,
@@ -229,6 +233,13 @@ export async function commitCheckoutOrder(input: {
       ? db.collection("coupons").doc(priced.couponId)
       : null;
     const couponSnapshot = couponRef ? await transaction.get(couponRef) : null;
+    const contestPrizeId = String(couponSnapshot?.data()?.contestPrizeId || "");
+    const contestPrizeRef = contestPrizeId
+      ? db.collection(contestCollections.prizes).doc(contestPrizeId)
+      : null;
+    const contestPrizeSnapshot = contestPrizeRef
+      ? await transaction.get(contestPrizeRef)
+      : null;
     const automaticCouponReads = await Promise.all(
       priced.appliedPromotions
         .filter((promotion) => promotion.couponId && promotion.couponId !== priced.couponId)
@@ -256,6 +267,14 @@ export async function commitCheckoutOrder(input: {
       if (coupon?.maxUses && Number(coupon.usedCount || 0) >= Number(coupon.maxUses)) {
         throw new Error("Code promo deja utilise au maximum.");
       }
+    }
+    if (contestPrizeRef && contestPrizeSnapshot) {
+      if (!contestPrizeSnapshot.exists) throw new Error("Code promo concours invalide.");
+      const prize = contestPrizeSnapshot.data() || {};
+      assertContestPrizeRedeemable(prize, {
+        couponId: couponRef?.id || "",
+        email: body.customer.email,
+      });
     }
     for (const { couponSnapshot: automaticSnapshot } of automaticCouponReads) {
       const coupon = automaticSnapshot.data();
@@ -329,6 +348,28 @@ export async function commitCheckoutOrder(input: {
         },
         { merge: true },
       );
+    }
+
+    if (contestPrizeRef && contestPrizeSnapshot) {
+      const prize = contestPrizeSnapshot.data() || {};
+      transaction.update(contestPrizeRef, {
+        status: "redeemed",
+        redeemedAt: FieldValue.serverTimestamp(),
+        orderId: orderRef.id,
+      });
+      transaction.set(db.collection(contestCollections.audits).doc(), {
+        action: "prize_redeemed",
+        contestId: String(prize.contestId || ""),
+        drawId: String(prize.drawId || ""),
+        prizeId: contestPrizeRef.id,
+        actorType: "checkout",
+        actorId: orderRef.id,
+        metadata: {
+          orderId: orderRef.id,
+          couponId: couponRef?.id || "",
+        },
+        createdAt: FieldValue.serverTimestamp(),
+      });
     }
 
     transaction.set(

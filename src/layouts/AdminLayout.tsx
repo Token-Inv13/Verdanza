@@ -15,6 +15,7 @@ import {
   Package,
   ShoppingCart,
   Truck,
+  Trophy,
   Users,
   X,
 } from "lucide-react";
@@ -31,6 +32,7 @@ const adminNav = [
   { label: "Livraisons", to: "/admin/livraisons", icon: Truck },
   { label: "Promos", to: "/admin/coupons", icon: BadgePercent },
   { label: "Bannieres", to: "/admin/bannieres", icon: Megaphone },
+  { label: "Concours", to: "/admin/concours", icon: Trophy },
   { label: "Archives", to: "/admin/archives", icon: Archive },
   { label: "Comptabilité", to: "/admin/comptabilite", icon: Calculator },
   { label: "Clients", to: "/admin/clients", icon: Users },

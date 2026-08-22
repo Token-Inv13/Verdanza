@@ -58,7 +58,9 @@ export function isArchivedInvoice(invoice: Invoice) {
 }
 
 export function visibleAdminCoupons(coupons: Coupon[]) {
-  return coupons.filter((coupon) => !isArchivedCoupon(coupon));
+  return coupons.filter(
+    (coupon) => !isArchivedCoupon(coupon) && coupon.source !== "contest",
+  );
 }
 
 export function visibleAdminPromoBanners(banners: PromoBanner[]) {

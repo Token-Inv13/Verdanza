@@ -33,6 +33,7 @@ export async function quoteOrder(input: {
   deliveryZone?: string;
   address?: Address;
   couponCode?: string;
+  email?: string;
 }) {
   const response = await fetch("/api/quote-order", {
     method: "POST",
@@ -43,6 +44,7 @@ export async function quoteOrder(input: {
       deliveryZone: input.deliveryZone,
       address: input.address,
       couponCode: input.couponCode?.trim() || undefined,
+      email: input.email?.trim() || undefined,
     }),
   });
   const payload = (await response.json().catch(() => ({}))) as

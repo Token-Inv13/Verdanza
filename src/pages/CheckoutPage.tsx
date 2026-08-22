@@ -201,6 +201,7 @@ export function CheckoutPage() {
     deliveryZone:
       deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
     address: quoteDeliveryAddress,
+    email: customer.email,
   });
   const currentManualQuote =
     manualQuoteContextKey === `${quoteContextKey}|coupon:${normalizedAppliedCouponCode}`
@@ -341,6 +342,7 @@ export function CheckoutPage() {
       deliveryMethod,
       deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
       address: quoteDeliveryAddress,
+      email: customer.email,
     })
       .then((nextQuote) => {
         if (!cancelled) {
@@ -363,6 +365,7 @@ export function CheckoutPage() {
       cancelled = true;
     };
   }, [
+    customer.email,
     deliveryMethod,
     quoteDeliveryAddress,
     quoteContextKey,
@@ -403,6 +406,7 @@ export function CheckoutPage() {
       deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
       address: quoteDeliveryAddress,
       couponCode: code,
+      email: customer.email,
     })
       .then((nextQuote) => {
         if (cancelled) return;
@@ -422,6 +426,7 @@ export function CheckoutPage() {
     };
   }, [
     appliedCouponCode,
+    customer.email,
     deliveryMethod,
     quoteDeliveryAddress,
     quoteContextKey,
@@ -521,6 +526,7 @@ export function CheckoutPage() {
         deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
         address: quoteDeliveryAddress,
         couponCode: code,
+        email: customer.email,
       });
       setQuote(nextQuote);
       setManualQuoteContextKey(requestContextKey);
@@ -593,12 +599,14 @@ export function CheckoutPage() {
             deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
             address: quoteDeliveryAddress,
             couponCode: normalizedAppliedCouponCode,
+            email: customer.email,
           })
         : await quoteOrder({
             items,
             deliveryMethod,
             deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
             address: quoteDeliveryAddress,
+            email: customer.email,
           });
 
       const authToken = user ? await user.getIdToken() : undefined;

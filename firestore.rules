@@ -86,7 +86,40 @@ service cloud.firestore {
     }
 
     match /coupons/{couponId} {
-      allow read, create, update, delete: if isAdmin();
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.get("source", "") != "contest";
+      allow update: if isAdmin()
+        && resource.data.get("source", "") != "contest"
+        && request.resource.data.get("source", "") != "contest";
+      allow delete: if isAdmin()
+        && resource.data.get("source", "") != "contest";
+    }
+
+    // Les concours et leurs donnees personnelles sont servis exclusivement
+    // par les fonctions Vercel utilisant Firebase Admin.
+    match /contests/{contestId} {
+      allow read, write: if false;
+    }
+
+    match /contestEntries/{entryId} {
+      allow read, write: if false;
+    }
+
+    match /contestDraws/{drawId} {
+      allow read, write: if false;
+    }
+
+    match /contestPrizes/{prizeId} {
+      allow read, write: if false;
+    }
+
+    match /contestAuditLogs/{auditId} {
+      allow read, write: if false;
+    }
+
+    match /contestControls/{controlId} {
+      allow read, write: if false;
     }
 
     match /promoBanners/{bannerId} {
