@@ -6,6 +6,238 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "cannabinoides-naturels-synthetiques-differences",
+    title: "Cannabinoïdes naturels, hémisynthétiques et synthétiques : quelles différences ?",
+    seoTitle:
+      "Cannabinoïdes naturels, hémisynthétiques et synthétiques : comprendre les différences | Verdanza",
+    description:
+      "CBD, CBC, HHC, H4-CBD, THCX, cannabinoïdes de synthèse : apprendre à distinguer l'origine réelle des cannabinoïdes, les risques et les vérifications utiles.",
+    excerpt:
+      "Un même nom ne suffit pas à identifier une molécule : le guide explique les différences entre cannabinoïdes naturels, hémisynthétiques et synthétiques, et ce qu'il faut vérifier avant de se fier au marquage.",
+    category: "Guide CBD",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-08-22T10:00:00+02:00",
+    dateModified: "2026-08-22T10:00:00+02:00",
+    readingTime: "8 min",
+    status: "published",
+    images: {
+      square: "/images/blog/cannabinoides-naturels-synthetiques-differences-1x1.webp",
+      landscape: "/images/blog/cannabinoides-naturels-synthetiques-differences-4x3.webp",
+      wide: "/images/blog/cannabinoides-naturels-synthetiques-differences-16x9.webp",
+    },
+    relatedSlugs: [
+      "denominations-cbd-cbn-cbg",
+      "comment-lire-analyse-cbd",
+      "fleur-cbd-ou-resine-cbd-differences",
+    ],
+    links: [
+      { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+      { to: "/resines-cbd", label: "Voir les résines CBD" },
+      { to: "/blog/denominations-cbd-cbn-cbg", label: "Comprendre CBD, CBN et CBG" },
+      { to: "/blog/comment-lire-analyse-cbd", label: "Lire une analyse CBD" },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les noms de cannabinoïdes sont nombreux, et certains changent vite.
+            Le même terme peut désigner une molécule connue, un mélange, ou une
+            appellation commerciale. Pour éviter la confusion, il faut raisonner
+            sur la composition réelle.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "categories-principales",
+        text: "1. Trois grandes catégories à distinguer",
+      },
+      {
+        type: "list",
+        items: [
+          "phytocannabinoïdes : molécules naturelles du chanvre ;",
+          "hémisynthétiques : molécules naturelles modifiées chimiquement ;",
+          "synthétiques : molécules issues de synthèse chimique.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "phytocannabinoides",
+        text: "Les phytocannabinoïdes : l'origine naturelle",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les phytocannabinoïdes (CBD, CBC, CBG, CBN, THC) sont présents dans
+            la plante de cannabis. Le fait qu'ils soient naturels n'est pas une
+            preuve de profil d'effet uniforme, ni une garantie automatique de
+            composition stable ou de statut réglementaire de marché pour un
+            produit précis.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Un nom de cannabinoïde naturel n'élimine pas la vérification du lot.
+            Il faut regarder la fiche produit, le lot et l'information
+            analytique disponible.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "hemisynthetiques",
+        text: "Les hémisynthétiques : des transformations sur base naturelle",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            En pratique, ce sont des molécules issues d'une matière première
+            naturelle, puis transformées. Cette catégorie inclut notamment H2-CBD
+            et H4-CBD dans les décisions de santé publique de 2024, et la
+            réglementation a évolué autour des structures proches du noyau
+            benzo[c]chromène.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "même point de départ naturel, composition finale différente ;",
+          "composition annoncée parfois moins lisible en lecture commerciale ;",
+          "risque d'interprétation erronée si l'on s'arrête au seul nom marketing.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "synthétiques",
+        text: "Les cannabinoïdes de synthèse : prudence sur la variabilité",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les cannabinoïdes de synthèse sont obtenus par voie chimique. Les
+            organismes de prévention rappellent qu'ils peuvent présenter une
+            variabilité de concentration importante, d'où une expérience moins
+            prévisible et la nécessité d'une vigilance renforcée sur l'origine
+            du lot et la transparence du contrôle.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Cadre de lecture rapide : nom commercial, composition, vigilance.",
+          headers: ["Type", "Ce que le mot indique", "Ce qu'il faut vérifier"],
+          rows: [
+            [
+              "Appellation commerciale",
+              "Nom présenté sur l’emballage (souvent marketing)",
+              "La molécule réelle, le lot, les substances recherchées en analyse.",
+            ],
+            [
+              "Phytocannabinoïde identifié",
+              "Molécule reconnue dans le référentiel scientifique",
+              "Taux annoncé, cohérence avec l'analyse de lot.",
+            ],
+            [
+              "Forme hémisynthétique",
+              "Molécule naturelle modifiée chimiquement",
+              "Cadre juridique applicable, formule exacte et lot correspondant.",
+            ],
+            [
+              "Forme synthétique",
+              "Molécule issue de synthèse chimique",
+              "Confiance dans les tests annoncés et suivi de lot.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "thcx-exemple",
+        text: "Cas concret : pourquoi le mot THCX doit être vérifié",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le sigle THCX peut être utilisé comme nom de groupe commercial. Il ne
+            renseigne pas, à lui seul, sur la molécule exacte. Il faut donc
+            vérifier l'identification fine des molécules présentes et ne pas
+            fonder le choix uniquement sur le sigle.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "reglementation",
+        text: "Rappel réglementaire utile",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La réglementation a déjà évolué sur plusieurs cannabinoïdes non
+            standards. Les décisions de santé publique de 2024, puis leur suite
+            contentieuse, montrent que la qualification dépend du classement en
+            vigueur et du statut des familles de structures, pas seulement du
+            label visible sur l'emballage.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "checklist",
+        text: "Checklist pratique avant achat",
+      },
+      {
+        type: "list",
+        items: [
+          "Nom exact des cannabinoïdes annoncés.",
+          "Numéro de lot visible.",
+          "Analyse de laboratoire correspondant au lot.",
+          "Liste des molécules effectivement recherchées.",
+          "Traçabilité fabricant/fournisseur et preuve de lot.",
+        ],
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            En cas d'effet inhabituel, interrompre la consommation, éviter toute
+            conduite ou activité à risque, conserver lot et emballage, et
+            consulter sans délai en cas de signes sévères.
+          </>
+        ),
+      },
+      {
+        type: "links",
+        title: "Pour aller plus loin",
+        links: [
+          {
+            to: "/blog/denominations-cbd-cbn-cbg",
+            label: "Comprendre CBD, CBN et CBG",
+          },
+          {
+            to: "/blog/comment-lire-analyse-cbd",
+            label: "Lire une analyse CBD",
+          },
+          {
+            to: "/blog/cbd-conduite-france",
+            label: "CBD et conduite : limites légales",
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "aspect-resine-cbd-texture-couleur",
     title: "Résine CBD : comment lire texture, couleur et présentation ?",
     seoTitle: "Aspect d'une résine CBD : texture et couleur | Verdanza",

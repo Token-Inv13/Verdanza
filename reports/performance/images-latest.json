@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-25T12:58:49.682Z",
+  "generatedAt": "2026-08-22T14:58:03.879Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -572,9 +572,149 @@
           "bytes": 5330
         }
       ]
+    },
+    {
+      "sourceUrl": "/images/brand/verdanza-quality-seal.png",
+      "sourceFile": "public/images/brand/verdanza-quality-seal.png",
+      "sourceBytes": 1814979,
+      "sourceWidth": 1024,
+      "sourceHeight": 1024,
+      "format": "png",
+      "hasAlpha": true,
+      "variants": [
+        {
+          "src": "/images/brand/verdanza-quality-seal-96.webp",
+          "width": 96,
+          "height": 96,
+          "bytes": 5020
+        },
+        {
+          "src": "/images/brand/verdanza-quality-seal-180.webp",
+          "width": 180,
+          "height": 180,
+          "bytes": 13684
+        },
+        {
+          "src": "/images/brand/verdanza-quality-seal-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 30946
+        }
+      ]
     }
   ],
   "blogImages": [
+    {
+      "articleSlug": "cannabinoides-naturels-synthetiques-differences",
+      "articleTitle": "Cannabinoïdes naturels, hémisynthétiques et synthétiques : quelles différences ?",
+      "sources": [
+        "/Fiche produit/Cookie%20Kush%20(int%C3%A9rieur)/cookie-zoom.webp",
+        "/Fiche produit/Harlequin%20(sous-serre)/harlequin_zoom.webp",
+        "/Fiche produit/Mango%20Haze/MangoHaze.webp"
+      ],
+      "variants": [
+        {
+          "src": "/images/blog/cannabinoides-naturels-synthetiques-differences-1x1.webp",
+          "width": 900,
+          "height": 900,
+          "bytes": 117620
+        },
+        {
+          "src": "/images/blog/cannabinoides-naturels-synthetiques-differences-4x3.webp",
+          "width": 1200,
+          "height": 900,
+          "bytes": 153738
+        },
+        {
+          "src": "/images/blog/cannabinoides-naturels-synthetiques-differences-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 202012
+        }
+      ]
+    },
+    {
+      "articleSlug": "aspect-resine-cbd-texture-couleur",
+      "articleTitle": "Résine CBD : comment lire texture, couleur et présentation ?",
+      "sources": [
+        "/Fiche produit/Golden static/goldenstatic.webp",
+        "/Fiche produit/La%20mousse/mousse1.webp",
+        "/Fiche produit/Creamy%20Piatella/piatella.webp"
+      ],
+      "variants": [
+        {
+          "src": "/images/blog/aspect-resine-cbd-texture-couleur-1x1.webp",
+          "width": 900,
+          "height": 900,
+          "bytes": 79596
+        },
+        {
+          "src": "/images/blog/aspect-resine-cbd-texture-couleur-4x3.webp",
+          "width": 1200,
+          "height": 900,
+          "bytes": 99316
+        },
+        {
+          "src": "/images/blog/aspect-resine-cbd-texture-couleur-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 121190
+        }
+      ]
+    },
+    {
+      "articleSlug": "aspect-fleur-cbd-couleur-structure",
+      "articleTitle": "Fleur CBD : comment lire son aspect sans surinterpréter ?",
+      "sources": [
+        "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
+        "/Fiche produit/Harlequin (sous-serre)/harlequin_zoom.webp",
+        "/Fiche produit/Mandarine/mandarine_zoom.webp"
+      ],
+      "variants": [
+        {
+          "src": "/images/blog/aspect-fleur-cbd-couleur-structure-1x1.webp",
+          "width": 900,
+          "height": 900,
+          "bytes": 130514
+        },
+        {
+          "src": "/images/blog/aspect-fleur-cbd-couleur-structure-4x3.webp",
+          "width": 1200,
+          "height": 900,
+          "bytes": 171518
+        },
+        {
+          "src": "/images/blog/aspect-fleur-cbd-couleur-structure-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 227560
+        }
+      ]
+    },
+    {
+      "articleSlug": "terpenes-profils-aromatiques-cbd",
+      "articleTitle": "Terpènes et profils aromatiques CBD : comment les lire ?",
+      "variants": [
+        {
+          "src": "/images/blog/terpenes-profils-aromatiques-cbd-1x1.webp",
+          "width": 900,
+          "height": 900,
+          "bytes": 16356
+        },
+        {
+          "src": "/images/blog/terpenes-profils-aromatiques-cbd-4x3.webp",
+          "width": 1200,
+          "height": 900,
+          "bytes": 18112
+        },
+        {
+          "src": "/images/blog/terpenes-profils-aromatiques-cbd-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 19942
+        }
+      ]
+    },
     {
       "articleSlug": "cbd-conduite-france",
       "articleTitle": "CBD et conduite en France : ce qu'il faut savoir",
@@ -763,8 +903,8 @@
     "productSourceBytes": 2164456,
     "productCardLargestBytes": 1160236,
     "productDetailBytes": 1718692,
-    "staticSourceBytes": 2197587,
-    "staticLargestBytes": 114692,
-    "blogImageBytes": 1540188
+    "staticSourceBytes": 4012566,
+    "staticLargestBytes": 145638,
+    "blogImageBytes": 2897662
   }
 }

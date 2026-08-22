@@ -118,6 +118,14 @@ const blogImageSources: Record<
     label: "Lecture d'analyse CBD",
     kind: "analysis",
   },
+  "cannabinoides-naturels-synthetiques-differences": {
+    label: "Origine des cannabinoïdes",
+    sources: [
+      "/Fiche produit/Cookie%20Kush%20(int%C3%A9rieur)/cookie-zoom.webp",
+      "/Fiche produit/Harlequin%20(sous-serre)/harlequin_zoom.webp",
+      "/Fiche produit/Mango%20Haze/MangoHaze.webp",
+    ],
+  },
   "conserver-fleurs-resines-cbd": {
     label: "Conservation fleurs et résines CBD",
     sources: [
