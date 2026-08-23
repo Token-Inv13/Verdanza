@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Firestore } from "firebase-admin/firestore";
-import adminContestsHandler from "../api/admin-contests";
+import { handleAdminContests as adminContestsHandler } from "../api/_server/contestAdminRoute";
 import {
   ContestError,
   assertContestAcceptsEntry,

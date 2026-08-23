@@ -1,17 +1,17 @@
-import { getAdminDb } from "./_server/firebaseAdmin.js";
+import { getAdminDb } from "./firebaseAdmin.js";
 import {
   ContestError,
   getContestPrizeByToken,
   serializeContestResponse,
-} from "./_server/contests.js";
+} from "./contests.js";
 import {
   assertMethod,
   sendJson,
   type VercelRequestLike,
   type VercelResponseLike,
-} from "./_server/http.js";
+} from "./http.js";
 
-export default async function handler(
+export async function handleContestPrize(
   request: VercelRequestLike,
   response: VercelResponseLike,
 ) {

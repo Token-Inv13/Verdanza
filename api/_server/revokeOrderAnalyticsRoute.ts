@@ -1,15 +1,15 @@
 import crypto from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
-import { getAdminDb } from "./_server/firebaseAdmin.js";
+import { getAdminDb } from "./firebaseAdmin.js";
 import {
   assertMethod,
   sendJson,
   type VercelRequestLike,
   type VercelResponseLike,
-} from "./_server/http.js";
-import type { Order } from "../src/types/index.js";
+} from "./http.js";
+import type { Order } from "../../src/types/index.js";
 
-export default async function handler(
+export async function handleRevokeOrderAnalytics(
   request: VercelRequestLike,
   response: VercelResponseLike,
 ) {

@@ -1,14 +1,14 @@
-import { assertAdminUser } from "./_server/adminAuth.js";
-import { activeAdminPaymentLinks } from "./_server/adminPaymentLinks.js";
-import { getAdminDb } from "./_server/firebaseAdmin.js";
+import { assertAdminUser } from "./adminAuth.js";
+import { activeAdminPaymentLinks } from "./adminPaymentLinks.js";
+import { getAdminDb } from "./firebaseAdmin.js";
 import {
   assertMethod,
   sendJson,
   type VercelRequestLike,
   type VercelResponseLike,
-} from "./_server/http.js";
+} from "./http.js";
 
-export default async function handler(
+export async function handleAdminPaymentLinks(
   request: VercelRequestLike,
   response: VercelResponseLike,
 ) {
