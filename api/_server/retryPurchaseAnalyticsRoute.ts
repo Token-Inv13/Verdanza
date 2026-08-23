@@ -1,19 +1,19 @@
-import { assertAdminUser } from "./_server/adminAuth.js";
-import { getAdminDb } from "./_server/firebaseAdmin.js";
+import { assertAdminUser } from "./adminAuth.js";
+import { getAdminDb } from "./firebaseAdmin.js";
 import {
   assertMethod,
   sendJson,
   type VercelRequestLike,
   type VercelResponseLike,
-} from "./_server/http.js";
-import { isPurchaseEligible } from "./_server/ga4MeasurementProtocol.js";
+} from "./http.js";
+import { isPurchaseEligible } from "./ga4MeasurementProtocol.js";
 import {
   ensurePurchaseAnalyticsRetryQueued,
   processPurchaseAnalyticsOutbox,
-} from "./_server/purchaseAnalytics.js";
-import type { Order } from "../src/types/index.js";
+} from "./purchaseAnalytics.js";
+import type { Order } from "../../src/types/index.js";
 
-export default async function handler(
+export async function handleRetryPurchaseAnalytics(
   request: VercelRequestLike,
   response: VercelResponseLike,
 ) {

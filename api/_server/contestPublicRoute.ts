@@ -1,22 +1,22 @@
-import { getAdminDb } from "./_server/firebaseAdmin.js";
+import { getAdminDb } from "./firebaseAdmin.js";
 import {
   ContestError,
   createContestEntry,
   getPublicContest,
   serializeContestResponse,
-} from "./_server/contests.js";
+} from "./contests.js";
 import {
   sendJson,
   type VercelRequestLike,
   type VercelResponseLike,
-} from "./_server/http.js";
+} from "./http.js";
 import {
   assessPublicSubmissionTrap,
   enforcePublicSubmissionRateLimit,
   sendPublicRateLimitResponse,
   sendPublicSubmissionTrapResponse,
   type PublicSubmissionSecurityContext,
-} from "./_server/publicRateLimit.js";
+} from "./publicRateLimit.js";
 
 type ContestEntryBody = {
   contestId?: string;
@@ -28,7 +28,7 @@ type ContestEntryBody = {
   submissionSecurity?: PublicSubmissionSecurityContext;
 };
 
-export default async function handler(
+export async function handlePublicContests(
   request: VercelRequestLike,
   response: VercelResponseLike,
 ) {

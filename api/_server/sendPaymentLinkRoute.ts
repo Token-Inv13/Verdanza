@@ -1,22 +1,22 @@
-import { assertAdminUser } from "./_server/adminAuth.js";
-import { findActiveAdminPaymentLink } from "./_server/adminPaymentLinks.js";
-import { sendPaymentLinkEmail } from "./_server/email.js";
-import { getAdminDb } from "./_server/firebaseAdmin.js";
+import { assertAdminUser } from "./adminAuth.js";
+import { findActiveAdminPaymentLink } from "./adminPaymentLinks.js";
+import { sendPaymentLinkEmail } from "./email.js";
+import { getAdminDb } from "./firebaseAdmin.js";
 import {
   assertMethod,
   sendJson,
   type VercelRequestLike,
   type VercelResponseLike,
-} from "./_server/http.js";
+} from "./http.js";
 import {
   executePaymentLinkDelivery,
   PaymentLinkConflictError,
   PaymentLinkOrderStateError,
   validatePaymentLinkRequestId,
   type PaymentLinkDeliveryRequest,
-} from "./_server/paymentLinkDelivery.js";
+} from "./paymentLinkDelivery.js";
 
-export default async function handler(
+export async function handleSendPaymentLink(
   request: VercelRequestLike,
   response: VercelResponseLike,
 ) {

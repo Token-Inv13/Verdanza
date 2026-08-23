@@ -1,5 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
-import { assertAdminUser } from "./_server/adminAuth.js";
+import { assertAdminUser } from "./adminAuth.js";
 import {
   ContestError,
   contestCollections,
@@ -14,17 +14,17 @@ import {
   transitionContest,
   updateContest,
   validateContestWinner,
-} from "./_server/contests.js";
-import { sendContestPrizeEmail } from "./_server/email.js";
-import { getAdminDb } from "./_server/firebaseAdmin.js";
+} from "./contests.js";
+import { sendContestPrizeEmail } from "./email.js";
+import { getAdminDb } from "./firebaseAdmin.js";
 import {
   sendJson,
   type VercelRequestLike,
   type VercelResponseLike,
-} from "./_server/http.js";
-import type { ContestPrize, ContestStatus } from "../src/types/contests.js";
+} from "./http.js";
+import type { ContestPrize, ContestStatus } from "../../src/types/contests.js";
 
-export default async function handler(
+export async function handleAdminContests(
   request: VercelRequestLike,
   response: VercelResponseLike,
 ) {
