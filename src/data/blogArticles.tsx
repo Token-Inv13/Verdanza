@@ -6,6 +6,289 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "signes-alteration-fleurs-resines-cbd",
+    title: "Fleurs et résines CBD : repérer les signes d'altération",
+    seoTitle: "CBD : repérer les signes d'altération | Verdanza",
+    description:
+      "Aspect, odeur, humidité et emballage : des repères simples pour distinguer une variation normale d'un signe d'altération sur fleurs et résines CBD.",
+    excerpt:
+      "Couleur, texture, odeur et humidité évoluent parfois sans anomalie. Ce guide aide à reconnaître les écarts qui méritent une vérification du lot.",
+    category: "Guide qualité",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-08-24T12:40:00+02:00",
+    dateModified: "2026-08-24T12:40:00+02:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/signes-alteration-fleurs-resines-cbd-1x1.webp",
+      landscape: "/images/blog/signes-alteration-fleurs-resines-cbd-4x3.webp",
+      wide: "/images/blog/signes-alteration-fleurs-resines-cbd-16x9.webp",
+    },
+    relatedSlugs: [
+      "conserver-fleurs-resines-cbd",
+      "etiquette-numero-lot-cbd-tracabilite",
+      "aspect-fleur-cbd-couleur-structure",
+    ],
+    links: [
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/conserver-fleurs-resines-cbd",
+        label: "Conserver fleurs et résines CBD",
+      },
+      {
+        to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+        label: "Vérifier l'étiquette et le lot",
+      },
+      { to: "/fleurs-cbd", label: "Découvrir les fleurs CBD" },
+      { to: "/resines-cbd", label: "Découvrir les résines CBD" },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une fleur ou une résine CBD peut varier légèrement d'un lot à
+            l'autre. La teinte, la densité, la souplesse et l'intensité
+            aromatique dépendent notamment de la matière végétale, de la
+            fabrication et de la conservation. Ces différences ne signalent
+            pas automatiquement une anomalie : il faut regarder plusieurs
+            indices ensemble.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Un seul détail visuel ne suffit pas à conclure. En cas de doute,
+            gardez le produit séparé, conservez son emballage et son numéro de
+            lot, puis demandez une vérification au vendeur.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "variation-ou-alteration",
+        text: "Variation naturelle ou altération : quelle différence ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une variation naturelle reste cohérente avec le type de produit et
+            se retrouve de façon assez homogène : fleurs plus ou moins
+            compactes, nuances de vert ou de brun, résine souple ou friable
+            selon sa présentation. Une altération se manifeste plutôt par une
+            évolution inhabituelle, localisée ou associée à plusieurs signaux,
+            par exemple une zone humide, un dépôt irrégulier et une odeur qui
+            ne correspond plus au profil annoncé.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Repères à croiser lors de l'examen d'une fleur ou d'une résine CBD.",
+          headers: ["Repère", "Variation possible", "Point à faire vérifier"],
+          rows: [
+            [
+              "Couleur",
+              "Nuances liées au lot, à la matière végétale ou à la lumière.",
+              "Tache localisée, voile inhabituel ou changement rapide et marqué.",
+            ],
+            [
+              "Texture",
+              "Fleur plus dense ou résine plus souple selon le format.",
+              "Zone anormalement humide, collante ou très différente du reste.",
+            ],
+            [
+              "Odeur",
+              "Intensité aromatique variable après ouverture.",
+              "Odeur de renfermé, de moisi ou décalée par rapport à la fiche.",
+            ],
+            [
+              "Surface",
+              "Trichomes, fibres végétales ou grain propres au produit.",
+              "Dépôt poudreux irrégulier, filaments ou zones duveteuses.",
+            ],
+            [
+              "Emballage",
+              "Légère compression liée au transport.",
+              "Fermeture endommagée, condensation ou fuite visible.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "observer-surface",
+        text: "Observer la surface sans surinterpréter",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Sur une fleur, les trichomes peuvent former de petits points clairs
+            et brillants. Des fibres végétales peuvent aussi être visibles.
+            Sur une résine, le grain, les inclusions végétales et les variations
+            de teinte dépendent du tamisage et du pressage. Ces caractéristiques
+            régulières ne doivent pas être confondues avec un voile diffus, des
+            filaments ou un dépôt qui apparaît seulement sur une zone.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une lumière neutre aide à comparer l'ensemble du produit, ses
+            bords et le fond de l'emballage. Le guide sur l'{" "}
+            <Link to="/blog/aspect-fleur-cbd-couleur-structure">
+              aspect d'une fleur CBD
+            </Link>{" "}
+            détaille les limites d'une lecture fondée uniquement sur la couleur
+            ou la densité.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "humidite-condensation",
+        text: "Humidité et condensation : deux signaux à replacer dans leur contexte",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La souplesse ne signifie pas nécessairement qu'un produit est trop
+            humide. En revanche, une sensation humide localisée, des éléments
+            qui s'agglomèrent de façon nouvelle ou des gouttelettes à
+            l'intérieur de l'emballage justifient une vérification. La
+            condensation peut résulter d'un écart de température pendant le
+            transport ; elle indique surtout que les conditions de stockage et
+            l'intégrité de la fermeture doivent être contrôlées.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "odeur-inhabituelle",
+        text: "Que peut indiquer une odeur inhabituelle ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            L'intensité aromatique peut diminuer avec le temps ou varier après
+            l'ouverture. Ce changement est différent d'une odeur franchement
+            humide, moisie, rance ou étrangère au profil présenté. Une odeur
+            seule ne permet pas d'identifier la cause, mais elle devient un
+            repère utile lorsqu'elle accompagne une modification de surface,
+            de texture ou d'emballage.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "controle-reception",
+        text: "Les vérifications utiles à la réception",
+      },
+      {
+        type: "list",
+        items: [
+          "contrôler que l'emballage est fermé, sec et conforme à la commande ;",
+          "repérer le numéro de lot avant de jeter ou de transférer l'emballage ;",
+          "observer l'ensemble sous une lumière neutre, sans se limiter à une zone ;",
+          "comparer la couleur, la texture et le profil aromatique à la fiche fournie ;",
+          "photographier immédiatement une anomalie visible ou une condensation ;",
+          "garder le produit séparé si plusieurs repères paraissent incohérents.",
+        ],
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le numéro de lot permet de relier la demande au bon produit. Le
+            guide sur l'{" "}
+            <Link to="/blog/etiquette-numero-lot-cbd-tracabilite">
+              étiquette et la traçabilité CBD
+            </Link>{" "}
+            explique comment croiser cet identifiant avec la fiche et les
+            documents disponibles.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "agir-en-cas-de-doute",
+        text: "Que faire lorsqu'un doute persiste ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Évitez de mélanger le produit concerné avec un autre lot. Conservez
+            l'emballage, le numéro de lot et des photographies prises sous une
+            lumière claire, puis contactez le vendeur en décrivant les faits :
+            date de réception, état de la fermeture, zone observée, odeur et
+            évolution éventuelle. Cette démarche permet une réponse précise
+            sans attribuer trop vite une cause au changement.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Une photographie peut documenter une couleur ou un dépôt, mais pas
+            confirmer à elle seule la nature d'une altération. Le lot et les
+            conditions de conservation restent indispensables à la vérification.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "prevenir-evolutions",
+        text: "Limiter les évolutions après ouverture",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Après contrôle, suivez en priorité les indications portées sur
+            l'emballage. Un contenant fermé, un endroit sec, une température
+            stable et une protection contre la lumière limitent les variations
+            inutiles. Le guide consacré à la{" "}
+            <Link to="/blog/conserver-fleurs-resines-cbd">
+              conservation des fleurs et résines CBD
+            </Link>{" "}
+            rassemble ces repères pratiques.
+          </>
+        ),
+      },
+      {
+        type: "links",
+        title: "Compléter vos repères qualité",
+        links: [
+          {
+            to: "/blog/conserver-fleurs-resines-cbd",
+            label: "Conserver fleurs et résines CBD",
+          },
+          {
+            to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+            label: "Vérifier l'étiquette et le lot",
+          },
+          {
+            to: "/blog/aspect-fleur-cbd-couleur-structure",
+            label: "Lire l'aspect d'une fleur CBD",
+          },
+          { to: "/qualite-conformite", label: "Qualité et conformité" },
+        ],
+      },
+    ],
+  },
+
+  {
     slug: "infusions-feuilles-chanvre-reglement-ue-2027",
     title: "Infusions de feuilles de chanvre : ce que change le règlement européen en 2027",
     seoTitle: "Infusions de chanvre : règlement UE 2027 | Verdanza",

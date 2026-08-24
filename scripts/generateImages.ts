@@ -90,6 +90,14 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" }
 > = {
+  "signes-alteration-fleurs-resines-cbd": {
+    label: "Signes d'altération CBD",
+    sources: [
+      "/Fiche produit/Mandarine/mandarine_zoom.webp",
+      "/Fiche produit/Golden static/goldenstatic.webp",
+      "/Fiche produit/Creamy%20Piatella/piatella.webp",
+    ],
+  },
   "infusions-feuilles-chanvre-reglement-ue-2027": {
     label: "Infusions de chanvre : cadre UE",
     kind: "analysis",
