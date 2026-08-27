@@ -6,6 +6,204 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "origine-variete-lot-cbd-differences",
+    title: "Origine, variété et lot CBD : trois informations à ne pas confondre",
+    seoTitle: "Origine, variété et lot CBD : comprendre la fiche | Verdanza",
+    description:
+      "Comprendre la différence entre origine, variété et numéro de lot sur une fiche CBD, pour lire les informations produit sans raccourci.",
+    excerpt:
+      "Origine, variété, lot : ces trois repères ne racontent pas la même chose. Voici comment les lire séparément avant de comparer deux références CBD.",
+    category: "Guide qualité",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-08-27T18:14:00+02:00",
+    dateModified: "2026-08-27T18:14:00+02:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/origine-variete-lot-cbd-differences-1x1.webp",
+      landscape: "/images/blog/origine-variete-lot-cbd-differences-4x3.webp",
+      wide: "/images/blog/origine-variete-lot-cbd-differences-16x9.webp",
+    },
+    relatedSlugs: [
+      "etiquette-numero-lot-cbd-tracabilite",
+      "comment-lire-analyse-cbd",
+      "aspect-fleur-cbd-couleur-structure",
+    ],
+    links: [
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+        label: "Étiquette et traçabilité",
+      },
+      { to: "/blog/comment-lire-analyse-cbd", label: "Lire une analyse CBD" },
+      { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+      { to: "/resines-cbd", label: "Voir les résines CBD" },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une fiche CBD peut mentionner une origine, une variété, une référence
+            commerciale et un numéro de lot. Ces informations se complètent, mais
+            elles ne veulent pas dire la même chose. Les confondre peut conduire
+            à comparer deux produits sur de mauvais critères ou à tirer une
+            conclusion trop rapide sur leur qualité.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Repère simple : l'origine situe un cadre de production, la variété
+            décrit un type de plante ou une référence, et le lot identifie une
+            production précise à un moment donné.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "origine",
+        text: "Ce que l'origine indique",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            L'origine aide à situer le produit dans une zone de production ou un
+            circuit d'approvisionnement. Elle peut donner un contexte utile, mais
+            elle ne suffit pas à évaluer une fleur ou une résine. Deux références
+            d'une même origine peuvent avoir un aspect, une texture, un profil
+            aromatique et des informations de lot différents.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "variete",
+        text: "Ce que la variété permet de lire",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La variété ou le nom de référence sert à reconnaître une famille de
+            produit. Il peut évoquer un profil aromatique, une structure de fleur
+            ou une présentation attendue. Pour autant, le nom seul ne remplace
+            pas la fiche complète : culture, conservation, coupe, texture et
+            analyse doivent rester dans la lecture.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Origine, variété et lot : trois niveaux de lecture.",
+          headers: ["Repère", "Ce que cela indique", "Limite de lecture"],
+          rows: [
+            [
+              "Origine",
+              "Un cadre géographique ou un circuit d'approvisionnement.",
+              "Ne garantit pas à elle seule la qualité d'une référence.",
+            ],
+            [
+              "Variété",
+              "Un nom de plante, de profil ou de référence commerciale.",
+              "Ne remplace pas les informations visibles sur la fiche.",
+            ],
+            [
+              "Lot",
+              "Une production identifiée à une date ou une période donnée.",
+              "Doit être relié aux documents disponibles pour ce lot.",
+            ],
+            [
+              "Analyse",
+              "Des mesures réalisées dans un contexte précis.",
+              "Ne décrit pas tout l'aspect, la texture ou les arômes.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "lot",
+        text: "Pourquoi le lot est central",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le numéro de lot relie un produit à une production précise. C'est un
+            repère important quand une analyse, une étiquette ou une information
+            de traçabilité est disponible. Un même nom de référence peut exister
+            sur plusieurs lots : il faut donc lire le lot au lieu de généraliser
+            une information ancienne à toutes les versions futures.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "vérifier que le lot affiché correspond au produit consulté ;",
+          "relier l'analyse au bon lot lorsque le document est disponible ;",
+          "ne pas appliquer automatiquement une ancienne fiche à un nouveau lot ;",
+          "tenir compte de la date du document consulté ;",
+          "comparer les produits avec le même niveau d'information.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "fiche-produit",
+        text: "Comment lire une fiche produit sans raccourci",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une lecture fiable commence par les informations stables : catégorie,
+            origine indiquée, nom de référence, lot, profil aromatique, aspect,
+            texture et données mesurées lorsqu'elles sont présentes. La page{" "}
+            <Link to="/qualite-conformite">qualité et conformité</Link> présente
+            aussi les repères généraux de Verdanza.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "comparaison",
+        text: "Comparer deux références",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Comparer deux références demande de rester au même niveau de lecture.
+            Une fleur ne se compare pas seulement à partir de son nom, et une
+            résine ne se résume pas à sa couleur. Pour éviter les conclusions
+            rapides, rapprochez la catégorie, la fiche, l'aspect, le lot et les
+            documents disponibles.
+          </>
+        ),
+      },
+      {
+        type: "links",
+        title: "Poursuivre la vérification",
+        links: [
+          {
+            to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+            label: "Lire l'étiquette et le numéro de lot",
+          },
+          { to: "/blog/comment-lire-analyse-cbd", label: "Comprendre une analyse" },
+          {
+            to: "/blog/aspect-fleur-cbd-couleur-structure",
+            label: "Lire l'aspect d'une fleur",
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "signes-alteration-fleurs-resines-cbd",
     title: "Fleurs et résines CBD : repérer les signes d'altération",
     seoTitle: "CBD : repérer les signes d'altération | Verdanza",

@@ -90,6 +90,10 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" }
 > = {
+  "origine-variete-lot-cbd-differences": {
+    label: "Origine, variété et lot CBD",
+    kind: "analysis",
+  },
   "signes-alteration-fleurs-resines-cbd": {
     label: "Signes d'altération CBD",
     sources: [
