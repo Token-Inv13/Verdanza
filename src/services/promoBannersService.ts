@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { logFirestoreFallback } from "../lib/clientLog";
+import { promotionAvailability, promotionBoundaryTimestamp } from "../lib/promotionDates";
 import { collections } from "./collections";
 import type {
   PromoBanner,
@@ -255,11 +256,11 @@ export function promoBannerVisibility(
   if (!placements.length || placements.every((placement) => placement === "draft")) {
     return { visible: false, label: "Aucun emplacement", tone: "warning" };
   }
-  const startsAt = parseBannerDate(banner.startsAt);
-  const endsAt = parseBannerDate(banner.endsAt);
+  const startsAt = promotionBoundaryTimestamp(banner.startsAt, "start");
+  const endsAt = promotionBoundaryTimestamp(banner.endsAt, "end");
   const current = now.getTime();
   if (startsAt && current < startsAt) return { visible: false, label: "Programmée", tone: "gold" };
-  if (endsAt && current > endOfDay(endsAt)) return { visible: false, label: "Expirée", tone: "danger" };
+  if (endsAt && current > endsAt) return { visible: false, label: "Expirée", tone: "danger" };
 
   const hasLinkedCoupon = Boolean(
     banner.linkedCouponId || banner.linkedPromoCode || banner.deletedLinkedCouponId,
@@ -438,16 +439,12 @@ function linkedCouponVisibility(
   label: string;
   tone: "success" | "warning" | "danger" | "muted" | "gold";
 } {
-  const nowTime = now.getTime();
-  const startsAt = coupon.startsAt ? Date.parse(coupon.startsAt) : 0;
-  const endsAt = coupon.endsAt ? Date.parse(coupon.endsAt) : 0;
+  const availability = promotionAvailability(coupon, now);
   if (coupon.isArchived) return { visible: false, label: "Promotion liée archivée", tone: "muted" };
-  if (!coupon.isActive) return { visible: false, label: "Promotion liée inactive", tone: "warning" };
-  if (startsAt && nowTime < startsAt) return { visible: false, label: "Promotion liée programmée", tone: "gold" };
-  if (endsAt && nowTime > endOfDay(endsAt)) return { visible: false, label: "Promotion liée expirée", tone: "danger" };
-  if (coupon.maxUses && Number(coupon.usedCount || 0) >= Number(coupon.maxUses)) {
-    return { visible: false, label: "Promotion liée indisponible", tone: "warning" };
-  }
+  if (availability === "inactive") return { visible: false, label: "Promotion liée inactive", tone: "warning" };
+  if (availability === "scheduled") return { visible: false, label: "Promotion liée programmée", tone: "gold" };
+  if (availability === "expired") return { visible: false, label: "Promotion liée expirée", tone: "danger" };
+  if (availability === "max_uses") return { visible: false, label: "Promotion liée indisponible", tone: "warning" };
   return { visible: true, label: "Visible", tone: "success" };
 }
 
@@ -465,13 +462,6 @@ function normalizeBannerDateValue(value: unknown) {
   return "";
 }
 
-function parseBannerDate(value: unknown) {
-  const normalized = normalizeBannerDateValue(value);
-  if (!normalized) return 0;
-  const timestamp = Date.parse(normalized);
-  return Number.isFinite(timestamp) ? timestamp : 0;
-}
-
 function slugify(value: string) {
   return value
     .normalize("NFD")
@@ -479,10 +469,4 @@ function slugify(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
-}
-
-function endOfDay(timestamp: number) {
-  const date = new Date(timestamp);
-  date.setHours(23, 59, 59, 999);
-  return date.getTime();
 }

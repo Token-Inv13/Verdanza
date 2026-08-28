@@ -5,6 +5,8 @@ import type {
   DeliveryFeeStatus,
   DeliveryMethod,
   Address,
+  GiftPromotionQuote,
+  PromotionSelection,
 } from "../types";
 
 export type OrderQuote = {
@@ -25,6 +27,8 @@ export type OrderQuote = {
   subtotalAfterPromotion?: number;
   postalFreeShippingApplied: boolean;
   total: number;
+  giftPromotions?: GiftPromotionQuote[];
+  promotionConflictMessage?: string;
 };
 
 export async function quoteOrder(input: {
@@ -34,6 +38,7 @@ export async function quoteOrder(input: {
   address?: Address;
   couponCode?: string;
   email?: string;
+  promotionSelections?: PromotionSelection[];
 }) {
   const response = await fetch("/api/quote-order", {
     method: "POST",
@@ -45,6 +50,7 @@ export async function quoteOrder(input: {
       address: input.address,
       couponCode: input.couponCode?.trim() || undefined,
       email: input.email?.trim() || undefined,
+      promotionSelections: input.promotionSelections,
     }),
   });
   const payload = (await response.json().catch(() => ({}))) as

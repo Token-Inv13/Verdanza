@@ -179,7 +179,45 @@ export type PromotionRuleType =
   | "threshold_extra_discount"
   | "percentage_cart_discount"
   | "percentage_category_discount"
-  | "free_shipping";
+  | "free_shipping"
+  | "tiered_product_gift";
+
+export type ProductGiftTier = {
+  id: string;
+  minimumSubtotal: number;
+  quantityGrams: number;
+};
+
+export type GiftSelectionMode = "customer_choice" | "automatic_first_available";
+export type GiftQualifyingScope = "cart_subtotal" | "categories" | "products";
+
+export type PromotionSelection = {
+  promotionId: string;
+  giftProductId: string;
+};
+
+export type GiftPromotionQuoteProduct = {
+  productId: string;
+  name: string;
+  image: string;
+  unitPrice: number;
+  availableStock: number;
+};
+
+export type GiftPromotionQuote = {
+  promotionId: string;
+  label: string;
+  unlockedQuantityGrams: number;
+  selectedProductId?: string;
+  availableProducts: GiftPromotionQuoteProduct[];
+  nextTier?: {
+    minimumSubtotal: number;
+    missingAmount: number;
+    quantityGrams: number;
+  };
+  selectionAdjusted?: boolean;
+  unavailable?: boolean;
+};
 
 export type AppliedPromotion = {
   id: string;
@@ -194,6 +232,13 @@ export type AppliedPromotion = {
   couponId?: string;
   couponCode?: string;
   appliedAt?: string;
+  giftTierId?: string;
+  giftMinimumSubtotal?: number;
+  giftProductId?: string;
+  giftProductName?: string;
+  giftQuantityGrams?: number;
+  giftUnitPriceSnapshot?: number;
+  giftCommercialValue?: number;
 };
 
 export type Coupon = {
@@ -219,6 +264,13 @@ export type Coupon = {
   isActive: boolean;
   productIds?: string[];
   categories?: ProductCategory[];
+  giftTiers?: ProductGiftTier[];
+  giftProductIds?: string[];
+  giftSelectionMode?: GiftSelectionMode;
+  defaultGiftProductId?: string;
+  qualifyingScope?: GiftQualifyingScope;
+  qualifyingCategories?: ProductCategory[];
+  qualifyingProductIds?: string[];
   isArchived?: boolean;
   isTemplate?: boolean;
   internalNote?: string;
@@ -277,7 +329,8 @@ export type StockMovementType =
   | "return"
   | "loss"
   | "correction"
-  | "restock";
+  | "restock"
+  | "promotion_gift";
 
 export type StockMovement = {
   id: string;
@@ -289,6 +342,7 @@ export type StockMovement = {
   createdAt: string;
   createdBy?: string;
   orderId?: string;
+  promotionId?: string;
 };
 
 export type CartItem = {
@@ -338,6 +392,7 @@ export type OrderStatus =
 export type PaymentStatus = "to_confirm" | "payment_link_sent" | "pending" | "paid" | "cancelled";
 
 export type OrderItem = {
+  lineId?: string;
   productId: string;
   productInternalReference?: string;
   name: string;
@@ -356,6 +411,10 @@ export type OrderItem = {
   purchaseCostTotalSnapshot?: number | null;
   purchaseCostCapturedAt?: string;
   purchaseCostSource?: "supplier_weighted" | "manual_fallback";
+  isGift?: boolean;
+  promotionId?: string;
+  promotionLabel?: string;
+  giftUnitPriceSnapshot?: number;
 };
 
 export type ProductCost = {

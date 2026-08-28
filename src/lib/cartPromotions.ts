@@ -5,6 +5,7 @@ import type {
   ProductCategory,
   PromotionRuleType,
 } from "../types/index.js";
+import { promotionBoundaryTimestamp } from "./promotionDates.js";
 
 export type PromotionCartLine = {
   productId: string;
@@ -72,7 +73,7 @@ export function calculateCartPromotions(input: {
   rules?: PromotionRule[];
   now?: Date;
 }): CartPromotionResult {
-  const rules = input.rules ?? BUILT_IN_AUTOMATIC_PROMOTIONS;
+  const rules = input.rules ?? [];
   const subtotalBeforePromotion = roundMoney(
     input.lines.reduce(
       (sum, line) => sum + promotionLineTotal(line),
@@ -332,8 +333,8 @@ function productsSubtotal(
 function isRuleUsable(rule: PromotionRule, now: Date) {
   if (!rule.active || !rule.autoApply) return false;
   const nowTime = now.getTime();
-  const startsAt = rule.startsAt ? Date.parse(rule.startsAt) : 0;
-  const endsAt = rule.endsAt ? Date.parse(rule.endsAt) : 0;
+  const startsAt = promotionBoundaryTimestamp(rule.startsAt, "start");
+  const endsAt = promotionBoundaryTimestamp(rule.endsAt, "end");
   if (startsAt && nowTime < startsAt) return false;
   if (endsAt && nowTime > endsAt) return false;
   return true;

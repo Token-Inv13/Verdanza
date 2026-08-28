@@ -16,7 +16,10 @@ import type {
   DeliveryMethod,
   PromoBanner,
   PromoBannerPlacement,
+  Product,
+  PromotionSelection,
 } from "../src/types/index.js";
+import { promotionAvailability } from "../src/lib/promotionDates.js";
 
 export default async function handler(
   request: VercelRequestLike,
@@ -53,6 +56,8 @@ export default async function handler(
       subtotalAfterPromotion: priced.subtotalAfterPromotion,
       postalFreeShippingApplied: priced.postalFreeShippingApplied,
       total: priced.total,
+      giftPromotions: priced.giftPromotions,
+      promotionConflictMessage: priced.promotionConflictMessage,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
@@ -75,20 +80,24 @@ function isPublicPromoBannersRequest(request: VercelRequestLike) {
 async function handlePublicPromoBanners(response: VercelResponseLike) {
   try {
     const db = getAdminDb();
-    const [bannerSnapshot, couponSnapshot] = await Promise.all([
+    const [bannerSnapshot, couponSnapshot, productSnapshot] = await Promise.all([
       db
         .collection("promoBanners")
         .where("isActive", "==", true)
         .where("isArchived", "==", false)
         .get(),
       db.collection("coupons").get(),
+      db.collection("products").get(),
     ]);
     const coupons = couponSnapshot.docs.map(
       (entry) => ({ id: entry.id, ...entry.data() }) as Coupon,
     );
+    const products = productSnapshot.docs.map(
+      (entry) => ({ id: entry.id, ...entry.data() }) as Product,
+    );
     const banners = bannerSnapshot.docs
       .map((entry) => normalizePublicBanner({ id: entry.id, ...entry.data() } as PromoBanner))
-      .filter((banner) => isPublicBannerVisible(banner, coupons))
+      .filter((banner) => isPublicBannerVisible(banner, coupons, products))
       .sort((left, right) => Number(left.priority || 0) - Number(right.priority || 0));
 
     sendJson(response, {
@@ -141,23 +150,35 @@ function normalizePublicBanner(banner: PromoBanner): PromoBanner {
   };
 }
 
-function isPublicBannerVisible(banner: PromoBanner, coupons: Coupon[]) {
+function isPublicBannerVisible(banner: PromoBanner, coupons: Coupon[], products: Product[]) {
   if (!banner.isActive || banner.isArchived || banner.isTemplate) return false;
   if (!banner.title.trim() || !banner.message.trim()) return false;
   const placements = normalizePlacements(
     banner.placements?.length ? banner.placements : [banner.placement],
   );
   if (!placements.length || placements.every((placement) => placement === "draft")) return false;
-  const now = Date.now();
-  const startsAt = banner.startsAt ? Date.parse(banner.startsAt) : 0;
-  const endsAt = banner.endsAt ? Date.parse(banner.endsAt) : 0;
-  if (startsAt && now < startsAt) return false;
-  if (endsAt && now > endOfDay(endsAt)) return false;
+  if (promotionAvailability(banner) !== "active") return false;
 
   const linkedCoupon = findLinkedCoupon(coupons, banner);
   if (banner.linkedCouponId || banner.linkedPromoCode || banner.deletedLinkedCouponId) {
     if (!linkedCoupon) return false;
-    if (!isCouponCurrentlyUsable(linkedCoupon, now)) return false;
+    if (promotionAvailability(linkedCoupon) !== "active") return false;
+    if (linkedCoupon.promotionType === "tiered_product_gift") {
+      const firstTier = [...(linkedCoupon.giftTiers || [])]
+        .sort((left, right) => left.minimumSubtotal - right.minimumSubtotal)[0];
+      const configuredIds = new Set(linkedCoupon.giftProductIds || []);
+      if (
+        !firstTier ||
+        !products.some(
+          (product) =>
+            configuredIds.has(product.id) &&
+            product.isActive &&
+            Number(product.stock || 0) >= Number(firstTier.quantityGrams || 0),
+        )
+      ) {
+        return false;
+      }
+    }
   }
   return true;
 }
@@ -169,18 +190,6 @@ function findLinkedCoupon(coupons: Coupon[], banner: PromoBanner) {
   const code = (banner.linkedPromoCode || "").trim().toUpperCase();
   if (!code) return undefined;
   return coupons.find((coupon) => coupon.code.trim().toUpperCase() === code);
-}
-
-function isCouponCurrentlyUsable(coupon: Coupon, now: number) {
-  const startsAt = coupon.startsAt ? Date.parse(coupon.startsAt) : 0;
-  const endsAt = coupon.endsAt ? Date.parse(coupon.endsAt) : 0;
-  if (!coupon.isActive || coupon.isArchived) return false;
-  if (startsAt && now < startsAt) return false;
-  if (endsAt && now > endOfDay(endsAt)) return false;
-  if (coupon.maxUses && Number(coupon.usedCount || 0) >= Number(coupon.maxUses)) {
-    return false;
-  }
-  return true;
 }
 
 function normalizePlacements(values: unknown[]) {
@@ -203,12 +212,6 @@ function normalizePlacements(values: unknown[]) {
   return publicPlacements.length ? publicPlacements : (["draft"] as PromoBannerPlacement[]);
 }
 
-function endOfDay(timestamp: number) {
-  const date = new Date(timestamp);
-  date.setHours(23, 59, 59, 999);
-  return date.getTime();
-}
-
 function parseQuoteBody(value: unknown): CheckoutRequestBody {
   if (!value || typeof value !== "object") {
     throw new Error("Payload devis invalide.");
@@ -220,6 +223,7 @@ function parseQuoteBody(value: unknown): CheckoutRequestBody {
     couponCode?: string;
     email?: string;
     address?: Address;
+    promotionSelections?: PromotionSelection[];
   };
 
   if (!Array.isArray(body.items) || !body.items.length) {
@@ -234,6 +238,7 @@ function parseQuoteBody(value: unknown): CheckoutRequestBody {
     deliveryMethod: body.deliveryMethod,
     deliveryZone: body.deliveryZone,
     couponCode: body.couponCode,
+    promotionSelections: body.promotionSelections,
     complianceAccepted: true,
     preferredPaymentMethod: "card_payment_link",
     customer: {

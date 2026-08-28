@@ -48,6 +48,11 @@ import {
   resolveFixedPriceOptions,
 } from "../src/lib/fixedPriceOptions.js";
 import type { Invoice, Order, Product } from "../src/types/index.js";
+import { promotionAvailability } from "../src/lib/promotionDates.js";
+import {
+  normalizeGiftTiers,
+  qualifyingGiftSubtotal,
+} from "../src/lib/tieredProductGifts.js";
 import {
   assertContestPrizeRedeemable,
   contestCollections,
@@ -109,6 +114,19 @@ export default async function handler(
     let priced: PricedCheckout;
     try {
       priced = await priceCheckout(db, body);
+      if (
+        priced.giftPromotions.some(
+          (promotion) =>
+            promotion.selectionAdjusted &&
+            body.promotionSelections?.some(
+              (selection) => selection.promotionId === promotion.promotionId,
+            ),
+        )
+      ) {
+        throw new Error(
+          "Le cadeau sélectionné n'est plus disponible. Le devis et les choix ont été actualisés.",
+        );
+      }
     } catch (error) {
       const requestCreatedDuringPricing = await findCheckoutRequest(
         db,
@@ -261,11 +279,8 @@ export async function commitCheckoutOrder(input: {
 
     if (couponRef && couponSnapshot) {
       const coupon = couponSnapshot.data();
-      if (!couponSnapshot.exists || coupon?.isActive === false || coupon?.isArchived === true) {
+      if (!couponSnapshot.exists || promotionAvailability(coupon || {}) !== "active") {
         throw new Error("Code promo invalide.");
-      }
-      if (coupon?.maxUses && Number(coupon.usedCount || 0) >= Number(coupon.maxUses)) {
-        throw new Error("Code promo deja utilise au maximum.");
       }
     }
     if (contestPrizeRef && contestPrizeSnapshot) {
@@ -278,11 +293,23 @@ export async function commitCheckoutOrder(input: {
     }
     for (const { couponSnapshot: automaticSnapshot } of automaticCouponReads) {
       const coupon = automaticSnapshot.data();
-      if (!automaticSnapshot.exists || coupon?.isActive === false || coupon?.isArchived === true) {
+      if (
+        !automaticSnapshot.exists ||
+        promotionAvailability(coupon || {}) !== "active"
+      ) {
         throw new Error("Promotion automatique invalide.");
       }
-      if (coupon?.maxUses && Number(coupon.usedCount || 0) >= Number(coupon.maxUses)) {
-        throw new Error("Promotion automatique utilisee au maximum.");
+      const appliedGift = priced.appliedPromotions.find(
+        (promotion) =>
+          promotion.type === "tiered_product_gift" &&
+          promotion.couponId === automaticSnapshot.id,
+      );
+      if (appliedGift) {
+        assertTieredGiftStillMatchesCoupon(
+          { id: automaticSnapshot.id, ...coupon } as import("../src/types/index.js").Coupon,
+          priced.orderItems,
+          appliedGift,
+        );
       }
     }
 
@@ -303,7 +330,12 @@ export async function commitCheckoutOrder(input: {
         throw new Error(`Produit indisponible : ${productName}.`);
       }
       if (stock < requestedQuantity) {
-        throw new Error(`Stock insuffisant pour ${productName}.`);
+        const giftItem = matchingItems.find((item) => item.isGift);
+        throw new Error(
+          giftItem
+            ? `Le cadeau ${productName} n'est plus disponible. Actualisez le devis et choisissez une autre référence.`
+            : `Stock insuffisant pour ${productName}.`,
+        );
       }
       for (const item of matchingItems.filter((entry) => entry.purchaseMode === "fixed_price")) {
         const product = { id: productSnapshot.id, ...data } as Product;
@@ -318,12 +350,15 @@ export async function commitCheckoutOrder(input: {
         transaction.set(db.collection("stockMovements").doc(), {
           productId: item.productId,
           productName: item.name,
-          type: "sale",
+          type: item.isGift ? "promotion_gift" : "sale",
           quantity: -item.quantity,
-          note: `Commande manuelle ${orderRef.id}`,
+          note: item.isGift
+            ? `Cadeau promotion ${item.promotionLabel || item.promotionId || "Verdanza"} - commande ${orderRef.id}`
+            : `Commande manuelle ${orderRef.id}`,
           createdAt: FieldValue.serverTimestamp(),
           createdBy: "manual-checkout",
           orderId: orderRef.id,
+          ...(item.isGift && item.promotionId ? { promotionId: item.promotionId } : {}),
         });
       }
     }
@@ -388,6 +423,30 @@ export async function commitCheckoutOrder(input: {
     transaction.set(sideEffectsRef, orderSideEffectsDocument(orderRef.id));
     return { created: true, orderId: orderRef.id };
   });
+}
+
+function assertTieredGiftStillMatchesCoupon(
+  coupon: import("../src/types/index.js").Coupon,
+  orderItems: Order["items"],
+  appliedGift: import("../src/types/index.js").AppliedPromotion,
+) {
+  if (coupon.promotionType !== "tiered_product_gift") {
+    throw new Error("La promotion cadeau a été modifiée. Actualisez le devis.");
+  }
+  const paidItems = orderItems.filter((item) => !item.isGift);
+  const qualifyingSubtotal = qualifyingGiftSubtotal(coupon, paidItems);
+  const tier = [...normalizeGiftTiers(coupon.giftTiers || [])]
+    .reverse()
+    .find((entry) => qualifyingSubtotal >= entry.minimumSubtotal);
+  if (
+    !tier ||
+    tier.id !== appliedGift.giftTierId ||
+    tier.quantityGrams !== appliedGift.giftQuantityGrams ||
+    !appliedGift.giftProductId ||
+    !coupon.giftProductIds?.includes(appliedGift.giftProductId)
+  ) {
+    throw new Error("La promotion cadeau a été modifiée. Actualisez le devis.");
+  }
 }
 
 async function processOrderSideEffectsBestEffort(

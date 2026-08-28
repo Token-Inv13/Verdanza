@@ -10,6 +10,8 @@ import type {
   DeliveryFeeStatus,
   DeliveryAddressValidation,
   AppliedPromotion,
+  GiftPromotionQuote,
+  PromotionSelection,
 } from "../../src/types/index.js";
 import {
   DEFAULT_LOCAL_DELIVERY_ESTIMATE_MAX_MINUTES,
@@ -38,6 +40,11 @@ import {
   evaluatePromotionRule,
   promotionRuleFromCouponDefinition,
 } from "../../src/lib/cartPromotions.js";
+import {
+  evaluateTieredProductGift,
+  tieredGiftProgressMessage,
+} from "../../src/lib/tieredProductGifts.js";
+import { promotionAvailability } from "../../src/lib/promotionDates.js";
 import {
   fixedPriceEffectiveUnitPrice,
   fixedPriceLineTotal,
@@ -133,6 +140,7 @@ export type CheckoutRequestBody = {
   company?: string;
   submissionSecurity?: PublicSubmissionSecurityContext;
   customer: CheckoutCustomerInput;
+  promotionSelections?: PromotionSelection[];
 };
 
 export type PricedCheckout = {
@@ -161,6 +169,8 @@ export type PricedCheckout = {
   postalFreeShippingApplied: boolean;
   deliveryFeeStatus: DeliveryFeeStatus;
   deliveryNote: string;
+  giftPromotions: GiftPromotionQuote[];
+  promotionConflictMessage?: string;
 };
 
 type ResolvedCoupon = {
@@ -219,10 +229,20 @@ export function parseCheckoutBody(value: unknown): CheckoutRequestBody {
   }
 
   const analyticsContext = parseAnalyticsContext(body.analyticsContext);
+  const promotionSelections = Array.isArray(body.promotionSelections)
+    ? body.promotionSelections
+        .map((selection) => ({
+          promotionId: String(selection?.promotionId || "").trim(),
+          giftProductId: String(selection?.giftProductId || "").trim(),
+        }))
+        .filter((selection) => selection.promotionId && selection.giftProductId)
+        .slice(0, 10)
+    : [];
   return {
     ...(body as CheckoutRequestBody),
     preferredPaymentMethod: normalizePreferredPaymentMethod(body.preferredPaymentMethod),
     analyticsContext,
+    promotionSelections,
   };
 }
 
@@ -233,6 +253,7 @@ export async function priceCheckout(
   const orderItems: OrderItem[] = [];
   const productStockById = new Map<string, number>();
   const productNameById = new Map<string, string>();
+  const paidProductsById = new Map<string, Product>();
 
   for (const item of body.items) {
     const productId = String(item.productId || "").trim();
@@ -261,6 +282,7 @@ export async function priceCheckout(
     }
     productStockById.set(product.id, Math.max(0, Math.floor(Number(product.stock || 0))));
     productNameById.set(product.id, product.name);
+    paidProductsById.set(product.id, product);
 
     if (purchaseMode === "fixed_price") {
       const fixedPriceOptionId = String(item.fixedPriceOptionId || "").trim();
@@ -318,6 +340,11 @@ export async function priceCheckout(
     orderItems.reduce((sum, item) => sum + orderItemLineTotal(item), 0),
   );
   const delivery = await resolveDeliveryFee(db, body, subtotal);
+  const automaticCoupons = await listAutomaticCoupons(db);
+  const giftPromotionCoupon = automaticCoupons
+    .filter((entry) => entry.promotionType === "tiered_product_gift")
+    .filter((entry) => promotionAvailability(entry) === "active")
+    .sort((left, right) => Number(left.priority || 10) - Number(right.priority || 10))[0];
   const coupon = body.couponCode
     ? await resolveCoupon(
         db,
@@ -328,6 +355,16 @@ export async function priceCheckout(
         body.customer.email,
       )
     : null;
+  const giftEvaluation =
+    !coupon && giftPromotionCoupon
+      ? await resolveTieredGiftEvaluation(
+          db,
+          giftPromotionCoupon,
+          orderItems,
+          paidProductsById,
+          body.promotionSelections || [],
+        )
+      : null;
   const automaticPromotions = coupon
     ? {
         subtotalBeforePromotion: subtotal,
@@ -336,10 +373,30 @@ export async function priceCheckout(
         appliedPromotions: coupon.appliedPromotion ? [coupon.appliedPromotion] : [],
         progressMessages: [],
       }
-    : calculateCartPromotions({
-        lines: orderItems,
-        rules: automaticPromotionRulesFromCoupons(await listAutomaticCoupons(db)),
-      });
+    : giftEvaluation && giftPromotionCoupon?.stackable !== true
+      ? {
+          subtotalBeforePromotion: subtotal,
+          subtotalAfterPromotion: subtotal,
+          promotionDiscountTotal: 0,
+          appliedPromotions: [],
+          progressMessages: [],
+        }
+      : calculateCartPromotions({
+          lines: orderItems,
+          rules: automaticPromotionRulesFromCoupons(
+            automaticCoupons.filter((entry) => entry.promotionType !== "tiered_product_gift"),
+          ),
+        });
+  if (giftEvaluation?.giftItem) orderItems.push(giftEvaluation.giftItem);
+  const appliedPromotions = [
+    ...automaticPromotions.appliedPromotions,
+    ...(giftEvaluation?.appliedPromotion ? [giftEvaluation.appliedPromotion] : []),
+  ];
+  const giftPromotions = giftEvaluation ? [giftEvaluation.quote] : [];
+  const promotionProgressMessages = [
+    ...automaticPromotions.progressMessages,
+    ...(giftEvaluation ? [tieredGiftProgressMessage(giftEvaluation.quote)] : []),
+  ];
   const effectiveDelivery =
     coupon?.freeShippingApplied && body.deliveryMethod === "postal"
       ? {
@@ -367,10 +424,10 @@ export async function priceCheckout(
     contestPrizeId: coupon?.contestPrizeId,
     discountType: coupon?.discountType,
     discountValue: coupon?.discountValue,
-    promoApplied: Boolean(coupon || automaticPromotions.appliedPromotions.length),
+    promoApplied: Boolean(coupon || appliedPromotions.length),
     promotionDiscountTotal: automaticPromotions.promotionDiscountTotal,
-    appliedPromotions: automaticPromotions.appliedPromotions,
-    promotionProgressMessages: automaticPromotions.progressMessages,
+    appliedPromotions,
+    promotionProgressMessages,
     subtotalBeforePromotion: automaticPromotions.subtotalBeforePromotion,
     subtotalAfterPromotion: automaticPromotions.subtotalAfterPromotion,
     totalAfterDiscount: total,
@@ -382,7 +439,36 @@ export async function priceCheckout(
     postalFreeShippingApplied: effectiveDelivery.postalFreeShippingApplied,
     deliveryFeeStatus: effectiveDelivery.deliveryFeeStatus,
     deliveryNote: effectiveDelivery.deliveryNote,
+    giftPromotions,
+    ...(coupon && giftPromotionCoupon
+      ? { promotionConflictMessage: `Le code ${coupon.code} remplace l'offre cadeau automatique.` }
+      : {}),
   };
+}
+
+async function resolveTieredGiftEvaluation(
+  db: FirebaseFirestore.Firestore,
+  promotion: Coupon,
+  paidItems: OrderItem[],
+  paidProductsById: Map<string, Product>,
+  selections: PromotionSelection[],
+) {
+  const products = new Map(paidProductsById);
+  await Promise.all(
+    (promotion.giftProductIds || []).map(async (productId) => {
+      if (products.has(productId)) return;
+      const snapshot = await db.collection("products").doc(productId).get();
+      if (snapshot.exists) {
+        products.set(productId, { id: snapshot.id, ...snapshot.data() } as Product);
+      }
+    }),
+  );
+  return evaluateTieredProductGift({
+    promotion,
+    paidItems,
+    products: [...products.values()],
+    selection: selections.find((selection) => selection.promotionId === promotion.id),
+  });
 }
 
 function assertRequestedStockTotals(
@@ -429,22 +515,17 @@ async function resolveCoupon(
   }
 
   const coupon = { id: couponSnapshot.id, ...couponSnapshot.data() } as Coupon;
-  const now = Date.now();
-  const startsAt = coupon.startsAt ? Date.parse(coupon.startsAt) : 0;
-  const endsAt = coupon.endsAt ? Date.parse(coupon.endsAt) : 0;
   const allowedProductIds = coupon.productIds ?? [];
   const allowedCategories = [
     ...(coupon.categories ?? []),
     ...(coupon.eligibleCategory ? [coupon.eligibleCategory] : []),
   ];
 
-  if (!coupon.isActive) throw new Error("Code promo inactif.");
-  if (coupon.isArchived) throw new Error("Code promo invalide.");
-  if (startsAt && now < startsAt) throw new Error("Code promo pas encore actif.");
-  if (endsAt && now > endsAt) throw new Error("Code promo expire.");
-  if (coupon.maxUses && coupon.usedCount >= coupon.maxUses) {
-    throw new Error("Code promo deja utilise au maximum.");
-  }
+  const availability = promotionAvailability(coupon);
+  if (availability === "inactive") throw new Error("Code promo inactif.");
+  if (availability === "scheduled") throw new Error("Code promo pas encore actif.");
+  if (availability === "expired") throw new Error("Code promo expire.");
+  if (availability === "max_uses") throw new Error("Code promo deja utilise au maximum.");
   if (coupon.source === "contest") {
     const expectedEmailHash = String(coupon.redeemableByEmailHash || "");
     if (!coupon.contestId || !expectedEmailHash) {

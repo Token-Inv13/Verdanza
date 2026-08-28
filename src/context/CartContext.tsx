@@ -19,7 +19,7 @@ import {
   sameCartLine,
 } from "../lib/fixedPriceOptions";
 import { getProductsWithFallback } from "../services/productsService";
-import type { CartItem, FixedPriceOption, Product } from "../types";
+import type { CartItem, FixedPriceOption, Product, PromotionSelection } from "../types";
 
 type CartLine = CartItem & {
   lineKey: string;
@@ -37,6 +37,8 @@ type CartContextValue = {
   hasBlockingCartIssues: boolean;
   itemCount: number;
   subtotal: number;
+  promotionSelections: PromotionSelection[];
+  setPromotionSelection: (promotionId: string, giftProductId?: string) => void;
   addItem: (productId: string) => void;
   addFixedPriceOption: (productId: string, fixedPriceOptionId: string) => void;
   incrementLine: (lineKey: string) => void;
@@ -51,6 +53,7 @@ type CartContextValue = {
 
 const CartContext = createContext<CartContextValue | null>(null);
 const storageKey = "verdanza-cart";
+const promotionSelectionsStorageKey = "verdanza-promotion-selections";
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [catalog, setCatalog] = useState<Product[]>([]);
@@ -62,10 +65,36 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       return [];
     }
   });
+  const [promotionSelections, setPromotionSelections] = useState<PromotionSelection[]>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(promotionSelectionsStorageKey) || "[]");
+      return Array.isArray(stored)
+        ? stored.filter(
+            (entry): entry is PromotionSelection =>
+              Boolean(entry?.promotionId && entry?.giftProductId),
+          )
+        : [];
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(items));
   }, [items]);
+
+  useEffect(() => {
+    localStorage.setItem(promotionSelectionsStorageKey, JSON.stringify(promotionSelections));
+  }, [promotionSelections]);
+
+  const setPromotionSelection = useCallback((promotionId: string, giftProductId?: string) => {
+    setPromotionSelections((current) => {
+      const withoutPromotion = current.filter((entry) => entry.promotionId !== promotionId);
+      return giftProductId
+        ? [...withoutPromotion, { promotionId, giftProductId }]
+        : withoutPromotion;
+    });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -211,7 +240,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems((current) => current.filter((item) => !sameCartLine(item, target)));
   }, []);
 
-  const clearCart = useCallback(() => setItems([]), []);
+  const clearCart = useCallback(() => {
+    setItems([]);
+    setPromotionSelections([]);
+  }, []);
 
   const value = useMemo<CartContextValue>(() => {
     const cartWarnings = catalog.length === 0 ? [] : items.flatMap((item) => {
@@ -268,6 +300,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       hasBlockingCartIssues: cartWarnings.length > 0,
       itemCount: lines.reduce((sum, line) => sum + line.quantityGrams, 0),
       subtotal: lines.reduce((sum, line) => sum + line.lineTotal, 0),
+      promotionSelections,
+      setPromotionSelection,
       addItem,
       addFixedPriceOption,
       incrementLine,
@@ -290,6 +324,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     items,
     removeItem,
     removeLine,
+    promotionSelections,
+    setPromotionSelection,
     setItemQuantity,
     setLineQuantity,
   ]);

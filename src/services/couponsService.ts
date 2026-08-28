@@ -15,6 +15,10 @@ import {
 import { db } from "../lib/firebase";
 import { collections } from "./collections";
 import type { Coupon } from "../types";
+import {
+  normalizeGiftTiers,
+  validateTieredProductGift,
+} from "../lib/tieredProductGifts";
 
 export type CouponInput = Omit<Coupon, "id" | "usedCount" | "createdAt" | "updatedAt"> & {
   id?: string;
@@ -49,6 +53,8 @@ export async function upsertCoupon(input: CouponInput) {
   if (!db) throw new Error("Firebase is not configured.");
   const code = normalizeCouponCode(input.code);
   if (!code) throw new Error("Code promo requis.");
+  const giftIssues = validateTieredProductGift(input);
+  if (giftIssues.length) throw new Error(giftIssues[0]);
   const couponId = input.id || code.toLowerCase();
   const couponRef = doc(db, collections.coupons, couponId);
   const existing = await getDoc(couponRef);
@@ -95,6 +101,32 @@ export function buildCouponWritePayload(
     isActive: Boolean(input.isActive),
     productIds: input.productIds ?? [],
     categories: input.categories ?? [],
+    giftTiers:
+      input.promotionType === "tiered_product_gift"
+        ? normalizeGiftTiers(input.giftTiers || [])
+        : clearValue,
+    giftProductIds:
+      input.promotionType === "tiered_product_gift" ? input.giftProductIds ?? [] : clearValue,
+    giftSelectionMode:
+      input.promotionType === "tiered_product_gift"
+        ? input.giftSelectionMode || "customer_choice"
+        : clearValue,
+    defaultGiftProductId:
+      input.promotionType === "tiered_product_gift"
+        ? input.defaultGiftProductId || clearValue
+        : clearValue,
+    qualifyingScope:
+      input.promotionType === "tiered_product_gift"
+        ? input.qualifyingScope || "cart_subtotal"
+        : clearValue,
+    qualifyingCategories:
+      input.promotionType === "tiered_product_gift"
+        ? input.qualifyingCategories ?? []
+        : clearValue,
+    qualifyingProductIds:
+      input.promotionType === "tiered_product_gift"
+        ? input.qualifyingProductIds ?? []
+        : clearValue,
     isArchived: input.isArchived === true,
     isTemplate: input.isTemplate === true,
     internalNote: input.internalNote || clearValue,

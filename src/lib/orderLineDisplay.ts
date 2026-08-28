@@ -35,7 +35,10 @@ export function orderItemDisplayName(item: Pick<
 }
 
 export function orderItemSummaryLabel(item: OrderItem) {
-  return `${orderItemDisplayName(item)} x ${orderItemQuantityLabel(item)}`;
+  const gift = item.isGift
+    ? ` — cadeau${item.promotionLabel ? ` — ${item.promotionLabel}` : ""}`
+    : "";
+  return `${orderItemDisplayName(item)}${gift} x ${orderItemQuantityLabel(item)}`;
 }
 
 export function formatMoney(value: number) {

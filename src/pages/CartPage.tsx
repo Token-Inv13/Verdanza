@@ -4,6 +4,7 @@ import { Minus, Plus, Trash2 } from "lucide-react";
 import { ContactActions } from "../components/ContactActions";
 import { ProductImage } from "../components/ProductImage";
 import { PromoBannerSlot } from "../components/PromoBannerSlot";
+import { GiftPromotionChooser } from "../components/GiftPromotionChooser";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
 import {
@@ -12,7 +13,6 @@ import {
   getCartStockIssues,
   publicProductStockLabel,
 } from "../lib/cartStock";
-import { calculateCartPromotions } from "../lib/cartPromotions";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
 import { trackAddToCart, trackCtaClick, trackRemoveFromCart, trackViewCart } from "../lib/analytics";
 import { fixedPriceCartLineLabel } from "../lib/fixedPriceOptions";
@@ -39,6 +39,8 @@ export function CartPage() {
     decrementLine,
     setLineQuantity,
     removeLine,
+    promotionSelections,
+    setPromotionSelection,
   } = useCart();
   const trackedCartSignature = useRef("");
   const [couponCode, setCouponCode] = useState(() =>
@@ -51,16 +53,6 @@ export function CartPage() {
   const [automaticQuote, setAutomaticQuote] = useState<OrderQuote | null>(null);
   const [promoMessage, setPromoMessage] = useState("");
   const [isCheckingPromo, setIsCheckingPromo] = useState(false);
-  const automaticPromotions = calculateCartPromotions({
-    lines: lines.map((line) => ({
-      productId: line.productId,
-      name: line.product.name,
-      category: line.product.category,
-      quantity: line.quantityGrams,
-      unitPrice: line.unitPrice,
-      lineTotal: line.lineTotal,
-    })),
-  });
   const normalizedCouponCode = couponCode.trim().toUpperCase();
   const normalizedAppliedCouponCode = appliedCouponCode.trim().toUpperCase();
   const hasManualPromo = Boolean(
@@ -73,17 +65,17 @@ export function CartPage() {
     ? []
     : automaticQuote
       ? automaticQuote.appliedPromotions || []
-      : automaticPromotions.appliedPromotions;
+      : [];
   const automaticDiscountAmount = hasManualPromo
     ? 0
     : Number(
         automaticQuote
           ? automaticQuote.promotionDiscountTotal || automaticQuote.discountAmount || 0
-          : automaticPromotions.promotionDiscountTotal,
+          : 0,
       );
   const automaticProgressMessages = automaticQuote
     ? automaticQuote.promotionProgressMessages || []
-    : automaticPromotions.progressMessages;
+    : [];
   const discountAmount = hasManualPromo
     ? Number(quote?.discountAmount || 0)
     : automaticDiscountAmount;
@@ -116,9 +108,13 @@ export function CartPage() {
       items,
       deliveryMethod: "postal",
       deliveryZone: POSTAL_DELIVERY_ZONE_ID,
+      promotionSelections,
     })
       .then((nextQuote) => {
-        if (!cancelled) setAutomaticQuote(nextQuote);
+        if (!cancelled) {
+          setAutomaticQuote(nextQuote);
+          synchronizeGiftSelections(nextQuote, promotionSelections, setPromotionSelection);
+        }
       })
       .catch(() => {
         if (!cancelled) setAutomaticQuote(null);
@@ -126,7 +122,7 @@ export function CartPage() {
     return () => {
       cancelled = true;
     };
-  }, [hasBlockingCartIssues, hasManualPromo, items, lines.length, subtotal]);
+  }, [hasBlockingCartIssues, hasManualPromo, items, lines.length, promotionSelections, setPromotionSelection, subtotal]);
 
   useEffect(() => {
     const code = appliedCouponCode.trim().toUpperCase();
@@ -141,6 +137,7 @@ export function CartPage() {
       deliveryMethod: "postal",
       deliveryZone: POSTAL_DELIVERY_ZONE_ID,
       couponCode: code,
+      promotionSelections,
     })
       .then((nextQuote) => {
         if (cancelled) return;
@@ -156,7 +153,7 @@ export function CartPage() {
     return () => {
       cancelled = true;
     };
-  }, [appliedCouponCode, hasBlockingCartIssues, items, lines.length, subtotal]);
+  }, [appliedCouponCode, hasBlockingCartIssues, items, lines.length, promotionSelections, subtotal]);
 
   useEffect(() => {
     const signature = lines.map((line) => `${line.lineKey}:${line.quantity}`).join("|");
@@ -178,6 +175,7 @@ export function CartPage() {
         deliveryMethod: "postal",
         deliveryZone: POSTAL_DELIVERY_ZONE_ID,
         couponCode: code,
+        promotionSelections,
       });
       setQuote(nextQuote);
       setAppliedCouponCode(nextQuote.couponCode || code);
@@ -414,6 +412,11 @@ export function CartPage() {
                   </span>
                 </p>
               )}
+              {hasManualPromo && quote?.promotionConflictMessage && (
+                <p className="text-xs leading-5 text-amber-800">
+                  {quote.promotionConflictMessage} Retirez le code pour restaurer l’offre cadeau.
+                </p>
+              )}
               {!hasManualPromo &&
                 automaticAppliedPromotions.map((promotion) => (
                   <p key={promotion.id} className="flex justify-between text-forest">
@@ -428,6 +431,12 @@ export function CartPage() {
                     {message}
                   </p>
                 ))}
+              {!hasManualPromo && (
+                <GiftPromotionChooser
+                  promotions={automaticQuote?.giftPromotions || []}
+                  onSelect={setPromotionSelection}
+                />
+              )}
               <p className="flex justify-between">
                 <span>Colissimo France</span>
                 <span>{postalShippingFree ? "Offerte" : formatEuro(deliveryFee)}</span>
@@ -493,4 +502,24 @@ export function CartPage() {
       )}
     </main>
   );
+}
+
+function synchronizeGiftSelections(
+  quote: OrderQuote,
+  current: Array<{ promotionId: string; giftProductId: string }>,
+  setSelection: (promotionId: string, giftProductId?: string) => void,
+) {
+  const promotions = quote.giftPromotions || [];
+  const activeIds = new Set(promotions.map((promotion) => promotion.promotionId));
+  current.forEach((selection) => {
+    if (!activeIds.has(selection.promotionId)) setSelection(selection.promotionId);
+  });
+  promotions.forEach((promotion) => {
+    if (promotion.selectedProductId) {
+      const saved = current.find((entry) => entry.promotionId === promotion.promotionId);
+      if (saved?.giftProductId !== promotion.selectedProductId) {
+        setSelection(promotion.promotionId, promotion.selectedProductId);
+      }
+    }
+  });
 }

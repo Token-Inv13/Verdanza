@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ContactActions } from "../components/ContactActions";
 import { AddressAutocomplete } from "../components/AddressAutocomplete";
 import { PromoBannerSlot } from "../components/PromoBannerSlot";
+import { GiftPromotionChooser } from "../components/GiftPromotionChooser";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
@@ -22,7 +23,6 @@ import {
 } from "../lib/analytics";
 import { rememberPendingOrderAnalyticsRevocation } from "../lib/orderAnalyticsRevocation";
 import { getCartStockIssues } from "../lib/cartStock";
-import { calculateCartPromotions } from "../lib/cartPromotions";
 import { formatLocalDeliveryEstimate } from "../lib/deliveryEstimate";
 import { fixedPriceCartLineLabel } from "../lib/fixedPriceOptions";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
@@ -74,6 +74,8 @@ export function CheckoutPage() {
     lines,
     cartWarnings,
     hasBlockingCartIssues,
+    promotionSelections,
+    setPromotionSelection,
   } = useCart();
   const beginCheckoutSignature = useRef("");
   const shippingSignature = useRef("");
@@ -183,16 +185,6 @@ export function CheckoutPage() {
   const fallbackEstimatedDeliveryFee = isLocalDelivery
     ? selectedZone?.fee ?? 0
     : postalDeliveryFee(subtotal);
-  const automaticPromotions = calculateCartPromotions({
-    lines: lines.map((line) => ({
-      productId: line.productId,
-      name: line.product.name,
-      category: line.product.category,
-      quantity: line.quantityGrams,
-      unitPrice: line.unitPrice,
-      lineTotal: line.lineTotal,
-    })),
-  });
   const normalizedCouponCode = couponCode.trim().toUpperCase();
   const normalizedAppliedCouponCode = appliedCouponCode.trim().toUpperCase();
   const quoteContextKey = JSON.stringify({
@@ -202,6 +194,7 @@ export function CheckoutPage() {
       deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
     address: quoteDeliveryAddress,
     email: customer.email,
+    promotionSelections,
   });
   const currentManualQuote =
     manualQuoteContextKey === `${quoteContextKey}|coupon:${normalizedAppliedCouponCode}`
@@ -219,17 +212,17 @@ export function CheckoutPage() {
     ? []
     : currentAutomaticQuote
       ? currentAutomaticQuote.appliedPromotions || []
-      : automaticPromotions.appliedPromotions;
+      : [];
   const automaticDiscountAmount = hasManualPromo
     ? 0
     : Number(
         currentAutomaticQuote
           ? currentAutomaticQuote.promotionDiscountTotal || currentAutomaticQuote.discountAmount || 0
-          : automaticPromotions.promotionDiscountTotal,
+          : 0,
       );
   const automaticProgressMessages = currentAutomaticQuote
     ? currentAutomaticQuote.promotionProgressMessages || []
-    : automaticPromotions.progressMessages;
+    : [];
   const discountAmount = hasManualPromo
     ? Number(currentManualQuote?.discountAmount || 0)
     : automaticDiscountAmount;
@@ -343,11 +336,13 @@ export function CheckoutPage() {
       deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
       address: quoteDeliveryAddress,
       email: customer.email,
+      promotionSelections,
     })
       .then((nextQuote) => {
         if (!cancelled) {
           setAutomaticQuote(nextQuote);
           setAutomaticQuoteContextKey(requestContextKey);
+          synchronizeGiftSelections(nextQuote, promotionSelections, setPromotionSelection);
         }
       })
       .catch((quoteError) => {
@@ -375,6 +370,8 @@ export function CheckoutPage() {
     items,
     lines.length,
     resolvedDeliveryZoneId,
+    promotionSelections,
+    setPromotionSelection,
     subtotal,
   ]);
 
@@ -407,6 +404,7 @@ export function CheckoutPage() {
       address: quoteDeliveryAddress,
       couponCode: code,
       email: customer.email,
+      promotionSelections,
     })
       .then((nextQuote) => {
         if (cancelled) return;
@@ -435,6 +433,7 @@ export function CheckoutPage() {
     items,
     lines.length,
     resolvedDeliveryZoneId,
+    promotionSelections,
     subtotal,
   ]);
 
@@ -527,6 +526,7 @@ export function CheckoutPage() {
         address: quoteDeliveryAddress,
         couponCode: code,
         email: customer.email,
+        promotionSelections,
       });
       setQuote(nextQuote);
       setManualQuoteContextKey(requestContextKey);
@@ -600,6 +600,7 @@ export function CheckoutPage() {
             address: quoteDeliveryAddress,
             couponCode: normalizedAppliedCouponCode,
             email: customer.email,
+            promotionSelections,
           })
         : await quoteOrder({
             items,
@@ -607,6 +608,7 @@ export function CheckoutPage() {
             deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
             address: quoteDeliveryAddress,
             email: customer.email,
+            promotionSelections,
           });
 
       const authToken = user ? await user.getIdToken() : undefined;
@@ -623,6 +625,7 @@ export function CheckoutPage() {
           deliveryZone:
             deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
           couponCode: hasManualPromo ? normalizedAppliedCouponCode : undefined,
+          promotionSelections,
           customerMessage: customerMessage.trim() || undefined,
           preferredPaymentMethod,
           complianceAccepted,
@@ -671,16 +674,31 @@ export function CheckoutPage() {
         JSON.stringify({
           orderId: payload.orderId,
           orderType: "order",
-          items: lines.map((line) => ({
-            name: line.fixedPriceOption
-              ? `${line.product.name} - ${fixedPriceCartLineLabel(line.fixedPriceOption, line.quantity)}`
-              : line.product.name,
-            quantity: line.quantityGrams,
-            displayQuantity: line.fixedPriceOption
-              ? `${line.quantity} ${line.quantity > 1 ? "formats" : "format"}`
-              : `${line.quantity} g`,
-            total: line.lineTotal,
-          })),
+          items: [
+            ...lines.map((line) => ({
+              name: line.fixedPriceOption
+                ? `${line.product.name} - ${fixedPriceCartLineLabel(line.fixedPriceOption, line.quantity)}`
+                : line.product.name,
+              quantity: line.quantityGrams,
+              displayQuantity: line.fixedPriceOption
+                ? `${line.quantity} ${line.quantity > 1 ? "formats" : "format"}`
+                : `${line.quantity} g`,
+              total: line.lineTotal,
+            })),
+            ...(finalQuote.giftPromotions || []).flatMap((promotion) => {
+              const product = promotion.availableProducts.find(
+                (entry) => entry.productId === promotion.selectedProductId,
+              );
+              return product && promotion.unlockedQuantityGrams > 0
+                ? [{
+                    name: `${product.name} — cadeau — ${promotion.label}`,
+                    quantity: promotion.unlockedQuantityGrams,
+                    displayQuantity: `${promotion.unlockedQuantityGrams} g`,
+                    total: 0,
+                  }]
+                : [];
+            }),
+          ],
           delivery:
             deliveryMethod === "local_express"
               ? selectedZone?.name || "Livraison locale"
@@ -1098,6 +1116,11 @@ export function CheckoutPage() {
                   </span>
                 </p>
               )}
+              {hasManualPromo && currentManualQuote?.promotionConflictMessage && (
+                <p className="text-xs leading-5 text-amber-800">
+                  {currentManualQuote.promotionConflictMessage} Retirez le code pour restaurer l’offre cadeau.
+                </p>
+              )}
               {!hasManualPromo &&
                 automaticAppliedPromotions.map((promotion) => (
                   <p key={promotion.id} className="flex justify-between text-forest">
@@ -1112,6 +1135,12 @@ export function CheckoutPage() {
                     {message}
                   </p>
                 ))}
+              {!hasManualPromo && (
+                <GiftPromotionChooser
+                  promotions={currentAutomaticQuote?.giftPromotions || []}
+                  onSelect={setPromotionSelection}
+                />
+              )}
               <p className="flex justify-between text-lg font-semibold text-forest">
                 <span>Total de la commande</span>
                 <span>{formatEuro(estimatedTotal)}</span>
@@ -1182,6 +1211,25 @@ export function CheckoutPage() {
       )}
     </main>
   );
+}
+
+function synchronizeGiftSelections(
+  quote: OrderQuote,
+  current: Array<{ promotionId: string; giftProductId: string }>,
+  setSelection: (promotionId: string, giftProductId?: string) => void,
+) {
+  const promotions = quote.giftPromotions || [];
+  const activeIds = new Set(promotions.map((promotion) => promotion.promotionId));
+  current.forEach((selection) => {
+    if (!activeIds.has(selection.promotionId)) setSelection(selection.promotionId);
+  });
+  promotions.forEach((promotion) => {
+    if (!promotion.selectedProductId) return;
+    const saved = current.find((entry) => entry.promotionId === promotion.promotionId);
+    if (saved?.giftProductId !== promotion.selectedProductId) {
+      setSelection(promotion.promotionId, promotion.selectedProductId);
+    }
+  });
 }
 
 function getOrCreateCheckoutRequestId() {

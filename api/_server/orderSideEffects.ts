@@ -64,6 +64,12 @@ export function checkoutPayloadFingerprint(body: CheckoutRequestBody) {
     deliveryZone: cleanText(body.deliveryZone),
     deliverySlot: cleanText(body.deliverySlot),
     couponCode: cleanText(body.couponCode).toLowerCase(),
+    promotionSelections: (body.promotionSelections || [])
+      .map((selection) => ({
+        promotionId: cleanText(selection.promotionId),
+        giftProductId: cleanText(selection.giftProductId),
+      }))
+      .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))),
     preferredPaymentMethod: body.preferredPaymentMethod || "",
     customerMessage: cleanText(body.customerMessage),
     customer: {

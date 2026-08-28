@@ -7,16 +7,15 @@ import {
 export function buildCustomerInvoiceLines(
   order: Pick<Order, "items"> & Partial<Pick<Order, "appliedPromotions">>,
 ) {
-  const promotionLabel = order.appliedPromotions?.[0]?.label || "Offert";
   return (order.items || []).map((item): InvoiceLine => {
     const unitPrice = Number(item.unitPrice || 0);
     const quantity = Number(item.quantity || 0);
-    const isGift = unitPrice === 0;
+    const isGift = item.isGift === true || unitPrice === 0;
     if (item.purchaseMode === "fixed_price") {
       const fixedQuantity = Math.max(1, Math.floor(Number(item.fixedPriceQuantity || 1)));
       const fixedUnitPrice = Number(item.fixedPriceTotal || 0);
       return {
-        id: `${item.productId}-${item.fixedPriceOptionId || "fixed-price"}`,
+        id: item.lineId || `${item.productId}-${item.fixedPriceOptionId || "fixed-price"}`,
         label: orderItemDisplayName(item),
         quantity: fixedQuantity,
         unitPrice: fixedUnitPrice,
@@ -25,7 +24,7 @@ export function buildCustomerInvoiceLines(
       };
     }
     return {
-      id: item.productId,
+      id: item.lineId || (isGift ? `gift-${item.promotionId || "legacy"}-${item.productId}` : item.productId),
       label: item.name,
       quantity,
       unitPrice,
@@ -34,7 +33,8 @@ export function buildCustomerInvoiceLines(
         ? {
             isGift: true,
             note: "Offert",
-            promotionLabel,
+            promotionLabel:
+              item.promotionLabel || order.appliedPromotions?.[0]?.label || "Offert",
           }
         : {}),
     };

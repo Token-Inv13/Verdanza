@@ -98,19 +98,19 @@ export function AccountOrdersPage() {
                   publié pour le moment.
                 </p>
                 <div className="mt-4 grid gap-3">
-                  {order.items.map((item) => {
+                  {order.items.filter((item) => !item.isGift).map((item) => {
                     const id = reviewDocumentId(user.uid, order.id, item.productId);
                     const existing = reviews.find((review) => review.id === id);
                     return existing ? (
                       <p
-                        key={item.productId}
+                        key={item.lineId || item.productId}
                         className="rounded-md border border-forest/10 bg-ivory px-4 py-3 text-sm text-forest"
                       >
                         Avis enregistré pour {item.name} : {existing.rating}/5.
                       </p>
                     ) : (
                       <ReviewForm
-                        key={item.productId}
+                        key={item.lineId || item.productId}
                         userId={user.uid}
                         customerEmail={user.email || undefined}
                         orderId={order.id}

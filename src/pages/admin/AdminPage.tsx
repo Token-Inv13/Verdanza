@@ -129,6 +129,7 @@ import type {
   PromoBannerType,
   PromoBannerVariant,
   PromotionRuleType,
+  ProductGiftTier,
   SupplierPurchase,
   SupplierPurchaseLine,
   ProductReview,
@@ -175,6 +176,15 @@ import {
   type AccountingPeriodFilter,
 } from "../../lib/accountingPeriods";
 import { formatLocalDeliveryEstimate } from "../../lib/deliveryEstimate";
+import {
+  promotionAvailability,
+  promotionDateTimeLocalToIso,
+  promotionDateTimeLocalValue,
+} from "../../lib/promotionDates";
+import {
+  normalizeGiftTiers,
+  validateTieredProductGift,
+} from "../../lib/tieredProductGifts";
 import { orderItemQuantityLabel } from "../../lib/orderLineDisplay";
 import {
   FIXED_PRICE_POLICY_VERSION,
@@ -239,6 +249,13 @@ const emptyCoupon: CouponInput = {
   isActive: true,
   productIds: [],
   categories: [],
+  giftTiers: [],
+  giftProductIds: [],
+  giftSelectionMode: "customer_choice",
+  defaultGiftProductId: undefined,
+  qualifyingScope: "cart_subtotal",
+  qualifyingCategories: [],
+  qualifyingProductIds: [],
 };
 
 const emptyPromoBanner: PromoBannerInput = {
@@ -516,7 +533,24 @@ export function AdminPage({ section }: { section: string }) {
         ...editingCoupon,
         productIds: normalizeList(editingCoupon.productIds ?? []),
         categories: normalizeList(editingCoupon.categories ?? []) as ProductCategory[],
+        giftTiers: normalizeGiftTiers(editingCoupon.giftTiers || []),
       };
+      const giftIssues = validateTieredProductGift(couponPayload);
+      if (giftIssues.length) throw new Error(giftIssues[0]);
+      if (couponPayload.promotionType === "tiered_product_gift" && couponPayload.isActive) {
+        const firstTier = couponPayload.giftTiers[0];
+        const activeGift = products.some(
+          (product) =>
+            couponPayload.giftProductIds?.includes(product.id) &&
+            product.isActive &&
+            Number(product.stock || 0) >= Number(firstTier?.quantityGrams || 0),
+        );
+        if (!activeGift) {
+          throw new Error(
+            "Impossible d'activer la campagne sans produit cadeau actif et suffisamment en stock pour le premier palier.",
+          );
+        }
+      }
       await upsertCoupon(couponPayload);
       const couponCode = normalizeCouponCode(couponPayload.code);
       const couponId = couponPayload.id || couponCode.toLowerCase();
@@ -598,6 +632,24 @@ export function AdminPage({ section }: { section: string }) {
     setEditingCoupon(emptyCoupon);
     setMessage(`Promotion ${coupon.label || coupon.code} supprimee definitivement.`);
     await refresh();
+  }
+
+  function handleCouponDuplicate(coupon: Coupon) {
+    setEditingCoupon({
+      ...coupon,
+      id: undefined,
+      code: "",
+      label: `${coupon.label || coupon.code} — copie`,
+      usedCount: 0,
+      startsAt: undefined,
+      endsAt: undefined,
+      isActive: false,
+      isArchived: false,
+      archivedAt: undefined,
+    });
+    setCouponBannerAction("none");
+    setCouponBannerTargetId("");
+    setMessage("Copie préparée inactive : renseignez le code et les dates avant enregistrement.");
   }
 
   async function handlePromoBannerSubmit(event: FormEvent<HTMLFormElement>) {
@@ -931,6 +983,7 @@ export function AdminPage({ section }: { section: string }) {
         <div className="mt-8 grid gap-6 xl:grid-cols-[420px_1fr]">
           <CouponForm
             coupon={editingCoupon}
+            products={products}
             banners={visiblePromoBanners}
             bannerAction={couponBannerAction}
             bannerTargetId={couponBannerTargetId}
@@ -943,10 +996,12 @@ export function AdminPage({ section }: { section: string }) {
             <SourceLine source={couponSource} />
             <CouponsTable
               coupons={visibleCoupons}
+              products={products}
               onEdit={editCoupon}
               onToggle={handleCouponToggle}
               onArchive={handleCouponArchive}
               onDelete={handleCouponDelete}
+              onDuplicate={handleCouponDuplicate}
             />
           </section>
         </div>
@@ -2520,6 +2575,7 @@ function DeliveryZoneRow({
 
 function CouponForm({
   coupon,
+  products,
   banners,
   bannerAction,
   bannerTargetId,
@@ -2529,6 +2585,7 @@ function CouponForm({
   onSubmit,
 }: {
   coupon: CouponInput;
+  products: Product[];
   banners: PromoBanner[];
   bannerAction: "none" | "create" | "link";
   bannerTargetId: string;
@@ -2539,6 +2596,7 @@ function CouponForm({
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const preview = couponPreview(coupon);
+  const isTieredGift = coupon.promotionType === "tiered_product_gift";
 
   return (
     <form onSubmit={onSubmit} className="admin-card h-fit">
@@ -2546,6 +2604,42 @@ function CouponForm({
         {coupon.id ? "Modifier une promotion" : "Créer une promotion"}
       </h2>
       <div className="mt-5 grid gap-4">
+        <label className="text-sm font-medium text-forest">
+          Type de promotion
+          <select
+            className="input-field mt-2"
+            value={coupon.promotionType || inferAdminPromotionType(coupon)}
+            onChange={(event) => {
+              const promotionType = event.target.value as PromotionRuleType;
+              onChange({
+                ...coupon,
+                promotionType,
+                ...(promotionType === "tiered_product_gift"
+                  ? {
+                      autoApply: true,
+                      discountType: "fixed" as const,
+                      discountValue: 0,
+                      giftSelectionMode: coupon.giftSelectionMode || "customer_choice",
+                      qualifyingScope: coupon.qualifyingScope || "cart_subtotal",
+                    }
+                  : {}),
+              });
+            }}
+          >
+            <option value="percentage_cart_discount">Pourcentage panier</option>
+            <option value="fixed_cart_discount">Montant fixe panier</option>
+            <option value="fixed_category_discount">Montant fixe catégorie</option>
+            <option value="threshold_extra_discount">Offert après seuil</option>
+            <option value="percentage_category_discount">Pourcentage catégorie</option>
+            <option value="free_shipping">Livraison offerte</option>
+            <option value="tiered_product_gift">Cadeau produit par paliers</option>
+          </select>
+        </label>
+        <Input
+          label="Identifiant Firestore"
+          value={coupon.id || ""}
+          onChange={(id) => onChange({ ...coupon, id: id.trim().toLowerCase() || undefined })}
+        />
         <div>
           <Input
             label="Code promo"
@@ -2553,13 +2647,24 @@ function CouponForm({
             onChange={(code) => onChange({ ...coupon, code: code.toUpperCase().replace(/\s+/g, "") })}
           />
           <p className="mt-1 text-xs text-ink/55">Exemple : WELCOME10</p>
+          {coupon.autoApply && !coupon.id && (
+            <button
+              className="mt-2 text-xs font-semibold text-forest underline"
+              type="button"
+              onClick={() =>
+                onChange({ ...coupon, code: technicalPromotionCode(coupon.label || "PROMOTION") })
+              }
+            >
+              Générer depuis le nom
+            </button>
+          )}
         </div>
         <Input
           label="Nom / libellé"
           value={coupon.label}
           onChange={(label) => onChange({ ...coupon, label })}
         />
-        <label className="text-sm font-medium text-forest">
+        {!isTieredGift && <label className="text-sm font-medium text-forest">
           Type de réduction
           <select
             className="input-field mt-2"
@@ -2578,8 +2683,9 @@ function CouponForm({
           <span className="mt-1 block text-xs font-normal text-ink/55">
             Choisissez pourcentage, montant fixe ou livraison offerte.
           </span>
-        </label>
+        </label>}
         <div className="grid grid-cols-2 gap-3">
+          {!isTieredGift && <>
           <NumberInput
             label="Valeur de la remise"
             value={coupon.discountValue}
@@ -2590,27 +2696,32 @@ function CouponForm({
             value={coupon.minimumOrder}
             onChange={(minimumOrder) => onChange({ ...coupon, minimumOrder })}
           />
+          </>}
           <NumberInput
             label="Nombre maximum d'utilisations"
             value={coupon.maxUses || 0}
             onChange={(maxUses) => onChange({ ...coupon, maxUses: maxUses || undefined })}
           />
         </div>
-        <p className="text-xs leading-5 text-ink/55">
+        {!isTieredGift && <p className="text-xs leading-5 text-ink/55">
           Pour 10 %, indiquez 10. Pour 5 €, indiquez 5. Laissez 0 en limite
           d'utilisation pour illimité.
-        </p>
+        </p>}
         <Input
-          label="Date de début"
-          value={dateInputValue(coupon.startsAt)}
-          onChange={(startsAt) => onChange({ ...coupon, startsAt: startsAt || undefined })}
-          type="date"
+          label="Date et heure de début (Europe/Paris)"
+          value={promotionDateTimeLocalValue(coupon.startsAt)}
+          onChange={(startsAt) =>
+            onChange({ ...coupon, startsAt: startsAt ? promotionDateTimeLocalToIso(startsAt) : undefined })
+          }
+          type="datetime-local"
         />
         <Input
-          label="Date de fin"
-          value={dateInputValue(coupon.endsAt)}
-          onChange={(endsAt) => onChange({ ...coupon, endsAt: endsAt || undefined })}
-          type="date"
+          label="Date et heure de fin (Europe/Paris)"
+          value={promotionDateTimeLocalValue(coupon.endsAt)}
+          onChange={(endsAt) =>
+            onChange({ ...coupon, endsAt: endsAt ? promotionDateTimeLocalToIso(endsAt) : undefined })
+          }
+          type="datetime-local"
         />
         <label className="flex items-center gap-2 text-sm text-forest">
           <input
@@ -2632,6 +2743,9 @@ function CouponForm({
           <strong className="block">Aperçu</strong>
           {preview}
         </div>
+        {isTieredGift && (
+          <TieredGiftEditor coupon={coupon} products={products} onChange={onChange} />
+        )}
         <label className="text-sm font-medium text-forest">
           Banniere associee
           <select
@@ -2693,6 +2807,7 @@ function CouponForm({
                 <option value="percentage_cart_discount">Pourcentage panier</option>
                 <option value="percentage_category_discount">Pourcentage categorie</option>
                 <option value="free_shipping">Livraison offerte</option>
+                <option value="tiered_product_gift">Cadeau produit par paliers</option>
               </select>
               {coupon.promotionType === "threshold_extra_discount" && (
                 <span className="mt-1 block text-xs font-normal text-ink/55">
@@ -2770,6 +2885,8 @@ function CouponForm({
               value={coupon.usedCount || 0}
               onChange={(usedCount) => onChange({ ...coupon, usedCount })}
             />
+            {!isTieredGift && (
+              <>
             <Input
               label="Produits concernés"
               value={(coupon.productIds ?? []).join(", ")}
@@ -2782,6 +2899,8 @@ function CouponForm({
                 onChange({ ...coupon, categories: normalizeList(categories) as ProductCategory[] })
               }
             />
+              </>
+            )}
             <Input
               label="Notes internes"
               value={coupon.internalNote || ""}
@@ -2797,18 +2916,247 @@ function CouponForm({
   );
 }
 
+function TieredGiftEditor({
+  coupon,
+  products,
+  onChange,
+}: {
+  coupon: CouponInput;
+  products: Product[];
+  onChange: (coupon: CouponInput) => void;
+}) {
+  const [showInactive, setShowInactive] = useState(false);
+  const tiers = normalizeGiftTiers(coupon.giftTiers || []);
+  const firstTier = tiers[0];
+  const visibleProducts = [...products]
+    .filter((product) => showInactive || product.isActive)
+    .sort((left, right) => Number(right.isActive) - Number(left.isActive));
+  const selectedGiftIds = coupon.giftProductIds || [];
+  const firstTierAvailable = products.some(
+    (product) =>
+      selectedGiftIds.includes(product.id) &&
+      product.isActive &&
+      Number(product.stock || 0) >= Number(firstTier?.quantityGrams || 0),
+  );
+  const issues = validateTieredProductGift(coupon);
+
+  function updateTier(index: number, patch: Partial<ProductGiftTier>) {
+    const next = tiers.map((tier, tierIndex) =>
+      tierIndex === index ? { ...tier, ...patch } : tier,
+    );
+    onChange({ ...coupon, giftTiers: normalizeGiftTiers(next) });
+  }
+
+  return (
+    <section className="grid gap-4 rounded-lg border border-champagne/40 bg-cream p-4">
+      <div>
+        <strong className="text-forest">Configuration du cadeau par paliers</strong>
+        <p className="mt-1 text-xs leading-5 text-ink/55">
+          Le serveur calcule le palier, la quantité et le stock. Le client ne transmet que son choix de référence.
+        </p>
+      </div>
+      <label className="text-sm font-medium text-forest">
+        Portée du montant qualifiant
+        <select
+          className="input-field mt-2"
+          value={coupon.qualifyingScope || "cart_subtotal"}
+          onChange={(event) =>
+            onChange({
+              ...coupon,
+              qualifyingScope: event.target.value as NonNullable<Coupon["qualifyingScope"]>,
+            })
+          }
+        >
+          <option value="cart_subtotal">Tout le sous-total des produits</option>
+          <option value="categories">Catégories sélectionnées</option>
+          <option value="products">Produits sélectionnés</option>
+        </select>
+      </label>
+      {coupon.qualifyingScope === "categories" && (
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          {(["flowers", "resins", "oils", "packs"] as ProductCategory[]).map((category) => (
+            <label key={category} className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={coupon.qualifyingCategories?.includes(category) || false}
+                onChange={() =>
+                  onChange({
+                    ...coupon,
+                    qualifyingCategories: toggleList(coupon.qualifyingCategories || [], category),
+                  })
+                }
+              />
+              {category}
+            </label>
+          ))}
+        </div>
+      )}
+      {coupon.qualifyingScope === "products" && (
+        <div className="max-h-56 overflow-y-auto rounded-md border border-forest/10 bg-white p-2">
+          {products.map((product) => (
+            <label key={product.id} className="flex items-center gap-2 border-b border-forest/5 py-2 text-sm last:border-0">
+              <input
+                type="checkbox"
+                checked={coupon.qualifyingProductIds?.includes(product.id) || false}
+                onChange={() =>
+                  onChange({
+                    ...coupon,
+                    qualifyingProductIds: toggleList(coupon.qualifyingProductIds || [], product.id),
+                  })
+                }
+              />
+              {product.name}
+            </label>
+          ))}
+        </div>
+      )}
+      <div className="grid gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <strong className="text-sm text-forest">Paliers</strong>
+          <button
+            className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
+            type="button"
+            onClick={() => {
+              const index = tiers.length + 1;
+              onChange({
+                ...coupon,
+                giftTiers: normalizeGiftTiers([
+                  ...tiers,
+                  { id: `tier-${index}`, minimumSubtotal: index * 10, quantityGrams: index },
+                ]),
+              });
+            }}
+          >
+            Ajouter un palier
+          </button>
+        </div>
+        {tiers.map((tier, index) => (
+          <div key={tier.id || index} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+            <NumberInput
+              label="Montant minimum"
+              value={tier.minimumSubtotal}
+              onChange={(minimumSubtotal) => updateTier(index, { minimumSubtotal })}
+            />
+            <NumberInput
+              label="Quantité offerte (g)"
+              value={tier.quantityGrams}
+              onChange={(quantityGrams) => updateTier(index, { quantityGrams })}
+            />
+            <button
+              className="self-end pb-3 text-xs font-semibold text-red-700"
+              type="button"
+              onClick={() => onChange({ ...coupon, giftTiers: tiers.filter((_, i) => i !== index) })}
+            >
+              Supprimer
+            </button>
+          </div>
+        ))}
+      </div>
+      <label className="text-sm font-medium text-forest">
+        Mode de choix
+        <select
+          className="input-field mt-2"
+          value={coupon.giftSelectionMode || "customer_choice"}
+          onChange={(event) =>
+            onChange({
+              ...coupon,
+              giftSelectionMode: event.target.value as NonNullable<Coupon["giftSelectionMode"]>,
+            })
+          }
+        >
+          <option value="customer_choice">Le client choisit son cadeau</option>
+          <option value="automatic_first_available">Première référence disponible automatiquement</option>
+        </select>
+      </label>
+      <div className="flex items-center justify-between gap-3">
+        <strong className="text-sm text-forest">Produits cadeaux</strong>
+        <label className="flex items-center gap-2 text-xs text-ink/60">
+          <input type="checkbox" checked={showInactive} onChange={(event) => setShowInactive(event.target.checked)} />
+          Afficher les inactifs
+        </label>
+      </div>
+      <div className="grid max-h-[32rem] gap-2 overflow-y-auto">
+        {visibleProducts.map((product) => {
+          const selected = selectedGiftIds.includes(product.id);
+          const sufficient = Number(product.stock || 0) >= Number(firstTier?.quantityGrams || 0);
+          return (
+            <article key={product.id} className="grid grid-cols-[56px_1fr_auto] items-center gap-3 rounded-md border border-forest/10 bg-white p-2">
+              <img src={product.image} alt="" className="h-14 w-14 rounded object-cover" />
+              <div className="min-w-0 text-xs">
+                <strong className="block truncate text-sm text-forest">{product.name}</strong>
+                <span>{product.category} · {formatEuro(product.price)} EUR · stock {product.stock} g</span>
+                <span className={`block ${product.isActive && sufficient ? "text-forest" : "text-amber-800"}`}>
+                  {product.isActive ? (sufficient ? "Actif et disponible" : "Stock insuffisant pour le premier palier") : "Produit inactif"}
+                </span>
+              </div>
+              <div className="grid justify-items-end gap-2 text-xs">
+                <label className="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    onChange={() => {
+                      const giftProductIds = toggleList(selectedGiftIds, product.id);
+                      onChange({
+                        ...coupon,
+                        giftProductIds,
+                        defaultGiftProductId: giftProductIds.includes(coupon.defaultGiftProductId || "")
+                          ? coupon.defaultGiftProductId
+                          : giftProductIds[0],
+                      });
+                    }}
+                  />
+                  Cadeau
+                </label>
+                {selected && (
+                  <label className="flex items-center gap-1">
+                    <input
+                      type="radio"
+                      name="default-gift-product"
+                      checked={coupon.defaultGiftProductId === product.id}
+                      onChange={() => onChange({ ...coupon, defaultGiftProductId: product.id })}
+                    />
+                    Par défaut
+                  </label>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {!firstTierAvailable && selectedGiftIds.length > 0 && (
+        <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+          Avertissement : aucune référence configurée ne peut fournir la quantité du premier palier.
+        </p>
+      )}
+      {issues.length > 0 && (
+        <ul className="list-disc pl-5 text-xs leading-5 text-red-700">
+          {issues.map((issue) => <li key={issue}>{issue}</li>)}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function toggleList<T>(values: T[], value: T) {
+  return values.includes(value) ? values.filter((entry) => entry !== value) : [...values, value];
+}
+
 function CouponsTable({
   coupons,
+  products,
   onEdit,
   onToggle,
   onArchive,
   onDelete,
+  onDuplicate,
 }: {
   coupons: Coupon[];
+  products: Product[];
   onEdit: (coupon: CouponInput) => void;
   onToggle: (coupon: Coupon) => Promise<void>;
   onArchive: (coupon: Coupon) => Promise<void>;
   onDelete: (coupon: Coupon) => Promise<void>;
+  onDuplicate: (coupon: Coupon) => void;
 }) {
   const activeCount = coupons.filter((coupon) => couponStatus(coupon).label === "Actif").length;
   const expiredCount = coupons.filter((coupon) => couponStatus(coupon).label === "Expiré").length;
@@ -2854,6 +3202,9 @@ function CouponsTable({
                   </div>
                 </div>
                 <p className="mt-3 text-sm text-ink/70">{couponDescription(coupon)}</p>
+                {coupon.promotionType === "tiered_product_gift" && (
+                  <GiftPromotionStockStatus coupon={coupon} products={products} />
+                )}
                 <p className="mt-2 text-xs text-ink/55">
                   Minimum {formatEuro(Number(coupon.minimumOrder || 0))} EUR · Utilisations{" "}
                   {coupon.usedCount || 0}
@@ -2865,6 +3216,9 @@ function CouponsTable({
                   </button>
                   <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs" onClick={() => void onToggle(coupon)}>
                     {coupon.isActive ? "Désactiver" : "Activer"}
+                  </button>
+                  <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs" onClick={() => onDuplicate(coupon)}>
+                    Dupliquer
                   </button>
                   <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs" onClick={() => void onArchive(coupon)}>
                     Archiver
@@ -2882,7 +3236,7 @@ function CouponsTable({
         <table className="hidden w-full min-w-[980px] text-left text-sm lg:table">
           <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
             <tr>
-              {["Code", "Type", "Valeur", "Minimum", "Utilisations", "Validité", "Statut", "Actions"].map((header) => (
+              {["Code", "Type", "Valeur / paliers", "Cadeaux", "Utilisations", "Validité", "Statut", "Actions"].map((header) => (
                 <th key={header} className="px-4 py-3 font-medium">{header}</th>
               ))}
             </tr>
@@ -2901,9 +3255,13 @@ function CouponsTable({
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-4">{couponTypeLabel(coupon.discountType)}</td>
-                  <td className="px-4 py-4">{couponValueLabel(coupon)}</td>
-                  <td className="px-4 py-4">{formatEuro(Number(coupon.minimumOrder || 0))} EUR</td>
+                  <td className="px-4 py-4">{couponPromotionTypeLabel(coupon)}</td>
+                  <td className="px-4 py-4">{coupon.promotionType === "tiered_product_gift" ? giftTierSummary(coupon) : couponValueLabel(coupon)}</td>
+                  <td className="px-4 py-4 text-xs">
+                    {coupon.promotionType === "tiered_product_gift" ? (
+                      <GiftPromotionStockStatus coupon={coupon} products={products} />
+                    ) : "—"}
+                  </td>
                   <td className="px-4 py-4">
                     {coupon.usedCount || 0}
                     {coupon.maxUses ? ` / ${coupon.maxUses}` : " / illimité"}
@@ -2920,6 +3278,9 @@ function CouponsTable({
                     <div className="flex flex-wrap gap-2">
                       <button className="btn-secondary min-h-9 px-3 py-2" onClick={() => onEdit(coupon)}>
                         Modifier
+                      </button>
+                      <button className="btn-secondary min-h-9 px-3 py-2" onClick={() => onDuplicate(coupon)}>
+                        Dupliquer
                       </button>
                       <button className="btn-secondary min-h-9 px-3 py-2" onClick={() => void onArchive(coupon)}>
                         Archiver
@@ -3057,16 +3418,16 @@ function PromoBannerForm({
         <BannerPlacementSelector banner={banner} onChange={onChange} />
         <div className="grid grid-cols-2 gap-3">
           <Input
-            label="Date de debut"
-            value={dateInputValue(banner.startsAt)}
-            onChange={(startsAt) => onChange({ ...banner, startsAt: startsAt || undefined })}
-            type="date"
+            label="Début (Europe/Paris)"
+            value={promotionDateTimeLocalValue(banner.startsAt)}
+            onChange={(startsAt) => onChange({ ...banner, startsAt: startsAt ? promotionDateTimeLocalToIso(startsAt) : undefined })}
+            type="datetime-local"
           />
           <Input
-            label="Date de fin"
-            value={dateInputValue(banner.endsAt)}
-            onChange={(endsAt) => onChange({ ...banner, endsAt: endsAt || undefined })}
-            type="date"
+            label="Fin (Europe/Paris)"
+            value={promotionDateTimeLocalValue(banner.endsAt)}
+            onChange={(endsAt) => onChange({ ...banner, endsAt: endsAt ? promotionDateTimeLocalToIso(endsAt) : undefined })}
+            type="datetime-local"
           />
         </div>
         <Input
@@ -8203,6 +8564,8 @@ function formatOrderItemLine(item: {
   fixedPriceQuantity?: number;
   fixedPriceGrams?: number;
   fixedPriceTotal?: number;
+  isGift?: boolean;
+  promotionLabel?: string;
 }) {
   const reference = item.productInternalReference ? `${item.productInternalReference} - ` : "";
   if (item.purchaseMode === "fixed_price") {
@@ -8211,7 +8574,10 @@ function formatOrderItemLine(item: {
       : "";
     return `${reference}${item.name}${format} x ${orderItemQuantityLabel(item)}`;
   }
-  return `${reference}${item.name} x${item.quantity} g`;
+  const gift = item.isGift
+    ? ` - Cadeau${item.promotionLabel ? ` (${item.promotionLabel})` : ""}`
+    : "";
+  return `${reference}${item.name}${gift} x${item.quantity} g`;
 }
 
 function formatAccountingValue(key: AccountingMetricKey, value: number) {
@@ -8492,15 +8858,15 @@ function formatEuro(value: number) {
   return value.toFixed(2).replace(".", ",");
 }
 
-function dateInputValue(value?: string) {
-  if (!value) return "";
-  return value.includes("T") ? value.slice(0, 10) : value;
-}
-
 function couponPreview(coupon: CouponInput) {
   const code = coupon.code || "CODE";
   const minimum = Number(coupon.minimumOrder || 0);
   const minimumText = minimum > 0 ? ` à partir de ${formatEuro(minimum)} EUR d'achat` : "";
+  if (coupon.promotionType === "tiered_product_gift") {
+    const tiers = giftTierSummary(coupon);
+    const productCount = coupon.giftProductIds?.length || 0;
+    return `${tiers}. Choix parmi ${productCount} produit${productCount > 1 ? "s" : ""}. ${coupon.autoApply ? "Sans code." : `Code ${code}.`}`;
+  }
   if (coupon.promotionType === "threshold_extra_discount") {
     return `Le client paie ${formatEuro(
       Number(coupon.paidThresholdAmount || 0),
@@ -8529,6 +8895,9 @@ function couponValueLabel(coupon: Pick<Coupon, "discountType" | "discountValue">
 }
 
 function couponDescription(coupon: Coupon) {
+  if (coupon.promotionType === "tiered_product_gift") {
+    return `${giftTierSummary(coupon)}. ${coupon.giftProductIds?.length || 0} produit(s) cadeau configuré(s).`;
+  }
   if (coupon.promotionType === "threshold_extra_discount") {
     return `Offert après seuil : ${formatEuro(
       Number(coupon.paidThresholdAmount || 0),
@@ -8548,17 +8917,57 @@ function inferAdminPromotionType(coupon: CouponInput): PromotionRuleType {
 }
 
 function couponStatus(coupon: Coupon): { label: string; tone: AdminBadgeTone } {
-  const now = Date.now();
-  const startsAt = coupon.startsAt ? Date.parse(coupon.startsAt) : 0;
-  const endsAt = coupon.endsAt ? Date.parse(coupon.endsAt) : 0;
+  const availability = promotionAvailability(coupon);
   if (coupon.isArchived) return { label: "Archivé", tone: "muted" };
-  if (!coupon.isActive) return { label: "Inactif", tone: "muted" };
-  if (startsAt && now < startsAt) return { label: "Programmé", tone: "gold" };
-  if (endsAt && now > endsAt) return { label: "Expiré", tone: "danger" };
-  if (coupon.maxUses && Number(coupon.usedCount || 0) >= Number(coupon.maxUses)) {
-    return { label: "Limite atteinte", tone: "warning" };
-  }
+  if (availability === "inactive") return { label: "Inactif", tone: "muted" };
+  if (availability === "scheduled") return { label: "Programmé", tone: "gold" };
+  if (availability === "expired") return { label: "Expiré", tone: "danger" };
+  if (availability === "max_uses") return { label: "Limite atteinte", tone: "warning" };
   return { label: "Actif", tone: "success" };
+}
+
+function couponPromotionTypeLabel(coupon: Coupon) {
+  return coupon.promotionType === "tiered_product_gift"
+    ? "Cadeau par paliers"
+    : couponTypeLabel(coupon.discountType);
+}
+
+function giftTierSummary(coupon: Pick<Coupon, "giftTiers">) {
+  const tiers = normalizeGiftTiers(coupon.giftTiers || []);
+  return tiers.length
+    ? tiers
+        .map((tier) => `${tier.quantityGrams} g dès ${formatEuro(tier.minimumSubtotal)} EUR`)
+        .join(", ")
+    : "Aucun palier";
+}
+
+function GiftPromotionStockStatus({ coupon, products }: { coupon: Coupon; products: Product[] }) {
+  const firstTier = normalizeGiftTiers(coupon.giftTiers || [])[0];
+  const configured = new Set(coupon.giftProductIds || []);
+  const giftProducts = products.filter((product) => configured.has(product.id));
+  const anyAvailable = Boolean(
+    firstTier &&
+      giftProducts.some(
+        (product) => product.isActive && product.stock >= firstTier.quantityGrams,
+      ),
+  );
+  return (
+    <div className="mt-2 grid gap-1">
+      <span>{giftProducts.map((product) => product.name).join(", ") || "Aucun produit"}</span>
+      <span className={anyAvailable ? "text-forest" : "font-semibold text-amber-800"}>
+        {anyAvailable ? "Stock cadeau disponible" : "Aucun stock pour le premier palier"}
+      </span>
+    </div>
+  );
+}
+
+function technicalPromotionCode(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "")
+    .slice(0, 32);
 }
 
 const bannerPlacementOptions: Array<{ value: PromoBannerPlacement; label: string }> = [
