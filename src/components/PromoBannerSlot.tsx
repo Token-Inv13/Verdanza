@@ -10,16 +10,22 @@ import type {
   PromoBannerType,
   PromoBannerVariant,
 } from "../types";
+import { TopPromoShowcase } from "./TopPromoShowcase";
 
-const PromoBannersContext = createContext<PromoBanner[]>([]);
+type PromoBannersState = { banners: PromoBanner[]; loaded: boolean };
+
+const PromoBannersContext = createContext<PromoBannersState>({ banners: [], loaded: false });
 
 export function PromoBannersProvider({ children }: { children: ReactNode }) {
   const [banners, setBanners] = useState<PromoBanner[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
     getPublicPromoBanners().then((nextBanners) => {
-      if (isMounted) setBanners(nextBanners);
+      if (!isMounted) return;
+      setBanners(nextBanners);
+      setLoaded(true);
     });
     return () => {
       isMounted = false;
@@ -27,7 +33,7 @@ export function PromoBannersProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <PromoBannersContext.Provider value={banners}>
+    <PromoBannersContext.Provider value={{ banners, loaded }}>
       {children}
     </PromoBannersContext.Provider>
   );
@@ -42,7 +48,8 @@ export function PromoBannerSlot({
   type?: PromoBannerType;
   className?: string;
 }) {
-  const banners = useContext(PromoBannersContext);
+  const { banners, loaded } = useContext(PromoBannersContext);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => new Set());
   const location = useLocation();
   const currentPlacement = placement || placementFromPath(location.pathname);
   const visibleBanners = useMemo(
@@ -50,27 +57,53 @@ export function PromoBannerSlot({
       banners
         .filter((banner) => promoBannerMatchesPlacement(banner, currentPlacement))
         .filter((banner) => (type ? banner.type === type : true))
+        .filter((banner) => !dismissedIds.has(banner.id))
         .filter((banner) => !isBannerDismissed(banner))
         .sort((left, right) => Number(left.priority || 0) - Number(right.priority || 0)),
-    [banners, currentPlacement, type],
+    [banners, currentPlacement, dismissedIds, type],
   );
 
+  const dismissBanner = (banner: PromoBanner) => {
+    window.localStorage.setItem(dismissStorageKey(banner.id), "true");
+    setDismissedIds((current) => new Set(current).add(banner.id));
+  };
+
+  if (type === "top_bar" && !loaded) {
+    return (
+      <div className="border-b border-forest/10 bg-ivory py-2 sm:py-3" aria-hidden="true">
+        <div className="container-page">
+          <div className="h-[176px] animate-pulse rounded-2xl bg-forest/5 motion-reduce:animate-none sm:h-[184px]" />
+        </div>
+      </div>
+    );
+  }
+
   if (!visibleBanners.length) return null;
+
+  if (type === "top_bar") {
+    return (
+      <div className={className}>
+        <TopPromoShowcase banners={visibleBanners} onDismiss={dismissBanner} />
+      </div>
+    );
+  }
 
   return (
     <div className={className}>
       {visibleBanners.map((banner) => (
-        <PublicPromoBanner key={banner.id} banner={banner} />
+        <PublicPromoBanner key={banner.id} banner={banner} onDismiss={dismissBanner} />
       ))}
     </div>
   );
 }
 
-function PublicPromoBanner({ banner }: { banner: PromoBanner }) {
-  const [dismissed, setDismissed] = useState(() => isBannerDismissed(banner));
-
-  if (dismissed) return null;
-
+function PublicPromoBanner({
+  banner,
+  onDismiss,
+}: {
+  banner: PromoBanner;
+  onDismiss: (banner: PromoBanner) => void;
+}) {
   const showOfferBadge = banner.variant === "promo";
   const content = (
     <>
@@ -84,7 +117,7 @@ function PublicPromoBanner({ banner }: { banner: PromoBanner }) {
           <strong className="block text-sm font-semibold text-forest">{banner.title}</strong>
         </div>
         <p className="mt-1 text-sm leading-6 text-ink/70">{banner.message}</p>
-        {banner.linkedPromoCode && (
+        {banner.promotionSummary?.requiresCode === true && banner.linkedPromoCode && (
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-forest">
             <span>Code : {banner.linkedPromoCode}</span>
             <button
@@ -105,10 +138,7 @@ function PublicPromoBanner({ banner }: { banner: PromoBanner }) {
           type="button"
           className="ml-auto h-9 w-9 rounded-full border border-transparent text-lg leading-none text-forest/70 hover:border-forest/10 hover:bg-ivory/80 hover:text-forest"
           aria-label="Fermer cette banniere"
-          onClick={() => {
-            window.localStorage.setItem(dismissStorageKey(banner.id), "true");
-            setDismissed(true);
-          }}
+          onClick={() => onDismiss(banner)}
         >
           ×
         </button>

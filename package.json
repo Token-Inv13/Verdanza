@@ -33,6 +33,7 @@
     "test:product-purchase-options": "node --import tsx scripts/testProductPurchaseOptions.ts",
     "test:fixed-price-migration": "node --import tsx scripts/testFixedPriceMigration.ts",
     "test:promotions": "node --import tsx scripts/testPromotionsAndBanners.ts",
+    "test:promo-showcase": "node --import tsx scripts/testTopPromoShowcase.tsx",
     "test:gift-promotions": "node --import tsx scripts/testGiftPromotions.ts",
     "test:supplier-purchases": "node --import tsx scripts/testSupplierPurchases.ts",
     "test:accounting-periods": "node --import tsx scripts/testAccountingPeriods.ts",

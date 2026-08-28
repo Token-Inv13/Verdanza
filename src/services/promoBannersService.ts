@@ -310,6 +310,32 @@ export function normalizePromoBanner(banner: PromoBanner): PromoBanner {
     buttonUrl: sanitizeBannerUrl(banner.buttonUrl || ""),
     linkedCouponId: banner.linkedCouponId || banner.deletedLinkedCouponId || "",
     linkedPromoCode: banner.linkedPromoCode || "",
+    promotionSummary: banner.promotionSummary
+      ? {
+          promotionType: banner.promotionSummary.promotionType,
+          applicationMode:
+            banner.promotionSummary.applicationMode === "automatic" ? "automatic" : "code",
+          requiresCode: banner.promotionSummary.requiresCode === true,
+          giftTiers: Array.isArray(banner.promotionSummary.giftTiers)
+            ? banner.promotionSummary.giftTiers
+                .map((tier) => ({
+                  id: String(tier.id || "").trim(),
+                  minimumSubtotal: Number(tier.minimumSubtotal || 0),
+                  quantityGrams: Math.max(0, Math.floor(Number(tier.quantityGrams || 0))),
+                }))
+                .filter((tier) => tier.id && tier.minimumSubtotal > 0 && tier.quantityGrams > 0)
+                .sort((left, right) => left.minimumSubtotal - right.minimumSubtotal)
+            : undefined,
+          giftProductNames: Array.isArray(banner.promotionSummary.giftProductNames)
+            ? banner.promotionSummary.giftProductNames
+                .map((name) => String(name || "").trim())
+                .filter(Boolean)
+            : undefined,
+          discountType: banner.promotionSummary.discountType,
+          discountValue: Number(banner.promotionSummary.discountValue || 0),
+          minimumOrder: Number(banner.promotionSummary.minimumOrder || 0),
+        }
+      : undefined,
     variant: normalizeBannerVariant(banner.variant),
     dismissible: Boolean(banner.dismissible),
     isActive: normalizeActiveState(banner),

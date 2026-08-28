@@ -297,6 +297,17 @@ export type PromoBannerPlacement =
   | "draft";
 export type PromoBannerVariant = "default" | "promo" | "delivery" | "info" | "warning";
 
+export type PublicPromotionSummary = {
+  promotionType?: PromotionRuleType;
+  applicationMode: "automatic" | "code";
+  requiresCode: boolean;
+  giftTiers?: ProductGiftTier[];
+  giftProductNames?: string[];
+  discountType?: CouponDiscountType;
+  discountValue?: number;
+  minimumOrder?: number;
+};
+
 export type PromoBanner = {
   id: string;
   title: string;
@@ -312,6 +323,7 @@ export type PromoBanner = {
   buttonUrl?: string;
   linkedCouponId?: string;
   linkedPromoCode?: string;
+  promotionSummary?: PublicPromotionSummary;
   deletedLinkedCouponId?: string;
   variant: PromoBannerVariant;
   dismissible: boolean;

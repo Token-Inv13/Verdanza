@@ -20,6 +20,10 @@ import type {
   PromotionSelection,
 } from "../src/types/index.js";
 import { promotionAvailability } from "../src/lib/promotionDates.js";
+import {
+  publicPromoCode,
+  publicPromotionSummary,
+} from "../src/lib/publicPromotionBanners.js";
 
 export default async function handler(
   request: VercelRequestLike,
@@ -101,26 +105,37 @@ async function handlePublicPromoBanners(response: VercelResponseLike) {
       .sort((left, right) => Number(left.priority || 0) - Number(right.priority || 0));
 
     sendJson(response, {
-      banners: banners.map((banner) => ({
-        id: banner.id,
-        title: banner.title,
-        message: banner.message,
-        type: banner.type,
-        placement: banner.placement,
-        placements: banner.placements,
-        isActive: banner.isActive,
-        startsAt: banner.startsAt || "",
-        endsAt: banner.endsAt || "",
-        priority: Number(banner.priority || 0),
-        buttonLabel: banner.buttonLabel || "",
-        buttonUrl: banner.buttonUrl || "",
-        linkedCouponId: banner.linkedCouponId || "",
-        linkedPromoCode: banner.linkedPromoCode || "",
-        variant: banner.variant,
-        dismissible: Boolean(banner.dismissible),
-        isArchived: Boolean(banner.isArchived),
-        isTemplate: Boolean(banner.isTemplate),
-      })),
+      banners: banners.map((banner) => {
+        const linkedCoupon = findLinkedCoupon(coupons, banner);
+        const promotionSummary = linkedCoupon
+          ? publicPromotionSummary(linkedCoupon, products)
+          : undefined;
+        return {
+          id: banner.id,
+          title: banner.title,
+          message: banner.message,
+          type: banner.type,
+          placement: banner.placement,
+          placements: banner.placements,
+          isActive: banner.isActive,
+          startsAt: banner.startsAt || "",
+          endsAt: banner.endsAt || "",
+          priority: Number(banner.priority || 0),
+          buttonLabel: banner.buttonLabel || "",
+          buttonUrl: banner.buttonUrl || "",
+          linkedCouponId: banner.linkedCouponId || "",
+          linkedPromoCode: publicPromoCode(
+            banner.linkedPromoCode,
+            linkedCoupon,
+            promotionSummary,
+          ),
+          ...(promotionSummary ? { promotionSummary } : {}),
+          variant: banner.variant,
+          dismissible: Boolean(banner.dismissible),
+          isArchived: Boolean(banner.isArchived),
+          isTemplate: Boolean(banner.isTemplate),
+        };
+      }),
     });
   } catch (error) {
     console.error("public-promo-banners failed", error);
