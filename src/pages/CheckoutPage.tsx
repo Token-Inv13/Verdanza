@@ -155,11 +155,19 @@ export function CheckoutPage() {
     [customer, selectedAddress],
   );
   const isLocalDelivery = deliveryMethod === "local_express";
+  const hasCompleteQuoteDeliveryAddress = Boolean(
+    deliveryAddress.line1?.trim() &&
+      deliveryAddress.postalCode?.trim() &&
+      deliveryAddress.city?.trim() &&
+      deliveryAddress.country?.trim(),
+  );
   const quoteDeliveryAddress = isLocalDelivery
     ? deliveryEligibility.eligible
       ? deliveryAddress
       : undefined
-    : deliveryAddress;
+    : hasCompleteQuoteDeliveryAddress
+      ? deliveryAddress
+      : undefined;
   const localDeliveryUnavailable = !deliveryEligibility.eligible;
   const localDeliveryMinimum = effectiveLocalDeliveryMinimum(
     selectedZone?.minimumOrderAmount ?? selectedZone?.minimumOrder,

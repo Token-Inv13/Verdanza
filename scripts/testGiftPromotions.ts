@@ -196,12 +196,18 @@ const createOrderSource = readFileSync("api/create-order.ts", "utf8");
 const cancellationSource = readFileSync("api/_server/orderCancellation.ts", "utf8");
 const bannerSource = readFileSync("api/quote-order.ts", "utf8");
 const accountingSource = readFileSync("src/lib/accountingSummary.ts", "utf8");
+const checkoutSource = readFileSync("src/pages/CheckoutPage.tsx", "utf8");
 assert.match(createOrderSource, /type: item\.isGift \? "promotion_gift" : "sale"/);
 assert.match(createOrderSource, /requestedQuantity = matchingItems\.reduce/);
 assert.match(cancellationSource, /for \(const item of order\.items \|\| \[\]\)/);
 assert.match(cancellationSource, /promotionsRestoredAt/);
 assert.match(bannerSource, /firstTier[\s\S]*product\.stock/);
 assert.doesNotMatch(accountingSource, /filter\(\(item\) => !item\.isGift\)/, "gift cost is not excluded from accounting");
+assert.match(
+  checkoutSource,
+  /hasCompleteQuoteDeliveryAddress[\s\S]*\? deliveryAddress[\s\S]*: undefined/,
+  "checkout quotes omit an incomplete postal address so the gift quote remains available",
+);
 
 console.log("Tiered product gift tests passed (36+ scenarios and invariants).");
 
