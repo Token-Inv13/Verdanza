@@ -106,6 +106,9 @@ const tests: TestCase[] = [
       assertIncludes(html, "WELCOME10");
       assertIncludes(html, "Copier le code WELCOME10");
       assertIncludes(html, 'aria-live="polite"');
+      const promotedHtml = render([welcomeBanner]);
+      assertIncludes(promotedHtml, "WELCOME10");
+      assertIncludes(promotedHtml, "Copier le code WELCOME10");
     },
   },
   {

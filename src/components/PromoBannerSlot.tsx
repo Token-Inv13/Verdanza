@@ -70,9 +70,9 @@ export function PromoBannerSlot({
 
   if (type === "top_bar" && !loaded) {
     return (
-      <div className="border-b border-forest/10 bg-ivory py-2 sm:py-3" aria-hidden="true">
+      <div className="border-b border-forest/10 bg-ivory py-2" aria-hidden="true">
         <div className="container-page">
-          <div className="h-[176px] animate-pulse rounded-2xl bg-forest/5 motion-reduce:animate-none sm:h-[184px]" />
+          <div className="h-[176px] animate-pulse rounded-2xl bg-forest/5 motion-reduce:animate-none" />
         </div>
       </div>
     );

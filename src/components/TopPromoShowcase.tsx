@@ -31,6 +31,7 @@ export function TopPromoShowcase({
   }, [activeIndex, banners.length]);
 
   if (!primary) return null;
+  const primaryCode = publicCodeForBanner(primary);
 
   const move = (direction: number) => {
     setActiveIndex((index) => (index + direction + banners.length) % banners.length);
@@ -59,7 +60,7 @@ export function TopPromoShowcase({
 
   return (
     <section
-      className="border-b border-forest/10 bg-gradient-to-b from-[#fbf8f0] to-ivory py-2 sm:py-3"
+      className="border-b border-forest/10 bg-gradient-to-b from-[#fbf8f0] to-ivory py-2"
       aria-label="Offres du moment"
       data-testid="top-promo-showcase"
     >
@@ -71,7 +72,7 @@ export function TopPromoShowcase({
             <span className="absolute right-8 top-10 h-20 w-10 rotate-[58deg] rounded-[100%_0_100%_0] bg-forest/15" />
           </div>
 
-          <div className="relative grid min-h-[128px] gap-3 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-5 sm:px-5 sm:py-4">
+          <div className="relative grid gap-2 px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-5 sm:px-5 sm:py-2">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-forest px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-ivory">
@@ -82,16 +83,35 @@ export function TopPromoShowcase({
                   <span className="text-[11px] font-medium text-forest/65">Sans code</span>
                 )}
               </div>
-              <h2 className="mt-1.5 max-w-3xl font-display text-[22px] leading-[1.05] text-forest sm:text-[28px]">
+              <h2 className="mt-1.5 max-w-3xl font-display text-[21px] leading-[1.05] text-forest sm:text-[28px]">
                 {primary.title}
               </h2>
-              <p className="mt-1 max-w-3xl text-xs leading-5 text-ink/70 sm:text-sm">
+              <p className="sr-only max-w-3xl text-xs leading-5 text-ink/70 sm:not-sr-only sm:mt-1 sm:text-sm">
                 {primary.message}
               </p>
               <GiftTierRail banner={primary} />
             </div>
 
             <div className="flex items-center gap-2 sm:self-end">
+              {primaryCode && (
+                <>
+                  <code className="rounded-md border border-forest/15 bg-ivory px-2 py-1.5 text-xs font-semibold tracking-wide text-forest">
+                    {primaryCode}
+                  </code>
+                  <button
+                    type="button"
+                    className="inline-flex min-h-9 items-center gap-1 rounded-md px-1.5 text-xs font-semibold underline decoration-champagne underline-offset-2 hover:bg-forest/5"
+                    aria-label={`Copier le code ${primaryCode}`}
+                    onClick={() => void copyCode(primary)}
+                  >
+                    <Copy size={13} aria-hidden="true" />
+                    {copiedBannerId === primary.id ? "Copié" : "Copier"}
+                  </button>
+                  <span className="sr-only" role="status" aria-live="polite">
+                    {copiedBannerId === primary.id ? `Code ${primaryCode} copié` : ""}
+                  </span>
+                </>
+              )}
               {primary.buttonLabel && primary.buttonUrl && (
                 <BannerLink url={primary.buttonUrl} label={primary.buttonLabel} primary />
               )}
@@ -158,19 +178,19 @@ function GiftTierRail({ banner }: { banner: PromoBanner }) {
 
   return (
     <div
-      className="mt-2 flex max-w-2xl snap-x gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="mt-1.5 flex max-w-2xl snap-x gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       aria-label="Paliers de l'offre"
     >
       {tiers.map((tier) => (
         <div
           key={tier.id}
-          className="flex min-w-[105px] snap-start items-center gap-1.5 rounded-lg border border-forest/10 bg-ivory/75 px-2 py-1.5 text-forest sm:min-w-[125px]"
+          className="flex min-w-[105px] snap-start items-center gap-1.5 rounded-lg border border-forest/10 bg-ivory/75 px-2 py-1 text-forest sm:min-w-[125px]"
         >
           <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-champagne/25 text-[11px]" aria-hidden="true">
             <Gift size={13} />
           </span>
           <span className="whitespace-nowrap text-[10px] leading-4 sm:text-[11px]">
-            {formatEuro(tier.minimumSubtotal)} <strong className="block text-xs">{tier.quantityGrams} g offert{tier.quantityGrams > 1 ? "s" : ""}</strong>
+            {formatEuro(tier.minimumSubtotal)} <span className="sm:hidden" aria-hidden="true">→ </span><strong className="inline text-xs sm:block">{tier.quantityGrams} g offert{tier.quantityGrams > 1 ? "s" : ""}</strong>
           </span>
         </div>
       ))}
@@ -192,12 +212,12 @@ function SecondaryPromoRail({
   const code = publicCodeForBanner(banner);
   return (
     <aside
-      className="relative flex min-h-10 flex-wrap items-center gap-x-2 gap-y-1 border-t border-forest/10 bg-cream/75 px-3 py-2 pr-11 text-xs text-forest sm:px-5"
+      className="relative flex min-h-10 flex-nowrap items-center gap-x-2 overflow-x-auto border-t border-forest/10 bg-cream/75 px-3 py-2 pr-11 text-xs text-forest [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:px-5"
       data-testid="secondary-promo-rail"
     >
       <strong>{banner.title}</strong>
       <span className="hidden text-forest/30 sm:inline" aria-hidden="true">·</span>
-      <span className="min-w-0 text-ink/65">{banner.message}</span>
+      <span className="hidden min-w-0 text-ink/65 sm:inline">{banner.message}</span>
       {code && (
         <>
           <code className="rounded-md border border-forest/15 bg-ivory px-2 py-1 font-sans font-semibold tracking-wide text-forest">{code}</code>
