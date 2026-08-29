@@ -3,6 +3,7 @@ import { Clock3, UserRound } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { BlogArticleRenderer } from "../components/BlogArticleRenderer";
 import { BlogCard } from "../components/BlogCard";
+import { BlogEngagement } from "../components/BlogEngagement";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { JsonLd } from "../components/JsonLd";
 import { Seo } from "../components/Seo";
@@ -178,6 +179,8 @@ export function BlogArticlePage() {
         </figure>
 
         <BlogArticleRenderer article={article} />
+
+        <BlogEngagement article={article} />
 
         <footer className="mt-12 grid gap-4 rounded-lg border border-forest/10 bg-cream p-6 sm:p-8 lg:grid-cols-[1.3fr_1fr]">
           <div>

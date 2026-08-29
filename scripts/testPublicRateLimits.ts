@@ -483,6 +483,7 @@ test("les seuils sont centralises et documentables", () => {
   assert.equal(publicRateLimitRules["/api/create-order"].length, 6);
   assert.equal(publicRateLimitRules["/api/contact"].length, 6);
   assert.equal(publicRateLimitRules["/api/contests"].length, 6);
+  assert.equal(publicRateLimitRules["/api/blog-interactions"].length, 6);
   assert.equal(publicRateLimitsCollection, "securityRateLimits");
 });
 

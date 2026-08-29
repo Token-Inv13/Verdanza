@@ -86,6 +86,7 @@ const ContestPrizePage = lazy(() =>
   })),
 );
 const AdminContestsPage = lazy(() => import("./pages/admin/AdminContestsPage"));
+const AdminBlogCommentsPage = lazy(() => import("./pages/admin/AdminBlogCommentsPage"));
 
 export function App() {
   return (
@@ -163,6 +164,7 @@ export function App() {
             <Route path="coupons" element={<AdminPage section="Coupons" />} />
             <Route path="bannieres" element={<AdminPage section="Bannieres" />} />
             <Route path="concours" element={<AdminContestsPage />} />
+            <Route path="commentaires-blog" element={<AdminBlogCommentsPage />} />
             <Route path="archives" element={<AdminArchivesPage />} />
             <Route path="factures" element={<Navigate to="/admin/comptabilite?tab=factures" replace />} />
             <Route path="comptabilite" element={<AdminPage section="Comptabilité" />} />

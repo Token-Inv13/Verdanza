@@ -13,7 +13,8 @@ export const publicRateLimitsCollection = "securityRateLimits";
 export type PublicSubmissionRoute =
   | "/api/create-order"
   | "/api/contact"
-  | "/api/contests";
+  | "/api/contests"
+  | "/api/blog-interactions";
 export type PublicRateLimitSignalType = "network" | "email" | "anonymous";
 
 type PublicRateLimitRule = {
@@ -50,6 +51,14 @@ export const publicRateLimitRules: Record<
     { signal: "email", windowId: "24h", windowMs: 24 * 60 * 60_000, maximum: 6 },
     { signal: "anonymous", windowId: "1h", windowMs: 60 * 60_000, maximum: 8 },
     { signal: "anonymous", windowId: "24h", windowMs: 24 * 60 * 60_000, maximum: 20 },
+  ],
+  "/api/blog-interactions": [
+    { signal: "network", windowId: "1m", windowMs: 60_000, maximum: 30 },
+    { signal: "network", windowId: "1h", windowMs: 60 * 60_000, maximum: 120 },
+    { signal: "email", windowId: "10m", windowMs: 10 * 60_000, maximum: 5 },
+    { signal: "email", windowId: "24h", windowMs: 24 * 60 * 60_000, maximum: 40 },
+    { signal: "anonymous", windowId: "1m", windowMs: 60_000, maximum: 20 },
+    { signal: "anonymous", windowId: "24h", windowMs: 24 * 60 * 60_000, maximum: 120 },
   ],
 };
 

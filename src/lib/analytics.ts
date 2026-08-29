@@ -48,6 +48,9 @@ export type AnalyticsEventName =
   | "blog_article_view"
   | "blog_read_progress"
   | "blog_shop_click"
+  | "blog_like"
+  | "blog_share"
+  | "blog_comment_submit"
   | "generate_lead";
 
 export type ContactHelpSource =
@@ -391,6 +394,32 @@ export function trackBlogShopClick(article: BlogArticle, destinationPath: string
     article_title: article.title,
     article_category: article.category,
     destination_path: sanitizeDestinationPath(destinationPath),
+  });
+}
+
+export function trackBlogLike(article: BlogArticle, action: "add" | "remove") {
+  trackEvent("blog_like", {
+    article_slug: article.slug,
+    article_title: article.title,
+    article_category: article.category,
+    engagement_action: action,
+  });
+}
+
+export function trackBlogShare(article: BlogArticle, method: "native" | "clipboard") {
+  trackEvent("blog_share", {
+    article_slug: article.slug,
+    article_title: article.title,
+    article_category: article.category,
+    share_method: method,
+  });
+}
+
+export function trackBlogCommentSubmit(article: BlogArticle) {
+  trackEvent("blog_comment_submit", {
+    article_slug: article.slug,
+    article_title: article.title,
+    article_category: article.category,
   });
 }
 

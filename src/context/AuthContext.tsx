@@ -38,7 +38,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function shouldLoadAuthImmediately(pathname: string) {
-  return /^(\/admin|\/compte|\/connexion|\/inscription|\/panier|\/checkout|\/auth\/action)(?:\/|$)/.test(
+  return /^(\/admin|\/compte|\/connexion|\/inscription|\/panier|\/checkout|\/auth\/action|\/blog\/[^/]+)(?:\/|$)/.test(
     pathname,
   );
 }

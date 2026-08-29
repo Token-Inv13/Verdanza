@@ -134,6 +134,11 @@ function legalSections(title: string, contactEmail?: string) {
           "Les données de compte, commande, livraison et contact sont utilisées pour exécuter la commande et assurer le suivi client.",
           "Les données sont traitées par des prestataires techniques nécessaires au fonctionnement du site et au suivi des commandes.",
           "Les données de règlement manuel sont utilisées uniquement pour le suivi de commande et la confirmation administrative.",
+          "Les J'aime des guides utilisent un identifiant technique aléatoire conservé dans le navigateur, transformé côté serveur avant stockage, sans connexion obligatoire et sans adresse IP brute enregistrée.",
+          "Les commentaires des guides nécessitent un compte connecté. Le commentaire, le nom public affiché, l'identifiant technique du compte, l'article concerné, la date et le statut de modération sont conservés pour publier et administrer l'espace de discussion.",
+          "L'adresse e-mail du compte n'est pas affichée avec les commentaires. Seul le nom public associé au compte peut être publié avec un commentaire approuvé.",
+          "Tous les commentaires sont créés en attente de modération. Verdanza peut approuver, rejeter ou supprimer un commentaire.",
+          "Les commentaires et données de modération sont conservés tant que le guide ou l'échange reste utile au service, puis peuvent être supprimés sur demande légitime ou lors d'une revue administrative.",
         ],
       },
       {

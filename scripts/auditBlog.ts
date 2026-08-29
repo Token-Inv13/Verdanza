@@ -6,6 +6,7 @@ import {
   blogArticles,
   publishedBlogArticles,
 } from "../src/data/blogArticles";
+import { publishedBlogArticleSlugs } from "../src/data/blogArticleSlugs";
 import { absoluteUrl } from "../src/lib/siteUrl";
 
 const distDir = resolve("dist");
@@ -21,6 +22,11 @@ if (published.length !== 14) failures.push(`published article count ${published.
 expectUnique("slugs", published.map((article) => article.slug));
 expectUnique("SEO titles", published.map((article) => article.seoTitle));
 expectUnique("descriptions", published.map((article) => article.description));
+expectEqualSet(
+  "published blog slug registry",
+  published.map((article) => article.slug),
+  [...publishedBlogArticleSlugs],
+);
 
 auditBlogIndex();
 for (const article of published) {
@@ -86,6 +92,9 @@ async function auditArticle(article: (typeof published)[number]) {
   if (Number.isNaN(new Date(article.datePublished).getTime())) failures.push(`${path} invalid published date`);
   if (Number.isNaN(new Date(article.dateModified).getTime())) failures.push(`${path} invalid modified date`);
   if (!main.includes(article.images.wide)) failures.push(`${path} main image missing`);
+  if (!main.includes("Votre avis sur ce guide")) failures.push(`${path} engagement component missing`);
+  if (!main.includes("Commentaires approuvés")) failures.push(`${path} approved comments section missing`);
+  if (!main.includes("Partager")) failures.push(`${path} share action missing`);
   if (blogPosting.length !== 1) failures.push(`${path} BlogPosting count ${blogPosting.length}`);
   if (breadcrumbs.length !== 1) failures.push(`${path} BreadcrumbList count ${breadcrumbs.length}`);
   if (/"@type":"Product"|"@type":"Offer"|"@type":"Review"|"@type":"AggregateRating"/.test(allJson)) {
@@ -220,6 +229,14 @@ function decodeScriptJson(value: string) {
 
 function expectUnique(label: string, values: string[]) {
   if (new Set(values).size !== values.length) failures.push(`duplicate ${label}`);
+}
+
+function expectEqualSet(label: string, left: string[], right: string[]) {
+  const missing = left.filter((value) => !right.includes(value));
+  const extra = right.filter((value) => !left.includes(value));
+  if (missing.length || extra.length) {
+    failures.push(`${label} mismatch missing=[${missing.join(",")}] extra=[${extra.join(",")}]`);
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -141,6 +141,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /blogArticleStats/{statId} {
+      allow read, write: if false;
+    }
+
+    match /blogArticleLikes/{likeId} {
+      allow read, write: if false;
+    }
+
+    match /blogArticleComments/{commentId} {
+      allow read, write: if false;
+    }
+
     match /settings/{settingId} {
       allow read: if isAdmin();
       allow create, update, delete: if isAdmin();
