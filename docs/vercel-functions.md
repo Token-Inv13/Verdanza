@@ -1,11 +1,16 @@
 # Fonctions Vercel
 
-Verdanza passera sur Vercel Pro pour son exploitation commerciale. La consolidation des
-fonctions mise en place avant cette migration reste volontairement conservée après le passage
-à Pro : elle maintient des frontières cohérentes, réduit le coût opérationnel et évite de
-recréer des points d'entrée séparés sans nécessité fonctionnelle.
+Verdanza utilise Vercel Pro pour son exploitation commerciale. L'architecture n'est donc plus
+contrainte par l'ancienne limite de fonctions du plan Hobby. La consolidation temporaire en
+onze fonctions, mise en place pour respecter cette limite, a été retirée au profit de quinze
+fonctions explicites alignées sur leurs responsabilités métier.
 
-Le plan Pro restera néanmoins nécessaire pour l'exploitation commerciale de Verdanza et pour
-conserver une marge suffisante lors des futurs développements. Le budget courant est de onze
-fonctions déployées. Les URLs historiques sont maintenues par les rewrites de `vercel.json` et
-les contrôles d'autorisation restent appliqués dans chaque handler métier.
+Les points d'entrée publics, administratifs et personnels sont désormais séparés. Les URLs API
+historiques correspondent directement aux fichiers sous `api/`, sans dispatcher ni rewrite de
+consolidation. La logique métier partagée reste centralisée sous `api/_server/`, notamment les
+transactions, les contrôles d'autorisation et les intégrations externes.
+
+Le tirage Concours V1 est atomique : le concours passe directement de `closed` à
+`winner_pending` dans la transaction qui enregistre le snapshot et le gagnant. Le statut
+`drawing` reste disponible conceptuellement dans le modèle, mais n'est pas exposé comme une
+étape persistante pendant ce tirage atomique.

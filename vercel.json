@@ -106,34 +106,6 @@
   ],
   "rewrites": [
     {
-      "source": "/api/contests",
-      "destination": "/api/contest-api?__verdanzaRoute=public"
-    },
-    {
-      "source": "/api/admin-contests",
-      "destination": "/api/contest-api?__verdanzaRoute=admin"
-    },
-    {
-      "source": "/api/contest-prize",
-      "destination": "/api/contest-api?__verdanzaRoute=prize"
-    },
-    {
-      "source": "/api/retry-order-purchase-analytics",
-      "destination": "/api/order-analytics?__verdanzaRoute=retry-purchase"
-    },
-    {
-      "source": "/api/revoke-order-analytics",
-      "destination": "/api/order-analytics?__verdanzaRoute=revoke"
-    },
-    {
-      "source": "/api/admin-payment-links",
-      "destination": "/api/payment-links?__verdanzaRoute=list"
-    },
-    {
-      "source": "/api/send-payment-link",
-      "destination": "/api/payment-links?__verdanzaRoute=send"
-    },
-    {
       "source": "/api/public-promo-banners",
       "destination": "/api/quote-order?publicPromoBanners=1"
     }
