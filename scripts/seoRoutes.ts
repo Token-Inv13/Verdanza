@@ -194,6 +194,12 @@ export const staticSeoRoutes: SeoRoute[] = [
   { path: "/admin/archives", kind: "admin", component: "AdminArchivesPage", indexable: false },
   { path: "/admin/concours", kind: "admin", component: "AdminContestsPage", indexable: false },
   {
+    path: "/admin/commentaires-blog",
+    kind: "admin",
+    component: "AdminBlogCommentsPage",
+    indexable: false,
+  },
+  {
     path: "/admin/comptabilite",
     kind: "admin",
     component: "AdminPage(Comptabilite)",
