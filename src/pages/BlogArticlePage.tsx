@@ -3,7 +3,11 @@ import { Clock3, UserRound } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { BlogArticleRenderer } from "../components/BlogArticleRenderer";
 import { BlogCard } from "../components/BlogCard";
-import { BlogEngagement } from "../components/BlogEngagement";
+import {
+  BlogComments,
+  BlogEngagementActions,
+  BlogEngagementProvider,
+} from "../components/BlogEngagement";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { JsonLd } from "../components/JsonLd";
 import { Seo } from "../components/Seo";
@@ -137,108 +141,121 @@ export function BlogArticlePage() {
         ]}
       />
 
-      <article>
-        <header className="max-w-4xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-champagne">
-            {article.category}
-          </p>
-          <h1 className="mt-4 font-display text-4xl leading-tight text-forest sm:text-5xl md:text-6xl">
-            {article.title}
-          </h1>
-          <p className="mt-5 text-lg leading-8 text-ink/70">{article.excerpt}</p>
-          <div className="mt-6 flex flex-wrap gap-3 text-sm text-forest/75">
-            <span className="inline-flex items-center gap-2">
-              <UserRound size={16} /> {article.authorName}
-            </span>
-            <time dateTime={article.datePublished}>
-              Publié le {formatFrenchDate(article.datePublished)}
-            </time>
-            {article.dateModified !== article.datePublished && (
-              <time dateTime={article.dateModified}>
-                Mis à jour le {formatFrenchDate(article.dateModified)}
-              </time>
-            )}
-            <span className="inline-flex items-center gap-2">
-              <Clock3 size={16} /> {article.readingTime}
-            </span>
-          </div>
-        </header>
-
-        <figure className="mt-8 overflow-hidden rounded-lg border border-forest/10 bg-cream">
-          <img
-            src={heroImage?.src || article.images.wide}
-            srcSet={heroImage?.srcSet}
-            sizes={heroImage?.sizes || "100vw"}
-            alt=""
-            width={heroImage?.width || 1600}
-            height={heroImage?.height || 900}
-            fetchPriority="high"
-            decoding="async"
-            className="aspect-video w-full object-cover"
-          />
-        </figure>
-
-        <BlogArticleRenderer article={article} />
-
-        <BlogEngagement article={article} />
-
-        <footer className="mt-12 grid gap-4 rounded-lg border border-forest/10 bg-cream p-6 sm:p-8 lg:grid-cols-[1.3fr_1fr]">
-          <div>
-            <h2 className="font-display text-3xl text-forest">Poursuivre la lecture</h2>
-            <p className="mt-3 text-sm leading-6 text-ink/70">
-              Retrouvez les produits et les pages pratiques liés à ce guide.
+      <BlogEngagementProvider article={article}>
+        <article>
+          <header className="max-w-4xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-champagne">
+              {article.category}
             </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {article.links.map((link) => (
-              <Link
-                key={link.to}
-                to={link.to}
-                className="btn-secondary min-h-10 py-2"
-                onClick={() => {
-                  trackCtaClick({
-                    ctaId: ctaIdForPath("blog_article_link", link.to),
-                    ctaLocation: "blog_article_footer",
-                    destinationPath: link.to,
-                    ctaCategory: ctaCategoryForPath(link.to),
-                  });
-                  if (isShopDestinationPath(link.to)) {
-                    trackBlogShopClick(article, link.to);
-                  }
-                }}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </div>
-        </footer>
-      </article>
+            <h1 className="mt-4 font-display text-4xl leading-tight text-forest sm:text-5xl md:text-6xl">
+              {article.title}
+            </h1>
+            <p className="mt-5 text-lg leading-8 text-ink/70">{article.excerpt}</p>
+            <div className="mt-6 flex flex-wrap gap-3 text-sm text-forest/75">
+              <span className="inline-flex items-center gap-2">
+                <UserRound size={16} /> {article.authorName}
+              </span>
+              <time dateTime={article.datePublished}>
+                Publié le {formatFrenchDate(article.datePublished)}
+              </time>
+              {article.dateModified !== article.datePublished && (
+                <time dateTime={article.dateModified}>
+                  Mis à jour le {formatFrenchDate(article.dateModified)}
+                </time>
+              )}
+              <span className="inline-flex items-center gap-2">
+                <Clock3 size={16} /> {article.readingTime}
+              </span>
+            </div>
+          </header>
 
-      {relatedArticles.length > 0 && (
-        <section className="mt-14">
-          <div className="section-heading">
-            <h2>À lire également</h2>
-            <Link
-              to="/blog"
-              onClick={() =>
-                trackCtaClick({
-                  ctaId: "blog_article_all_guides",
-                  ctaLocation: "blog_related_articles",
-                  destinationPath: "/blog",
-                  ctaCategory: "content",
-                })
-              }
-            >
-              Tous les guides
-            </Link>
+          <div className="mt-7 2xl:hidden">
+            <BlogEngagementActions layout="horizontal" />
           </div>
-          <div className="grid gap-6 lg:grid-cols-2">
-            {relatedArticles.map((related) => (
-              <BlogCard key={related.slug} article={related} />
-            ))}
+
+          <figure className="mt-8 overflow-hidden rounded-lg border border-forest/10 bg-cream">
+            <img
+              src={heroImage?.src || article.images.wide}
+              srcSet={heroImage?.srcSet}
+              sizes={heroImage?.sizes || "100vw"}
+              alt=""
+              width={heroImage?.width || 1600}
+              height={heroImage?.height || 900}
+              fetchPriority="high"
+              decoding="async"
+              className="aspect-video w-full object-cover"
+            />
+          </figure>
+
+          <div className="relative max-w-4xl">
+            <aside className="absolute inset-y-0 -left-[4.5rem] hidden w-12 2xl:block" aria-label="Actions du guide">
+              <div className="sticky top-28 pt-10">
+                <BlogEngagementActions layout="vertical" />
+              </div>
+            </aside>
+            <BlogArticleRenderer article={article} />
           </div>
-        </section>
-      )}
+
+          <footer className="mt-12 grid gap-4 rounded-lg border border-forest/10 bg-cream p-6 sm:p-8 lg:grid-cols-[1.3fr_1fr]">
+            <div>
+              <h2 className="font-display text-3xl text-forest">Poursuivre la lecture</h2>
+              <p className="mt-3 text-sm leading-6 text-ink/70">
+                Retrouvez les produits et les pages pratiques liés à ce guide.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {article.links.map((link) => (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  className="btn-secondary min-h-10 py-2"
+                  onClick={() => {
+                    trackCtaClick({
+                      ctaId: ctaIdForPath("blog_article_link", link.to),
+                      ctaLocation: "blog_article_footer",
+                      destinationPath: link.to,
+                      ctaCategory: ctaCategoryForPath(link.to),
+                    });
+                    if (isShopDestinationPath(link.to)) {
+                      trackBlogShopClick(article, link.to);
+                    }
+                  }}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+          </footer>
+
+          <BlogComments />
+        </article>
+
+        {relatedArticles.length > 0 && (
+          <section className="mt-14">
+            <div className="section-heading">
+              <h2>À lire également</h2>
+              <Link
+                to="/blog"
+                onClick={() =>
+                  trackCtaClick({
+                    ctaId: "blog_article_all_guides",
+                    ctaLocation: "blog_related_articles",
+                    destinationPath: "/blog",
+                    ctaCategory: "content",
+                  })
+                }
+              >
+                Tous les guides
+              </Link>
+            </div>
+            <div className="grid gap-6 lg:grid-cols-2">
+              {relatedArticles.map((related) => (
+                <BlogCard key={related.slug} article={related} />
+              ))}
+            </div>
+          </section>
+        )}
+      </BlogEngagementProvider>
     </main>
   );
 }

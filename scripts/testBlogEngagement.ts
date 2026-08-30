@@ -307,17 +307,64 @@ test("l'acces administrateur est protege par token et adminUsers", () => {
   assert.match(source, /assertAdminUser\(db, token\)/);
 });
 
-test("le partage utilise navigator.share puis le fallback clipboard", () => {
+test("le partage conserve le partage natif et les deux fallbacks de copie", () => {
   const source = readFileSync("src/components/BlogEngagement.tsx", "utf8");
   assert.match(source, /navigator\.share/);
-  assert.match(source, /navigator\.clipboard\.writeText\(canonicalUrl\)/);
+  assert.match(source, /navigator\.clipboard\?\.writeText/);
+  assert.match(source, /document\.execCommand\("copy"\)/);
   assert.match(source, /absoluteUrl\(blogArticlePath\(article\)\)/);
 });
 
-test("le composant est integre une seule fois dans le template commun des guides", () => {
+test("la barre d'actions et les commentaires partagent un seul etat par guide", () => {
   const source = readFileSync("src/pages/BlogArticlePage.tsx", "utf8");
-  const matches = source.match(/<BlogEngagement article=\{article\} \/>/g) || [];
-  assert.equal(matches.length, 1);
+  assert.equal((source.match(/<BlogEngagementProvider article=\{article\}>/g) || []).length, 1);
+  assert.equal((source.match(/<BlogComments \/>/g) || []).length, 1);
+  assert.match(source, /<BlogEngagementActions layout="horizontal" \/>/);
+  assert.match(source, /<BlogEngagementActions layout="vertical" \/>/);
+});
+
+test("le bouton Commentaires cible la section publique", () => {
+  const source = readFileSync("src/components/BlogEngagement.tsx", "utf8");
+  assert.match(source, /document\.getElementById\(blogCommentsSectionId\)/);
+  assert.match(source, /scrollIntoView/);
+  assert.match(source, /id=\{blogCommentsSectionId\}/);
+});
+
+test("le formulaire est replie par defaut et peut etre ouvert puis annule", () => {
+  const source = readFileSync("src/components/BlogEngagement.tsx", "utf8");
+  assert.match(source, /useState\(false\)/);
+  assert.match(source, /aria-expanded=\{isFormOpen\}/);
+  assert.match(source, /isFormOpen && \(/);
+  assert.match(source, /Écrire un commentaire/);
+  assert.match(source, /Annuler/);
+  assert.match(source, /setIsFormOpen\(false\)/);
+});
+
+test("les CTA commentaire distinguent les utilisateurs connectes et deconnectes", () => {
+  const source = readFileSync("src/components/BlogEngagement.tsx", "utf8");
+  assert.match(source, /Se connecter pour commenter/);
+  assert.match(source, /Vous commentez en tant que/);
+  assert.match(source, /Envoyer pour validation/);
+  assert.match(source, /window\.location\.search/);
+  assert.match(source, /window\.location\.hash/);
+});
+
+test("le menu de partage propose les destinations desktop et se ferme avec Escape", () => {
+  const source = readFileSync("src/components/BlogEngagement.tsx", "utf8");
+  assert.match(source, /role="menu"/);
+  assert.match(source, /event\.key !== "Escape"/);
+  assert.match(source, /wa\.me/);
+  assert.match(source, /facebook\.com\/sharer/);
+  assert.match(source, /x\.com\/intent\/post/);
+  assert.match(source, /Lien copié/);
+});
+
+test("l'etat vide reste compact et le libelle interne n'est plus public", () => {
+  const source = readFileSync("src/components/BlogEngagement.tsx", "utf8");
+  assert.match(source, /data-blog-comments-empty/);
+  assert.match(source, /Aucun commentaire pour le moment/);
+  assert.doesNotMatch(source, /Commentaires approuvés/);
+  assert.doesNotMatch(source, /Votre avis sur ce guide/);
 });
 
 test("les regles Firestore interdisent les collections blog au client", () => {

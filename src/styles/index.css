@@ -187,6 +187,41 @@
   .blog-link-panel a {
     @apply rounded-md border border-forest/10 bg-ivory px-3 py-2 text-sm no-underline transition hover:border-champagne;
   }
+
+  .blog-share-menu-item {
+    @apply flex min-h-10 w-full items-center gap-3 rounded px-3 py-2 text-left text-sm font-medium text-forest transition duration-200 hover:bg-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-champagne motion-reduce:transition-none;
+  }
+
+  .blog-comment-form {
+    animation: blog-comment-reveal 180ms ease-out;
+  }
+}
+
+@keyframes blog-comment-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-0.35rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes blog-like-pop {
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .blog-comment-form {
+    animation: none;
+  }
 }
 
 html.age-gate-pending .font-display {

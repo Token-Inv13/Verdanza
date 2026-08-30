@@ -92,9 +92,11 @@ async function auditArticle(article: (typeof published)[number]) {
   if (Number.isNaN(new Date(article.datePublished).getTime())) failures.push(`${path} invalid published date`);
   if (Number.isNaN(new Date(article.dateModified).getTime())) failures.push(`${path} invalid modified date`);
   if (!main.includes(article.images.wide)) failures.push(`${path} main image missing`);
-  if (!main.includes("Votre avis sur ce guide")) failures.push(`${path} engagement component missing`);
-  if (!main.includes("Commentaires approuvés")) failures.push(`${path} approved comments section missing`);
+  if (!main.includes('data-blog-engagement-actions="horizontal"')) failures.push(`${path} engagement action bar missing`);
+  if (!main.includes('id="blog-comments"')) failures.push(`${path} comments section missing`);
+  if (!main.includes("Se connecter pour commenter")) failures.push(`${path} comment login action missing`);
   if (!main.includes("Partager")) failures.push(`${path} share action missing`);
+  if (main.includes("Commentaires approuvés")) failures.push(`${path} exposes internal approval wording`);
   if (blogPosting.length !== 1) failures.push(`${path} BlogPosting count ${blogPosting.length}`);
   if (breadcrumbs.length !== 1) failures.push(`${path} BreadcrumbList count ${breadcrumbs.length}`);
   if (/"@type":"Product"|"@type":"Offer"|"@type":"Review"|"@type":"AggregateRating"/.test(allJson)) {

@@ -406,7 +406,10 @@ export function trackBlogLike(article: BlogArticle, action: "add" | "remove") {
   });
 }
 
-export function trackBlogShare(article: BlogArticle, method: "native" | "clipboard") {
+export function trackBlogShare(
+  article: BlogArticle,
+  method: "native" | "clipboard" | "whatsapp" | "facebook" | "x",
+) {
   trackEvent("blog_share", {
     article_slug: article.slug,
     article_title: article.title,
