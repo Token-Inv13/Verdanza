@@ -27,12 +27,22 @@ const blogImageUrls = publishedBlogArticles.flatMap((article) => [
 ]);
 const staticImageUrls = new Set([
   "/images/verdanza-hero-premium.webp",
-  "/verdanza-badge.png",
-  "/verdanza-logo.png",
   ...blogImageUrls,
 ]);
-const generatedPrefixes = ["/images/products/", "/images/brand/", "/images/blog/", "/images/verdanza-hero-premium-"];
-const referencedUrls = new Set([...productImageUrls, ...staticImageUrls]);
+const brandAssetUrls = new Set([
+  "/brand/verdanza-v1/logos/verdanza-logo-horizontal-compact-full-color.svg",
+  "/brand/verdanza-v1/logos/verdanza-logo-horizontal-compact-mono-gold.svg",
+  "/brand/verdanza-v1/logos/verdanza-logo-horizontal-primary-full-color.svg",
+  "/brand/verdanza-v1/logos/verdanza-logo-stacked-compact-full-color.svg",
+  "/brand/verdanza-v1/logos/verdanza-monogram-small-full-color.svg",
+  "/brand/verdanza-v1/logos/verdanza-seal-full-color.svg",
+  "/brand/verdanza-v1/email/verdanza-logo-horizontal-compact-full-color-512.png",
+  "/brand/verdanza-v1/documents/verdanza-logo-horizontal-primary-mono-charcoal-1024.png",
+  "/brand/verdanza-v1/structured-data/verdanza-seal-full-color-512.png",
+  "/brand/verdanza-v1/social/verdanza-default-og-1200x630.png",
+]);
+const generatedPrefixes = ["/images/products/", "/images/blog/", "/images/verdanza-hero-premium-"];
+const referencedUrls = new Set([...productImageUrls, ...staticImageUrls, ...brandAssetUrls]);
 const publicImages = listPublicImages(publicDir);
 
 for (const product of products) {
@@ -61,6 +71,14 @@ for (const source of staticImageUrls) {
         ? 160 * 1024
         : 80 * 1024;
     auditVariantSet(source, variant, maxBytes);
+  }
+}
+
+for (const source of brandAssetUrls) {
+  const file = publicFile(source);
+  if (!existsSync(file)) failures.push(`missing brand asset ${source}`);
+  else if (statSync(file).size > 250 * 1024) {
+    failures.push(`brand asset too large: ${source} ${Math.round(statSync(file).size / 1024)} KB`);
   }
 }
 

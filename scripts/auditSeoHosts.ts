@@ -22,11 +22,13 @@ const protectedTechnicalHosts = [
   "verdanza-git-main-token-inv13s-projects.vercel.app",
 ];
 const faviconFiles = [
-  { url: "/favicon-48x48.png", width: 48, height: 48, maxBytes: 50 * 1024 },
-  { url: "/favicon-96x96.png", width: 96, height: 96, maxBytes: 100 * 1024 },
-  { url: "/favicon-192x192.png", width: 192, height: 192, maxBytes: 200 * 1024 },
-  { url: "/favicon-512x512.png", width: 512, height: 512, maxBytes: 500 * 1024 },
-  { url: "/apple-touch-icon.png", width: 180, height: 180, maxBytes: 200 * 1024 },
+  { url: "/brand/verdanza-v1/favicons/favicon-16x16.png", width: 16, height: 16, maxBytes: 20 * 1024 },
+  { url: "/brand/verdanza-v1/favicons/favicon-32x32.png", width: 32, height: 32, maxBytes: 30 * 1024 },
+  { url: "/brand/verdanza-v1/favicons/favicon-48x48.png", width: 48, height: 48, maxBytes: 50 * 1024 },
+  { url: "/brand/verdanza-v1/favicons/apple-touch-icon-180x180.png", width: 180, height: 180, maxBytes: 200 * 1024 },
+  { url: "/brand/verdanza-v1/icons/android-chrome-192x192.png", width: 192, height: 192, maxBytes: 200 * 1024 },
+  { url: "/brand/verdanza-v1/icons/android-chrome-512x512.png", width: 512, height: 512, maxBytes: 500 * 1024 },
+  { url: "/brand/verdanza-v1/icons/maskable-icon-512x512.png", width: 512, height: 512, maxBytes: 500 * 1024 },
 ];
 const failures: string[] = [];
 const observations: string[] = [];
@@ -116,11 +118,13 @@ async function auditStaticConfiguration() {
 
   const indexHtml = readFileSync(resolve("index.html"), "utf8");
   const requiredHeadTags = [
-    '<link rel="icon" type="image/x-icon" href="/favicon.ico" />',
-    '<link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />',
-    '<link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />',
-    '<link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png" />',
-    '<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />',
+    '<link rel="icon" type="image/svg+xml" href="/brand/verdanza-v1/favicons/favicon.svg" />',
+    '<link rel="icon" type="image/x-icon" sizes="any" href="/favicon.ico" />',
+    '<link rel="icon" type="image/png" sizes="16x16" href="/brand/verdanza-v1/favicons/favicon-16x16.png" />',
+    '<link rel="icon" type="image/png" sizes="32x32" href="/brand/verdanza-v1/favicons/favicon-32x32.png" />',
+    '<link rel="icon" type="image/png" sizes="48x48" href="/brand/verdanza-v1/favicons/favicon-48x48.png" />',
+    '<link rel="apple-touch-icon" sizes="180x180" href="/brand/verdanza-v1/favicons/apple-touch-icon-180x180.png" />',
+    '<link rel="mask-icon" href="/brand/verdanza-v1/favicons/safari-pinned-tab.svg" color="#0E3726" />',
   ];
   requiredHeadTags.forEach((tag) => {
     if (!indexHtml.includes(tag)) failures.push(`missing head tag: ${tag}`);
@@ -140,8 +144,9 @@ async function auditStaticConfiguration() {
     failures.push("manifest brand name mismatch");
   }
   for (const expected of [
-    { src: "/favicon-192x192.png", sizes: "192x192" },
-    { src: "/favicon-512x512.png", sizes: "512x512" },
+    { src: "/brand/verdanza-v1/icons/android-chrome-192x192.png", sizes: "192x192" },
+    { src: "/brand/verdanza-v1/icons/android-chrome-512x512.png", sizes: "512x512" },
+    { src: "/brand/verdanza-v1/icons/maskable-icon-512x512.png", sizes: "512x512" },
   ]) {
     if (
       !manifest.icons?.some(
@@ -160,7 +165,9 @@ async function auditStaticConfiguration() {
   }
   auditIco(readFileSync(resolve("public/favicon.ico")), "public/favicon.ico");
 
-  const sourceBadge = await sharp(resolve("public/verdanza-badge.png")).metadata();
+  const sourceBadge = await sharp(
+    resolve("public/brand/verdanza-v1/structured-data/verdanza-seal-full-color-512.png"),
+  ).metadata();
   if (!sourceBadge.width || sourceBadge.width !== sourceBadge.height) {
     failures.push("official favicon source is not square");
   }

@@ -9,6 +9,7 @@ import {
 import { formatLocalDeliveryEstimate } from "../../src/lib/deliveryEstimate.js";
 import { invoiceDocumentSendBlock } from "../../src/lib/invoiceSendPolicy.js";
 import { orderItemLineTotal, orderItemSummaryLabel } from "../../src/lib/orderLineDisplay.js";
+import { BRAND_EMAIL_LOGO_URL } from "../../src/lib/brandAssets.js";
 
 export type EmailResult =
   | { status: "sent"; id?: string; recipients?: EmailRecipientResults }
@@ -300,10 +301,11 @@ export async function sendContestPrizeEmail(input: {
     subject: `Votre gain Verdanza - ${input.contestTitle}`,
     html: `
       <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111111">
-        <h1 style="color:#0B3D2E">Felicitations ${escapeHtml(input.winnerDisplayName)} !</h1>
+        ${emailBrandHeader()}
+        <h1 style="color:#0E3726">Felicitations ${escapeHtml(input.winnerDisplayName)} !</h1>
         <p>Votre participation a ete validee comme gagnante du concours <strong>${escapeHtml(input.contestTitle)}</strong>.</p>
         <p>Votre gain est un bon Verdanza de <strong>${escapeHtml(formattedValue)}</strong>, valable jusqu'au ${escapeHtml(formattedExpiry)}.</p>
-        <p><a href="${escapeHtml(input.claimUrl)}" style="display:inline-block;background:#0B3D2E;color:#FAF8F2;padding:12px 18px;text-decoration:none;border-radius:6px">Consulter mon gain</a></p>
+        <p><a href="${escapeHtml(input.claimUrl)}" style="display:inline-block;background:#0E3726;color:#FDF9F4;padding:12px 18px;text-decoration:none;border-radius:6px">Consulter mon gain</a></p>
         <p>Ce lien est personnel. Ne le partagez pas.</p>
       </div>
     `,
@@ -450,7 +452,8 @@ function orderEmailHtml(order: Order, intro: string) {
     ? `${process.env.VITE_APP_URL}/compte/commandes`
     : "";
   return `
-    <div style="font-family:Arial,sans-serif;color:#183c2f;line-height:1.5">
+    <div style="font-family:Arial,sans-serif;color:#0E3726;line-height:1.5">
+      ${emailBrandHeader()}
       <h1>Verdanza</h1>
       <p>${escapeHtml(intro)}</p>
       <p><strong>Type :</strong> ${escapeHtml(orderTypeLabel())}</p>
@@ -571,7 +574,8 @@ function customerManualOrderEmailText(order: Order) {
 function adminOrderEmailHtml(order: Order) {
   const address = order.deliveryAddress;
   return `
-    <div style="font-family:Arial,sans-serif;color:#183c2f;line-height:1.5">
+    <div style="font-family:Arial,sans-serif;color:#0E3726;line-height:1.5">
+      ${emailBrandHeader()}
       <h1>${escapeHtml(orderEmailTitle())} Verdanza</h1>
       <p><strong>Type :</strong> ${escapeHtml(orderTypeLabel())}</p>
       <p><strong>Commande :</strong> ${escapeHtml(shortOrderId(order.id))}</p>
@@ -625,7 +629,8 @@ function adminOrderEmailText(order: Order) {
 
 function invoiceEmailHtml(invoice: Invoice, settings: BillingSettings) {
   return `
-    <div style="font-family:Arial,sans-serif;color:#183c2f;line-height:1.5">
+    <div style="font-family:Arial,sans-serif;color:#0E3726;line-height:1.5">
+      ${emailBrandHeader()}
       <h1>Votre facture Verdanza ${escapeHtml(invoice.invoiceNumber)}</h1>
       <p>Bonjour ${escapeHtml(invoice.customerName || "Client")},</p>
       <p>Vous trouverez votre facture Verdanza en pièce jointe.</p>
@@ -667,7 +672,8 @@ function paymentLinkEmailHtml(
 ) {
   const amount = `${input.paymentLinkAmount.toFixed(2).replace(".", ",")} ${input.paymentLinkCurrency}`;
   return `
-    <div style="font-family:Arial,sans-serif;color:#183c2f;line-height:1.5">
+    <div style="font-family:Arial,sans-serif;color:#0E3726;line-height:1.5">
+      ${emailBrandHeader()}
       <h1>Lien de paiement Verdanza</h1>
       <p>Bonjour ${escapeHtml(customerFirstName(order))},</p>
       <p>Votre commande Verdanza ${escapeHtml(shortOrderId(order.id))} est confirmée.</p>
@@ -723,7 +729,8 @@ function contactEmailHtml(input: {
   message: string;
 }) {
   return `
-    <div style="font-family:Arial,sans-serif;color:#183c2f;line-height:1.5">
+    <div style="font-family:Arial,sans-serif;color:#0E3726;line-height:1.5">
+      ${emailBrandHeader()}
       <h1>Nouveau message Verdanza</h1>
       <p><strong>Nom :</strong> ${escapeHtml(input.name)}</p>
       <p><strong>Email :</strong> ${escapeHtml(input.email)}</p>
@@ -753,6 +760,10 @@ function contactEmailText(input: {
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function emailBrandHeader() {
+  return `<div style="margin:0 0 24px"><img src="${BRAND_EMAIL_LOGO_URL}" alt="Verdanza" width="220" style="display:block;width:220px;max-width:100%;height:auto;border:0" /></div>`;
 }
 
 function shortOrderId(orderId: string) {

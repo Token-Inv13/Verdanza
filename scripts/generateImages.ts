@@ -54,37 +54,6 @@ const staticTargets = [
     ],
     sizes: "100vw",
   },
-  {
-    key: "/verdanza-badge.png",
-    sourceUrl: "/verdanza-badge.png",
-    outputBase: "/images/brand/verdanza-badge-age",
-    variants: [
-      { name: "112", width: 112, quality: 82 },
-      { name: "224", width: 224, quality: 84 },
-    ],
-    sizes: "112px",
-  },
-  {
-    key: "/verdanza-logo.png",
-    sourceUrl: "/verdanza-logo.png",
-    outputBase: "/images/brand/verdanza-logo",
-    variants: [
-      { name: "180", width: 180, quality: 82 },
-      { name: "320", width: 320, quality: 84 },
-    ],
-    sizes: "180px",
-  },
-  {
-    key: "/images/brand/verdanza-quality-seal.png",
-    sourceUrl: "/images/brand/verdanza-quality-seal.png",
-    outputBase: "/images/brand/verdanza-quality-seal",
-    variants: [
-      { name: "96", width: 96, quality: 82 },
-      { name: "180", width: 180, quality: 84 },
-      { name: "320", width: 320, quality: 84 },
-    ],
-    sizes: "64px",
-  },
 ];
 const blogImageSources: Record<
   string,

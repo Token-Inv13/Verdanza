@@ -218,7 +218,12 @@ function auditHome(nodes: Record<string, JsonLdValue>[], failures: string[]) {
   if (store?.["@id"] !== `${absoluteUrl("/")}#organization`) failures.push("OnlineStore @id mismatch");
   if (store?.name !== "Verdanza") failures.push("OnlineStore name mismatch");
   if (store?.url !== absoluteUrl("/")) failures.push("OnlineStore url mismatch");
-  if (store?.logo !== absoluteUrl("/verdanza-logo.png")) failures.push("OnlineStore logo mismatch");
+  if (
+    store?.logo !==
+    absoluteUrl("/brand/verdanza-v1/structured-data/verdanza-seal-full-color-512.png")
+  ) {
+    failures.push("OnlineStore logo mismatch");
+  }
   if (store?.telephone !== verdanzaPublicContact.internationalPhone) {
     failures.push("OnlineStore telephone mismatch");
   }

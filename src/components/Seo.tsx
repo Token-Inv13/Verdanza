@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { BRAND_SOCIAL_IMAGE } from "../lib/brandAssets";
 
 const siteUrl = "https://verdanza.fr";
 
@@ -33,7 +34,7 @@ export function Seo({
     const href = canonical === null ? "" : canonicalUrl(canonical || path);
     const socialTitle = ogTitle || title;
     const socialDescription = ogDescription || description;
-    const imageUrl = image ? absoluteUrl(image) : "";
+    const imageUrl = absoluteUrl(image || BRAND_SOCIAL_IMAGE);
 
     document.title = title;
     setMeta("description", description);
@@ -46,16 +47,11 @@ export function Seo({
       removeProperty("og:url");
     }
     setProperty("og:type", ogType);
-    setMeta("twitter:card", imageUrl ? "summary_large_image" : "summary");
+    setMeta("twitter:card", "summary_large_image");
     setMeta("twitter:title", socialTitle);
     setMeta("twitter:description", socialDescription);
-    if (imageUrl) {
-      setProperty("og:image", imageUrl);
-      setMeta("twitter:image", imageUrl);
-    } else {
-      removeProperty("og:image");
-      removeMeta("twitter:image");
-    }
+    setProperty("og:image", imageUrl);
+    setMeta("twitter:image", imageUrl);
     if (ogType === "article") {
       setOptionalProperty("article:published_time", articlePublishedTime);
       setOptionalProperty("article:modified_time", articleModifiedTime);
@@ -119,12 +115,6 @@ function setMeta(name: string, content: string) {
     document.head.appendChild(meta);
   }
   meta.content = content;
-}
-
-function removeMeta(name: string) {
-  document.querySelectorAll<HTMLMetaElement>(`meta[name="${name}"]`).forEach((meta) => {
-    meta.remove();
-  });
 }
 
 function setProperty(property: string, content: string) {

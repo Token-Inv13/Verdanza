@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { BRAND_DOCUMENT_LOGO } from "../../src/lib/brandAssets.js";
 import type { BillingSettings, Invoice } from "../../src/types/index.js";
 
 type PdfFont = Awaited<ReturnType<PDFDocument["embedFont"]>>;
@@ -28,8 +29,8 @@ export async function renderInvoicePdf(invoice: Invoice, settings: BillingSettin
   let page = pdf.addPage(pageSize);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const forest = rgb(0.02, 0.25, 0.19);
-  const muted = rgb(0.36, 0.36, 0.36);
+  const forest = rgb(14 / 255, 55 / 255, 38 / 255);
+  const muted = rgb(52 / 255, 51 / 255, 51 / 255);
   const black = rgb(0, 0, 0);
   const lightLine = rgb(0.78, 0.78, 0.78);
   const logo = await loadLogo(pdf);
@@ -89,7 +90,7 @@ export async function renderInvoicePdf(invoice: Invoice, settings: BillingSettin
 
   function drawHeader(logoImage: PdfImage | null) {
     if (logoImage) {
-      const scale = Math.min(116 / logoImage.width, 58 / logoImage.height);
+      const scale = Math.min(128 / logoImage.width, 58 / logoImage.height);
       const width = logoImage.width * scale;
       const height = logoImage.height * scale;
       page.drawImage(logoImage, {
@@ -288,7 +289,8 @@ export async function renderInvoicePdf(invoice: Invoice, settings: BillingSettin
 
 async function loadLogo(pdf: PDFDocument) {
   try {
-    const logoBytes = await readFile(join(process.cwd(), "public", "verdanza-logo.png"));
+    const logoPath = BRAND_DOCUMENT_LOGO.replace(/^\/+/, "").split("/");
+    const logoBytes = await readFile(join(process.cwd(), "public", ...logoPath));
     return await pdf.embedPng(logoBytes);
   } catch (error) {
     console.warn("Invoice logo unavailable, using text fallback.", error);

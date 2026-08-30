@@ -1,4 +1,4 @@
-import { BRAND_LABEL } from "./brandAssets.js";
+import { BRAND_PRODUCT_PLACEHOLDER } from "./brandAssets.js";
 import type { Product, ProductImageAsset } from "../types/index.js";
 
 export const PRODUCT_IMAGE_MAX_COUNT = 3;
@@ -54,7 +54,7 @@ export function syncProductPrimaryImage<T extends Partial<Product>>(product: T):
   return {
     ...product,
     images,
-    image: primary?.url || product.image || BRAND_LABEL,
+    image: primary?.url || product.image || BRAND_PRODUCT_PLACEHOLDER,
     imageAlt: primary?.alt || product.imageAlt || product.name || "Produit Verdanza",
   };
 }

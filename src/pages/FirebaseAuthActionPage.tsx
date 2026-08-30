@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Seo } from "../components/Seo";
-import { BRAND_LOGO, BRAND_LOGO_ALT } from "../lib/brandAssets";
+import { BrandLogo } from "../components/BrandLogo";
 import {
   classifyFirebaseAuthActionError,
   confirmFirebasePasswordReset,
@@ -100,7 +100,7 @@ export function FirebaseAuthActionPage() {
       />
       <section className="mx-auto w-full max-w-lg rounded-3xl border border-[#d9c490]/60 bg-white p-6 shadow-xl shadow-[#123f32]/10 sm:p-10">
         <a href="/" className="mx-auto block w-fit rounded-lg focus:outline-none focus:ring-2 focus:ring-[#b88a2b] focus:ring-offset-4">
-          <img src={BRAND_LOGO} alt={BRAND_LOGO_ALT} className="h-20 w-auto" />
+          <BrandLogo variant="horizontal" className="h-auto w-[220px] max-w-full" />
         </a>
         <div className="mt-7 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#b88a2b]">Espace sécurisé</p>

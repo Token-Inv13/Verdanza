@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { Eye, EyeOff, LockKeyhole } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { BrandLogo } from "./BrandLogo";
 import { Seo } from "./Seo";
 
 export function AdminAuthGate() {
@@ -105,6 +106,10 @@ export function AdminAuthGate() {
         onSubmit={handleSubmit}
         className="w-full max-w-md rounded-lg border border-forest/10 bg-ivory p-8 shadow-soft"
       >
+        <BrandLogo
+          variant="horizontal"
+          className="mb-8 h-auto w-[210px] max-w-full"
+        />
         <LockKeyhole className="text-champagne" />
         <h1 className="mt-4 font-display text-4xl text-forest">Admin Verdanza</h1>
         <p className="mt-3 text-sm leading-6 text-ink/60">
@@ -186,6 +191,10 @@ function AdminGateShell({ message }: { message: string }) {
         noindex
       />
       <div className="max-w-md rounded-lg border border-forest/10 bg-ivory p-8 text-center shadow-soft">
+        <BrandLogo
+          variant="horizontal"
+          className="mx-auto mb-8 h-auto w-[210px] max-w-full"
+        />
         <LockKeyhole className="mx-auto text-champagne" />
         <h1 className="mt-4 font-display text-4xl text-forest">Acces admin</h1>
         <p className="mt-3 text-sm leading-6 text-ink/60">{message}</p>

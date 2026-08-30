@@ -3,20 +3,26 @@
   "short_name": "Verdanza",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#FAF8F2",
-  "theme_color": "#0B3D2E",
+  "background_color": "#FDF9F4",
+  "theme_color": "#0E3726",
   "icons": [
     {
-      "src": "/favicon-192x192.png",
+      "src": "/brand/verdanza-v1/icons/android-chrome-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/favicon-512x512.png",
+      "src": "/brand/verdanza-v1/icons/android-chrome-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/brand/verdanza-v1/icons/maskable-icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

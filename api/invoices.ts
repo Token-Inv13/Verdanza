@@ -10,7 +10,7 @@ import {
 import { renderInvoicePdf } from "./_server/invoicePdf.js";
 import { getAdminAnalyticsReport } from "./_server/ga4DataApi.js";
 import { sendInvoiceToCustomerEmail } from "./_server/email.js";
-import { BRAND_LOGO } from "../src/lib/brandAssets.js";
+import { BRAND_DOCUMENT_LOGO } from "../src/lib/brandAssets.js";
 import { normalizeSupplierPurchaseInput } from "../src/lib/accountingCosts.js";
 import { buildCustomerInvoiceLines } from "../src/lib/customerInvoiceLines.js";
 import {
@@ -80,7 +80,7 @@ const fallbackBillingSettings: BillingSettings = {
   email: "contact@verdanza.fr",
   paymentTerms: "Règlement à confirmer directement avec le client.",
   legalMentions: "",
-  logoUrl: BRAND_LOGO,
+  logoUrl: BRAND_DOCUMENT_LOGO,
   isManuallyValidated: false,
   validationWarning:
     "Les informations légales de facturation ne sont pas encore validées. Vérifiez la raison sociale, le SIRET, l'adresse, le régime TVA et les mentions obligatoires avant émission officielle.",

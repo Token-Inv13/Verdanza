@@ -262,27 +262,6 @@ export const staticImageVariants: Record<string, ResponsiveImageVariant> = {
     width: 1672,
     height: 941,
   },
-  "/verdanza-badge.png": {
-    src: "/images/brand/verdanza-badge-age-224.webp",
-    srcSet: "/images/brand/verdanza-badge-age-112.webp 112w, /images/brand/verdanza-badge-age-224.webp 224w",
-    sizes: "112px",
-    width: 224,
-    height: 224,
-  },
-  "/verdanza-logo.png": {
-    src: "/images/brand/verdanza-logo-320.webp",
-    srcSet: "/images/brand/verdanza-logo-180.webp 180w, /images/brand/verdanza-logo-320.webp 320w",
-    sizes: "180px",
-    width: 320,
-    height: 180,
-  },
-  "/images/brand/verdanza-quality-seal.png": {
-    src: "/images/brand/verdanza-quality-seal-320.webp",
-    srcSet: "/images/brand/verdanza-quality-seal-96.webp 96w, /images/brand/verdanza-quality-seal-180.webp 180w, /images/brand/verdanza-quality-seal-320.webp 320w",
-    sizes: "64px",
-    width: 320,
-    height: 320,
-  },
   "/images/blog/origine-variete-lot-cbd-differences-1x1.webp": {
     src: "/images/blog/origine-variete-lot-cbd-differences-1x1.webp",
     srcSet: "/images/blog/origine-variete-lot-cbd-differences-1x1.webp 900w",

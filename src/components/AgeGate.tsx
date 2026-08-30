@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { staticImageVariants } from "../lib/generatedImageVariants";
-import { BRAND_BADGE, BRAND_LOGO_ALT } from "../lib/brandAssets";
+import { BrandLogo } from "./BrandLogo";
 import { ensureBodyScrollUnlocked } from "../lib/bodyScrollLock";
 import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import {
@@ -10,7 +9,6 @@ import {
 } from "../lib/ageGate";
 
 export function AgeGate() {
-  const badgeImage = staticImageVariants[BRAND_BADGE];
   const [isConfirmed, setIsConfirmed] = useState(() => {
     return isAgeConfirmedLocally();
   });
@@ -35,15 +33,8 @@ export function AgeGate() {
         aria-labelledby="age-gate-title"
         className="w-full max-w-xl rounded-lg border border-champagne/40 bg-ivory p-8 text-forest shadow-soft"
       >
-        <img
-          src={badgeImage?.src || BRAND_BADGE}
-          srcSet={badgeImage?.srcSet}
-          sizes={badgeImage?.sizes || "112px"}
-          alt={BRAND_LOGO_ALT}
-          width={badgeImage?.width || 112}
-          height={badgeImage?.height || 112}
-          fetchPriority="high"
-          decoding="async"
+        <BrandLogo
+          variant="seal"
           className="mx-auto mb-6 h-28 w-28 object-contain"
         />
         <h2

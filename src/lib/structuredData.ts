@@ -1,7 +1,7 @@
 import type { Product } from "../types";
 import type { BlogArticle } from "../types/blog";
 import { verdanzaPublicContact } from "../config/publicContact";
-import { BRAND_OG_IMAGE } from "./brandAssets";
+import { BRAND_STRUCTURED_DATA_LOGO } from "./brandAssets";
 import { isProductOrderable as isPublicProductOrderable } from "./cartStock";
 import { getActiveSocialLinks } from "./socialLinks";
 import { absoluteUrl } from "./siteUrl";
@@ -82,7 +82,7 @@ export function buildHomeJsonLd(contactEmail?: string): JsonLdValue {
     "@id": organizationId,
     name: "Verdanza",
     url: absoluteUrl("/"),
-    logo: absoluteUrl(BRAND_OG_IMAGE),
+    logo: absoluteUrl(BRAND_STRUCTURED_DATA_LOGO),
     telephone: verdanzaPublicContact.internationalPhone,
     sameAs: getActiveSocialLinks().map((link) => link.url),
     contactPoint,

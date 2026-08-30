@@ -8,9 +8,8 @@ import { ComplianceNote } from "../components/ComplianceNote";
 import { CookieConsentBanner } from "../components/CookieConsentBanner";
 import { FloatingContactButton } from "../components/FloatingContactButton";
 import { PromoBannersProvider, PromoBannerSlot } from "../components/PromoBannerSlot";
+import { BrandLogo } from "../components/BrandLogo";
 import { useConsent } from "../context/ConsentContext";
-import { staticImageVariants } from "../lib/generatedImageVariants";
-import { BRAND_LOGO, BRAND_LOGO_ALT } from "../lib/brandAssets";
 import { trackContactClick, trackCtaClick } from "../lib/analytics";
 import { getActiveSocialLinks } from "../lib/socialLinks";
 
@@ -49,7 +48,6 @@ export function MainLayout() {
   const { itemCount } = useCart();
   const { user } = useAuth();
   const consent = useConsent();
-  const logoImage = staticImageVariants[BRAND_LOGO];
   const contactEmail =
     (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
     "contact@verdanza.fr";
@@ -74,16 +72,14 @@ export function MainLayout() {
         <AgeGate />
         <header className="sticky top-0 z-40 border-b border-forest/10 bg-ivory/95 backdrop-blur">
         <div className="container-page flex min-h-20 items-center justify-between gap-4">
-          <NavLink to="/" className="flex items-center gap-3">
-            <img
-              src={logoImage?.src || BRAND_LOGO}
-              srcSet={logoImage?.srcSet}
-              sizes={logoImage?.sizes || "180px"}
-              alt={BRAND_LOGO_ALT}
-              width={logoImage?.width || 180}
-              height={logoImage?.height || 82}
-              decoding="async"
-              className="h-14 w-auto"
+          <NavLink to="/" className="flex shrink-0 items-center gap-3">
+            <BrandLogo
+              variant="monogram"
+              className="h-11 w-11 object-contain min-[360px]:hidden"
+            />
+            <BrandLogo
+              variant="horizontal"
+              className="hidden h-auto w-[112px] min-[360px]:block min-[390px]:w-[128px] sm:w-[184px] xl:w-[200px]"
             />
           </NavLink>
           <nav className="hidden items-center gap-6 text-sm text-forest/80 lg:flex">
@@ -170,16 +166,9 @@ export function MainLayout() {
       <footer className="bg-cream py-12">
         <div className="container-page grid gap-8 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
-            <img
-              src={logoImage?.src || BRAND_LOGO}
-              srcSet={logoImage?.srcSet}
-              sizes={logoImage?.sizes || "180px"}
-              alt={BRAND_LOGO_ALT}
-              width={logoImage?.width || 180}
-              height={logoImage?.height || 82}
-              loading="lazy"
-              decoding="async"
-              className="h-16 w-auto"
+            <BrandLogo
+              variant="horizontal-primary"
+              className="h-auto w-[220px] max-w-full"
             />
             <p className="mt-4 max-w-md text-sm leading-6 text-ink/70">
               Verdanza sélectionne des produits CBD conformes et

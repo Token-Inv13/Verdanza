@@ -159,7 +159,7 @@ import {
   POSTAL_DELIVERY_MINIMUM,
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../../config/deliveryRules";
-import { BRAND_LABEL } from "../../lib/brandAssets";
+import { BRAND_PRODUCT_PLACEHOLDER } from "../../lib/brandAssets";
 import {
   computeWeightedSupplierCosts,
   normalizeSupplierPurchaseInput,
@@ -213,7 +213,7 @@ const emptyProduct: ProductInput = {
   fixedPriceOptions: [],
   shortDescription: "",
   longDescription: "",
-  image: BRAND_LABEL,
+  image: BRAND_PRODUCT_PLACEHOLDER,
   cbdRate: "A renseigner",
   cbgRate: "A renseigner",
   thcRate: "< 0,3 %",
@@ -1327,7 +1327,7 @@ function ProductImagesEditor({
     const primary = normalized.find((image) => image.isPrimary) || normalized[0];
     onChange({
       images: normalized,
-      image: primary?.url || BRAND_LABEL,
+      image: primary?.url || BRAND_PRODUCT_PLACEHOLDER,
       imageAlt: primary?.alt || product.name || "Produit Verdanza",
     });
   }
@@ -1873,7 +1873,7 @@ function ProductTable({
                 <td className="px-4 py-4">
                   <div className="flex items-center gap-3">
                     <img
-                      src={product.image || BRAND_LABEL}
+                      src={product.image || BRAND_PRODUCT_PLACEHOLDER}
                       alt=""
                       className="h-14 w-14 rounded-md border border-forest/10 object-cover"
                       loading="lazy"
@@ -2011,7 +2011,7 @@ function StockRow({
     <article className="admin-card grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_100px_110px_auto] md:items-end">
       <div className="flex items-center gap-3">
         <img
-          src={product.image || BRAND_LABEL}
+          src={product.image || BRAND_PRODUCT_PLACEHOLDER}
           alt=""
           className="h-12 w-12 rounded-md border border-forest/10 object-cover"
           loading="lazy"
