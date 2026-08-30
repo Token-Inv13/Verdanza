@@ -51,6 +51,14 @@ export function Seo({
     setMeta("twitter:title", socialTitle);
     setMeta("twitter:description", socialDescription);
     setProperty("og:image", imageUrl);
+    setProperty("og:image:type", socialImageMimeType(imageUrl));
+    if (imageUrl === absoluteUrl(BRAND_SOCIAL_IMAGE)) {
+      setProperty("og:image:width", "1200");
+      setProperty("og:image:height", "630");
+    } else {
+      removeProperty("og:image:width");
+      removeProperty("og:image:height");
+    }
     setMeta("twitter:image", imageUrl);
     if (ogType === "article") {
       setOptionalProperty("article:published_time", articlePublishedTime);
@@ -105,6 +113,14 @@ function normalizePathname(pathname: string) {
   const withoutDuplicateSlashes = pathname.replace(/\/{2,}/g, "/");
   if (withoutDuplicateSlashes === "/" || withoutDuplicateSlashes === "") return "/";
   return withoutDuplicateSlashes.replace(/\/+$/, "");
+}
+
+function socialImageMimeType(imageUrl: string) {
+  const pathname = new URL(imageUrl).pathname.toLowerCase();
+  if (pathname.endsWith(".webp")) return "image/webp";
+  if (pathname.endsWith(".jpg") || pathname.endsWith(".jpeg")) return "image/jpeg";
+  if (pathname.endsWith(".svg")) return "image/svg+xml";
+  return "image/png";
 }
 
 function setMeta(name: string, content: string) {
