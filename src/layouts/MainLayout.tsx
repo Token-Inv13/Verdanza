@@ -271,7 +271,7 @@ export function MainLayout() {
           )}
         </div>
       </footer>
-      <FloatingContactButton />
+      <FloatingContactButton suppressed={open} />
       <CookieConsentBanner />
     </div>
   );

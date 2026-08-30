@@ -5,7 +5,7 @@ import { ContactActions } from "./ContactActions";
 import { useConsent } from "../context/ConsentContext";
 import { trackContactHelpAction } from "../lib/analytics";
 
-export function FloatingContactButton() {
+export function FloatingContactButton({ suppressed = false }: { suppressed?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const consent = useConsent();
   const panelId = useId();
@@ -20,8 +20,16 @@ export function FloatingContactButton() {
     setIsOpen(false);
   }, [location.pathname]);
 
+  const hiddenByConsent = !consent.hasDecision || consent.preferencesOpen;
+  const isSuppressed = suppressed || hiddenByConsent;
+
   useEffect(() => {
-    if (!isOpen) return undefined;
+    if (!isSuppressed || !isOpen) return;
+    setIsOpen(false);
+  }, [isOpen, isSuppressed]);
+
+  useEffect(() => {
+    if (!isOpen || isSuppressed) return undefined;
 
     function handlePointerDown(event: PointerEvent) {
       const target = event.target;
@@ -44,7 +52,7 @@ export function FloatingContactButton() {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, isSuppressed]);
 
   function handleToggle() {
     setIsOpen((current) => {
@@ -54,18 +62,17 @@ export function FloatingContactButton() {
     });
   }
 
-  const needsCookieBannerOffset = !consent.hasDecision && !consent.preferencesOpen;
   const needsProductPurchaseOffset = location.pathname.startsWith("/produits/");
-  const positionClass = needsCookieBannerOffset
-    ? "bottom-auto top-[calc(env(safe-area-inset-top)+5.5rem)] sm:top-auto sm:bottom-[calc(env(safe-area-inset-bottom)+16rem)] lg:bottom-[calc(env(safe-area-inset-bottom)+10rem)]"
-    : needsProductPurchaseOffset
-      ? "bottom-[calc(env(safe-area-inset-bottom)+6rem)]"
-      : "bottom-[calc(env(safe-area-inset-bottom)+1rem)]";
+  const positionClass = needsProductPurchaseOffset
+    ? "bottom-[calc(env(safe-area-inset-bottom)+6rem)]"
+    : "bottom-[calc(env(safe-area-inset-bottom)+0.75rem)]";
+
+  if (isSuppressed) return null;
 
   return (
     <div
       ref={wrapperRef}
-      className={`fixed ${positionClass} right-4 z-50 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-3 sm:right-6`}
+      className={`fixed ${positionClass} right-[max(0.75rem,env(safe-area-inset-right))] z-50 flex max-w-[calc(100vw-1.5rem)] flex-col items-end gap-3 sm:right-6`}
     >
       {isOpen && (
         <section
@@ -105,14 +112,15 @@ export function FloatingContactButton() {
       <button
         ref={buttonRef}
         type="button"
-        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-champagne/40 bg-forest px-4 py-3 text-sm font-semibold text-ivory shadow-soft transition hover:bg-[#082f24] focus:outline-none focus:ring-2 focus:ring-champagne focus:ring-offset-2 sm:px-5"
+        className="inline-flex h-12 min-h-12 w-12 shrink-0 items-center justify-center gap-2 rounded-full border border-champagne/40 bg-forest p-0 text-sm font-semibold text-ivory shadow-soft transition hover:bg-[#082f24] focus:outline-none focus:ring-2 focus:ring-champagne focus:ring-offset-2 sm:h-auto sm:w-auto sm:px-5 sm:py-3"
         onClick={handleToggle}
         aria-expanded={isOpen}
         aria-controls={panelId}
-        aria-label={isOpen ? "Fermer l'aide Verdanza" : "Besoin d'aide ? Contacter Verdanza"}
+        aria-label={isOpen ? "Fermer l'aide Verdanza" : "Besoin d'aide ?"}
+        data-testid="floating-contact-trigger"
       >
         <HelpCircle size={18} aria-hidden="true" />
-        <span className="hidden min-[360px]:inline">Besoin d'aide ?</span>
+        <span className="hidden sm:inline">Besoin d'aide ?</span>
       </button>
     </div>
   );

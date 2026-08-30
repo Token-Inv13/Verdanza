@@ -125,7 +125,7 @@ const tests: TestCase[] = [
     name: "one banner renders without false navigation",
     run() {
       const html = render([automaticBanner]);
-      assertIncludes(html, "Jusqu’à 3 g offerts ce week-end");
+      assertIncludes(html, "Jusqu’à 3 g offerts ce week‑end");
       assertNotIncludes(html, "Offre suivante");
       assertNotIncludes(html, "secondary-promo-rail");
     },
@@ -160,6 +160,19 @@ const tests: TestCase[] = [
       assertIncludes(html, "2 g offerts");
       assertIncludes(html, "70 €");
       assertIncludes(html, "3 g offerts");
+    },
+  },
+  {
+    name: "mobile showcase uses shrinkable tiers and an integrated close control",
+    run() {
+      const source = read("src/components/TopPromoShowcase.tsx");
+      assertIncludes(source, 'data-testid="gift-tier-grid"');
+      assertIncludes(source, "min-[350px]:grid-cols-3");
+      assertIncludes(source, "grid-cols-[auto_minmax(0,1fr)]");
+      assertIncludes(source, 'className="absolute right-1 top-1 z-10"');
+      assertIncludes(source, "h-11 w-11");
+      assertNotIncludes(source, "min-w-[105px]");
+      assertNotIncludes(source, "snap-x");
     },
   },
   {

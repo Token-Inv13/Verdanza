@@ -29,27 +29,28 @@ export function CookieConsentBanner() {
     <>
       {showBanner && (
         <section
-          className="fixed bottom-0 left-0 right-0 z-50 border-t border-forest/10 bg-ivory px-4 py-4 shadow-soft"
+          className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-50 max-h-[min(70dvh,36rem)] overflow-y-auto overscroll-contain rounded-xl border border-forest/15 bg-ivory p-3 shadow-soft sm:inset-x-4 sm:p-4 lg:inset-x-0 lg:bottom-0 lg:max-h-none lg:rounded-none lg:border-x-0 lg:border-b-0 lg:px-4 lg:py-4"
           aria-label="Gestion des cookies"
+          data-testid="cookie-consent-banner"
         >
-          <div className="container-page flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-3xl">
-              <h2 className="font-display text-2xl text-forest">Cookies et mesure d'audience</h2>
-              <p className="mt-2 text-sm leading-6 text-ink/70">
+          <div className="mx-auto grid w-full max-w-7xl min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-6">
+            <div className="min-w-0 max-w-3xl">
+              <h2 className="font-display text-xl leading-tight text-forest sm:text-2xl">Cookies et mesure d'audience</h2>
+              <p className="mt-1 text-[0.8125rem] leading-5 text-ink/70 sm:mt-2 sm:text-sm sm:leading-6">
                 Les cookies essentiels sont toujours actifs. La mesure d'audience
                 Google Analytics et Google Tag Manager reste désactivée tant que
                 vous ne l'acceptez pas.
               </p>
             </div>
-            <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[440px]">
-              <button className="btn-primary justify-center" type="button" onClick={consent.acceptAll}>
+            <div className="grid min-w-0 grid-cols-1 gap-2 min-[350px]:grid-cols-2 lg:min-w-[440px] lg:grid-cols-3">
+              <button className="btn-primary w-full min-w-0 justify-center px-3 py-2.5 text-xs sm:text-sm" type="button" onClick={consent.acceptAll}>
                 Tout accepter
               </button>
-              <button className="btn-secondary justify-center" type="button" onClick={consent.rejectAll}>
+              <button className="btn-secondary w-full min-w-0 justify-center px-3 py-2.5 text-xs sm:text-sm" type="button" onClick={consent.rejectAll}>
                 Tout refuser
               </button>
               <button
-                className="btn-secondary justify-center"
+                className="btn-secondary w-full min-w-0 justify-center px-3 py-2.5 text-xs min-[350px]:col-span-2 sm:text-sm lg:col-span-1"
                 type="button"
                 onClick={consent.openPreferences}
               >

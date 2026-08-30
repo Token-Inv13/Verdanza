@@ -72,19 +72,25 @@ export function TopPromoShowcase({
             <span className="absolute right-8 top-10 h-20 w-10 rotate-[58deg] rounded-[100%_0_100%_0] bg-forest/15" />
           </div>
 
-          <div className="relative grid gap-2 px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-5 sm:px-5 sm:py-2">
-            <div className="min-w-0">
+          {primary.dismissible && (
+            <div className="absolute right-1 top-1 z-10">
+              <DismissButton banner={primary} onDismiss={onDismiss} />
+            </div>
+          )}
+
+          <div className="relative grid min-w-0 gap-2 px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-5 sm:px-5 sm:py-2">
+            <div className="min-w-0 pr-10 sm:pr-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-forest px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-ivory">
+                <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-forest px-2.5 py-1 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-ivory">
                   <Gift size={13} aria-hidden="true" />
                   Offre du moment
                 </span>
                 {primary.promotionSummary?.applicationMode === "automatic" && (
-                  <span className="text-[11px] font-medium text-forest/65">Sans code</span>
+                  <span className="min-w-0 break-words text-[0.6875rem] font-medium text-forest/75">Sans code</span>
                 )}
               </div>
-              <h2 className="mt-1.5 max-w-3xl font-display text-[21px] leading-[1.05] text-forest sm:text-[28px]">
-                {primary.title}
+              <h2 className="mt-1.5 max-w-3xl font-display text-[clamp(1.2rem,5.6vw,1.5rem)] leading-[1.08] text-forest [text-wrap:balance] sm:text-[28px]">
+                {formatPromoTitle(primary.title)}
               </h2>
               <p className="sr-only max-w-3xl text-xs leading-5 text-ink/70 sm:not-sr-only sm:mt-1 sm:text-sm">
                 {primary.message}
@@ -92,7 +98,7 @@ export function TopPromoShowcase({
               <GiftTierRail banner={primary} />
             </div>
 
-            <div className="flex items-center gap-2 sm:self-end">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 pr-10 sm:justify-end sm:self-end">
               {primaryCode && (
                 <>
                   <code className="rounded-md border border-forest/15 bg-ivory px-2 py-1.5 text-xs font-semibold tracking-wide text-forest">
@@ -135,9 +141,6 @@ export function TopPromoShowcase({
                   </button>
                 </div>
               )}
-              {primary.dismissible && (
-                <DismissButton banner={primary} onDismiss={onDismiss} />
-              )}
             </div>
           </div>
 
@@ -178,19 +181,23 @@ function GiftTierRail({ banner }: { banner: PromoBanner }) {
 
   return (
     <div
-      className="mt-1.5 flex max-w-2xl snap-x gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="mt-2 grid min-w-0 max-w-2xl grid-cols-1 gap-1.5 min-[350px]:grid-cols-3"
       aria-label="Paliers de l'offre"
+      role="group"
+      data-testid="gift-tier-grid"
     >
       {tiers.map((tier) => (
         <div
           key={tier.id}
-          className="flex min-w-[105px] snap-start items-center gap-1.5 rounded-lg border border-forest/10 bg-ivory/75 px-2 py-1 text-forest sm:min-w-[125px]"
+          className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-lg border border-forest/10 bg-ivory/75 px-2 py-1.5 text-forest min-[350px]:grid-cols-1 min-[350px]:justify-items-center min-[350px]:gap-0.5 min-[350px]:px-1.5 min-[350px]:text-center sm:grid-cols-[auto_minmax(0,1fr)] sm:justify-items-stretch sm:gap-2 sm:px-2 sm:text-left"
+          data-testid="gift-tier"
         >
           <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-champagne/25 text-[11px]" aria-hidden="true">
             <Gift size={13} />
           </span>
-          <span className="whitespace-nowrap text-[10px] leading-4 sm:text-[11px]">
-            {formatEuro(tier.minimumSubtotal)} <span className="sm:hidden" aria-hidden="true">→ </span><strong className="inline text-xs sm:block">{tier.quantityGrams} g offert{tier.quantityGrams > 1 ? "s" : ""}</strong>
+          <span className="min-w-0 max-w-full break-words text-[0.6875rem] leading-4">
+            <span className="block">{formatEuro(tier.minimumSubtotal)}</span>
+            <strong className="block text-xs leading-4">{tier.quantityGrams} g offert{tier.quantityGrams > 1 ? "s" : ""}</strong>
           </span>
         </div>
       ))}
@@ -257,7 +264,7 @@ function BannerLink({
   primary?: boolean;
 }) {
   const className = primary
-    ? "inline-flex min-h-9 items-center justify-center rounded-lg bg-forest px-3 py-2 text-xs font-semibold text-ivory shadow-sm transition hover:bg-forest/90 motion-reduce:transition-none sm:px-4 sm:text-sm"
+    ? "inline-flex min-h-11 w-full min-w-0 max-w-full items-center justify-center rounded-lg bg-forest px-3 py-2 text-center text-xs font-semibold text-ivory shadow-sm transition hover:bg-forest/90 motion-reduce:transition-none sm:min-h-9 sm:w-auto sm:px-4 sm:text-sm"
     : "font-semibold underline decoration-champagne underline-offset-2";
   if (url.startsWith("/")) return <Link to={url} className={className}>{label}</Link>;
   return <a href={url} className={className}>{label}</a>;
@@ -273,7 +280,7 @@ function DismissButton({
   return (
     <button
       type="button"
-      className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-transparent text-forest/65 transition hover:border-forest/10 hover:bg-ivory hover:text-forest motion-reduce:transition-none"
+      className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-transparent text-forest/65 transition hover:border-forest/10 hover:bg-ivory hover:text-forest focus:outline-none focus:ring-2 focus:ring-champagne focus:ring-offset-2 motion-reduce:transition-none"
       aria-label={`Fermer la promotion ${banner.title}`}
       onClick={() => onDismiss(banner)}
     >
@@ -284,4 +291,8 @@ function DismissButton({
 
 function formatEuro(value: number) {
   return `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(value)} €`;
+}
+
+function formatPromoTitle(title: string) {
+  return title.replace(/week-end/gi, (value) => value.replace("-", "‑"));
 }
