@@ -498,8 +498,11 @@ export function BlogComments() {
         <h2 id="blog-comments-title" className="font-display text-3xl text-forest sm:text-4xl">
           Commentaires
         </h2>
-        <span className="inline-flex min-w-7 items-center justify-center rounded-full bg-cream px-2 py-1 text-xs font-semibold tabular-nums text-forest" aria-label={`${summary.approvedCommentCount} commentaires publics`}>
-          {summary.approvedCommentCount}
+        <span className="inline-flex min-w-7 items-center justify-center rounded-full bg-cream px-2 py-1 text-xs font-semibold tabular-nums text-forest">
+          <span aria-hidden="true">{summary.approvedCommentCount}</span>
+          <span className="sr-only">
+            {summary.approvedCommentCount} commentaire{summary.approvedCommentCount > 1 ? "s" : ""} public{summary.approvedCommentCount > 1 ? "s" : ""}
+          </span>
         </span>
       </div>
       <p className="mt-2 text-sm leading-6 text-ink/60">
@@ -507,7 +510,7 @@ export function BlogComments() {
       </p>
 
       {isLoading ? (
-        <p className="mt-6 text-sm text-ink/55" aria-live="polite">Chargement des commentaires...</p>
+        <p className="mt-6 text-sm text-ink/65" aria-live="polite">Chargement des commentaires...</p>
       ) : comments.length > 0 ? (
         <div className="mt-6 divide-y divide-forest/10 border-y border-forest/10">
           {comments.map((comment) => (
@@ -532,7 +535,7 @@ export function BlogComments() {
       ) : (
         <div className="mt-6 border-y border-forest/10 py-5" data-blog-comments-empty>
           <p className="text-sm font-medium text-forest">Aucun commentaire pour le moment.</p>
-          <p className="mt-1 text-sm text-ink/55">Vous pouvez ouvrir la discussion.</p>
+          <p className="mt-1 text-sm text-ink/65">Vous pouvez ouvrir la discussion.</p>
         </div>
       )}
 
