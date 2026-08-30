@@ -152,7 +152,11 @@ export function buildBlogPostingJsonLd(article: BlogArticle): JsonLdValue {
       url: absoluteUrl("/a-propos"),
     },
     publisher: {
+      "@type": "Organization",
       "@id": organizationId,
+      name: "Verdanza",
+      url: absoluteUrl("/"),
+      logo: absoluteUrl(BRAND_STRUCTURED_DATA_LOGO),
     },
   };
 }
