@@ -50,13 +50,20 @@ export function validateSupplierInvoicePdfBuffer(buffer: Buffer) {
   }
 }
 
+export const SUPPLIER_INVOICE_PDF_OPTIONS = Object.freeze({
+  disableWorker: true,
+  useSystemFonts: true,
+  isEvalSupported: false,
+});
+
 export async function extractSupplierInvoicePdfText(buffer: Buffer) {
-  const pdfjsModuleName = "pdfjs-dist/legacy/build/pdf.js";
+  const pdfjsModuleName = "pdfjs-dist/legacy/build/pdf.mjs";
   const pdfjs = (await import(pdfjsModuleName)) as {
     getDocument: (options: {
       data: Uint8Array;
       disableWorker: boolean;
       useSystemFonts: boolean;
+      isEvalSupported: boolean;
     }) => {
       promise: Promise<{
         numPages: number;
@@ -68,22 +75,25 @@ export async function extractSupplierInvoicePdfText(buffer: Buffer) {
       }>;
     };
   };
-  const document = await pdfjs.getDocument({
-    data: new Uint8Array(buffer),
-    disableWorker: true,
-    useSystemFonts: true,
-  }).promise;
-  const pages: string[] = [];
-  for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
-    const page = await document.getPage(pageNumber);
-    const content = await page.getTextContent();
-    pages.push(
-      content.items
-        .map((item) => item.str || "")
-        .join("\n"),
-    );
+  try {
+    const document = await pdfjs.getDocument({
+      data: new Uint8Array(buffer),
+      ...SUPPLIER_INVOICE_PDF_OPTIONS,
+    }).promise;
+    const pages: string[] = [];
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+      const page = await document.getPage(pageNumber);
+      const content = await page.getTextContent();
+      pages.push(
+        content.items
+          .map((item) => item.str || "")
+          .join("\n"),
+      );
+    }
+    return pages.join("\n");
+  } catch {
+    throw new Error("PDF illisible ou endommagé.");
   }
-  return pages.join("\n");
 }
 
 async function supplierPurchaseDuplicate(

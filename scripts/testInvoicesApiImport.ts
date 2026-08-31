@@ -8,7 +8,10 @@ delete (globalThis as { Path2D?: unknown }).Path2D;
 const require = createRequire(import.meta.url);
 const before = loadedPdfModules();
 const invoicesModule = await import("../api/invoices");
+const supplierInvoiceAnalysisModule = await import("../api/analyze-supplier-invoice");
 assert.equal(typeof invoicesModule.default, "function");
+assert.equal(typeof supplierInvoiceAnalysisModule.default, "function");
+assert.deepEqual(loadedPdfModules(), before);
 
 const response = mockResponse();
 await invoicesModule.default(
