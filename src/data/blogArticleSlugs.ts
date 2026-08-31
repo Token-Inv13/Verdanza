@@ -1,4 +1,5 @@
 export const publishedBlogArticleSlugs = [
+  "calibre-fleurs-cbd-taille-tetes",
   "origine-variete-lot-cbd-differences",
   "signes-alteration-fleurs-resines-cbd",
   "infusions-feuilles-chanvre-reglement-ue-2027",

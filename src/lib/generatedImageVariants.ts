@@ -262,6 +262,27 @@ export const staticImageVariants: Record<string, ResponsiveImageVariant> = {
     width: 1672,
     height: 941,
   },
+  "/images/blog/calibre-fleurs-cbd-taille-tetes-1x1.webp": {
+    src: "/images/blog/calibre-fleurs-cbd-taille-tetes-1x1.webp",
+    srcSet: "/images/blog/calibre-fleurs-cbd-taille-tetes-1x1.webp 900w",
+    sizes: "(min-width: 1024px) 420px, 92vw",
+    width: 900,
+    height: 900,
+  },
+  "/images/blog/calibre-fleurs-cbd-taille-tetes-4x3.webp": {
+    src: "/images/blog/calibre-fleurs-cbd-taille-tetes-4x3.webp",
+    srcSet: "/images/blog/calibre-fleurs-cbd-taille-tetes-4x3.webp 1200w",
+    sizes: "(min-width: 1024px) 520px, 92vw",
+    width: 1200,
+    height: 900,
+  },
+  "/images/blog/calibre-fleurs-cbd-taille-tetes-16x9.webp": {
+    src: "/images/blog/calibre-fleurs-cbd-taille-tetes-16x9.webp",
+    srcSet: "/images/blog/calibre-fleurs-cbd-taille-tetes-16x9.webp 1600w",
+    sizes: "100vw",
+    width: 1600,
+    height: 900,
+  },
   "/images/blog/origine-variete-lot-cbd-differences-1x1.webp": {
     src: "/images/blog/origine-variete-lot-cbd-differences-1x1.webp",
     srcSet: "/images/blog/origine-variete-lot-cbd-differences-1x1.webp 900w",

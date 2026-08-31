@@ -59,6 +59,14 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" }
 > = {
+  "calibre-fleurs-cbd-taille-tetes": {
+    label: "Calibre des fleurs CBD",
+    sources: [
+      "/Fiche produit/Petite tetes OG Kush ( sous serre)/PTOGKush_pile.webp",
+      "/Fiche produit/Harlequin (sous-serre)/harlequin_zoom.webp",
+      "/Fiche produit/Mandarine/mandarine_zoom.webp",
+    ],
+  },
   "origine-variete-lot-cbd-differences": {
     label: "Origine, variété et lot CBD",
     kind: "analysis",

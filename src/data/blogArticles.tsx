@@ -6,6 +6,291 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "calibre-fleurs-cbd-taille-tetes",
+    title: "Calibre des fleurs CBD : que dit vraiment la taille des têtes ?",
+    seoTitle: "Calibre des fleurs CBD : lire la taille des têtes | Verdanza",
+    description:
+      "Petites, moyennes ou grosses têtes : comprendre ce que le calibre décrit sur une fleur CBD, ses limites et les autres repères à comparer.",
+    excerpt:
+      "Le calibre décrit d'abord la taille et la présentation des fleurs. Il ne suffit pas à juger leur qualité : lot, structure, conservation et analyse restent à croiser.",
+    category: "Guide produits",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-08-31T11:05:00+02:00",
+    dateModified: "2026-08-31T11:05:00+02:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/calibre-fleurs-cbd-taille-tetes-1x1.webp",
+      landscape: "/images/blog/calibre-fleurs-cbd-taille-tetes-4x3.webp",
+      wide: "/images/blog/calibre-fleurs-cbd-taille-tetes-16x9.webp",
+    },
+    relatedSlugs: [
+      "aspect-fleur-cbd-couleur-structure",
+      "origine-variete-lot-cbd-differences",
+      "terpenes-profils-aromatiques-cbd",
+    ],
+    links: [
+      { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/aspect-fleur-cbd-couleur-structure",
+        label: "Lire l'aspect d'une fleur CBD",
+      },
+      {
+        to: "/blog/origine-variete-lot-cbd-differences",
+        label: "Comprendre l'origine, la variété et le lot",
+      },
+      {
+        to: "/blog/terpenes-profils-aromatiques-cbd",
+        label: "Comprendre les profils aromatiques",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Sur une fiche de fleurs CBD, les termes petites têtes, fleurs de
+            calibre moyen ou grosses têtes décrivent avant tout une présentation.
+            Ils donnent une indication sur les dimensions des fleurs présentes
+            dans le lot, mais ne constituent pas à eux seuls une mesure de
+            qualité, de composition ou de profil aromatique.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Le calibre répond à la question « quelle taille ont les fleurs ? ».
+            Pour comparer deux références, il faut aussi regarder leur structure,
+            leur lot, leur état de conservation et les informations disponibles
+            sur la fiche.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "definition-calibre",
+        text: "Ce que signifie le calibre d'une fleur CBD",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le calibre classe les fleurs selon leurs dimensions visibles. Une
+            petite tête peut être naturellement compacte, provenir d'une partie
+            plus basse de la plante ou résulter du tri d'un lot. Une grosse tête
+            correspond généralement à une fleur plus volumineuse, parfois formée
+            autour d'une tige plus présente. Entre les deux, le calibre moyen
+            regroupe des fleurs de dimensions intermédiaires.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Il n'existe pas toujours une frontière universelle entre ces
+            catégories. Les appellations dépendent du tri réalisé et de la
+            présentation retenue par le vendeur. C'est pourquoi le terme doit
+            être lu comme un repère descriptif, et non comme une norme suffisante
+            pour comparer tous les produits du marché.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Ce que le calibre permet de décrire, et ce qu'il ne prouve pas.",
+          headers: ["Présentation", "Ce que l'on peut observer", "Conclusion à éviter"],
+          rows: [
+            [
+              "Petites têtes",
+              "Fleurs de dimensions réduites, parfois plus nombreuses et régulières dans le lot.",
+              "La petite taille ne signifie pas automatiquement une qualité inférieure.",
+            ],
+            [
+              "Calibre moyen",
+              "Fleurs intermédiaires, avec un équilibre variable entre matière végétale et tige.",
+              "Le calibre moyen ne garantit pas une homogénéité parfaite du lot.",
+            ],
+            [
+              "Grosses têtes",
+              "Fleurs plus volumineuses, dont la structure et la tige sont souvent plus visibles.",
+              "Le volume ne prouve ni une composition particulière ni une qualité supérieure.",
+            ],
+            [
+              "Fragments",
+              "Morceaux issus de la manipulation, du transport ou du fond de l'emballage.",
+              "Un fragment ne doit pas être confondu systématiquement avec une petite fleur entière.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "facteurs-taille",
+        text: "Pourquoi les fleurs d'un même lot n'ont-elles pas toutes la même taille ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une plante ne forme pas toutes ses fleurs dans les mêmes conditions.
+            Leur position, l'exposition à la lumière, la structure des branches et
+            le développement végétal produisent naturellement des volumes
+            différents. Le séchage, la manucure et le tri modifient ensuite la
+            présentation finale sans rendre chaque pièce identique.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "la position de la fleur sur la plante ;",
+          "la structure propre à la variété et au lot ;",
+          "la coupe et la manucure réalisées après récolte ;",
+          "le tri par dimensions avant conditionnement ;",
+          "les manipulations pendant l'emballage et le transport ;",
+          "la présence plus ou moins importante d'une tige centrale.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "calibre-qualite",
+        text: "Taille et qualité : deux lectures différentes",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une grosse fleur attire davantage le regard, mais sa taille ne décrit
+            pas seule sa couleur, sa densité réelle, son humidité, sa conservation
+            ou sa composition. À l'inverse, une petite fleur peut présenter une
+            structure nette et cohérente avec le reste du lot. Le guide consacré
+            à l'{" "}
+            <Link to="/blog/aspect-fleur-cbd-couleur-structure">
+              aspect des fleurs CBD
+            </Link>{" "}
+            détaille les critères visuels sans les transformer en promesse de
+            qualité.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le même principe vaut pour le profil aromatique. La taille d'une tête
+            ne permet pas de prévoir à elle seule une dominante végétale, fruitée,
+            boisée ou épicée. Ces indications doivent être lues sur la fiche et
+            replacées dans le contexte du lot, comme l'explique le guide sur les{" "}
+            <Link to="/blog/terpenes-profils-aromatiques-cbd">
+              terpènes et profils aromatiques
+            </Link>.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "petites-tetes-fragments",
+        text: "Distinguer petites têtes et fragments",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une petite tête conserve généralement une forme complète autour de
+            sa structure végétale. Un fragment présente plutôt une cassure nette
+            et une forme partielle. Quelques morceaux peuvent apparaître pendant
+            le transport, surtout lorsque les fleurs sont sèches ou manipulées.
+            Leur présence ponctuelle ne décrit pas nécessairement tout le lot.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Pour examiner une livraison, observez l'ensemble du contenu plutôt
+            qu'une seule pièce : répartition des tailles, intégrité des fleurs,
+            fond de l'emballage et cohérence avec la présentation annoncée.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "comparer-fleurs",
+        text: "Comment comparer deux fleurs sans se limiter au calibre",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une comparaison utile commence par des informations de même nature.
+            Le calibre se compare avec le calibre, le profil aromatique avec le
+            profil aromatique, et les données d'analyse avec des documents liés au
+            bon lot. L'{" "}
+            <Link to="/blog/origine-variete-lot-cbd-differences">
+              origine, la variété et le numéro de lot
+            </Link>{" "}
+            apportent des repères distincts qu'il vaut mieux ne pas fusionner.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "vérifier que la présentation reçue correspond au calibre annoncé ;",
+          "observer l'homogénéité générale sans attendre des fleurs identiques ;",
+          "distinguer les fleurs entières des fragments liés à la manipulation ;",
+          "croiser la taille avec la structure, la couleur et l'état de conservation ;",
+          "relier les informations d'analyse au numéro de lot concerné ;",
+          "consulter les indications de conservation portées sur l'emballage.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "reception",
+        text: "Les vérifications utiles à la réception",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            À la réception, gardez l'emballage et le numéro de lot le temps de
+            vérifier la référence. Regardez si les fleurs sont globalement
+            conformes à la présentation de la fiche, si la fermeture est intacte
+            et si aucun signe inhabituel n'apparaît. En cas d'écart marqué,
+            documentez l'ensemble sous une lumière neutre avant de contacter le
+            vendeur.
+          </>
+        ),
+      },
+      {
+        type: "links",
+        title: "Compléter la lecture d'une fleur CBD",
+        links: [
+          {
+            to: "/blog/aspect-fleur-cbd-couleur-structure",
+            label: "Lire la couleur et la structure d'une fleur",
+          },
+          {
+            to: "/blog/origine-variete-lot-cbd-differences",
+            label: "Distinguer origine, variété et lot",
+          },
+          {
+            to: "/blog/terpenes-profils-aromatiques-cbd",
+            label: "Comprendre les profils aromatiques",
+          },
+          { to: "/qualite-conformite", label: "Qualité et conformité" },
+          { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+        ],
+      },
+    ],
+  },
+  {
     slug: "origine-variete-lot-cbd-differences",
     title: "Origine, variété et lot CBD : trois informations à ne pas confondre",
     seoTitle: "Origine, variété et lot CBD : comprendre la fiche | Verdanza",
