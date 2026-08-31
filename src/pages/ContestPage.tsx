@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { CalendarDays, CheckCircle2, Clock3, Gift, ShieldCheck } from "lucide-react";
+import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 import { publicSubmissionSecurityContext } from "../lib/publicSubmissionSecurity";
 import { enterContest, getPublicContest } from "../services/contestsService";
@@ -78,6 +79,12 @@ export function ContestPage() {
       />
       <section className="hero-section border-b border-forest/10">
         <div className="container-page py-12 sm:py-16 lg:py-20">
+          <Breadcrumbs
+            items={[
+              { name: "Accueil", path: "/" },
+              { name: "Jeu-concours", path: "/concours", current: true },
+            ]}
+          />
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-champagne">
             Verdanza Weekly
           </p>

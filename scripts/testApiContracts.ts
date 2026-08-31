@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import adminContestsHandler from "../api/admin-contests";
 import adminPaymentLinksHandler from "../api/admin-payment-links";
+import blogInteractionsHandler from "../api/blog-interactions";
 import contestPrizeHandler from "../api/contest-prize";
 import contestsHandler from "../api/contests";
 import retryPurchaseAnalyticsHandler from "../api/retry-order-purchase-analytics";
@@ -10,6 +11,7 @@ import revokeOrderAnalyticsHandler from "../api/revoke-order-analytics";
 import sendPaymentLinkHandler from "../api/send-payment-link";
 import { handleAdminContests } from "../api/_server/contestAdminRoute";
 import { handleAdminPaymentLinks } from "../api/_server/adminPaymentLinksRoute";
+import { handleBlogInteractions } from "../api/_server/blogInteractions";
 import { handleContestPrize } from "../api/_server/contestPrizeRoute";
 import { handlePublicContests } from "../api/_server/contestPublicRoute";
 import { handleRetryPurchaseAnalytics } from "../api/_server/retryPurchaseAnalyticsRoute";
@@ -29,6 +31,7 @@ const removedRewriteSources = [
 function testDirectEntrypoints() {
   assert.equal(contestsHandler, handlePublicContests);
   assert.equal(adminContestsHandler, handleAdminContests);
+  assert.equal(blogInteractionsHandler, handleBlogInteractions);
   assert.equal(contestPrizeHandler, handleContestPrize);
   assert.equal(retryPurchaseAnalyticsHandler, handleRetryPurchaseAnalytics);
   assert.equal(revokeOrderAnalyticsHandler, handleRevokeOrderAnalytics);
@@ -40,6 +43,14 @@ async function testEndpointContracts() {
   const publicMethodResponse = new FakeResponse();
   await contestsHandler(request("PUT", "/api/contests"), publicMethodResponse as never);
   assert.equal(publicMethodResponse.statusCode, 405);
+
+  const blogMethodResponse = new FakeResponse();
+  await blogInteractionsHandler(
+    request("PATCH", "/api/blog-interactions"),
+    blogMethodResponse as never,
+  );
+  assert.equal(blogMethodResponse.statusCode, 405);
+  assert.deepEqual(blogMethodResponse.body, { error: "Methode non autorisee." });
 
   const adminResponse = new FakeResponse();
   await adminContestsHandler(
@@ -111,6 +122,7 @@ function testFunctionInventoryAndSecuritySources() {
     "admin-contests.ts",
     "admin-payment-links.ts",
     "analyze-supplier-invoice.ts",
+    "blog-interactions.ts",
     "contact.ts",
     "contest-prize.ts",
     "contests.ts",
@@ -124,10 +136,11 @@ function testFunctionInventoryAndSecuritySources() {
     "send-payment-link.ts",
     "update-order-status.ts",
   ]);
-  assert.equal(functions.length, 15);
+  assert.equal(functions.length, 16);
 
   for (const file of [
     "api/_server/contestAdminRoute.ts",
+    "api/_server/blogInteractions.ts",
     "api/_server/retryPurchaseAnalyticsRoute.ts",
     "api/_server/adminPaymentLinksRoute.ts",
     "api/_server/sendPaymentLinkRoute.ts",
@@ -168,4 +181,4 @@ await testEndpointContracts();
 testRewriteConfiguration();
 testFunctionInventoryAndSecuritySources();
 
-console.log("Direct API endpoint contract tests passed (15 functions)");
+console.log("Direct API endpoint contract tests passed (16 functions)");

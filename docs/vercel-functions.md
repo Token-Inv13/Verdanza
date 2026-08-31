@@ -2,7 +2,7 @@
 
 Verdanza utilise Vercel Pro pour son exploitation commerciale. L'architecture n'est donc plus
 contrainte par l'ancienne limite de fonctions du plan Hobby. La consolidation temporaire en
-onze fonctions, mise en place pour respecter cette limite, a été retirée au profit de quinze
+onze fonctions, mise en place pour respecter cette limite, a été retirée au profit de seize
 fonctions explicites alignées sur leurs responsabilités métier.
 
 Les points d'entrée publics, administratifs et personnels sont désormais séparés. Les URLs API

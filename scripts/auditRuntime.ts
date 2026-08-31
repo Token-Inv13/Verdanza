@@ -2,6 +2,7 @@ import { chromium, type Page } from "playwright";
 import { blockExternalServices, gotoDomReady, waitForStableDom } from "./auditPageReady";
 
 const baseUrl = process.argv[2] || "http://127.0.0.1:4173";
+const addToCartButtonName = /^Ajouter \d+(?:[.,]\d+)? g\b/i;
 const noJavaScriptRoutes = [
   "/",
   "/blog",
@@ -140,7 +141,7 @@ async function auditInteractiveViewport(
       await gotoDomReady(page, `${baseUrl}/produits/golden-static`);
       await expectOneH1(page, `${label} product`);
       await expectImagesLoaded(page, `${label} product`);
-      await page.getByRole("button", { name: /Ajouter 1 g au panier/i }).click();
+      await page.locator("main").getByRole("button", { name: addToCartButtonName }).first().click();
       await gotoDomReady(page, `${baseUrl}/panier`);
       if (!(await page.getByText(/Golden Static/i).count())) {
         failures.push(`${label} cart did not contain added product`);

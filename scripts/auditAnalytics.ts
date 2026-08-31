@@ -9,6 +9,7 @@ const packageJson = JSON.parse(readFileSync(resolve("package.json"), "utf8")) as
   scripts?: Record<string, string>;
 };
 const failures: string[] = [];
+const addToCartButtonName = /^Ajouter \d+(?:[.,]\d+)? g\b/i;
 
 type GoogleRequestLog = {
   gtm: string[];
@@ -267,7 +268,7 @@ async function assertAcceptAndWithdrawFlow(context: BrowserContext, baseUrl: str
   await page.waitForURL("**/produits/cookie-kush-indoor");
   await waitForGa4Event(googleRequests, "view_item");
   await assertNoObjectDataLayerEvent(page, "view_item");
-  await page.getByRole("button", { name: "Ajouter 1 g au panier" }).click();
+  await page.locator("main").getByRole("button", { name: addToCartButtonName }).first().click();
   await waitForGa4Event(googleRequests, "add_to_cart");
   await assertNoObjectDataLayerEvent(page, "add_to_cart");
 
@@ -307,7 +308,7 @@ async function assertAcceptAndWithdrawFlow(context: BrowserContext, baseUrl: str
   if ((await analyticsCookieCount(context)) !== 0) failures.push("_ga cookies were not removed after withdrawal");
   const ga4RequestsBeforeBlockedEvent = googleRequests.ga4.length;
   await page.goto(`${baseUrl}/produits/golden-static`, { waitUntil: "load" });
-  await page.getByRole("button", { name: "Ajouter 1 g au panier" }).click();
+  await page.locator("main").getByRole("button", { name: addToCartButtonName }).first().click();
   await page.waitForTimeout(200);
   if (googleRequests.ga4.length !== ga4RequestsBeforeBlockedEvent) {
     failures.push("new GA4 events were not blocked after withdrawal");
