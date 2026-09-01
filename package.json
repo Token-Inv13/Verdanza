@@ -80,6 +80,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@napi-rs/canvas": "0.1.100",
     "firebase": "^11.1.0",
     "firebase-admin": "^14.0.0",
     "lucide-react": "^0.468.0",

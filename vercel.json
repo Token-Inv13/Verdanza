@@ -3,6 +3,11 @@
   "buildCommand": "npm run build",
   "devCommand": "npm run dev -- --host 127.0.0.1",
   "outputDirectory": "dist",
+  "functions": {
+    "api/analyze-supplier-invoice.ts": {
+      "includeFiles": "node_modules/@napi-rs/{canvas,canvas-linux-x64-gnu}/**"
+    }
+  },
   "cleanUrls": true,
   "redirects": [
     {
