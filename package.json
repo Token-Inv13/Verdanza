@@ -48,6 +48,7 @@
     "test:admin-products-responsive": "node --import tsx scripts/testAdminProductsResponsive.ts",
     "test:admin-archives": "node --import tsx scripts/testAdminArchives.ts",
     "test:admin-analytics": "node --import tsx scripts/testAdminAnalytics.ts",
+    "test:firebase-admin-compatibility": "node --import tsx scripts/testFirebaseAdminCompatibility.ts",
     "test:firebase-auth-actions": "node --import tsx scripts/testFirebaseAuthActions.ts",
     "test:order-reliability": "node --import tsx scripts/testOrderReliability.ts",
     "test:payment-link-reliability": "node --import tsx scripts/testPaymentLinkReliability.ts",
@@ -82,7 +83,7 @@
   "dependencies": {
     "@napi-rs/canvas": "0.1.100",
     "firebase": "^11.1.0",
-    "firebase-admin": "^14.0.0",
+    "firebase-admin": "^14.3.0",
     "lucide-react": "^0.468.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.10.38",
