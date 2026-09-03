@@ -59,6 +59,14 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" }
 > = {
+  "photos-fleurs-cbd-lumiere-echelle": {
+    label: "Photos de fleurs CBD",
+    sources: [
+      "/Fiche produit/Amnesia/amnesia_hydro_zoom.webp",
+      "/Fiche produit/Blue%20Dream/BlueDream.webp",
+      "/Fiche produit/Petite tetes OG Kush ( sous serre)/PTOGKush_pile.webp",
+    ],
+  },
   "calibre-fleurs-cbd-taille-tetes": {
     label: "Calibre des fleurs CBD",
     sources: [

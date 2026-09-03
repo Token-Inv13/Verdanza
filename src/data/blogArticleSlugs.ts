@@ -1,4 +1,5 @@
 export const publishedBlogArticleSlugs = [
+  "photos-fleurs-cbd-lumiere-echelle",
   "calibre-fleurs-cbd-taille-tetes",
   "origine-variete-lot-cbd-differences",
   "signes-alteration-fleurs-resines-cbd",

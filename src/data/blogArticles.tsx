@@ -6,6 +6,286 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "photos-fleurs-cbd-lumiere-echelle",
+    title: "Photos de fleurs CBD : comment les lire sans surinterpréter ?",
+    seoTitle: "Photos de fleurs CBD : lumière, échelle et détails | Verdanza",
+    description:
+      "Lumière, cadrage, zoom et écran : comprendre ce qu'une photo de fleur CBD permet d'observer, et les limites à garder en tête avant de comparer.",
+    excerpt:
+      "Une photo aide à lire la présentation d'une fleur CBD, mais son rendu dépend aussi de la lumière, de l'échelle et du cadrage. Voici les bons repères.",
+    category: "Guide produits",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-09-03T15:35:00+02:00",
+    dateModified: "2026-09-03T15:35:00+02:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/photos-fleurs-cbd-lumiere-echelle-1x1.webp",
+      landscape: "/images/blog/photos-fleurs-cbd-lumiere-echelle-4x3.webp",
+      wide: "/images/blog/photos-fleurs-cbd-lumiere-echelle-16x9.webp",
+    },
+    relatedSlugs: [
+      "aspect-fleur-cbd-couleur-structure",
+      "calibre-fleurs-cbd-taille-tetes",
+      "origine-variete-lot-cbd-differences",
+    ],
+    links: [
+      { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/aspect-fleur-cbd-couleur-structure",
+        label: "Lire l'aspect d'une fleur CBD",
+      },
+      {
+        to: "/blog/calibre-fleurs-cbd-taille-tetes",
+        label: "Comprendre le calibre des fleurs",
+      },
+      {
+        to: "/blog/origine-variete-lot-cbd-differences",
+        label: "Distinguer origine, variété et lot",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une photo de fleur CBD permet d'observer une présentation, une
+            structure générale et certains détails de surface. Elle reste
+            pourtant une image prise dans des conditions précises : éclairage,
+            cadrage, distance, appareil et écran influencent le résultat. La
+            lire correctement consiste donc à distinguer ce qui est visible de
+            ce qui ne peut pas être conclu à partir d'une image seule.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Une photo est un repère de présentation. Elle ne mesure ni la
+            composition, ni l'humidité, ni le profil aromatique d'un lot. Ces
+            informations doivent être recherchées dans la fiche, l'étiquette et
+            les documents associés au bon lot.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "photo-et-lot",
+        text: "Une photo montre un échantillon, pas chaque fleur du lot",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les fleurs d'une même plante et d'un même lot ne sont pas toutes
+            identiques. Leur taille, leur forme et la présence d'une tige
+            visible peuvent varier. Une image produit représente donc une ou
+            plusieurs pièces choisies pour décrire la référence, sans pouvoir
+            reproduire exactement chaque élément d'un emballage.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Pour savoir ce qui doit rester cohérent, il faut rapprocher la photo
+            de la description écrite : type de culture indiqué, calibre,
+            structure annoncée, profil aromatique et numéro de lot lorsqu'il est
+            disponible. Le guide sur l'{" "}
+            <Link to="/blog/origine-variete-lot-cbd-differences">
+              origine, la variété et le lot CBD
+            </Link>{" "}
+            explique pourquoi ces repères ne doivent pas être confondus.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "lumiere-couleur",
+        text: "Comment la lumière modifie le rendu des couleurs",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La couleur affichée dépend de la source lumineuse et de la balance
+            des blancs choisie par l'appareil. Une lumière chaude accentue les
+            tons jaunes ou ambrés. Une lumière froide peut tirer le vert vers le
+            bleu. Un flash ou un éclairage latéral renforce certains reliefs et
+            points brillants, tandis qu'une lumière diffuse réduit les ombres.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Effets fréquents de la prise de vue sur une photo de fleur CBD.",
+          headers: ["Condition", "Effet possible sur l'image", "Précaution de lecture"],
+          rows: [
+            [
+              "Lumière chaude",
+              "Tons jaunes, bruns ou ambrés plus présents.",
+              "Ne pas attribuer automatiquement cette teinte à la fleur elle-même.",
+            ],
+            [
+              "Lumière froide",
+              "Verts plus bleutés et contraste parfois renforcé.",
+              "Comparer avec une vue prise sous une lumière plus neutre si elle existe.",
+            ],
+            [
+              "Flash ou lumière directe",
+              "Reflets et détails de surface davantage visibles.",
+              "Un point brillant n'indique pas à lui seul une caractéristique précise.",
+            ],
+            [
+              "Lumière diffuse",
+              "Ombres atténuées et volumes moins marqués.",
+              "La densité apparente peut sembler différente d'une vue contrastée.",
+            ],
+            [
+              "Fond sombre ou clair",
+              "Perception du contraste et de la saturation modifiée.",
+              "Observer la fleur plutôt que déduire sa teinte à partir du fond.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "echelle-cadrage",
+        text: "Échelle, zoom et cadrage : retrouver les bonnes proportions",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Un gros plan remplit l'écran et peut donner l'impression d'une fleur
+            volumineuse, même lorsqu'aucun repère de taille n'est visible. À
+            l'inverse, une vue large montre mieux la répartition des pièces mais
+            masque certains détails. Le cadrage doit donc être lu séparément du
+            {" "}<Link to="/blog/calibre-fleurs-cbd-taille-tetes">calibre annoncé</Link>.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "chercher une vue d'ensemble en complément du gros plan ;",
+          "vérifier si un emballage ou un élément connu fournit une échelle ;",
+          "ne pas comparer la taille de deux fleurs photographiées à des distances différentes ;",
+          "tenir compte des bords coupés par le cadrage ;",
+          "distinguer une vue agrandie d'une photographie à taille comparable.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "macro-details",
+        text: "Ce qu'une photographie macro permet réellement d'observer",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une vue macro peut rendre visibles la structure végétale, la coupe,
+            les petites feuilles, les fibres et des points clairs en surface.
+            Elle aide à examiner la régularité d'une zone, mais elle amplifie
+            aussi les poussières, les reflets et les écarts minuscules. Une
+            conclusion fiable demande une vue d'ensemble et, si nécessaire, la
+            vérification physique du produit reçu.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "ecran-retouche",
+        text: "Pourquoi deux écrans peuvent afficher des teintes différentes",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La luminosité, le contraste, le mode nuit et le profil colorimétrique
+            d'un téléphone ou d'un ordinateur modifient l'affichage. La
+            compression d'une image peut aussi réduire les détails fins. Ces
+            variations expliquent pourquoi une teinte perçue à l'écran ne doit
+            pas devenir, seule, un critère définitif de conformité ou de qualité.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "comparer-photos",
+        text: "Une méthode simple pour comparer deux présentations",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Commencez par comparer des vues de même nature : ensemble avec
+            ensemble, gros plan avec gros plan. Regardez ensuite la forme
+            générale, la répartition des tailles et la coupe, puis croisez ces
+            observations avec la fiche. Le guide consacré à l'{" "}
+            <Link to="/blog/aspect-fleur-cbd-couleur-structure">
+              aspect des fleurs CBD
+            </Link>{" "}
+            complète cette lecture sans transformer un détail visuel en preuve.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "comparer des images prises sous des angles et des cadrages proches ;",
+          "séparer les observations de couleur, de structure et de calibre ;",
+          "lire la légende et la description associées à chaque photo ;",
+          "vérifier que les informations concernent bien la même référence ou le même lot ;",
+          "éviter de conclure à partir d'un seul détail agrandi.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "verification-reception",
+        text: "Que vérifier à la réception",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            À la réception, examinez l'ensemble sous une lumière neutre et
+            conservez l'emballage ainsi que le numéro de lot. Si un écart marqué
+            apparaît entre la présentation annoncée et le produit reçu,
+            photographiez une vue générale puis un détail, sans filtre et avec
+            un repère d'échelle. Ces éléments facilitent une vérification factuelle
+            avec le vendeur.
+          </>
+        ),
+      },
+      {
+        type: "links",
+        title: "Compléter la lecture des fleurs CBD",
+        links: [
+          {
+            to: "/blog/aspect-fleur-cbd-couleur-structure",
+            label: "Lire la couleur et la structure d'une fleur",
+          },
+          {
+            to: "/blog/calibre-fleurs-cbd-taille-tetes",
+            label: "Comprendre la taille des têtes",
+          },
+          {
+            to: "/blog/origine-variete-lot-cbd-differences",
+            label: "Distinguer origine, variété et lot",
+          },
+          { to: "/qualite-conformite", label: "Qualité et conformité" },
+          { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+        ],
+      },
+    ],
+  },
+  {
     slug: "calibre-fleurs-cbd-taille-tetes",
     title: "Calibre des fleurs CBD : que dit vraiment la taille des têtes ?",
     seoTitle: "Calibre des fleurs CBD : lire la taille des têtes | Verdanza",
