@@ -25,12 +25,12 @@ const expectedPdfHashes: Record<string, string> = {
 
 assert.equal(productSheets.length, 10, "the library must contain exactly 10 sheets");
 assert.equal(
-  productSheets.filter((sheet) => sheet.category === "flowers").length,
+  productSheets.filter((sheet) => sheet.category === "flower").length,
   6,
   "the library must contain six flowers",
 );
 assert.equal(
-  productSheets.filter((sheet) => sheet.category === "resins").length,
+  productSheets.filter((sheet) => sheet.category === "resin").length,
   4,
   "the library must contain four resins",
 );
@@ -138,6 +138,7 @@ try {
     const context = await browser.newContext({
       viewport: { width, height: 900 },
       serviceWorkers: "block",
+      reducedMotion: width === 390 ? "reduce" : "no-preference",
     });
     await context.addInitScript(() => {
       window.localStorage.setItem("verdanza-age-confirmed", "true");
@@ -156,6 +157,90 @@ try {
     page.on("pageerror", (error) => pageErrors.push(error.message));
     const response = await gotoDomReady(page, `${server.baseUrl}/fiches-produits`);
     assert.equal(response?.status(), 200, `${width}px: route must return HTTP 200`);
+
+    const selector = page.locator("[data-product-selector]");
+    await selector.scrollIntoViewIfNeeded();
+    assert.equal(await selector.isVisible(), true, `${width}px: selector must be visible`);
+    assert.equal(
+      await page.locator("[data-product-selector-results]").count(),
+      0,
+      `${width}px: result must stay hidden before type and ambience are selected`,
+    );
+
+    await page.locator('[data-selector-option="category:flower"]').click();
+    assert.equal(
+      await page.locator('[data-selector-step="1"] > button').getAttribute("aria-expanded"),
+      "false",
+      `${width}px: type step must close after selection`,
+    );
+    assert.equal(
+      await page.locator('[data-selector-step="2"] > button').getAttribute("aria-expanded"),
+      "true",
+      `${width}px: ambience step must open after type`,
+    );
+    await page.getByRole("button", { name: "Détente profonde", exact: true }).click();
+    await page.locator('[data-product-selector-results][data-result-category="flower"]').waitFor();
+    assert.equal(
+      await page.locator("[data-selector-alternative]").count() <= 2,
+      true,
+      `${width}px: selector must show at most two alternatives`,
+    );
+    if (width === 390) {
+      const reducedMotionTransforms = await page
+        .locator("[data-selector-primary-card], [data-selector-alternative]")
+        .evaluateAll((cards) => cards.map((card) => getComputedStyle(card).transform));
+      assert.ok(
+        reducedMotionTransforms.every((transform) => transform === "none"),
+        "390px reduced-motion: recommendation cards must not tilt",
+      );
+    }
+
+    await page.getByRole("button", { name: "Intense", exact: true }).click();
+    assert.equal(
+      await page.locator('[data-selector-step="4"] > button').getAttribute("aria-expanded"),
+      "true",
+      `${width}px: aroma step must open after intensity`,
+    );
+    await page.getByRole("button", { name: "Peu importe", exact: true }).click();
+    await page.locator('[data-selector-step="1"] > button').click();
+    await page.locator('[data-selector-option="category:resin"]').click();
+    await page.locator('[data-product-selector-results][data-result-category="resin"]').waitFor();
+
+    const selectorInteractionMetrics = await page.evaluate(() => {
+      const visibleButtons = [...document.querySelectorAll<HTMLButtonElement>("[data-product-selector] button")]
+        .filter((button) => {
+          const rect = button.getBoundingClientRect();
+          const style = getComputedStyle(button);
+          return (
+            rect.width > 0 &&
+            rect.height > 0 &&
+            style.visibility !== "hidden" &&
+            !button.closest('[aria-hidden="true"]')
+          );
+        });
+      const optionButtons = visibleButtons.filter((button) => button.hasAttribute("data-selector-option"));
+      return {
+        shortestButton: Math.min(...visibleButtons.map((button) => button.getBoundingClientRect().height)),
+        overlappingOptions: optionButtons.some((button, index) => {
+          const first = button.getBoundingClientRect();
+          return optionButtons.slice(index + 1).some((other) => {
+            const second = other.getBoundingClientRect();
+            return first.left < second.right && first.right > second.left && first.top < second.bottom && first.bottom > second.top;
+          });
+        }),
+      };
+    });
+    assert.ok(selectorInteractionMetrics.shortestButton >= 43.5, `${width}px: selector buttons must be about 44px high`);
+    assert.equal(selectorInteractionMetrics.overlappingOptions, false, `${width}px: selector options must not overlap`);
+
+    await page.locator("[data-selector-reset]").click();
+    assert.equal(await page.locator("[data-product-selector-results]").count(), 0, `${width}px: reset must hide results`);
+    assert.equal(
+      await page.locator('[data-selector-step="1"] > button').getAttribute("aria-expanded"),
+      "true",
+      `${width}px: reset must reopen type`,
+    );
+
     await page.locator('[data-product-sheet-card]').first().scrollIntoViewIfNeeded();
     await page.locator('[data-product-sheet-card] img').first().waitFor({ state: "visible" });
     await page.waitForFunction(
@@ -190,7 +275,7 @@ try {
 
     assert.equal(metrics.cards, 10, `${width}px: all product cards must render`);
     assert.equal(metrics.h1, 1, `${width}px: exactly one H1 is required`);
-    assert.equal(metrics.h2, 2, `${width}px: two H2 section headings are required`);
+    assert.equal(metrics.h2, 4, `${width}px: selector, library and category H2 headings are required`);
     assert.equal(metrics.scrollWidth, metrics.viewportWidth, `${width}px: horizontal overflow detected`);
     assert.equal(metrics.columnCount, width < 640 ? 1 : width < 1280 ? 2 : 3, `${width}px: unexpected grid columns`);
     assert.equal(metrics.imageAltMissing, false, `${width}px: image alt text is missing`);

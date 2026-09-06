@@ -1,15 +1,18 @@
 import { ExternalLink } from "lucide-react";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
+import { ProductProfileSelector } from "../components/product-sheets/ProductProfileSelector";
 import {
+  productSheetAmbienceLabels,
+  productSheetIntensityLabels,
   productSheets,
   type ProductSheet,
   type ProductSheetCategory,
 } from "../data/productSheets";
 
 const sections: Array<{ category: ProductSheetCategory; title: string }> = [
-  { category: "flowers", title: "Fleurs" },
-  { category: "resins", title: "Résines" },
+  { category: "flower", title: "Fleurs" },
+  { category: "resin", title: "Résines" },
 ];
 
 export function ProductSheetsPage() {
@@ -47,39 +50,63 @@ export function ProductSheetsPage() {
         </div>
       </header>
 
-      <div className="container-page space-y-16 pt-12 sm:pt-16">
-        {sections.map((section) => {
-          const sheets = productSheets.filter(
-            (sheet) => sheet.category === section.category,
-          );
+      <div className="container-page pt-12 sm:pt-16">
+        <ProductProfileSelector />
 
-          return (
-            <section key={section.category} aria-labelledby={`${section.category}-title`}>
-              <div className="mb-7 flex items-end justify-between gap-4 border-b border-forest/10 pb-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-champagne">
-                    Sélection
-                  </p>
-                  <h2
-                    id={`${section.category}-title`}
-                    className="mt-1 font-display text-4xl leading-tight text-forest sm:text-5xl"
-                  >
-                    {section.title}
-                  </h2>
+        <section
+          id="toutes-les-fiches"
+          className="scroll-mt-24 border-b border-forest/10 pb-7 pt-16 sm:pt-20"
+          aria-labelledby="all-product-sheets-title"
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-champagne">
+            Explorer librement
+          </p>
+          <h2
+            id="all-product-sheets-title"
+            className="mt-2 font-display text-4xl leading-tight text-forest sm:text-5xl"
+          >
+            Toutes les fiches
+          </h2>
+          <p className="mt-3 text-base leading-7 text-ink/60">
+            Vous préférez parcourir toute la sélection ? Retrouvez les dix profils
+            ci-dessous.
+          </p>
+        </section>
+
+        <div className="space-y-16 pt-10 sm:pt-12">
+          {sections.map((section) => {
+            const sheets = productSheets.filter(
+              (sheet) => sheet.category === section.category,
+            );
+
+            return (
+              <section key={section.category} aria-labelledby={`${section.category}-title`}>
+                <div className="mb-7 flex items-end justify-between gap-4 border-b border-forest/10 pb-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-champagne">
+                      Sélection
+                    </p>
+                    <h2
+                      id={`${section.category}-title`}
+                      className="mt-1 font-display text-4xl leading-tight text-forest sm:text-5xl"
+                    >
+                      {section.title}
+                    </h2>
+                  </div>
+                  <span className="text-sm text-forest/55">
+                    {sheets.length} fiche{sheets.length > 1 ? "s" : ""}
+                  </span>
                 </div>
-                <span className="text-sm text-forest/55">
-                  {sheets.length} fiche{sheets.length > 1 ? "s" : ""}
-                </span>
-              </div>
 
-              <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-                {sheets.map((sheet) => (
-                  <ProductSheetCard key={sheet.slug} sheet={sheet} />
-                ))}
-              </div>
-            </section>
-          );
-        })}
+                <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                  {sheets.map((sheet) => (
+                    <ProductSheetCard key={sheet.slug} sheet={sheet} />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
       </div>
     </main>
   );
@@ -116,21 +143,21 @@ function ProductSheetCard({ sheet }: { sheet: ProductSheet }) {
             </dt>
             <dd className="mt-2">
               <span className="inline-flex rounded-full border border-champagne/45 bg-cream px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-forest">
-                {sheet.intensity}
+                {productSheetIntensityLabels[sheet.experience.intensity]}
               </span>
             </dd>
           </div>
           <div>
             <dt className="text-[0.7rem] font-semibold uppercase tracking-[0.17em] text-forest/55">
-              Ambiance{sheet.ambiences.length > 1 ? "s" : ""}
+              Ambiance{sheet.experience.ambiences.length > 1 ? "s" : ""}
             </dt>
             <dd className="mt-2 flex flex-wrap gap-2">
-              {sheet.ambiences.map((ambience) => (
+              {sheet.experience.ambiences.map((ambience) => (
                 <span
                   key={ambience}
                   className="rounded-full border border-sage/45 bg-sage/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-forest"
                 >
-                  {ambience}
+                  {productSheetAmbienceLabels[ambience]}
                 </span>
               ))}
             </dd>

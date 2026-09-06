@@ -51,6 +51,13 @@ export type AnalyticsEventName =
   | "blog_like"
   | "blog_share"
   | "blog_comment_submit"
+  | "product_selector_started"
+  | "product_selector_type_selected"
+  | "product_selector_ambience_selected"
+  | "product_selector_intensity_selected"
+  | "product_selector_aroma_selected"
+  | "product_selector_result_viewed"
+  | "product_sheet_opened_from_selector"
   | "generate_lead";
 
 export type ContactHelpSource =

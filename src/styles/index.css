@@ -195,6 +195,101 @@
   .blog-comment-form {
     animation: blog-comment-reveal 180ms ease-out;
   }
+
+  .product-selector-shell {
+    background:
+      radial-gradient(circle at 92% 5%, rgba(201, 164, 92, 0.14), transparent 24rem),
+      linear-gradient(145deg, #faf8f2 0%, #f5f0e6 100%);
+  }
+
+  .selector-step-content {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: translateY(-0.25rem);
+    transition:
+      grid-template-rows 220ms ease,
+      opacity 180ms ease,
+      transform 180ms ease;
+  }
+
+  .selector-step-content > div {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .selector-step-content.is-open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .product-result-stage {
+    perspective: 75rem;
+  }
+
+  .product-result-card {
+    --tilt-x: 0deg;
+    --tilt-y: 0deg;
+    transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y)) translateZ(0.75rem);
+    transform-style: preserve-3d;
+    transition:
+      transform 180ms ease,
+      box-shadow 220ms ease;
+    will-change: transform;
+    animation: selector-card-in 260ms ease-out both;
+  }
+
+  .product-result-card:active {
+    transform: rotateX(0deg) rotateY(0deg) translateY(-0.125rem) translateZ(1.125rem)
+      scale(0.995);
+  }
+
+  .product-result-highlight {
+    background: linear-gradient(
+      125deg,
+      rgba(255, 255, 255, 0.22),
+      transparent 34%,
+      transparent 65%,
+      rgba(201, 164, 92, 0.12)
+    );
+    transform: translateZ(1.125rem);
+  }
+
+  .product-alternative-card {
+    transition:
+      transform 180ms ease,
+      opacity 180ms ease,
+      box-shadow 180ms ease;
+  }
+}
+
+@keyframes selector-card-in {
+  from {
+    opacity: 0.65;
+    transform: translateY(0.5rem) translateZ(0);
+  }
+  to {
+    opacity: 1;
+    transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y)) translateZ(0.75rem);
+  }
+}
+
+@media (min-width: 768px) {
+  .product-alternative-card-1 {
+    left: 0;
+    transform: translateY(1.5rem) rotate(-4deg) translateZ(-1.25rem);
+  }
+
+  .product-alternative-card-2 {
+    right: 0;
+    transform: translateY(1.5rem) rotate(4deg) translateZ(-1.25rem);
+  }
+
+  .product-alternative-card:hover {
+    z-index: 20;
+    transform: translateY(0.75rem) rotate(0deg) translateZ(-0.5rem);
+  }
 }
 
 @keyframes blog-comment-reveal {
@@ -221,6 +316,20 @@
 
   .blog-comment-form {
     animation: none;
+  }
+
+  .selector-step-content,
+  .product-result-card,
+  .product-alternative-card {
+    animation: none;
+    transition-duration: 1ms;
+  }
+
+  .product-result-card,
+  .product-result-card:active,
+  .product-alternative-card,
+  .product-alternative-card:hover {
+    transform: none;
   }
 }
 
