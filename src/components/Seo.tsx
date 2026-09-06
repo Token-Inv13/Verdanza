@@ -9,6 +9,7 @@ export function Seo({
   path,
   canonical,
   noindex = false,
+  robots,
   ogTitle,
   ogDescription,
   ogType = "website",
@@ -22,6 +23,7 @@ export function Seo({
   path?: string;
   canonical?: string | null;
   noindex?: boolean;
+  robots?: "index,follow" | "noindex,follow" | "noindex,nofollow";
   ogTitle?: string;
   ogDescription?: string;
   ogType?: "website" | "product" | "article";
@@ -38,7 +40,7 @@ export function Seo({
 
     document.title = title;
     setMeta("description", description);
-    setMeta("robots", noindex ? "noindex,nofollow" : "index,follow");
+    setMeta("robots", robots || (noindex ? "noindex,nofollow" : "index,follow"));
     setProperty("og:title", socialTitle);
     setProperty("og:description", socialDescription);
     if (href) {
@@ -86,6 +88,7 @@ export function Seo({
     ogTitle,
     ogType,
     path,
+    robots,
     title,
   ]);
 

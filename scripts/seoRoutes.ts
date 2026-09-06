@@ -55,6 +55,12 @@ export const staticSeoRoutes: SeoRoute[] = [
     indexable: true,
   },
   {
+    path: "/fiches-produits",
+    kind: "public-noindex",
+    component: "ProductSheetsPage",
+    indexable: false,
+  },
+  {
     path: "/livraison",
     kind: "public-indexable",
     component: "DeliveryPage(overview)",

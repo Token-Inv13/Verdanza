@@ -13,6 +13,7 @@ import { DeliveryPage } from "./pages/DeliveryPage";
 import { ContentPage } from "./pages/ContentPage";
 import { FlyerLandingPage } from "./pages/FlyerLandingPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { ProductSheetsPage } from "./pages/ProductSheetsPage";
 
 const AdminLayout = lazy(() =>
   import("./layouts/AdminLayout").then((module) => ({ default: module.AdminLayout })),
@@ -110,6 +111,7 @@ export function App() {
             element={<CategoryPage category="resins" title="Résines CBD" />}
           />
           <Route path="produits/:slug" element={<ProductPage />} />
+          <Route path="fiches-produits" element={<ProductSheetsPage />} />
           <Route path="livraison" element={<DeliveryPage mode="overview" />} />
           <Route path="livraison-locale" element={<DeliveryPage mode="local" />} />
           <Route path="livraison-postale" element={<DeliveryPage mode="postal" />} />

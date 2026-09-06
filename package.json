@@ -32,6 +32,7 @@
     "test:address-delivery": "node --import tsx scripts/testAddressDelivery.ts",
     "test:fixed-price-formats": "node --import tsx scripts/testFixedPriceFormats.ts",
     "test:product-purchase-options": "node --import tsx scripts/testProductPurchaseOptions.ts",
+    "test:product-sheets": "node --import tsx scripts/testProductSheets.ts",
     "test:fixed-price-migration": "node --import tsx scripts/testFixedPriceMigration.ts",
     "test:promotions": "node --import tsx scripts/testPromotionsAndBanners.ts",
     "test:promo-showcase": "node --import tsx scripts/testTopPromoShowcase.tsx",
