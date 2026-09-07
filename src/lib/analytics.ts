@@ -53,7 +53,6 @@ export type AnalyticsEventName =
   | "blog_comment_submit"
   | "product_selector_started"
   | "product_selector_type_selected"
-  | "product_selector_ambience_selected"
   | "product_selector_intensity_selected"
   | "product_selector_aroma_selected"
   | "product_selector_result_viewed"

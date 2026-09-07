@@ -11,26 +11,26 @@ import { startAuditStaticServer } from "./auditStaticServer";
 const publicDir = resolve("public");
 const distDir = resolve("dist");
 const expectedPdfHashes: Record<string, string> = {
-  biscotti: "566e9e0926ba2a24b73fb0f91f9ecb32c13e1e537a74d5db6b9e3f390ad18f7a",
-  "blue-dream": "713875a691d70b0a9b9ef3c735f4890b3235e44ab330ac1cab3af1c7d404be87",
-  "lemon-skunk": "d8ee71213bc7baf5513e364dd1e7a899c231db3250284fc568a9ebc832b14ace",
-  mimosa: "2f77b96c8ce7d168c076bc8c301d7b97cc826e40e6683e0b8254942f774f06c0",
-  "watermelon-candy": "4e09195c75321d44fa2025dead407a28e01beca8b825bc9c962812763f6659ca",
-  "zkittlez-og": "ce27ed529402ddd3f10da23d08aff843dc148e45b1ba57d1c6874297ad84c31b",
-  "pollen-mousseux": "26aaf58dc3b07d6308df351288ef4b67bbcc4a10b96b8320af9d40b99e55f050",
-  kief: "1b659ca37e6bbde9d0cb5234358799e99629622fe8d5007d5e24761ea10a4c72",
-  "black-libanais": "b02e2b579f88860ab942bdf6c82d8d5a4b973ef6609b37ca3b1e7c38749ba32e",
-  "black-butter": "2040feb70e4b975f40db97bea12670dbf375e87ab63ec329a87b5912977ee6de",
+  biscotti: "78edaec3b2539d6a35bc1e58f4c47bfdae5af0dfd6bd850259595c3df441bdb4",
+  "blue-dream": "efea9187ff3407cfd7a2a21af127bea9dbcfc9178d8d8be62cbfbe2091898899",
+  "lemon-skunk": "f0243ab36f3a0558a9bd7c25dbd9a5b9c99552d37f9a5e2c36859c2f845a19d2",
+  mimosa: "dd3e0c3ab48758e1735d175fc52bafce233022ed276c960c3c0b47e594bc937d",
+  "watermelon-candy": "8d381cb07a4cbfa906018d9a8defdeee67e5baaec421f514670d5ef8c4dff409",
+  "zkittlez-og": "bf9ee2a140a1a56bb80484d54fbe63328cd5a9d7b82f15b1590da3fda85f85cc",
+  "pollen-mousseux": "b9516d4168d85c87e7a4d4edfbbc1b95e2548ccfb8fbb9a188fc3ac43e97ed2f",
+  kief: "79de3490c076dfcf5fb4f3e1b73d74c0dcbe42a20cbe65aca44b54ed3a54bb5b",
+  "black-libanais": "181af77d9086b74e96266f129bd7d85e52f83d654318ca2719ac0d192e3f52db",
+  "black-butter": "da2d01aa97defdd62efd02a41abd56492a6162aa218dc9901a4cf41de5583a04",
 };
 
 assert.equal(productSheets.length, 10, "the library must contain exactly 10 sheets");
 assert.equal(
-  productSheets.filter((sheet) => sheet.category === "flower").length,
+  productSheets.filter((sheet) => sheet.selectionProfile.category === "flower").length,
   6,
   "the library must contain six flowers",
 );
 assert.equal(
-  productSheets.filter((sheet) => sheet.category === "resin").length,
+  productSheets.filter((sheet) => sheet.selectionProfile.category === "resin").length,
   4,
   "the library must contain four resins",
 );
@@ -65,7 +65,7 @@ for (const sheet of productSheets) {
     assert.equal(
       sha256(pdfPath),
       expectedPdfHashes[sheet.slug],
-      `${sheet.slug}: PDF hash differs from the validated V5.1 standard`,
+      `${sheet.slug}: PDF hash differs from the validated V6 standard`,
     );
 
     const metadata = await sharp(previewPath).metadata();
@@ -164,7 +164,7 @@ try {
     assert.equal(
       await page.locator("[data-product-selector-results]").count(),
       0,
-      `${width}px: result must stay hidden before type and ambience are selected`,
+      `${width}px: result must stay hidden before type and intensity are selected`,
     );
 
     await page.locator('[data-selector-option="category:flower"]').click();
@@ -176,10 +176,10 @@ try {
     assert.equal(
       await page.locator('[data-selector-step="2"] > button').getAttribute("aria-expanded"),
       "true",
-      `${width}px: ambience step must open after type`,
+      `${width}px: intensity step must open after type`,
     );
-    await page.getByRole("button", { name: "Détente profonde", exact: true }).click();
-    await page.locator('[data-product-selector-results][data-result-category="flower"]').waitFor();
+    await page.getByRole("button", { name: "Fort", exact: true }).click();
+    await page.locator('[data-product-selector-results][data-result-category="flower"][data-result-intensity="forte"]').waitFor();
     assert.equal(
       await page.locator("[data-selector-alternative]").count() <= 2,
       true,
@@ -195,16 +195,33 @@ try {
       );
     }
 
-    await page.getByRole("button", { name: "Intense", exact: true }).click();
     assert.equal(
-      await page.locator('[data-selector-step="4"] > button').getAttribute("aria-expanded"),
+      await page.locator('[data-selector-step="3"] > button').getAttribute("aria-expanded"),
       "true",
       `${width}px: aroma step must open after intensity`,
     );
+    assert.equal(await page.locator('[data-selector-step="4"]').count(), 0, `${width}px: V6 must expose exactly three steps`);
+    assert.equal(await selector.getByText("Ambiance", { exact: false }).count(), 0, `${width}px: ambience must be absent from V6 selector and results`);
     await page.getByRole("button", { name: "Peu importe", exact: true }).click();
     await page.locator('[data-selector-step="1"] > button').click();
     await page.locator('[data-selector-option="category:resin"]').click();
-    await page.locator('[data-product-selector-results][data-result-category="resin"]').waitFor();
+    await page.locator('[data-product-selector-results][data-result-category="resin"][data-result-intensity="forte"]').waitFor();
+    const unavailableSoftIntensity = page.locator('[data-selector-option="intensity:douce"]');
+    assert.equal(
+      await unavailableSoftIntensity.isDisabled(),
+      true,
+      `${width}px: resin + soft must be announced as a disabled option`,
+    );
+    assert.match(
+      await unavailableSoftIntensity.innerText(),
+      /Doux\s+Aucun produit actuellement/i,
+      `${width}px: unavailable intensity must remain visible with an explanation`,
+    );
+    assert.equal(
+      await unavailableSoftIntensity.getAttribute("data-available"),
+      "false",
+      `${width}px: unavailable intensity must expose its computed availability state`,
+    );
 
     const selectorInteractionMetrics = await page.evaluate(() => {
       const visibleButtons = [...document.querySelectorAll<HTMLButtonElement>("[data-product-selector] button")]
@@ -239,6 +256,11 @@ try {
       await page.locator('[data-selector-step="1"] > button').getAttribute("aria-expanded"),
       "true",
       `${width}px: reset must reopen type`,
+    );
+    assert.equal(
+      await page.locator('[data-selector-option="aroma:any"]').getAttribute("aria-pressed"),
+      "true",
+      `${width}px: reset must restore Peu importe`,
     );
 
     await page.locator('[data-product-sheet-card]').first().scrollIntoViewIfNeeded();

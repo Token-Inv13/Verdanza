@@ -3,7 +3,6 @@ import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 import { ProductProfileSelector } from "../components/product-sheets/ProductProfileSelector";
 import {
-  productSheetAmbienceLabels,
   productSheetIntensityLabels,
   productSheets,
   type ProductSheet,
@@ -20,7 +19,7 @@ export function ProductSheetsPage() {
     <main className="pb-20">
       <Seo
         title="Fiches produits Verdanza"
-        description="Découvrez les profils aromatiques, l’intensité et l’ambiance des fleurs et résines Verdanza."
+        description="Découvrez le type, l’intensité et les profils aromatiques des fleurs et résines Verdanza."
         path="/fiches-produits"
         robots="noindex,follow"
       />
@@ -40,8 +39,7 @@ export function ProductSheetsPage() {
             </p>
             <h1>Fiches produits</h1>
             <p>
-              Retrouvez les profils aromatiques, l’intensité et l’ambiance de notre
-              sélection.
+              Retrouvez le type, l’intensité et les profils aromatiques de notre sélection.
             </p>
             <p className="!mt-2 text-base !leading-7 text-ink/55">
               Une lecture simple pour trouver le profil qui vous correspond.
@@ -76,7 +74,7 @@ export function ProductSheetsPage() {
         <div className="space-y-16 pt-10 sm:pt-12">
           {sections.map((section) => {
             const sheets = productSheets.filter(
-              (sheet) => sheet.category === section.category,
+              (sheet) => sheet.selectionProfile.category === section.category,
             );
 
             return (
@@ -143,23 +141,8 @@ function ProductSheetCard({ sheet }: { sheet: ProductSheet }) {
             </dt>
             <dd className="mt-2">
               <span className="inline-flex rounded-full border border-champagne/45 bg-cream px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-forest">
-                {productSheetIntensityLabels[sheet.experience.intensity]}
+                {productSheetIntensityLabels[sheet.selectionProfile.intensity]}
               </span>
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[0.7rem] font-semibold uppercase tracking-[0.17em] text-forest/55">
-              Ambiance{sheet.experience.ambiences.length > 1 ? "s" : ""}
-            </dt>
-            <dd className="mt-2 flex flex-wrap gap-2">
-              {sheet.experience.ambiences.map((ambience) => (
-                <span
-                  key={ambience}
-                  className="rounded-full border border-sage/45 bg-sage/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-forest"
-                >
-                  {productSheetAmbienceLabels[ambience]}
-                </span>
-              ))}
             </dd>
           </div>
         </dl>

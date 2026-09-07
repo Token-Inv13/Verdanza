@@ -1,7 +1,6 @@
 import {
   productSheets,
   type ProductSheet,
-  type ProductSheetAmbience,
   type ProductSheetAromaFamily,
   type ProductSheetCategory,
   type ProductSheetIntensity,
@@ -11,94 +10,88 @@ export type ProductSheetAromaChoice = ProductSheetAromaFamily | "any";
 
 export type ProductSelectorChoices = {
   category: ProductSheetCategory | null;
-  ambience: ProductSheetAmbience | null;
   intensity: ProductSheetIntensity | null;
   aroma: ProductSheetAromaChoice | null;
 };
 
 export type ProductSheetMatch = {
   sheet: ProductSheet;
-  score: number;
+  aromaMatch: boolean;
   rank: number;
-  label: "Meilleure correspondance" | "Très proche" | "Alternative";
 };
 
-const intensityOrder: ProductSheetIntensity[] = [
-  "douce",
-  "moderee",
-  "soutenue",
-  "intense",
-];
-
 export function createInitialProductSelectorChoices(): ProductSelectorChoices {
+  return { category: null, intensity: null, aroma: "any" };
+}
+
+export function getAvailableProductSheetIntensities(
+  category: ProductSheetCategory | null,
+  sheets: ProductSheet[] = productSheets,
+): Set<ProductSheetIntensity> {
+  if (!category) return new Set();
+
+  return new Set(
+    sheets
+      .filter((sheet) => sheet.selectionProfile.category === category)
+      .map((sheet) => sheet.selectionProfile.intensity),
+  );
+}
+
+export function changeProductSelectorCategory(
+  choices: ProductSelectorChoices,
+  category: ProductSheetCategory,
+  sheets: ProductSheet[] = productSheets,
+): ProductSelectorChoices {
+  const availableIntensities = getAvailableProductSheetIntensities(category, sheets);
+
   return {
-    category: null,
-    ambience: null,
-    intensity: null,
-    aroma: null,
+    ...choices,
+    category,
+    intensity:
+      choices.intensity && availableIntensities.has(choices.intensity)
+        ? choices.intensity
+        : null,
   };
 }
 
-export function scoreProductSheet(
+export function matchesRequiredSelection(
   sheet: ProductSheet,
   choices: ProductSelectorChoices,
 ) {
-  if (!choices.category || sheet.category !== choices.category) return Number.NEGATIVE_INFINITY;
+  return Boolean(
+    choices.category &&
+      choices.intensity &&
+      sheet.selectionProfile.category === choices.category &&
+      sheet.selectionProfile.intensity === choices.intensity,
+  );
+}
 
-  let score = 0;
-  if (choices.ambience && sheet.experience.ambiences.includes(choices.ambience)) {
-    score += 4;
-  }
-
-  if (choices.intensity) {
-    if (sheet.experience.intensity === choices.intensity) {
-      score += 3;
-    } else if (areNeighboringIntensities(sheet.experience.intensity, choices.intensity)) {
-      score += 1;
-    }
-  }
-
-  if (
-    choices.aroma &&
-    choices.aroma !== "any" &&
-    sheet.aromaFamilies.includes(choices.aroma)
-  ) {
-    score += 2;
-  }
-
-  return score;
+export function matchesSelectedAroma(
+  sheet: ProductSheet,
+  aroma: ProductSheetAromaChoice | null,
+) {
+  return Boolean(
+    aroma && aroma !== "any" && sheet.selectionProfile.aromaFamilies.includes(aroma),
+  );
 }
 
 export function rankProductSheets(
   choices: ProductSelectorChoices,
   sheets: ProductSheet[] = productSheets,
 ): ProductSheetMatch[] {
-  if (!choices.category || !choices.ambience) return [];
+  if (!choices.category || !choices.intensity) return [];
 
   return sheets
     .map((sheet, sourceIndex) => ({
       sheet,
       sourceIndex,
-      score: scoreProductSheet(sheet, choices),
+      aromaMatch: matchesSelectedAroma(sheet, choices.aroma),
     }))
-    .filter((match) => Number.isFinite(match.score))
-    .sort((left, right) => right.score - left.score || left.sourceIndex - right.sourceIndex)
-    .map(({ sheet, score }, rank) => ({
-      sheet,
-      score,
-      rank,
-      label:
-        rank === 0
-          ? "Meilleure correspondance"
-          : rank === 1
-            ? "Très proche"
-            : "Alternative",
-    }));
-}
-
-export function areNeighboringIntensities(
-  left: ProductSheetIntensity,
-  right: ProductSheetIntensity,
-) {
-  return Math.abs(intensityOrder.indexOf(left) - intensityOrder.indexOf(right)) === 1;
+    .filter(({ sheet }) => matchesRequiredSelection(sheet, choices))
+    .sort(
+      (left, right) =>
+        Number(right.aromaMatch) - Number(left.aromaMatch) ||
+        left.sourceIndex - right.sourceIndex,
+    )
+    .map(({ sheet, aromaMatch }, rank) => ({ sheet, aromaMatch, rank }));
 }
