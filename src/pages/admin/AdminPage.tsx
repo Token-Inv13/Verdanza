@@ -1,6 +1,15 @@
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { FormEvent, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { MapPin } from "lucide-react";
+import { OrderFinancingSummary } from "../../components/orders/OrderFinancingSummary";
+import {
+  financingDisplayItems,
+  financingNotices,
+  formatFinancingCents,
+  presentInvoiceFinancing,
+  type OrderFinancingPresentation,
+} from "../../lib/orderFinancing";
+import { CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED, CAGNOTTE_READ_DISPLAY_ENABLED } from "../../config/cagnotteFeatures";
 import { useAdminData } from "../../hooks/useAdminData";
 import {
   deleteProductAdmin,
@@ -99,6 +108,13 @@ import {
   getAdminProductReviews,
   updateReviewStatus,
 } from "../../services/reviewsService";
+
+const AdminCagnottePanel = CAGNOTTE_READ_DISPLAY_ENABLED
+  ? lazy(() => import("../../components/cagnotte/CagnottePanel").then((module) => ({ default: module.CagnottePanel })))
+  : null;
+const AdminCagnotteTools = CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED
+  ? lazy(() => import("../../components/cagnotte/CagnotteAdminTools").then((module) => ({ default: module.CagnotteAdminTools })))
+  : null;
 import type {
   AdminMetric,
   BillingSettings,
@@ -176,6 +192,7 @@ import {
   type AccountingPeriodFilter,
 } from "../../lib/accountingPeriods";
 import { formatLocalDeliveryEstimate } from "../../lib/deliveryEstimate";
+import { adminDateValue, formatAdminDate, formatAdminDateTime } from "../../lib/adminDatePresentation";
 import {
   promotionAvailability,
   promotionDateTimeLocalToIso,
@@ -319,6 +336,7 @@ export function AdminPage({ section }: { section: string }) {
     supplierPurchasesError,
     isLoading,
     refresh,
+    refreshOrder,
   } = useAdminData();
   const [searchParams] = useSearchParams();
   const messageScope =
@@ -872,6 +890,7 @@ export function AdminPage({ section }: { section: string }) {
             orders={orders}
             orderSource={orderSource}
             onRefresh={refresh}
+            onRefreshOrder={refreshOrder}
             onDelete={async (orderId) => {
               if (orderSource !== "firestore") {
                 setMessage("Aucune commande supprimable.");
@@ -942,6 +961,7 @@ export function AdminPage({ section }: { section: string }) {
             invoices={visibleInvoices}
             orderSource={orderSource}
             onRefresh={refresh}
+            onRefreshOrder={refreshOrder}
             onDelete={async (orderId) => {
               if (orderSource !== "firestore") {
                 setMessage("Aucune commande supprimable.");
@@ -4184,6 +4204,20 @@ function CustomerDetailPanel({
         <MiniCustomerMetric label="Derniere commande" value={stats.lastOrderLabel} />
       </div>
 
+      {AdminCagnottePanel && (
+        <div className="mt-4">
+          <Suspense fallback={null}>
+            <AdminCagnottePanel
+              enabled={CAGNOTTE_READ_DISPLAY_ENABLED}
+              identityKey={customer.uid}
+              scope="admin"
+              targetUid={customer.uid}
+              customerLabel={customer.displayName || customer.email || customer.uid}
+            />
+          </Suspense>
+        </div>
+      )}
+
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
         <section className="rounded-lg border border-forest/10 bg-cream p-3">
           <h3 className="font-semibold text-forest">Informations generales</h3>
@@ -4500,26 +4534,6 @@ function sortCustomers(
 
 function normalizeCustomerPhone(value?: string) {
   return value?.replace(/\D/g, "") || "";
-}
-
-function formatAdminDate(value?: string | number | unknown) {
-  const timestamp = adminDateValue(value);
-  if (!timestamp) return "";
-  return new Intl.DateTimeFormat("fr-FR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(timestamp));
-}
-
-function adminDateValue(value: unknown) {
-  if (!value) return 0;
-  if (typeof value === "number") return value;
-  if (typeof value === "string") return Date.parse(value) || 0;
-  if (typeof value === "object" && "seconds" in value) {
-    return Number((value as { seconds?: number }).seconds || 0) * 1000;
-  }
-  return 0;
 }
 
 function BillingWarning({ settings }: { settings: BillingSettings }) {
@@ -6361,6 +6375,7 @@ function InvoicesPanel({
                 invoice,
                 invoice.orderId ? orderById.get(invoice.orderId) || null : undefined,
               );
+              const invoiceFinancing = presentInvoiceFinancing(invoice);
               return (
               <tr key={invoice.id} className="border-t border-forest/10">
                 <td className="px-4 py-4">
@@ -6385,7 +6400,18 @@ function InvoicesPanel({
                   </select>
                 </td>
                 <td className="px-4 py-4">{paymentStatusLabel(invoice.paymentStatus)}</td>
-                <td className="px-4 py-4">{formatEuro(invoice.total)} EUR</td>
+                <td className="min-w-72 px-4 py-4">
+                  {formatEuro(invoice.total)} EUR
+                  {invoiceFinancing && (
+                    <div className="mt-2">
+                      <OrderFinancingSummary
+                        presentation={invoiceFinancing}
+                        title="Financement du document"
+                        context="document"
+                      />
+                    </div>
+                  )}
+                </td>
                 <td className="px-4 py-4">
                   <div className="flex flex-wrap gap-2">
                     <button className="btn-secondary min-h-9 px-3 py-2" onClick={() => void onDownload(invoice)}>PDF</button>
@@ -6448,6 +6474,7 @@ type AdminOrderListItem = {
   paymentLinkUrl?: string;
   paymentLinkLabel?: string;
   paymentLinkAmount?: number;
+  financing: OrderFinancingPresentation;
   paymentLinkCurrency?: "EUR";
   paymentLinkSent?: boolean;
   paymentLinkSentAt?: string;
@@ -6502,6 +6529,7 @@ function AdminOrders({
   orderSource,
   onCreateInvoice,
   onRefresh,
+  onRefreshOrder,
   onUpdate,
   onDelete,
 }: {
@@ -6510,6 +6538,7 @@ function AdminOrders({
   orderSource: "firestore" | "empty";
   onCreateInvoice?: (orderId: string) => Promise<void>;
   onRefresh?: () => Promise<void>;
+  onRefreshOrder?: (orderId: string) => Promise<void>;
   onUpdate: (orderId: string, data: AdminOrderUpdateInput) => Promise<void>;
   onDelete: (orderId: string) => Promise<void>;
 }) {
@@ -6804,6 +6833,7 @@ function AdminOrders({
                   </span>
                 )}
               </div>
+              <OrderFinancingSummary presentation={order.financing} />
               <PaymentLinkActions
                 order={order}
                 orderSource={orderSource}
@@ -6889,6 +6919,11 @@ function AdminOrders({
                   </button>
                 )}
               </div>
+              {AdminCagnotteTools && orderSource === "firestore" && (
+                <Suspense fallback={<div className="mt-4 rounded-md border border-forest/10 p-4 text-sm">Chargement des outils administratifs…</div>}>
+                  <div className="mt-4"><AdminCagnotteTools orderId={order.id} enabled={CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED} onOrderReload={() => onRefreshOrder?.(order.id)} /></div>
+                </Suspense>
+              )}
             </article>
           ))}
         </div>
@@ -6909,6 +6944,7 @@ function AdminOrders({
               onRetryOrderEmails={handleRetryOrderEmails}
               emailRetrying={emailRetrying}
               onRetryPurchaseAnalytics={handleRetryPurchaseAnalytics}
+              onRefresh={() => onRefreshOrder ? onRefreshOrder(order.id) : Promise.resolve()}
             />
           ))}
         </div>
@@ -7238,6 +7274,7 @@ function DesktopOrderCard({
   onRetryOrderEmails,
   emailRetrying,
   onRetryPurchaseAnalytics,
+  onRefresh,
 }: {
   order: AdminOrderListItem;
   invoice?: Invoice;
@@ -7261,6 +7298,7 @@ function DesktopOrderCard({
   ) => Promise<void>;
   emailRetrying: string;
   onRetryPurchaseAnalytics: (orderId: string) => Promise<void>;
+  onRefresh?: () => Promise<void>;
 }) {
   const isArchived = order.archived || order.hidden;
 
@@ -7445,6 +7483,7 @@ function DesktopOrderCard({
               </span>
             )}
           </div>
+          <OrderFinancingSummary presentation={order.financing} />
           <PaymentLinkActions
             order={order}
             orderSource={orderSource}
@@ -7454,6 +7493,14 @@ function DesktopOrderCard({
           />
         </section>
       </div>
+
+      {AdminCagnotteTools && orderSource === "firestore" && (
+        <Suspense fallback={<div className="mt-4 rounded-md border border-forest/10 p-4 text-sm">Chargement des outils administratifs…</div>}>
+          <div className="mt-4">
+            <AdminCagnotteTools orderId={order.id} enabled={CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED} onOrderReload={onRefresh} />
+          </div>
+        </Suspense>
+      )}
 
       <div className="mt-5 grid gap-3 border-t border-forest/10 pt-4 xl:grid-cols-[1fr_1fr_1fr_auto]">
         <input
@@ -7671,7 +7718,9 @@ function PaymentMethodAdminFields({
       </label>
       {order.paymentConfirmedAt && (
         <span className="mt-2 block text-ink/55">
-          Confirmé le {order.paymentConfirmedAt}
+          {formatAdminDateTime(order.paymentConfirmedAt)
+            ? `Confirmé le ${formatAdminDateTime(order.paymentConfirmedAt)}`
+            : "Date de confirmation indisponible"}
           {order.paymentConfirmedBy ? ` par ${order.paymentConfirmedBy}` : ""}
         </span>
       )}
@@ -7694,9 +7743,11 @@ function PaymentLinkActions({
     deliveryMethod?: string;
     delivery: string;
     total: string;
+    paymentAmount?: number;
     paymentLinkUrl?: string;
     paymentLinkLabel?: string;
     paymentLinkAmount?: number;
+    financing: OrderFinancingPresentation;
     paymentLinkCurrency?: "EUR";
     paymentLinkSent?: boolean;
     paymentLinkSentAt?: string;
@@ -7728,14 +7779,19 @@ function PaymentLinkActions({
     paymentLinkCurrency: "EUR";
   }) => Promise<PaymentLinkDeliveryResponse>;
 }) {
-  const matchingLink = paymentLinks.find((link) => link.amount === parseEuro(order.total));
+  const amountToPay = order.financing.verification === "verified"
+    ? order.financing.paymentCents / 100
+    : null;
+  const matchingLink = amountToPay === null
+    ? undefined
+    : paymentLinks.find((link) => link.amount === amountToPay);
   const savedKnownLink = paymentLinks.find((link) => link.url === order.paymentLinkUrl);
   const initialUrl = order.paymentLinkUrl
     ? savedKnownLink?.url || "custom"
     : matchingLink?.url || "";
   const [selectedUrl, setSelectedUrl] = useState(initialUrl);
   const [customUrl, setCustomUrl] = useState(savedKnownLink ? "" : order.paymentLinkUrl || "");
-  const [customAmount, setCustomAmount] = useState(order.paymentLinkAmount || parseEuro(order.total));
+  const [customAmount, setCustomAmount] = useState(order.paymentLinkAmount ?? amountToPay ?? 0);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [localDelivery, setLocalDelivery] = useState<PaymentLinkDeliveryResponse>();
   const pendingRequestRef = useRef<{
@@ -7744,9 +7800,12 @@ function PaymentLinkActions({
     payloadFingerprint: string;
   } | undefined>(undefined);
   const sendingRef = useRef(false);
-  const selectedLink = paymentLinks.find((link) => link.url === selectedUrl);
+  const selectedLink = paymentLinks.find(
+    (link) => link.url === selectedUrl && amountToPay !== null && link.amount === amountToPay,
+  );
   const customLink =
-    selectedUrl === "custom" && customUrl.trim() && customAmount > 0
+    selectedUrl === "custom" && customUrl.trim() && amountToPay !== null &&
+    customAmount === amountToPay && customAmount > 0
       ? {
           label: `Paiement CB ${formatEuro(customAmount)} EUR`,
           url: customUrl.trim(),
@@ -7755,8 +7814,10 @@ function PaymentLinkActions({
         }
       : null;
   const activeLink = selectedLink || customLink;
-  const disabled = orderSource !== "firestore" || !activeLink;
-  const exactMatchMissing = Boolean(paymentLinks.length && !order.paymentLinkUrl && !matchingLink);
+  const paymentRequestAllowed = amountToPay !== null && amountToPay > 0 &&
+    !order.financing.orderCancelled && order.financing.externalPaymentState !== "confirmed";
+  const disabled = orderSource !== "firestore" || !activeLink || !paymentRequestAllowed;
+  const exactMatchMissing = Boolean(paymentRequestAllowed && paymentLinks.length && !order.paymentLinkUrl && !matchingLink);
   const latestDelivery = localDelivery || order.paymentLinkDelivery;
   const hasPreviousEmail = Boolean(
     order.paymentLinkDeliveryHistory?.some(
@@ -7770,8 +7831,8 @@ function PaymentLinkActions({
     const knownLink = paymentLinks.find((link) => link.url === order.paymentLinkUrl);
     setSelectedUrl(order.paymentLinkUrl ? knownLink?.url || "custom" : matchingLink?.url || "");
     setCustomUrl(knownLink ? "" : order.paymentLinkUrl || "");
-    setCustomAmount(order.paymentLinkAmount || parseEuro(order.total));
-  }, [order.id, order.paymentLinkAmount, order.paymentLinkUrl, order.total, matchingLink?.url, paymentLinks]);
+    setCustomAmount(order.paymentLinkAmount ?? amountToPay ?? 0);
+  }, [amountToPay, order.id, order.paymentLinkAmount, order.paymentLinkUrl, matchingLink?.url, paymentLinks]);
 
   useEffect(() => {
     pendingRequestRef.current = undefined;
@@ -7879,7 +7940,13 @@ function PaymentLinkActions({
         </AdminBadge>
       </div>
       <p className="mt-2 text-[11px] text-ink/60">
-        Montant recommandé de la commande : {order.total}
+        {order.financing.verification === "required"
+          ? "Vérification nécessaire : aucun montant de règlement ne peut être proposé."
+          : order.financing.externalPaymentState === "confirmed"
+            ? `Règlement hors cagnotte déjà confirmé : ${formatFinancingCents(order.financing.paymentCents)}`
+            : order.financing.orderCancelled
+              ? "Commande annulée : aucune nouvelle demande de règlement."
+              : `À régler hors cagnotte : ${formatFinancingCents(order.financing.paymentCents)}`}
       </p>
       <p className="mt-1 text-[11px] text-ink/60">
         Choisissez le lien correspondant au montant à demander au client.
@@ -7887,7 +7954,7 @@ function PaymentLinkActions({
       <select
         className="input-field mt-2"
         value={selectedUrl}
-        disabled={orderSource !== "firestore" || !paymentLinks.length}
+        disabled={orderSource !== "firestore" || !paymentLinks.length || !paymentRequestAllowed}
         onChange={(event) => setSelectedUrl(event.target.value)}
       >
         {!paymentLinks.length && <option value="">Aucun lien disponible</option>}
@@ -7922,7 +7989,7 @@ function PaymentLinkActions({
       )}
       {exactMatchMissing && (
         <p className="mt-2 text-[11px] leading-5 text-amber-800">
-          Aucun lien ne correspond exactement au total. Choisissez un lien existant ou collez un lien au montant exact.
+          Aucun lien ne correspond exactement au montant hors cagnotte. Choisissez un lien existant ou collez un lien au montant exact.
         </p>
       )}
       <p className="mt-2 break-all text-[11px] text-ink/55">
@@ -7933,7 +8000,7 @@ function PaymentLinkActions({
       {order.paymentLinkSent && (
         <p className="mt-1 text-[11px] text-ink/55">
           Montant du lien envoyé :{" "}
-          {order.paymentLinkAmount
+          {order.paymentLinkAmount !== undefined
             ? `${order.paymentLinkAmount} ${order.paymentLinkCurrency || "EUR"} - `
             : ""}
           Envoyé via {paymentChannelLabel(order.paymentLinkChannel)}
@@ -9088,6 +9155,7 @@ function whatsappLink(order: {
   delivery: string;
   total: string;
   trackingNumber?: string;
+  financing: OrderFinancingPresentation;
 }) {
   const phone = normalizePhone(order.customerPhone).replace("+", "");
   return `https://wa.me/${phone}?text=${encodeURIComponent(orderMessage(order))}`;
@@ -9102,6 +9170,7 @@ function smsLink(order: {
   delivery: string;
   total: string;
   trackingNumber?: string;
+  financing: OrderFinancingPresentation;
 }) {
   return `sms:${normalizePhone(order.customerPhone)}?body=${encodeURIComponent(orderMessage(order))}`;
 }
@@ -9115,6 +9184,7 @@ function whatsappPaymentLink(order: {
   total?: string;
   paymentLinkAmount?: number;
   paymentLinkCurrency?: "EUR";
+  financing: OrderFinancingPresentation;
 }) {
   if (!order.customerPhone || !order.paymentLinkUrl) return "#";
   const phone = normalizePhone(order.customerPhone).replace("+", "");
@@ -9130,6 +9200,7 @@ function smsPaymentLink(order: {
   total?: string;
   paymentLinkAmount?: number;
   paymentLinkCurrency?: "EUR";
+  financing: OrderFinancingPresentation;
 }) {
   return `sms:${normalizePhone(order.customerPhone)}?body=${encodeURIComponent(paymentLinkMessage(order))}`;
 }
@@ -9143,6 +9214,7 @@ async function copyOrderMessage(order: {
   delivery: string;
   total: string;
   trackingNumber?: string;
+  financing: OrderFinancingPresentation;
 }) {
   await navigator.clipboard.writeText(orderMessage(order));
 }
@@ -9155,20 +9227,24 @@ function paymentLinkMessage(order: {
   total?: string;
   paymentLinkAmount?: number;
   paymentLinkCurrency?: "EUR";
+  financing: OrderFinancingPresentation;
 }) {
   const firstName = order.customer.split(" ")[0] || "Bonjour";
   const shortId = order.id.slice(0, 8).toUpperCase();
   const link = order.paymentLinkUrl || "[LIEN_DE_PAIEMENT]";
-  const amount = order.paymentLinkAmount
-    ? `${order.paymentLinkAmount} ${order.paymentLinkCurrency || "EUR"}`
-    : order.total || "le montant confirme";
+  const amount = order.paymentLinkAmount !== undefined
+    ? `${order.paymentLinkAmount.toFixed(2).replace(".", ",")} ${order.paymentLinkCurrency || "EUR"}`
+    : order.financing.verification === "verified"
+      ? formatFinancingCents(order.financing.paymentCents)
+      : "le montant à vérifier";
+  const financing = financingMessageSuffix(order.financing);
   if (order.deliveryMethod === "postal") {
-    return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée. Pour finaliser l'expédition, vous pouvez régler ${amount} par carte bancaire via ce lien : ${link}. Dès réception du paiement, votre commande sera préparée.`;
+    return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée. Pour finaliser l'expédition, vous pouvez régler ${amount} par carte bancaire via ce lien : ${link}. Dès réception du paiement, votre commande sera préparée.${financing}`;
   }
   if (order.deliveryMethod === "local_express") {
-    return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée. Vous pouvez régler ${amount} par carte bancaire via ce lien : ${link}, ou confirmer avec nous le mode de règlement souhaité.`;
+    return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée. Vous pouvez régler ${amount} par carte bancaire via ce lien : ${link}, ou confirmer avec nous le mode de règlement souhaité.${financing}`;
   }
-  return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée. Vous pouvez régler ${amount} par carte bancaire via ce lien : ${link}. Dès réception du paiement, nous préparerons votre commande. Merci, Verdanza.`;
+  return `Bonjour ${firstName}, votre commande Verdanza n°${shortId} est confirmée. Vous pouvez régler ${amount} par carte bancaire via ce lien : ${link}. Dès réception du paiement, nous préparerons votre commande.${financing} Merci, Verdanza.`;
 }
 
 function paymentLinkDeliveryMessage(delivery: PaymentLinkDeliveryResponse) {
@@ -9223,32 +9299,48 @@ function orderMessage(order: {
   delivery: string;
   total: string;
   trackingNumber?: string;
+  financing: OrderFinancingPresentation;
 }) {
   const firstName = order.customer.split(" ")[0] || "Bonjour";
   const shortId = order.id.slice(0, 8).toUpperCase();
   if (order.orderType === "preorder") {
-    return `Bonjour ${firstName}, votre précommande Verdanza n°${shortId} a bien été reçue. Nous vous contacterons rapidement pour confirmer les disponibilités, la livraison et le règlement. Total estimé : ${order.total}.`;
+    return `Bonjour ${firstName}, votre précommande Verdanza n°${shortId} a bien été reçue. Nous vous contacterons rapidement pour confirmer les disponibilités, la livraison et le règlement. Total estimé : ${order.total}.${financingMessageSuffix(order.financing)}`;
   }
   const common = `Bonjour ${firstName}, votre commande Verdanza n°${shortId}`;
   if (order.orderStatus === "confirmed") {
-    return `${common} est confirmée. Mode de livraison : ${order.delivery}. Total estimé : ${order.total}. Nous vous tenons informé de la suite.`;
+    return `${common} est confirmée. Mode de livraison : ${order.delivery}. Total estimé : ${order.total}. Nous vous tenons informé de la suite.${financingMessageSuffix(order.financing)}`;
   }
   if (order.orderStatus === "preparing") {
-    return `${common} est en préparation.`;
+    return `${common} est en préparation.${financingMessageSuffix(order.financing)}`;
   }
   if (order.orderStatus === "out_for_delivery") {
-    return `${common} est en cours de livraison. Le livreur arrive prochainement à l'adresse indiquée.`;
+    return `${common} est en cours de livraison. Le livreur arrive prochainement à l'adresse indiquée.${financingMessageSuffix(order.financing)}`;
   }
   if (order.orderStatus === "shipped") {
-    return `${common} a été expédiée. Numéro de suivi : ${order.trackingNumber || "à venir"}.`;
+    return `${common} a été expédiée. Numéro de suivi : ${order.trackingNumber || "à venir"}.${financingMessageSuffix(order.financing)}`;
   }
   if (order.orderStatus === "delivered") {
-    return `${common} est indiquée comme livrée. Merci pour votre commande.`;
+    return `${common} est indiquée comme livrée.${financingMessageSuffix(order.financing)} Merci pour votre commande.`;
   }
   if (order.orderStatus === "cancelled") {
-    return `${common} a été annulée. Contactez-nous si besoin au 07 80 81 41 37.`;
+    return `${common} a été annulée.${financingMessageSuffix(order.financing, true)} Contactez-nous si besoin au 07 80 81 41 37.`;
   }
-  return `${common} a bien été reçue. Nous vérifions les disponibilités et revenons vers vous rapidement. Total estimé : ${order.total}.`;
+  return `${common} a bien été reçue. Nous vérifions les disponibilités et revenons vers vous rapidement. Total estimé : ${order.total}.${financingMessageSuffix(order.financing)}`;
+}
+
+function financingMessageSuffix(
+  presentation: OrderFinancingPresentation,
+  includeNotices = false,
+) {
+  if (presentation.kind === "ordinary") return "";
+  if (presentation.verification === "required") {
+    return " Financement cagnotte : vérification administrative nécessaire.";
+  }
+  const amounts = financingDisplayItems(presentation)
+    .slice(1)
+    .map((item) => `${item.label} : ${formatFinancingCents(item.cents)}`);
+  const notices = includeNotices ? financingNotices(presentation) : [];
+  return ` ${[...amounts, ...notices].join(" ")}`;
 }
 
 function preferredPaymentMethodLabel(method?: PreferredPaymentMethod) {

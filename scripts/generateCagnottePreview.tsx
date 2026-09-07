@@ -14,6 +14,8 @@ import type { CagnottePanelState } from "../src/services/cagnotteService.js";
 import type { CheckoutOrderResult } from "../src/services/ordersService.js";
 import type { OrderQuote } from "../src/services/quoteService.js";
 import type { CagnotteReadResponse } from "../src/types/cagnotteRead.js";
+import { CagnotteAdminToolsView, type CagnotteAdminViewModel } from "../src/components/cagnotte/CagnotteAdminTools.js";
+import type { CagnotteAdminInspection, CorrectionPreview, RefundPreview } from "../src/types/cagnotteAdmin.js";
 import {
   inertEmailHtmlForPreview,
   renderAdminOrderEmailContent,
@@ -22,7 +24,7 @@ import {
 import { adminAlertText } from "../api/_server/orderAlerts.js";
 import { renderInvoicePdf } from "../api/_server/invoicePdf.js";
 import { OrderFinancingSummary } from "../src/components/orders/OrderFinancingSummary.js";
-import { presentInvoiceFinancing } from "../src/lib/orderFinancing.js";
+import { presentInvoiceFinancing, presentOrderFinancing } from "../src/lib/orderFinancing.js";
 import {
   billingSettingsFixture,
   invoiceFixture,
@@ -34,6 +36,7 @@ const advantagesOutputPath = resolve(outputDirectory, "mes-avantages.html");
 const checkoutOutputPath = resolve(outputDirectory, "panier-cagnotte.html");
 const recapsOutputPath = resolve(outputDirectory, "recapitulatifs-cagnotte.html");
 const invoiceOutputPath = resolve(outputDirectory, "facture-cagnotte-fictive.pdf");
+const administrationOutputPath = resolve(outputDirectory, "administration-cagnotte.html");
 const advantagesStyles = await readFile(resolve("src/styles/cagnotte.css"), "utf8");
 const checkoutStyles = await readFile(resolve("src/styles/cagnotte-checkout.css"), "utf8");
 const recapsStyles = `
@@ -41,6 +44,7 @@ const recapsStyles = `
   .preview-surface>div{max-width:100%}.preview-surface pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f1e6;border-radius:.45rem;padding:.9rem;color:#0e3726}
   [data-order-financing] strong{color:#0e3726}[data-order-financing] dl{display:grid;gap:.3rem;margin:.7rem 0 0}[data-order-financing] dl>div{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:start;gap:1rem;border-bottom:1px solid rgba(14,55,38,.08);padding:.2rem 0}[data-order-financing] dt,[data-order-financing] dd{min-width:0;margin:0}[data-order-financing] dd{font-weight:700;color:#0e3726;text-align:right;white-space:nowrap}[data-order-financing] p{color:#555;line-height:1.55}
 `;
+const administrationStyles = await readFile(resolve("src/styles/cagnotte-admin.css"), "utf8");
 
 const normal = response({ availableCents: 1275, pendingCents: 480, reservedCents: 800, regularizationCents: 0 }, [
   movement("Cagnotte réservée", 800, "2026-09-04T09:00:00.000Z", [
@@ -151,6 +155,7 @@ const checkoutHtml = page(
 
 const beforePaymentOrder = mixedOrderFixture();
 const paidOrder = mixedOrderFixture({ paid: true });
+const partialRefundOrder = mixedOrderFixture({ paid: true, refund: "partial" });
 const documentInvoice = invoiceFixture(beforePaymentOrder);
 const documentPresentation = presentInvoiceFinancing(documentInvoice);
 if (!documentPresentation) throw new Error("Snapshot documentaire fictif absent.");
@@ -168,6 +173,7 @@ const recapsContent = [
   emailPreviewCard("Confirmation après paiement", paidEmail.html),
   `<article class="preview-card preview-surface"><p class="preview-label">Récapitulatif administrateur</p>${inertEmailHtmlForPreview(adminEmail.html)}<pre>${escapePreview(adminAlertText(beforePaymentOrder, { includeAdminUrl: false }))}</pre></article>`,
   previewCard("Présentation du financement sur le document", <OrderFinancingSummary presentation={documentPresentation} title="Bloc du document fictif" showOrdinary context="document" />),
+  previewCard("Retour partiel enregistré", <OrderFinancingSummary presentation={presentOrderFinancing(partialRefundOrder)} title="Commande et retour fictifs" />),
 ].join("\n");
 const recapsHtml = page(
   "Aperçu fictif — Récapitulatifs cagnotte Verdanza",
@@ -177,7 +183,26 @@ const recapsHtml = page(
   `${checkoutStyles}\n${recapsStyles}`,
 );
 
-for (const [name, content] of [["Mes avantages", advantagesHtml], ["Panier cagnotte", checkoutHtml], ["Récapitulatifs cagnotte", recapsHtml]] as const) {
+const adminInspection = administrationInspectionFixture();
+const recordedRefund = administrationRefundFixture();
+const correctedRefund = administrationCorrectionFixture(false);
+const reviewCorrection = administrationCorrectionFixture(true);
+const administrationCards = [
+  previewCard("Saisie d’un retour", <CagnotteAdminToolsView model={adminModel("refund", adminInspection)} form={administrationFormFixture()} />),
+  previewCard("Résultat enregistré · scénario 100 / 8 / 92 €", <CagnotteAdminToolsView model={{ ...adminModel("refund", adminInspection), refundPreview: recordedRefund, notice: "Déclaration enregistrée. Aucun remboursement bancaire n’a été exécuté." }} form={administrationFormFixture()} />),
+  previewCard("Correction d’une déclaration", <CagnotteAdminToolsView model={{ ...adminModel("correction", adminInspection), correctionPreview: correctedRefund, notice: "Correction prévisualisée par le serveur." }} form={administrationFormFixture()} />),
+  previewCard("Correction nécessitant vérification", <CagnotteAdminToolsView model={{ ...adminModel("correction", adminInspection), correctionPreview: reviewCorrection, notice: reviewCorrection.reviewReason || "Correction à vérifier." }} form={administrationFormFixture()} />),
+  previewCard("Revue d’un impayé · transport incertain", <CagnotteAdminToolsView model={adminModel("unpaid", adminInspection)} form={administrationFormFixture()} />),
+].join("\n");
+const administrationHtml = page(
+  "Aperçu fictif — Administration de la cagnotte Verdanza",
+  "Outils administratifs de cagnotte",
+  "Aperçu statique des véritables composants. Les boutons sont inertes et aucune opération bancaire, API ou ressource distante n’est appelée.",
+  administrationCards,
+  administrationStyles,
+);
+
+for (const [name, content] of [["Mes avantages", advantagesHtml], ["Panier cagnotte", checkoutHtml], ["Récapitulatifs cagnotte", recapsHtml], ["Administration cagnotte", administrationHtml]] as const) {
   if (/<script\b|https?:\/\/|firebase|analytics|href\s*=/i.test(content)) {
     throw new Error(`${name} : l’aperçu doit rester autonome et inerte.`);
   }
@@ -187,6 +212,7 @@ await mkdir(outputDirectory, { recursive: true });
 await writeFile(advantagesOutputPath, advantagesHtml, "utf8");
 await writeFile(checkoutOutputPath, checkoutHtml, "utf8");
 await writeFile(recapsOutputPath, recapsHtml, "utf8");
+await writeFile(administrationOutputPath, administrationHtml, "utf8");
 const invoicePdf = await PDFDocument.load(await renderInvoicePdf(
   documentInvoice,
   billingSettingsFixture(),
@@ -199,6 +225,7 @@ await writeFile(invoiceOutputPath, await invoicePdf.save());
 console.log(advantagesOutputPath);
 console.log(checkoutOutputPath);
 console.log(recapsOutputPath);
+console.log(administrationOutputPath);
 console.log(invoiceOutputPath);
 
 function page(title: string, heading: string, intro: string, content: string, componentStyles: string) {
@@ -229,6 +256,63 @@ function movement(label: CagnotteReadResponse["history"]["items"][number]["label
 
 function ready(data: CagnotteReadResponse): CagnottePanelState {
   return { phase: "ready", data, errorCode: null };
+}
+
+function adminModel(mode: "refund" | "correction" | "unpaid", inspection: CagnotteAdminInspection): CagnotteAdminViewModel {
+  return { phase: "ready", inspection, mode, refundPreview: null, correctionPreview: null, notice: "", uncertain: false };
+}
+
+function administrationFormFixture(): Parameters<typeof CagnotteAdminToolsView>[0]["form"] {
+  return {
+    lines: { fleurs: "" }, delivery: "", source: "admin", reference: "", confirmedAt: "2026-09-06T13:00:00",
+    reason: "product_return", declaredFinancial: "", correctionReason: "", correctionReference: "",
+    reviewOutcome: "payment_uncertain", reviewSource: "", reviewReason: "", externalVerificationConfirmed: false,
+  };
+}
+
+function administrationInspectionFixture(): CagnotteAdminInspection {
+  const effective = {
+    lines: [{ lineId: "fleurs", returnedNetCents: 2500 }], returnedProductNetCents: 2500,
+    productFinancialCents: 2300, cagnotteRestitutionCents: 200, deliveryFinancialCents: 0, totalFinancialCents: 2300,
+  };
+  return {
+    kind: "administrative_refund_inspection",
+    order: { id: "CMD-DEMO-100", customer: { id: "client-demo", name: "Camille Démo", email: "camille@example.test" },
+      orderStatus: "delivered", paymentStatus: "paid", totalCents: 10000, paymentAmountCents: 9200, deliveryCents: 0 },
+    financing: { productsNetCents: 10000, cagnotteCents: 800, externalProductsCents: 9200, externalTotalCents: 9200, deliveryCents: 0 },
+    wallet: { pendingCents: 0, availableCents: 1745, reservedCents: 0, regularizationCents: 0 },
+    lines: [{ lineId: "fleurs", label: "Fleurs CBD fictives", initialNetCents: 10000, returnedNetCents: 2500, remainingNetCents: 7500 }],
+    effective,
+    history: [{ id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T11:00:00.000Z", reference: "retour-demo-25", declaredFinancialCents: 2300,
+      returnedProductNetCents: 2500, financialCents: 2300, cagnotteRestitutionCents: 200, resultingAvailableCents: 1745, effective: true }],
+    correctionTarget: { eventId: "a".repeat(64), revision: 0, effective },
+    unpaid: { reservedAmountCents: 800, reservationState: "reserved", reservedAt: "2026-09-02T08:00:00.000Z", ageHours: 99, reviewRequired: true,
+      payment: { status: "payment_link_sent", uncertain: true, confirmedAt: null },
+      linkTransmission: { requestId: "demo-request", status: "unknown", transportStatus: "unknown", sendingActive: false, uncertain: true },
+      stateVersion: "b".repeat(64), review: { outcome: "payment_uncertain", source: "Tableau prestataire fictif", reason: "Encaissement non déterminé", reviewedAt: "2026-09-06T10:00:00.000Z", reviewedByEmail: "admin@example.test", current: true } },
+  };
+}
+
+function administrationRefundFixture(): RefundPreview {
+  const before = { lines: [{ lineId: "fleurs", returnedNetCents: 0 }], returnedProductNetCents: 0, productFinancialCents: 0, cagnotteRestitutionCents: 0, deliveryFinancialCents: 0, totalFinancialCents: 0 };
+  const after = { lines: [{ lineId: "fleurs", returnedNetCents: 2500 }], returnedProductNetCents: 2500, productFinancialCents: 2300, cagnotteRestitutionCents: 200, deliveryFinancialCents: 0, totalFinancialCents: 2300 };
+  return { kind: "administrative_refund_recorded", orderId: "CMD-DEMO-100", currency: "EUR", additionalReturns: [{ lineId: "fleurs", additionalNetCents: 2500 }],
+    productFinancialCents: 2300, cagnotteRestitutionCents: 200, deliveryFinancialCents: 0, totalFinancialCents: 2300,
+    correction: { theoreticalCents: 115, appliedCents: 115, pendingDeltaCents: 0, availableDeltaCents: -115, regularizationDeltaCents: 0, remainingGainCents: 345 },
+    restitution: { grossCents: 200, compensationCents: 0, availableIncreaseCents: 200, availableAfterCents: 1745, cumulativeCents: 200, reservationState: "consumed" },
+    before, after, previewVersion: "c".repeat(64), recordedAt: "2026-09-06T11:00:00.000Z" };
+}
+
+function administrationCorrectionFixture(requiresReview: boolean): CorrectionPreview {
+  const previousEffective = administrationInspectionFixture().effective;
+  const effective = { lines: [{ lineId: "fleurs", returnedNetCents: 0 }], returnedProductNetCents: 0, productFinancialCents: 0, cagnotteRestitutionCents: 0, deliveryFinancialCents: 0, totalFinancialCents: 0 };
+  return { kind: requiresReview ? "correction_requires_review" : "refund_correction_preview", orderId: "CMD-DEMO-100", currency: "EUR", targetEventId: "a".repeat(64), previousRevision: 0, revision: 1,
+    replacementReturns: [], deliveryRefundCents: 0, declaredFinancialCents: 0, previousEffective, effective,
+    differential: { returnedProductNetCents: -2500, productFinancialCents: -2300, cagnotteRestitutionCents: -200, deliveryFinancialCents: 0, totalFinancialCents: -2300,
+      loyaltyCents: 115, pendingDeltaCents: 0, availableDeltaCents: -85, regularizationDeltaCents: 0 },
+    walletAfter: { pendingCents: 0, availableCents: requiresReview ? 40 : 1660, reservedCents: requiresReview ? 800 : 0, regularizationCents: 0 },
+    remainingGainCents: 460, reservationState: "consumed", previewVersion: "d".repeat(64),
+    ...(requiresReview ? { reviewReason: "Le crédit restitué a été réservé ou utilisé après la déclaration." } : {}) };
 }
 
 function checkoutState(overrides: Partial<CagnotteCheckoutState> = {}): CagnotteCheckoutState {

@@ -32,6 +32,10 @@ const allowedOptions = new Set([
   "--orders-only",
   "--checkout-use-only",
   "--checkout-client-only",
+  "--refunds-only",
+  "--payment-links-only",
+  "--server-security-only",
+  "--admin-reviews-only",
   "--security-only",
   "--read-only",
 ]);
@@ -70,10 +74,10 @@ const digest = createHash("sha256").update(await readFile(jar)).digest("hex");
 if (digest !== "9b6498b7f62714d67f48f59b3818883cd682dbcd46b9f59511de81c97bb5166c") {
   throw new Error("Émulateur 1.22.0 absent ou empreinte inattendue.");
 }
-const rulesPath = resolve(root, mode === "--security-only" ? "firestore.rules" : config.firestore.rules);
+const rulesPath = resolve(root, mode === "--security-only" || mode === "--server-security-only" ? "firestore.rules" : config.firestore.rules);
 const rules = await readFile(rulesPath);
 if (!rules.length) throw new Error(mode === "--security-only" ? "Fichier complet de règles absent/vide." : "Règles locales de test absentes ou vides.");
-if (mode === "--security-only") {
+if (mode === "--security-only" || mode === "--server-security-only") {
   console.log(`Règles candidates : ${rulesPath}\nSHA-256 : ${createHash("sha256").update(rules).digest("hex")}`);
 }
 
@@ -124,6 +128,13 @@ try {
   if (mode === "--orders-only") await run("scripts/testCagnotteOrders.ts");
   if (mode === "--checkout-use-only") await run("scripts/testCagnotteCheckoutIntegration.ts");
   if (mode === "--checkout-client-only") await run("scripts/testCagnotteCheckoutClientContract.ts");
+  if (mode === "--refunds-only") await run("scripts/testOrderRefunds.ts");
+  if (mode === "--payment-links-only") {
+    await run("scripts/testPaymentLinkReliability.ts");
+    await run("scripts/testCagnottePaymentLinks.ts");
+  }
+  if (mode === "--server-security-only") await run("scripts/testCagnotteSecurity.ts");
+  if (mode === "--admin-reviews-only") await run("scripts/testCagnotteAdminReviews.ts");
   if (mode === "--security-only") {
     await run("scripts/testCagnotteRules.ts");
     await run("scripts/testCagnotteSecurity.ts");

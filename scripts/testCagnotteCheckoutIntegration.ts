@@ -5,6 +5,7 @@ import { createOrderHandler } from "../api/create-order.js";
 import { createQuoteOrderHandler } from "../api/quote-order.js";
 import { createOrderStatusHandler } from "../api/_server/orderStatusRoute.js";
 import { createSendPaymentLinkHandler } from "../api/_server/sendPaymentLinkRoute.js";
+import { readUnpaidOrderContext } from "../api/_server/unpaidOrderReview.js";
 import { applyCagnotteLedgerOperation } from "../api/_server/cagnotteLedger.js";
 import { CAGNOTTE_RESERVATION_PROGRAM } from "../api/_server/cagnotteReservations.js";
 import { CAGNOTTE_RESERVATION_VERSION, type CagnotteInternalOrder, type CagnotteWallet } from "../api/_server/cagnotteLedgerTypes.js";
@@ -222,7 +223,7 @@ try {
     await seed(); await fund("customer-a", "fund-cancel-before");
     const proposal = record(record((await quote(quoteBody(), program, "customer-a")).body).cagnotteUse);
     const orderId = String(record((await create(acceptedCheckout(proposal), program, "customer-a")).body).orderId);
-    assert.equal((await status(orderId, { orderStatus: "cancelled" }, program)).status, 200);
+    assert.equal((await status(orderId, await reviewedCancellationPatch(orderId), program)).status, 200);
     assertWallet(await wallet("customer-a"), [0, 2_000, 0, 0]);
     assert.equal((await reservation(orderId)).state, "released");
     const stock = (await rawDb.collection("products").doc("product-main").get()).data()?.stock;
@@ -250,7 +251,7 @@ try {
     await fixtureSpentGain(rawDb, "customer-a", source.orderId, 1_200, program.programVersion);
     await applyCagnotteLedgerOperation({ db: rawDb, program: null, recordedAtEpochMs: 40_000, command: { order: source, event: "cancelled" } });
     assertWallet(await wallet("customer-a"), [0, 0, 800, 2_000]);
-    await status(orderId, { orderStatus: "cancelled" }, program);
+    await status(orderId, await reviewedCancellationPatch(orderId), program);
     assertWallet(await wallet("customer-a"), [0, 0, 0, 1_200]);
     assert.equal((await reservation(orderId)).releaseCompensationCents, 800);
     await assertWalletJournal(rawDb, "customer-a");
@@ -260,7 +261,7 @@ try {
     await seed(); await fund("customer-a", "fund-terminal-race");
     const proposal = record(record((await quote(quoteBody(), program, "customer-a")).body).cagnotteUse);
     const orderId = String(record((await create(acceptedCheckout(proposal), program, "customer-a")).body).orderId);
-    const cancellation = { orderStatus: "cancelled" };
+    const cancellation = await reviewedCancellationPatch(orderId);
     const results = await Promise.all([
       status(orderId, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program),
       status(orderId, cancellation, program),
@@ -273,13 +274,8 @@ try {
     assert.ok(terminalReservation.state === "released" || terminalReservation.state === "consumed");
     const currentWallet = await wallet("customer-a");
     assert.equal(currentWallet.reservedCents, 0);
-    if (stored.orderStatus === "cancelled" && terminalReservation.state === "released") {
-      assertWallet(currentWallet, [0, 2_000, 0, 0]);
-    } else if (stored.orderStatus === "cancelled") {
-      assertWallet(currentWallet, [0, 1_200, 0, 0]);
-    } else {
-      assertWallet(currentWallet, [460, 1_200, 0, 0]);
-    }
+    if (stored.orderStatus === "cancelled") assertWallet(currentWallet, [0, 2_000, 0, 0]);
+    else assertWallet(currentWallet, [460, 1_200, 0, 0]);
     await assertWalletJournal(rawDb, "customer-a");
   });
 
@@ -453,6 +449,24 @@ async function status(orderId: string, patch: Record<string, unknown>, selectedP
     now: () => new Date(30_000).toISOString(),
   });
   return invoke(handler, { orderId, authToken: "synthetic-admin-token", ...patch });
+}
+
+async function reviewedCancellationPatch(orderId: string) {
+  const context = await rawDb.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(rawDb.collection("orders").doc(orderId));
+    const storedOrder = { id: snapshot.id, ...snapshot.data() } as Order;
+    return readUnpaidOrderContext({ db: rawDb, transaction, order: storedOrder, nowEpochMs: 30_000 });
+  });
+  return {
+    orderStatus: "cancelled",
+    unpaidReview: {
+      action: "record",
+      outcome: "unpaid_confirmed",
+      source: "fixture locale",
+      reason: "Confirmation synthétique avant annulation",
+      expectedStateVersion: context.stateVersion,
+    },
+  };
 }
 
 async function sendLink(

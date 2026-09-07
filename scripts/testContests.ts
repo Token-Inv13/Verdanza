@@ -286,8 +286,10 @@ function testFirestoreRulesBoundary() {
   }
   assert.match(rules, /resource\.data\.get\("source", ""\) != "contest"/);
   const createOrderSource = readFileSync(resolve("api/create-order.ts"), "utf8");
-  assert.match(createOrderSource, /status: "redeemed"/);
-  assert.match(createOrderSource, /action: "prize_redeemed"/);
+  const checkoutOrderSource = readFileSync(resolve("api/_server/checkoutOrder.ts"), "utf8");
+  assert.match(createOrderSource, /commitCheckoutOrder/);
+  assert.match(checkoutOrderSource, /status: "redeemed"/);
+  assert.match(checkoutOrderSource, /action: "prize_redeemed"/);
 }
 
 function contestFixture(overrides: Partial<Contest> = {}): Contest {

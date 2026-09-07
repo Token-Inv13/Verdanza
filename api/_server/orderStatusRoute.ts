@@ -14,6 +14,7 @@ import type {
 } from "../../src/types/index.js";
 import { CagnotteLedgerError } from "./cagnotteLedger.js";
 import { CagnotteReservationError } from "./cagnotteReservations.js";
+import { UnpaidReviewError, type UnpaidReviewRequest } from "./unpaidOrderReview.js";
 
 const orderStatuses: OrderStatus[] = [
   "new",
@@ -82,14 +83,14 @@ return async function handler(
       processAnalytics: dependencies.processAnalytics,
     });
 
-    sendJson(response, { ok: true, analyticsPurchase: purchaseAnalyticsResult });
+    sendJson(response, { ok: true, analyticsPurchase: purchaseAnalyticsResult, unpaidReview: committed.unpaidReviewContext });
   } catch (error) {
     console.error("update-order-status failed", error);
     const message =
       error instanceof Error ? error.message : "Mise a jour commande impossible.";
-    const conflict = error instanceof CagnotteReservationError ||
+    const conflict = error instanceof CagnotteReservationError || error instanceof UnpaidReviewError ||
       (error instanceof CagnotteLedgerError && error.code === "CONFLICT");
-    sendJson(response, { error: message }, message === "Acces admin requis." ? 403 : conflict ? 409 : 400);
+    sendJson(response, { error: message, ...(error instanceof UnpaidReviewError ? { code: error.code } : {}) }, message === "Acces admin requis." ? 403 : conflict ? 409 : 400);
   }
 }
 
@@ -114,6 +115,7 @@ function parseBody(value: unknown): {
   restore?: boolean;
   deleteCancelled?: boolean;
   historyNote?: string;
+  unpaidReview?: UnpaidReviewRequest;
   authToken?: string;
 } {
   const body = typeof value === "string" ? JSON.parse(value) : value;
@@ -137,6 +139,7 @@ function parseBody(value: unknown): {
     restore?: boolean;
     deleteCancelled?: boolean;
     historyNote?: string;
+    unpaidReview?: unknown;
     authToken?: string;
   };
   if (!payload.orderId) throw new Error("orderId requis.");
@@ -168,6 +171,7 @@ function parseBody(value: unknown): {
     paymentLinkChannel: payload.paymentLinkChannel, trackingNumber: payload.trackingNumber,
     archived: payload.archived, hidden: payload.hidden, restore: payload.restore,
     deleteCancelled: payload.deleteCancelled, historyNote: payload.historyNote,
+    unpaidReview: parseUnpaidReview(payload.unpaidReview),
   };
 }
 
@@ -190,6 +194,7 @@ function parseJsonObject(value: unknown): {
   restore?: boolean;
   deleteCancelled?: boolean;
   historyNote?: string;
+  unpaidReview?: unknown;
   authToken?: string;
 } {
   const body = typeof value === "string" ? JSON.parse(value) : value;
@@ -213,8 +218,23 @@ function parseJsonObject(value: unknown): {
     restore?: boolean;
     deleteCancelled?: boolean;
     historyNote?: string;
+    unpaidReview?: unknown;
     authToken?: string;
   };
+}
+
+function parseUnpaidReview(value: unknown): UnpaidReviewRequest | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Revue impayée invalide.");
+  const raw = value as Record<string, unknown>;
+  if (Object.keys(raw).some((key) => !["action", "outcome", "source", "reason", "expectedStateVersion"].includes(key)) ||
+    raw.action !== "record" || (raw.outcome !== "unpaid_confirmed" && raw.outcome !== "payment_uncertain") ||
+    typeof raw.source !== "string" || raw.source.trim().length < 2 || raw.source.trim().length > 120 ||
+    typeof raw.reason !== "string" || raw.reason.trim().length < 3 || raw.reason.trim().length > 300 ||
+    typeof raw.expectedStateVersion !== "string" || !/^[a-f0-9]{64}$/.test(raw.expectedStateVersion)) {
+    throw new Error("Revue impayée invalide.");
+  }
+  return { action: "record", outcome: raw.outcome, source: raw.source.trim(), reason: raw.reason.trim(), expectedStateVersion: raw.expectedStateVersion };
 }
 
 function bearerToken(request: VercelRequestLike) {

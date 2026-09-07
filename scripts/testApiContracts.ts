@@ -1,3 +1,5 @@
+import orderRefundHandler from "../api/order-refunds.js";
+import { handleOrderRefund } from "../api/_server/orderRefundRoute.js";
 import cagnotteHandler from "../api/cagnotte.js";
 import { handleCagnotteRead } from "../api/_server/cagnotteReadRoute.js";
 import assert from "node:assert/strict";
@@ -31,6 +33,7 @@ const removedRewriteSources = [
 ];
 
 function testDirectEntrypoints() {
+  assert.equal(orderRefundHandler, handleOrderRefund);
   assert.equal(cagnotteHandler, handleCagnotteRead);
   assert.equal(contestsHandler, handlePublicContests);
   assert.equal(adminContestsHandler, handleAdminContests);
@@ -139,6 +142,7 @@ function testFunctionInventoryAndSecuritySources() {
     "create-order.ts",
     "create-review.ts",
     "invoices.ts",
+    "order-refunds.ts",
     "quote-order.ts",
     "retry-order-emails.ts",
     "retry-order-purchase-analytics.ts",
@@ -146,7 +150,7 @@ function testFunctionInventoryAndSecuritySources() {
     "send-payment-link.ts",
     "update-order-status.ts",
   ]);
-  assert.equal(functions.length, 17);
+  assert.equal(functions.length, 18);
 
   for (const file of [
     "api/_server/contestAdminRoute.ts",
@@ -154,6 +158,7 @@ function testFunctionInventoryAndSecuritySources() {
     "api/_server/retryPurchaseAnalyticsRoute.ts",
     "api/_server/adminPaymentLinksRoute.ts",
     "api/_server/sendPaymentLinkRoute.ts",
+    "api/_server/orderRefundRoute.ts",
     "api/_server/cagnotteReadRoute.ts",
   ]) {
     assert.match(
@@ -192,4 +197,4 @@ await testEndpointContracts();
 testRewriteConfiguration();
 testFunctionInventoryAndSecuritySources();
 
-console.log("Direct API endpoint contract tests passed (17 functions)");
+console.log("Direct API endpoint contract tests passed (18 functions)");

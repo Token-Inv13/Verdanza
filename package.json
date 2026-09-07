@@ -51,6 +51,10 @@
     "test:cagnotte-checkout-client": "node --import tsx scripts/runCagnotteLedgerTests.ts --checkout-client-only",
     "test:cagnotte-presentation": "node --import tsx scripts/testCagnottePresentation.tsx",
     "test:cagnotte-order-presentation": "node --import tsx scripts/testCagnotteOrderPresentation.tsx",
+    "test:order-refunds": "node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
+    "test:cagnotte-admin-reviews": "node --import tsx scripts/runCagnotteLedgerTests.ts --admin-reviews-only",
+    "test:cagnotte-admin-ui": "node --import tsx scripts/testCagnotteAdminInterface.tsx",
+    "test:cagnotte-payment-links": "node --import tsx scripts/runCagnotteLedgerTests.ts --payment-links-only",
     "preview:cagnotte": "node --import tsx scripts/generateCagnottePreview.tsx",
     "test:fixed-price-migration": "node --import tsx scripts/testFixedPriceMigration.ts",
     "test:promotions": "node --import tsx scripts/testPromotionsAndBanners.ts",
@@ -84,7 +88,7 @@
     "sitemap": "node --import tsx scripts/generateSitemap.ts",
     "sitemap:check": "node --import tsx scripts/generateSitemap.ts --check",
     "build:local": "npm run sitemap:check && tsc -b && vite build && npm run prerender",
-    "typecheck:api": "tsc --noEmit --moduleResolution NodeNext --module NodeNext --target ES2022 --esModuleInterop --skipLibCheck --strict --types node api/cagnotte.ts api/create-review.ts api/create-order.ts api/quote-order.ts api/contests.ts api/admin-contests.ts api/contest-prize.ts api/blog-interactions.ts api/retry-order-purchase-analytics.ts api/revoke-order-analytics.ts api/admin-payment-links.ts api/send-payment-link.ts api/update-order-status.ts api/retry-order-emails.ts api/contact.ts api/invoices.ts api/analyze-supplier-invoice.ts api/_server/cagnotteRead.ts api/_server/cagnotteReadRoute.ts api/_server/cagnotteReservations.ts api/_server/cagnotteReservationTypes.ts api/_server/cagnotteLedger.ts api/_server/cagnotteLedgerTypes.ts api/_server/adminAuth.ts api/_server/adminPaymentLinks.ts api/_server/checkout.ts api/_server/contests.ts api/_server/blogInteractions.ts api/_server/email.ts api/_server/firebaseAdmin.ts api/_server/ga4MeasurementProtocol.ts api/_server/ga4DataApi.ts api/_server/purchaseAnalytics.ts api/_server/orderSideEffects.ts api/_server/paymentLinkDelivery.ts api/_server/productReferences.ts api/_server/productDeletion.ts api/_server/http.ts api/_server/invoicePdf.ts api/_server/orderAlerts.ts api/_server/supplierInvoiceAnalysis.ts src/data/blogArticleSlugs.ts src/types/blogEngagement.ts src/types/cagnotteRead.ts",
+    "typecheck:api": "tsc --noEmit --moduleResolution NodeNext --module NodeNext --target ES2022 --esModuleInterop --skipLibCheck --strict --types node api/cagnotte.ts api/order-refunds.ts api/create-review.ts api/create-order.ts api/quote-order.ts api/contests.ts api/admin-contests.ts api/contest-prize.ts api/blog-interactions.ts api/retry-order-purchase-analytics.ts api/revoke-order-analytics.ts api/admin-payment-links.ts api/send-payment-link.ts api/update-order-status.ts api/retry-order-emails.ts api/contact.ts api/invoices.ts api/analyze-supplier-invoice.ts api/_server/cagnotteRead.ts api/_server/cagnotteReadRoute.ts api/_server/cagnotteReservations.ts api/_server/cagnotteReservationTypes.ts api/_server/cagnotteLedger.ts api/_server/cagnotteLedgerTypes.ts api/_server/adminAuth.ts api/_server/adminPaymentLinks.ts api/_server/checkout.ts api/_server/contests.ts api/_server/blogInteractions.ts api/_server/email.ts api/_server/firebaseAdmin.ts api/_server/ga4MeasurementProtocol.ts api/_server/ga4DataApi.ts api/_server/purchaseAnalytics.ts api/_server/orderSideEffects.ts api/_server/paymentLinkDelivery.ts api/_server/productReferences.ts api/_server/productDeletion.ts api/_server/http.ts api/_server/invoicePdf.ts api/_server/orderAlerts.ts api/_server/supplierInvoiceAnalysis.ts src/data/blogArticleSlugs.ts src/types/blogEngagement.ts src/types/cagnotteRead.ts",
     "verify:local-safety": "node scripts/verifyLocalSafety.mjs",
     "verify": "npm run verify:local-safety && npm run lint && npm run typecheck && npm run typecheck:api && npm run test:core && npm run build:local && npm run audit:local-essential",
     "verify:full": "npm run verify && npm run test:extended && npm run audit:local-full",
@@ -142,4 +146,3 @@
     "vite-plugin-pwa": "^1.3.0"
   }
 }
-

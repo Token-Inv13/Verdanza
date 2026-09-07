@@ -178,6 +178,8 @@ const paymentUrl = "https://buy.stripe.com/test_secret_payment_link";
 function order(overrides: Partial<Order> = {}): Order {
   return {
     id: "order-123",
+    createdAt: "2000-01-01T00:00:00.000Z",
+    updatedAt: "2000-01-01T00:00:00.000Z",
     customerEmail: "client@example.test",
     customerPhone: "+33000000000",
     customerName: "Client Test",
@@ -292,7 +294,7 @@ async function testLostHttpResponseAndProviderSuccessOnce() {
   );
 }
 
-async function testTimeoutRetryUsesSameProviderKey() {
+async function testTimeoutRetryRequiresVerification() {
   const db = database();
   let providerCalls = 0;
   let actualDeliveries = 0;
@@ -315,12 +317,12 @@ async function testTimeoutRetryUsesSameProviderKey() {
   assert.equal(
     (db.documents.get("orders/order-123") as { paymentLinkSent?: boolean })
       .paymentLinkSent,
-    undefined,
+    false,
   );
   const retry = await delivery(db, request(), send);
-  assert.equal(retry.status, "sent");
-  assert.equal(retry.attempts, 2);
-  assert.equal(providerCalls, 2);
+  assert.equal(retry.status, "unknown");
+  assert.equal(retry.attempts, 1);
+  assert.equal(providerCalls, 1);
   assert.equal(actualDeliveries, 1);
 }
 
@@ -484,7 +486,7 @@ function restoreEnvironment(name: string, value: string | undefined) {
 
 await testDoubleSimultaneousPost();
 await testLostHttpResponseAndProviderSuccessOnce();
-await testTimeoutRetryUsesSameProviderKey();
+await testTimeoutRetryRequiresVerification();
 await testSameIdDifferentPayloadConflict();
 await testVoluntaryResendUsesNewIntent();
 await testCancellationRaceDoesNotRecordSent();

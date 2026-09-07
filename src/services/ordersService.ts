@@ -1,5 +1,7 @@
 import {
   collection,
+  doc,
+  getDoc,
   getDocs,
   orderBy,
   query,
@@ -190,6 +192,8 @@ export type AdminOrderRow = {
   paymentLinkUrl?: string;
   paymentLinkLabel?: string;
   paymentLinkAmount?: number;
+  paymentAmount?: number;
+  financing: OrderFinancingPresentation;
   paymentLinkCurrency?: Order["paymentLinkCurrency"];
   paymentLinkSent?: boolean;
   paymentLinkSentAt?: string;
@@ -246,9 +250,28 @@ export async function getAdminOrdersWithFallback() {
     const snapshot = await getDocs(
       query(collection(db, collections.orders), orderBy("createdAt", "desc")),
     );
-    const orders: AdminOrderRow[] = snapshot.docs.map((entry) => {
-      const order = { id: entry.id, ...entry.data() } as Order;
-      return {
+    const orders: AdminOrderRow[] = snapshot.docs.map((entry) =>
+      adminOrderRow({ id: entry.id, ...entry.data() } as Order));
+    return {
+      orders,
+      source: orders.length ? ("firestore" as const) : ("empty" as const),
+    };
+  } catch (error) {
+    console.warn("Unable to load Firestore orders", error);
+    return { orders: [], source: "empty" as const };
+  }
+}
+
+export async function getAdminOrder(orderId: string): Promise<AdminOrderRow | null> {
+  if (!db) return null;
+  const snapshot = await getDoc(doc(db, collections.orders, orderId));
+  if (!snapshot.exists()) return null;
+  return adminOrderRow({ id: snapshot.id, ...snapshot.data() } as Order);
+}
+
+function adminOrderRow(order: Order): AdminOrderRow {
+  const financing = presentOrderFinancing(order);
+  return {
         id: order.id,
         customerId: order.customerId,
         orderType: order.orderType || "order",
@@ -265,7 +288,7 @@ export async function getAdminOrdersWithFallback() {
         paymentConfirmedBy: order.paymentConfirmedBy,
         orderStatus: order.orderStatus,
         deliveryMethod: order.deliveryMethod,
-        delivery: order.deliveryZone || order.deliveryMethod,
+        delivery: publicDeliveryLabel(order),
         deliveryFee: order.deliveryFee,
         deliveryMinimumApplied: order.deliveryMinimumApplied,
         postalFreeShippingApplied: order.postalFreeShippingApplied,
@@ -276,6 +299,8 @@ export async function getAdminOrdersWithFallback() {
         paymentLinkUrl: order.paymentLinkUrl,
         paymentLinkLabel: order.paymentLinkLabel,
         paymentLinkAmount: order.paymentLinkAmount,
+        paymentAmount: order.paymentAmount,
+        financing,
         paymentLinkCurrency: order.paymentLinkCurrency,
         paymentLinkSent: order.paymentLinkSent === true,
         paymentLinkSentAt: order.paymentLinkSentAt,
@@ -307,17 +332,8 @@ export async function getAdminOrdersWithFallback() {
         emails: order.emails,
         analytics: order.analytics,
         createdAt: order.createdAt,
-        updatedAt: order.updatedAt,
-      };
-    });
-    return {
-      orders,
-      source: orders.length ? ("firestore" as const) : ("empty" as const),
-    };
-  } catch (error) {
-    console.warn("Unable to load Firestore orders", error);
-    return { orders: [], source: "empty" as const };
-  }
+    updatedAt: order.updatedAt,
+  };
 }
 
 export async function retryOrderPurchaseAnalytics(orderId: string) {

@@ -2,7 +2,7 @@ import { createCagnotteReservationIntent } from "../api/_server/cagnotteReservat
 import type { CagnotteReservationTestProgram } from "../api/_server/cagnotteReservationTypes.js";
 import { buildCustomerInvoiceLines } from "../src/lib/customerInvoiceLines.js";
 import { buildOrderFinancingDocumentSnapshot } from "../src/lib/orderFinancing.js";
-import type { BillingSettings, Invoice, Order } from "../src/types/index.js";
+import type { BillingSettings, Invoice, Order, OrderRefundSummary } from "../src/types/index.js";
 
 const program: CagnotteReservationTestProgram = Object.freeze({
   mode: "local_test",
@@ -18,6 +18,7 @@ export function mixedOrderFixture(options: {
   deliveryFee?: number;
   paid?: boolean;
   cancelled?: boolean;
+  refund?: "partial" | "full";
   customerName?: string;
 } = {}): Order {
   const deliveryFee = options.deliveryFee ?? 0;
@@ -37,6 +38,7 @@ export function mixedOrderFixture(options: {
   }, program);
   if (!intent) throw new Error("Fixture de réservation indisponible.");
   const paidAt = "2026-09-06T11:00:00.000Z";
+  const refundSummary = options.refund ? refundFixture(options.refund) : undefined;
   return {
     id: orderId,
     checkoutRequestId: "11111111-1111-4111-8111-111111111111",
@@ -94,6 +96,7 @@ export function mixedOrderFixture(options: {
       } as const,
     } : {}),
     ...(options.cancelled ? { cancelledAt: "2026-09-06T12:00:00.000Z" } : {}),
+    ...(refundSummary ? { refundSummary } : {}),
     createdAt: "2026-09-06T10:00:00.000Z",
     updatedAt: "2026-09-06T12:00:00.000Z",
   };
@@ -150,5 +153,21 @@ export function billingSettingsFixture(): BillingSettings {
     legalMentions: "Données fictives.",
     isManuallyValidated: false,
     validationWarning: "Démonstration locale.",
+  };
+}
+
+function refundFixture(kind: "partial" | "full"): OrderRefundSummary {
+  const full = kind === "full";
+  return {
+    version: "order-mixed-refund-record-v1",
+    returnedProductNetCents: full ? 10_000 : 2_500,
+    productFinancialCents: full ? 9_200 : 2_300,
+    cagnotteRestitutionCents: full ? 800 : 200,
+    deliveryFinancialCents: 0,
+    totalFinancialCents: full ? 9_200 : 2_300,
+    productsFullyRefunded: full,
+    entirePaymentRefunded: full,
+    kind: "administrative_confirmation",
+    recordedAt: "2026-09-06T13:00:00.000Z",
   };
 }

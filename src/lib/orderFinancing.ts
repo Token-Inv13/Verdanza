@@ -1,4 +1,7 @@
-import type { OrderFinancingDocumentSnapshot } from "../types/index.js";
+import type {
+  OrderFinancingDocumentSnapshot,
+  OrderRefundSummary,
+} from "../types/index.js";
 import type {
   CagnotteOrderEnrollment,
   CagnotteOrderReservationIntent,
@@ -19,6 +22,7 @@ export type OrderFinancingSource = {
   cagnotte?: CagnotteOrderEnrollment;
   cagnotteReservationIntent?: CagnotteOrderReservationIntent;
   cagnottePaymentEvidence?: CagnottePaymentEvidence;
+  refundSummary?: OrderRefundSummary;
 };
 
 export type OrderFinancingAmounts = {
@@ -34,6 +38,8 @@ export type OrderFinancingPresentation = OrderFinancingAmounts & {
   cagnotteState: "not_applicable" | "planned" | "consumed";
   externalPaymentState: "planned" | "confirmed";
   orderCancelled: boolean;
+  refund?: OrderFinancingDocumentSnapshot["refund"];
+  refundVerificationRequired?: boolean;
 };
 
 export type FinancingDisplayItem = {
@@ -124,12 +130,15 @@ export function presentOrderFinancing(
     }
     validatePresentationEnrollment(order);
     const consumed = validatePaymentHistory(order);
+    const refund = validateRefundSummary(order.refundSummary, amounts);
     return {
       ...amounts,
       verification: "verified",
       cagnotteState: consumed ? "consumed" : "planned",
       externalPaymentState: consumed ? "confirmed" : "planned",
       orderCancelled: isCancelled(order),
+      ...(refund.value ? { refund: refund.value } : {}),
+      ...(refund.invalid ? { refundVerificationRequired: true } : {}),
     };
   } catch (error) {
     let totalCents = 0;
@@ -153,7 +162,7 @@ export function buildOrderFinancingDocumentSnapshot(
 ): OrderFinancingDocumentSnapshot | undefined {
   const presentation = presentOrderFinancing(order);
   if (presentation.kind === "ordinary") return undefined;
-  if (presentation.verification === "required") {
+  if (presentation.verification === "required" || presentation.refundVerificationRequired) {
     return {
       schemaVersion: 1,
       version: "order-financing-document-v1",
@@ -161,7 +170,9 @@ export function buildOrderFinancingDocumentSnapshot(
       verification: "required",
       totalCents: presentation.totalCents,
       source: "persisted_order",
-      reason: presentation.reason || "Financement de commande à vérifier.",
+      reason: presentation.refundVerificationRequired
+        ? "Récapitulatif de retour à vérifier."
+        : presentation.reason || "Financement de commande à vérifier.",
     };
   }
   return {
@@ -176,6 +187,7 @@ export function buildOrderFinancingDocumentSnapshot(
     cagnotteState: presentation.cagnotteState === "consumed" ? "consumed" : "planned",
     externalPaymentState: presentation.externalPaymentState,
     orderCancelled: presentation.orderCancelled,
+    ...(presentation.refund ? { refund: presentation.refund } : {}),
   };
 }
 
@@ -200,6 +212,9 @@ export function presentInvoiceFinancing(source: {
     (snapshot.externalPaymentState !== "planned" && snapshot.externalPaymentState !== "confirmed")) {
     return requiredInvoiceFinancing(totalCents, "Montants documentaires incohérents.");
   }
+  if (snapshot.refund && !validDocumentRefund(snapshot.refund, snapshot.paymentCents, snapshot.cagnotteCents)) {
+    return requiredInvoiceFinancing(totalCents, "Récapitulatif documentaire de retour incohérent.");
+  }
   return {
     kind: "cagnotte",
     verification: "verified",
@@ -209,6 +224,7 @@ export function presentInvoiceFinancing(source: {
     cagnotteState: snapshot.cagnotteState,
     externalPaymentState: snapshot.externalPaymentState,
     orderCancelled: snapshot.orderCancelled === true,
+    ...(snapshot.refund ? { refund: snapshot.refund } : {}),
   };
 }
 
@@ -237,6 +253,12 @@ export function financingDisplayItems(
           : "À régler hors cagnotte",
     cents: presentation.paymentCents,
   });
+  if (presentation.refund) {
+    items.push(
+      { label: "Remboursement financier enregistré", cents: presentation.refund.totalFinancialCents },
+      { label: "Cagnotte brute restituée", cents: presentation.refund.cagnotteRestitutionCents },
+    );
+  }
   return items;
 }
 
@@ -253,6 +275,12 @@ export function financingNotices(presentation: OrderFinancingPresentation): stri
     if (presentation.cagnotteState !== "consumed") {
       notices.push("L’état final de libération de la réservation doit être vérifié dans son parcours dédié.");
     }
+  }
+  if (presentation.refund) {
+    notices.push("Une éventuelle compensation de régularisation reste distincte de la restitution brute affichée.");
+  }
+  if (presentation.refundVerificationRequired) {
+    notices.push("Vérification nécessaire : le récapitulatif de retour persistant est incomplet ou incohérent.");
   }
   return notices;
 }
@@ -304,6 +332,45 @@ function validatePaymentHistory(order: OrderFinancingSource) {
   return true;
 }
 
+function validateRefundSummary(
+  summary: OrderRefundSummary | undefined,
+  amounts: OrderFinancingAmounts,
+): { value?: OrderFinancingDocumentSnapshot["refund"]; invalid?: true } {
+  if (!summary) return {};
+  const values = [
+    summary.returnedProductNetCents,
+    summary.productFinancialCents,
+    summary.cagnotteRestitutionCents,
+    summary.deliveryFinancialCents,
+    summary.totalFinancialCents,
+  ];
+  const validConfirmation = summary.version === "order-mixed-refund-record-v1" &&
+    summary.kind === "administrative_confirmation";
+  const validCorrection = summary.version === "order-refund-correction-v1" &&
+    summary.kind === "administrative_correction" &&
+    typeof summary.targetEventId === "string" && /^[a-f0-9]{64}$/.test(summary.targetEventId) &&
+    typeof summary.revision === "number" && Number.isSafeInteger(summary.revision) && summary.revision > 0;
+  if ((!validConfirmation && !validCorrection) || !validInstant(summary.recordedAt) ||
+    !values.every(nonNegativeCents) ||
+    summary.totalFinancialCents !== summary.productFinancialCents + summary.deliveryFinancialCents ||
+    summary.productFinancialCents > amounts.paymentCents ||
+    summary.cagnotteRestitutionCents > amounts.cagnotteCents) {
+    return { invalid: true };
+  }
+  return {
+    value: {
+      returnedProductNetCents: summary.returnedProductNetCents,
+      productFinancialCents: summary.productFinancialCents,
+      cagnotteRestitutionCents: summary.cagnotteRestitutionCents,
+      deliveryFinancialCents: summary.deliveryFinancialCents,
+      totalFinancialCents: summary.totalFinancialCents,
+      productsFullyRefunded: summary.productsFullyRefunded,
+      entirePaymentRefunded: summary.entirePaymentRefunded,
+      recordedAt: summary.recordedAt,
+    },
+  };
+}
+
 function requiredInvoiceFinancing(
   totalCents: number,
   reason: string,
@@ -331,4 +398,21 @@ function nonNegativeCents(value: unknown): value is number {
 
 function validInstant(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && Number.isFinite(Date.parse(value));
+}
+
+function validDocumentRefund(
+  refund: NonNullable<OrderFinancingDocumentSnapshot["refund"]>,
+  paymentCents: number,
+  cagnotteCents: number,
+) {
+  const values = [
+    refund.returnedProductNetCents,
+    refund.productFinancialCents,
+    refund.cagnotteRestitutionCents,
+    refund.deliveryFinancialCents,
+    refund.totalFinancialCents,
+  ];
+  return values.every(nonNegativeCents) && validInstant(refund.recordedAt) &&
+    refund.totalFinancialCents === refund.productFinancialCents + refund.deliveryFinancialCents &&
+    refund.productFinancialCents <= paymentCents && refund.cagnotteRestitutionCents <= cagnotteCents;
 }

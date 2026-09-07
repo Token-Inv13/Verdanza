@@ -112,6 +112,45 @@ try {
   assert.match(cancelledAfterText, /L’annulation seule ne prouve aucun remboursement financier/);
   assert.doesNotMatch(cancelledAfterText, /Remboursement financier enregistré/);
 
+  const partial = mixedOrderFixture({ paid: true, refund: "partial" });
+  const partialPresentation = presentOrderFinancing(partial);
+  assert.deepEqual(coreAmounts(partial), [10_000, 800, 9_200]);
+  assert.deepEqual(refundAmounts(partialPresentation), [2_300, 200], "G — retour net 25 EUR réparti 23/2");
+  const partialText = renderOrderEmailContent(partial, "Retour enregistré.").text;
+  assert.match(partialText, /Total de la commande: 100,00 EUR/);
+  assert.match(partialText, /Remboursement financier enregistré: 23,00\sEUR/);
+  assert.match(partialText, /Cagnotte brute restituée: 2,00\sEUR/);
+  assert.match(partialText, /compensation de régularisation reste distincte/i);
+
+  const neutralized = {
+    ...partial,
+    refundSummary: {
+      ...partial.refundSummary!,
+      version: "order-refund-correction-v1" as const,
+      kind: "administrative_correction" as const,
+      returnedProductNetCents: 0,
+      productFinancialCents: 0,
+      cagnotteRestitutionCents: 0,
+      totalFinancialCents: 0,
+      productsFullyRefunded: false,
+      entirePaymentRefunded: false,
+      targetEventId: "a".repeat(64),
+      revision: 1,
+    },
+  };
+  const neutralizedPresentation = presentOrderFinancing(neutralized);
+  assert.equal(neutralizedPresentation.verification, "verified", "une projection de correction valide reste cohérente");
+  assert.deepEqual(refundAmounts(neutralizedPresentation), [0, 0]);
+  const invalidCorrection = presentOrderFinancing({
+    ...neutralized,
+    refundSummary: { ...neutralized.refundSummary, targetEventId: "invalide" },
+  });
+  assert.equal(invalidCorrection.verification, "verified");
+  assert.equal(invalidCorrection.refundVerificationRequired, true, "une vraie projection de correction incohérente reste signalée");
+
+  const full = mixedOrderFixture({ paid: true, refund: "full" });
+  assert.deepEqual(refundAmounts(presentOrderFinancing(full)), [9_200, 800], "H — retour total 92/8");
+
   const missingPaymentAmount = { ...beforePayment } as Order;
   delete missingPaymentAmount.paymentAmount;
   const invalid = presentOrderFinancing(missingPaymentAmount);
@@ -210,7 +249,7 @@ try {
   assert.equal(incompleteSuccess?.paymentAmount, 0, "aucun repli silencieux vers 100 EUR");
 
   assert.equal(externalCalls, 0);
-  console.log("Cagnotte order presentation tests passed: order states, messages, document snapshot, PDF and pure rendering");
+  console.log("Cagnotte order presentation tests passed: cases A-H, messages, admin, document snapshot, PDF and pure rendering");
 } finally {
   globalThis.fetch = originalFetch;
 }
@@ -221,6 +260,10 @@ function coreAmounts(order: Order) {
 
 function corePresentation(value: { totalCents: number; cagnotteCents: number; paymentCents: number }) {
   return [value.totalCents, value.cagnotteCents, value.paymentCents];
+}
+
+function refundAmounts(value: ReturnType<typeof presentOrderFinancing>) {
+  return [value.refund?.totalFinancialCents, value.refund?.cagnotteRestitutionCents];
 }
 
 function zeroFinancingOrder(): Order {

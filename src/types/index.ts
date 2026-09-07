@@ -405,6 +405,17 @@ export type OrderStatus =
 
 export type PaymentStatus = "to_confirm" | "payment_link_sent" | "pending" | "paid" | "cancelled";
 
+export type OrderUnpaidReview = {
+  schemaVersion: 1;
+  version: "order-unpaid-review-v1";
+  outcome: "unpaid_confirmed" | "payment_uncertain";
+  source: string;
+  reason: string;
+  stateVersion: string;
+  reviewedAt: string;
+  reviewedBy: { uid: string; email: string | null };
+};
+
 export type OrderItem = {
   lineId?: string;
   productId: string;
@@ -618,6 +629,7 @@ export type Order = {
   paymentLinkChannel?: PaymentLinkChannel;
   paymentLinkDelivery?: PaymentLinkDeliverySummary;
   paymentLinkDeliveryHistory?: PaymentLinkDeliverySummary[];
+  unpaidReview?: OrderUnpaidReview;
   customerMessage?: string;
   orderStatus: OrderStatus;
   deliveryMethod: DeliveryMethod;
@@ -651,6 +663,7 @@ export type Order = {
   stockRestoredAt?: string;
   couponRestoredAt?: string;
   promotionsRestoredAt?: string;
+  refundSummary?: OrderRefundSummary;
   restoredPromotionIds?: string[];
   missingPromotionIds?: string[];
   promotionRestoration?: {
@@ -672,6 +685,21 @@ export type Order = {
   updatedAt: string;
 };
 
+export type OrderRefundSummary = {
+  version: "order-refund-record-v1" | "order-mixed-refund-record-v1" | "order-refund-correction-v1";
+  returnedProductNetCents: number;
+  productFinancialCents: number;
+  cagnotteRestitutionCents: number;
+  deliveryFinancialCents: number;
+  totalFinancialCents: number;
+  productsFullyRefunded: boolean;
+  entirePaymentRefunded: boolean;
+  kind: "administrative_confirmation" | "administrative_correction";
+  targetEventId?: string;
+  revision?: number;
+  recordedAt: string;
+};
+
 export type OrderFinancingDocumentSnapshot = {
   schemaVersion: 1;
   version: "order-financing-document-v1";
@@ -685,6 +713,17 @@ export type OrderFinancingDocumentSnapshot = {
   cagnotteState?: "planned" | "consumed";
   externalPaymentState?: "planned" | "confirmed";
   orderCancelled?: boolean;
+  refund?: Pick<
+    OrderRefundSummary,
+    | "returnedProductNetCents"
+    | "productFinancialCents"
+    | "cagnotteRestitutionCents"
+    | "deliveryFinancialCents"
+    | "totalFinancialCents"
+    | "productsFullyRefunded"
+    | "entirePaymentRefunded"
+    | "recordedAt"
+  >;
 };
 
 export type InvoiceStatus =

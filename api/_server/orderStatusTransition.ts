@@ -9,6 +9,7 @@ import { CagnotteReservationError } from "./cagnotteReservations.js";
 import { CAGNOTTE_SERVER_PROGRAM } from "./cagnotteProgram.js";
 import type { CagnotteTestProgram } from "./cagnotteLedgerTypes.js";
 import type { CagnotteReservationTestProgram } from "./cagnotteReservationTypes.js";
+import { prepareUnpaidReviewControl, type UnpaidReviewRequest } from "./unpaidOrderReview.js";
 import type { EmailResult } from "./email.js";
 import type { PurchaseAnalyticsProcessResult } from "./purchaseAnalytics.js";
 import type { Order, OrderStatus, PaymentStatus, ProductCost, SupplierPurchase, FinalPaymentMethod, PaymentLinkChannel } from "../../src/types/index.js";
@@ -19,20 +20,22 @@ export type OrderStatusChange = {
   paymentLinkUrl?: string; paymentLinkLabel?: string; paymentLinkAmount?: number; paymentLinkCurrency?: "EUR";
   paymentLinkSent?: boolean; paymentLinkChannel?: PaymentLinkChannel | ""; trackingNumber?: string;
   archived?: boolean; hidden?: boolean; restore?: boolean; deleteCancelled?: boolean; historyNote?: string;
+  unpaidReview?: UnpaidReviewRequest;
 };
 
 /** Actual endpoint transaction; admin is already verified by its unchanged HTTP boundary. */
 export async function commitOrderStatusTransition({db,body,admin,program=CAGNOTTE_SERVER_PROGRAM,now=()=>new Date().toISOString()}: {
   db: Firestore; body: OrderStatusChange; admin: {uid:string; email:string | null};
   program?: CagnotteReservationTestProgram | CagnotteTestProgram | null; now?: ()=>string;
-}): Promise<{ updatedOrder: Order | null; previousStatus: OrderStatus | null; purchaseAnalyticsQueued: boolean; missingPromotionIds: string[] }> {
+}): Promise<{ updatedOrder: Order | null; previousStatus: OrderStatus | null; purchaseAnalyticsQueued: boolean; missingPromotionIds: string[]; unpaidReviewContext: Awaited<ReturnType<typeof prepareUnpaidReviewControl>>["context"] | null }> {
   const operationTime=now();
   let updatedOrder: Order | null = null;
   let previousStatus: OrderStatus | null = null;
   let purchaseAnalyticsQueued = false;
   let missingPromotionIds: string[] = [];
+  let unpaidReviewContext: Awaited<ReturnType<typeof prepareUnpaidReviewControl>>["context"] | null = null;
   await db.runTransaction(async (transaction) => {
-    updatedOrder = null; previousStatus = null; purchaseAnalyticsQueued = false; missingPromotionIds = [];
+    updatedOrder = null; previousStatus = null; purchaseAnalyticsQueued = false; missingPromotionIds = []; unpaidReviewContext = null;
     let cancellationPlan: Awaited<ReturnType<typeof prepareOrderCancellationInTransaction>> | null = null;
     let writePaymentLinkEvent: (() => void) | null = null;
     const orderRef = db.collection("orders").doc(body.orderId);
@@ -80,6 +83,15 @@ export async function commitOrderStatusTransition({db,body,admin,program=CAGNOTT
     const update: Record<string, unknown> = {
       updatedAt: FieldValue.serverTimestamp(),
     };
+    if (body.unpaidReview || (body.orderStatus === "cancelled" && hasCagnotteEnrollment(order))) {
+      const unpaidControl = await prepareUnpaidReviewControl({
+        db, transaction, order, request: body.unpaidReview,
+        cancellationRequested: body.orderStatus === "cancelled", actor: admin, now: operationTime,
+      });
+      unpaidReviewContext = unpaidControl.context;
+      if (unpaidControl.reviewToStore) update.unpaidReview = unpaidControl.reviewToStore;
+    }
+
     if (body.orderStatus === "cancelled") {
       if (body.paymentStatus && body.paymentStatus !== "cancelled") {
         throw new Error(
@@ -274,7 +286,7 @@ export async function commitOrderStatusTransition({db,body,admin,program=CAGNOTT
     };
   });
 
-  return {updatedOrder,previousStatus,purchaseAnalyticsQueued,missingPromotionIds};
+  return {updatedOrder,previousStatus,purchaseAnalyticsQueued,missingPromotionIds,unpaidReviewContext};
 }
 
 /** Shared controlled transition, applied only after transactional reads by both callers.
