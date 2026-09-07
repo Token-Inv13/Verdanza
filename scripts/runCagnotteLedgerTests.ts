@@ -25,7 +25,13 @@ if (config.firestore.rules !== "firestore.cagnotte.local.rules" || config.cagnot
   throw new Error("Configuration locale inattendue.");
 }
 
-const allowedOptions = new Set(["--unit-only", "--reservations-only", "--regularization-only"]);
+const allowedOptions = new Set([
+  "--unit-only",
+  "--reservations-only",
+  "--regularization-only",
+  "--orders-only",
+  "--checkout-use-only",
+]);
 const options = process.argv.slice(2);
 if (options.length > 1 || options.some((option) => !allowedOptions.has(option))) {
   throw new Error("Option de test transactionnel inattendue.");
@@ -109,6 +115,8 @@ try {
   if (mode === "ledger") await run("scripts/testCagnotteLedger.ts", ["--emulator"]);
   if (mode === "--reservations-only") await run("scripts/testCagnotteReservations.ts");
   if (mode === "--regularization-only") await run("scripts/testCagnotteRegularization.ts");
+  if (mode === "--orders-only") await run("scripts/testCagnotteOrders.ts");
+  if (mode === "--checkout-use-only") await run("scripts/testCagnotteCheckoutIntegration.ts");
 } finally {
   // Stop only the direct Java child created by this runner.
   if (emulator.exitCode === null) emulator.kill();

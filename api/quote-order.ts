@@ -6,10 +6,19 @@ import {
   type VercelResponseLike,
 } from "./_server/http.js";
 import {
+  parseCheckoutBody,
   priceCheckout,
   type CheckoutRequestBody,
   type CheckoutRequestItem,
 } from "./_server/checkout.js";
+import { verifyFirebaseIdToken } from "./_server/adminAuth.js";
+import {
+  CagnotteCheckoutError,
+  prepareCagnotteCheckoutQuote,
+  readAvailableCagnotteCents,
+} from "./_server/cagnotteCheckout.js";
+import { CAGNOTTE_RESERVATION_PROGRAM } from "./_server/cagnotteReservations.js";
+import type { CagnotteReservationTestProgram } from "./_server/cagnotteReservationTypes.js";
 import type {
   Coupon,
   Address,
@@ -25,12 +34,18 @@ import {
   publicPromotionSummary,
 } from "../src/lib/publicPromotionBanners.js";
 
-export default async function handler(
+export function createQuoteOrderHandler(dependencies: {
+  getDb: typeof getAdminDb;
+  verifyToken: typeof verifyFirebaseIdToken;
+  reservationProgram?: CagnotteReservationTestProgram | null;
+  now?: () => number;
+}) {
+return async function handler(
   request: VercelRequestLike,
   response: VercelResponseLike,
 ) {
   if (isPublicPromoBannersRequest(request)) {
-    await handlePublicPromoBanners(response);
+    await handlePublicPromoBanners(response, dependencies.getDb);
     return;
   }
 
@@ -40,7 +55,37 @@ export default async function handler(
     const requestBody =
       typeof request.body === "string" ? JSON.parse(request.body) : request.body;
     const body = parseQuoteBody(requestBody);
-    const priced = await priceCheckout(getAdminDb(), body);
+    const db = dependencies.getDb();
+    const requestedCents = body.cagnotteUse?.requestedCents ?? 0;
+    let beneficiaryId = "";
+    if (requestedCents > 0) {
+      const reservationProgram = dependencies.reservationProgram ?? CAGNOTTE_RESERVATION_PROGRAM;
+      if (!reservationProgram) {
+        throw new CagnotteCheckoutError("RESERVATIONS_DISABLED", "L’utilisation de la cagnotte est désactivée.");
+      }
+      if (!body.authToken) {
+        throw new CagnotteCheckoutError("AUTH_REQUIRED", "Authentification requise pour utiliser la cagnotte.");
+      }
+      beneficiaryId = (await dependencies.verifyToken(body.authToken)).uid;
+      if (!beneficiaryId) {
+        throw new CagnotteCheckoutError("AUTH_REQUIRED", "Authentification cagnotte invalide.");
+      }
+    }
+    const priced = await priceCheckout(db, body);
+    const cagnotteUse = requestedCents > 0
+      ? prepareCagnotteCheckoutQuote({
+          body,
+          priced,
+          beneficiaryId,
+          availableCents: await readAvailableCagnotteCents(db, beneficiaryId),
+          program: dependencies.reservationProgram ?? CAGNOTTE_RESERVATION_PROGRAM,
+          createdAtEpochMs: (dependencies.now ?? Date.now)(),
+        }).quote
+      : undefined;
+    if (cagnotteUse) {
+      response.setHeader("Cache-Control", "private, no-store");
+      response.setHeader("Vary", "Authorization");
+    }
 
     sendJson(response, {
       subtotal: priced.subtotal,
@@ -62,18 +107,30 @@ export default async function handler(
       total: priced.total,
       giftPromotions: priced.giftPromotions,
       promotionConflictMessage: priced.promotionConflictMessage,
+      ...(cagnotteUse ? { cagnotteUse } : {}),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
+    const status = error instanceof CagnotteCheckoutError
+      ? error.code === "AUTH_REQUIRED" ? 401 : 409
+      : 400;
     sendJson(
       response,
       {
-        error: safeQuoteError(message),
+        ...(error instanceof CagnotteCheckoutError ? { code: error.code } : {}),
+        error: error instanceof CagnotteCheckoutError ? message : safeQuoteError(message),
       },
-      400,
+      status,
     );
   }
 }
+}
+
+export default createQuoteOrderHandler({
+  getDb: getAdminDb,
+  verifyToken: verifyFirebaseIdToken,
+  reservationProgram: CAGNOTTE_RESERVATION_PROGRAM,
+});
 
 function isPublicPromoBannersRequest(request: VercelRequestLike) {
   if (request.method !== "GET") return false;
@@ -81,9 +138,9 @@ function isPublicPromoBannersRequest(request: VercelRequestLike) {
   return url.includes("publicPromoBanners=1") || url.startsWith("/api/public-promo-banners");
 }
 
-async function handlePublicPromoBanners(response: VercelResponseLike) {
+async function handlePublicPromoBanners(response: VercelResponseLike, getDb: typeof getAdminDb) {
   try {
-    const db = getAdminDb();
+    const db = getDb();
     const [bannerSnapshot, couponSnapshot, productSnapshot] = await Promise.all([
       db
         .collection("promoBanners")
@@ -239,6 +296,8 @@ function parseQuoteBody(value: unknown): CheckoutRequestBody {
     email?: string;
     address?: Address;
     promotionSelections?: PromotionSelection[];
+    authToken?: string;
+    cagnotteUse?: CheckoutRequestBody["cagnotteUse"];
   };
 
   if (!Array.isArray(body.items) || !body.items.length) {
@@ -248,12 +307,14 @@ function parseQuoteBody(value: unknown): CheckoutRequestBody {
     throw new Error("Mode de livraison invalide.");
   }
 
-  return {
+  return parseCheckoutBody({
     items: body.items,
     deliveryMethod: body.deliveryMethod,
     deliveryZone: body.deliveryZone,
     couponCode: body.couponCode,
     promotionSelections: body.promotionSelections,
+    authToken: body.authToken,
+    cagnotteUse: body.cagnotteUse,
     complianceAccepted: true,
     preferredPaymentMethod: "card_payment_link",
     customer: {
@@ -270,7 +331,7 @@ function parseQuoteBody(value: unknown): CheckoutRequestBody {
         country: "France",
       },
     },
-  };
+  });
 }
 
 function safeQuoteError(message: string) {

@@ -1,6 +1,16 @@
 /** Amounts are integer euro cents, checked at every public calculation boundary. */
 export type Cents = number;
 
+/** Server-created registration. No wallet is created at checkout. */
+export type CagnotteOrderEnrollment = {
+  schemaVersion: 1;
+  beneficiaryId: string;
+  programVersion: string;
+  calculationVersion: CagnotteCalculationVersion;
+  createdAtEpochMs: number;
+  snapshot: CagnotteSnapshot;
+};
+
 /** Server-persisted binding between an order and its reserved wallet amount. */
 export type CagnotteOrderReservationIntent = {
   readonly schemaVersion: 1;
@@ -17,6 +27,16 @@ export type CagnotteOrderReservationIntent = {
   readonly intentFingerprint: string;
 };
 
+/** Server evidence recorded when a mixed payment consumes its reservation. */
+export type CagnottePaymentEvidence = {
+  readonly schemaVersion: 1;
+  readonly version: "cagnotte-payment-evidence-v1";
+  readonly reservationState: "consumed";
+  readonly loyaltyAccrualDecision: "attributed" | "not_attributed";
+  readonly loyaltyAccrualReason?: "server_program_ineligible";
+  readonly recordedAt: string;
+};
+
 export type CagnotteCalculationVersion = "cagnotte-math-v1";
 
 export type CagnotteAdvantage =
@@ -30,6 +50,37 @@ export type CagnotteCompatibility = {
   readonly status: "allowed" | "blocked" | "needs_validation";
   readonly blockingAdvantages: readonly CagnotteAdvantage[];
   readonly pendingAdvantages: readonly CagnotteAdvantage[];
+};
+
+export type CagnotteCheckoutQuoteVersion = "cagnotte-checkout-quote-v1";
+
+export type CagnotteUseAcceptance = {
+  readonly quoteVersion: CagnotteCheckoutQuoteVersion;
+  readonly quoteFingerprint: string;
+  readonly acceptedCagnotteCents: Cents;
+  readonly acceptedPayableCents: Cents;
+};
+
+export type CagnotteUseRequest = {
+  readonly requestedCents: Cents;
+  readonly acceptance?: CagnotteUseAcceptance;
+};
+
+/** Server quote only. It neither reserves credit nor creates an order. */
+export type CagnotteCheckoutQuote = {
+  readonly quoteVersion: CagnotteCheckoutQuoteVersion;
+  readonly quoteFingerprint: string;
+  readonly currency: "EUR";
+  readonly productsAfterDiscountsCents: Cents;
+  readonly deliveryCents: Cents;
+  readonly requestedCagnotteCents: Cents;
+  readonly proposedCagnotteCents: Cents;
+  readonly cagnotteCapCents: Cents;
+  readonly payableCents: Cents;
+  readonly estimatedLoyaltyCents: Cents;
+  readonly loyaltyAccrualStatus: "estimated" | "suspended";
+  readonly limitationReasons: readonly CagnotteLimitationReason[];
+  readonly compatibility: CagnotteCompatibility;
 };
 
 export type CagnotteLine = {

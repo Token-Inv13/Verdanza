@@ -13,6 +13,8 @@ import type {
   GiftPromotionQuote,
   PromotionSelection,
 } from "../../src/types/index.js";
+import type { CagnotteUseAcceptance, CagnotteUseRequest } from "../../src/types/cagnotte.js";
+export type { CagnotteUseAcceptance, CagnotteUseRequest } from "../../src/types/cagnotte.js";
 import {
   DEFAULT_LOCAL_DELIVERY_ESTIMATE_MAX_MINUTES,
   DEFAULT_LOCAL_DELIVERY_ESTIMATE_MIN_MINUTES,
@@ -141,6 +143,7 @@ export type CheckoutRequestBody = {
   submissionSecurity?: PublicSubmissionSecurityContext;
   customer: CheckoutCustomerInput;
   promotionSelections?: PromotionSelection[];
+  cagnotteUse?: CagnotteUseRequest;
 };
 
 export type PricedCheckout = {
@@ -229,6 +232,7 @@ export function parseCheckoutBody(value: unknown): CheckoutRequestBody {
   }
 
   const analyticsContext = parseAnalyticsContext(body.analyticsContext);
+  const cagnotteUse = parseCagnotteUse(body.cagnotteUse);
   const promotionSelections = Array.isArray(body.promotionSelections)
     ? body.promotionSelections
         .map((selection) => ({
@@ -243,6 +247,40 @@ export function parseCheckoutBody(value: unknown): CheckoutRequestBody {
     preferredPaymentMethod: normalizePreferredPaymentMethod(body.preferredPaymentMethod),
     analyticsContext,
     promotionSelections,
+    cagnotteUse,
+  };
+}
+
+function parseCagnotteUse(value: unknown): CagnotteUseRequest | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Demande cagnotte invalide.");
+  }
+  const raw = value as Partial<CagnotteUseRequest>;
+  if (!Number.isSafeInteger(raw.requestedCents) || Number(raw.requestedCents) < 0) {
+    throw new Error("Montant cagnotte invalide.");
+  }
+  if (raw.acceptance === undefined) return { requestedCents: Number(raw.requestedCents) };
+  const acceptance = raw.acceptance as Partial<CagnotteUseAcceptance>;
+  if (
+    acceptance.quoteVersion !== "cagnotte-checkout-quote-v1" ||
+    typeof acceptance.quoteFingerprint !== "string" ||
+    !/^[a-f0-9]{64}$/.test(acceptance.quoteFingerprint) ||
+    !Number.isSafeInteger(acceptance.acceptedCagnotteCents) ||
+    Number(acceptance.acceptedCagnotteCents) < 0 ||
+    !Number.isSafeInteger(acceptance.acceptedPayableCents) ||
+    Number(acceptance.acceptedPayableCents) < 0
+  ) {
+    throw new Error("Acceptation cagnotte invalide.");
+  }
+  return {
+    requestedCents: Number(raw.requestedCents),
+    acceptance: {
+      quoteVersion: acceptance.quoteVersion,
+      quoteFingerprint: acceptance.quoteFingerprint,
+      acceptedCagnotteCents: Number(acceptance.acceptedCagnotteCents),
+      acceptedPayableCents: Number(acceptance.acceptedPayableCents),
+    },
   };
 }
 
@@ -784,6 +822,7 @@ export function orderPayload(
     deliveryFee: priced.deliveryFee,
     discountAmount: priced.discountAmount,
     couponCode: priced.couponCode ?? null,
+    contestPrizeId: priced.contestPrizeId ?? null,
     promoCode: priced.couponCode ?? null,
     promoId: priced.couponId ?? null,
     discountType: priced.discountType ?? null,

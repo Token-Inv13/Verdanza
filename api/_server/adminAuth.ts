@@ -3,6 +3,7 @@ import type { Firestore } from "firebase-admin/firestore";
 export type VerifiedFirebaseUser = {
   uid: string;
   email: string | null;
+  emailVerified?: boolean;
 };
 
 export async function verifyFirebaseIdToken(
@@ -35,8 +36,12 @@ export async function verifyFirebaseIdToken(
   };
 }
 
-export async function assertAdminUser(db: Firestore, idToken: string) {
-  const user = await verifyFirebaseIdToken(idToken);
+export async function assertAdminUser(
+  db: Firestore,
+  idToken: string,
+  verify: typeof verifyFirebaseIdToken = verifyFirebaseIdToken,
+) {
+  const user = await verify(idToken);
   const uidSnapshot = await db.collection("adminUsers").doc(user.uid).get();
   const emailSnapshot = user.email
     ? await db.collection("adminUsers").doc(user.email).get()

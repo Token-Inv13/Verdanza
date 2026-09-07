@@ -1,3 +1,6 @@
+import { orderFromSnapshot } from "./_server/orderProtection.js";
+import { commitCheckoutOrder } from "./_server/checkoutOrder.js";
+export { commitCheckoutOrder, assertFixedPriceOrderItemStillMatchesProduct } from "./_server/checkoutOrder.js";
 import { FieldValue } from "firebase-admin/firestore";
 import crypto from "node:crypto";
 import { getAdminDb } from "./_server/firebaseAdmin.js";
@@ -8,14 +11,16 @@ import {
   type VercelResponseLike,
 } from "./_server/http.js";
 import {
-  orderPayload,
   parseCheckoutBody,
-  paymentInstructionsFor,
   priceCheckout,
-  type CheckoutRequestBody,
   type PricedCheckout,
 } from "./_server/checkout.js";
+import { createCheckoutIdentityResolver } from "./_server/checkoutIdentity.js";
 import { verifyFirebaseIdToken } from "./_server/adminAuth.js";
+import { CagnotteCheckoutError } from "./_server/cagnotteCheckout.js";
+import { CAGNOTTE_RESERVATION_PROGRAM, CagnotteReservationError } from "./_server/cagnotteReservations.js";
+import type { CagnotteReservationTestProgram } from "./_server/cagnotteReservationTypes.js";
+import { orderPaymentAmount } from "./_server/cagnotteOrders.js";
 import {
   sendAdminManualOrderEmail,
   sendManualOrderConfirmationEmail,
@@ -24,13 +29,9 @@ import { sendOrderCreationAlerts } from "./_server/orderAlerts.js";
 import {
   CheckoutRequestConflictError,
   checkoutPayloadFingerprint,
-  checkoutRequestDocument,
-  checkoutRequestsCollection,
   claimOrderSideEffectTask,
   findCheckoutRequest,
   notificationSummary,
-  orderSideEffectsCollection,
-  orderSideEffectsDocument,
   persistOrderSideEffectResult,
   runEmailSideEffect,
   validateCheckoutRequestId,
@@ -42,23 +43,17 @@ import {
   sendPublicSubmissionTrapResponse,
 } from "./_server/publicRateLimit.js";
 import { buildCustomerInvoiceLines } from "../src/lib/customerInvoiceLines.js";
-import {
-  fixedPriceEffectiveUnitPrice,
-  fixedPriceLineTotal,
-  resolveFixedPriceOptions,
-} from "../src/lib/fixedPriceOptions.js";
-import type { Invoice, Order, Product } from "../src/types/index.js";
-import { promotionAvailability } from "../src/lib/promotionDates.js";
-import {
-  normalizeGiftTiers,
-  qualifyingGiftSubtotal,
-} from "../src/lib/tieredProductGifts.js";
-import {
-  assertContestPrizeRedeemable,
-  contestCollections,
-} from "./_server/contests.js";
+import type { Invoice, Order } from "../src/types/index.js";
 
-export default async function handler(
+export function createOrderHandler(dependencies: {
+  getDb: typeof getAdminDb;
+  verifyToken: typeof verifyFirebaseIdToken;
+  reservationProgram?: CagnotteReservationTestProgram | null;
+  now?: () => number;
+  processSideEffects?: typeof processOrderSideEffectsBestEffort;
+  enforceRateLimit?: typeof enforcePublicSubmissionRateLimit;
+}) {
+return async function handler(
   request: VercelRequestLike,
   response: VercelResponseLike,
 ) {
@@ -71,15 +66,25 @@ export default async function handler(
     const checkoutRequestId = validateCheckoutRequestId(body.checkoutRequestId);
     body.checkoutRequestId = checkoutRequestId;
     const payloadFingerprint = checkoutPayloadFingerprint(body);
-    const db = getAdminDb();
+    const db = dependencies.getDb();
+    const verifiedUid = createCheckoutIdentityResolver(body.authToken, dependencies.verifyToken);
     const existingRequest = await findCheckoutRequest(
       db,
       checkoutRequestId,
       payloadFingerprint,
+      verifiedUid,
     );
     if (existingRequest) {
-      await sendExistingOrderResponse(db, response, existingRequest.orderId);
+      await sendExistingOrderResponse(db, response, existingRequest.orderId, verifiedUid);
       return;
+    }
+    if (Number(body.cagnotteUse?.requestedCents || 0) > 0) {
+      if (!body.authToken || !(await verifiedUid())) {
+        throw new CagnotteCheckoutError("AUTH_REQUIRED", "Authentification requise pour utiliser la cagnotte.");
+      }
+      if (!dependencies.reservationProgram) {
+        throw new CagnotteCheckoutError("RESERVATIONS_DISABLED", "L’utilisation de la cagnotte est désactivée.");
+      }
     }
 
     const trap = assessPublicSubmissionTrap({
@@ -96,8 +101,8 @@ export default async function handler(
       return;
     }
 
-    const rateLimit = await enforcePublicSubmissionRateLimit({
-      route: "/api/create-order",
+    const rateLimitInput = {
+      route: "/api/create-order" as const,
       request,
       email: body.customer.email,
       anonymousId: body.submissionSecurity?.anonymousId,
@@ -105,7 +110,10 @@ export default async function handler(
       attemptId: checkoutRequestId,
       attemptPayloadFingerprint: payloadFingerprint,
       db,
-    });
+    };
+    const rateLimit = dependencies.enforceRateLimit
+      ? await dependencies.enforceRateLimit(rateLimitInput)
+      : await enforcePublicSubmissionRateLimit(rateLimitInput);
     if (!rateLimit.allowed) {
       sendPublicRateLimitResponse(response, rateLimit);
       return;
@@ -132,16 +140,15 @@ export default async function handler(
         db,
         checkoutRequestId,
         payloadFingerprint,
+        verifiedUid,
       );
       if (requestCreatedDuringPricing) {
-        await sendExistingOrderResponse(db, response, requestCreatedDuringPricing.orderId);
+        await sendExistingOrderResponse(db, response, requestCreatedDuringPricing.orderId, verifiedUid);
         return;
       }
       throw error;
     }
-    const verifiedCustomer = body.authToken
-      ? await verifyFirebaseIdToken(body.authToken)
-      : null;
+    const customerId = await verifiedUid();
     const analyticsRevocationToken = body.analyticsContext?.clientId
       ? crypto.randomBytes(32).toString("base64url")
       : undefined;
@@ -153,22 +160,24 @@ export default async function handler(
       db,
       body,
       priced,
-      customerId: verifiedCustomer?.uid,
+      customerId,
       analyticsRevocationTokenHash,
       checkoutRequestId,
       payloadFingerprint,
+      cagnotteProgram: dependencies.reservationProgram ?? CAGNOTTE_RESERVATION_PROGRAM,
+      nowEpochMs: (dependencies.now ?? Date.now)(),
     });
     if (!creation.created) {
-      await sendExistingOrderResponse(db, response, creation.orderId);
+      await sendExistingOrderResponse(db, response, creation.orderId, verifiedUid);
       return;
     }
 
-    const sideEffects = await processOrderSideEffectsBestEffort(db, creation.orderId);
+    const sideEffects = await (dependencies.processSideEffects ?? processOrderSideEffectsBestEffort)(db, creation.orderId);
+    const storedOrder = orderFromSnapshot(await db.collection("orders").doc(creation.orderId).get());
 
     sendJson(response, {
       orderId: creation.orderId,
-      total: priced.total,
-      paymentInstructions: paymentInstructionsFor(),
+      ...checkoutCreationResult(storedOrder),
       analyticsRevocationToken,
       notifications: {
         status: notificationSummary(sideEffects.client, sideEffects.admin),
@@ -195,259 +204,45 @@ export default async function handler(
       message.includes("zone de livraison")
       ? message
       : "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza par email à contact@verdanza.fr.";
-    const isConflict = error instanceof CheckoutRequestConflictError;
+    const isConflict = error instanceof CheckoutRequestConflictError ||
+      error instanceof CagnotteReservationError ||
+      (error instanceof CagnotteCheckoutError && error.code !== "AUTH_REQUIRED");
+    const authenticationRequired = error instanceof CagnotteCheckoutError && error.code === "AUTH_REQUIRED";
     const invalidRequestId = message === "checkout_request_id_invalid";
+    const code = error instanceof CheckoutRequestConflictError
+      ? "checkout_request_conflict"
+      : error instanceof CagnotteCheckoutError
+        ? error.code
+        : error instanceof CagnotteReservationError
+          ? `cagnotte_${error.code.toLowerCase()}`
+          : invalidRequestId
+            ? "checkout_request_id_invalid"
+            : stockOrProductError || safeBusinessError === message
+              ? "checkout_rejected"
+              : "checkout_result_uncertain";
     sendJson(
       response,
       {
-        error: isConflict
+        code,
+        error: error instanceof CagnotteCheckoutError
+          ? error.message
+          : isConflict
           ? "Cette tentative ne correspond plus au panier initial. Verifiez vos commandes avant de recommencer."
           : invalidRequestId
             ? "Tentative de commande invalide. Rechargez la page avant de reessayer."
             : safeBusinessError,
       },
-      isConflict ? 409 : 400,
+      authenticationRequired ? 401 : isConflict ? 409 : 400,
     );
   }
 }
-
-export async function commitCheckoutOrder(input: {
-  db: FirebaseFirestore.Firestore;
-  body: CheckoutRequestBody;
-  priced: PricedCheckout;
-  checkoutRequestId: string;
-  payloadFingerprint: string;
-  customerId?: string;
-  analyticsRevocationTokenHash?: string;
-  orderId?: string;
-}) {
-  const {
-    db,
-    body,
-    priced,
-    checkoutRequestId,
-    payloadFingerprint,
-    customerId,
-    analyticsRevocationTokenHash,
-  } = input;
-  const normalizedRequestId = validateCheckoutRequestId(checkoutRequestId);
-  const orderRef = input.orderId
-    ? db.collection("orders").doc(input.orderId)
-    : db.collection("orders").doc();
-  const requestRef = db.collection(checkoutRequestsCollection).doc(normalizedRequestId);
-  const sideEffectsRef = db.collection(orderSideEffectsCollection).doc(orderRef.id);
-
-  return db.runTransaction(async (transaction) => {
-    const requestSnapshot = await transaction.get(requestRef);
-    if (requestSnapshot.exists) {
-      const existing = requestSnapshot.data() || {};
-      if (existing.payloadFingerprint !== payloadFingerprint || !existing.orderId) {
-        throw new CheckoutRequestConflictError();
-      }
-      return { created: false, orderId: String(existing.orderId) };
-    }
-
-    const couponRef = priced.couponId
-      ? db.collection("coupons").doc(priced.couponId)
-      : null;
-    const couponSnapshot = couponRef ? await transaction.get(couponRef) : null;
-    const contestPrizeId = String(couponSnapshot?.data()?.contestPrizeId || "");
-    const contestPrizeRef = contestPrizeId
-      ? db.collection(contestCollections.prizes).doc(contestPrizeId)
-      : null;
-    const contestPrizeSnapshot = contestPrizeRef
-      ? await transaction.get(contestPrizeRef)
-      : null;
-    const automaticCouponReads = await Promise.all(
-      priced.appliedPromotions
-        .filter((promotion) => promotion.couponId && promotion.couponId !== priced.couponId)
-        .map(async (promotion) => {
-          const promotionRef = db.collection("coupons").doc(promotion.couponId as string);
-          const promotionSnapshot = await transaction.get(promotionRef);
-          return { couponSnapshot: promotionSnapshot };
-        }),
-    );
-    const productReads = await Promise.all(
-      Array.from(new Set(priced.orderItems.map((item) => item.productId))).map(
-        async (productId) => {
-          const productRef = db.collection("products").doc(productId);
-          const productSnapshot = await transaction.get(productRef);
-          return { productId, productRef, productSnapshot };
-        },
-      ),
-    );
-
-    if (couponRef && couponSnapshot) {
-      const coupon = couponSnapshot.data();
-      if (!couponSnapshot.exists || promotionAvailability(coupon || {}) !== "active") {
-        throw new Error("Code promo invalide.");
-      }
-    }
-    if (contestPrizeRef && contestPrizeSnapshot) {
-      if (!contestPrizeSnapshot.exists) throw new Error("Code promo concours invalide.");
-      const prize = contestPrizeSnapshot.data() || {};
-      assertContestPrizeRedeemable(prize, {
-        couponId: couponRef?.id || "",
-        email: body.customer.email,
-      });
-    }
-    for (const { couponSnapshot: automaticSnapshot } of automaticCouponReads) {
-      const coupon = automaticSnapshot.data();
-      if (
-        !automaticSnapshot.exists ||
-        promotionAvailability(coupon || {}) !== "active"
-      ) {
-        throw new Error("Promotion automatique invalide.");
-      }
-      const appliedGift = priced.appliedPromotions.find(
-        (promotion) =>
-          promotion.type === "tiered_product_gift" &&
-          promotion.couponId === automaticSnapshot.id,
-      );
-      if (appliedGift) {
-        assertTieredGiftStillMatchesCoupon(
-          { id: automaticSnapshot.id, ...coupon } as import("../src/types/index.js").Coupon,
-          priced.orderItems,
-          appliedGift,
-        );
-      }
-    }
-
-    for (const { productId, productRef, productSnapshot } of productReads) {
-      const matchingItems = priced.orderItems.filter((item) => item.productId === productId);
-      const requestedQuantity = matchingItems.reduce(
-        (sum, item) => sum + Number(item.quantity || 0),
-        0,
-      );
-      const productName = matchingItems[0]?.name || productId;
-      if (!productSnapshot.exists) {
-        throw new Error(`Produit indisponible : ${productName}.`);
-      }
-
-      const data = productSnapshot.data();
-      const stock = Number(data?.stock ?? 0);
-      if (data?.isActive !== true) {
-        throw new Error(`Produit indisponible : ${productName}.`);
-      }
-      if (stock < requestedQuantity) {
-        const giftItem = matchingItems.find((item) => item.isGift);
-        throw new Error(
-          giftItem
-            ? `Le cadeau ${productName} n'est plus disponible. Actualisez le devis et choisissez une autre référence.`
-            : `Stock insuffisant pour ${productName}.`,
-        );
-      }
-      for (const item of matchingItems.filter((entry) => entry.purchaseMode === "fixed_price")) {
-        const product = { id: productSnapshot.id, ...data } as Product;
-        assertFixedPriceOrderItemStillMatchesProduct(item, product);
-      }
-
-      transaction.update(productRef, {
-        stock: stock - requestedQuantity,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      for (const item of matchingItems) {
-        transaction.set(db.collection("stockMovements").doc(), {
-          productId: item.productId,
-          productName: item.name,
-          type: item.isGift ? "promotion_gift" : "sale",
-          quantity: -item.quantity,
-          note: item.isGift
-            ? `Cadeau promotion ${item.promotionLabel || item.promotionId || "Verdanza"} - commande ${orderRef.id}`
-            : `Commande manuelle ${orderRef.id}`,
-          createdAt: FieldValue.serverTimestamp(),
-          createdBy: "manual-checkout",
-          orderId: orderRef.id,
-          ...(item.isGift && item.promotionId ? { promotionId: item.promotionId } : {}),
-        });
-      }
-    }
-
-    if (priced.couponCode) {
-      transaction.set(
-        db.collection("coupons").doc(priced.couponId || priced.couponCode.toLowerCase()),
-        {
-          usedCount: FieldValue.increment(1),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
-    }
-    for (const promotion of priced.appliedPromotions) {
-      if (!promotion.couponId || promotion.couponId === priced.couponId) continue;
-      transaction.set(
-        db.collection("coupons").doc(promotion.couponId),
-        {
-          usedCount: FieldValue.increment(1),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
-    }
-
-    if (contestPrizeRef && contestPrizeSnapshot) {
-      const prize = contestPrizeSnapshot.data() || {};
-      transaction.update(contestPrizeRef, {
-        status: "redeemed",
-        redeemedAt: FieldValue.serverTimestamp(),
-        orderId: orderRef.id,
-      });
-      transaction.set(db.collection(contestCollections.audits).doc(), {
-        action: "prize_redeemed",
-        contestId: String(prize.contestId || ""),
-        drawId: String(prize.drawId || ""),
-        prizeId: contestPrizeRef.id,
-        actorType: "checkout",
-        actorId: orderRef.id,
-        metadata: {
-          orderId: orderRef.id,
-          couponId: couponRef?.id || "",
-        },
-        createdAt: FieldValue.serverTimestamp(),
-      });
-    }
-
-    transaction.set(
-      orderRef,
-      orderPayload(
-        { ...body, checkoutRequestId: normalizedRequestId },
-        priced,
-        customerId,
-        analyticsRevocationTokenHash,
-      ),
-    );
-    transaction.set(
-      requestRef,
-      checkoutRequestDocument(orderRef.id, payloadFingerprint),
-    );
-    transaction.set(sideEffectsRef, orderSideEffectsDocument(orderRef.id));
-    return { created: true, orderId: orderRef.id };
-  });
 }
 
-function assertTieredGiftStillMatchesCoupon(
-  coupon: import("../src/types/index.js").Coupon,
-  orderItems: Order["items"],
-  appliedGift: import("../src/types/index.js").AppliedPromotion,
-) {
-  if (coupon.promotionType !== "tiered_product_gift") {
-    throw new Error("La promotion cadeau a été modifiée. Actualisez le devis.");
-  }
-  const paidItems = orderItems.filter((item) => !item.isGift);
-  const qualifyingSubtotal = qualifyingGiftSubtotal(coupon, paidItems);
-  const tier = [...normalizeGiftTiers(coupon.giftTiers || [])]
-    .reverse()
-    .find((entry) => qualifyingSubtotal >= entry.minimumSubtotal);
-  if (
-    !tier ||
-    tier.id !== appliedGift.giftTierId ||
-    tier.quantityGrams !== appliedGift.giftQuantityGrams ||
-    !appliedGift.giftProductId ||
-    !coupon.giftProductIds?.includes(appliedGift.giftProductId)
-  ) {
-    throw new Error("La promotion cadeau a été modifiée. Actualisez le devis.");
-  }
-}
+export default createOrderHandler({
+  getDb: getAdminDb,
+  verifyToken: verifyFirebaseIdToken,
+  reservationProgram: CAGNOTTE_RESERVATION_PROGRAM,
+});
 
 async function processOrderSideEffectsBestEffort(
   db: FirebaseFirestore.Firestore,
@@ -495,7 +290,7 @@ async function processDraftInvoiceSideEffect(
     await persistOrderSideEffectResult(db, orderId, "draft_invoice", missing);
     return missing;
   }
-  const order = { id: snapshot.id, ...snapshot.data() } as Order;
+  const order = orderFromSnapshot(snapshot);
   try {
     await createDraftInvoiceForOrder(db, order);
     const result = { status: "sent" as const };
@@ -512,18 +307,46 @@ async function sendExistingOrderResponse(
   db: FirebaseFirestore.Firestore,
   response: VercelResponseLike,
   orderId: string,
+  verifyCustomer: () => Promise<string | undefined>,
 ) {
   const snapshot = await db.collection("orders").doc(orderId).get();
   if (!snapshot.exists) throw new CheckoutRequestConflictError();
-  const order = { id: snapshot.id, ...snapshot.data() } as Order;
+  const order = orderFromSnapshot(snapshot);
+  if (order.cagnotte && (await verifyCustomer() !== order.cagnotte.beneficiaryId || order.customerId !== order.cagnotte.beneficiaryId)) {
+    throw new CheckoutRequestConflictError();
+  }
   const client = storedEmailResult(order.emails?.orderConfirmationStatus);
   const admin = storedEmailResult(order.emails?.adminNotificationStatus);
   sendJson(response, {
     orderId,
-    total: Number(order.total || 0),
-    paymentInstructions: order.paymentInstructions,
+    ...checkoutCreationResult(order),
     notifications: { status: notificationSummary(client, admin) },
   });
+}
+
+function checkoutCreationResult(order: Order) {
+  const amountCents = order.cagnotteReservationIntent?.amountCents ?? 0;
+  return {
+    total: Number(order.total || 0),
+    paymentAmount: orderPaymentAmount(order),
+    paymentStatus: order.paymentStatus,
+    orderStatus: order.orderStatus,
+    paymentInstructions: order.paymentInstructions,
+    ...(amountCents > 0 ? { cagnotteUse: { amountCents, state: "reserved" as const } } : {}),
+    summary: {
+      items: order.items || [],
+      subtotal: Number(order.subtotal || 0),
+      deliveryFee: Number(order.deliveryFee || 0),
+      deliveryMethod: order.deliveryMethod,
+      deliveryZone: order.deliveryZone || order.deliveryZoneId,
+      deliveryNote: order.deliveryNote,
+      postalFreeShippingApplied: order.postalFreeShippingApplied,
+      preferredPaymentMethod: order.preferredPaymentMethod,
+      couponCode: order.couponCode,
+      discountAmount: Number(order.discountAmount || 0),
+      appliedPromotions: order.appliedPromotions || [],
+    },
+  };
 }
 
 function storedEmailResult(status?: "sent" | "partial" | "failed" | "skipped") {
@@ -533,29 +356,6 @@ function storedEmailResult(status?: "sent" | "partial" | "failed" | "skipped") {
     return { status, reason: "partial_delivery", recipients: {} } as const;
   }
   return { status, reason: status === "skipped" ? "config_missing" : "email_delivery_failed" } as const;
-}
-
-export function assertFixedPriceOrderItemStillMatchesProduct(
-  item: Order["items"][number],
-  product: Product,
-) {
-  if (item.purchaseMode !== "fixed_price") return;
-  const option = resolveFixedPriceOptions(product).find(
-    (entry) => entry.id === item.fixedPriceOptionId,
-  );
-  if (!option) {
-    throw new Error(`Format prix fixe indisponible pour ${item.name}.`);
-  }
-  const expectedQuantity = Number(item.fixedPriceQuantity || 0);
-  const expectedTotal = fixedPriceLineTotal(option, expectedQuantity);
-  if (
-    option.quantityGrams !== item.fixedPriceGrams ||
-    option.totalPrice !== item.fixedPriceTotal ||
-    expectedTotal !== item.lineTotal ||
-    fixedPriceEffectiveUnitPrice(option) !== item.unitPrice
-  ) {
-    throw new Error(`Format prix fixe modifie pour ${item.name}.`);
-  }
 }
 
 function hashToken(value: string) {

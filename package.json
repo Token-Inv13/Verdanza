@@ -43,6 +43,8 @@
     "test:cagnotte-ledger:unit": "node --import tsx scripts/runCagnotteLedgerTests.ts --unit-only",
     "test:cagnotte-reservations": "node --import tsx scripts/runCagnotteLedgerTests.ts --reservations-only",
     "test:cagnotte-regularization": "node --import tsx scripts/runCagnotteLedgerTests.ts --regularization-only",
+    "test:cagnotte-orders": "node --import tsx scripts/runCagnotteLedgerTests.ts --orders-only",
+    "test:cagnotte-checkout-use": "node --import tsx scripts/runCagnotteLedgerTests.ts --checkout-use-only",
     "test:cagnotte-presentation": "node --import tsx scripts/testCagnottePresentation.tsx",
     "test:fixed-price-migration": "node --import tsx scripts/testFixedPriceMigration.ts",
     "test:promotions": "node --import tsx scripts/testPromotionsAndBanners.ts",

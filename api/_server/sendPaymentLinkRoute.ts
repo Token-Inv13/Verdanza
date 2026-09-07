@@ -1,4 +1,4 @@
-import { assertAdminUser } from "./adminAuth.js";
+import { assertAdminUser, verifyFirebaseIdToken } from "./adminAuth.js";
 import { findActiveAdminPaymentLink } from "./adminPaymentLinks.js";
 import { sendPaymentLinkEmail } from "./email.js";
 import { getAdminDb } from "./firebaseAdmin.js";
@@ -16,7 +16,15 @@ import {
   type PaymentLinkDeliveryRequest,
 } from "./paymentLinkDelivery.js";
 
-export async function handleSendPaymentLink(
+type DeliveryDependencies = Parameters<typeof executePaymentLinkDelivery>[0];
+
+export function createSendPaymentLinkHandler(dependencies: {
+  getDb: () => DeliveryDependencies["db"];
+  verifyToken: typeof verifyFirebaseIdToken;
+  send: DeliveryDependencies["send"];
+  now?: () => number;
+}) {
+return async function handleSendPaymentLink(
   request: VercelRequestLike,
   response: VercelResponseLike,
 ) {
@@ -45,20 +53,14 @@ export async function handleSendPaymentLink(
       channel: "email",
     };
 
-    const db = getAdminDb();
-    const admin = await assertAdminUser(db, token);
+    const db = dependencies.getDb();
+    const admin = await assertAdminUser(db, token, dependencies.verifyToken);
     const result = await executePaymentLinkDelivery({
       db,
       request: deliveryRequest,
       admin,
-      send: (order, delivery) =>
-        sendPaymentLinkEmail(order, {
-          paymentLinkRequestId: delivery.paymentLinkRequestId,
-          paymentLinkUrl: delivery.paymentLinkUrl,
-          paymentLinkLabel: delivery.paymentLinkLabel,
-          paymentLinkAmount: delivery.paymentLinkAmount,
-          paymentLinkCurrency: delivery.paymentLinkCurrency,
-        }),
+      send: dependencies.send,
+      now: dependencies.now,
     });
 
     const statusCode =
@@ -84,6 +86,21 @@ export async function handleSendPaymentLink(
     sendJson(response, { error: message, code }, status);
   }
 }
+
+}
+
+export const handleSendPaymentLink = createSendPaymentLinkHandler({
+  getDb: getAdminDb,
+  verifyToken: verifyFirebaseIdToken,
+  send: (order, delivery) =>
+    sendPaymentLinkEmail(order, {
+      paymentLinkRequestId: delivery.paymentLinkRequestId,
+      paymentLinkUrl: delivery.paymentLinkUrl,
+      paymentLinkLabel: delivery.paymentLinkLabel,
+      paymentLinkAmount: delivery.paymentLinkAmount,
+      paymentLinkCurrency: delivery.paymentLinkCurrency,
+    }),
+});
 
 type RawBody = {
   orderId?: string;

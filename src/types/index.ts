@@ -568,6 +568,9 @@ export type OrderAlerts = {
 };
 
 export type Order = {
+  cagnotte?: import("./cagnotte.js").CagnotteOrderEnrollment;
+  cagnotteReservationIntent?: import("./cagnotte.js").CagnotteOrderReservationIntent;
+  cagnottePaymentEvidence?: import("./cagnotte.js").CagnottePaymentEvidence;
   id: string;
   checkoutRequestId?: string;
   orderType?: OrderType;
@@ -581,6 +584,7 @@ export type Order = {
   deliveryFee: number;
   discountAmount?: number;
   couponCode?: string;
+  contestPrizeId?: string;
   promoCode?: string;
   promoId?: string;
   discountType?: CouponDiscountType;
@@ -592,6 +596,8 @@ export type Order = {
   subtotalBeforePromotion?: number;
   subtotalAfterPromotion?: number;
   total: number;
+  /** Amount actually payable outside cagnotte. `total` keeps its historical gross meaning. */
+  paymentAmount?: number;
   paymentProvider?: PaymentProvider;
   paymentStatus: PaymentStatus;
   paymentReference?: string;

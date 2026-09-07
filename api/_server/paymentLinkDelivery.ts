@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { orderPaymentAmount } from "./cagnotteOrders.js";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { EmailResult } from "./email.js";
 import type {
@@ -158,7 +159,6 @@ async function reservePaymentLinkDelivery(
       throw new PaymentLinkOrderStateError("order_missing");
     }
     const order = { id: orderSnapshot.id, ...orderSnapshot.data() } as Order;
-    assertOrderCanReceivePaymentLink(order);
 
     const previous = requestSnapshot.data() || {};
     if (requestSnapshot.exists) {
@@ -190,6 +190,8 @@ async function reservePaymentLinkDelivery(
         throw new PaymentLinkOrderStateError("initial_send_required");
       }
     }
+
+    assertOrderCanReceivePaymentLink(order, request);
 
     const leaseToken = crypto.randomUUID();
     const attempts = Number(previous.attempts || 0) + 1;
@@ -367,7 +369,7 @@ async function finalizePaymentLinkDelivery(input: {
             transaction_id: order.id,
             payment_method: "card_payment_link",
             delivery_method: order.deliveryMethod,
-            value: Number(order.total || 0),
+            value: orderPaymentAmount(order),
             currency: "EUR",
             createdAt: FieldValue.serverTimestamp(),
             createdBy: input.admin.uid,
@@ -388,9 +390,24 @@ async function finalizePaymentLinkDelivery(input: {
   });
 }
 
-function assertOrderCanReceivePaymentLink(order: Order) {
+function assertOrderCanReceivePaymentLink(
+  order: Order,
+  request: PaymentLinkDeliveryRequest,
+) {
   const errorCode = orderStateError(order);
   if (errorCode) throw new PaymentLinkOrderStateError(errorCode);
+  try {
+    if (
+      request.paymentLinkCurrency !== "EUR" ||
+      request.channel !== "email" ||
+      request.paymentLinkAmount !== orderPaymentAmount(order) ||
+      orderPaymentAmount(order) <= 0
+    ) {
+      throw new Error("payment_link_order_amount_mismatch");
+    }
+  } catch {
+    throw new PaymentLinkOrderStateError("payment_link_order_amount_mismatch");
+  }
 }
 
 function orderStateError(order: Order) {

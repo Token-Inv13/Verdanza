@@ -1,3 +1,4 @@
+import { orderFromSnapshot } from "./orderProtection.js";
 import crypto from "node:crypto";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { CheckoutRequestBody } from "./checkout.js";
@@ -70,6 +71,12 @@ export function checkoutPayloadFingerprint(body: CheckoutRequestBody) {
         giftProductId: cleanText(selection.giftProductId),
       }))
       .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))),
+    cagnotteUse: body.cagnotteUse
+      ? {
+          requestedCents: body.cagnotteUse.requestedCents,
+          acceptance: body.cagnotteUse.acceptance || null,
+        }
+      : null,
     preferredPaymentMethod: body.preferredPaymentMethod || "",
     customerMessage: cleanText(body.customerMessage),
     customer: {
@@ -97,10 +104,12 @@ export function checkoutPayloadFingerprint(body: CheckoutRequestBody) {
 export function checkoutRequestDocument(
   orderId: string,
   payloadFingerprint: string,
+  cagnotteBeneficiaryId?: string,
 ) {
   return {
     orderId,
     payloadFingerprint,
+    ...(cagnotteBeneficiaryId ? { cagnotteBeneficiaryId } : {}),
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -132,6 +141,7 @@ export async function findCheckoutRequest(
   db: FirebaseFirestore.Firestore,
   checkoutRequestId: string,
   payloadFingerprint: string,
+  verifyCustomer?: () => Promise<string | undefined>,
 ) {
   const snapshot = await db
     .collection(checkoutRequestsCollection)
@@ -140,6 +150,9 @@ export async function findCheckoutRequest(
   if (!snapshot.exists) return null;
   const data = snapshot.data() || {};
   if (data.payloadFingerprint !== payloadFingerprint) {
+    throw new CheckoutRequestConflictError();
+  }
+  if (data.cagnotteBeneficiaryId && (!verifyCustomer || await verifyCustomer() !== data.cagnotteBeneficiaryId)) {
     throw new CheckoutRequestConflictError();
   }
   const orderId = typeof data.orderId === "string" ? data.orderId : "";
@@ -279,7 +292,7 @@ export async function runEmailSideEffect(input: {
     await persistOrderSideEffectResult(input.db, input.orderId, input.task, result);
     return result;
   }
-  const order = { id: snapshot.id, ...snapshot.data() } as Order;
+  const order = orderFromSnapshot(snapshot);
   let result: EmailResult;
   try {
     result = await input.send(order);
