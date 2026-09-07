@@ -13,6 +13,7 @@ import {
   visibleOrderSteps,
 } from "../../utils/orderStatus";
 import { orderItemSummaryLabel } from "../../lib/orderLineDisplay";
+import { OrderFinancingSummary } from "../../components/orders/OrderFinancingSummary";
 
 export function AccountOrdersPage() {
   const { user } = useAuth();
@@ -73,10 +74,13 @@ export function AccountOrdersPage() {
                 <p className="font-medium text-forest">Commande {order.id.slice(0, 8)}</p>
                 <p className="text-xs text-ink/50">{formatDate(order.createdAt)}</p>
               </div>
-              <strong>{order.total.toFixed(2).replace(".", ",")} EUR</strong>
+              <strong>Total : {order.total.toFixed(2).replace(".", ",")} EUR</strong>
             </div>
             <div className="mt-3 grid gap-2 text-sm text-ink/70">
               <p>Règlement : {paymentStatusLabel(order.paymentStatus)}</p>
+              {order.financing.kind === "ordinary" && order.paymentStatus !== "paid" && (
+                <p>À régler : {order.total.toFixed(2).replace(".", ",")} EUR</p>
+              )}
               <p>Statut : {orderStatusLabel(order.orderStatus)}</p>
               <p>Livraison : {order.deliveryMethod}</p>
               {order.trackingNumber && <p>Suivi postal : {order.trackingNumber}</p>}
@@ -86,6 +90,9 @@ export function AccountOrdersPage() {
                   .map((item) => orderItemSummaryLabel(item))
                   .join(", ")}
               </p>
+            </div>
+            <div className="mt-3">
+              <OrderFinancingSummary presentation={order.financing} />
             </div>
             <OrderProgress order={order} />
             {order.orderStatus === "delivered" && user && (

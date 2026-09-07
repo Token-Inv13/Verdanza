@@ -1,4 +1,4 @@
-import type { OrderStatus, PaymentProvider, PaymentStatus } from "../types";
+import type { OrderStatus, PaymentProvider, PaymentStatus } from "../types/index.js";
 
 export const orderStatusLabels: Record<OrderStatus, string> = {
   new: "Nouvelle commande",

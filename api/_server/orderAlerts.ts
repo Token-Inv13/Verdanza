@@ -1,6 +1,14 @@
+import { orderFromSnapshot } from "./orderProtection.js";
 import { FieldValue } from "firebase-admin/firestore";
 import type { Order } from "../../src/types/index.js";
 import { orderItemSummaryLabel } from "../../src/lib/orderLineDisplay.js";
+import { publicDeliveryLabel } from "../../src/lib/deliveryPresentation.js";
+import {
+  financingDisplayItems,
+  financingNotices,
+  formatFinancingCents,
+  presentOrderFinancing,
+} from "../../src/lib/orderFinancing.js";
 import {
   claimOrderSideEffectTask,
   persistOrderSideEffectResult,
@@ -25,7 +33,7 @@ export async function sendOrderCreationAlerts(
     return {};
   }
 
-  const order = { id: orderSnapshot.id, ...orderSnapshot.data() } as Order;
+  const order = orderFromSnapshot(orderSnapshot);
   const [sms, whatsapp] = await Promise.all([
     processAlertTask(db, order, "admin_sms", "adminSms", sendAdminOrderSms),
     processAlertTask(
@@ -184,7 +192,7 @@ async function processAlertTask(
   return result;
 }
 
-function adminAlertText(order: Order) {
+export function adminAlertText(order: Order, options: { includeAdminUrl?: boolean } = {}) {
   const adminUrl = process.env.VITE_APP_URL
     ? `${process.env.VITE_APP_URL}/admin/commandes`
     : "https://verdanza.fr/admin/commandes";
@@ -194,12 +202,27 @@ function adminAlertText(order: Order) {
     `Client: ${order.customerName || order.customerEmail || "Non renseigne"}`,
     order.customerPhone ? `Tel: ${order.customerPhone}` : "",
     `Total: ${formatMoney(Number(order.total || 0))}`,
+    ...financingAlertLines(order),
     `Livraison: ${deliveryLabel(order)}`,
     `Produits: ${itemsSummary(order)}`,
-    adminUrl,
+    options.includeAdminUrl === false ? "" : adminUrl,
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function financingAlertLines(order: Order) {
+  const presentation = presentOrderFinancing(order);
+  if (presentation.kind === "ordinary") return [];
+  if (presentation.verification === "required") {
+    return ["Financement cagnotte: vérification nécessaire; aucun montant hors cagnotte reconstitué."];
+  }
+  return [
+    ...financingDisplayItems(presentation).slice(1).map((item) =>
+      `${item.label}: ${formatFinancingCents(item.cents)}`,
+    ),
+    ...financingNotices(presentation),
+  ];
 }
 
 function alertResultUpdate(prefix: string, result: AlertResult) {
@@ -229,10 +252,7 @@ function alertResultUpdate(prefix: string, result: AlertResult) {
 }
 
 function deliveryLabel(order: Order) {
-  if (order.deliveryMethod === "local_express") {
-    return order.deliveryZone ? `Express local - ${order.deliveryZone}` : "Express local";
-  }
-  return "Livraison postale";
+  return publicDeliveryLabel(order);
 }
 
 function itemsSummary(order: Order) {

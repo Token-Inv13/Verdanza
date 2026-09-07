@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { Seo } from "../components/Seo";
 import { useCart } from "../context/CartContext";
 import { trackContactClick } from "../lib/analytics";
+import { parseCheckoutSuccessSummary } from "../lib/checkoutSuccessSummary";
 
 const contactEmail =
   (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
@@ -31,19 +32,21 @@ export function CheckoutSuccessPage() {
           Commande
         </p>
         <h1 className="mt-3 font-display text-5xl text-forest">
-          Commande envoyée
+          Commande enregistrée
         </h1>
         <p className="mt-5 leading-7 text-ink/70">
-          Votre commande a bien été transmise à Verdanza.
+          Votre commande a bien été enregistrée par Verdanza.
         </p>
         <div className="mt-5 rounded-md border border-champagne/30 bg-ivory p-4 text-sm leading-6 text-forest">
           <strong className="block text-base">
-            Prochaine étape : confirmation et règlement
+            {summary?.paymentStatus === "paid" ? "Règlement confirmé" : "Prochaine étape : confirmation et règlement"}
           </strong>
           <p className="mt-2">
-            {summary?.deliveryMethod === "postal"
-              ? "Les frais Colissimo et le total ci-dessous sont déterminés. Nous vérifions les disponibilités avant expédition. Si vous souhaitez régler par carte bancaire, un lien de paiement vous sera envoyé par email et/ou message."
-              : "Nous allons vérifier les disponibilités, le mode de livraison et le règlement. Si vous souhaitez régler par carte bancaire, un lien de paiement vous sera envoyé par email et/ou message après confirmation de votre commande."}
+            {summary?.paymentStatus === "paid"
+              ? "Le règlement est confirmé. La livraison reste soumise au suivi indiqué dans votre compte."
+              : summary?.deliveryMethod === "postal"
+                ? "Les frais Colissimo et le total ci-dessous sont déterminés. Nous vérifions les disponibilités avant expédition. Si vous souhaitez régler par carte bancaire, un lien de paiement vous sera envoyé par email et/ou message."
+                : "Nous allons vérifier les disponibilités, le mode de livraison et le règlement. Si vous souhaitez régler par carte bancaire, un lien de paiement vous sera envoyé par email et/ou message après confirmation de votre commande."}
           </p>
         </div>
         {orderId && (
@@ -73,6 +76,18 @@ export function CheckoutSuccessPage() {
                   "Carte bancaire via lien de paiement après confirmation"}
               </p>
               <p>Total de la commande : {formatMoney(summary.total)}</p>
+              {summary.cagnotteUse && (
+                <p>Financement prévu par cagnotte : {formatMoney(summary.cagnotteUse.amountCents / 100)}</p>
+              )}
+              {summary.financingVerificationRequired ? (
+                <p className="text-amber-800">
+                  Vérification nécessaire : le montant hors cagnotte enregistré est incomplet ou incohérent.
+                </p>
+              ) : summary.paymentStatus === "paid" ? (
+                <p>Règlement confirmé : aucune nouvelle somme n’est demandée.</p>
+              ) : (
+                <p>À régler hors cagnotte : {formatMoney(summary.paymentAmount)}</p>
+              )}
             </div>
           )}
           <p>
@@ -102,30 +117,7 @@ function readLastOrderSummary(orderId: string | null) {
   try {
     const raw = window.sessionStorage.getItem("verdanza:lastOrderSummary");
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as {
-      orderId?: string;
-      items?: { name: string; quantity: number; displayQuantity?: string; total: number }[];
-      delivery?: string;
-      deliveryMethod?: "postal" | "local_express";
-      deliveryNote?: string;
-      subtotal?: number;
-      deliveryFee?: number;
-      preferredPaymentMethod?: string;
-      total?: number;
-    };
-    if (parsed.orderId !== orderId || !Array.isArray(parsed.items)) return null;
-    return {
-      items: parsed.items,
-      delivery: parsed.delivery || "Livraison sélectionnée",
-      deliveryMethod: parsed.deliveryMethod,
-      deliveryNote: parsed.deliveryNote || "",
-      subtotal: Number(parsed.subtotal || 0),
-      deliveryFee: Number(parsed.deliveryFee || 0),
-      preferredPaymentMethod:
-        parsed.preferredPaymentMethod ||
-        "Carte bancaire via lien de paiement après confirmation",
-      total: Number(parsed.total || 0),
-    };
+    return parseCheckoutSuccessSummary(raw, orderId);
   } catch {
     return null;
   }

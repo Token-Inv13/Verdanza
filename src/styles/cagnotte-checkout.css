@@ -1,0 +1,29 @@
+.cagnotte-use-panel { display: grid; gap: 1rem; border: 1px solid rgba(14,55,38,.14); border-radius: 14px; background: #fffdf8; padding: clamp(1rem,3vw,1.5rem); color: #111; box-shadow: 0 10px 30px rgba(14,55,38,.05); }
+.cagnotte-use-panel h2 { margin: 0; color: #0e3726; font-family: "Cormorant Garamond",Georgia,serif; font-size: clamp(1.65rem,4vw,2.2rem); }
+.cagnotte-use-demo { margin: 0 0 -.6rem; color: #8c6a2f; font-size: .72rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.cagnotte-use-muted { margin: 0; color: rgba(17,17,17,.64); font-size: .86rem; line-height: 1.55; }
+.cagnotte-use-balances, .cagnotte-use-quote dl { display: grid; gap: .65rem; margin: 0; }
+.cagnotte-use-balances { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.cagnotte-use-balances div, .cagnotte-use-quote dl div { display: grid; grid-template-columns: minmax(0,1fr) max-content; align-items: start; gap: 1rem; border-radius: 9px; background: #f7f1e5; padding: .75rem; }
+.cagnotte-use-balances dt, .cagnotte-use-quote dt { color: rgba(17,17,17,.65); }
+.cagnotte-use-balances dd, .cagnotte-use-quote dd { margin: 0; color: #0e3726; font-weight: 800; text-align: right; white-space: nowrap; }
+.cagnotte-use-toggle { display: flex; align-items: flex-start; gap: .65rem; color: #0e3726; font-size: .9rem; font-weight: 700; line-height: 1.45; }
+.cagnotte-use-toggle input { margin-top: .2rem; }
+.cagnotte-use-controls { display: grid; gap: .55rem; }
+.cagnotte-use-controls label { color: #0e3726; font-size: .86rem; font-weight: 700; }
+.cagnotte-use-controls input { min-height: 44px; width: min(100%,16rem); border: 1px solid rgba(14,55,38,.2); border-radius: 7px; background: #fff; padding: .65rem .75rem; }
+.cagnotte-use-actions { display: flex; flex-wrap: wrap; gap: .65rem; }
+.cagnotte-use-panel button { min-height: 42px; border: 1px solid #0e3726; border-radius: 7px; background: #0e3726; padding: .6rem .9rem; color: #fffdf8; font-weight: 700; }
+.cagnotte-use-panel button:disabled { cursor: not-allowed; opacity: .5; }
+.cagnotte-use-panel button:focus-visible, .cagnotte-use-panel input:focus-visible { outline: 3px solid #c9a45c; outline-offset: 2px; }
+.cagnotte-use-panel .cagnotte-use-link { border-color: transparent; background: transparent; color: #0e3726; text-decoration: underline; }
+.cagnotte-use-warning, .cagnotte-use-error { margin: 0; border-left: 4px solid #c9a45c; border-radius: 8px; background: #fbf3df; padding: .8rem .9rem; color: #614717; font-size: .86rem; line-height: 1.5; }
+.cagnotte-use-warning p { margin: 0; }
+.cagnotte-use-warning button { margin-top: .65rem; }
+.cagnotte-use-error { border-left-color: #9b2c2c; background: #fff1f1; color: #7f1d1d; }
+.cagnotte-use-quote { display: grid; gap: .75rem; border-top: 1px solid rgba(14,55,38,.12); padding-top: 1rem; }
+.cagnotte-use-payable { border: 1px solid rgba(14,55,38,.16); background: #0e3726!important; color: #fffdf8; }
+.cagnotte-use-payable dt, .cagnotte-use-payable dd { color: #fffdf8; }
+.cagnotte-use-uncertain { border-color: rgba(201,164,92,.7); }
+.cagnotte-use-success { border-color: rgba(14,55,38,.3); }
+@media(max-width:640px){.cagnotte-use-balances{grid-template-columns:1fr}.cagnotte-use-balances div,.cagnotte-use-quote dl div{align-items:flex-start}.cagnotte-use-actions{display:grid}.cagnotte-use-panel button{width:100%}}

@@ -43,6 +43,7 @@ import {
   sendPublicSubmissionTrapResponse,
 } from "./_server/publicRateLimit.js";
 import { buildCustomerInvoiceLines } from "../src/lib/customerInvoiceLines.js";
+import { buildOrderFinancingDocumentSnapshot } from "../src/lib/orderFinancing.js";
 import type { Invoice, Order } from "../src/types/index.js";
 
 export function createOrderHandler(dependencies: {
@@ -371,6 +372,7 @@ async function createDraftInvoiceForOrder(
   const invoiceNumber = await nextInvoiceNumber(db);
   const now = new Date().toISOString();
   const invoiceRef = db.collection("invoices").doc();
+  const financing = buildOrderFinancingDocumentSnapshot(order);
   const invoice: Invoice = {
     id: invoiceRef.id,
     invoiceNumber,
@@ -387,6 +389,7 @@ async function createDraftInvoiceForOrder(
     discountAmount: Number(order.discountAmount || 0),
     appliedPromotions: order.appliedPromotions || [],
     total: Number(order.total || 0),
+    ...(financing ? { financing } : {}),
     paymentMethod: preferredPaymentMethodLabel(order.preferredPaymentMethod),
     paymentStatus: order.paymentStatus || "to_confirm",
     internalNote: "",

@@ -672,6 +672,21 @@ export type Order = {
   updatedAt: string;
 };
 
+export type OrderFinancingDocumentSnapshot = {
+  schemaVersion: 1;
+  version: "order-financing-document-v1";
+  currency: "EUR";
+  verification: "verified" | "required";
+  totalCents: number;
+  source: "persisted_order";
+  reason?: string;
+  cagnotteCents?: number;
+  paymentCents?: number;
+  cagnotteState?: "planned" | "consumed";
+  externalPaymentState?: "planned" | "confirmed";
+  orderCancelled?: boolean;
+};
+
 export type InvoiceStatus =
   | "draft"
   | "validated"
@@ -731,6 +746,7 @@ export type Invoice = {
   discountAmount: number;
   appliedPromotions?: AppliedPromotion[];
   total: number;
+  financing?: OrderFinancingDocumentSnapshot;
   paymentMethod?: string;
   paymentStatus: PaymentStatus;
   internalNote?: string;

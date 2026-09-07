@@ -5,6 +5,7 @@ import { AddressAutocomplete } from "../components/AddressAutocomplete";
 import { PromoBannerSlot } from "../components/PromoBannerSlot";
 import { GiftPromotionChooser } from "../components/GiftPromotionChooser";
 import { Seo } from "../components/Seo";
+import { CagnotteCheckoutPanel, CheckoutAttemptNotice } from "../components/cagnotte/CagnotteCheckoutPanel";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { deliveryZones as fallbackDeliveryZones } from "../data/deliveryZones";
@@ -26,6 +27,10 @@ import { getCartStockIssues } from "../lib/cartStock";
 import { formatLocalDeliveryEstimate } from "../lib/deliveryEstimate";
 import { fixedPriceCartLineLabel } from "../lib/fixedPriceOptions";
 import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
+import { createCheckoutOrder, type CheckoutOrderResult, type CreateCheckoutOrderInput } from "../services/ordersService";
+import { useCagnotteCheckout, useCheckoutAttempt } from "../hooks/useCagnotteCheckout";
+import { clearCagnottePreference } from "../services/cagnotteCheckoutService";
+import { CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED } from "../config/cagnotteFeatures";
 import {
   effectiveLocalDeliveryMinimum,
   isPostalShippingFree,
@@ -53,7 +58,6 @@ const contactEmail =
 const checkoutErrorMessage =
   "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza par email.";
 const promoStorageKey = "verdanza-coupon-code";
-const checkoutRequestStorageKey = "verdanza:checkout-request-id";
 
 type CheckoutSelectablePaymentMethod = Exclude<
   PreferredPaymentMethod,
@@ -80,7 +84,7 @@ export function CheckoutPage() {
   const beginCheckoutSignature = useRef("");
   const shippingSignature = useRef("");
   const paymentSignature = useRef("");
-  const checkoutRequestId = useRef(getOrCreateCheckoutRequestId());
+  const formSubmissionLock = useRef(false);
   const formStartedAt = useRef(Date.now());
   const { user, customerProfile } = useAuth();
   const navigate = useNavigate();
@@ -239,10 +243,53 @@ export function CheckoutPage() {
     activeQuote?.postalFreeShippingApplied ?? postalShippingFree;
   const estimatedTotal =
     activeQuote?.total ?? Math.max(0, subtotal + estimatedDeliveryFee - discountAmount);
-  const serverQuoteReady = Boolean(activeQuote);
+  const ordinaryServerQuoteReady = Boolean(activeQuote);
   const stockIssues = useMemo(() => getCartStockIssues(lines), [lines]);
   const hasStockIssues = stockIssues.length > 0;
   const hasCartIssues = hasStockIssues || hasBlockingCartIssues;
+  const checkoutIdentityKey = user?.uid ?? "guest";
+  const cagnotteContextKey = `${quoteContextKey}|coupon:${hasManualPromo ? normalizedAppliedCouponCode : ""}`;
+  const cagnotte = useCagnotteCheckout({
+    enabled: CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED,
+    identityKey: user?.uid ?? null,
+    contextKey: cagnotteContextKey,
+  });
+  const checkoutAttempt = useCheckoutAttempt(checkoutIdentityKey);
+  const attemptLocked = checkoutAttempt.state.phase === "submitting" ||
+    checkoutAttempt.state.phase === "uncertain" ||
+    checkoutAttempt.state.phase === "reload_check";
+  const cagnotteQuote = cagnotte.state.proposal?.cagnotteUse;
+  const cagnotteAcceptanceRequired = cagnotte.state.selectionEnabled && !cagnotte.state.acceptance;
+  const fallbackAcceptanceRequired = cagnotte.state.fallbackPhase === "ready" && !cagnotte.state.fallbackAccepted;
+  const acceptedPayableCents = cagnotte.state.acceptance?.acceptedPayableCents;
+  const serverQuoteReady = CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED && cagnotte.state.selectionEnabled
+    ? Boolean(cagnotte.state.proposal)
+    : Boolean(cagnotte.state.fallbackQuote) || ordinaryServerQuoteReady;
+
+  function loadCagnotteQuote(requestedCents: number) {
+    return quoteOrder({
+      items,
+      deliveryMethod,
+      deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
+      address: quoteDeliveryAddress,
+      couponCode: hasManualPromo ? normalizedAppliedCouponCode : undefined,
+      email: customer.email,
+      promotionSelections,
+      cagnotteUse: { requestedCents },
+    });
+  }
+
+  function loadOrdinaryCheckoutQuote() {
+    return quoteOrder({
+      items,
+      deliveryMethod,
+      deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
+      address: quoteDeliveryAddress,
+      couponCode: hasManualPromo ? normalizedAppliedCouponCode : undefined,
+      email: customer.email,
+      promotionSelections,
+    });
+  }
 
   useEffect(() => {
     const signature = lines.map((line) => `${line.lineKey}:${line.quantity}`).join("|");
@@ -568,6 +615,8 @@ export function CheckoutPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (formSubmissionLock.current || attemptLocked || !checkoutAttempt.requestId) return;
+    formSubmissionLock.current = true;
     setError("");
     setIsSubmitting(true);
 
@@ -577,7 +626,7 @@ export function CheckoutPage() {
           "Certains produits dépassent le stock disponible. Veuillez ajuster votre panier avant de continuer.",
         );
       }
-      if (!activeQuote) {
+      if (!serverQuoteReady) {
         throw new Error("Le total serveur doit être calculé avant de valider la commande.");
       }
       if (isBelowLocalMinimum) {
@@ -600,133 +649,55 @@ export function CheckoutPage() {
       if (preferredPaymentMethod === "bank_transfer") {
         throw new Error("Le virement bancaire ne peut pas être sélectionné.");
       }
-      const finalQuote = hasManualPromo
-        ? await quoteOrder({
-            items,
-            deliveryMethod,
-            deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
-            address: quoteDeliveryAddress,
-            couponCode: normalizedAppliedCouponCode,
-            email: customer.email,
-            promotionSelections,
-          })
-        : await quoteOrder({
-            items,
-            deliveryMethod,
-            deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
-            address: quoteDeliveryAddress,
-            email: customer.email,
-            promotionSelections,
-          });
-
-      const authToken = user ? await user.getIdToken() : undefined;
-      const analyticsContext = await getGa4MeasurementContext().catch(() => null);
-      const response = await fetch("/api/create-order", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          checkoutRequestId: checkoutRequestId.current,
-          items,
-          authToken,
-          analyticsContext,
-          deliveryMethod,
-          deliveryZone:
-            deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
-          couponCode: hasManualPromo ? normalizedAppliedCouponCode : undefined,
-          promotionSelections,
-          customerMessage: customerMessage.trim() || undefined,
-          preferredPaymentMethod,
-          complianceAccepted,
-          company,
-          submissionSecurity: publicSubmissionSecurityContext(formStartedAt.current),
-          customer: {
-            email: customer.email,
-            phone: customer.phone,
-            firstName: customer.firstName,
-            lastName: customer.lastName,
-            address: deliveryAddress,
-          },
-        }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as {
-        orderId?: string;
-        analyticsRevocationToken?: string;
-        error?: string;
-      };
-
-      if (!response.ok || !payload.orderId) {
-        throw new Error(payload.error || checkoutErrorMessage);
+      if (fallbackAcceptanceRequired) {
+        throw new Error("Validez le nouveau total sans cagnotte avant de créer la commande.");
+      }
+      let finalQuote: OrderQuote;
+      let cagnotteUse: CreateCheckoutOrderInput["cagnotteUse"];
+      if (CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED && cagnotte.state.selectionEnabled) {
+        if (!cagnotte.state.acceptance) {
+          throw new Error("Validez le montant de cagnotte et le reste à régler avant de créer la commande.");
+        }
+        const revalidated = await cagnotte.revalidate(loadCagnotteQuote);
+        if (!revalidated.accepted || !revalidated.proposal || !revalidated.acceptance || !revalidated.proposal.cagnotteUse) {
+          setError("Les montants ont changé. Vérifiez puis acceptez le nouveau récapitulatif avant de recommencer.");
+          return;
+        }
+        finalQuote = revalidated.proposal;
+        cagnotteUse = {
+          requestedCents: revalidated.proposal.cagnotteUse.requestedCagnotteCents,
+          acceptance: revalidated.acceptance,
+        };
+      } else {
+        finalQuote = await loadOrdinaryCheckoutQuote();
       }
 
-      rememberPendingOrderAnalyticsRevocation(
-        payload.orderId,
-        payload.analyticsRevocationToken,
-      );
-      window.sessionStorage.removeItem(checkoutRequestStorageKey);
-
-      trackOrderSubmitted({
-        transactionId: payload.orderId,
-        lines,
-        value: finalQuote.total,
-        coupon: finalQuote?.couponCode || undefined,
-        shippingTier: deliveryMethod,
-        deliveryZone:
-          deliveryMethod === "local_express"
-            ? selectedZone?.name || selectedZone?.id
-            : POSTAL_DELIVERY_NAME,
-        paymentMethod: preferredPaymentMethod,
-      });
-
-      window.sessionStorage.setItem(
-        "verdanza:lastOrderSummary",
-        JSON.stringify({
-          orderId: payload.orderId,
-          orderType: "order",
-          items: [
-            ...lines.map((line) => ({
-              name: line.fixedPriceOption
-                ? `${line.product.name} - ${fixedPriceCartLineLabel(line.fixedPriceOption, line.quantity)}`
-                : line.product.name,
-              quantity: line.quantityGrams,
-              displayQuantity: line.fixedPriceOption
-                ? `${line.quantity} ${line.quantity > 1 ? "formats" : "format"}`
-                : `${line.quantity} g`,
-              total: line.lineTotal,
-            })),
-            ...(finalQuote.giftPromotions || []).flatMap((promotion) => {
-              const product = promotion.availableProducts.find(
-                (entry) => entry.productId === promotion.selectedProductId,
-              );
-              return product && promotion.unlockedQuantityGrams > 0
-                ? [{
-                    name: `${product.name} — cadeau — ${promotion.label}`,
-                    quantity: promotion.unlockedQuantityGrams,
-                    displayQuantity: `${promotion.unlockedQuantityGrams} g`,
-                    total: 0,
-                  }]
-                : [];
-            }),
-          ],
-          delivery:
-            deliveryMethod === "local_express"
-              ? selectedZone?.name || "Livraison locale"
-              : `${POSTAL_DELIVERY_NAME} à domicile`,
-          deliveryMethod,
-          subtotal: finalQuote.subtotal,
-          deliveryFee: finalQuote.deliveryFee,
-          postalFreeShippingApplied: finalQuote.postalFreeShippingApplied,
-          deliveryNote: finalQuote.deliveryNote,
-          preferredPaymentMethod: paymentMethodLabels[preferredPaymentMethod],
-          couponCode: finalQuote?.couponCode || undefined,
-          discountAmount: finalQuote?.discountAmount || automaticDiscountAmount || 0,
-          appliedPromotions: finalQuote?.appliedPromotions?.length
-            ? finalQuote.appliedPromotions
-            : automaticAppliedPromotions,
-          total: finalQuote.total,
-        }),
-      );
-
-      navigate(`/checkout/success?order_id=${encodeURIComponent(payload.orderId)}`);
+      const analyticsContext = await getGa4MeasurementContext().catch(() => null);
+      const orderRequest: CreateCheckoutOrderInput = {
+        checkoutRequestId: checkoutAttempt.requestId,
+        items,
+        analyticsContext,
+        deliveryMethod,
+        deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
+        couponCode: hasManualPromo ? normalizedAppliedCouponCode : undefined,
+        promotionSelections,
+        customerMessage: customerMessage.trim() || undefined,
+        preferredPaymentMethod,
+        complianceAccepted,
+        company,
+        submissionSecurity: publicSubmissionSecurityContext(formStartedAt.current),
+        customer: {
+          email: customer.email,
+          phone: customer.phone,
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          address: deliveryAddress,
+        },
+        ...(cagnotteUse ? { cagnotteUse } : {}),
+      };
+      const result = await checkoutAttempt.submit(orderRequest, createCheckoutOrder);
+      if (!result) return;
+      completeSuccessfulCheckout(result, finalQuote);
     } catch (checkoutError) {
       console.error("Checkout submission failed", checkoutError);
       const message =
@@ -749,8 +720,68 @@ export function CheckoutPage() {
           ? checkoutError.message
           : checkoutErrorMessage;
       setError(message);
+    } finally {
+      formSubmissionLock.current = false;
       setIsSubmitting(false);
     }
+  }
+
+  async function handleRetryAttempt() {
+    if (formSubmissionLock.current) return;
+    formSubmissionLock.current = true;
+    setIsSubmitting(true);
+    try {
+      const result = await checkoutAttempt.retry(createCheckoutOrder);
+      if (result) completeSuccessfulCheckout(result, cagnotte.state.proposal || activeQuote);
+    } finally {
+      formSubmissionLock.current = false;
+      setIsSubmitting(false);
+    }
+  }
+
+  function completeSuccessfulCheckout(result: CheckoutOrderResult, displayedQuote: OrderQuote | null) {
+    rememberPendingOrderAnalyticsRevocation(result.orderId, result.analyticsRevocationToken);
+    trackOrderSubmitted({
+      transactionId: result.orderId,
+      lines,
+      value: result.total,
+      coupon: result.summary.couponCode || displayedQuote?.couponCode || undefined,
+      shippingTier: result.summary.deliveryMethod,
+      deliveryZone: result.summary.deliveryZone || POSTAL_DELIVERY_NAME,
+      paymentMethod: result.summary.preferredPaymentMethod || preferredPaymentMethod,
+    });
+    const summaryItems = result.summary.items.map((item) => ({
+      name: item.name,
+      quantity: item.quantity,
+      displayQuantity: item.purchaseMode === "fixed_price"
+        ? `${item.fixedPriceQuantity || 1} ${Number(item.fixedPriceQuantity || 1) > 1 ? "formats" : "format"}`
+        : `${item.quantity} g`,
+      total: Number(item.lineTotal ?? item.fixedPriceTotal ?? item.unitPrice * item.quantity),
+    }));
+    window.sessionStorage.setItem("verdanza:lastOrderSummary", JSON.stringify({
+      orderId: result.orderId,
+      orderType: "order",
+      items: summaryItems,
+      delivery: result.summary.deliveryZone || (result.summary.deliveryMethod === "postal" ? `${POSTAL_DELIVERY_NAME} à domicile` : "Livraison locale"),
+      deliveryMethod: result.summary.deliveryMethod,
+      subtotal: result.summary.subtotal,
+      deliveryFee: result.summary.deliveryFee,
+      postalFreeShippingApplied: result.summary.postalFreeShippingApplied,
+      deliveryNote: result.summary.deliveryNote,
+      preferredPaymentMethod: result.summary.preferredPaymentMethod
+        ? paymentMethodLabels[result.summary.preferredPaymentMethod as CheckoutSelectablePaymentMethod] || result.summary.preferredPaymentMethod
+        : paymentMethodLabels[preferredPaymentMethod],
+      couponCode: result.summary.couponCode,
+      discountAmount: result.summary.discountAmount,
+      appliedPromotions: result.summary.appliedPromotions,
+      total: result.total,
+      paymentAmount: result.paymentAmount,
+      paymentStatus: result.paymentStatus,
+      orderStatus: result.orderStatus,
+      cagnotteUse: result.cagnotteUse,
+    }));
+    clearCagnottePreference(user?.uid ?? null);
+    navigate(`/checkout/success?order_id=${encodeURIComponent(result.orderId)}`);
   }
 
   return (
@@ -1149,10 +1180,43 @@ export function CheckoutPage() {
                   onSelect={setPromotionSelection}
                 />
               )}
+              <CagnotteCheckoutPanel
+                enabled={CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED}
+                mode="checkout"
+                state={cagnotte.state}
+                authenticated={Boolean(user)}
+                locked={attemptLocked || isSubmitting}
+                onToggle={(enabled) => {
+                  if (enabled) {
+                    void cagnotte.requestMaximum(loadCagnotteQuote);
+                    return;
+                  }
+                  void cagnotte.continueWithout(loadOrdinaryCheckoutQuote);
+                }}
+                onAmountChange={cagnotte.setAmountInput}
+                onRequest={() => cagnotte.requestProposal(loadCagnotteQuote)}
+                onMaximum={() => cagnotte.requestMaximum(loadCagnotteQuote)}
+                onAccept={() => cagnotte.acceptProposal()}
+                onContinueWithout={() => void cagnotte.continueWithout(loadOrdinaryCheckoutQuote)}
+                onAcceptWithout={() => cagnotte.acceptWithoutCagnotte()}
+                onRefreshWallet={() => void cagnotte.refreshWallet()}
+              />
               <p className="flex justify-between text-lg font-semibold text-forest">
                 <span>Total de la commande</span>
-                <span>{formatEuro(estimatedTotal)}</span>
+                <span>{formatEuro(cagnotte.state.fallbackQuote?.total ?? cagnotte.state.proposal?.total ?? estimatedTotal)}</span>
               </p>
+              {cagnotteQuote && (
+                <>
+                  <p className="flex justify-between text-forest">
+                    <span>Financé par votre cagnotte</span>
+                    <span>{formatEuro(cagnotteQuote.proposedCagnotteCents / 100)}</span>
+                  </p>
+                  <p className="flex justify-between font-semibold text-forest">
+                    <span>À régler hors cagnotte</span>
+                    <span>{formatEuro(cagnotteQuote.payableCents / 100)}</span>
+                  </p>
+                </>
+              )}
               {!serverQuoteReady && !isBelowPostalMinimum && !isBelowLocalMinimum && (
                 <p className="text-xs leading-5 text-ink/55">
                   Calcul du total par le serveur en cours…
@@ -1198,12 +1262,23 @@ export function CheckoutPage() {
               de conformité.
             </label>
             {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
+            {checkoutAttempt.state.identityKey === checkoutIdentityKey && (
+              <CheckoutAttemptNotice
+                phase={checkoutAttempt.state.phase}
+                error={checkoutAttempt.state.error}
+                onRetry={() => void handleRetryAttempt()}
+              />
+            )}
             <button
               className="btn-primary mt-6 w-full"
               disabled={
                 isSubmitting ||
+                attemptLocked ||
                 hasCartIssues ||
                 !serverQuoteReady ||
+                !checkoutAttempt.requestId ||
+                cagnotteAcceptanceRequired ||
+                fallbackAcceptanceRequired ||
                 isBelowPostalMinimum ||
                 isBelowLocalMinimum
               }
@@ -1212,7 +1287,9 @@ export function CheckoutPage() {
                 ? "Validation..."
                 : !serverQuoteReady
                   ? "Calcul du total..."
-                  : "Valider ma commande"}
+                  : acceptedPayableCents !== undefined
+                    ? `Valider la commande — ${formatEuro(acceptedPayableCents / 100)} à régler`
+                    : "Valider ma commande"}
             </button>
           </aside>
         </form>
@@ -1238,14 +1315,6 @@ function synchronizeGiftSelections(
       setSelection(promotion.promotionId, promotion.selectedProductId);
     }
   });
-}
-
-function getOrCreateCheckoutRequestId() {
-  const existing = window.sessionStorage.getItem(checkoutRequestStorageKey);
-  if (existing) return existing;
-  const requestId = window.crypto.randomUUID();
-  window.sessionStorage.setItem(checkoutRequestStorageKey, requestId);
-  return requestId;
 }
 
 function buildCheckoutAddress(

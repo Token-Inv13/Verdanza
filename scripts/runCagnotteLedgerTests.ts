@@ -31,6 +31,7 @@ const allowedOptions = new Set([
   "--regularization-only",
   "--orders-only",
   "--checkout-use-only",
+  "--checkout-client-only",
   "--security-only",
   "--read-only",
 ]);
@@ -122,6 +123,7 @@ try {
   if (mode === "--regularization-only") await run("scripts/testCagnotteRegularization.ts");
   if (mode === "--orders-only") await run("scripts/testCagnotteOrders.ts");
   if (mode === "--checkout-use-only") await run("scripts/testCagnotteCheckoutIntegration.ts");
+  if (mode === "--checkout-client-only") await run("scripts/testCagnotteCheckoutClientContract.ts");
   if (mode === "--security-only") {
     await run("scripts/testCagnotteRules.ts");
     await run("scripts/testCagnotteSecurity.ts");
