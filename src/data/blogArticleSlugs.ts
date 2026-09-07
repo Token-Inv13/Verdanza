@@ -1,4 +1,5 @@
 export const publishedBlogArticleSlugs = [
+  "manucure-fleurs-cbd-feuilles-tiges",
   "photos-fleurs-cbd-lumiere-echelle",
   "calibre-fleurs-cbd-taille-tetes",
   "origine-variete-lot-cbd-differences",

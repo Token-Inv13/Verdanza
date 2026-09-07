@@ -59,6 +59,14 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" }
 > = {
+  "manucure-fleurs-cbd-feuilles-tiges": {
+    label: "Manucure des fleurs CBD",
+    sources: [
+      "/Fiche produit/Mango%20Haze/MangoHaze.webp",
+      "/Fiche produit/Mandarine/mandarine_zoom.webp",
+      "/Fiche produit/Plutonium/zoom.webp",
+    ],
+  },
   "photos-fleurs-cbd-lumiere-echelle": {
     label: "Photos de fleurs CBD",
     sources: [

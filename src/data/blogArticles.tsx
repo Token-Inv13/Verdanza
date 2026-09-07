@@ -6,6 +6,259 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "manucure-fleurs-cbd-feuilles-tiges",
+    title: "Manucure des fleurs CBD : que montrent feuilles, tiges et coupe ?",
+    seoTitle: "Manucure des fleurs CBD : feuilles, tiges et coupe | Verdanza",
+    description:
+      "Feuilles, tiges, coupe et régularité : comprendre ce que la manucure décrit sur une fleur CBD, ses variations et les conclusions à éviter.",
+    excerpt:
+      "La coupe d'une fleur CBD laisse parfois apparaître de petites feuilles ou une tige. Voici comment lire ces détails sans les confondre avec une preuve de qualité.",
+    category: "Guide produits",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-09-07T19:05:00+02:00",
+    dateModified: "2026-09-07T19:05:00+02:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-1x1.webp",
+      landscape: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-4x3.webp",
+      wide: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-16x9.webp",
+    },
+    relatedSlugs: [
+      "aspect-fleur-cbd-couleur-structure",
+      "calibre-fleurs-cbd-taille-tetes",
+      "photos-fleurs-cbd-lumiere-echelle",
+    ],
+    links: [
+      { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/aspect-fleur-cbd-couleur-structure",
+        label: "Comprendre l'aspect d'une fleur CBD",
+      },
+      {
+        to: "/blog/calibre-fleurs-cbd-taille-tetes",
+        label: "Comprendre le calibre des fleurs",
+      },
+      {
+        to: "/blog/photos-fleurs-cbd-lumiere-echelle",
+        label: "Lire les photos de fleurs CBD",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La manucure désigne la coupe réalisée autour d'une fleur après la
+            récolte et le séchage. Elle façonne sa présentation en retirant une
+            partie des petites feuilles et en raccourcissant les tiges visibles.
+            Son résultat peut être serré, plus souple ou légèrement irrégulier
+            selon la structure naturelle de la fleur et le travail effectué.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            La manucure décrit une finition visuelle. Elle ne permet pas, à elle
+            seule, de connaître la composition, l'humidité, la conformité ou le
+            profil aromatique d'un lot CBD.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "definition-manucure",
+        text: "Ce que recouvre la manucure d'une fleur CBD",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une fleur porte naturellement de petites feuilles autour de sa
+            structure et repose sur une tige centrale. La manucure consiste à
+            réduire ces parties apparentes pour obtenir une présentation plus
+            nette. Elle peut être réalisée avec différents outils et à des
+            degrés variables, mais une photographie ne suffit pas à identifier
+            avec certitude la méthode employée.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Il faut aussi distinguer la coupe de la forme générale. Une fleur
+            compacte peut conserver quelques pointes de feuilles, tandis qu'une
+            fleur plus aérée peut présenter un contour régulier. Le guide sur
+            l'{" "}
+            <Link to="/blog/aspect-fleur-cbd-couleur-structure">
+              aspect, la couleur et la structure des fleurs CBD
+            </Link>{" "}
+            aide à séparer ces observations.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "details-visibles",
+        text: "Feuilles, tiges et coupe : comment lire les détails visibles",
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Repères visuels liés à la manucure d'une fleur CBD.",
+          headers: ["Détail observé", "Ce qu'il peut décrire", "Conclusion à éviter"],
+          rows: [
+            [
+              "Petites feuilles visibles",
+              "Une coupe moins serrée ou une forme végétale préservée.",
+              "Déduire automatiquement que le lot est mauvais ou non conforme.",
+            ],
+            [
+              "Tige centrale apparente",
+              "Le support naturel de la fleur, plus visible selon sa forme.",
+              "Transformer sa seule présence en mesure de composition ou de qualité.",
+            ],
+            [
+              "Contour très net",
+              "Une finition rapprochée autour de la fleur.",
+              "Considérer cette présentation comme une garantie sur toutes les autres caractéristiques.",
+            ],
+            [
+              "Coupe légèrement irrégulière",
+              "Des variations de forme ou de finition au sein du lot.",
+              "Conclure à partir d'une seule zone ou d'une seule fleur.",
+            ],
+            [
+              "Petits fragments dans l'emballage",
+              "Des éléments détachés pendant la manipulation ou le transport.",
+              "Les confondre avec le calibre annoncé sans examiner l'ensemble.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "variations-lot",
+        text: "Pourquoi la finition varie dans un même lot",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les fleurs ne présentent pas toutes la même ramification ni la même
+            densité. Leur position sur la plante, leur taille et leur forme
+            influencent la manière dont les feuilles et la tige restent
+            visibles après la coupe. Une variation modérée entre plusieurs
+            pièces peut donc relever de cette diversité naturelle.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "observer plusieurs fleurs plutôt qu'un seul exemplaire ;",
+          "séparer la quantité de petites feuilles de la forme de la fleur ;",
+          "tenir compte du calibre annoncé et de la répartition des tailles ;",
+          "comparer les détails avec la description du même lot ;",
+          "ne pas attribuer une méthode de coupe à partir d'une photo seule.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "comparer-presentations",
+        text: "Comparer deux présentations sans fausser la lecture",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Pour comparer deux fleurs, utilisez des vues prises à une échelle et
+            sous une lumière proches. Examinez d'abord le contour général, puis
+            la présence de petites feuilles, la longueur de tige visible et la
+            régularité de la coupe. Le {" "}
+            <Link to="/blog/calibre-fleurs-cbd-taille-tetes">
+              calibre des fleurs CBD
+            </Link>{" "}
+            doit être lu séparément : une petite tête bien coupée reste une
+            petite tête, et une fleur volumineuse peut conserver une tige plus
+            apparente.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les images produit fournissent un repère utile, mais le cadrage et
+            le zoom modifient la perception des détails. Avant de comparer,
+            consultez aussi le guide consacré à la {" "}
+            <Link to="/blog/photos-fleurs-cbd-lumiere-echelle">
+              lecture des photos de fleurs CBD
+            </Link>.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "limites-observation",
+        text: "Ce que la manucure ne permet pas de vérifier",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une finition visuellement régulière ne remplace ni l'étiquette ni
+            les documents du lot. Elle ne mesure pas les cannabinoïdes, ne
+            confirme pas l'absence de contaminants et ne renseigne pas avec
+            précision sur l'humidité ou les arômes. Ces éléments reposent sur
+            des informations de traçabilité et, lorsqu'elles existent, sur des
+            analyses correspondant au lot concerné.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "verification-reception",
+        text: "Les vérifications utiles à la réception",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            À la réception, regardez l'ensemble du contenu sous une lumière
+            neutre. Vérifiez la cohérence avec les photos et la description,
+            puis conservez l'emballage et le numéro de lot. Si la présentation
+            reçue diffère nettement de celle annoncée, photographiez une vue
+            générale et quelques détails sans filtre avant de contacter le
+            vendeur.
+          </>
+        ),
+      },
+      {
+        type: "links",
+        title: "Pour poursuivre votre lecture",
+        links: [
+          {
+            to: "/blog/aspect-fleur-cbd-couleur-structure",
+            label: "Comprendre la couleur et la structure d'une fleur",
+          },
+          {
+            to: "/blog/calibre-fleurs-cbd-taille-tetes",
+            label: "Comprendre la taille des têtes",
+          },
+          {
+            to: "/blog/photos-fleurs-cbd-lumiere-echelle",
+            label: "Lire les photos de fleurs CBD",
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "photos-fleurs-cbd-lumiere-echelle",
     title: "Photos de fleurs CBD : comment les lire sans surinterpréter ?",
     seoTitle: "Photos de fleurs CBD : lumière, échelle et détails | Verdanza",
