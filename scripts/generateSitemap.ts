@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { sitemapEntries } from "./seoRoutes";
 
@@ -9,8 +9,19 @@ ${entries.map((entry) => `  <url><loc>${escapeXml(entry.loc)}</loc>${entry.lastm
 </urlset>
 `;
 
-writeFileSync(resolve("public", "sitemap.xml"), xml, "utf8");
-console.log(`Generated public/sitemap.xml with ${entries.length} URLs.`);
+const sitemapPath = resolve("public", "sitemap.xml");
+if (process.argv.includes("--check")) {
+  const current = readFileSync(sitemapPath, "utf8");
+  if (current !== xml) {
+    throw new Error(
+      "public/sitemap.xml is stale. Run npm run sitemap intentionally, then review the tracked diff.",
+    );
+  }
+  console.log(`Validated public/sitemap.xml with ${entries.length} URLs (read-only).`);
+} else {
+  writeFileSync(sitemapPath, xml, "utf8");
+  console.log(`Generated public/sitemap.xml with ${entries.length} URLs.`);
+}
 
 function escapeXml(value: string) {
   return value

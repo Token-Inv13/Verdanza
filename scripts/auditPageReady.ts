@@ -30,16 +30,18 @@ export async function waitForStableDom(page: Page) {
 export async function blockExternalServices(context: BrowserContext) {
   await context.route("**/*", async (route) => {
     const url = route.request().url();
-    if (
-      url.includes("identitytoolkit.googleapis.com") ||
-      url.includes("firebaseinstallations.googleapis.com") ||
-      url.includes("firestore.googleapis.com") ||
-      url.includes("google-analytics.com") ||
-      url.includes("googletagmanager.com")
-    ) {
+    if (!isLocalResourceUrl(url)) {
       await route.abort();
       return;
     }
     await route.continue();
   });
+}
+
+export function isLocalResourceUrl(value: string) {
+  const url = new URL(value);
+  return (
+    ["data:", "blob:"].includes(url.protocol) ||
+    ["127.0.0.1", "localhost", "::1"].includes(url.hostname)
+  );
 }
