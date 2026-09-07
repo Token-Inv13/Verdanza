@@ -21,7 +21,7 @@ export type ProductSheetMatch = {
 };
 
 export function createInitialProductSelectorChoices(): ProductSelectorChoices {
-  return { category: null, intensity: null, aroma: "any" };
+  return { category: null, intensity: null, aroma: null };
 }
 
 export function getAvailableProductSheetIntensities(
@@ -47,6 +47,7 @@ export function changeProductSelectorCategory(
   return {
     ...choices,
     category,
+    aroma: choices.category === category ? choices.aroma : null,
     intensity:
       choices.intensity && availableIntensities.has(choices.intensity)
         ? choices.intensity
@@ -79,7 +80,7 @@ export function rankProductSheets(
   choices: ProductSelectorChoices,
   sheets: ProductSheet[] = productSheets,
 ): ProductSheetMatch[] {
-  if (!choices.category || !choices.intensity) return [];
+  if (!choices.category || !choices.intensity || !choices.aroma) return [];
 
   return sheets
     .map((sheet, sourceIndex) => ({

@@ -36,7 +36,7 @@ for (const sheet of productSheets) {
   assert.equal("ambiences" in sheet.selectionProfile, false, `${sheet.slug}: ambience leaked into selectionProfile`);
 }
 
-const flowerMedium: ProductSelectorChoices = { category: "flower", intensity: "moyenne", aroma: null };
+const flowerMedium: ProductSelectorChoices = { category: "flower", intensity: "moyenne", aroma: "any" };
 const flowerMatches = rankProductSheets(flowerMedium);
 assert.deepEqual(
   flowerMatches.map((match) => match.sheet.slug),
@@ -106,16 +106,16 @@ assert.deepEqual(
     { category: "flower", intensity: "douce", aroma: "fruite" },
     "resin",
   ),
-  { category: "resin", intensity: null, aroma: "fruite" },
-  "changing type must clear an intensity unavailable in the new category",
+  { category: "resin", intensity: null, aroma: null },
+  "changing type must clear unavailable intensity and require aroma confirmation again",
 );
 assert.deepEqual(
   changeProductSelectorCategory(
     { category: "flower", intensity: "moyenne", aroma: "sucre" },
     "resin",
   ),
-  { category: "resin", intensity: "moyenne", aroma: "sucre" },
-  "changing type must preserve an intensity that remains available",
+  { category: "resin", intensity: "moyenne", aroma: null },
+  "changing type may preserve a compatible intensity but must require aroma confirmation again",
 );
 
 const exactSelectionCases: Array<{
@@ -166,13 +166,18 @@ assert.equal(matchesRequiredSelection(sheet("watermelon-candy"), flowerMedium), 
 assert.equal(matchesSelectedAroma(sheet("mimosa"), "fruite"), true);
 assert.equal(matchesSelectedAroma(sheet("mimosa"), "any"), false);
 
-assert.deepEqual(createInitialProductSelectorChoices(), { category: null, intensity: null, aroma: "any" }, "reset must return to type with aroma set to Peu importe");
+assert.deepEqual(createInitialProductSelectorChoices(), { category: null, intensity: null, aroma: null }, "reset must clear type, intensity and aroma");
 assert.deepEqual(rankProductSheets(createInitialProductSelectorChoices()), [], "empty selector must show no result");
 assert.deepEqual(rankProductSheets({ category: "flower", intensity: null, aroma: null }), [], "type alone must show no result");
+assert.deepEqual(
+  rankProductSheets({ category: "flower", intensity: "forte", aroma: null }),
+  [],
+  "type and intensity must show no result until aroma is explicitly confirmed",
+);
 
 const stableTieSheets = [cloneAs("first"), cloneAs("second")];
 assert.deepEqual(
-  rankProductSheets({ category: "flower", intensity: "forte", aroma: null }, stableTieSheets).map((match) => match.sheet.slug),
+  rankProductSheets({ category: "flower", intensity: "forte", aroma: "any" }, stableTieSheets).map((match) => match.sheet.slug),
   ["first", "second"],
   "equal matches must preserve source order",
 );

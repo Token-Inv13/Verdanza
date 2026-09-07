@@ -50,14 +50,12 @@ export function ProductProfileSelector() {
     [choices.category],
   );
   const selectionKey = [choices.category, choices.intensity, choices.aroma].join(":");
-  const hasSelection = Boolean(
-    choices.category || choices.intensity || (choices.aroma && choices.aroma !== "any"),
-  );
-  const requiredSelectionComplete = Boolean(choices.category && choices.intensity);
+  const hasSelection = Boolean(choices.category || choices.intensity || choices.aroma);
+  const selectionComplete = Boolean(choices.category && choices.intensity && choices.aroma);
 
   useEffect(() => {
     const summary = summaryRef.current;
-    if (!summary || !requiredSelectionComplete || selectorExpanded) {
+    if (!summary || !selectionComplete || selectorExpanded) {
       setShowStickySummary(false);
       return;
     }
@@ -67,7 +65,7 @@ export function ProductProfileSelector() {
     );
     observer.observe(summary);
     return () => observer.disconnect();
-  }, [requiredSelectionComplete, selectorExpanded]);
+  }, [selectionComplete, selectorExpanded]);
 
   const startSelector = () => {
     if (startedRef.current) return;
@@ -86,9 +84,13 @@ export function ProductProfileSelector() {
 
   const selectIntensity = (intensity: ProductSheetIntensity) => {
     startSelector();
-    setChoices((current) => ({ ...current, intensity }));
-    setOpenStep(null);
-    setSelectorExpanded(false);
+    setChoices((current) => ({
+      ...current,
+      intensity,
+      aroma: current.intensity === intensity ? current.aroma : null,
+    }));
+    setOpenStep(3);
+    setSelectorExpanded(true);
     trackEvent("product_selector_intensity_selected", { intensity });
   };
 
@@ -116,7 +118,7 @@ export function ProductProfileSelector() {
   const completedSteps = [
     Boolean(choices.category),
     Boolean(choices.intensity),
-    Boolean(choices.aroma && choices.aroma !== "any"),
+    Boolean(choices.aroma),
   ];
 
   return (
@@ -219,9 +221,9 @@ export function ProductProfileSelector() {
                 number={3}
                 title="Quels arômes aimez-vous ?"
                 optional
-                summary={choices.aroma === "any" ? "Peu importe" : choices.aroma ? productSheetAromaFamilyLabels[choices.aroma] : "Facultatif"}
+                summary={choices.aroma === "any" ? "Peu importe" : choices.aroma ? productSheetAromaFamilyLabels[choices.aroma] : "À choisir"}
                 open={openStep === 3}
-                completed={Boolean(choices.aroma && choices.aroma !== "any")}
+                completed={Boolean(choices.aroma)}
                 locked={!choices.intensity}
                 onToggle={() => setOpenStep((current) => (current === 3 ? null : 3))}
               >
@@ -260,7 +262,11 @@ function SelectionSummary({
   const labels = [
     choices.category ? `${productSheetCategoryLabels[choices.category]}s` : null,
     choices.intensity ? intensitySummaryLabels[choices.intensity] : null,
-    choices.aroma && choices.aroma !== "any" ? productSheetAromaFamilyLabels[choices.aroma] : null,
+    choices.aroma === "any"
+      ? "Peu importe"
+      : choices.aroma
+        ? productSheetAromaFamilyLabels[choices.aroma]
+        : null,
   ].filter(Boolean) as string[];
 
   return (

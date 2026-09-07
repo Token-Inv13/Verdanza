@@ -40,18 +40,26 @@ try {
     assert.equal(await page.locator('[data-selector-step="1"] > button').getAttribute("aria-expanded"), "true", `${width}px: type must start open`);
     assert.equal(await page.locator('[data-selector-step="2"] > button').isDisabled(), true, `${width}px: intensity must stay locked before type`);
     assert.equal(await page.locator('[data-selector-step="3"] > button').isDisabled(), true, `${width}px: aroma must stay locked before intensity`);
+    assert.match(await page.locator('[data-selector-step="3"] > button').innerText(), /À choisir/i, `${width}px: aroma must start unselected`);
+    assert.equal(await page.locator('[data-selector-option="aroma:any"]').getAttribute("aria-pressed"), "false", `${width}px: Peu importe must not be preselected`);
     assert.equal(await page.locator('a[href="#all-product-sheets"]').count(), 1, `${width}px: library anchor must use #all-product-sheets`);
 
     await page.locator('[data-selector-option="category:flower"]').click();
+    assert.equal(await page.locator("[data-product-selector-results]").count(), 0, `${width}px: type alone must not reveal results`);
     assert.equal(await page.locator('[data-selector-step="2"] > button').getAttribute("aria-expanded"), "true", `${width}px: intensity must open after type`);
     await page.locator('[data-selector-option="intensity:forte"]').click();
+    assert.equal(await page.locator("[data-product-selector-results]").count(), 0, `${width}px: type and intensity must not reveal results`);
+    assert.equal(await selector.getAttribute("data-selector-collapsed"), "false", `${width}px: selector must stay expanded before aroma confirmation`);
+    assert.equal(await page.locator('[data-selector-step="3"] > button').getAttribute("aria-expanded"), "true", `${width}px: aroma must open after intensity`);
+    assert.equal(await page.locator('[data-selector-summary]').count(), 0, `${width}px: no compact or sticky summary may appear before the third choice`);
+    await page.locator('[data-selector-option="aroma:fruite"]').click();
     await page.locator('[data-product-selector-results][data-result-category="flower"][data-result-intensity="forte"]').waitFor();
-    assert.equal(await selector.getAttribute("data-selector-collapsed"), "true", `${width}px: selector must collapse after type and intensity`);
-    assert.match(await page.locator('[data-selector-summary][data-sticky="false"]').innerText(), /Fleurs\s*·\s*Fort/i, `${width}px: compact summary is incomplete`);
+    assert.equal(await selector.getAttribute("data-selector-collapsed"), "true", `${width}px: selector must collapse after all three choices`);
+    assert.match(await page.locator('[data-selector-summary][data-sticky="false"]').innerText(), /Fleurs\s*·\s*Fort\s*·\s*Fruité/i, `${width}px: compact summary is incomplete`);
     assert.deepEqual(
       await page.locator("[data-selector-result-card]").evaluateAll((cards) => cards.map((card) => card.getAttribute("data-selector-result-card"))),
-      ["blue-dream", "lemon-skunk", "zkittlez-og"],
-      `${width}px: strict V6 result order changed`,
+      ["zkittlez-og", "blue-dream", "lemon-skunk"],
+      `${width}px: Fruité must reorder all strict V6 matches without filtering them`,
     );
     assert.equal(await page.locator("[data-selector-result-card]").count(), 3, `${width}px: all exact results must stay visible`);
 
@@ -63,7 +71,7 @@ try {
     await page.locator("#all-product-sheets").scrollIntoViewIfNeeded();
     if (width < 768) {
       await page.locator('[data-selector-summary][data-sticky="true"]').waitFor({ state: "visible" });
-      assert.match(await page.locator('[data-selector-summary][data-sticky="true"]').innerText(), /Fleurs\s*·\s*Fort/i, `${width}px: sticky summary must repeat the selection`);
+      assert.match(await page.locator('[data-selector-summary][data-sticky="true"]').innerText(), /Fleurs\s*·\s*Fort\s*·\s*Fruité/i, `${width}px: sticky summary must repeat the complete selection`);
       await page.locator('[data-selector-summary][data-sticky="true"] [data-selector-edit]').click();
     } else {
       assert.equal(await page.locator('[data-selector-summary][data-sticky="true"]').isVisible(), false, `${width}px: sticky summary is mobile-only`);
@@ -72,18 +80,24 @@ try {
     }
     await selector.scrollIntoViewIfNeeded();
     assert.equal(await page.locator('[data-selector-step="3"] > button').getAttribute("aria-expanded"), "true", `${width}px: Modify must reopen aroma`);
-    await page.locator('[data-selector-option="aroma:fruite"]').click();
+    await page.locator('[data-selector-option="aroma:any"]').click();
     assert.equal(
       await page.locator("[data-selector-result-card]").first().getAttribute("data-selector-result-card"),
-      "zkittlez-og",
-      `${width}px: aroma must reorder without filtering exact matches`,
+      "blue-dream",
+      `${width}px: Peu importe must restore stable exact-match order`,
     );
-    assert.equal(await page.locator("[data-selector-result-card]").count(), 3, `${width}px: aroma must not remove exact matches`);
+    assert.equal(await page.locator("[data-selector-result-card]").count(), 3, `${width}px: Peu importe must keep all exact matches`);
+    assert.match(await page.locator('[data-selector-summary][data-sticky="false"]').innerText(), /Peu importe/i, `${width}px: explicit Peu importe must appear in the final summary`);
 
     await page.locator('[data-selector-summary][data-sticky="false"] [data-selector-edit]').click();
     await page.locator('[data-selector-step="1"] > button').click();
     await page.locator('[data-selector-option="category:resin"]').click();
+    assert.equal(await page.locator("[data-product-selector-results]").count(), 0, `${width}px: changing type must hide results until aroma is confirmed again`);
+    assert.equal(await page.locator('[data-selector-step="3"] > button').getAttribute("aria-expanded"), "true", `${width}px: compatible intensity may remain but aroma must be confirmed again`);
+    assert.equal(await page.locator('[data-selector-option="aroma:any"]').getAttribute("aria-pressed"), "false", `${width}px: changing type must clear the previous aroma choice`);
+    await page.locator('[data-selector-option="aroma:any"]').click();
     await page.locator('[data-product-selector-results][data-result-category="resin"][data-result-intensity="forte"]').waitFor();
+    await page.locator('[data-selector-summary][data-sticky="false"] [data-selector-edit]').click();
     await page.locator('[data-selector-step="2"] > button').click();
     const unavailableSoft = page.locator('[data-selector-option="intensity:douce"]');
     assert.equal(await unavailableSoft.isDisabled(), true, `${width}px: resin soft must be visibly disabled`);
@@ -93,7 +107,8 @@ try {
     assert.equal(await page.locator("[data-product-selector-results]").count(), 0, `${width}px: reset must hide results`);
     assert.equal(await selector.getAttribute("data-selector-collapsed"), "false", `${width}px: reset must expand selector`);
     assert.equal(await page.locator('[data-selector-step="1"] > button').getAttribute("aria-expanded"), "true", `${width}px: reset must reopen type`);
-    assert.equal(await page.locator('[data-selector-option="aroma:any"]').getAttribute("aria-pressed"), "true", `${width}px: reset must restore Peu importe`);
+    assert.equal(await page.locator('[data-selector-option="aroma:any"]').getAttribute("aria-pressed"), "false", `${width}px: reset must clear Peu importe`);
+    assert.match(await page.locator('[data-selector-step="3"] > button').innerText(), /À choisir/i, `${width}px: reset must restore aroma to À choisir`);
 
     const library = page.locator("#all-product-sheets");
     await library.scrollIntoViewIfNeeded();
