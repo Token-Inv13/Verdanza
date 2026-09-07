@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname, resolve } from "node:path";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { isLocalResourceUrl } from "./auditPageReady";
 
 const distDir = resolve("dist");
 const srcDir = resolve("src");
@@ -419,6 +420,10 @@ async function installGoogleRequestMock(context: BrowserContext, requests: Googl
         contentType: "text/plain",
         body: "",
       });
+      return;
+    }
+    if (!isLocalResourceUrl(url)) {
+      await route.abort();
       return;
     }
     await route.continue();

@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { mkdirSync, readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { chromium } from "playwright";
+import { isLocalResourceUrl } from "./auditPageReady";
 import {
   canonicalUrl,
   fallbackSeoRoute,
@@ -231,13 +232,7 @@ function isExpectedPrerenderNetworkError(message: string) {
 async function blockExternalServices(context: import("playwright").BrowserContext) {
   await context.route("**/*", async (route) => {
     const url = route.request().url();
-    if (
-      url.includes("identitytoolkit.googleapis.com") ||
-      url.includes("firebaseinstallations.googleapis.com") ||
-      url.includes("firestore.googleapis.com") ||
-      url.includes("google-analytics.com") ||
-      url.includes("googletagmanager.com")
-    ) {
+    if (!isLocalResourceUrl(url)) {
       await route.abort();
       return;
     }
