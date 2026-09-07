@@ -1,6 +1,22 @@
 /** Amounts are integer euro cents, checked at every public calculation boundary. */
 export type Cents = number;
 
+/** Server-persisted binding between an order and its reserved wallet amount. */
+export type CagnotteOrderReservationIntent = {
+  readonly schemaVersion: 1;
+  readonly reservationVersion: "cagnotte-reservation-v1";
+  readonly order: {
+    readonly orderId: string;
+    readonly beneficiaryId: string;
+    readonly programVersion: string;
+    readonly createdAtEpochMs: number;
+    readonly snapshot: CagnotteSnapshot;
+  };
+  readonly amountCents: number;
+  readonly snapshotFingerprint: string;
+  readonly intentFingerprint: string;
+};
+
 export type CagnotteCalculationVersion = "cagnotte-math-v1";
 
 export type CagnotteAdvantage =

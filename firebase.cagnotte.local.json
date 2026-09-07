@@ -1,0 +1,5 @@
+{
+  "firestore": { "rules": "firestore.cagnotte.local.rules" },
+  "emulators": { "firestore": { "host": "127.0.0.1", "port": 18085 }, "ui": { "enabled": false } },
+  "cagnotteTest": { "projectId": "demo-verdanza-cagnotte", "emulatorVersion": "1.22.0" }
+}
