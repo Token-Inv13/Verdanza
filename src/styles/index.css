@@ -1,3 +1,5 @@
+@import "./cagnotte.css";
+
 @font-face {
   font-family: "Inter";
   src: url("/fonts/inter-latin-400-700.woff2") format("woff2");
