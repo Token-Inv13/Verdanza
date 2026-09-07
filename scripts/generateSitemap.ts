@@ -12,7 +12,7 @@ ${entries.map((entry) => `  <url><loc>${escapeXml(entry.loc)}</loc>${entry.lastm
 const sitemapPath = resolve("public", "sitemap.xml");
 if (process.argv.includes("--check")) {
   const current = readFileSync(sitemapPath, "utf8");
-  if (current !== xml) {
+  if (normalizeLineEndings(current) !== normalizeLineEndings(xml)) {
     throw new Error(
       "public/sitemap.xml is stale. Run npm run sitemap intentionally, then review the tracked diff.",
     );
@@ -21,6 +21,10 @@ if (process.argv.includes("--check")) {
 } else {
   writeFileSync(sitemapPath, xml, "utf8");
   console.log(`Generated public/sitemap.xml with ${entries.length} URLs.`);
+}
+
+function normalizeLineEndings(value: string) {
+  return value.replace(/\r\n?/g, "\n");
 }
 
 function escapeXml(value: string) {

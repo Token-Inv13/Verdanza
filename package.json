@@ -74,6 +74,7 @@
     "verify:local-safety": "node scripts/verifyLocalSafety.mjs",
     "verify": "npm run verify:local-safety && npm run lint && npm run typecheck && npm run typecheck:api && npm run test:core && npm run build:local && npm run audit:local-essential",
     "verify:full": "npm run verify && npm run test:extended && npm run audit:local-full",
+    "postdeploy:check": "node scripts/postdeployCheck.mjs",
     "seed:products": "node --import tsx scripts/seedFirestoreProducts.ts",
     "seed:delivery-zones": "node --import tsx scripts/seedFirestoreDeliveryZones.ts",
     "upsert:aix-radius-zone": "node --import tsx scripts/upsertAixRadiusDeliveryZone.ts",
