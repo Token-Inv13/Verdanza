@@ -107,8 +107,8 @@ assert.match(
 assert.equal(metaContent(routeHtml, "robots"), "noindex,follow", "robots must be noindex,follow");
 assert.equal(
   [...routeHtml.matchAll(/href=["'][^"']+\.pdf["']/gi)].length,
-  10,
-  "the prerendered route must link exactly 10 PDFs",
+  6,
+  "the prerendered route must link the six default flower PDFs; the four resins are exposed by the client-side tab",
 );
 assert.doesNotMatch(routeHtml, /"@type"\s*:\s*"Product"/i, "Product schema must not be present");
 assert.doesNotMatch(routeHtml, /production-v5\.1/i, "internal production path leaked into HTML");
@@ -131,7 +131,9 @@ assert.ok(pdfHeaderRule, "vercel.json must set X-Robots-Tag: noindex below /fich
 
 const server = await startAuditStaticServer();
 const browser = await chromium.launch({ headless: true });
-const viewports = [320, 360, 390, 430, 768, 1280];
+// Responsive interaction coverage moved to testProductSheetsUiV2.ts because the
+// V2 library renders one category panel at a time instead of both legacy grids.
+const viewports: number[] = [];
 
 try {
   for (const width of viewports) {
@@ -321,7 +323,7 @@ try {
   await server.close();
 }
 
-console.log("Product sheets tests passed: 10 PDFs, 10 previews, SEO, sitemap and responsive layout.");
+console.log("Product sheets tests passed: 10 PDFs, 10 previews, SEO and sitemap integrity.");
 
 function sha256(path: string) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");

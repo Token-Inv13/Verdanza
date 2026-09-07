@@ -57,6 +57,9 @@ export type AnalyticsEventName =
   | "product_selector_aroma_selected"
   | "product_selector_result_viewed"
   | "product_sheet_opened_from_selector"
+  | "product_sheet_category_selected"
+  | "product_sheet_carousel_navigated"
+  | "product_sheet_card_opened"
   | "generate_lead";
 
 export type ContactHelpSource =

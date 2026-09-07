@@ -7,6 +7,7 @@ import { trackContactHelpAction } from "../lib/analytics";
 
 export function FloatingContactButton({ suppressed = false }: { suppressed?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [hiddenByProductSheetCards, setHiddenByProductSheetCards] = useState(false);
   const consent = useConsent();
   const panelId = useId();
   const location = useLocation();
@@ -21,7 +22,45 @@ export function FloatingContactButton({ suppressed = false }: { suppressed?: boo
   }, [location.pathname]);
 
   const hiddenByConsent = !consent.hasDecision || consent.preferencesOpen;
-  const isSuppressed = suppressed || hiddenByConsent;
+  const isSuppressed = suppressed || hiddenByConsent || hiddenByProductSheetCards;
+
+  useEffect(() => {
+    if (location.pathname !== "/fiches-produits") {
+      setHiddenByProductSheetCards(false);
+      return;
+    }
+
+    let frame: number | null = null;
+    const update = () => {
+      frame = null;
+      const interactiveSections = [
+        ...document.querySelectorAll<HTMLElement>(
+          "[data-product-selector-results], [data-product-sheet-category]",
+        ),
+      ];
+      setHiddenByProductSheetCards(
+        interactiveSections.some((section) => {
+          const rect = section.getBoundingClientRect();
+          return rect.bottom > 80 && rect.top < window.innerHeight;
+        }),
+      );
+    };
+    const scheduleUpdate = () => {
+      if (frame === null) frame = window.requestAnimationFrame(update);
+    };
+    const observer = new MutationObserver(scheduleUpdate);
+    observer.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+    update();
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!isSuppressed || !isOpen) return;
