@@ -1,0 +1,46 @@
+name: Post-deploy QA — Verdanza
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Base URL to inspect with read-only HTTP requests
+        required: true
+        type: string
+        default: https://verdanza.fr
+
+permissions:
+  contents: read
+
+jobs:
+  postdeploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Runtime versions
+        run: |
+          node --version
+          npm --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run read-only post-deploy QA
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+        run: |
+          printf 'Post-deploy target: %s\n' "$BASE_URL"
+          npm run postdeploy:check -- --base-url "$BASE_URL"

@@ -69,6 +69,7 @@ expectScript(
   "build:local",
   "npm run sitemap:check && tsc -b && vite build && npm run prerender",
 );
+expectScript("postdeploy:check", "node scripts/postdeployCheck.mjs");
 
 requireValue(
   scripts["typecheck:api"]?.includes("tsc --noEmit"),
@@ -184,6 +185,7 @@ for (const testFile of [
 
 const excluded = [
   "build",
+  "postdeploy:check",
   "sitemap",
   "images:generate",
   "analyze:bundle",
