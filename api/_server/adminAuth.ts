@@ -21,7 +21,7 @@ export async function verifyFirebaseIdToken(
     },
   );
   const payload = (await response.json()) as {
-    users?: Array<{ localId?: string; email?: string }>;
+    users?: Array<{ localId?: string; email?: string; emailVerified?: boolean }>;
     error?: { message?: string };
   };
 
@@ -33,17 +33,17 @@ export async function verifyFirebaseIdToken(
   return {
     uid: user.localId,
     email: user.email ?? null,
+    emailVerified: user.emailVerified === true,
   };
 }
 
 export async function assertAdminUser(
-  db: Firestore,
-  idToken: string,
+  db: Firestore, idToken: string,
   verify: typeof verifyFirebaseIdToken = verifyFirebaseIdToken,
 ) {
   const user = await verify(idToken);
   const uidSnapshot = await db.collection("adminUsers").doc(user.uid).get();
-  const emailSnapshot = user.email
+  const emailSnapshot = user.email && user.emailVerified === true
     ? await db.collection("adminUsers").doc(user.email).get()
     : null;
   const adminData = uidSnapshot.exists
@@ -52,7 +52,7 @@ export async function assertAdminUser(
       ? emailSnapshot.data()
       : null;
 
-  if (!adminData?.isActive) {
+  if (adminData?.isActive !== true) {
     throw new Error("Acces admin requis.");
   }
 

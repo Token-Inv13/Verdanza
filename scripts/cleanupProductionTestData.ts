@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { deleteUnenrolledOrderCandidates } from "../api/_server/orderProtection.js";
 import { products } from "../src/data/products.js";
 import type { Product } from "../src/types/index.js";
 import {
@@ -84,6 +85,10 @@ async function deleteDocuments(
   collectionName: string,
   documentIds: string[],
 ) {
+  if (collectionName === "orders") {
+    await deleteUnenrolledOrderCandidates({ db, orderIds: documentIds, writeAudit: () => undefined });
+    return documentIds.length;
+  }
   let deleted = 0;
   for (let index = 0; index < documentIds.length; index += 400) {
     const batch = db.batch();

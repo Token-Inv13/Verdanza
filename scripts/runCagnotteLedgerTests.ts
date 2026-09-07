@@ -31,6 +31,8 @@ const allowedOptions = new Set([
   "--regularization-only",
   "--orders-only",
   "--checkout-use-only",
+  "--security-only",
+  "--read-only",
 ]);
 const options = process.argv.slice(2);
 if (options.length > 1 || options.some((option) => !allowedOptions.has(option))) {
@@ -67,9 +69,12 @@ const digest = createHash("sha256").update(await readFile(jar)).digest("hex");
 if (digest !== "9b6498b7f62714d67f48f59b3818883cd682dbcd46b9f59511de81c97bb5166c") {
   throw new Error("Émulateur 1.22.0 absent ou empreinte inattendue.");
 }
-const rulesPath = resolve(root, config.firestore.rules);
+const rulesPath = resolve(root, mode === "--security-only" ? "firestore.rules" : config.firestore.rules);
 const rules = await readFile(rulesPath);
-if (!rules.length) throw new Error("Règles locales de test absentes ou vides.");
+if (!rules.length) throw new Error(mode === "--security-only" ? "Fichier complet de règles absent/vide." : "Règles locales de test absentes ou vides.");
+if (mode === "--security-only") {
+  console.log(`Règles candidates : ${rulesPath}\nSHA-256 : ${createHash("sha256").update(rules).digest("hex")}`);
+}
 
 const log = createWriteStream(resolve(localHome, "firestore.log"), { flags: "a" });
 const emulator = spawn(
@@ -117,6 +122,11 @@ try {
   if (mode === "--regularization-only") await run("scripts/testCagnotteRegularization.ts");
   if (mode === "--orders-only") await run("scripts/testCagnotteOrders.ts");
   if (mode === "--checkout-use-only") await run("scripts/testCagnotteCheckoutIntegration.ts");
+  if (mode === "--security-only") {
+    await run("scripts/testCagnotteRules.ts");
+    await run("scripts/testCagnotteSecurity.ts");
+  }
+  if (mode === "--read-only") await run("scripts/testCagnotteRead.ts");
 } finally {
   // Stop only the direct Java child created by this runner.
   if (emulator.exitCode === null) emulator.kill();

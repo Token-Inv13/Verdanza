@@ -138,6 +138,8 @@ export type PaymentLinkDeliverySummary = {
   completedAt?: string;
   providerId?: string;
   errorCode?: string;
+  /** Transport acceptance does not prove receipt by the recipient. */
+  transportStatus?: "accepted" | "not_sent" | "unknown";
 };
 export type DeliveryFeeStatus = "free" | "to_confirm" | "configured";
 

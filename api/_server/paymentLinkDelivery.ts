@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
-import { orderPaymentAmount } from "./cagnotteOrders.js";
+import { orderPaymentAmount, validateOrderCagnotteEnrollment } from "./cagnotteOrders.js";
+import { hasCagnotteEnrollment } from "./orderProtection.js";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { EmailResult } from "./email.js";
 import type {
@@ -48,6 +49,7 @@ export type PaymentLinkDeliveryResult = {
   providerId?: string;
   errorCode?: string;
   existing: boolean;
+  transportStatus?: PaymentLinkDeliverySummary["transportStatus"];
 };
 
 type DeliveryClaim = {
@@ -296,6 +298,11 @@ async function finalizePaymentLinkDelivery(input: {
     let errorCode = providerSucceeded
       ? ""
       : emailErrorCode(input.providerResult);
+    const transportStatus: NonNullable<PaymentLinkDeliverySummary["transportStatus"]> = providerSucceeded
+      ? "accepted"
+      : status === "failed"
+        ? "not_sent"
+        : "unknown";
     let order: Order | null = null;
 
     if (!orderSnapshot.exists) {
@@ -304,7 +311,7 @@ async function finalizePaymentLinkDelivery(input: {
     } else {
       order = { id: orderSnapshot.id, ...orderSnapshot.data() } as Order;
       if (providerSucceeded) {
-        const stateError = orderStateError(order);
+        const stateError = paymentLinkOrderError(order, input.request);
         if (stateError) {
           status = "unknown";
           errorCode = `${stateError}_after_provider_call`;
@@ -319,12 +326,14 @@ async function finalizePaymentLinkDelivery(input: {
       leaseUntil: FieldValue.delete(),
       providerId: providerId || FieldValue.delete(),
       lastErrorCode: errorCode || FieldValue.delete(),
+      transportStatus,
       completedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
 
     if (order) {
-      const summary = paymentLinkSummary({
+      const summary = {
+        ...paymentLinkSummary({
         request: input.request,
         status,
         attempts,
@@ -333,7 +342,9 @@ async function finalizePaymentLinkDelivery(input: {
         createdAt: timestampToIso(state.createdAt, completedAt),
         lastAttemptAt: completedAt,
         completedAt,
-      });
+        }),
+        transportStatus,
+      };
       const history = upsertHistory(order.paymentLinkDeliveryHistory, summary);
       const orderUpdate: Record<string, unknown> = {
         paymentLinkDelivery: summary,
@@ -385,6 +396,7 @@ async function finalizePaymentLinkDelivery(input: {
       attempts,
       providerId,
       errorCode: errorCode || undefined,
+      transportStatus,
       existing: false,
     } satisfies PaymentLinkDeliveryResult;
   });
@@ -396,6 +408,13 @@ function assertOrderCanReceivePaymentLink(
 ) {
   const errorCode = orderStateError(order);
   if (errorCode) throw new PaymentLinkOrderStateError(errorCode);
+  if (hasCagnotteEnrollment(order)) {
+    try {
+      validateOrderCagnotteEnrollment(order);
+    } catch {
+      throw new PaymentLinkOrderStateError("cagnotte_order_invalid");
+    }
+  }
   try {
     if (
       request.paymentLinkCurrency !== "EUR" ||
@@ -407,6 +426,15 @@ function assertOrderCanReceivePaymentLink(
     }
   } catch {
     throw new PaymentLinkOrderStateError("payment_link_order_amount_mismatch");
+  }
+}
+
+function paymentLinkOrderError(order: Order, request: PaymentLinkDeliveryRequest) {
+  try {
+    assertOrderCanReceivePaymentLink(order, request);
+    return "";
+  } catch (error) {
+    return error instanceof PaymentLinkOrderStateError ? error.code : "order_invalid";
   }
 }
 
@@ -459,6 +487,7 @@ function deliveryResult(
       typeof value.providerId === "string" ? value.providerId : undefined,
     errorCode:
       typeof value.lastErrorCode === "string" ? value.lastErrorCode : undefined,
+    transportStatus: value.transportStatus as PaymentLinkDeliverySummary["transportStatus"],
     existing,
   };
 }

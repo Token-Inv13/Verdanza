@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { FieldValue } from "firebase-admin/firestore";
+import { deleteUnenrolledOrderCandidates } from "../api/_server/orderProtection.js";
 import {
   getRequiredAdminDb,
   requireConfirmationFlag,
@@ -107,10 +108,11 @@ async function main() {
     return;
   }
 
-  const batch = db.batch();
-  candidates.forEach((candidate) => {
-    batch.delete(db.collection("orders").doc(candidate.id));
-    batch.set(
+  await deleteUnenrolledOrderCandidates({
+    db, orderIds: candidates.map((candidate) => candidate.id),
+    writeAudit(transaction, orderRef) {
+    const candidate = candidates.find((entry) => entry.id === orderRef.id)!;
+    transaction.set(
       db.collection("adminAuditLogs").doc(),
       {
         action: "order_permanently_deleted",
@@ -122,9 +124,8 @@ async function main() {
       },
       { merge: true },
     );
+    },
   });
-
-  if (candidates.length) await batch.commit();
 
   const protectedOrderAfter = await db.collection("orders").doc(KEEP_ORDER_ID).get();
   const remainingSnapshot = await db.collection("orders").get();
