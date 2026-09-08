@@ -23,8 +23,8 @@ import {
   CAGNOTTE_READ_DISPLAY_ENABLED,
 } from "../src/config/cagnotteFeatures.js";
 
-const baseMain = "2f0b5ed6cf0e76507b72bcb50dfbb95a634e1fe8";
-const expectedRulesHash = "607eebc720f6a50c341f3d32b6942f302d071f5508e5da6b58fb14b8a7838cc2";
+const baseMain = "322f65895fb0a75479c92bc4a3054caa4073d2f8";
+const expectedRulesHash = "bfac684e58aff26b20dde1cb65abec49e40fc98a7d64272262e53b35b5f6091e";
 const expectedEndpoints = [
   "admin-contests.ts",
   "admin-payment-links.ts",
@@ -228,8 +228,8 @@ await check("aucun rate limit ou ciblage client contournable sur les nouvelles r
 
 await check("règles Firestore candidates et protections commandes", () => {
   const rulesBytes = readFileSync(resolve("firestore.rules"));
-  assert.equal(createHash("sha256").update(rulesBytes).digest("hex"), expectedRulesHash);
-  const rules = rulesBytes.toString("utf8").replace(/\r\n/g, "\n");
+  const rules = rulesBytes.toString("utf8").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  assert.equal(createHash("sha256").update(rules, "utf8").digest("hex"), expectedRulesHash);
   for (const collection of [
     "cagnotteWallets",
     "cagnotteMovements",

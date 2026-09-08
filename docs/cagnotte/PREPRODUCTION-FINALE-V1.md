@@ -51,7 +51,7 @@ L'arbre statique de `cagnotte.ts` contient 15 modules locaux et requiert `fireba
 
 ## Firestore
 
-- SHA-256 attendu et vérifié de `firestore.rules` : `607eebc720f6a50c341f3d32b6942f302d071f5508e5da6b58fb14b8a7838cc2`.
+- SHA-256 attendu et vérifié de `firestore.rules` : `bfac684e58aff26b20dde1cb65abec49e40fc98a7d64272262e53b35b5f6091e` (SHA-256 calculé sur UTF-8 avec fins de ligne normalisées LF).
 - Les accès directs client en lecture et écriture sont refusés pour les cinq collections cagnotte.
 - Les commandes qui portent une clé `cagnotte` ne peuvent pas être créées, modifiées ou supprimées directement par les règles clientes d'administration prévues pour les commandes historiques.
 - Le candidat `firestore.cagnotte-read.indexes.json` contient exactement l'index collection `cagnotteMovements` sur `beneficiaryId ASC`, `recordedAtEpochMs DESC`, `__name__ DESC`.
