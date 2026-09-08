@@ -11,8 +11,9 @@ import {
 } from "./cagnotteReservations.js";
 import type {
   CagnotteReservationIntent,
-  CagnotteReservationTestProgram,
+  CagnotteReservationProgram,
 } from "./cagnotteReservationTypes.js";
+import type { CagnotteAccrualProgram } from "./cagnotteLedgerTypes.js";
 import { cagnotteCalculationForPricedCheckout } from "./cagnotteOrders.js";
 import type { CagnotteCheckoutQuote } from "../../src/types/cagnotte.js";
 
@@ -50,8 +51,10 @@ export function prepareCagnotteCheckoutQuote(input: {
   priced: PricedCheckout;
   beneficiaryId: string;
   availableCents: number;
-  program: CagnotteReservationTestProgram | null;
+  accrualProgram: CagnotteAccrualProgram | null;
+  reservationProgram: CagnotteReservationProgram | null;
   createdAtEpochMs: number;
+  firebaseProjectId?: string | null;
 }): { quote: CagnotteCheckoutQuote; calculationIntent: CagnotteReservationIntent } {
   const requestedCents = input.body.cagnotteUse?.requestedCents ?? 0;
   const calculationIntent = createCagnotteReservationIntent(
@@ -65,7 +68,8 @@ export function prepareCagnotteCheckoutQuote(input: {
         input.availableCents,
       ),
     },
-    input.program,
+    input.reservationProgram,
+    input.firebaseProjectId,
   );
   if (!calculationIntent) {
     throw new CagnotteCheckoutError(
@@ -85,7 +89,7 @@ export function prepareCagnotteCheckoutQuote(input: {
     payableCents:
       snapshot.productsPaidCents + eurosToExactCents(input.priced.deliveryFee),
     estimatedLoyaltyCents: snapshot.loyaltyCents,
-    loyaltyAccrualStatus: input.program?.newAccrualsEnabled === true ? "estimated" as const : "suspended" as const,
+    loyaltyAccrualStatus: input.accrualProgram?.newAccrualsEnabled === true ? "estimated" as const : "suspended" as const,
     limitationReasons: snapshot.limitationReasons,
     compatibility: snapshot.compatibility,
   };

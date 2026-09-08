@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createOrderHandler } from "../api/create-order.js";
 import { createQuoteOrderHandler } from "../api/quote-order.js";
 import { applyCagnotteLedgerOperation } from "../api/_server/cagnotteLedger.js";
-import { CAGNOTTE_RESERVATION_VERSION, type CagnotteInternalOrder } from "../api/_server/cagnotteLedgerTypes.js";
+import { CAGNOTTE_RESERVATION_VERSION, type CagnotteInternalOrder, type CagnotteTestProgram } from "../api/_server/cagnotteLedgerTypes.js";
 import type { CagnotteReservationTestProgram } from "../api/_server/cagnotteReservationTypes.js";
 import type { VercelRequestLike, VercelResponseLike } from "../api/_server/http.js";
 import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
@@ -24,11 +24,18 @@ const activeProgram: CagnotteReservationTestProgram = Object.freeze({
   programVersion: "checkout-client-contract-v1",
   calculationVersion: "cagnotte-math-v1",
   startsAtEpochMs: 1_000,
-  newAccrualsEnabled: true,
   reservationVersion: CAGNOTTE_RESERVATION_VERSION,
   reservationsEnabled: true,
 });
-const suspendedProgram = Object.freeze({ ...activeProgram, reservationsEnabled: false, newAccrualsEnabled: false });
+const activeAccrualProgram: CagnotteTestProgram = Object.freeze({
+  mode: activeProgram.mode,
+  programVersion: activeProgram.programVersion,
+  calculationVersion: activeProgram.calculationVersion,
+  startsAtEpochMs: activeProgram.startsAtEpochMs,
+  newAccrualsEnabled: true,
+});
+const suspendedProgram = Object.freeze({ ...activeProgram, reservationsEnabled: false });
+const suspendedAccrualProgram = Object.freeze({ ...activeAccrualProgram, newAccrualsEnabled: false });
 const collections = [
   "analyticsOperationalEvents", "analyticsOutbox", "cagnotteAccruals", "cagnotteMovements",
   "cagnotteReservations", "cagnotteWallets", "checkoutRequests", "coupons", "orderSideEffects",
@@ -45,6 +52,7 @@ try {
 
   const quoteHandler = createQuoteOrderHandler({
     getDb: () => db,
+    accrualProgram: activeAccrualProgram,
     reservationProgram: activeProgram,
     now: () => 10_000,
     verifyToken: async () => ({ uid: "customer-a", email: "customer@example.test", emailVerified: true }),
@@ -98,7 +106,7 @@ try {
     refused: () => assert.fail("la tentative ne doit pas être déclarée refusée"),
   });
   attempts.setIdentity("customer-a");
-  const firstHandler = createHandler(activeProgram);
+  const firstHandler = createHandler(activeAccrualProgram, activeProgram);
   const sentBusinessBodies: string[] = [];
   let firstResponseLost = true;
   const firstResult = await attempts.submit(checkoutRequestId, request, (frozen) => createCheckoutOrder(frozen, {
@@ -121,7 +129,7 @@ try {
   assert.equal((await db.collection("orders").get()).size, 1, "la réponse perdue suit une commande déjà enregistrée");
 
   await db.collection("cagnotteWallets").doc("customer-a").update({ availableCents: 0 });
-  const replayHandler = createHandler(suspendedProgram);
+  const replayHandler = createHandler(suspendedAccrualProgram, suspendedProgram);
   const replay = await attempts.retry((frozen) => createCheckoutOrder(frozen, {
     getToken: async () => "synthetic-customer-token-refreshed",
     fetch: async (input, init) => {
@@ -147,10 +155,11 @@ try {
   await db.terminate();
 }
 
-function createHandler(program: CagnotteReservationTestProgram) {
+function createHandler(accrualProgram: CagnotteTestProgram, reservationProgram: CagnotteReservationTestProgram) {
   return createOrderHandler({
     getDb: () => db,
-    reservationProgram: program,
+    accrualProgram,
+    reservationProgram,
     now: () => 10_000,
     verifyToken: async () => ({ uid: "customer-a", email: "customer@example.test", emailVerified: true }),
     processSideEffects: async () => ({
@@ -188,7 +197,7 @@ async function fund(beneficiaryId: string) {
   };
   await applyCagnotteLedgerOperation({
     db,
-    program: activeProgram,
+    program: activeAccrualProgram,
     recordedAtEpochMs: 3_000,
     command: { order, event: "payment_and_delivery_confirmed" },
   });

@@ -114,7 +114,7 @@ async function link(payload: Record<string, unknown>, options: Hooks & {
   return { ...await invoke(handler, payload, options.method), stats: monitor.stats() };
 }
 async function transition(id: string, payload: Record<string, unknown>, selectedProgram: CagnotteTestProgram | null = program) {
-  const handler = createOrderStatusHandler({ getDb: () => db, verifyToken: async () => admin, program: selectedProgram,
+  const handler = createOrderStatusHandler({ getDb: () => db, verifyToken: async () => admin, accrualProgram: selectedProgram, reservationProgram: null,
     sendStatusEmail: async () => ({ status: "skipped", reason: "synthetic" }), processAnalytics: async () => ({ status: "skipped" }) });
   const result = await invoke(handler, { orderId: id, authToken: "synthetic", ...payload });
   equal(result.status, 200); return result;
@@ -146,12 +146,13 @@ try {
     equal((await link(body(f.id))).status, 200); eq(await ledger(), before);
     equal((await stored(f.id)).orderStatus, "delivered"); await transition(f.id, pay); eq(await balances(f.uid), [0, 500, 0]);
   });
-  await test("programme normal null et suspension : lien autorise sans rattrapage", async () => {
+  await test("drain : le lien reste neutre et la commande inscrite peut terminer", async () => {
     const f = await fixture({ orderStatus: "delivered" });
-    // This server-only transition observes delivery under a suspended fixture program.
-    await transition(f.id, { internalNote: "Synthetic suspended delivery" }, { ...program, newAccrualsEnabled: false });
+    const drain = { ...program, newAccrualsEnabled: false };
+    await transition(f.id, { internalNote: "Synthetic drain delivery" }, drain);
     const before = await ledger(); equal((await link(body(f.id))).status, 200); eq(await ledger(), before);
-    equal(await balances(f.uid), null);
+    eq(await balances(f.uid), [0, 0, 0]);
+    await transition(f.id, pay, drain); eq(await balances(f.uid), [0, 500, 0]);
   });
   await test("declaration manuelle partagee : livree impayee sans reconciliation", async () => {
     const f = await fixture({ orderStatus: "delivered" }), before = await ledger();

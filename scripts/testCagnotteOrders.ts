@@ -9,8 +9,16 @@ import { orderPayload, parseCheckoutBody, priceCheckout } from "../api/_server/c
 import { checkoutPayloadFingerprint, findCheckoutRequest } from "../api/_server/orderSideEffects.js";
 import { commitOrderStatusTransition, processOrderStatusTransitionEffects, type OrderStatusChange } from "../api/_server/orderStatusTransition.js";
 import { buildCagnotteOrderEnrollment, cagnotteCalculationForPricedCheckout, eurosToCagnotteCents } from "../api/_server/cagnotteOrders.js";
-import { CAGNOTTE_SERVER_PROGRAM } from "../api/_server/cagnotteProgram.js";
-import type { CagnotteTestProgram, CagnotteWallet } from "../api/_server/cagnotteLedgerTypes.js";
+import {
+  CAGNOTTE_PRODUCTION_FIREBASE_PROJECT_ID,
+  CAGNOTTE_PRODUCTION_PROGRAM_DEFINITION,
+  CAGNOTTE_PRODUCTION_PROGRAM_VERSION,
+  CAGNOTTE_SERVER_PROGRAM,
+  CagnotteProgramConfigurationError,
+  resolveCagnotteProductionProgram,
+  resolveCagnotteProductionReservationProgram,
+} from "../api/_server/cagnotteProgram.js";
+import type { CagnotteAccrualProgram, CagnotteProductionProgram, CagnotteTestProgram, CagnotteWallet } from "../api/_server/cagnotteLedgerTypes.js";
 import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
 import type { Order } from "../src/types/index.js";
 import { fixtureSpentGain, assertWalletJournal } from "./cagnotteRegularizationFixtures.js";
@@ -53,7 +61,7 @@ const db = new Proxy(rawDb, {
 }) as Firestore;
 
 let sequence = 0;
-async function create(options: { active?: boolean; guest?: boolean; promotion?: "code" | "automatic" | "gift"; catalogPromotion?: boolean; fixed?: boolean; beneficiary?: string; forged?: boolean } = {}) {
+async function create(options: { active?: boolean; guest?: boolean; promotion?: "code" | "automatic" | "gift"; catalogPromotion?: boolean; fixed?: boolean; beneficiary?: string; forged?: boolean; nowEpochMs?: number; accrualProgram?: CagnotteAccrualProgram; firebaseProjectId?: string } = {}) {
   const n = ++sequence;
   const productId = `product-${n}`; const giftId = `gift-${n}`; const couponId = `offer-${n}`;
   await rawDb.collection("products").doc(productId).set({
@@ -85,7 +93,8 @@ async function create(options: { active?: boolean; guest?: boolean; promotion?: 
   const priced = await priceCheckout(db, body);
   const input = { db, body, priced, customerId: options.guest ? undefined : options.beneficiary || `customer-${n}`,
     checkoutRequestId: requestId, payloadFingerprint: checkoutPayloadFingerprint(body), orderId: `order-${n}`,
-    ...(options.active ? { cagnotteProgram: program, nowEpochMs: 124_000 } : {}),
+    ...(options.active ? { accrualProgram: options.accrualProgram ?? program, nowEpochMs: options.nowEpochMs ?? 124_000,
+      ...(options.firebaseProjectId ? { firebaseProjectId: options.firebaseProjectId } : {}) } : {}),
   };
   const result = await commitCheckoutOrder(input);
   if (options.promotion || options.catalogPromotion) await rawDb.collection("coupons").doc(couponId).update({ isActive: false });
@@ -99,8 +108,9 @@ async function balances(f: Fixture) {
   return [wallet?.pendingCents || 0, wallet?.availableCents || 0];
 }
 async function movements(f: Fixture) { return (await rawDb.collection("cagnotteMovements").where("orderId", "==", f.id).get()).docs.map((doc) => doc.data()); }
-async function change(f: Fixture, body: Omit<OrderStatusChange, "orderId">, config: CagnotteTestProgram | null = program) {
-  return commitOrderStatusTransition({ db, body: { orderId: f.id, ...body }, admin, program: config, now: () => "2000-01-01T00:00:00.000Z" });
+async function change(f: Fixture, body: Omit<OrderStatusChange, "orderId">, config: CagnotteAccrualProgram | null = program, firebaseProjectId?: string) {
+  return commitOrderStatusTransition({ db, body: { orderId: f.id, ...body }, admin, accrualProgram: config,
+    reservationProgram: null, firebaseProjectId, now: () => "2000-01-01T00:00:00.000Z" });
 }
 const paid = { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" } as const;
 const delivered = { orderStatus: "delivered" } as const;
@@ -158,6 +168,57 @@ try {
   });
   await test("Creation", "fixture activee : invite sans inscription", async () => {
     const f = await create({ active: true, guest: true }); equal((await stored(f)).cagnotte, undefined);
+  });
+  await test("Production inerte", "definition sans date et entrees normales nulles", () => {
+    equal(CAGNOTTE_SERVER_PROGRAM, null);
+    equal(Object.hasOwn(CAGNOTTE_PRODUCTION_PROGRAM_DEFINITION, "startsAtEpochMs"), false);
+    equal(Object.isFrozen(CAGNOTTE_PRODUCTION_PROGRAM_DEFINITION), true);
+    equal(CAGNOTTE_PRODUCTION_PROGRAM_DEFINITION.programVersion, "cagnotte-commercial-policy-v1");
+    equal(resolveCagnotteProductionProgram({ runtimeEnvironment: "preview", mode: "off" }), null);
+    equal(resolveCagnotteProductionReservationProgram({ runtimeEnvironment: "local", mode: "off" }), null);
+  });
+  await test("Production inerte", "preview local date absente mode inconnu et projet divergent echouent fermes", () => {
+    const valid = { startsAtEpochMs: 123_000, firebaseProjectId: CAGNOTTE_PRODUCTION_FIREBASE_PROJECT_ID };
+    throws(() => resolveCagnotteProductionProgram({ runtimeEnvironment: "preview", mode: "accrue", ...valid }), CagnotteProgramConfigurationError);
+    throws(() => resolveCagnotteProductionProgram({ runtimeEnvironment: "local", mode: "drain", ...valid }), CagnotteProgramConfigurationError);
+    throws(() => resolveCagnotteProductionProgram({ runtimeEnvironment: "production", mode: "accrue", firebaseProjectId: CAGNOTTE_PRODUCTION_FIREBASE_PROJECT_ID }), CagnotteProgramConfigurationError);
+    throws(() => resolveCagnotteProductionProgram({ runtimeEnvironment: "production", mode: "accrue", startsAtEpochMs: 123_000, firebaseProjectId: "other-project" }), CagnotteProgramConfigurationError);
+    throws(() => resolveCagnotteProductionProgram({ runtimeEnvironment: "production", mode: "unknown" as never, ...valid }), CagnotteProgramConfigurationError);
+  });
+  await test("Creation", "startsAt exclut avant, inclut exactement et apres", async () => {
+    const before = await create({ active: true, nowEpochMs: 122_999 });
+    const exact = await create({ active: true, nowEpochMs: 123_000 });
+    const after = await create({ active: true, nowEpochMs: 123_001 });
+    equal((await stored(before)).cagnotte, undefined);
+    equal((await stored(exact)).cagnotte?.createdAtEpochMs, 123_000);
+    equal((await stored(after)).cagnotte?.createdAtEpochMs, 123_001);
+  });
+  await test("Creation", "commande avant lancement payee apres reste historique", async () => {
+    const f = await create({ active: true, nowEpochMs: 122_999 });
+    await change(f, { ...paid, ...delivered }, program);
+    equal((await stored(f)).cagnotte, undefined);
+    equal((await movements(f)).length, 0);
+  });
+  await test("Production inerte", "acquisition 5 pourcent fonctionne sans programme de reservation", async () => {
+    const active: CagnotteProductionProgram = resolveCagnotteProductionProgram({
+      runtimeEnvironment: "production",
+      mode: "accrue",
+      startsAtEpochMs: 123_000,
+      firebaseProjectId: CAGNOTTE_PRODUCTION_FIREBASE_PROJECT_ID,
+    })!;
+    equal(active.programVersion, CAGNOTTE_PRODUCTION_PROGRAM_VERSION);
+    const f = await create({ active: true, accrualProgram: active, firebaseProjectId: CAGNOTTE_PRODUCTION_FIREBASE_PROJECT_ID });
+    const order = await stored(f);
+    equal(order.cagnotte?.accrualEnrollment, "enrolled");
+    equal(order.cagnotte?.snapshot.loyaltyCents, 500);
+    equal((await rawDb.collection("cagnotteReservations").where("orderId", "==", f.id).get()).size, 0);
+    const drain = resolveCagnotteProductionProgram({ runtimeEnvironment: "production", mode: "drain",
+      startsAtEpochMs: 123_000, firebaseProjectId: CAGNOTTE_PRODUCTION_FIREBASE_PROJECT_ID })!;
+    equal(buildCagnotteOrderEnrollment({}, "new-customer", drain, 124_000, CAGNOTTE_PRODUCTION_FIREBASE_PROJECT_ID), undefined);
+    await change(f, paid, drain, CAGNOTTE_PRODUCTION_FIREBASE_PROJECT_ID);
+    deepStrictEqual(await balances(f), [500, 0]);
+    await change(f, delivered, drain, CAGNOTTE_PRODUCTION_FIREBASE_PROJECT_ID);
+    deepStrictEqual(await balances(f), [0, 500]);
   });
   await test("Creation", "format fixe exact et livraison hors base", async () => {
     const f = await create({ active: true, fixed: true }); const result = await stored(f);
@@ -229,7 +290,7 @@ try {
   });
   await test("Creation", "reprise conserve l'original malgre config/prix modifies", async () => {
     const f = await create({ active: true }); const before = await stored(f);
-    const result = await commitCheckoutOrder({ ...f.input, cagnotteProgram: null, priced: { ...f.input.priced, total: 999 } });
+    const result = await commitCheckoutOrder({ ...f.input, accrualProgram: null, priced: { ...f.input.priced, total: 999 } });
     equal(result.created, false); deepStrictEqual(await stored(f), before);
     const found = await findCheckoutRequest(db, f.input.checkoutRequestId, f.input.payloadFingerprint, async () => f.input.customerId);
     equal(found?.orderId, f.id);
@@ -242,7 +303,7 @@ try {
   });
   await test("Creation", "ancienne tentative non inscrite conserve son contrat", async () => {
     const f = await create(); const before = await stored(f);
-    equal((await commitCheckoutOrder({ ...f.input, customerId: "other", cagnotteProgram: program })).created, false);
+    equal((await commitCheckoutOrder({ ...f.input, customerId: "other", accrualProgram: program })).created, false);
     deepStrictEqual(await stored(f), before);
     monitor.denyCagnotte = true;
     try { await change(f, paid); } finally { monitor.denyCagnotte = false; }
@@ -293,9 +354,10 @@ try {
     const f = await create({ active: true }); await change(f, paid); await change(f, delivered, null); deepStrictEqual(await balances(f), [0, 500]);
     await change(f, cancelled, null); deepStrictEqual(await balances(f), [0, 0]);
   });
-  await test("Cycle", "suspension avant attribution : contrat 2A sans nouveau gain", async () => {
-    const f = await create({ active: true }); await change(f, { ...paid, ...delivered }, null);
-    deepStrictEqual(await balances(f), [0, 0]); equal((await movements(f)).length, 0);
+  await test("Cycle", "drain avant attribution : la commande inscrite termine son gain", async () => {
+    const f = await create({ active: true });
+    await change(f, { ...paid, ...delivered }, { ...program, newAccrualsEnabled: false });
+    deepStrictEqual(await balances(f), [0, 500]); equal((await movements(f)).length, 3);
   });
   await test("Cycle", "lien de paiement et facture payee ne creditent pas le gain", async () => {
     const f = await create({ active: true });

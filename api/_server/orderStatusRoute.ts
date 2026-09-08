@@ -47,7 +47,9 @@ export function createOrderStatusHandler(dependencies: {
   verifyToken: typeof verifyFirebaseIdToken;
   sendStatusEmail: Effects["sendStatusEmail"];
   processAnalytics: Effects["processAnalytics"];
-  program?: Parameters<typeof commitOrderStatusTransition>[0]["program"];
+  accrualProgram?: Parameters<typeof commitOrderStatusTransition>[0]["accrualProgram"];
+  reservationProgram?: Parameters<typeof commitOrderStatusTransition>[0]["reservationProgram"];
+  getFirebaseProjectId?: () => string | null;
   now?: Parameters<typeof commitOrderStatusTransition>[0]["now"];
 }) {
 return async function handler(
@@ -69,7 +71,17 @@ return async function handler(
     const admin = await assertAdminUser(db, idToken, dependencies.verifyToken);
 
     const committed =
-      await commitOrderStatusTransition({ db, body, admin, program: dependencies.program, now: dependencies.now });
+      await commitOrderStatusTransition({
+        db,
+        body,
+        admin,
+        accrualProgram: dependencies.accrualProgram,
+        reservationProgram: dependencies.reservationProgram,
+        firebaseProjectId: dependencies.accrualProgram || dependencies.reservationProgram
+          ? dependencies.getFirebaseProjectId?.()
+          : null,
+        now: dependencies.now,
+      });
 
     if (committed.missingPromotionIds.length) {
       console.warn("order cancellation promotion documents missing", {

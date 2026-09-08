@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import type { DocumentReference, Firestore, Transaction } from "firebase-admin/firestore";
 import { calculateLoyaltyCents, CAGNOTTE_CALCULATION_VERSION, simulateCagnotteRefund } from "../../src/lib/cagnotteCalculations.js";
-import type { CagnotteAccrual, CagnotteLedgerCommand, CagnotteLedgerResult, CagnotteMovement, CagnotteTestProgram, CagnotteWallet } from "./cagnotteLedgerTypes.js";
+import type { CagnotteAccrual, CagnotteAccrualProgram, CagnotteLedgerCommand, CagnotteLedgerResult, CagnotteMovement, CagnotteWallet } from "./cagnotteLedgerTypes.js";
 import { CAGNOTTE_REGULARIZATION_VERSION, CAGNOTTE_RESERVATION_VERSION } from "./cagnotteLedgerTypes.js";
+import { assertCagnotteProgramFirebaseProject } from "./cagnotteProgram.js";
 
 function hasOwn(value: object, property: PropertyKey) {
   return Object.prototype.hasOwnProperty.call(value, property);
@@ -18,7 +19,8 @@ export class CagnotteLedgerError extends Error {
 type Operation = {
   db: Firestore;
   command: CagnotteLedgerCommand;
-  program: CagnotteTestProgram | null;
+  program: CagnotteAccrualProgram | null;
+  firebaseProjectId?: string | null;
   /** Stable operation time. Callers sharing another transaction must supply it. */
   recordedAtEpochMs?: number;
   walletMutation?: CagnotteWalletMutation;
@@ -95,10 +97,11 @@ export function applyCagnotteLedgerOperation(input: Operation): Promise<Cagnotte
  * per transaction; aggregate same-wallet operations before integrating a future batch API.
  * No external side effects, hidden client initialization, clock or nested transaction.
  */
-export async function prepareCagnotteLedgerOperation({ db, transaction, command, program, recordedAtEpochMs = Date.now(), walletMutation: suppliedWalletMutation }: Operation & { transaction: Transaction }) {
+export async function prepareCagnotteLedgerOperation({ db, transaction, command, program, firebaseProjectId, recordedAtEpochMs = Date.now(), walletMutation: suppliedWalletMutation }: Operation & { transaction: Transaction }) {
+  assertCagnotteProgramFirebaseProject(program, firebaseProjectId);
   // Copy validated JSON now: no caller mutation can alter the plan while reads await.
   const order = JSON.parse(canonical(command.order)) as CagnotteLedgerCommand["order"];
-  const testProgram = program ? JSON.parse(canonical(program)) as CagnotteTestProgram : null;
+  const activeProgram = program ? JSON.parse(canonical(program)) as CagnotteAccrualProgram : null;
   id(order.orderId);
   if (order.beneficiaryId !== null) id(order.beneficiaryId);
   if (order.programVersion !== null) id(order.programVersion);
@@ -149,7 +152,7 @@ export async function prepareCagnotteLedgerOperation({ db, transaction, command,
     // It never grants a right, but prevents a later activation from crediting a cancelled order.
     const cancellationTombstone = event === "cancelled" && order.beneficiaryId !== null &&
       order.programVersion !== null && order.snapshot.calculationVersion === CAGNOTTE_CALCULATION_VERSION;
-    if (!eligible(testProgram, order) && !cancellationTombstone) return noWrite("not_eligible");
+    if (!matchesProgramIdentity(activeProgram, order) && !cancellationTombstone) return noWrite("not_eligible");
     // Validates the original arithmetic and version using the delivered lot 1 code.
     simulateCagnotteRefund(order.snapshot, [], []);
     state = {
@@ -162,7 +165,7 @@ export async function prepareCagnotteLedgerOperation({ db, transaction, command,
     };
   }
   if (state.cancelled && (event === "payment_confirmed" || event === "delivery_confirmed")) return noWrite("cancelled");
-  if ((event === "payment_confirmed" || combined) && !state.credited && !eligible(testProgram, order)) return noWrite("not_eligible");
+  if ((event === "payment_confirmed" || combined) && !state.credited && !matchesProgramIdentity(activeProgram, order)) return noWrite("not_eligible");
   if (event === "refund_confirmed" && !state.paymentConfirmed) problem("PAYMENT_REQUIRED", "Remboursement reçu avant confirmation du paiement : à rejouer ultérieurement.");
 
   const ownsWalletMutation = suppliedWalletMutation === undefined;
@@ -266,10 +269,11 @@ export async function prepareCagnotteLedgerOperation({ db, transaction, command,
   };
 }
 
-function eligible(program: CagnotteTestProgram | null, order: CagnotteLedgerCommand["order"]): boolean {
+/** Enrollment is already persisted on the order. The switch must not strand it in drain mode. */
+function matchesProgramIdentity(program: CagnotteAccrualProgram | null, order: CagnotteLedgerCommand["order"]): boolean {
   if (!program) return false;
   canonical(program);
-  return program.mode === "local_test" && program.newAccrualsEnabled === true &&
+  return (program.mode === "local_test" || program.mode === "production") &&
     program.calculationVersion === CAGNOTTE_CALCULATION_VERSION && order.snapshot.calculationVersion === program.calculationVersion &&
     typeof program.programVersion === "string" && order.programVersion === program.programVersion &&
     order.beneficiaryId !== null && Number.isSafeInteger(program.startsAtEpochMs) && program.startsAtEpochMs >= 0 &&

@@ -3,7 +3,7 @@ import { commitCheckoutOrder } from "./_server/checkoutOrder.js";
 export { commitCheckoutOrder, assertFixedPriceOrderItemStillMatchesProduct } from "./_server/checkoutOrder.js";
 import { FieldValue } from "firebase-admin/firestore";
 import crypto from "node:crypto";
-import { getAdminDb } from "./_server/firebaseAdmin.js";
+import { getAdminDb, getAdminProjectId } from "./_server/firebaseAdmin.js";
 import {
   assertMethod,
   sendJson,
@@ -19,7 +19,9 @@ import { createCheckoutIdentityResolver } from "./_server/checkoutIdentity.js";
 import { verifyFirebaseIdToken } from "./_server/adminAuth.js";
 import { CagnotteCheckoutError } from "./_server/cagnotteCheckout.js";
 import { CAGNOTTE_RESERVATION_PROGRAM, CagnotteReservationError } from "./_server/cagnotteReservations.js";
-import type { CagnotteReservationTestProgram } from "./_server/cagnotteReservationTypes.js";
+import type { CagnotteReservationProgram } from "./_server/cagnotteReservationTypes.js";
+import { CAGNOTTE_SERVER_PROGRAM } from "./_server/cagnotteProgram.js";
+import type { CagnotteAccrualProgram } from "./_server/cagnotteLedgerTypes.js";
 import { orderPaymentAmount } from "./_server/cagnotteOrders.js";
 import {
   sendAdminManualOrderEmail,
@@ -49,7 +51,9 @@ import type { Invoice, Order } from "../src/types/index.js";
 export function createOrderHandler(dependencies: {
   getDb: typeof getAdminDb;
   verifyToken: typeof verifyFirebaseIdToken;
-  reservationProgram?: CagnotteReservationTestProgram | null;
+  accrualProgram?: CagnotteAccrualProgram | null;
+  reservationProgram?: CagnotteReservationProgram | null;
+  getFirebaseProjectId?: () => string | null;
   now?: () => number;
   processSideEffects?: typeof processOrderSideEffectsBestEffort;
   enforceRateLimit?: typeof enforcePublicSubmissionRateLimit;
@@ -64,6 +68,15 @@ return async function handler(
     const requestBody =
       typeof request.body === "string" ? JSON.parse(request.body) : request.body;
     const body = parseCheckoutBody(requestBody);
+    const accrualProgram = dependencies.accrualProgram === undefined
+      ? CAGNOTTE_SERVER_PROGRAM
+      : dependencies.accrualProgram;
+    const reservationProgram = dependencies.reservationProgram === undefined
+      ? CAGNOTTE_RESERVATION_PROGRAM
+      : dependencies.reservationProgram;
+    const firebaseProjectId = accrualProgram || reservationProgram
+      ? dependencies.getFirebaseProjectId?.()
+      : null;
     const checkoutRequestId = validateCheckoutRequestId(body.checkoutRequestId);
     body.checkoutRequestId = checkoutRequestId;
     const payloadFingerprint = checkoutPayloadFingerprint(body);
@@ -83,7 +96,7 @@ return async function handler(
       if (!body.authToken || !(await verifiedUid())) {
         throw new CagnotteCheckoutError("AUTH_REQUIRED", "Authentification requise pour utiliser la cagnotte.");
       }
-      if (!dependencies.reservationProgram) {
+      if (!reservationProgram) {
         throw new CagnotteCheckoutError("RESERVATIONS_DISABLED", "L’utilisation de la cagnotte est désactivée.");
       }
     }
@@ -165,7 +178,9 @@ return async function handler(
       analyticsRevocationTokenHash,
       checkoutRequestId,
       payloadFingerprint,
-      cagnotteProgram: dependencies.reservationProgram ?? CAGNOTTE_RESERVATION_PROGRAM,
+      accrualProgram,
+      reservationProgram,
+      firebaseProjectId,
       nowEpochMs: (dependencies.now ?? Date.now)(),
     });
     if (!creation.created) {
@@ -242,7 +257,9 @@ return async function handler(
 export default createOrderHandler({
   getDb: getAdminDb,
   verifyToken: verifyFirebaseIdToken,
+  accrualProgram: CAGNOTTE_SERVER_PROGRAM,
   reservationProgram: CAGNOTTE_RESERVATION_PROGRAM,
+  getFirebaseProjectId: getAdminProjectId,
 });
 
 async function processOrderSideEffectsBestEffort(

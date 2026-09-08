@@ -1,13 +1,25 @@
 import type { CagnotteCalculationVersion, CagnotteSnapshot, CumulativeLineReturn } from "../../src/types/cagnotte.js";
 
-/** Fixtures only. No production start date or activation default exists. */
-export type CagnotteTestProgram = {
-  readonly mode: "local_test";
+export type CagnotteProgramMode = "local_test" | "production";
+
+export type CagnotteProgramIdentity<M extends CagnotteProgramMode = CagnotteProgramMode> = {
+  readonly mode: M;
   readonly programVersion: string;
   readonly calculationVersion: CagnotteCalculationVersion;
   readonly startsAtEpochMs: number;
+};
+
+export type CagnotteAccrualProgram<M extends CagnotteProgramMode = CagnotteProgramMode> =
+  CagnotteProgramIdentity<M> & {
+  /** Gates only new order enrollment. Enrolled orders must still complete. */
   readonly newAccrualsEnabled: boolean;
 };
+
+/** Explicit local fixtures; never selected by normal application configuration. */
+export type CagnotteTestProgram = CagnotteAccrualProgram<"local_test">;
+
+/** Production-capable contract. Its normal application entry remains null. */
+export type CagnotteProductionProgram = CagnotteAccrualProgram<"production">;
 
 /** Trusted internal order facts, never an HTTP/client payload contract. */
 export type CagnotteInternalOrder = {

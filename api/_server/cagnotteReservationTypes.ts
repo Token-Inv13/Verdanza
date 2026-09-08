@@ -1,11 +1,16 @@
 import type { CagnotteCalculationInput, CagnotteOrderReservationIntent } from "../../src/types/cagnotte.js";
-import type { CagnotteTestProgram } from "./cagnotteLedgerTypes.js";
+import type { CagnotteProgramIdentity, CagnotteProgramMode } from "./cagnotteLedgerTypes.js";
 import { CAGNOTTE_RESERVATION_VERSION } from "./cagnotteLedgerTypes.js";
 
-export type CagnotteReservationTestProgram = CagnotteTestProgram & {
+export type CagnotteReservationProgram<M extends CagnotteProgramMode = CagnotteProgramMode> =
+  CagnotteProgramIdentity<M> & {
   readonly reservationVersion: typeof CAGNOTTE_RESERVATION_VERSION;
+  /** Gates only new intents/reservations. Existing reservations stay terminally operable. */
   readonly reservationsEnabled: boolean;
 };
+
+export type CagnotteReservationTestProgram = CagnotteReservationProgram<"local_test">;
+export type CagnotteReservationProductionProgram = CagnotteReservationProgram<"production">;
 
 export type CagnotteReservationIntentInput = {
   readonly orderId: string;

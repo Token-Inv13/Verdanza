@@ -37,6 +37,13 @@ export function getAdminDb() {
   return getFirestore();
 }
 
+/** Resolved credential/project identity only. Never logs or returns credential material. */
+export function getAdminProjectId(): string | null {
+  const serviceAccount = getServiceAccount();
+  if (serviceAccount?.projectId) return serviceAccount.projectId;
+  return process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || null;
+}
+
 export function getAdminStorageBucket() {
   ensureAdminApp();
   return getStorage().bucket();

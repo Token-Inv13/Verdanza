@@ -5,10 +5,10 @@ import { computeWeightedSupplierCostsAsOf, resolveOrderItemPurchaseCost } from "
 import { prepareOrderCancellationInTransaction } from "./orderCancellation.js";
 import { enqueuePurchaseAnalyticsForPaidTransition } from "./purchaseAnalytics.js";
 import { orderPaymentAmount, prepareOrderCagnotteTransition, validateOrderCagnotteEnrollment } from "./cagnotteOrders.js";
-import { CagnotteReservationError } from "./cagnotteReservations.js";
+import { CAGNOTTE_RESERVATION_PROGRAM, CagnotteReservationError } from "./cagnotteReservations.js";
 import { CAGNOTTE_SERVER_PROGRAM } from "./cagnotteProgram.js";
-import type { CagnotteTestProgram } from "./cagnotteLedgerTypes.js";
-import type { CagnotteReservationTestProgram } from "./cagnotteReservationTypes.js";
+import type { CagnotteAccrualProgram } from "./cagnotteLedgerTypes.js";
+import type { CagnotteReservationProgram } from "./cagnotteReservationTypes.js";
 import { prepareUnpaidReviewControl, type UnpaidReviewRequest } from "./unpaidOrderReview.js";
 import type { EmailResult } from "./email.js";
 import type { PurchaseAnalyticsProcessResult } from "./purchaseAnalytics.js";
@@ -24,9 +24,16 @@ export type OrderStatusChange = {
 };
 
 /** Actual endpoint transaction; admin is already verified by its unchanged HTTP boundary. */
-export async function commitOrderStatusTransition({db,body,admin,program=CAGNOTTE_SERVER_PROGRAM,now=()=>new Date().toISOString()}: {
+export async function commitOrderStatusTransition({
+  db, body, admin, accrualProgram = CAGNOTTE_SERVER_PROGRAM,
+  reservationProgram = CAGNOTTE_RESERVATION_PROGRAM, firebaseProjectId,
+  now = () => new Date().toISOString(),
+}: {
   db: Firestore; body: OrderStatusChange; admin: {uid:string; email:string | null};
-  program?: CagnotteReservationTestProgram | CagnotteTestProgram | null; now?: ()=>string;
+  accrualProgram?: CagnotteAccrualProgram | null;
+  reservationProgram?: CagnotteReservationProgram | null;
+  firebaseProjectId?: string | null;
+  now?: ()=>string;
 }): Promise<{ updatedOrder: Order | null; previousStatus: OrderStatus | null; purchaseAnalyticsQueued: boolean; missingPromotionIds: string[]; unpaidReviewContext: Awaited<ReturnType<typeof prepareUnpaidReviewControl>>["context"] | null }> {
   const operationTime=now();
   let updatedOrder: Order | null = null;
@@ -225,7 +232,7 @@ export async function commitOrderStatusTransition({db,body,admin,program=CAGNOTT
     const linkOnly = body.paymentLinkSent === true && !body.orderStatus &&
       (!body.paymentStatus || body.paymentStatus === "payment_link_sent");
     const cagnottePlan = linkOnly ? null : await prepareOrderCagnotteTransition({
-      db, transaction, order, program,
+      db, transaction, order, accrualProgram, reservationProgram, firebaseProjectId,
       recordedAtEpochMs: Date.parse(operationTime),
       nextOrderStatus: nextStatus,
       nextPaymentStatus: (update.paymentStatus as PaymentStatus | undefined) ?? order.paymentStatus,

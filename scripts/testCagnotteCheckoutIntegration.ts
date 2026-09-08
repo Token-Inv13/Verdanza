@@ -8,7 +8,7 @@ import { createSendPaymentLinkHandler } from "../api/_server/sendPaymentLinkRout
 import { readUnpaidOrderContext } from "../api/_server/unpaidOrderReview.js";
 import { applyCagnotteLedgerOperation } from "../api/_server/cagnotteLedger.js";
 import { CAGNOTTE_RESERVATION_PROGRAM } from "../api/_server/cagnotteReservations.js";
-import { CAGNOTTE_RESERVATION_VERSION, type CagnotteInternalOrder, type CagnotteWallet } from "../api/_server/cagnotteLedgerTypes.js";
+import { CAGNOTTE_RESERVATION_VERSION, type CagnotteInternalOrder, type CagnotteTestProgram, type CagnotteWallet } from "../api/_server/cagnotteLedgerTypes.js";
 import type { CagnotteReservationTestProgram } from "../api/_server/cagnotteReservationTypes.js";
 import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
 import { assertWalletJournal, fixtureSpentGain } from "./cagnotteRegularizationFixtures.js";
@@ -24,9 +24,15 @@ const program: CagnotteReservationTestProgram = Object.freeze({
   programVersion: "checkout-use-test-v1",
   calculationVersion: "cagnotte-math-v1",
   startsAtEpochMs: 1_000,
-  newAccrualsEnabled: true,
   reservationVersion: CAGNOTTE_RESERVATION_VERSION,
   reservationsEnabled: true,
+});
+const accrualProgram: CagnotteTestProgram = Object.freeze({
+  mode: program.mode,
+  programVersion: program.programVersion,
+  calculationVersion: program.calculationVersion,
+  startsAtEpochMs: program.startsAtEpochMs,
+  newAccrualsEnabled: true,
 });
 const admin: VerifiedFirebaseUser = {
   uid: "checkout-admin",
@@ -312,10 +318,10 @@ try {
 
   await test("Suspension", "réservation existante finalisée sans gain nouveau", async () => {
     await seed(); await fund("customer-a", "fund-suspended-gains");
-    const suspendedGains = { ...program, newAccrualsEnabled: false };
-    const proposal = record(record((await quote(quoteBody(), suspendedGains, "customer-a")).body).cagnotteUse);
-    const orderId = String(record((await create(acceptedCheckout(proposal), suspendedGains, "customer-a")).body).orderId);
-    await status(orderId, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link", orderStatus: "delivered" }, suspendedGains);
+    const suspendedGains = { ...accrualProgram, newAccrualsEnabled: false };
+    const proposal = record(record((await quote(quoteBody(), program, "customer-a", suspendedGains)).body).cagnotteUse);
+    const orderId = String(record((await create(acceptedCheckout(proposal), program, "customer-a", undefined, false, suspendedGains)).body).orderId);
+    await status(orderId, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link", orderStatus: "delivered" }, program, suspendedGains);
     assertWallet(await wallet("customer-a"), [0, 1_200, 0, 0]);
     assert.equal((await reservation(orderId)).state, "consumed");
   });
@@ -401,9 +407,15 @@ function acceptedCheckout(proposal: Record<string, unknown>, requestId = randomU
   };
 }
 
-async function quote(body: Record<string, unknown>, selectedProgram: CagnotteReservationTestProgram | null, identity: string | undefined) {
+async function quote(
+  body: Record<string, unknown>,
+  selectedProgram: CagnotteReservationTestProgram | null,
+  identity: string | undefined,
+  selectedAccrualProgram: CagnotteTestProgram | null = selectedProgram ? accrualProgram : null,
+) {
   const handler = createQuoteOrderHandler({
     getDb: () => rawDb,
+    accrualProgram: selectedAccrualProgram,
     reservationProgram: selectedProgram,
     now: () => 10_000,
     verifyToken: async () => ({ uid: identity || "", email: "customer@example.test", emailVerified: true }),
@@ -417,11 +429,13 @@ async function create(
   identity: string | undefined,
   processSideEffects?: () => Promise<never>,
   failBeforeCommit = false,
+  selectedAccrualProgram: CagnotteTestProgram | null = selectedProgram ? accrualProgram : null,
 ) {
   let transactionDepth = 0;
   const checked = checkedDatabase(() => transactionDepth, (value) => { transactionDepth = value; }, failBeforeCommit);
   const handler = createOrderHandler({
     getDb: () => checked,
+    accrualProgram: selectedAccrualProgram,
     reservationProgram: selectedProgram,
     now: () => 10_000,
     verifyToken: async () => ({ uid: identity || "", email: "customer@example.test", emailVerified: true }),
@@ -439,11 +453,17 @@ async function create(
   return invoke(handler, body);
 }
 
-async function status(orderId: string, patch: Record<string, unknown>, selectedProgram: CagnotteReservationTestProgram | null) {
+async function status(
+  orderId: string,
+  patch: Record<string, unknown>,
+  selectedProgram: CagnotteReservationTestProgram | null,
+  selectedAccrualProgram: CagnotteTestProgram | null = selectedProgram ? accrualProgram : null,
+) {
   const handler = createOrderStatusHandler({
     getDb: () => rawDb,
     verifyToken: async () => admin,
-    program: selectedProgram,
+    accrualProgram: selectedAccrualProgram,
+    reservationProgram: selectedProgram,
     sendStatusEmail: async () => ({ status: "skipped", reason: "synthetic" }),
     processAnalytics: async () => ({ status: "skipped" }),
     now: () => new Date(30_000).toISOString(),
@@ -556,7 +576,7 @@ async function fund(beneficiaryId: string, orderId: string) {
     }),
   };
   await applyCagnotteLedgerOperation({
-    db: rawDb, program, recordedAtEpochMs: 3_000,
+    db: rawDb, program: accrualProgram, recordedAtEpochMs: 3_000,
     command: { order: source, event: "payment_and_delivery_confirmed" },
   });
   return source;

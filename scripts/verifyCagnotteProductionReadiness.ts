@@ -6,7 +6,15 @@ import { dirname, extname, relative, resolve } from "node:path";
 import cagnotteHandler from "../api/cagnotte.js";
 import orderRefundHandler from "../api/order-refunds.js";
 import { buildCagnotteOrderEnrollment, prepareOrderCagnotteTransition } from "../api/_server/cagnotteOrders.js";
-import { CAGNOTTE_SERVER_PROGRAM } from "../api/_server/cagnotteProgram.js";
+import {
+  CAGNOTTE_PRODUCTION_FIREBASE_PROJECT_ID,
+  CAGNOTTE_PRODUCTION_PROGRAM_DEFINITION,
+  CAGNOTTE_PRODUCTION_PROGRAM_VERSION,
+  CAGNOTTE_SERVER_PROGRAM,
+  CagnotteProgramConfigurationError,
+  resolveCagnotteProductionProgram,
+  resolveCagnotteProductionReservationProgram,
+} from "../api/_server/cagnotteProgram.js";
 import {
   CAGNOTTE_READ_SERVER_ENABLED,
   readCagnotte,
@@ -75,6 +83,39 @@ await check("sept gardes normaux fermés", () => {
   assert.equal(ORDER_REFUNDS_ENABLED, false);
 });
 
+await check("contrats Production présents mais définition statique inerte", () => {
+  assert.equal(CAGNOTTE_PRODUCTION_PROGRAM_VERSION, "cagnotte-commercial-policy-v1");
+  assert.deepEqual(CAGNOTTE_PRODUCTION_PROGRAM_DEFINITION, {
+    mode: "production",
+    programVersion: "cagnotte-commercial-policy-v1",
+    calculationVersion: "cagnotte-math-v1",
+  });
+  assert.equal(Object.isFrozen(CAGNOTTE_PRODUCTION_PROGRAM_DEFINITION), true);
+  assert.equal(Object.hasOwn(CAGNOTTE_PRODUCTION_PROGRAM_DEFINITION, "startsAtEpochMs"), false);
+  assert.match(read("api/_server/cagnotteLedgerTypes.ts"), /CagnotteProductionProgram/);
+  assert.match(read("api/_server/cagnotteReservationTypes.ts"), /CagnotteReservationProductionProgram/);
+});
+
+await check("résolveurs Production purs, fermés hors Production et sur projet divergent", () => {
+  const valid = { startsAtEpochMs: 123_000, firebaseProjectId: CAGNOTTE_PRODUCTION_FIREBASE_PROJECT_ID };
+  assert.equal(resolveCagnotteProductionProgram({ runtimeEnvironment: "preview", mode: "off" }), null);
+  assert.equal(resolveCagnotteProductionReservationProgram({ runtimeEnvironment: "local", mode: "off" }), null);
+  assert.throws(
+    () => resolveCagnotteProductionProgram({ runtimeEnvironment: "preview", mode: "accrue", ...valid }),
+    CagnotteProgramConfigurationError,
+  );
+  assert.throws(
+    () => resolveCagnotteProductionProgram({ runtimeEnvironment: "production", mode: "accrue", startsAtEpochMs: 123_000, firebaseProjectId: "wrong-project" }),
+    CagnotteProgramConfigurationError,
+  );
+  const drain = resolveCagnotteProductionProgram({ runtimeEnvironment: "production", mode: "drain", ...valid });
+  const accrue = resolveCagnotteProductionProgram({ runtimeEnvironment: "production", mode: "accrue", ...valid });
+  const reservationDrain = resolveCagnotteProductionReservationProgram({ runtimeEnvironment: "production", mode: "drain", ...valid });
+  assert.equal(drain?.newAccrualsEnabled, false);
+  assert.equal(accrue?.newAccrualsEnabled, true);
+  assert.equal(reservationDrain?.reservationsEnabled, false);
+});
+
 await check("aucun mécanisme parallèle d’activation cagnotte", () => {
   const runtimeFiles = [...walk("api"), ...walk("src")]
     .filter((file) => [".ts", ".tsx", ".js", ".jsx", ".mjs"].includes(extname(file)));
@@ -109,7 +150,9 @@ await check("aucun mécanisme parallèle d’activation cagnotte", () => {
   assert.match(read("api/_server/cagnotteReadRoute.ts"), /enabled:\s*CAGNOTTE_READ_SERVER_ENABLED/);
   assert.match(read("api/_server/orderRefundRoute.ts"), /enabled:\s*ORDER_REFUNDS_ENABLED/);
   assert.match(read("api/create-order.ts"), /reservationProgram:\s*CAGNOTTE_RESERVATION_PROGRAM/);
+  assert.match(read("api/create-order.ts"), /accrualProgram:\s*CAGNOTTE_SERVER_PROGRAM/);
   assert.match(read("api/quote-order.ts"), /reservationProgram:\s*CAGNOTTE_RESERVATION_PROGRAM/);
+  assert.match(read("api/quote-order.ts"), /accrualProgram:\s*CAGNOTTE_SERVER_PROGRAM/);
 });
 
 await check("mode fermé sans écritures cagnotte ni fallback silencieux", async () => {

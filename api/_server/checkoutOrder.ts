@@ -6,16 +6,17 @@ import type { Order, Product } from "../../src/types/index.js";
 import { promotionAvailability } from "../../src/lib/promotionDates.js";
 import { normalizeGiftTiers, qualifyingGiftSubtotal } from "../../src/lib/tieredProductGifts.js";
 import { assertContestPrizeRedeemable, contestCollections } from "./contests.js";
-import { buildCagnotteOrderEnrollment, cagnotteCalculationForPricedCheckout } from "./cagnotteOrders.js";
+import { buildCagnotteOrderEnrollment, cagnotteCalculationForPricedCheckout, canEnrollCagnotteOrder } from "./cagnotteOrders.js";
 import { CAGNOTTE_SERVER_PROGRAM } from "./cagnotteProgram.js";
-import type { CagnotteTestProgram } from "./cagnotteLedgerTypes.js";
-import type { CagnotteReservationTestProgram } from "./cagnotteReservationTypes.js";
+import type { CagnotteAccrualProgram } from "./cagnotteLedgerTypes.js";
+import type { CagnotteReservationProgram } from "./cagnotteReservationTypes.js";
 import {
   assertAcceptedCagnotteQuote,
   prepareCagnotteCheckoutQuote,
   readAvailableCagnotteCents,
 } from "./cagnotteCheckout.js";
 import {
+  CAGNOTTE_RESERVATION_PROGRAM,
   createCagnotteReservationIntent,
   prepareCagnotteReservationOperation,
 } from "./cagnotteReservations.js";
@@ -29,7 +30,9 @@ export async function commitCheckoutOrder(input: {
   customerId?: string;
   analyticsRevocationTokenHash?: string;
   orderId?: string;
-  cagnotteProgram?: CagnotteReservationTestProgram | CagnotteTestProgram | null;
+  accrualProgram?: CagnotteAccrualProgram | null;
+  reservationProgram?: CagnotteReservationProgram | null;
+  firebaseProjectId?: string | null;
   nowEpochMs?: number;
 }) {
   const {
@@ -48,6 +51,12 @@ export async function commitCheckoutOrder(input: {
   const requestRef = db.collection(checkoutRequestsCollection).doc(normalizedRequestId);
   const sideEffectsRef = db.collection(orderSideEffectsCollection).doc(orderRef.id);
   const operationEpochMs = input.nowEpochMs ?? Date.now();
+  const accrualProgram = input.accrualProgram === undefined
+    ? CAGNOTTE_SERVER_PROGRAM
+    : input.accrualProgram;
+  const reservationProgram = input.reservationProgram === undefined
+    ? CAGNOTTE_RESERVATION_PROGRAM
+    : input.reservationProgram;
 
   return db.runTransaction(async (transaction) => {
     const requestSnapshot = await transaction.get(requestRef);
@@ -73,7 +82,6 @@ export async function commitCheckoutOrder(input: {
     let reservationIntent: ReturnType<typeof createCagnotteReservationIntent> = null;
     if (positiveUseRequested) {
       if (!customerId) throw new Error("Authentification requise pour utiliser la cagnotte.");
-      const reservationProgram = input.cagnotteProgram as CagnotteReservationTestProgram | null | undefined;
       if (!reservationProgram) throw new Error("L’utilisation de la cagnotte est désactivée.");
       const availableCents = await readAvailableCagnotteCents(db, customerId, transaction);
       const preparedQuote = prepareCagnotteCheckoutQuote({
@@ -81,8 +89,10 @@ export async function commitCheckoutOrder(input: {
         priced: committedPrice,
         beneficiaryId: customerId,
         availableCents,
-        program: reservationProgram ?? null,
+        accrualProgram,
+        reservationProgram: reservationProgram ?? null,
         createdAtEpochMs: operationEpochMs,
+        firebaseProjectId: input.firebaseProjectId,
       });
       assertAcceptedCagnotteQuote(preparedQuote.quote, body.cagnotteUse?.acceptance);
       reservationIntent = createCagnotteReservationIntent({
@@ -94,7 +104,7 @@ export async function commitCheckoutOrder(input: {
           body.cagnotteUse!.requestedCents,
           availableCents,
         ),
-      }, reservationProgram ?? null);
+      }, reservationProgram ?? null, input.firebaseProjectId);
       if (!reservationIntent) throw new Error("L’utilisation de la cagnotte est désactivée.");
     }
 
@@ -175,8 +185,20 @@ export async function commitCheckoutOrder(input: {
           calculationVersion: reservationIntent.order.snapshot.calculationVersion,
           createdAtEpochMs: reservationIntent.order.createdAtEpochMs,
           snapshot: reservationIntent.order.snapshot,
+          accrualEnrollment: canEnrollCagnotteOrder(
+            accrualProgram,
+            customerId,
+            operationEpochMs,
+            input.firebaseProjectId,
+          ) ? "enrolled" as const : "not_enrolled" as const,
         }
-      : buildCagnotteOrderEnrollment(payload, customerId, input.cagnotteProgram ?? CAGNOTTE_SERVER_PROGRAM, operationEpochMs);
+      : buildCagnotteOrderEnrollment(
+          payload,
+          customerId,
+          accrualProgram,
+          operationEpochMs,
+          input.firebaseProjectId,
+        );
     if (enrollment) payload.cagnotte = enrollment;
     if (reservationIntent && reservationIntent.amountCents > 0) {
       payload.cagnotteReservationIntent = reservationIntent;
@@ -240,7 +262,8 @@ export async function commitCheckoutOrder(input: {
           transaction,
           action: "reserve",
           intent: reservationIntent,
-          program: input.cagnotteProgram as CagnotteReservationTestProgram,
+          program: reservationProgram as CagnotteReservationProgram,
+          firebaseProjectId: input.firebaseProjectId,
           recordedAtEpochMs: operationEpochMs,
         })
       : null;
