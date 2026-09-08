@@ -1,7 +1,8 @@
 import { deepStrictEqual, equal, ok, rejects, throws } from "node:assert/strict";
 import type { Firestore } from "firebase-admin/firestore";
 import { applyCagnotteLedgerOperation, CagnotteLedgerError, prepareCagnotteLedgerOperation } from "../api/_server/cagnotteLedger.js";
-import type { CagnotteAccrual, CagnotteInternalOrder, CagnotteLedgerCommand, CagnotteMovement, CagnotteTestProgram, CagnotteWallet } from "../api/_server/cagnotteLedgerTypes.js";
+import type { CagnotteAccrual, CagnotteAccrualProgram, CagnotteInternalOrder, CagnotteLedgerCommand, CagnotteMovement, CagnotteTestProgram, CagnotteWallet } from "../api/_server/cagnotteLedgerTypes.js";
+import { CagnotteProgramConfigurationError } from "../api/_server/cagnotteProgram.js";
 import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
 import { fixtureSpentGain, assertWalletJournal } from "./cagnotteRegularizationFixtures.js";
 import { assertCagnotteEmulatorAvailable, CAGNOTTE_DEMO, connectCagnotteEmulator, createCagnotteTestEnvironment, validateCagnotteEmulatorTarget, validateCagnotteTestEnvironment } from "./cagnotteEmulator.js";
@@ -105,11 +106,11 @@ async function emulatorTests(db: Firestore) {
     await send(source, "payment_confirmed"); await send(source, "delivery_confirmed");
   }
 
-  await test("programme absent/inactif, historique, version incompatible et beneficiaire absent : aucune ecriture", async () => {
+  await test("programme absent, historique, version incompatible et beneficiaire absent : aucune ecriture", async () => {
     const before = await dump();
     const source = order("excluded");
     for (const [candidate, config] of [
-      [source, null], [source, { ...program, newAccrualsEnabled: false }],
+      [source, null],
       [{ ...source, programVersion: null }, program], [{ ...source, beneficiaryId: null }, program],
       [{ ...source, createdAtEpochMs: 122_999 }, program], [{ ...source, programVersion: "different" }, program],
       [source, { ...program, calculationVersion: "unsupported" }],
@@ -117,6 +118,27 @@ async function emulatorTests(db: Firestore) {
       equal((await apply({ order: candidate, event: "payment_confirmed" }, config)).status, "not_eligible");
     }
     deepStrictEqual(await dump(), before);
+  });
+  await test("drain termine paiement puis livraison d'une commande deja inscrite", async () => {
+    const source = order("drain-enrolled");
+    const drain = { ...program, newAccrualsEnabled: false };
+    equal((await apply({ order: source, event: "payment_confirmed" }, drain)).status, "applied");
+    await balances(source, 500, 0);
+    equal((await apply({ order: source, event: "delivery_confirmed" }, drain)).status, "applied");
+    await balances(source, 0, 500);
+  });
+  await test("projet Firebase Production divergent : echec avant toute ecriture", async () => {
+    const source = order("production-project-mismatch");
+    const productionProgram: CagnotteAccrualProgram<"production"> = { ...program, mode: "production" };
+    await unchanged(
+      () => applyCagnotteLedgerOperation({
+        db,
+        command: { order: source, event: "payment_confirmed" },
+        program: productionProgram,
+        firebaseProjectId: "other-project",
+      }),
+      (error) => error instanceof CagnotteProgramConfigurationError,
+    );
   });
   const normal = order("normal");
   await test("paiement 100 EUR : 500 centimes en attente", async () => {

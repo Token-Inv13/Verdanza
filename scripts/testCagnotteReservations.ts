@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { applyCagnotteLedgerOperation, prepareCagnotteLedgerOperation } from "../api/_server/cagnotteLedger.js";
-import { CAGNOTTE_RESERVATION_VERSION, type CagnotteInternalOrder, type CagnotteWallet } from "../api/_server/cagnotteLedgerTypes.js";
+import { CAGNOTTE_RESERVATION_VERSION, type CagnotteInternalOrder, type CagnotteTestProgram, type CagnotteWallet } from "../api/_server/cagnotteLedgerTypes.js";
 import {
   applyCagnotteReservationOperation,
   CAGNOTTE_RESERVATION_PROGRAM,
@@ -26,9 +26,15 @@ const program: CagnotteReservationTestProgram = Object.freeze({
   programVersion: "reservation-test-v1",
   calculationVersion: "cagnotte-math-v1",
   startsAtEpochMs: 1_000,
-  newAccrualsEnabled: true,
   reservationVersion: CAGNOTTE_RESERVATION_VERSION,
   reservationsEnabled: true,
+});
+const accrualProgram: CagnotteTestProgram = Object.freeze({
+  mode: program.mode,
+  programVersion: program.programVersion,
+  calculationVersion: program.calculationVersion,
+  startsAtEpochMs: program.startsAtEpochMs,
+  newAccrualsEnabled: true,
 });
 
 try {
@@ -46,6 +52,25 @@ try {
     );
     assert.equal(databaseAccess, 0);
     assert.equal(createCagnotteReservationIntent({ orderId: "off", beneficiaryId: "off", createdAtEpochMs: 2_000, calculation: calculation() }, null), null);
+  });
+  await test("Garde", "drain bloque les nouveaux intents mais termine consume, release et cancel", async () => {
+    const drain = { ...program, reservationsEnabled: false };
+    assert.equal(createCagnotteReservationIntent({ orderId: "drain-new", beneficiaryId: "drain-user", createdAtEpochMs: 2_000, calculation: calculation() }, drain), null);
+
+    await fund("drain-consume-user", "drain-consume-fund", 40_000);
+    const consumed = makeIntent("drain-consume-order", "drain-consume-user");
+    await applyCagnotteReservationOperation({ db, action: "reserve", intent: consumed, program });
+    assert.equal((await applyCagnotteReservationOperation({ db, action: "consume", intent: consumed, program: drain })).status, "consumed");
+
+    await fund("drain-release-user", "drain-release-fund", 40_000);
+    const released = makeIntent("drain-release-order", "drain-release-user");
+    await applyCagnotteReservationOperation({ db, action: "reserve", intent: released, program });
+    assert.equal((await applyCagnotteReservationOperation({ db, action: "release", intent: released, program: drain })).status, "released");
+
+    await fund("drain-cancel-user", "drain-cancel-fund", 40_000);
+    const cancelled = makeIntent("drain-cancel-order", "drain-cancel-user");
+    await applyCagnotteReservationOperation({ db, action: "reserve", intent: cancelled, program });
+    assert.equal((await applyCagnotteReservationOperation({ db, action: "cancel", intent: cancelled, program: drain })).status, "released");
   });
 
   await test("Calcul", "montant nul sans document et plafond exact après réductions", async () => {
@@ -93,14 +118,14 @@ try {
     });
     assertWallet(await wallet("main-user"), [0, 1_200, 800, 0]);
     await db.runTransaction(async (transaction) => {
-      const payment = await prepareCagnottePaymentComposition({ db, transaction, intent, program, delivered: false, recordedAtEpochMs: 11_000 });
+      const payment = await prepareCagnottePaymentComposition({ db, transaction, intent, accrualProgram, reservationProgram: program, delivered: false, recordedAtEpochMs: 11_000 });
       assert.deepEqual([payment.reservation.status, payment.ledger.status, payment.walletAfter?.pendingCents, payment.walletAfter?.availableCents, payment.walletAfter?.reservedCents], ["consumed", "applied", 460, 1_200, 0]);
       transaction.update(orderRef, { paymentStatus: "paid" });
       payment.write();
     });
     assertWallet(await wallet("main-user"), [460, 1_200, 0, 0]);
     await db.runTransaction(async (transaction) => {
-      const delivery = await prepareCagnotteLedgerOperation({ db, transaction, program, recordedAtEpochMs: 12_000, command: { order: intent.order, event: "delivery_confirmed" } });
+      const delivery = await prepareCagnotteLedgerOperation({ db, transaction, program: accrualProgram, recordedAtEpochMs: 12_000, command: { order: intent.order, event: "delivery_confirmed" } });
       transaction.update(orderRef, { status: "delivered" });
       delivery.write();
     });
@@ -133,7 +158,7 @@ try {
     const orderRef = db.collection("orders").doc(intent.order.orderId);
     await orderRef.set({ status: "awaiting_payment" });
     await db.runTransaction(async (transaction) => {
-      const plan = await prepareCagnottePaymentComposition({ db, transaction, intent, program, delivered: true, recordedAtEpochMs: 22_000 });
+      const plan = await prepareCagnottePaymentComposition({ db, transaction, intent, accrualProgram, reservationProgram: program, delivered: true, recordedAtEpochMs: 22_000 });
       assert.deepEqual([plan.walletAfter?.pendingCents, plan.walletAfter?.availableCents, plan.walletAfter?.reservedCents], [0, 1_660, 0]);
       transaction.update(orderRef, { status: "delivered", paymentStatus: "paid" });
       plan.write();
@@ -141,7 +166,7 @@ try {
     assertWallet(await wallet("combined-user"), [0, 1_660, 0, 0]);
     const beforeReplay = await snapshot();
     await db.runTransaction(async (transaction) => {
-      const replay = await prepareCagnottePaymentComposition({ db, transaction, intent, program, delivered: true, recordedAtEpochMs: 99_999 });
+      const replay = await prepareCagnottePaymentComposition({ db, transaction, intent, accrualProgram, reservationProgram: program, delivered: true, recordedAtEpochMs: 99_999 });
       assert.deepEqual([replay.reservation.status, replay.ledger.status], ["already_consumed", "already_applied"]);
       replay.write();
     });
@@ -263,7 +288,7 @@ try {
     const intent = makeIntent("cancel-order", "cancel-user");
     await applyCagnotteReservationOperation({ db, action: "reserve", intent, program, recordedAtEpochMs: 39_000 });
     await db.runTransaction(async (transaction) => {
-      const plan = await prepareCagnottePaymentComposition({ db, transaction, intent, program, delivered: true, recordedAtEpochMs: 40_000 });
+      const plan = await prepareCagnottePaymentComposition({ db, transaction, intent, accrualProgram, reservationProgram: program, delivered: true, recordedAtEpochMs: 40_000 });
       plan.write();
     });
     assertWallet(await wallet("cancel-user"), [0, 1_660, 0, 0]);
@@ -423,7 +448,7 @@ async function fund(beneficiaryId: string, orderId: string, productsCents: numbe
     createdAtEpochMs: 2_000,
     snapshot: calculateCagnotte({ lines: [{ lineId: "product", initialCents: productsCents }], discounts: [], requestedCagnotteCents: 0, availableCagnotteCents: 0 }),
   };
-  const result = await applyCagnotteLedgerOperation({ db, program, recordedAtEpochMs: 3_000 + passed, command: { order, event: "payment_and_delivery_confirmed" } });
+  const result = await applyCagnotteLedgerOperation({ db, program: accrualProgram, recordedAtEpochMs: 3_000 + passed, command: { order, event: "payment_and_delivery_confirmed" } });
   assert.equal(result.status, "applied");
   return order;
 }

@@ -117,7 +117,7 @@ try {
   await test("Champs serveur", "champ id contradictoire : reference, journal et effets restent canoniques", async () => {
     const target = await fixture(); const targetBefore = await stored(target.id);
     const f = await fixture({ enrollment: true, overrides: { id: target.id } });
-    const committed = await commitOrderStatusTransition({ db, body: { orderId: f.id, ...paid, orderStatus: "delivered" }, admin, program, now });
+    const committed = await commitOrderStatusTransition({ db, body: { orderId: f.id, ...paid, orderStatus: "delivered" }, admin, accrualProgram: program, reservationProgram: null, now });
     equal(committed.updatedOrder!.id, f.id); deepStrictEqual(await stored(target.id), targetBefore);
     equal((await stored(f.id)).paymentStatus, "paid"); equal((await stored(f.id)).orderStatus, "delivered");
     const wallet = (await db.collection("cagnotteWallets").doc(String(f.data.customerId)).get()).data()!;
@@ -140,7 +140,7 @@ try {
       preferredPaymentMethod: "card_payment_link", customer: { firstName: "Synthetic", lastName: "Customer", email: "synthetic@example.test", phone: "0600000000", address: { firstName: "Synthetic", lastName: "Customer", line1: "1 rue de Test", postalCode: "75001", city: "Paris", country: "FR" } } };
     const body = parseCheckoutBody(raw); const priced = await priceCheckout(db, body);
     const verifiedUid = createCheckoutIdentityResolver(body.authToken, async () => ({ uid: "verified-checkout-customer", email: null }));
-    const input = { db, body, priced, checkoutRequestId: body.checkoutRequestId!, payloadFingerprint: checkoutPayloadFingerprint(body), customerId: await verifiedUid(), orderId: "security-checkout", cagnotteProgram: program, nowEpochMs: 2000 };
+    const input = { db, body, priced, checkoutRequestId: body.checkoutRequestId!, payloadFingerprint: checkoutPayloadFingerprint(body), customerId: await verifiedUid(), orderId: "security-checkout", accrualProgram: program, nowEpochMs: 2000 };
     await commitCheckoutOrder(input); const result = await stored(input.orderId) as unknown as Order;
     equal(result.customerId, "verified-checkout-customer"); equal(result.cagnotte!.beneficiaryId, result.customerId);
     equal(result.cagnotte!.snapshot.loyaltyCents, 500); equal(result.total, priced.total);
@@ -154,8 +154,8 @@ try {
   });
   for (const state of ["sans gain", "gain annule", "gain zero"]) await test("Conservation", `suppression HTTP refusee ${state}`, async () => {
     const f = await fixture({ enrollment: true, ...(state === "gain zero" ? { overrides: { items: [], subtotal: 0, total: 0 } } : {}) });
-    if (state !== "sans gain") await commitOrderStatusTransition({ db, body: { orderId: f.id, ...paid, orderStatus: "delivered" }, admin, program, now });
-    await commitOrderStatusTransition({ db, body: { orderId: f.id, ...cancelled }, admin, program, now });
+    if (state !== "sans gain") await commitOrderStatusTransition({ db, body: { orderId: f.id, ...paid, orderStatus: "delivered" }, admin, accrualProgram: program, reservationProgram: null, now });
+    await commitOrderStatusTransition({ db, body: { orderId: f.id, ...cancelled }, admin, accrualProgram: program, reservationProgram: null, now });
     const before = await stored(f.id); const ledger = await ledgerState();
     const result = await route({ orderId: f.id, deleteCancelled: true, authToken: "synthetic", cagnotte: null });
     equal(result.status, 400); ok(JSON.stringify(result.payload).includes("tracabilite"));

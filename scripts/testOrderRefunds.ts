@@ -11,14 +11,17 @@ import { fixtureSpentGain, assertWalletJournal } from "./cagnotteRegularizationF
 import { applyCagnotteLedgerOperation } from "../api/_server/cagnotteLedger.js";
 import { applyCagnotteReservationOperation, createCagnotteReservationIntent } from "../api/_server/cagnotteReservations.js";
 import type { CagnotteReservationTestProgram } from "../api/_server/cagnotteReservationTypes.js";
+import type { CagnotteTestProgram } from "../api/_server/cagnotteLedgerTypes.js";
 import type { VerifiedFirebaseUser } from "../api/_server/adminAuth.js";
 import type { VercelRequestLike, VercelResponseLike } from "../api/_server/http.js";
 import { readUnpaidOrderContext } from "../api/_server/unpaidOrderReview.js";
 
 const db = await connectCagnotteEmulator(CAGNOTTE_DEMO);
 const actor: VerifiedFirebaseUser = { uid: "refund-admin", email: "refund-admin@example.test", emailVerified: true };
-const program: CagnotteReservationTestProgram = { mode: "local_test", programVersion: "refund-fixture-v1", calculationVersion: "cagnotte-math-v1", startsAtEpochMs: 1000, newAccrualsEnabled: true,
+const program: CagnotteReservationTestProgram = { mode: "local_test", programVersion: "refund-fixture-v1", calculationVersion: "cagnotte-math-v1", startsAtEpochMs: 1000,
   reservationVersion: "cagnotte-reservation-v1", reservationsEnabled: true };
+const accrualProgram: CagnotteTestProgram = { mode: "local_test", programVersion: program.programVersion,
+  calculationVersion: program.calculationVersion, startsAtEpochMs: program.startsAtEpochMs, newAccrualsEnabled: true };
 const clock = () => "2000-01-03T00:00:00.000Z";
 const confirmDate = "2000-01-02T00:00:00.000Z";
 const paid = { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" } as const;
@@ -28,12 +31,12 @@ async function fundWallet(uid: string, amountCents: number, orderId: string) {
   const snapshot = calculateCagnotte({ lines: [{ lineId: "funding-line", initialCents: amountCents * 20 }], discounts: [],
     requestedCagnotteCents: 0, availableCagnotteCents: 0, advantages: [] });
   equal(snapshot.loyaltyCents, amountCents);
-  await applyCagnotteLedgerOperation({ db, program, command: { event: "payment_and_delivery_confirmed", order: {
+  await applyCagnotteLedgerOperation({ db, program: accrualProgram, command: { event: "payment_and_delivery_confirmed", order: {
     orderId, beneficiaryId: uid, programVersion: program.programVersion, createdAtEpochMs: 2000, snapshot,
   } } });
 }
 async function fixture(options: { amounts?: number[]; delivery?: number; discount?: number; gift?: boolean; enrolled?: boolean; ready?: boolean; beneficiary?: string;
-  usedCagnotteCents?: number; initialWalletCents?: number; paymentProgram?: CagnotteReservationTestProgram | null } = {}) {
+  usedCagnotteCents?: number; initialWalletCents?: number; paymentProgram?: CagnotteTestProgram | null } = {}) {
   const id = `refund-order-${++seq}`, uid = options.beneficiary ?? `refund-customer-${seq}`;
   const amounts = options.amounts ?? [10000];
   const lines = amounts.map((initialCents, index) => ({ lineId: `line-${index}`, initialCents }));
@@ -69,13 +72,14 @@ async function fixture(options: { amounts?: number[]; delivery?: number; discoun
   const f = { id, uid, snapshot, data };
   if (snapshot.appliedCagnotteCents > 0) await applyCagnotteReservationOperation({ db, action: "reserve",
     intent: data.cagnotteReservationIntent as NonNullable<ReturnType<typeof createCagnotteReservationIntent>>, program, recordedAtEpochMs: 2000 });
-  const paymentProgram = Object.hasOwn(options, "paymentProgram") ? options.paymentProgram! : program;
+  const paymentProgram = Object.hasOwn(options, "paymentProgram") ? options.paymentProgram! : accrualProgram;
   if (options.ready !== false) await change(f, { ...paid, orderStatus: "delivered" }, paymentProgram);
   return f;
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
-async function change(f: Fixture, patch: Omit<OrderStatusChange, "orderId">, config: CagnotteReservationTestProgram | null = program) {
-  return commitOrderStatusTransition({ db, body: { orderId: f.id, ...patch }, admin: actor, program: config, now: () => "2000-01-01T00:00:00.000Z" });
+async function change(f: Fixture, patch: Omit<OrderStatusChange, "orderId">, config: CagnotteTestProgram | null = accrualProgram) {
+  return commitOrderStatusTransition({ db, body: { orderId: f.id, ...patch }, admin: actor,
+    accrualProgram: config, reservationProgram: program, now: () => "2000-01-01T00:00:00.000Z" });
 }
 async function cancelReviewedUnpaid(f: Fixture) {
   const context = await db.runTransaction(async (transaction) => {
@@ -544,7 +548,7 @@ try {
     const f = await fixture(), s = selection(f), c = confirmation(s, await preview(s), "rollback"); await refused(c, undefined, { fail: true });
   });
   await test("cumuls de journal sans confirmation financiere : aucune fabrication", async () => {
-    const f = await fixture(); await applyCagnotteLedgerOperation({ db, program, command: { event: "refund_confirmed", refundId: "legacy-loyalty-only",
+    const f = await fixture(); await applyCagnotteLedgerOperation({ db, program: accrualProgram, command: { event: "refund_confirmed", refundId: "legacy-loyalty-only",
       order: { orderId: f.id, beneficiaryId: f.uid, programVersion: program.programVersion, createdAtEpochMs: 2000, snapshot: f.snapshot }, additionalReturns: [{ lineId: "line-0", additionalNetCents: 1000 }] } });
     await refused(selection(f), "refund_history_requires_verification");
   });

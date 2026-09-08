@@ -8,13 +8,16 @@ import { createOrderStatusHandler } from "../api/_server/orderStatusRoute.js";
 import { paymentLinkRequestDocumentId, paymentLinkRequestsCollection } from "../api/_server/paymentLinkDelivery.js";
 import { readUnpaidOrderContext, UnpaidReviewError } from "../api/_server/unpaidOrderReview.js";
 import type { CagnotteReservationTestProgram } from "../api/_server/cagnotteReservationTypes.js";
+import type { CagnotteTestProgram } from "../api/_server/cagnotteLedgerTypes.js";
 import type { Order } from "../src/types/index.js";
 import type { VercelRequestLike, VercelResponseLike } from "../api/_server/http.js";
 
 const db = await connectCagnotteEmulator(CAGNOTTE_DEMO);
 const actor = { uid: "review-admin", email: "review-admin@example.test" };
 const program: CagnotteReservationTestProgram = { mode: "local_test", programVersion: "admin-review-v1", calculationVersion: "cagnotte-math-v1",
-  startsAtEpochMs: 1000, newAccrualsEnabled: true, reservationVersion: "cagnotte-reservation-v1", reservationsEnabled: true };
+  startsAtEpochMs: 1000, reservationVersion: "cagnotte-reservation-v1", reservationsEnabled: true };
+const accrualProgram: CagnotteTestProgram = { mode: "local_test", programVersion: program.programVersion,
+  calculationVersion: program.calculationVersion, startsAtEpochMs: program.startsAtEpochMs, newAccrualsEnabled: true };
 const reviewNow = "2026-09-06T12:00:00.000Z";
 let sequence = 0, tests = 0;
 
@@ -26,7 +29,7 @@ async function test(name: string, run: () => Promise<void>) {
 async function fixture(status: "unknown" | "sending" | "none" = "unknown") {
   const id = `review-order-${++sequence}`, beneficiaryId = `review-user-${sequence}`, requestId = `00000000-0000-4000-8000-${String(sequence).padStart(12, "0")}`;
   const fundingSnapshot = calculateCagnotte({ lines: [{ lineId: "fund", initialCents: 20000 }], discounts: [], requestedCagnotteCents: 0, availableCagnotteCents: 0, advantages: [] });
-  await applyCagnotteLedgerOperation({ db, program, recordedAtEpochMs: Date.parse("2026-08-01T10:00:00.000Z"), command: { event: "payment_and_delivery_confirmed", order: {
+  await applyCagnotteLedgerOperation({ db, program: accrualProgram, recordedAtEpochMs: Date.parse("2026-08-01T10:00:00.000Z"), command: { event: "payment_and_delivery_confirmed", order: {
     orderId: `${id}-fund`, beneficiaryId, programVersion: program.programVersion, createdAtEpochMs: 2000, snapshot: fundingSnapshot } } });
   const calculation = { lines: [{ lineId: "line-0", initialCents: 10000 }], discounts: [], requestedCagnotteCents: 800, availableCagnotteCents: 1000, advantages: [] };
   const snapshot = calculateCagnotte(calculation);
@@ -55,7 +58,7 @@ async function context(id: string, now = reviewNow) {
   return db.runTransaction(async (transaction) => readUnpaidOrderContext({ db, transaction, order: await order(id), nowEpochMs: Date.parse(now) }));
 }
 async function change(id: string, body: Parameters<typeof commitOrderStatusTransition>[0]["body"], now = reviewNow) {
-  return commitOrderStatusTransition({ db, body: { ...body, orderId: id }, admin: actor, program: null, now: () => now });
+  return commitOrderStatusTransition({ db, body: { ...body, orderId: id }, admin: actor, accrualProgram: null, reservationProgram: null, now: () => now });
 }
 async function review(id: string, outcome: "unpaid_confirmed" | "payment_uncertain", stateVersion: string) {
   return change(id, { orderId: id, unpaidReview: { action: "record", outcome, source: "Console prestataire fictive", reason: "Contrôle manuel du dossier synthétique", expectedStateVersion: stateVersion } });
@@ -117,7 +120,7 @@ try {
   await test("visiteur et non administrateur refuses avant mutation", async () => {
     const f = await fixture("unknown"), current = await context(f.id), before = await dump(f.id);
     const handler = createOrderStatusHandler({ getDb: () => db, verifyToken: async () => ({ uid: "ordinary-user", email: "ordinary@example.test", emailVerified: true }),
-      sendStatusEmail: async () => ({ status: "skipped", reason: "fixture" }), processAnalytics: async () => ({ status: "skipped", code: "fixture" }), program: null, now: () => reviewNow });
+      sendStatusEmail: async () => ({ status: "skipped", reason: "fixture" }), processAnalytics: async () => ({ status: "skipped", code: "fixture" }), accrualProgram: null, reservationProgram: null, now: () => reviewNow });
     let status = 0;
     const response = { setHeader() {}, status(value: number) { status = value; return this; }, json() {} };
     await handler({ method: "POST", body: { orderId: f.id, authToken: "invalid-role", unpaidReview: { action: "record", outcome: "unpaid_confirmed", source: "fixture", reason: "tentative sans droit", expectedStateVersion: current.stateVersion } }, headers: {} } as VercelRequestLike, response as unknown as VercelResponseLike);

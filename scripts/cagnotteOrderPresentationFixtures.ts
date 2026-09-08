@@ -9,7 +9,6 @@ const program: CagnotteReservationTestProgram = Object.freeze({
   programVersion: "presentation-fixture-v1",
   calculationVersion: "cagnotte-math-v1",
   startsAtEpochMs: 1_000,
-  newAccrualsEnabled: false,
   reservationVersion: "cagnotte-reservation-v1",
   reservationsEnabled: true,
 });
