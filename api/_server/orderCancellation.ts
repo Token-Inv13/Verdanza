@@ -38,7 +38,7 @@ export function nextRestoredCouponUsedCount(value: unknown) {
   return Math.max(0, Number.isFinite(usedCount) ? usedCount - 1 : 0);
 }
 
-export async function applyOrderCancellationInTransaction({
+export async function prepareOrderCancellationInTransaction({
   db,
   transaction,
   order,
@@ -50,7 +50,8 @@ export async function applyOrderCancellationInTransaction({
   order: Order;
   adminUid: string;
   now: string;
-}): Promise<OrderCancellationResult> {
+}): Promise<OrderCancellationResult & { write(): void }> {
+  const writes: (() => void)[] = [];
   const orderUpdate: Record<string, unknown> = {
     cancelledAt: order.cancelledAt || now,
     paymentStatus: "cancelled",
@@ -88,11 +89,11 @@ export async function applyOrderCancellationInTransaction({
     for (const item of order.items || []) {
       const quantity = Number(item.quantity || 0);
       if (!item.productId || quantity <= 0) continue;
-      transaction.update(db.collection("products").doc(item.productId), {
+      writes.push(() => transaction.update(db.collection("products").doc(item.productId), {
         stock: FieldValue.increment(quantity),
         updatedAt: FieldValue.serverTimestamp(),
-      });
-      transaction.set(db.collection("stockMovements").doc(), {
+      }));
+      writes.push(() => transaction.set(db.collection("stockMovements").doc(), {
         productId: item.productId,
         productName: item.name,
         type: "order_cancelled",
@@ -101,7 +102,7 @@ export async function applyOrderCancellationInTransaction({
         createdAt: FieldValue.serverTimestamp(),
         createdBy: adminUid,
         orderId: order.id,
-      });
+      }));
     }
     orderUpdate.stockRestoredAt = now;
   }
@@ -114,9 +115,9 @@ export async function applyOrderCancellationInTransaction({
         missingPromotionIds.push(promotionId);
         continue;
       }
-      transaction.update(reference, {
+      writes.push(() => transaction.update(reference, {
         usedCount: nextRestoredCouponUsedCount(snapshot.data()?.usedCount),
-      });
+      }));
       restoredPromotionIds.push(promotionId);
     }
     const audit: PromotionRestorationAudit = {
@@ -148,10 +149,10 @@ export async function applyOrderCancellationInTransaction({
       } else {
         status = "cancelled";
         changedAt = now;
-        transaction.update(invoiceReference, {
+        writes.push(() => transaction.update(invoiceReference, {
           status: "cancelled",
           updatedAt: now,
-        });
+        }));
       }
     }
     orderUpdate.linkedInvoiceCancellation = {
@@ -163,9 +164,16 @@ export async function applyOrderCancellationInTransaction({
     } satisfies LinkedInvoiceCancellationAudit;
   }
 
-  return { orderUpdate, missingPromotionIds };
+  return { orderUpdate, missingPromotionIds, write() { for (const write of writes) write(); } };
 }
 
 function normalizePromotionId(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+/** Compatibility wrapper for existing callers. */
+export async function applyOrderCancellationInTransaction(input: Parameters<typeof prepareOrderCancellationInTransaction>[0]): Promise<OrderCancellationResult> {
+  const plan = await prepareOrderCancellationInTransaction(input);
+  plan.write();
+  return { orderUpdate: plan.orderUpdate, missingPromotionIds: plan.missingPromotionIds };
 }

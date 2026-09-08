@@ -8,6 +8,8 @@ import type {
   GiftPromotionQuote,
   PromotionSelection,
 } from "../types";
+import type { CagnotteCheckoutQuote, CagnotteUseRequest } from "../types/cagnotte";
+import { getFirebaseIdToken } from "../lib/firebaseAuth";
 
 export type OrderQuote = {
   subtotal: number;
@@ -29,7 +31,19 @@ export type OrderQuote = {
   total: number;
   giftPromotions?: GiftPromotionQuote[];
   promotionConflictMessage?: string;
+  cagnotteUse?: CagnotteCheckoutQuote;
 };
+
+export class QuoteHttpError extends Error {
+  constructor(
+    readonly code: string,
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "QuoteHttpError";
+  }
+}
 
 export async function quoteOrder(input: {
   items: CartItem[];
@@ -39,8 +53,19 @@ export async function quoteOrder(input: {
   couponCode?: string;
   email?: string;
   promotionSelections?: PromotionSelection[];
-}) {
-  const response = await fetch("/api/quote-order", {
+  cagnotteUse?: Pick<CagnotteUseRequest, "requestedCents">;
+}, dependencies: {
+  getToken?: typeof getFirebaseIdToken;
+  fetch?: typeof fetch;
+} = {}) {
+  const requestedCents = input.cagnotteUse?.requestedCents ?? 0;
+  const authToken = requestedCents > 0
+    ? await (dependencies.getToken ?? getFirebaseIdToken)()
+    : undefined;
+  if (requestedCents > 0 && !authToken) {
+    throw new QuoteHttpError("AUTH_REQUIRED", 401, "Votre session a expiré. Reconnectez-vous pour utiliser votre cagnotte.");
+  }
+  const response = await (dependencies.fetch ?? fetch)("/api/quote-order", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -51,14 +76,20 @@ export async function quoteOrder(input: {
       couponCode: input.couponCode?.trim() || undefined,
       email: input.email?.trim() || undefined,
       promotionSelections: input.promotionSelections,
+      ...(requestedCents > 0 ? { authToken, cagnotteUse: { requestedCents } } : {}),
     }),
   });
   const payload = (await response.json().catch(() => ({}))) as
     | OrderQuote
-    | { error?: string };
+    | { code?: string; error?: string };
 
   if (!response.ok) {
-    throw new Error("error" in payload && payload.error ? payload.error : "Code promo invalide.");
+    const errorPayload = payload as { code?: string; error?: string };
+    throw new QuoteHttpError(
+      errorPayload.code || "QUOTE_UNAVAILABLE",
+      response.status,
+      errorPayload.error || "Le devis serveur est indisponible.",
+    );
   }
 
   return payload as OrderQuote;

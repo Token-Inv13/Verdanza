@@ -9,7 +9,7 @@ import {
   getBillingSettings,
   getInvoicesWithFallback,
 } from "../services/invoicesService";
-import { getAdminOrdersWithFallback, type AdminOrderRow } from "../services/ordersService";
+import { getAdminOrder, getAdminOrdersWithFallback, type AdminOrderRow } from "../services/ordersService";
 import { getAdminProductsWithFallback } from "../services/productsService";
 import { getProductCostsAdmin } from "../services/productCostsService";
 import { getSupplierPurchasesAdmin } from "../services/supplierPurchasesService";
@@ -112,6 +112,12 @@ export function useAdminData() {
     setIsLoading(false);
   }, [isAuthReady]);
 
+  const refreshOrder = useCallback(async (orderId: string) => {
+    const order = await getAdminOrder(orderId);
+    if (!order) return;
+    setOrders((current) => current.map((entry) => entry.id === orderId ? order : entry));
+  }, []);
+
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -163,5 +169,6 @@ export function useAdminData() {
     supplierPurchasesError,
     isLoading,
     refresh,
+    refreshOrder,
   };
 }

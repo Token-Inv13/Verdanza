@@ -1,0 +1,15 @@
+.cagnotte-admin{border:1px solid rgba(14,55,38,.16);border-radius:.75rem;background:#fff;padding:1rem;color:#18231d}
+.cagnotte-admin h3,.cagnotte-admin h4{margin:0;color:#0e3726}.cagnotte-admin p{line-height:1.5}
+.cagnotte-admin__warning{border-left:4px solid #b48a3c;background:#faf6eb;padding:.7rem .85rem}
+.cagnotte-admin__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin-top:1rem}
+.cagnotte-admin__box{min-width:0;border:1px solid rgba(14,55,38,.12);border-radius:.55rem;padding:.8rem;background:#fff}
+.cagnotte-admin__amounts{display:grid;grid-template-columns:minmax(0,1fr) max-content;gap:.3rem .8rem;margin:.6rem 0}
+.cagnotte-admin__amounts dt,.cagnotte-admin__amounts dd{margin:0}.cagnotte-admin__amounts dd{text-align:right;font-weight:700;color:#0e3726}
+.cagnotte-admin label{display:grid;gap:.3rem;font-size:.78rem;font-weight:700;color:#0e3726}
+.cagnotte-admin input,.cagnotte-admin select,.cagnotte-admin textarea{width:100%;border:1px solid rgba(14,55,38,.25);border-radius:.4rem;background:#fff;padding:.58rem;color:#18231d}
+.cagnotte-admin button{border:1px solid #0e3726;border-radius:.4rem;background:#0e3726;color:#fff;padding:.55rem .75rem;font-weight:700}.cagnotte-admin button.secondary{background:#fff;color:#0e3726}
+.cagnotte-admin button:disabled{cursor:not-allowed;border-color:#9ca8a1;background:#dfe4e1;color:#59645e;opacity:.72}
+.cagnotte-admin__actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.75rem}.cagnotte-admin__status{margin-top:.75rem;border-radius:.45rem;background:#edf4ef;padding:.7rem}.cagnotte-admin__status.review{background:#fff1e7;color:#79360d}
+.cagnotte-admin__tag{display:inline-flex;border-radius:999px;background:#f0e7d4;padding:.2rem .5rem;font-size:.72rem;font-weight:800;color:#654b20}
+.cagnotte-admin__history{display:grid;gap:.75rem;margin-top:.75rem}.cagnotte-admin__history-entry{border-top:1px solid rgba(14,55,38,.12);padding-top:.75rem}.cagnotte-admin__history-entry:first-child{border-top:0;padding-top:0}.cagnotte-admin__history-entry .cagnotte-admin__actions{align-items:center;justify-content:space-between;margin-top:0}
+@media(max-width:760px){.cagnotte-admin__grid{grid-template-columns:1fr}}

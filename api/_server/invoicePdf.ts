@@ -3,6 +3,12 @@ import { join } from "node:path";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { BRAND_DOCUMENT_LOGO } from "../../src/lib/brandAssets.js";
 import type { BillingSettings, Invoice } from "../../src/types/index.js";
+import {
+  financingDisplayItems,
+  financingNotices,
+  presentInvoiceFinancing,
+} from "../../src/lib/orderFinancing.js";
+import { paymentStatusLabel } from "../../src/utils/orderStatus.js";
 
 type PdfFont = Awaited<ReturnType<PDFDocument["embedFont"]>>;
 type PdfImage = Awaited<ReturnType<PDFDocument["embedPng"]>>;
@@ -23,8 +29,32 @@ const table = {
   unitPriceX: 430,
   totalX: 555,
 };
+const amountRowMinimumGap = 12;
 
-export async function renderInvoicePdf(invoice: Invoice, settings: BillingSettings) {
+export type InvoicePdfRenderOptions = {
+  demonstrationDocument?: boolean;
+};
+
+export function calculateSeparatedAmountRow(input: {
+  labelX: number;
+  amountRightX: number;
+  amountWidth: number;
+  minimumGap?: number;
+}) {
+  const minimumGap = input.minimumGap ?? amountRowMinimumGap;
+  const amountX = input.amountRightX - input.amountWidth;
+  return {
+    amountX,
+    labelMaxWidth: Math.max(1, amountX - minimumGap - input.labelX),
+    minimumGap,
+  };
+}
+
+export async function renderInvoicePdf(
+  invoice: Invoice,
+  settings: BillingSettings,
+  options: InvoicePdfRenderOptions = {},
+) {
   const pdf = await PDFDocument.create();
   let page = pdf.addPage(pageSize);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -104,6 +134,9 @@ export async function renderInvoicePdf(invoice: Invoice, settings: BillingSettin
     }
     drawTextRight("FACTURE", contentRight, pageHeight - margin - 6, 22, bold, forest);
     drawTextRight(invoice.invoiceNumber, contentRight, pageHeight - margin - 30, 14, bold, forest);
+    if (options.demonstrationDocument) {
+      drawTextRight("DÉMONSTRATION — DOCUMENT NON ÉMIS", contentRight, pageHeight - margin - 52, 9, bold, forest);
+    }
   }
 
   function drawPartyBlock(title: string, lines: string[], x: number, startY: number) {
@@ -149,7 +182,9 @@ export async function renderInvoicePdf(invoice: Invoice, settings: BillingSettin
 
   function drawTotalsAndFooter() {
     const promotionsHeight = (invoice.appliedPromotions?.length || 0) * 12;
-    ensureSpace(166 + promotionsHeight);
+    const financing = presentInvoiceFinancing(invoice);
+    const financingHeight = financing ? 78 + financingNotices(financing).length * 22 : 0;
+    ensureSpace(166 + promotionsHeight + financingHeight);
     y -= 10;
     page.drawLine({ start: { x: 330, y }, end: { x: contentRight, y }, thickness: 0.5, color: muted });
     y -= 18;
@@ -169,13 +204,40 @@ export async function renderInvoicePdf(invoice: Invoice, settings: BillingSettin
         y -= 12;
       }
     }
-    drawTotal("Total estimé", invoice.total, true);
+    drawTotal("Total du document", invoice.total, true);
+    if (financing) {
+      y -= 4;
+      drawText("Financement de la commande", 300, y, 10, bold, forest);
+      y -= 17;
+      if (financing.verification === "required") {
+        const warning = wrapText(
+          "Vérification nécessaire : aucun montant hors cagnotte n'est reconstitué.",
+          font,
+          8,
+          255,
+        );
+        for (const line of warning) {
+          drawText(line, 300, y, 8, font, muted);
+          y -= 11;
+        }
+      } else {
+        for (const item of financingDisplayItems(financing, "document").slice(1)) {
+          drawFinancingLine(item.label, item.cents / 100);
+        }
+        for (const notice of financingNotices(financing)) {
+          for (const line of wrapText(notice, font, 7, 255)) {
+            drawText(line, 300, y, 7, font, muted);
+            y -= 10;
+          }
+        }
+      }
+    }
     y -= 18;
 
     ensureSpace(64);
     drawText(`Règlement : ${invoice.paymentMethod || "À confirmer"}`, margin, y, 10, font, muted);
     y -= 16;
-    drawText(`Statut règlement : ${invoice.paymentStatus}`, margin, y, 10, font, muted);
+    drawText(`Statut du règlement : ${paymentStatusLabel(invoice.paymentStatus || "to_confirm")}`, margin, y, 10, font, muted);
     y -= 24;
 
     const legalLines: string[] = [];
@@ -281,9 +343,72 @@ export async function renderInvoicePdf(invoice: Invoice, settings: BillingSettin
   function drawTotal(label: string, value: number, highlight = false) {
     const size = highlight ? 12 : 10;
     const selectedFont = highlight ? bold : font;
-    drawText(label, 385, y, size, selectedFont, forest);
-    drawTextRight(formatMoney(value), table.totalX, y, size, selectedFont, forest);
-    y -= highlight ? 22 : 16;
+    drawSeparatedAmountRow({
+      label,
+      amount: formatMoney(value),
+      labelX: 330,
+      labelSize: size,
+      amountSize: size,
+      labelFont: selectedFont,
+      amountFont: selectedFont,
+      color: forest,
+      lineHeight: size + 3,
+      minimumHeight: highlight ? 22 : 16,
+    });
+  }
+
+  function drawFinancingLine(label: string, value: number) {
+    drawSeparatedAmountRow({
+      label,
+      amount: formatMoney(value),
+      labelX: 300,
+      labelSize: 8,
+      amountSize: 9,
+      labelFont: font,
+      amountFont: bold,
+      color: muted,
+      amountColor: forest,
+      lineHeight: 10,
+      minimumHeight: 15,
+    });
+  }
+
+  function drawSeparatedAmountRow(input: {
+    label: string;
+    amount: string;
+    labelX: number;
+    labelSize: number;
+    amountSize: number;
+    labelFont: PdfFont;
+    amountFont: PdfFont;
+    color: ReturnType<typeof rgb>;
+    amountColor?: ReturnType<typeof rgb>;
+    lineHeight: number;
+    minimumHeight: number;
+  }) {
+    const cleanAmount = sanitize(input.amount);
+    const layout = calculateSeparatedAmountRow({
+      labelX: input.labelX,
+      amountRightX: table.totalX,
+      amountWidth: input.amountFont.widthOfTextAtSize(cleanAmount, input.amountSize),
+    });
+    const labelLines = wrapText(
+      sanitize(input.label),
+      input.labelFont,
+      input.labelSize,
+      layout.labelMaxWidth,
+    );
+    labelLines.forEach((line, index) => {
+      drawText(line, input.labelX, y - index * input.lineHeight, input.labelSize, input.labelFont, input.color);
+    });
+    page.drawText(cleanAmount, {
+      x: layout.amountX,
+      y,
+      size: input.amountSize,
+      font: input.amountFont,
+      color: input.amountColor || input.color,
+    });
+    y -= Math.max(input.minimumHeight, labelLines.length * input.lineHeight + 3);
   }
 }
 
@@ -327,7 +452,7 @@ function sanitize(value: string) {
     .replaceAll("œ", "oe")
     .replaceAll("Œ", "OE")
     .replaceAll("\u00A0", " ")
-    .replace(/[^\x20-\x7E\xA0-\xFF]/g, " ");
+    .replace(/[^\x20-\x7E\xA0-\xFF\u2014]/g, " ");
 }
 
 function wrapText(

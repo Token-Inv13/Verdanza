@@ -14,6 +14,7 @@ import { ContentPage } from "./pages/ContentPage";
 import { FlyerLandingPage } from "./pages/FlyerLandingPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ProductSheetsPage } from "./pages/ProductSheetsPage";
+import { CAGNOTTE_READ_DISPLAY_ENABLED } from "./config/cagnotteFeatures";
 
 const AdminLayout = lazy(() =>
   import("./layouts/AdminLayout").then((module) => ({ default: module.AdminLayout })),
@@ -51,6 +52,13 @@ const AccountFavoritesPage = lazy(() =>
     default: module.AccountFavoritesPage,
   })),
 );
+const AccountAdvantagesPage = CAGNOTTE_READ_DISPLAY_ENABLED
+  ? lazy(() =>
+      import("./pages/account/AccountAdvantagesPage").then((module) => ({
+        default: module.AccountAdvantagesPage,
+      })),
+    )
+  : null;
 const AuthPage = lazy(() =>
   import("./pages/AuthPage").then((module) => ({ default: module.AuthPage })),
 );
@@ -136,6 +144,9 @@ export function App() {
               <Route path="commandes" element={<AccountOrdersPage />} />
               <Route path="favoris" element={<AccountFavoritesPage />} />
               <Route path="profil" element={<AccountProfilePage />} />
+              {AccountAdvantagesPage && (
+                <Route path="avantages" element={<AccountAdvantagesPage />} />
+              )}
             </Route>
           </Route>
           <Route

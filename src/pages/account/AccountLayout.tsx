@@ -1,11 +1,15 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { Seo } from "../../components/Seo";
 import { useAuth } from "../../context/AuthContext";
+import { CAGNOTTE_READ_DISPLAY_ENABLED } from "../../config/cagnotteFeatures";
 
 const accountLinks = [
   { to: "/compte", label: "Tableau de bord", end: true },
   { to: "/compte/commandes", label: "Commandes" },
   { to: "/compte/favoris", label: "Mes favoris" },
+  ...(CAGNOTTE_READ_DISPLAY_ENABLED
+    ? [{ to: "/compte/avantages", label: "Mes avantages" }]
+    : []),
   { to: "/compte/profil", label: "Profil" },
 ];
 

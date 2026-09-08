@@ -192,7 +192,7 @@ assert.ok(validateTieredProductGift({
   ],
 }).length >= 2);
 
-const createOrderSource = readFileSync("api/create-order.ts", "utf8");
+const createOrderSource = readFileSync("api/_server/checkoutOrder.ts", "utf8");
 const cancellationSource = readFileSync("api/_server/orderCancellation.ts", "utf8");
 const bannerSource = readFileSync("api/quote-order.ts", "utf8");
 const accountingSource = readFileSync("src/lib/accountingSummary.ts", "utf8");

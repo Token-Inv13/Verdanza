@@ -1,5 +1,7 @@
 import {
   collection,
+  doc,
+  getDoc,
   getDocs,
   orderBy,
   query,
@@ -7,8 +9,12 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { getFirebaseIdToken } from "../lib/firebaseAuth";
+import { publicDeliveryLabel } from "../lib/deliveryPresentation";
 import { collections } from "./collections";
 import type {
+  Address,
+  CartItem,
+  DeliveryMethod,
   Order,
   OrderItem,
   OrderAnalytics,
@@ -21,7 +27,142 @@ import type {
   PreferredPaymentMethod,
   PaymentStatus,
   StatusHistoryEntry,
+  PromotionSelection,
 } from "../types";
+import type { CagnotteUseRequest } from "../types/cagnotte";
+import type { PublicSubmissionSecurityContext } from "../lib/publicSubmissionSecurity";
+import {
+  presentOrderFinancing,
+  type OrderFinancingPresentation,
+} from "../lib/orderFinancing";
+
+export type CreateCheckoutOrderInput = {
+  checkoutRequestId: string;
+  items: CartItem[];
+  deliveryMethod: DeliveryMethod;
+  deliveryZone?: string;
+  couponCode?: string;
+  promotionSelections?: PromotionSelection[];
+  customerMessage?: string;
+  preferredPaymentMethod: PreferredPaymentMethod;
+  complianceAccepted: boolean;
+  company?: string;
+  submissionSecurity: PublicSubmissionSecurityContext;
+  analyticsContext?: {
+    consentGranted: true;
+    consentCapturedAt: string;
+    clientId: string;
+    sessionId?: string;
+  } | null;
+  customer: {
+    email: string;
+    phone: string;
+    firstName: string;
+    lastName: string;
+    address: Address;
+  };
+  cagnotteUse?: CagnotteUseRequest;
+};
+
+export type CheckoutOrderResult = {
+  orderId: string;
+  total: number;
+  paymentAmount: number;
+  paymentStatus: PaymentStatus;
+  orderStatus: OrderStatus;
+  paymentInstructions?: string;
+  analyticsRevocationToken?: string;
+  cagnotteUse?: {
+    amountCents: number;
+    state: "reserved";
+  };
+  summary: {
+    items: OrderItem[];
+    subtotal: number;
+    deliveryFee: number;
+    deliveryMethod: DeliveryMethod;
+    deliveryZone?: string;
+    deliveryNote?: string;
+    postalFreeShippingApplied?: boolean;
+    preferredPaymentMethod?: PreferredPaymentMethod;
+    couponCode?: string;
+    discountAmount: number;
+    appliedPromotions: NonNullable<Order["appliedPromotions"]>;
+  };
+};
+
+export class CreateOrderHttpError extends Error {
+  constructor(
+    readonly code: string,
+    readonly status: number,
+    readonly outcome: "refused" | "uncertain",
+    message: string,
+  ) {
+    super(message);
+    this.name = "CreateOrderHttpError";
+  }
+}
+
+export async function createCheckoutOrder(
+  input: CreateCheckoutOrderInput,
+  dependencies: {
+    getToken?: typeof getFirebaseIdToken;
+    fetch?: typeof fetch;
+  } = {},
+): Promise<CheckoutOrderResult> {
+  const authToken = await (dependencies.getToken ?? getFirebaseIdToken)();
+  if (input.cagnotteUse?.requestedCents && !authToken) {
+    throw new CreateOrderHttpError(
+      "AUTH_REQUIRED",
+      401,
+      "refused",
+      "Votre session a expiré. Reconnectez-vous avant d’utiliser votre cagnotte.",
+    );
+  }
+  let response: Response;
+  try {
+    response = await (dependencies.fetch ?? fetch)("/api/create-order", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...input, ...(authToken ? { authToken } : {}) }),
+    });
+  } catch {
+    throw new CreateOrderHttpError(
+      "checkout_result_uncertain",
+      0,
+      "uncertain",
+      "La réponse du serveur n’est pas arrivée.",
+    );
+  }
+  const payload = (await response.json().catch(() => ({}))) as Partial<CheckoutOrderResult> & {
+    code?: string;
+    error?: string;
+  };
+  if (!response.ok) {
+    const code = payload.code || "checkout_result_uncertain";
+    const refused = code !== "checkout_result_uncertain";
+    throw new CreateOrderHttpError(
+      code,
+      response.status,
+      refused ? "refused" : "uncertain",
+      payload.error || (refused ? "La commande a été refusée." : "Le résultat de la commande reste à vérifier."),
+    );
+  }
+  if (
+    !payload.orderId ||
+    typeof payload.total !== "number" || !Number.isFinite(payload.total) || payload.total < 0 ||
+    typeof payload.paymentAmount !== "number" || !Number.isFinite(payload.paymentAmount) || payload.paymentAmount < 0 ||
+    !payload.paymentStatus || !payload.orderStatus || !payload.summary || !Array.isArray(payload.summary.items)
+  ) {
+    throw new CreateOrderHttpError(
+      "checkout_result_uncertain",
+      response.status,
+      "uncertain",
+      "La réponse de création est incomplète.",
+    );
+  }
+  return payload as CheckoutOrderResult;
+}
 
 export type AdminOrderRow = {
   id: string;
@@ -51,6 +192,8 @@ export type AdminOrderRow = {
   paymentLinkUrl?: string;
   paymentLinkLabel?: string;
   paymentLinkAmount?: number;
+  paymentAmount?: number;
+  financing: OrderFinancingPresentation;
   paymentLinkCurrency?: Order["paymentLinkCurrency"];
   paymentLinkSent?: boolean;
   paymentLinkSentAt?: string;
@@ -90,6 +233,8 @@ export type CustomerOrderRow = {
   createdAt?: string;
   items: OrderItem[];
   total: number;
+  paymentAmount?: number;
+  financing: OrderFinancingPresentation;
   paymentProvider?: PaymentProvider;
   paymentStatus: PaymentStatus;
   preferredPaymentMethod?: PreferredPaymentMethod;
@@ -105,9 +250,28 @@ export async function getAdminOrdersWithFallback() {
     const snapshot = await getDocs(
       query(collection(db, collections.orders), orderBy("createdAt", "desc")),
     );
-    const orders: AdminOrderRow[] = snapshot.docs.map((entry) => {
-      const order = { id: entry.id, ...entry.data() } as Order;
-      return {
+    const orders: AdminOrderRow[] = snapshot.docs.map((entry) =>
+      adminOrderRow({ id: entry.id, ...entry.data() } as Order));
+    return {
+      orders,
+      source: orders.length ? ("firestore" as const) : ("empty" as const),
+    };
+  } catch (error) {
+    console.warn("Unable to load Firestore orders", error);
+    return { orders: [], source: "empty" as const };
+  }
+}
+
+export async function getAdminOrder(orderId: string): Promise<AdminOrderRow | null> {
+  if (!db) return null;
+  const snapshot = await getDoc(doc(db, collections.orders, orderId));
+  if (!snapshot.exists()) return null;
+  return adminOrderRow({ id: snapshot.id, ...snapshot.data() } as Order);
+}
+
+function adminOrderRow(order: Order): AdminOrderRow {
+  const financing = presentOrderFinancing(order);
+  return {
         id: order.id,
         customerId: order.customerId,
         orderType: order.orderType || "order",
@@ -124,7 +288,7 @@ export async function getAdminOrdersWithFallback() {
         paymentConfirmedBy: order.paymentConfirmedBy,
         orderStatus: order.orderStatus,
         deliveryMethod: order.deliveryMethod,
-        delivery: order.deliveryZone || order.deliveryMethod,
+        delivery: publicDeliveryLabel(order),
         deliveryFee: order.deliveryFee,
         deliveryMinimumApplied: order.deliveryMinimumApplied,
         postalFreeShippingApplied: order.postalFreeShippingApplied,
@@ -135,6 +299,8 @@ export async function getAdminOrdersWithFallback() {
         paymentLinkUrl: order.paymentLinkUrl,
         paymentLinkLabel: order.paymentLinkLabel,
         paymentLinkAmount: order.paymentLinkAmount,
+        paymentAmount: order.paymentAmount,
+        financing,
         paymentLinkCurrency: order.paymentLinkCurrency,
         paymentLinkSent: order.paymentLinkSent === true,
         paymentLinkSentAt: order.paymentLinkSentAt,
@@ -166,17 +332,8 @@ export async function getAdminOrdersWithFallback() {
         emails: order.emails,
         analytics: order.analytics,
         createdAt: order.createdAt,
-        updatedAt: order.updatedAt,
-      };
-    });
-    return {
-      orders,
-      source: orders.length ? ("firestore" as const) : ("empty" as const),
-    };
-  } catch (error) {
-    console.warn("Unable to load Firestore orders", error);
-    return { orders: [], source: "empty" as const };
-  }
+    updatedAt: order.updatedAt,
+  };
 }
 
 export async function retryOrderPurchaseAnalytics(orderId: string) {
@@ -294,16 +451,19 @@ export async function getCustomerOrders(customerId: string) {
   return snapshot.docs
     .map((entry) => {
       const order = { id: entry.id, ...entry.data() } as Order;
+      const financing = presentOrderFinancing(order);
       return {
         id: order.id,
         createdAt: order.createdAt,
         items: order.items || [],
         total: Number(order.total || 0),
+        paymentAmount: order.paymentAmount === undefined ? undefined : Number(order.paymentAmount),
+        financing,
         paymentProvider: order.paymentProvider,
         paymentStatus: order.paymentStatus,
         preferredPaymentMethod: order.preferredPaymentMethod,
         orderStatus: order.orderStatus,
-        deliveryMethod: order.deliveryZone || order.deliveryMethod,
+        deliveryMethod: publicDeliveryLabel(order),
         trackingNumber: order.trackingNumber,
         statusHistory: order.statusHistory || [],
       } satisfies CustomerOrderRow;

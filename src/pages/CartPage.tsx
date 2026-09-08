@@ -6,7 +6,11 @@ import { ProductImage } from "../components/ProductImage";
 import { PromoBannerSlot } from "../components/PromoBannerSlot";
 import { GiftPromotionChooser } from "../components/GiftPromotionChooser";
 import { Seo } from "../components/Seo";
+import { CagnotteCheckoutPanel } from "../components/cagnotte/CagnotteCheckoutPanel";
 import { useCart } from "../context/CartContext";
+import { useAuth } from "../context/AuthContext";
+import { useCagnotteCheckout } from "../hooks/useCagnotteCheckout";
+import { CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED } from "../config/cagnotteFeatures";
 import {
   availableProductStock,
   getCartLineStockIssue,
@@ -29,6 +33,7 @@ import {
 const promoStorageKey = "verdanza-coupon-code";
 
 export function CartPage() {
+  const { user } = useAuth();
   const {
     items,
     lines,
@@ -87,6 +92,27 @@ export function CartPage() {
   const stockIssues = getCartStockIssues(lines);
   const hasStockIssues = stockIssues.length > 0;
   const hasCartIssues = hasStockIssues || hasBlockingCartIssues;
+  const cagnotteContextKey = JSON.stringify({
+    items,
+    deliveryMethod: "postal",
+    deliveryZone: POSTAL_DELIVERY_ZONE_ID,
+    couponCode: hasManualPromo ? normalizedAppliedCouponCode : "",
+    promotionSelections,
+  });
+  const cagnotte = useCagnotteCheckout({
+    enabled: CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED,
+    identityKey: user?.uid ?? null,
+    contextKey: cagnotteContextKey,
+  });
+
+  const loadCagnotteQuote = (requestedCents: number) => quoteOrder({
+    items,
+    deliveryMethod: "postal",
+    deliveryZone: POSTAL_DELIVERY_ZONE_ID,
+    couponCode: hasManualPromo ? normalizedAppliedCouponCode : undefined,
+    promotionSelections,
+    cagnotteUse: { requestedCents },
+  });
 
   useEffect(() => {
     if (!couponCode.trim()) {
@@ -437,6 +463,23 @@ export function CartPage() {
                   onSelect={setPromotionSelection}
                 />
               )}
+              <CagnotteCheckoutPanel
+                enabled={CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED}
+                mode="cart"
+                state={cagnotte.state}
+                authenticated={Boolean(user)}
+                onToggle={(enabled) => {
+                  if (enabled) {
+                    void cagnotte.requestMaximum(loadCagnotteQuote);
+                  } else {
+                    cagnotte.setSelectionEnabled(false);
+                  }
+                }}
+                onAmountChange={cagnotte.setAmountInput}
+                onRequest={() => cagnotte.requestProposal(loadCagnotteQuote)}
+                onMaximum={() => cagnotte.requestMaximum(loadCagnotteQuote)}
+                onRefreshWallet={() => void cagnotte.refreshWallet()}
+              />
               <p className="flex justify-between">
                 <span>Colissimo France</span>
                 <span>{postalShippingFree ? "Offerte" : formatEuro(deliveryFee)}</span>

@@ -7,9 +7,18 @@ import {
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../../src/config/deliveryRules.js";
 import { formatLocalDeliveryEstimate } from "../../src/lib/deliveryEstimate.js";
+import { publicDeliveryLabel } from "../../src/lib/deliveryPresentation.js";
 import { invoiceDocumentSendBlock } from "../../src/lib/invoiceSendPolicy.js";
 import { orderItemLineTotal, orderItemSummaryLabel } from "../../src/lib/orderLineDisplay.js";
 import { BRAND_EMAIL_LOGO_URL } from "../../src/lib/brandAssets.js";
+import {
+  financingDisplayItems,
+  financingNotices,
+  formatFinancingCents,
+  presentInvoiceFinancing,
+  presentOrderFinancing,
+  type OrderFinancingPresentation,
+} from "../../src/lib/orderFinancing.js";
 
 export type EmailResult =
   | { status: "sent"; id?: string; recipients?: EmailRecipientResults }
@@ -439,6 +448,37 @@ function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+export function renderOrderEmailContent(order: Order, intro: string) {
+  return { html: orderEmailHtml(order, intro), text: orderEmailText(order, intro) };
+}
+
+export function renderAdminOrderEmailContent(order: Order) {
+  return { html: adminOrderEmailHtml(order), text: adminOrderEmailText(order) };
+}
+
+export function renderInvoiceEmailContent(invoice: Invoice, settings: BillingSettings) {
+  return { html: invoiceEmailHtml(invoice, settings), text: invoiceEmailText(invoice, settings) };
+}
+
+export function renderPaymentLinkEmailContent(
+  order: Order,
+  input: {
+    paymentLinkUrl: string;
+    paymentLinkLabel: string;
+    paymentLinkAmount: number;
+    paymentLinkCurrency: "EUR";
+  },
+) {
+  return { html: paymentLinkEmailHtml(order, input), text: paymentLinkEmailText(order, input) };
+}
+
+/** Removes active resources and links only after the real email template has rendered. */
+export function inertEmailHtmlForPreview(html: string) {
+  return html
+    .replace(/<div style="margin:0 0 24px"><img[^>]*><\/div>/i, "<div style=\"margin:0 0 24px;font-weight:bold\">Verdanza</div>")
+    .replace(/<a\s+href="[^"]*"[^>]*>(.*?)<\/a>/gi, "<span>$1</span>");
+}
+
 function orderEmailHtml(order: Order, intro: string) {
   const rows = order.items
     .map(
@@ -463,7 +503,8 @@ function orderEmailHtml(order: Order, intro: string) {
       <p><strong>Sous-total produits :</strong> ${formatMoney(Number(order.subtotal || 0))}</p>
       <p><strong>Frais de livraison :</strong> ${escapeHtml(deliveryFeeLabel(order))}</p>
       <p><strong>Total de la commande :</strong> ${formatMoney(Number(order.total || 0))}</p>
-      <p><strong>Livraison :</strong> ${escapeHtml(order.deliveryZone || order.deliveryMethod)}</p>
+      ${orderFinancingHtml(order)}
+      <p><strong>Livraison :</strong> ${escapeHtml(publicDeliveryLabel(order))}</p>
       <p><strong>Information livraison :</strong> ${escapeHtml(deliveryInfoText(order))}</p>
       <p><strong>Mode de règlement souhaité :</strong> ${escapeHtml(preferredPaymentMethodLabel(order.preferredPaymentMethod))}</p>
       <p>${escapeHtml(orderConfirmationNextStep(order))}</p>
@@ -487,7 +528,8 @@ function orderEmailText(order: Order, intro: string) {
     `Sous-total produits: ${formatMoney(Number(order.subtotal || 0))}`,
     `Frais de livraison: ${deliveryFeeLabel(order)}`,
     `Total de la commande: ${formatMoney(Number(order.total || 0))}`,
-    `Livraison: ${order.deliveryZone || order.deliveryMethod}`,
+    ...orderFinancingTextLines(order),
+    `Livraison: ${publicDeliveryLabel(order)}`,
     `Information livraison: ${deliveryInfoText(order)}`,
     `Mode de reglement souhaite: ${preferredPaymentMethodLabel(order.preferredPaymentMethod)}`,
     orderConfirmationNextStep(order),
@@ -560,7 +602,7 @@ function customerManualOrderEmailText(order: Order) {
       .map((item) => `${orderItemSummaryLabel(item)} - ${formatMoney(orderItemLineTotal(item))}`)
       .join("\n"),
     ...promoEmailTextLines(order),
-    `Livraison: ${order.deliveryZone || order.deliveryMethod}`,
+    `Livraison: ${publicDeliveryLabel(order)}`,
     `Information livraison: ${deliveryInfoText(order)}`,
     `Sous-total produits: ${formatMoney(Number(order.subtotal || 0))}`,
     `Frais de livraison: ${deliveryFeeLabel(order)}`,
@@ -583,18 +625,19 @@ function adminOrderEmailHtml(order: Order) {
       <p><strong>Téléphone :</strong> ${escapeHtml(order.customerPhone || "")}</p>
       <p><strong>Email :</strong> ${escapeHtml(order.customerEmail || "")}</p>
       <p><strong>Adresse :</strong> ${escapeHtml(formatAddress(address))}</p>
-      <p><strong>Livraison :</strong> ${escapeHtml(order.deliveryZone || order.deliveryMethod)}</p>
+      <p><strong>Livraison :</strong> ${escapeHtml(publicDeliveryLabel(order))}</p>
       <p><strong>Minimum appliqué :</strong> ${escapeHtml(String(order.deliveryMinimumApplied ?? (order.deliveryMethod === "postal" ? 15 : 20)))} €</p>
       <p><strong>Frais de livraison :</strong> ${escapeHtml(deliveryFeeLabel(order))}</p>
       <p><strong>Information livraison :</strong> ${escapeHtml(deliveryInfoText(order))}</p>
       <p><strong>Mode de règlement souhaité :</strong> ${escapeHtml(preferredPaymentMethodLabel(order.preferredPaymentMethod))}</p>
-      <p><strong>Action paiement :</strong> Lien de paiement à envoyer si CB souhaitée.</p>
+      <p><strong>Action paiement :</strong> ${escapeHtml(adminPaymentAction(order))}</p>
       <p><strong>Produits :</strong></p>
       <ul>${order.items
         .map((item) => `<li>${escapeHtml(orderItemSummaryLabel(item))}</li>`)
         .join("")}</ul>
       ${promoEmailHtml(order)}
       <p><strong>Total de la commande :</strong> ${formatMoney(Number(order.total || 0))}</p>
+      ${orderFinancingHtml(order)}
       ${order.customerMessage ? `<p><strong>Message client :</strong> ${escapeHtml(order.customerMessage)}</p>` : ""}
       ${adminUrl() ? `<p><a href="${adminUrl()}">Ouvrir le cockpit admin</a></p>` : ""}
     </div>
@@ -610,16 +653,17 @@ function adminOrderEmailText(order: Order) {
     `Téléphone: ${order.customerPhone || ""}`,
     `Email: ${order.customerEmail || ""}`,
     `Adresse: ${formatAddress(order.deliveryAddress)}`,
-    `Livraison: ${order.deliveryZone || order.deliveryMethod}`,
+    `Livraison: ${publicDeliveryLabel(order)}`,
     `Minimum applique: ${order.deliveryMinimumApplied ?? (order.deliveryMethod === "postal" ? 15 : 20)} EUR`,
     `Frais de livraison: ${deliveryFeeLabel(order)}`,
     `Information livraison: ${deliveryInfoText(order)}`,
     `Mode de reglement souhaite: ${preferredPaymentMethodLabel(order.preferredPaymentMethod)}`,
-    "Action paiement: lien de paiement a envoyer si CB souhaitee.",
+    `Action paiement: ${adminPaymentAction(order)}`,
     "Produits:",
     order.items.map((item) => orderItemSummaryLabel(item)).join("\n"),
     ...promoEmailTextLines(order),
     `Total de la commande: ${formatMoney(Number(order.total || 0))}`,
+    ...orderFinancingTextLines(order),
     order.customerMessage ? `Message client: ${order.customerMessage}` : "",
     adminUrl() ? `Admin: ${adminUrl()}` : "",
   ]
@@ -635,6 +679,7 @@ function invoiceEmailHtml(invoice: Invoice, settings: BillingSettings) {
       <p>Bonjour ${escapeHtml(invoice.customerName || "Client")},</p>
       <p>Vous trouverez votre facture Verdanza en pièce jointe.</p>
       <p><strong>Total :</strong> ${formatMoney(Number(invoice.total || 0))}</p>
+      ${invoiceFinancingHtml(invoice)}
       <p><strong>Statut du règlement :</strong> ${escapeHtml(invoice.paymentStatus)}</p>
       ${invoice.orderId ? `<p><strong>Commande :</strong> ${escapeHtml(shortOrderId(invoice.orderId))}</p>` : ""}
       <p>Pour toute question : ${escapeHtml(settings.phone)} - ${escapeHtml(settings.email)}</p>
@@ -651,6 +696,7 @@ function invoiceEmailText(invoice: Invoice, settings: BillingSettings) {
     "Vous trouverez votre facture Verdanza en pièce jointe.",
     invoice.orderId ? `Commande: ${shortOrderId(invoice.orderId)}` : "",
     `Total: ${formatMoney(Number(invoice.total || 0))}`,
+    ...invoiceFinancingTextLines(invoice),
     `Statut du règlement: ${invoice.paymentStatus}`,
     "",
     `Téléphone: ${settings.phone}`,
@@ -679,8 +725,9 @@ function paymentLinkEmailHtml(
       <p>Votre commande Verdanza ${escapeHtml(shortOrderId(order.id))} est confirmée.</p>
       <p>Vous pouvez régler ${escapeHtml(amount)} par carte bancaire via le lien suivant :</p>
       <p><a href="${escapeHtml(input.paymentLinkUrl)}">${escapeHtml(input.paymentLinkUrl)}</a></p>
-      <p><strong>Total estimé / confirmé :</strong> ${formatMoney(Number(order.total || 0))}</p>
-      <p><strong>Mode de livraison :</strong> ${escapeHtml(order.deliveryZone || order.deliveryMethod)}</p>
+      <p><strong>Montant à régler :</strong> ${escapeHtml(amount)}</p>
+      ${orderFinancingHtml(order)}
+      <p><strong>Mode de livraison :</strong> ${escapeHtml(publicDeliveryLabel(order))}</p>
       <p>Dès réception du règlement, nous préparerons votre commande.</p>
       <p>Pour toute question :<br>Téléphone : ${escapeHtml(contactPhone())}<br>Email : ${escapeHtml(contactEmail())}</p>
       <p>Merci,<br>Verdanza</p>
@@ -707,8 +754,9 @@ function paymentLinkEmailText(
     input.paymentLinkUrl,
     "",
     "Resume :",
-    `Total estime / confirme : ${formatMoney(Number(order.total || 0))}`,
-    `Mode de livraison : ${order.deliveryZone || order.deliveryMethod}`,
+    `Montant a regler : ${amount}`,
+    ...orderFinancingTextLines(order),
+    `Mode de livraison : ${publicDeliveryLabel(order)}`,
     "",
     "Des reception du reglement, nous preparerons votre commande.",
     "",
@@ -719,6 +767,69 @@ function paymentLinkEmailText(
     "Merci,",
     "Verdanza",
   ].join("\n");
+}
+
+function orderFinancingHtml(order: Order) {
+  return financingHtml(presentOrderFinancing(order));
+}
+
+function orderFinancingTextLines(order: Order) {
+  return financingTextLines(presentOrderFinancing(order));
+}
+
+function invoiceFinancingHtml(invoice: Invoice) {
+  const presentation = presentInvoiceFinancing(invoice);
+  return presentation ? financingHtml(presentation, "document") : "";
+}
+
+function invoiceFinancingTextLines(invoice: Invoice) {
+  const presentation = presentInvoiceFinancing(invoice);
+  return presentation ? financingTextLines(presentation, "document") : [];
+}
+
+function financingHtml(
+  presentation: OrderFinancingPresentation,
+  context: "order" | "document" = "order",
+) {
+  if (presentation.kind === "ordinary") return "";
+  if (presentation.verification === "required") {
+    return "<p><strong>Financement cagnotte :</strong> Vérification nécessaire ; aucun montant hors cagnotte n’est reconstitué.</p>";
+  }
+  return [
+    ...financingDisplayItems(presentation, context).slice(1).map((item) =>
+      `<p><strong>${escapeHtml(item.label)} :</strong> ${escapeHtml(formatFinancingCents(item.cents))}</p>`,
+    ),
+    ...financingNotices(presentation).map((notice) => `<p>${escapeHtml(notice)}</p>`),
+  ].join("");
+}
+
+function financingTextLines(
+  presentation: OrderFinancingPresentation,
+  context: "order" | "document" = "order",
+) {
+  if (presentation.kind === "ordinary") return [];
+  if (presentation.verification === "required") {
+    return ["Financement cagnotte: vérification nécessaire; aucun montant hors cagnotte n'est reconstitué."];
+  }
+  return [
+    ...financingDisplayItems(presentation, context).slice(1).map((item) =>
+      `${item.label}: ${formatFinancingCents(item.cents)}`,
+    ),
+    ...financingNotices(presentation),
+  ];
+}
+
+function adminPaymentAction(order: Order) {
+  const presentation = presentOrderFinancing(order);
+  if (presentation.verification === "required") return "Vérifier le financement avant toute demande de règlement.";
+  if (presentation.orderCancelled) return "Aucune nouvelle demande de règlement : commande annulée.";
+  if (presentation.externalPaymentState === "confirmed" || order.paymentStatus === "paid") {
+    return "Règlement confirmé : aucune nouvelle somme à demander.";
+  }
+  if (presentation.paymentCents === 0) return "Aucun règlement hors cagnotte à demander.";
+  return presentation.kind === "ordinary"
+    ? "Lien de paiement à envoyer si CB souhaitée."
+    : `Demander uniquement ${formatFinancingCents(presentation.paymentCents)} hors cagnotte si un lien CB est souhaité.`;
 }
 
 function contactEmailHtml(input: {
@@ -835,6 +946,21 @@ function deliveryFeeLabel(order: Order) {
 }
 
 function orderConfirmationNextStep(order: Order) {
+  const presentation = presentOrderFinancing(order);
+  if (presentation.verification === "required") {
+    return "Le financement de cette commande doit être vérifié avant toute nouvelle demande de règlement.";
+  }
+  if (presentation.orderCancelled) {
+    return presentation.externalPaymentState === "confirmed"
+      ? "La commande est annulée après un paiement confirmé. Aucun remboursement financier n’est déduit de la seule annulation."
+      : "La commande est annulée avant paiement confirmé. Aucun encaissement ni remboursement financier n’est déduit de la seule annulation.";
+  }
+  if (presentation.externalPaymentState === "confirmed" || order.paymentStatus === "paid") {
+    return "Le règlement est confirmé. Aucune nouvelle somme ne vous est demandée.";
+  }
+  if (presentation.paymentCents === 0) {
+    return "Aucun règlement hors cagnotte ne reste à demander pour cette commande.";
+  }
   if (order.deliveryMethod === "postal") {
     if (order.deliveryFeeStatus === "to_confirm") {
       return "Cette commande est antérieure à la tarification Colissimo actuelle. L'équipe Verdanza vérifiera manuellement ses modalités avant le règlement.";

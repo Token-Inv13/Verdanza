@@ -1,4 +1,4 @@
-import { assertAdminUser } from "./adminAuth.js";
+import { assertAdminUser, verifyFirebaseIdToken } from "./adminAuth.js";
 import { findActiveAdminPaymentLink } from "./adminPaymentLinks.js";
 import { sendPaymentLinkEmail } from "./email.js";
 import { getAdminDb } from "./firebaseAdmin.js";
@@ -16,7 +16,14 @@ import {
   type PaymentLinkDeliveryRequest,
 } from "./paymentLinkDelivery.js";
 
-export async function handleSendPaymentLink(
+type DeliveryDependencies = Parameters<typeof executePaymentLinkDelivery>[0];
+export function createSendPaymentLinkHandler(dependencies: {
+  getDb: () => DeliveryDependencies["db"];
+  verifyToken: typeof verifyFirebaseIdToken;
+  send: DeliveryDependencies["send"];
+  now?: () => number;
+}) {
+return async function handleSendPaymentLink(
   request: VercelRequestLike,
   response: VercelResponseLike,
 ) {
@@ -45,20 +52,14 @@ export async function handleSendPaymentLink(
       channel: "email",
     };
 
-    const db = getAdminDb();
-    const admin = await assertAdminUser(db, token);
+    const db = dependencies.getDb();
+    const admin = await assertAdminUser(db, token, dependencies.verifyToken);
     const result = await executePaymentLinkDelivery({
       db,
       request: deliveryRequest,
       admin,
-      send: (order, delivery) =>
-        sendPaymentLinkEmail(order, {
-          paymentLinkRequestId: delivery.paymentLinkRequestId,
-          paymentLinkUrl: delivery.paymentLinkUrl,
-          paymentLinkLabel: delivery.paymentLinkLabel,
-          paymentLinkAmount: delivery.paymentLinkAmount,
-          paymentLinkCurrency: delivery.paymentLinkCurrency,
-        }),
+      send: dependencies.send,
+      now: dependencies.now,
     });
 
     const statusCode =
@@ -85,6 +86,12 @@ export async function handleSendPaymentLink(
   }
 }
 
+}
+
+export const handleSendPaymentLink = createSendPaymentLinkHandler({
+  getDb: getAdminDb, verifyToken: verifyFirebaseIdToken, send: sendPaymentLinkEmail,
+});
+
 type RawBody = {
   orderId?: string;
   paymentLinkRequestId?: string;
@@ -103,8 +110,8 @@ function parseJsonObject(value: unknown): RawBody {
 }
 
 function parseBody(value: RawBody) {
-  if (!value.orderId) throw new Error("order_id_required");
-  if (!value.paymentLinkUrl) throw new Error("payment_link_required");
+  if (typeof value.orderId !== "string" || !value.orderId || value.orderId.includes("/")) throw new Error("order_id_required");
+  if (typeof value.paymentLinkUrl !== "string" || !value.paymentLinkUrl) throw new Error("payment_link_required");
   if (value.intent !== "initial" && value.intent !== "resend") {
     throw new Error("payment_link_intent_invalid");
   }
@@ -127,6 +134,10 @@ function resolvePaymentLink(body: {
   paymentLinkAmount?: number;
   paymentLinkCurrency?: "EUR";
 }) {
+  if (body.paymentLinkCurrency !== undefined && body.paymentLinkCurrency !== "EUR") throw new Error("payment_link_not_allowed");
+  let url: URL;
+  try { url = new URL(body.paymentLinkUrl); } catch { throw new Error("payment_link_not_allowed"); }
+  if (url.protocol !== "https:" || url.hostname !== "buy.stripe.com" || url.port || url.username || url.password || !url.pathname.slice(1)) throw new Error("payment_link_not_allowed");
   const configured = findActiveAdminPaymentLink(body.paymentLinkUrl);
   if (configured) return configured;
 

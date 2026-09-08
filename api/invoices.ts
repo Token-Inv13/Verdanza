@@ -1,3 +1,4 @@
+import { orderFromSnapshot } from "./_server/orderProtection.js";
 import { FieldValue } from "firebase-admin/firestore";
 import { assertAdminUser } from "./_server/adminAuth.js";
 import { getAdminDb, getAdminStorageBucket } from "./_server/firebaseAdmin.js";
@@ -13,6 +14,7 @@ import { sendInvoiceToCustomerEmail } from "./_server/email.js";
 import { BRAND_DOCUMENT_LOGO } from "../src/lib/brandAssets.js";
 import { normalizeSupplierPurchaseInput } from "../src/lib/accountingCosts.js";
 import { buildCustomerInvoiceLines } from "../src/lib/customerInvoiceLines.js";
+import { buildOrderFinancingDocumentSnapshot } from "../src/lib/orderFinancing.js";
 import {
   normalizeSupplierLabel,
   normalizeText,
@@ -47,7 +49,6 @@ import type {
   Invoice,
   InvoiceLine,
   InvoiceStatus,
-  Order,
   PaymentStatus,
   Product,
   SupplierProductAlias,
@@ -296,7 +297,7 @@ async function getLinkedOrder(
   if (!invoice.orderId) return undefined;
   const snapshot = await db.collection("orders").doc(invoice.orderId).get();
   return snapshot.exists
-    ? ({ id: snapshot.id, ...snapshot.data() } as Order)
+    ? (orderFromSnapshot(snapshot))
     : null;
 }
 
@@ -309,10 +310,11 @@ async function createInvoiceFromOrder(db: FirebaseFirestore.Firestore, orderId: 
   }
   const orderSnapshot = await db.collection("orders").doc(orderId).get();
   if (!orderSnapshot.exists) throw new Error("Commande introuvable.");
-  const order = { id: orderSnapshot.id, ...orderSnapshot.data() } as Order;
+  const order = orderFromSnapshot(orderSnapshot);
   const invoiceNumber = await nextInvoiceNumber(db);
   const now = new Date().toISOString();
   const lines = buildCustomerInvoiceLines(order);
+  const financing = buildOrderFinancingDocumentSnapshot(order);
   const invoiceRef = db.collection("invoices").doc();
   const invoice: Invoice = {
     id: invoiceRef.id,
@@ -330,6 +332,7 @@ async function createInvoiceFromOrder(db: FirebaseFirestore.Firestore, orderId: 
     discountAmount: Number(order.discountAmount || 0),
     appliedPromotions: order.appliedPromotions || [],
     total: Number(order.total || 0),
+    ...(financing ? { financing } : {}),
     paymentMethod: order.paymentInstructions || "Règlement à confirmer",
     paymentStatus: order.paymentStatus || "to_confirm",
     internalNote: "",

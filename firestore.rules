@@ -14,6 +14,7 @@ service cloud.firestore {
 
     function adminByEmail() {
       return signedIn()
+        && request.auth.token.email_verified == true
         && request.auth.token.email != null
         && exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email))
         && get(/databases/$(database)/documents/adminUsers/$(request.auth.token.email)).data.isActive == true;
@@ -48,8 +49,20 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow read: if isAdmin()
         || (signedIn() && resource.data.customerId == request.auth.uid);
-      allow create, update, delete: if isAdmin();
+      // Presence, including null/malformed values, protects both sides of a write.
+      allow create: if isAdmin() && !request.resource.data.keys().hasAny(["cagnotte"]);
+      allow update: if isAdmin()
+        && !resource.data.keys().hasAny(["cagnotte"])
+        && !request.resource.data.keys().hasAny(["cagnotte"]);
+      allow delete: if isAdmin() && !resource.data.keys().hasAny(["cagnotte"]);
     }
+
+    // Internal documents and every descendant: server Admin SDK only.
+    match /cagnotteWallets/{document=**} { allow read, write: if false; }
+    match /cagnotteMovements/{document=**} { allow read, write: if false; }
+    match /cagnotteAccruals/{document=**} { allow read, write: if false; }
+    match /cagnotteRefunds/{document=**} { allow read, write: if false; }
+    match /cagnotteReservations/{document=**} { allow read, write: if false; }
 
     match /customers/{customerId} {
       allow read: if isAdmin() || (signedIn() && customerId == request.auth.uid);

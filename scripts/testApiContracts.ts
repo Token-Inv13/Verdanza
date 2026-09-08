@@ -1,3 +1,7 @@
+import orderRefundHandler from "../api/order-refunds.js";
+import { handleOrderRefund } from "../api/_server/orderRefundRoute.js";
+import cagnotteHandler from "../api/cagnotte.js";
+import { handleCagnotteRead } from "../api/_server/cagnotteReadRoute.js";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
@@ -29,6 +33,8 @@ const removedRewriteSources = [
 ];
 
 function testDirectEntrypoints() {
+  assert.equal(orderRefundHandler, handleOrderRefund);
+  assert.equal(cagnotteHandler, handleCagnotteRead);
   assert.equal(contestsHandler, handlePublicContests);
   assert.equal(adminContestsHandler, handleAdminContests);
   assert.equal(blogInteractionsHandler, handleBlogInteractions);
@@ -40,6 +46,12 @@ function testDirectEntrypoints() {
 }
 
 async function testEndpointContracts() {
+  const cagnotteResponse = new FakeResponse();
+  await cagnotteHandler(request("GET", "/api/cagnotte?scope=self"), cagnotteResponse as never);
+  assert.equal(cagnotteResponse.statusCode, 503);
+  assert.deepEqual(cagnotteResponse.body, { code: "cagnotte_read_disabled", error: "Consultation des avantages indisponible." });
+  assert.equal(cagnotteResponse.headers.get("Cache-Control"), "private, no-store");
+
   const publicMethodResponse = new FakeResponse();
   await contestsHandler(request("PUT", "/api/contests"), publicMethodResponse as never);
   assert.equal(publicMethodResponse.statusCode, 405);
@@ -123,12 +135,14 @@ function testFunctionInventoryAndSecuritySources() {
     "admin-payment-links.ts",
     "analyze-supplier-invoice.ts",
     "blog-interactions.ts",
+    "cagnotte.ts",
     "contact.ts",
     "contest-prize.ts",
     "contests.ts",
     "create-order.ts",
     "create-review.ts",
     "invoices.ts",
+    "order-refunds.ts",
     "quote-order.ts",
     "retry-order-emails.ts",
     "retry-order-purchase-analytics.ts",
@@ -136,7 +150,7 @@ function testFunctionInventoryAndSecuritySources() {
     "send-payment-link.ts",
     "update-order-status.ts",
   ]);
-  assert.equal(functions.length, 16);
+  assert.equal(functions.length, 18);
 
   for (const file of [
     "api/_server/contestAdminRoute.ts",
@@ -144,6 +158,8 @@ function testFunctionInventoryAndSecuritySources() {
     "api/_server/retryPurchaseAnalyticsRoute.ts",
     "api/_server/adminPaymentLinksRoute.ts",
     "api/_server/sendPaymentLinkRoute.ts",
+    "api/_server/orderRefundRoute.ts",
+    "api/_server/cagnotteReadRoute.ts",
   ]) {
     assert.match(
       readFileSync(resolve(file), "utf8"),
@@ -181,4 +197,4 @@ await testEndpointContracts();
 testRewriteConfiguration();
 testFunctionInventoryAndSecuritySources();
 
-console.log("Direct API endpoint contract tests passed (16 functions)");
+console.log("Direct API endpoint contract tests passed (18 functions)");
