@@ -17,9 +17,9 @@ const expectedProfiles = {
   mimosa: ["flower", "moyenne", ["agrumes", "fruite", "sucre"]],
   "watermelon-candy": ["flower", "douce", ["fruite", "sucre", "terreux"]],
   "zkittlez-og": ["flower", "forte", ["fruite", "sucre", "agrumes"]],
-  "pollen-mousseux": ["resin", "forte", ["terreux", "boise", "agrumes"]],
+  "le-mousseux": ["resin", "forte", ["terreux", "boise", "agrumes"]],
   kief: ["resin", "forte", ["terreux", "epice", "boise"]],
-  "black-libanais": ["resin", "forte", ["terreux", "epice", "boise"]],
+  libanais: ["resin", "forte", ["terreux", "epice", "boise"]],
   "black-butter": ["resin", "moyenne", ["terreux", "boise", "sucre"]],
 } as const;
 
@@ -52,7 +52,7 @@ const resinStrong = { ...flowerMedium, category: "resin", intensity: "forte" } a
 const resinMatches = rankProductSheets(resinStrong);
 assert.deepEqual(
   resinMatches.map((match) => match.sheet.slug),
-  ["pollen-mousseux", "kief", "black-libanais"],
+  ["le-mousseux", "kief", "libanais"],
   "resin + strong must return only exact V6 intensity matches",
 );
 assert.ok(
@@ -126,7 +126,7 @@ const exactSelectionCases: Array<{
   { choices: { category: "flower", intensity: "moyenne", aroma: "any" }, expected: ["biscotti", "mimosa"] },
   { choices: { category: "flower", intensity: "forte", aroma: "any" }, expected: ["blue-dream", "lemon-skunk", "zkittlez-og"] },
   { choices: { category: "resin", intensity: "moyenne", aroma: "any" }, expected: ["black-butter"] },
-  { choices: { category: "resin", intensity: "forte", aroma: "any" }, expected: ["pollen-mousseux", "kief", "black-libanais"] },
+  { choices: { category: "resin", intensity: "forte", aroma: "any" }, expected: ["le-mousseux", "kief", "libanais"] },
 ];
 for (const { choices, expected } of exactSelectionCases) {
   assert.deepEqual(rankProductSheets(choices).map((match) => match.sheet.slug), expected);
@@ -141,9 +141,9 @@ const aromaCases: Array<{
   { aroma: "fruite", category: "flower", intensity: "forte", first: "zkittlez-og" },
   { aroma: "agrumes", category: "flower", intensity: "forte", first: "blue-dream" },
   { aroma: "sucre", category: "flower", intensity: "moyenne", first: "biscotti" },
-  { aroma: "terreux", category: "resin", intensity: "forte", first: "pollen-mousseux" },
+  { aroma: "terreux", category: "resin", intensity: "forte", first: "le-mousseux" },
   { aroma: "epice", category: "resin", intensity: "forte", first: "kief" },
-  { aroma: "boise", category: "resin", intensity: "forte", first: "pollen-mousseux" },
+  { aroma: "boise", category: "resin", intensity: "forte", first: "le-mousseux" },
 ];
 for (const { aroma, category, intensity, first } of aromaCases) {
   assert.equal(rankProductSheets({ aroma, category, intensity })[0]?.sheet.slug, first, `${aroma}: matching aroma must rank first`);

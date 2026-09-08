@@ -162,6 +162,7 @@ function TiltProductCard({ sheet, active, onSelect }: { sheet: ProductSheet; act
     if (!card) return;
     card.style.setProperty("--tilt-x", `${pendingTiltRef.current.rotateX.toFixed(2)}deg`);
     card.style.setProperty("--tilt-y", `${pendingTiltRef.current.rotateY.toFixed(2)}deg`);
+    card.classList.add("is-tilting");
   };
 
   const handlePointerMove = (event: PointerEvent<HTMLButtonElement>) => {
@@ -176,7 +177,12 @@ function TiltProductCard({ sheet, active, onSelect }: { sheet: ProductSheet; act
 
   const resetTilt = () => {
     pendingTiltRef.current = { rotateX: 0, rotateY: 0 };
-    if (frameRef.current === null) frameRef.current = requestAnimationFrame(applyTilt);
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    frameRef.current = null;
+    const card = cardRef.current;
+    card?.classList.remove("is-tilting");
+    card?.style.removeProperty("--tilt-x");
+    card?.style.removeProperty("--tilt-y");
   };
 
   return (

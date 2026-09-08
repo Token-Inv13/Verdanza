@@ -17,9 +17,9 @@ const expectedPdfHashes: Record<string, string> = {
   mimosa: "dd3e0c3ab48758e1735d175fc52bafce233022ed276c960c3c0b47e594bc937d",
   "watermelon-candy": "8d381cb07a4cbfa906018d9a8defdeee67e5baaec421f514670d5ef8c4dff409",
   "zkittlez-og": "bf9ee2a140a1a56bb80484d54fbe63328cd5a9d7b82f15b1590da3fda85f85cc",
-  "pollen-mousseux": "b9516d4168d85c87e7a4d4edfbbc1b95e2548ccfb8fbb9a188fc3ac43e97ed2f",
+  "le-mousseux": "ec55e382f3e638c1c4e8a2d1ef50dfecdc031f45c9367447a0f412c31fa6476c",
   kief: "79de3490c076dfcf5fb4f3e1b73d74c0dcbe42a20cbe65aca44b54ed3a54bb5b",
-  "black-libanais": "181af77d9086b74e96266f129bd7d85e52f83d654318ca2719ac0d192e3f52db",
+  libanais: "b665cdcb3c14c5c38a0367c417bab601d04ceaf54f47fecd9abdf19426e37bdf",
   "black-butter": "da2d01aa97defdd62efd02a41abd56492a6162aa218dc9901a4cf41de5583a04",
 };
 
@@ -38,6 +38,11 @@ assert.equal(
   new Set(productSheets.map((sheet) => sheet.slug)).size,
   productSheets.length,
   "product sheet slugs must be unique",
+);
+assert.deepEqual(
+  productSheets.filter((sheet) => sheet.selectionProfile.category === "resin").map((sheet) => sheet.name),
+  ["Le mousseux", "Kief", "Libanais", "Black Butter"],
+  "the active resin library must use the V6.1 names",
 );
 
 for (const sheet of productSheets) {
@@ -65,7 +70,7 @@ for (const sheet of productSheets) {
     assert.equal(
       sha256(pdfPath),
       expectedPdfHashes[sheet.slug],
-      `${sheet.slug}: PDF hash differs from the validated V6 standard`,
+      `${sheet.slug}: PDF hash differs from the validated V6.1 standard`,
     );
 
     const metadata = await sharp(previewPath).metadata();
@@ -119,6 +124,7 @@ assert.doesNotMatch(sitemap, /\.pdf(?:<|$)/i, "PDFs must not be in the sitemap")
 
 const vercelConfig = JSON.parse(readFileSync(resolve("vercel.json"), "utf8")) as {
   headers?: Array<{ source?: string; headers?: Array<{ key?: string; value?: string }> }>;
+  redirects?: Array<{ source?: string; destination?: string; permanent?: boolean }>;
 };
 const pdfHeaderRule = vercelConfig.headers?.find(
   (rule) =>
@@ -128,6 +134,22 @@ const pdfHeaderRule = vercelConfig.headers?.find(
     ),
 );
 assert.ok(pdfHeaderRule, "vercel.json must set X-Robots-Tag: noindex below /fiches-produits/");
+
+const expectedLegacyRedirects = new Map([
+  [
+    `/fiches-produits/${["pollen", "mousseux"].join("-")}/verdanza-${["pollen", "mousseux"].join("-")}.pdf`,
+    "/fiches-produits/le-mousseux/verdanza-le-mousseux.pdf",
+  ],
+  [
+    `/fiches-produits/${["black", "libanais"].join("-")}/verdanza-${["black", "libanais"].join("-")}.pdf`,
+    "/fiches-produits/libanais/verdanza-libanais.pdf",
+  ],
+]);
+for (const [source, destination] of expectedLegacyRedirects) {
+  const redirect = vercelConfig.redirects?.find((candidate) => candidate.source === source);
+  assert.equal(redirect?.destination, destination, `${source}: legacy PDF redirect destination is incorrect`);
+  assert.equal(redirect?.permanent, true, `${source}: legacy PDF redirect must be permanent`);
+}
 
 const server = await startAuditStaticServer();
 const browser = await chromium.launch({ headless: true });

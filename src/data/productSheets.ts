@@ -93,12 +93,12 @@ export const productSheets: ProductSheet[] = [
     previewUrl: "/images/fiches-produits/zkittlez-og.webp",
   },
   {
-    name: "Pollen Mousseux",
-    slug: "pollen-mousseux",
+    name: "Le mousseux",
+    slug: "le-mousseux",
     aromas: ["Terreux", "Boisé", "Subtilement fruité"],
     selectionProfile: { category: "resin", intensity: "forte", aromaFamilies: ["terreux", "boise", "agrumes"] },
-    pdfUrl: "/fiches-produits/pollen-mousseux/verdanza-pollen-mousseux.pdf",
-    previewUrl: "/images/fiches-produits/pollen-mousseux.webp",
+    pdfUrl: "/fiches-produits/le-mousseux/verdanza-le-mousseux.pdf",
+    previewUrl: "/images/fiches-produits/le-mousseux.webp",
   },
   {
     name: "Kief",
@@ -109,12 +109,12 @@ export const productSheets: ProductSheet[] = [
     previewUrl: "/images/fiches-produits/kief.webp",
   },
   {
-    name: "Black Libanais",
-    slug: "black-libanais",
+    name: "Libanais",
+    slug: "libanais",
     aromas: ["Épicé", "Terreux", "Boisé"],
     selectionProfile: { category: "resin", intensity: "forte", aromaFamilies: ["terreux", "epice", "boise"] },
-    pdfUrl: "/fiches-produits/black-libanais/verdanza-black-libanais.pdf",
-    previewUrl: "/images/fiches-produits/black-libanais.webp",
+    pdfUrl: "/fiches-produits/libanais/verdanza-libanais.pdf",
+    previewUrl: "/images/fiches-produits/libanais.webp",
   },
   {
     name: "Black Butter",

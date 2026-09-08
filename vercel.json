@@ -11,6 +11,16 @@
   "cleanUrls": true,
   "redirects": [
     {
+      "source": "/fiches-produits/pollen-mousseux/verdanza-pollen-mousseux.pdf",
+      "destination": "/fiches-produits/le-mousseux/verdanza-le-mousseux.pdf",
+      "permanent": true
+    },
+    {
+      "source": "/fiches-produits/black-libanais/verdanza-black-libanais.pdf",
+      "destination": "/fiches-produits/libanais/verdanza-libanais.pdf",
+      "permanent": true
+    },
+    {
       "source": "/",
       "has": [
         {

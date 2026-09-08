@@ -88,6 +88,26 @@ try {
     );
     assert.equal(await page.locator("[data-selector-result-card]").count(), 3, `${width}px: Peu importe must keep all exact matches`);
     assert.match(await page.locator('[data-selector-summary][data-sticky="false"]').innerText(), /Peu importe/i, `${width}px: explicit Peu importe must appear in the final summary`);
+    const activeResultCard = page.locator('[data-selector-primary-card="true"]');
+    const restingResultStyle = await activeResultCard.evaluate((card) => ({
+      transform: getComputedStyle(card).transform,
+      willChange: getComputedStyle(card).willChange,
+    }));
+    assert.equal(restingResultStyle.transform, "none", `${width}px: active result card must be untransformed at rest`);
+    assert.equal(restingResultStyle.willChange, "auto", `${width}px: active result card must not be permanently promoted`);
+    if (width >= 1024) {
+      const box = await activeResultCard.boundingBox();
+      assert.ok(box, `${width}px: active result card needs a bounding box`);
+      await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.35);
+      await page.waitForTimeout(50);
+      assert.notEqual(await activeResultCard.evaluate((card) => getComputedStyle(card).transform), "none", `${width}px: desktop tilt must remain available during pointer interaction`);
+      await page.mouse.move(0, 0);
+      await page.waitForFunction(() => {
+        const activeCard = document.querySelector<HTMLElement>('[data-selector-primary-card="true"]');
+        return activeCard ? getComputedStyle(activeCard).transform === "none" : false;
+      });
+      assert.equal(await activeResultCard.evaluate((card) => getComputedStyle(card).transform), "none", `${width}px: desktop tilt must return to a crisp untransformed state`);
+    }
 
     await page.locator('[data-selector-summary][data-sticky="false"] [data-selector-edit]').click();
     await page.locator('[data-selector-step="1"] > button').click();
@@ -97,6 +117,11 @@ try {
     assert.equal(await page.locator('[data-selector-option="aroma:any"]').getAttribute("aria-pressed"), "false", `${width}px: changing type must clear the previous aroma choice`);
     await page.locator('[data-selector-option="aroma:any"]').click();
     await page.locator('[data-product-selector-results][data-result-category="resin"][data-result-intensity="forte"]').waitFor();
+    assert.deepEqual(
+      await page.locator("[data-selector-result-card]").allTextContents(),
+      ["Le mousseux", "Kief", "Libanais"],
+      `${width}px: strong resin selector names must use the V6.1 references`,
+    );
     await page.locator('[data-selector-summary][data-sticky="false"] [data-selector-edit]').click();
     await page.locator('[data-selector-step="2"] > button').click();
     const unavailableSoft = page.locator('[data-selector-option="intensity:douce"]');
@@ -118,11 +143,17 @@ try {
     await page.locator('[data-product-sheet-tab="resin"]').click();
     await page.locator('[data-product-sheet-category="resin"]').waitFor();
     assert.equal(await page.locator('[data-product-sheet-card]').count(), 4, `${width}px: resin tab must contain four sheets`);
-    assert.equal(await page.locator('[data-product-sheet-card]').first().getAttribute("data-product-sheet-card"), "pollen-mousseux", `${width}px: resins must be one tap away`);
+    assert.equal(await page.locator('[data-product-sheet-card]').first().getAttribute("data-product-sheet-card"), "le-mousseux", `${width}px: resins must be one tap away`);
+    assert.deepEqual(
+      await page.locator('[data-product-sheet-card] h3').allTextContents(),
+      ["Le mousseux", "Kief", "Libanais", "Black Butter"],
+      `${width}px: resin library names must use the V6.1 references`,
+    );
     assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "1 / 4", `${width}px: category change must reset position`);
 
     await page.locator('[data-product-sheet-tab="flower"]').click();
     await page.locator('[data-product-sheet-category="flower"]').waitFor();
+    await page.waitForTimeout(300);
     const carousel = page.locator("[data-product-sheet-carousel]");
     await carousel.focus();
     await carousel.press("ArrowRight");
@@ -134,6 +165,10 @@ try {
       const carouselRect = carouselElement.getBoundingClientRect();
       const cardRect = activeCard.getBoundingClientRect();
       return Math.abs(carouselRect.left + carouselRect.width / 2 - (cardRect.left + cardRect.width / 2)) < 6;
+    });
+    await page.waitForFunction(() => {
+      const activeCard = document.querySelector<HTMLElement>('[data-product-sheet-card][data-active="true"]');
+      return activeCard ? getComputedStyle(activeCard).transform === "none" : false;
     });
     assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "2 / 6", `${width}px: keyboard navigation must advance the carousel`);
 
@@ -152,6 +187,7 @@ try {
         shortestTab: Math.min(...tabs.map((tab) => tab.getBoundingClientRect().height)),
         helpOverlapsActiveCta: help && activeCta ? intersects(help.getBoundingClientRect(), activeCta.getBoundingClientRect()) : false,
         helpOverlapsActiveCard: help && activeCard ? intersects(help.getBoundingClientRect(), activeCard.getBoundingClientRect()) : false,
+        activeCardTransform: activeCard ? getComputedStyle(activeCard).transform : "missing",
       };
 
       function isVisible(element: HTMLElement) {
@@ -168,6 +204,7 @@ try {
     assert.ok(layout.shortestTab >= 43.5, `${width}px: tabs must be about 44px`);
     assert.equal(layout.helpOverlapsActiveCta, false, `${width}px: floating help must not cover the active card CTA`);
     assert.equal(layout.helpOverlapsActiveCard, false, `${width}px: floating help must not cover the active carousel card`);
+    assert.equal(layout.activeCardTransform, "none", `${width}px: active library card must be untransformed at rest`);
     if (width < 1024) {
       assert.ok(layout.carouselOverflow > 0, `${width}px: the mobile/tablet library must scroll horizontally`);
       assert.equal(layout.carouselDisplay, "flex", `${width}px: the mobile/tablet library must use a horizontal flex carousel`);
@@ -177,6 +214,8 @@ try {
 
     assert.equal(await page.locator("h1").count(), 1, `${width}px: exactly one H1 is required`);
     assert.equal(await selector.getByText(/Ambiance|Cocooning|Détente profonde|Dynamique|Équilibré/i).count(), 0, `${width}px: legacy ambience UI must remain absent`);
+    const retiredNames = new RegExp([["Pollen", "Mousseux"], ["Black", "Libanais"]].map((words) => words.join(" ")).join("|"), "i");
+    assert.doesNotMatch(await page.locator("body").innerText(), retiredNames, `${width}px: retired product names must not remain visible`);
     assert.deepEqual(pdfRequests, [], `${width}px: PDFs must not preload`);
     assert.deepEqual(pageErrors, [], `${width}px: browser errors detected`);
     await context.close();
