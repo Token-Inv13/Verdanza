@@ -16,12 +16,14 @@ import type {
   CagnotteReservationIntent,
   CagnotteReservationIntentInput,
   CagnotteReservationResult,
-  CagnotteReservationTestProgram,
+  CagnotteReservationProgram,
 } from "./cagnotteReservationTypes.js";
 import { CAGNOTTE_CONSUMED_REFUND_VERSION } from "./cagnotteReservationTypes.js";
+import type { CagnotteAccrualProgram } from "./cagnotteLedgerTypes.js";
+import { assertCagnotteProgramFirebaseProject } from "./cagnotteProgram.js";
 
 /** Normal application configuration. Only tests inject an enabled local program. */
-export const CAGNOTTE_RESERVATION_PROGRAM = null;
+export const CAGNOTTE_RESERVATION_PROGRAM: CagnotteReservationProgram | null = null;
 
 type ReservationAction = "reserve" | "consume" | "release" | "cancel";
 
@@ -34,9 +36,10 @@ export class CagnotteReservationError extends Error {
 
 export function createCagnotteReservationIntent(
   input: CagnotteReservationIntentInput,
-  program: CagnotteReservationTestProgram | null = CAGNOTTE_RESERVATION_PROGRAM,
+  program: CagnotteReservationProgram | null = CAGNOTTE_RESERVATION_PROGRAM,
+  firebaseProjectId?: string | null,
 ): CagnotteReservationIntent | null {
-  if (!activeReservationProgram(program, input.createdAtEpochMs)) return null;
+  if (!activeReservationProgram(program, input.createdAtEpochMs, firebaseProjectId)) return null;
   id(input.orderId);
   id(input.beneficiaryId);
   const snapshot = calculateCagnotte(input.calculation);
@@ -60,14 +63,17 @@ export async function applyCagnotteReservationOperation(input: {
   db: Firestore;
   action: ReservationAction;
   intent: CagnotteReservationIntent;
-  program?: CagnotteReservationTestProgram | null;
+  program?: CagnotteReservationProgram | null;
+  firebaseProjectId?: string | null;
   recordedAtEpochMs?: number;
 }): Promise<CagnotteReservationResult> {
   const recordedAtEpochMs = input.recordedAtEpochMs ?? Date.now();
   const intent = validatedIntent(input.intent);
   cents(recordedAtEpochMs);
   if (intent.amountCents === 0) return noWrite("not_required", "none", 0, 0).result;
-  if (input.action === "reserve" && !activeReservationProgram(input.program ?? CAGNOTTE_RESERVATION_PROGRAM, intent.order.createdAtEpochMs)) {
+  const program = input.program === undefined ? CAGNOTTE_RESERVATION_PROGRAM : input.program;
+  assertCagnotteProgramFirebaseProject(program, input.firebaseProjectId);
+  if (input.action === "reserve" && !activeReservationProgram(program, intent.order.createdAtEpochMs, input.firebaseProjectId)) {
     fail("RESERVATIONS_DISABLED", "Nouvelles réservations désactivées.");
   }
   return input.db.runTransaction(async (transaction) => {
@@ -82,14 +88,17 @@ export async function prepareCagnotteReservationOperation(input: {
   transaction: Transaction;
   action: ReservationAction;
   intent: CagnotteReservationIntent;
-  program?: CagnotteReservationTestProgram | null;
+  program?: CagnotteReservationProgram | null;
+  firebaseProjectId?: string | null;
   recordedAtEpochMs: number;
   walletMutation?: CagnotteWalletMutation;
 }) {
   const intent = validatedIntent(input.intent);
   cents(input.recordedAtEpochMs);
   if (intent.amountCents === 0) return noWrite("not_required", "none", 0, 0);
-  if (input.action === "reserve" && !activeReservationProgram(input.program ?? CAGNOTTE_RESERVATION_PROGRAM, intent.order.createdAtEpochMs)) {
+  const program = input.program === undefined ? CAGNOTTE_RESERVATION_PROGRAM : input.program;
+  assertCagnotteProgramFirebaseProject(program, input.firebaseProjectId);
+  if (input.action === "reserve" && !activeReservationProgram(program, intent.order.createdAtEpochMs, input.firebaseProjectId)) {
     fail("RESERVATIONS_DISABLED", "Nouvelles réservations désactivées.");
   }
   const reservationRef = input.db.collection("cagnotteReservations").doc(intent.order.orderId);
@@ -123,7 +132,7 @@ export async function prepareCagnotteReservationOperation(input: {
   } else if (input.action !== "reserve") {
     fail("CONFLICT", "Réservation absente pour cette commande.");
   }
-  if (input.action === "reserve" && (input.program ?? CAGNOTTE_RESERVATION_PROGRAM)?.programVersion !== intent.order.programVersion) {
+  if (input.action === "reserve" && program?.programVersion !== intent.order.programVersion) {
     fail("CONFLICT", "Version du programme de réservation modifiée : nouveau devis requis.");
   }
 
@@ -185,7 +194,9 @@ export async function prepareCagnotteCancellationComposition(input: {
   db: Firestore;
   transaction: Transaction;
   intent: CagnotteReservationIntent;
-  program: CagnotteReservationTestProgram | null;
+  accrualProgram: CagnotteAccrualProgram | null;
+  reservationProgram: CagnotteReservationProgram | null;
+  firebaseProjectId?: string | null;
   recordedAtEpochMs: number;
 }) {
   const intent = validatedIntent(input.intent);
@@ -201,14 +212,16 @@ export async function prepareCagnotteCancellationComposition(input: {
     transaction: input.transaction,
     action: "cancel",
     intent,
-    program: input.program,
+    program: input.reservationProgram,
+    firebaseProjectId: input.firebaseProjectId,
     recordedAtEpochMs: input.recordedAtEpochMs,
     walletMutation,
   });
   const ledgerPlan = await prepareCagnotteLedgerOperation({
     db: input.db,
     transaction: input.transaction,
-    program: input.program,
+    program: input.accrualProgram,
+    firebaseProjectId: input.firebaseProjectId,
     recordedAtEpochMs: input.recordedAtEpochMs,
     walletMutation,
     command: { order: intent.order, event: "cancelled" },
@@ -238,7 +251,9 @@ export async function prepareCagnottePaymentComposition(input: {
   db: Firestore;
   transaction: Transaction;
   intent: CagnotteReservationIntent;
-  program: CagnotteReservationTestProgram | null;
+  accrualProgram: CagnotteAccrualProgram | null;
+  reservationProgram: CagnotteReservationProgram | null;
+  firebaseProjectId?: string | null;
   delivered: boolean;
   recordedAtEpochMs: number;
 }) {
@@ -248,11 +263,13 @@ export async function prepareCagnottePaymentComposition(input: {
     db: input.db, transaction: input.transaction, beneficiaryId: intent.order.beneficiaryId, allowMissing: false, missingCode: "CONFLICT",
   }) : undefined;
   const reservationPlan = await prepareCagnotteReservationOperation({
-    db: input.db, transaction: input.transaction, action: "consume", intent, program: input.program,
+    db: input.db, transaction: input.transaction, action: "consume", intent, program: input.reservationProgram,
+    firebaseProjectId: input.firebaseProjectId,
     recordedAtEpochMs: input.recordedAtEpochMs, ...(walletMutation ? { walletMutation } : {}),
   });
   const ledgerPlan = await prepareCagnotteLedgerOperation({
-    db: input.db, transaction: input.transaction, program: input.program, recordedAtEpochMs: input.recordedAtEpochMs,
+    db: input.db, transaction: input.transaction, program: input.accrualProgram,
+    firebaseProjectId: input.firebaseProjectId, recordedAtEpochMs: input.recordedAtEpochMs,
     ...(walletMutation ? { walletMutation } : {}),
     command: { order: intent.order, event: input.delivered ? "payment_and_delivery_confirmed" : "payment_confirmed" },
   });
@@ -797,8 +814,9 @@ function validateReservationRefundMovement(
   }
 }
 
-function activeReservationProgram(program: CagnotteReservationTestProgram | null, createdAtEpochMs: number): program is CagnotteReservationTestProgram {
-  return Boolean(program && program.mode === "local_test" && program.reservationsEnabled === true &&
+function activeReservationProgram(program: CagnotteReservationProgram | null, createdAtEpochMs: number, firebaseProjectId?: string | null): program is CagnotteReservationProgram {
+  assertCagnotteProgramFirebaseProject(program, firebaseProjectId);
+  return Boolean(program && (program.mode === "local_test" || program.mode === "production") && program.reservationsEnabled === true &&
     program.reservationVersion === CAGNOTTE_RESERVATION_VERSION && program.calculationVersion === CAGNOTTE_CALCULATION_VERSION &&
     Number.isSafeInteger(program.startsAtEpochMs) && program.startsAtEpochMs >= 0 &&
     Number.isSafeInteger(createdAtEpochMs) && createdAtEpochMs >= 0 && createdAtEpochMs >= program.startsAtEpochMs);

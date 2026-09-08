@@ -9,6 +9,8 @@ export type CagnotteOrderEnrollment = {
   calculationVersion: CagnotteCalculationVersion;
   createdAtEpochMs: number;
   snapshot: CagnotteSnapshot;
+  /** Missing on earlier enrolled orders and therefore interpreted as enrolled. */
+  accrualEnrollment?: "enrolled" | "not_enrolled";
 };
 
 /** Server-persisted binding between an order and its reserved wallet amount. */

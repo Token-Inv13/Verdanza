@@ -5,16 +5,17 @@ import { deriveOrderFinancingAmounts, exactEuroCents } from "../../src/lib/order
 import type { CagnotteAdvantage, CagnotteCalculationInput, CagnotteOrderEnrollment, ProductDiscount } from "../../src/types/cagnotte.js";
 import type { AppliedPromotion, Order } from "../../src/types/index.js";
 import type { PricedCheckout } from "./checkout.js";
-import type { CagnotteTestProgram } from "./cagnotteLedgerTypes.js";
+import type { CagnotteAccrualProgram } from "./cagnotteLedgerTypes.js";
 import { CagnotteLedgerError, prepareCagnotteLedgerOperation } from "./cagnotteLedger.js";
-import { CAGNOTTE_SERVER_PROGRAM } from "./cagnotteProgram.js";
+import { assertCagnotteProgramFirebaseProject, CAGNOTTE_SERVER_PROGRAM } from "./cagnotteProgram.js";
 import { hasCagnotteEnrollment } from "./orderProtection.js";
 import {
+  CAGNOTTE_RESERVATION_PROGRAM,
   prepareCagnotteCancellationComposition,
   prepareCagnottePaymentComposition,
   validateCagnotteReservationIntent,
 } from "./cagnotteReservations.js";
-import type { CagnotteReservationTestProgram } from "./cagnotteReservationTypes.js";
+import type { CagnotteReservationProgram } from "./cagnotteReservationTypes.js";
 
 /** Backward-compatible name for the exact conversion now shared with presentation consumers. */
 export const eurosToCagnotteCents = exactEuroCents;
@@ -28,12 +29,10 @@ type CagnotteOrderSource = Pick<
 /** Uses exactly the order payload to be persisted, not HTTP fields or recomputed unit prices. */
 export function buildCagnotteOrderEnrollment(
   payload: Record<string, unknown>, verifiedUid: string | undefined,
-  program: CagnotteTestProgram | null = CAGNOTTE_SERVER_PROGRAM, nowEpochMs = Date.now(),
+  program: CagnotteAccrualProgram | null = CAGNOTTE_SERVER_PROGRAM, nowEpochMs = Date.now(),
+  firebaseProjectId?: string | null,
 ): CagnotteOrderEnrollment | undefined {
-  if (!program?.newAccrualsEnabled || !verifiedUid) return undefined;
-  if (program.mode !== "local_test" || program.calculationVersion !== CAGNOTTE_CALCULATION_VERSION ||
-    !Number.isSafeInteger(program.startsAtEpochMs) || !Number.isSafeInteger(nowEpochMs) ||
-    nowEpochMs < program.startsAtEpochMs) return undefined;
+  if (!verifiedUid || !canEnrollCagnotteOrder(program, verifiedUid, nowEpochMs, firebaseProjectId)) return undefined;
   const order = payload as unknown as Order;
   if (order.customerId !== verifiedUid) throw new Error("Bénéficiaire serveur incohérent.");
   const snapshot = calculateCagnotte(cagnotteCalculationForOrder(order, 0, 0));
@@ -45,7 +44,22 @@ export function buildCagnotteOrderEnrollment(
     throw new Error("Instantané cagnotte incompatible avec les montants serveur retenus.");
   }
   return { schemaVersion: 1, beneficiaryId: verifiedUid, programVersion: program.programVersion,
-    calculationVersion: CAGNOTTE_CALCULATION_VERSION, createdAtEpochMs: nowEpochMs, snapshot };
+    calculationVersion: CAGNOTTE_CALCULATION_VERSION, createdAtEpochMs: nowEpochMs, snapshot,
+    accrualEnrollment: "enrolled" };
+}
+
+export function canEnrollCagnotteOrder(
+  program: CagnotteAccrualProgram | null,
+  verifiedUid: string | undefined,
+  createdAtEpochMs: number,
+  firebaseProjectId?: string | null,
+): program is CagnotteAccrualProgram {
+  assertCagnotteProgramFirebaseProject(program, firebaseProjectId);
+  return Boolean(program?.newAccrualsEnabled && verifiedUid &&
+    (program.mode === "local_test" || program.mode === "production") &&
+    program.calculationVersion === CAGNOTTE_CALCULATION_VERSION &&
+    Number.isSafeInteger(program.startsAtEpochMs) && program.startsAtEpochMs >= 0 &&
+    Number.isSafeInteger(createdAtEpochMs) && createdAtEpochMs >= program.startsAtEpochMs);
 }
 
 export function cagnotteCalculationForPricedCheckout(
@@ -121,13 +135,18 @@ export async function prepareOrderCagnotteTransition(input: {
   db: Firestore; transaction: Transaction; order: Order;
   nextOrderStatus: Order["orderStatus"]; nextPaymentStatus: Order["paymentStatus"];
   paymentConfirmationRequested?: boolean;
-  program?: CagnotteReservationTestProgram | CagnotteTestProgram | null;
+  accrualProgram?: CagnotteAccrualProgram | null;
+  reservationProgram?: CagnotteReservationProgram | null;
+  firebaseProjectId?: string | null;
   recordedAtEpochMs?: number;
 }) {
   const { order } = input;
   // Historical/ordinary orders: no new validation and no cagnotte collection access.
   if (!hasCagnotteEnrollment(order)) return null;
   const registration = validateOrderCagnotteEnrollment(order);
+  const accrualProgram = registration.accrualEnrollment === "not_enrolled"
+    ? null
+    : input.accrualProgram === undefined ? CAGNOTTE_SERVER_PROGRAM : input.accrualProgram;
   const cancelled = input.nextOrderStatus === "cancelled" || order.orderStatus === "cancelled" || Boolean(order.cancelledAt);
   const paid = input.nextPaymentStatus === "paid";
   const delivered = input.nextOrderStatus === "delivered";
@@ -141,7 +160,9 @@ export async function prepareOrderCagnotteTransition(input: {
         db: input.db,
         transaction: input.transaction,
         intent,
-        program: (input.program ?? CAGNOTTE_SERVER_PROGRAM) as CagnotteReservationTestProgram | null,
+        accrualProgram,
+        reservationProgram: input.reservationProgram === undefined ? CAGNOTTE_RESERVATION_PROGRAM : input.reservationProgram,
+        firebaseProjectId: input.firebaseProjectId,
         recordedAtEpochMs: input.recordedAtEpochMs ?? Date.now(),
       });
     }
@@ -150,14 +171,18 @@ export async function prepareOrderCagnotteTransition(input: {
         db: input.db,
         transaction: input.transaction,
         intent,
-        program: (input.program ?? CAGNOTTE_SERVER_PROGRAM) as CagnotteReservationTestProgram | null,
+        accrualProgram,
+        reservationProgram: input.reservationProgram === undefined ? CAGNOTTE_RESERVATION_PROGRAM : input.reservationProgram,
+        firebaseProjectId: input.firebaseProjectId,
         delivered,
         recordedAtEpochMs: input.recordedAtEpochMs ?? Date.now(),
       });
     }
   }
   return prepareCagnotteLedgerOperation({
-    db: input.db, transaction: input.transaction, program: input.program ?? CAGNOTTE_SERVER_PROGRAM,
+    db: input.db, transaction: input.transaction,
+    program: accrualProgram,
+    firebaseProjectId: input.firebaseProjectId,
     recordedAtEpochMs: input.recordedAtEpochMs,
     command: {
       order: { orderId: order.id, beneficiaryId: registration.beneficiaryId, programVersion: registration.programVersion,
@@ -172,6 +197,7 @@ export function validateOrderCagnotteEnrollment(order: Order) {
   const registration = order.cagnotte;
   if (!registration || typeof registration !== "object" || !registration.snapshot ||
     registration.schemaVersion !== 1 || registration.beneficiaryId !== order.customerId ||
+    (registration.accrualEnrollment !== undefined && registration.accrualEnrollment !== "enrolled" && registration.accrualEnrollment !== "not_enrolled") ||
     registration.calculationVersion !== CAGNOTTE_CALCULATION_VERSION ||
     registration.snapshot.calculationVersion !== registration.calculationVersion) {
     throw new CagnotteLedgerError("CONFLICT", "Inscription cagnotte de commande incohérente.");

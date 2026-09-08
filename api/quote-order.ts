@@ -18,7 +18,10 @@ import {
   readAvailableCagnotteCents,
 } from "./_server/cagnotteCheckout.js";
 import { CAGNOTTE_RESERVATION_PROGRAM } from "./_server/cagnotteReservations.js";
-import type { CagnotteReservationTestProgram } from "./_server/cagnotteReservationTypes.js";
+import type { CagnotteReservationProgram } from "./_server/cagnotteReservationTypes.js";
+import { CAGNOTTE_SERVER_PROGRAM } from "./_server/cagnotteProgram.js";
+import type { CagnotteAccrualProgram } from "./_server/cagnotteLedgerTypes.js";
+import { getAdminProjectId } from "./_server/firebaseAdmin.js";
 import type {
   Coupon,
   Address,
@@ -37,7 +40,9 @@ import {
 export function createQuoteOrderHandler(dependencies: {
   getDb: typeof getAdminDb;
   verifyToken: typeof verifyFirebaseIdToken;
-  reservationProgram?: CagnotteReservationTestProgram | null;
+  accrualProgram?: CagnotteAccrualProgram | null;
+  reservationProgram?: CagnotteReservationProgram | null;
+  getFirebaseProjectId?: () => string | null;
   now?: () => number;
 }) {
 return async function handler(
@@ -57,9 +62,11 @@ return async function handler(
     const body = parseQuoteBody(requestBody);
     const db = dependencies.getDb();
     const requestedCents = body.cagnotteUse?.requestedCents ?? 0;
+    const reservationProgram = dependencies.reservationProgram === undefined
+      ? CAGNOTTE_RESERVATION_PROGRAM
+      : dependencies.reservationProgram;
     let beneficiaryId = "";
     if (requestedCents > 0) {
-      const reservationProgram = dependencies.reservationProgram ?? CAGNOTTE_RESERVATION_PROGRAM;
       if (!reservationProgram) {
         throw new CagnotteCheckoutError("RESERVATIONS_DISABLED", "L’utilisation de la cagnotte est désactivée.");
       }
@@ -78,8 +85,12 @@ return async function handler(
           priced,
           beneficiaryId,
           availableCents: await readAvailableCagnotteCents(db, beneficiaryId),
-          program: dependencies.reservationProgram ?? CAGNOTTE_RESERVATION_PROGRAM,
+          accrualProgram: dependencies.accrualProgram === undefined
+            ? CAGNOTTE_SERVER_PROGRAM
+            : dependencies.accrualProgram,
+          reservationProgram,
           createdAtEpochMs: (dependencies.now ?? Date.now)(),
+          firebaseProjectId: dependencies.getFirebaseProjectId?.(),
         }).quote
       : undefined;
     if (cagnotteUse) {
@@ -129,7 +140,9 @@ return async function handler(
 export default createQuoteOrderHandler({
   getDb: getAdminDb,
   verifyToken: verifyFirebaseIdToken,
+  accrualProgram: CAGNOTTE_SERVER_PROGRAM,
   reservationProgram: CAGNOTTE_RESERVATION_PROGRAM,
+  getFirebaseProjectId: getAdminProjectId,
 });
 
 function isPublicPromoBannersRequest(request: VercelRequestLike) {
