@@ -4,6 +4,10 @@ import { calculateLoyaltyCents, CAGNOTTE_CALCULATION_VERSION, simulateCagnotteRe
 import type { CagnotteAccrual, CagnotteLedgerCommand, CagnotteLedgerResult, CagnotteMovement, CagnotteTestProgram, CagnotteWallet } from "./cagnotteLedgerTypes.js";
 import { CAGNOTTE_REGULARIZATION_VERSION, CAGNOTTE_RESERVATION_VERSION } from "./cagnotteLedgerTypes.js";
 
+function hasOwn(value: object, property: PropertyKey) {
+  return Object.prototype.hasOwnProperty.call(value, property);
+}
+
 export class CagnotteLedgerError extends Error {
   constructor(readonly code: "INVALID_INPUT" | "CONFLICT" | "CORRUPT_LEDGER" | "PAYMENT_REQUIRED", message: string) {
     super(message);
@@ -302,9 +306,9 @@ export function readCagnotteWallet(value: Record<string, unknown> | undefined, b
   canonical(value);
   const normalized = { ...value };
   if (value.schemaVersion === 1) {
-    if ((Object.hasOwn(value, "regularizationCents") && value.regularizationCents !== 0) ||
-      Object.hasOwn(value, "regularizationVersion") ||
-      (Object.hasOwn(value, "reservedCents") && value.reservedCents !== 0) || Object.hasOwn(value, "reservationVersion")) problem("CORRUPT_LEDGER", "Ancien portefeuille incompatible.");
+    if ((hasOwn(value, "regularizationCents") && value.regularizationCents !== 0) ||
+      hasOwn(value, "regularizationVersion") ||
+      (hasOwn(value, "reservedCents") && value.reservedCents !== 0) || hasOwn(value, "reservationVersion")) problem("CORRUPT_LEDGER", "Ancien portefeuille incompatible.");
     normalized.schemaVersion = 3;
     normalized.regularizationVersion = CAGNOTTE_REGULARIZATION_VERSION;
     normalized.regularizationCents = 0;
@@ -312,7 +316,7 @@ export function readCagnotteWallet(value: Record<string, unknown> | undefined, b
     normalized.reservedCents = 0;
   } else if (value.schemaVersion === 2) {
     if (value.regularizationVersion !== CAGNOTTE_REGULARIZATION_VERSION ||
-      (Object.hasOwn(value, "reservedCents") && value.reservedCents !== 0) || Object.hasOwn(value, "reservationVersion")) problem("CORRUPT_LEDGER", "Portefeuille V2 incompatible.");
+      (hasOwn(value, "reservedCents") && value.reservedCents !== 0) || hasOwn(value, "reservationVersion")) problem("CORRUPT_LEDGER", "Portefeuille V2 incompatible.");
     normalized.schemaVersion = 3;
     normalized.reservationVersion = CAGNOTTE_RESERVATION_VERSION;
     normalized.reservedCents = 0;
@@ -341,10 +345,10 @@ function newWallet(beneficiaryId: string): CagnotteWallet {
 function validateMovement(value: Record<string, unknown>, key: string, state: CagnotteAccrual) {
   canonical(value);
   const schema = value.schemaVersion;
-  const regularization = schema === 1 && !Object.hasOwn(value, "regularizationDeltaCents") ? 0 : value.regularizationDeltaCents;
-  const reserved = (schema === 1 || schema === 2) && !Object.hasOwn(value, "reservedDeltaCents") ? 0 : value.reservedDeltaCents;
-  if ((schema === 1 && (regularization !== 0 || Object.hasOwn(value, "regularizationVersion") || reserved !== 0 || Object.hasOwn(value, "reservationVersion"))) ||
-    (schema === 2 && (value.regularizationVersion !== CAGNOTTE_REGULARIZATION_VERSION || reserved !== 0 || Object.hasOwn(value, "reservationVersion"))) ||
+  const regularization = schema === 1 && !hasOwn(value, "regularizationDeltaCents") ? 0 : value.regularizationDeltaCents;
+  const reserved = (schema === 1 || schema === 2) && !hasOwn(value, "reservedDeltaCents") ? 0 : value.reservedDeltaCents;
+  if ((schema === 1 && (regularization !== 0 || hasOwn(value, "regularizationVersion") || reserved !== 0 || hasOwn(value, "reservationVersion"))) ||
+    (schema === 2 && (value.regularizationVersion !== CAGNOTTE_REGULARIZATION_VERSION || reserved !== 0 || hasOwn(value, "reservationVersion"))) ||
     (schema !== 1 && schema !== 2 && (schema !== 3 || value.regularizationVersion !== CAGNOTTE_REGULARIZATION_VERSION || value.reservationVersion !== CAGNOTTE_RESERVATION_VERSION)) ||
     value.orderId !== state.orderId || value.beneficiaryId !== state.beneficiaryId || value.eventKey !== key ||
     value.programVersion !== state.programVersion || value.calculationVersion !== state.calculationVersion ||
@@ -352,7 +356,7 @@ function validateMovement(value: Record<string, unknown>, key: string, state: Ca
     typeof value.payload !== "string") problem("CORRUPT_LEDGER", "Mouvement incompatible.");
   const p = value.pendingDeltaCents, a = value.availableDeltaCents, r = reserved, d = regularization;
   if (![p, a, r, d].every((n) => typeof n === "number" && Number.isSafeInteger(n))) problem("CORRUPT_LEDGER", "Variations de journal invalides.");
-  if ((schema === 3 || Object.hasOwn(value, "recordedAtEpochMs")) && (!Number.isSafeInteger(value.recordedAtEpochMs) || (value.recordedAtEpochMs as number) < 0)) problem("CORRUPT_LEDGER", "Horodatage de journal invalide.");
+  if ((schema === 3 || hasOwn(value, "recordedAtEpochMs")) && (!Number.isSafeInteger(value.recordedAtEpochMs) || (value.recordedAtEpochMs as number) < 0)) problem("CORRUPT_LEDGER", "Horodatage de journal invalide.");
   if (r !== 0) problem("CORRUPT_LEDGER", "Un mouvement de gain ne peut modifier le réservé.");
   const pending = p as number, available = a as number, deficit = d as number;
   const event = value.businessEvent;

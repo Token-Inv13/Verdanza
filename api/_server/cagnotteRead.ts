@@ -14,6 +14,10 @@ export const CAGNOTTE_READ_SERVER_ENABLED = false as const;
 export const CAGNOTTE_READ_DEFAULT_LIMIT = 20;
 export const CAGNOTTE_READ_MAX_LIMIT = 50;
 
+function hasOwn(value: object, property: PropertyKey) {
+  return Object.prototype.hasOwnProperty.call(value, property);
+}
+
 type ReadInput = {
   db: Firestore;
   beneficiaryId: string;
@@ -98,7 +102,7 @@ export async function readCagnotte(input: ReadInput): Promise<CagnotteReadRespon
     const item = publicMovement(document, beneficiaryId);
     return item ? [item] : [];
   });
-  const last = scanned.at(-1);
+  const last = scanned.length > 0 ? scanned[scanned.length - 1] : undefined;
   const nextCursor = result.historySnapshot.size > limit && last
     ? encodeCursor(input.scope, beneficiaryId, timestamp(last), last.id, cursorKey)
     : null;
@@ -181,8 +185,8 @@ function validateMovement(value: Record<string, unknown>, documentId: string, be
   const regularization = value.regularizationDeltaCents ?? 0;
   const reserved = value.reservedDeltaCents ?? 0;
   const knownEvent = ["payment_confirmed", "delivery_confirmed", "cancelled", "refund_confirmed", "made_available", "credit_reserved", "credit_consumed", "credit_released", "credit_refunded_after_return", "refund_declaration_corrected", "credit_refund_corrected"].includes(String(value.businessEvent));
-  if ((legacy && (regularization !== 0 || Object.hasOwn(value, "regularizationVersion") || reserved !== 0 || Object.hasOwn(value, "reservationVersion"))) ||
-    (schemaVersion === 2 && (value.regularizationVersion !== CAGNOTTE_REGULARIZATION_VERSION || reserved !== 0 || Object.hasOwn(value, "reservationVersion"))) ||
+  if ((legacy && (regularization !== 0 || hasOwn(value, "regularizationVersion") || reserved !== 0 || hasOwn(value, "reservationVersion"))) ||
+    (schemaVersion === 2 && (value.regularizationVersion !== CAGNOTTE_REGULARIZATION_VERSION || reserved !== 0 || hasOwn(value, "reservationVersion"))) ||
     (schemaVersion !== 1 && schemaVersion !== 2 && (schemaVersion !== 3 || value.regularizationVersion !== CAGNOTTE_REGULARIZATION_VERSION || value.reservationVersion !== CAGNOTTE_RESERVATION_VERSION)) ||
     value.currency !== "EUR" || value.origin !== "internal_server" || value.beneficiaryId !== beneficiaryId ||
     value.eventKey !== documentId || !knownEvent || typeof value.calculationVersion !== "string" ||

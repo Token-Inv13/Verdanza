@@ -22,6 +22,14 @@ export const ORDER_REFUND_CORRECTION_VERSION = "order-refund-correction-v1";
 const collection = "cagnotteRefunds";
 const historyLimit = 1000;
 
+function hasOwn(value: object, property: PropertyKey) {
+  return Object.prototype.hasOwnProperty.call(value, property);
+}
+
+function lastItem<T>(values: readonly T[]): T | undefined {
+  return values.length > 0 ? values[values.length - 1] : undefined;
+}
+
 export class OrderRefundError extends Error {
   constructor(readonly code: string, readonly status = 409) { super(code); }
 }
@@ -288,7 +296,7 @@ export async function executeOrderRefund(input: {
     let paidAt: string;
     try {
       paidAt = instant(order.paidAt);
-      if (paidAt !== instant(order.paymentConfirmedAt) || !Object.hasOwn(order, "paymentConfirmedBy") ||
+      if (paidAt !== instant(order.paymentConfirmedAt) || !hasOwn(order, "paymentConfirmedBy") ||
         (order.paymentConfirmedBy !== null && typeof order.paymentConfirmedBy !== "string") ||
         !["card_payment_link", "cash_on_delivery", "bank_transfer", "other"].includes(order.finalPaymentMethod ?? "")) throw new Error();
     } catch { fail("refund_prior_payment_requires_verification"); }
@@ -301,7 +309,7 @@ export async function executeOrderRefund(input: {
     if (sum(enrollment.snapshot.eligibleCents, deliveryCharged) !== eurosToCagnotteCents(order.total)) fail("refund_original_amounts_require_verification");
     try {
       const paymentCents = orderPaymentCents(order);
-      if (mixed && (!Object.hasOwn(order, "paymentAmount") || paymentCents !== sum(enrollment.snapshot.productsPaidCents, deliveryCharged))) throw new Error();
+      if (mixed && (!hasOwn(order, "paymentAmount") || paymentCents !== sum(enrollment.snapshot.productsPaidCents, deliveryCharged))) throw new Error();
     } catch { fail("refund_original_amounts_require_verification"); }
     const internalOrder = {
       orderId: order.id,
@@ -603,13 +611,13 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
       validateStoredCorrectionEvent(event, doc.id);
       return { id: doc.id, event };
     }).sort((a, b) => a.event.recordedAt.localeCompare(b.event.recordedAt));
-    let effective = originals.at(-1)?.event.result.after ?? cumulative(
+    let effective = lastItem(originals)?.event.result.after ?? cumulative(
       enrollment.snapshot.lines.map((line) => ({ lineId: line.lineId, returnedNetCents: 0 })).sort(byLine), 0, 0, 0,
     );
-    const lastOriginal = originals.at(-1);
+    const lastOriginal = lastItem(originals);
     if (lastOriginal) {
       const linked = corrections.filter((entry) => entry.event.targetEventId === lastOriginal.id).sort((a, b) => a.event.revision - b.event.revision);
-      if (linked.length) effective = linked.at(-1)!.event.result.effective;
+      if (linked.length) effective = lastItem(linked)!.event.result.effective;
     }
     const walletDoc = await tx.get(db.collection("cagnotteWallets").doc(enrollment.beneficiaryId));
     const unpaid = await readUnpaidOrderContext({ db, transaction: tx, order, nowEpochMs: Date.now() });
@@ -713,7 +721,7 @@ async function executeOrderRefundCorrection(input: {
     const originals = history.docs.filter((doc) => doc.data().kind !== "refund_correction").map((doc) => {
       const event = doc.data() as Event; validateStoredEvent(event, doc.id); return { id: doc.id, event };
     }).sort((a, b) => a.event.sequence - b.event.sequence);
-    if (originals.at(-1)?.id !== targetDoc.id) fail("correction_target_not_latest_effective");
+    if (lastItem(originals)?.id !== targetDoc.id) fail("correction_target_not_latest_effective");
     const corrections = history.docs.filter((doc) => doc.data().kind === "refund_correction").map((doc) => {
       const event = doc.data() as CorrectionEvent; validateStoredCorrectionEvent(event, doc.id); return event;
     }).filter((event) => event.targetEventId === targetDoc.id).sort((a, b) => a.revision - b.revision);
@@ -1086,8 +1094,8 @@ function validateStoredEvent(event: Event, key: string) {
         result.correction.pendingDeltaCents !== 0 || result.correction.availableDeltaCents !== 0 ||
         result.correction.regularizationDeltaCents !== 0 || result.correction.remainingGainCents !== 0)) ||
       (mixed && (result.restitution.reservationState !== "consumed" ||
-        !Object.hasOwn(event.result, "returnedProductNetCents") || !Object.hasOwn(event.result, "cagnotteRestitutionCents") ||
-        !Object.hasOwn(event.result, "loyaltyAccrualDecision") || !Object.hasOwn(event.result, "restitution"))) ||
+        !hasOwn(event.result, "returnedProductNetCents") || !hasOwn(event.result, "cagnotteRestitutionCents") ||
+        !hasOwn(event.result, "loyaltyAccrualDecision") || !hasOwn(event.result, "restitution"))) ||
       (!mixed && (result.cagnotteRestitutionCents !== 0 || result.restitution.reservationState !== "not_applicable"))) throw new Error();
     const normalized = parseOrderRefundRequest({ action: "record_confirmed", ...event.content, expectedPreviewVersion: result.previewVersion });
     if (normalized.action !== "record_confirmed" || stable(businessContent(normalized)) !== stable(event.content)) throw new Error();
