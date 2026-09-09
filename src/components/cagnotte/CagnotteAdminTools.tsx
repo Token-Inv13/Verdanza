@@ -11,7 +11,7 @@ import {
 import type { CagnotteAdminInspection, CorrectionPreview, RefundPreview } from "../../types/cagnotteAdmin";
 import { updateOrderAdminFields } from "../../services/ordersService";
 import { createCagnotteAdminRefreshChannel, createCagnotteAdminResponseIdentity, eurosInputToCents, refreshCagnotteAdminAfterWrite, runCagnotteAdminLocked } from "../../lib/cagnotteAdminController";
-import { cagnotteRefundDateTimeLocalToIso, cagnotteRefundDateTimeLocalValue } from "../../lib/cagnotteAdminDate";
+import { cagnotteRefundDateTimeLocalToIso } from "../../lib/cagnotteAdminDate";
 import { paymentStatusLabel } from "../../utils/orderStatus";
 
 type Mode = "refund" | "correction" | "unpaid";
@@ -23,6 +23,7 @@ export type CagnotteAdminViewModel = {
   correctionPreview: CorrectionPreview | null;
   notice: string;
   uncertain: boolean;
+  busy: boolean;
 };
 
 type Form = {
@@ -48,7 +49,7 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload }: {
   enabled: boolean;
   onOrderReload?: () => Promise<void> | void;
 }) {
-  const [model, setModel] = useState<CagnotteAdminViewModel>({ phase: "loading", inspection: null, mode: "refund", refundPreview: null, correctionPreview: null, notice: "", uncertain: false });
+  const [model, setModel] = useState<CagnotteAdminViewModel>({ phase: "loading", inspection: null, mode: "refund", refundPreview: null, correctionPreview: null, notice: "", uncertain: false, busy: false });
   const [form, setForm] = useState<Form>(() => emptyForm());
   const identity = useRef(createCagnotteAdminResponseIdentity()).current;
   const submitting = useRef(false);
@@ -94,12 +95,17 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload }: {
     setModel((value) => ({ ...value, refundPreview: null, correctionPreview: null, notice: "", uncertain: false }));
   };
   const returns = useMemo(() => formReturns(form.lines), [form.lines]);
+  const runAdminAction = (operation: () => Promise<void>) => runCagnotteAdminLocked(submitting, async () => {
+    setModel((value) => ({ ...value, busy: true }));
+    try { await operation(); } finally { setModel((value) => ({ ...value, busy: false })); }
+  }, setFailure(setModel));
 
-  const previewRefund = () => runCagnotteAdminLocked(submitting, async () => {
+  const previewRefund = () => runAdminAction(async () => {
     const result = await previewOrderRefund({ orderId, additionalReturns: returns, deliveryRefundCents: eurosInputToCents(form.delivery) });
     setModel((value) => ({ ...value, refundPreview: result, correctionPreview: null, notice: "Prévisualisation serveur prête.", uncertain: false }));
-  }, setFailure(setModel));
-  const confirmRefund = () => runCagnotteAdminLocked(submitting, async () => {
+  });
+  const confirmRefund = () => runAdminAction(async () => {
+    if (model.uncertain) throw new Error("Réinspectez la commande avant toute nouvelle tentative.");
     if (!model.refundPreview) throw new Error("Une prévisualisation serveur est requise.");
     pendingRefund.current ??= {
       orderId, additionalReturns: returns, deliveryRefundCents: eurosInputToCents(form.delivery), source: form.source,
@@ -110,8 +116,8 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload }: {
     const notice = result.alreadyRecorded ? "Déclaration retrouvée, sans double écriture." : "Déclaration enregistrée. Aucun remboursement bancaire n’a été exécuté.";
     adminRefreshChannel.publish(orderId, peerRefresh.current ?? undefined);
     await refreshCagnotteAdminAfterWrite(() => reload(notice), onOrderReload);
-  }, setFailure(setModel));
-  const previewCorrection = () => runCagnotteAdminLocked(submitting, async () => {
+  });
+  const previewCorrection = () => runAdminAction(async () => {
     if (!model.inspection?.correctionTarget) throw new Error("Aucune déclaration corrigeable.");
     if (!form.externalVerificationConfirmed) throw new Error("Confirmez d’abord la vérification externe de la correction.");
     const result = await previewRefundCorrection({ orderId, targetEventId: model.inspection.correctionTarget.eventId,
@@ -121,8 +127,9 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload }: {
     setModel((value) => ({ ...value, correctionPreview: result, refundPreview: null,
       notice: result.kind === "correction_requires_review" ? result.reviewReason || "Correction à vérifier." : "Correction prévisualisée par le serveur.",
       uncertain: false }));
-  }, setFailure(setModel));
-  const confirmCorrection = () => runCagnotteAdminLocked(submitting, async () => {
+  });
+  const confirmCorrection = () => runAdminAction(async () => {
+    if (model.uncertain) throw new Error("Réinspectez la commande avant toute nouvelle tentative.");
     if (!model.inspection?.correctionTarget || !model.correctionPreview || model.correctionPreview.kind === "correction_requires_review") {
       throw new Error("Une correction sûre prévisualisée est requise.");
     }
@@ -135,34 +142,43 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload }: {
     const notice = result.alreadyRecorded ? "Correction retrouvée, sans double effet." : "Correction enregistrée. Aucun flux bancaire n’a été modifié.";
     adminRefreshChannel.publish(orderId, peerRefresh.current ?? undefined);
     await refreshCagnotteAdminAfterWrite(() => reload(notice), onOrderReload);
-  }, setFailure(setModel));
-  const submitReview = () => runCagnotteAdminLocked(submitting, async () => {
+  });
+  const submitReview = () => runAdminAction(async () => {
     if (!model.inspection) throw new Error("Inspection requise.");
     await recordUnpaidReview({ orderId, outcome: form.reviewOutcome, source: form.reviewSource.trim(), reason: form.reviewReason.trim(),
       expectedStateVersion: model.inspection.unpaid.stateVersion });
     setModel((value) => ({ ...value, notice: "Revue enregistrée. Le statut d’envoi ne constitue pas une preuve de paiement.", uncertain: false }));
     await reload();
     await onOrderReload?.();
-  }, setFailure(setModel));
-  const cancelUnpaid = () => runCagnotteAdminLocked(submitting, async () => {
+  });
+  const cancelUnpaid = () => runAdminAction(async () => {
     if (!model.inspection?.unpaid.review?.current || model.inspection.unpaid.review.outcome !== "unpaid_confirmed") {
       throw new Error("Une revue actuelle confirmant l’impayé est requise.");
     }
     await updateOrderAdminFields(orderId, { orderStatus: "cancelled", historyNote: "Annulation après revue administrative de l’impayé" });
     setModel((value) => ({ ...value, notice: "Commande annulée dans la transaction commune ; réservation libérée selon les contrôles serveur.", uncertain: false }));
     await onOrderReload?.();
-  }, setFailure(setModel));
+  });
+  const reinspectBeforeRetry = () => runAdminAction(async () => {
+    if (!model.uncertain) return;
+    const current = identity.next();
+    const inspection = await inspectCagnotteOrder(orderId);
+    if (!identity.isCurrent(current)) return;
+    setModel((value) => ({ ...value, phase: "ready", inspection, uncertain: false,
+      notice: "Inspection actualisée. Vérifiez l’historique avant de reprendre exactement la même opération." }));
+  });
 
   if (!enabled) return null;
   return <CagnotteAdminToolsView model={model} form={form} onForm={update} onMode={(mode) => setModel((value) => ({ ...value, mode }))}
     onPreviewRefund={previewRefund} onConfirmRefund={confirmRefund} onPreviewCorrection={previewCorrection}
-    onConfirmCorrection={confirmCorrection} onReview={submitReview} onCancelUnpaid={cancelUnpaid} />;
+    onConfirmCorrection={confirmCorrection} onReview={submitReview} onCancelUnpaid={cancelUnpaid}
+    onReinspectBeforeRetry={reinspectBeforeRetry} />;
 }
 
 export function CagnotteAdminToolsView({ model, form = emptyForm(model.inspection ?? undefined), onForm = () => undefined,
   onMode = () => undefined, onPreviewRefund = () => undefined, onConfirmRefund = () => undefined,
   onPreviewCorrection = () => undefined, onConfirmCorrection = () => undefined, onReview = () => undefined,
-  onCancelUnpaid = () => undefined,
+  onCancelUnpaid = () => undefined, onReinspectBeforeRetry = () => undefined,
 }: {
   model: CagnotteAdminViewModel;
   form?: Form;
@@ -174,37 +190,78 @@ export function CagnotteAdminToolsView({ model, form = emptyForm(model.inspectio
   onConfirmCorrection?: () => void;
   onReview?: () => void;
   onCancelUnpaid?: () => void;
+  onReinspectBeforeRetry?: () => void;
 }) {
   const inspection = model.inspection;
   if (model.phase === "loading") return <section className="cagnotte-admin" aria-busy="true">Chargement des données administratives…</section>;
   if (!inspection) return <section className="cagnotte-admin"><strong>Outils cagnotte indisponibles</strong><p>{model.notice}</p></section>;
-  return <section className="cagnotte-admin" aria-label="Outils administratifs de cagnotte">
+  return <section className="cagnotte-admin" aria-label="Outils administratifs de cagnotte" aria-busy={model.busy}>
     <h3>Administration de la cagnotte</h3>
     <p><strong>{inspection.order.id}</strong> · {inspection.order.customer.name} · {inspection.order.customer.email}</p>
     <p className="cagnotte-admin__warning"><strong>Cette action enregistre votre déclaration.</strong><br />Elle n’effectue aucun remboursement bancaire.</p>
+    <article className="cagnotte-admin__status">
+      <strong>{inspection.operationalState.label}</strong>
+      <p>→ {inspection.operationalState.detail}</p>
+      {inspection.operationalState.code === "delivered_available" && <MoneyRows rows={[["Gain disponible pour cette commande", inspection.accrual.remainingGainCents]]} />}
+    </article>
     <div className="cagnotte-admin__actions" aria-label="Opérations quotidiennes">
       <span className="cagnotte-admin__tag">1. Consulter</span><span className="cagnotte-admin__tag">2. Confirmer paiement / livraison</span>
-      <button className="secondary" type="button" onClick={() => onMode("unpaid")}>3. Revoir / annuler un impayé</button>
-      <button className="secondary" type="button" onClick={() => onMode("refund")}>4. Enregistrer un retour</button>
-      <button className="secondary" type="button" onClick={() => onMode("correction")}>5. Corriger une déclaration</button>
+      {inspection.reservation.applicable && <button className="secondary" type="button" disabled={model.busy} onClick={() => onMode("unpaid")}>3. Revoir / annuler un impayé</button>}
+      <button className="secondary" type="button" disabled={model.busy} onClick={() => onMode("refund")}>4. Enregistrer un retour</button>
+      <button className="secondary" type="button" disabled={model.busy} onClick={() => onMode("correction")}>5. Corriger une déclaration</button>
     </div>
     <div className="cagnotte-admin__grid">
+      <article className="cagnotte-admin__box"><h4>Inscription de la commande</h4>
+        <p><strong>Inscrite :</strong> oui</p><p>Programme : {inspection.enrollment.programVersion}</p>
+        <p>Calcul : {inspection.enrollment.calculationVersion}</p>
+      </article>
+      <article className="cagnotte-admin__box"><h4>Gain de cette commande</h4><MoneyRows rows={[
+        ["Gain estimé", inspection.accrual.initialGainCents],
+        ["Gain en attente", inspection.accrual.compartment === "pending" ? inspection.accrual.remainingGainCents : 0],
+        ["Gain disponible", inspection.accrual.compartment === "available" ? inspection.accrual.remainingGainCents : 0],
+        ["Gain annulé ou réduit", inspection.accrual.cancelled ? inspection.accrual.initialGainCents : inspection.accrual.present ? Math.max(0, inspection.accrual.initialGainCents - inspection.accrual.remainingGainCents) : 0],
+      ]} /></article>
+      <article className="cagnotte-admin__box"><h4>Portefeuille global du client</h4>{inspection.wallet ? <MoneyRows rows={[
+        ["En attente global", inspection.wallet.pendingCents], ["Disponible global", inspection.wallet.availableCents],
+        ["Réservé global", inspection.wallet.reservedCents], ["Régularisation", inspection.wallet.regularizationCents],
+      ]} /> : <p>Aucun portefeuille créé.</p>}</article>
+      <article className="cagnotte-admin__box"><h4>Réservation de cette commande</h4>{inspection.reservation.applicable ? <>
+        <p><strong>État :</strong> {reservationStateLabel(inspection.reservation.state)}</p>
+        <MoneyRows rows={[["Montant", inspection.reservation.amountCents], ["Restitué", inspection.reservation.cumulativeRestitutedCents]]} />
+        {inspection.reservation.requiresReview && <p className="cagnotte-admin__warning">État à revoir.</p>}
+      </> : <p>Non applicable.</p>}</article>
       <article className="cagnotte-admin__box"><h4>Financement initial</h4><MoneyRows rows={[
-        ["Produits nets", inspection.financing.productsNetCents], [cagnotteFinancingLabel(inspection.unpaid.reservationState), inspection.financing.cagnotteCents],
+        ["Produits nets", inspection.financing.productsNetCents], [cagnotteFinancingLabel(inspection.reservation.state), inspection.financing.cagnotteCents],
         ["Part externe produits", inspection.financing.externalProductsCents], ["Livraison", inspection.financing.deliveryCents],
         ["Paiement externe total", inspection.financing.externalTotalCents],
       ]} /></article>
       <article className="cagnotte-admin__box"><h4>État effectif</h4><MoneyRows rows={[
         ["Retours produits", inspection.effective.returnedProductNetCents], ["Financier déclaré", inspection.effective.totalFinancialCents],
-        ["Cagnotte restituée", inspection.effective.cagnotteRestitutionCents], ["Disponible actuel", inspection.wallet?.availableCents ?? 0],
-      ]} /></article>
+        ["Cagnotte restituée", inspection.effective.cagnotteRestitutionCents],
+      ]} /><p><strong>Dernière révision :</strong> {inspection.refund.latestRevision}</p></article>
     </div>
+    <AdminMovementHistory inspection={inspection} />
     <AdminRefundHistory inspection={inspection} />
-    {model.mode === "refund" && <RefundForm inspection={inspection} form={form} preview={model.refundPreview} onForm={onForm} onPreview={onPreviewRefund} onConfirm={onConfirmRefund} />}
-    {model.mode === "correction" && <CorrectionForm inspection={inspection} form={form} preview={model.correctionPreview} onForm={onForm} onPreview={onPreviewCorrection} onConfirm={onConfirmCorrection} />}
-    {model.mode === "unpaid" && <UnpaidReview inspection={inspection} form={form} onForm={onForm} onReview={onReview} onCancel={onCancelUnpaid} />}
+    {model.mode === "refund" && <RefundForm inspection={inspection} form={form} preview={model.refundPreview} busy={model.busy} uncertain={model.uncertain} onForm={onForm} onPreview={onPreviewRefund} onConfirm={onConfirmRefund} />}
+    {model.mode === "correction" && <CorrectionForm inspection={inspection} form={form} preview={model.correctionPreview} busy={model.busy} uncertain={model.uncertain} onForm={onForm} onPreview={onPreviewCorrection} onConfirm={onConfirmCorrection} />}
+    {model.mode === "unpaid" && inspection.reservation.applicable && <UnpaidReview inspection={inspection} form={form} busy={model.busy} uncertain={model.uncertain} onForm={onForm} onReview={onReview} onCancel={onCancelUnpaid} />}
     {model.notice && <p className={`cagnotte-admin__status${model.uncertain || model.correctionPreview?.kind === "correction_requires_review" ? " review" : ""}`}>{model.notice}</p>}
+    {model.uncertain && <div className="cagnotte-admin__status review"><strong>Résultat réseau incertain.</strong>
+      <p>Inspectez la commande avant toute nouvelle tentative. Conservez la même référence métier et la même opération.</p>
+      <button type="button" disabled={model.busy} onClick={onReinspectBeforeRetry}>Réinspecter avant toute nouvelle tentative</button>
+    </div>}
   </section>;
+}
+
+function AdminMovementHistory({ inspection }: { inspection: CagnotteAdminInspection }) {
+  return <article className="cagnotte-admin__box" style={{ marginTop: "1rem" }}><h4>Journal cagnotte de la commande</h4>
+    {!inspection.movements.length && <p>Aucun mouvement.</p>}
+    <div className="cagnotte-admin__history">{inspection.movements.map((movement) => <section key={movement.id} className="cagnotte-admin__history-entry">
+      <strong>{movementEventLabel(movement.event)}</strong><p>Référence interne : <code>{movement.id}</code></p>
+      <MoneyRows rows={[["En attente", movement.pendingDeltaCents], ["Disponible", movement.availableDeltaCents],
+        ["Réservé", movement.reservedDeltaCents], ["Régularisation", movement.regularizationDeltaCents]]} />
+    </section>)}</div>
+  </article>;
 }
 
 function AdminRefundHistory({ inspection }: { inspection: CagnotteAdminInspection }) {
@@ -231,8 +288,8 @@ function AdminRefundHistory({ inspection }: { inspection: CagnotteAdminInspectio
   </article>;
 }
 
-function RefundForm({ inspection, form, preview, onForm, onPreview, onConfirm }: { inspection: CagnotteAdminInspection; form: Form; preview: RefundPreview | null; onForm: (patch: Partial<Form>) => void; onPreview: () => void; onConfirm: () => void }) {
-  return <div className="cagnotte-admin__box" style={{ marginTop: "1rem" }}><h4>Enregistrer un remboursement déjà confirmé</h4>
+function RefundForm({ inspection, form, preview, busy, uncertain, onForm, onPreview, onConfirm }: { inspection: CagnotteAdminInspection; form: Form; preview: RefundPreview | null; busy: boolean; uncertain: boolean; onForm: (patch: Partial<Form>) => void; onPreview: () => void; onConfirm: () => void }) {
+  return <fieldset disabled={busy || uncertain} className="cagnotte-admin__box cagnotte-admin__fieldset" style={{ marginTop: "1rem" }}><h4>Enregistrer un remboursement déjà confirmé</h4>
     <LineInputs inspection={inspection} form={form} onForm={onForm} />
     <div className="cagnotte-admin__grid"><Input label="Livraison remboursée (€)" value={form.delivery} onChange={(delivery) => onForm({ delivery })} />
       <Input label="Montant financier déclaré (€)" value={form.declaredFinancial} onChange={(declaredFinancial) => onForm({ declaredFinancial })} /></div>
@@ -243,12 +300,12 @@ function RefundForm({ inspection, form, preview, onForm, onPreview, onConfirm }:
       <label>Motif<select value={form.reason} onChange={(event) => onForm({ reason: event.target.value as Form["reason"] })}><option value="product_return">Retour produit</option><option value="order_cancellation">Annulation de commande</option><option value="delivery_refund">Remboursement de livraison</option></select></label></div>
     {preview && <Consequences refund={preview} />}
     <div className="cagnotte-admin__actions"><button type="button" onClick={onPreview}>Prévisualiser sur le serveur</button>
-      <button type="button" onClick={onConfirm} disabled={!preview || preview.kind === "administrative_refund_recorded"}>Confirmer l’enregistrement</button></div>
-  </div>;
+      <button type="button" onClick={onConfirm} disabled={uncertain || !preview || preview.kind === "administrative_refund_recorded"}>Confirmer l’enregistrement</button></div>
+  </fieldset>;
 }
 
-function CorrectionForm({ inspection, form, preview, onForm, onPreview, onConfirm }: { inspection: CagnotteAdminInspection; form: Form; preview: CorrectionPreview | null; onForm: (patch: Partial<Form>) => void; onPreview: () => void; onConfirm: () => void }) {
-  return <div className="cagnotte-admin__box" style={{ marginTop: "1rem" }}><h4>Corriger une déclaration</h4>
+function CorrectionForm({ inspection, form, preview, busy, uncertain, onForm, onPreview, onConfirm }: { inspection: CagnotteAdminInspection; form: Form; preview: CorrectionPreview | null; busy: boolean; uncertain: boolean; onForm: (patch: Partial<Form>) => void; onPreview: () => void; onConfirm: () => void }) {
+  return <fieldset disabled={busy || uncertain} className="cagnotte-admin__box cagnotte-admin__fieldset" style={{ marginTop: "1rem" }}><h4>Corriger une déclaration</h4>
     <p>Seule la dernière déclaration effective peut être neutralisée ou remplacée. L’original reste dans l’historique.</p>
     {!inspection.correctionTarget ? <p>Aucune déclaration corrigeable.</p> : <><LineInputs inspection={inspection} form={form} onForm={onForm} remainingMeansInitial />
       <div className="cagnotte-admin__grid"><Input label="Livraison corrigée (€)" value={form.delivery} onChange={(delivery) => onForm({ delivery })} />
@@ -258,13 +315,13 @@ function CorrectionForm({ inspection, form, preview, onForm, onPreview, onConfir
       <label style={{ marginTop: ".75rem", display: "flex", gridTemplateColumns: "auto 1fr", alignItems: "center" }}><input style={{ width: "auto" }} type="checkbox" checked={form.externalVerificationConfirmed} onChange={(event) => onForm({ externalVerificationConfirmed: event.target.checked })} />Je confirme avoir vérifié extérieurement la réalité financière et corriger uniquement la saisie administrative.</label>
       {preview && <CorrectionConsequences value={preview} />}
       <div className="cagnotte-admin__actions"><button type="button" onClick={onPreview}>Prévisualiser la correction</button>
-        <button type="button" onClick={onConfirm} disabled={!preview || preview.kind === "correction_requires_review" || !form.externalVerificationConfirmed}>Confirmer après vérification externe</button></div></>}
-  </div>;
+        <button type="button" onClick={onConfirm} disabled={uncertain || !preview || preview.kind === "correction_requires_review" || !form.externalVerificationConfirmed}>Confirmer après vérification externe</button></div></>}
+  </fieldset>;
 }
 
-function UnpaidReview({ inspection, form, onForm, onReview, onCancel }: { inspection: CagnotteAdminInspection; form: Form; onForm: (patch: Partial<Form>) => void; onReview: () => void; onCancel: () => void }) {
+function UnpaidReview({ inspection, form, busy, uncertain, onForm, onReview, onCancel }: { inspection: CagnotteAdminInspection; form: Form; busy: boolean; uncertain: boolean; onForm: (patch: Partial<Form>) => void; onReview: () => void; onCancel: () => void }) {
   const unpaid = inspection.unpaid;
-  return <div className="cagnotte-admin__box" style={{ marginTop: "1rem" }}><h4>Revue d’un impayé</h4>
+  return <fieldset disabled={busy || uncertain} className="cagnotte-admin__box cagnotte-admin__fieldset" style={{ marginTop: "1rem" }}><h4>Revue d’un impayé</h4>
     {unpaid.reviewRequired && <span className="cagnotte-admin__tag">À revoir · plus de 72 heures</span>}
     <MoneyRows rows={[["Montant réservé", unpaid.reservedAmountCents]]} />
     <p><strong>Règlement de la commande :</strong> {paymentStatusLabel(unpaid.payment.status)}{unpaid.payment.uncertain ? " · à vérifier" : ""}</p>
@@ -277,7 +334,7 @@ function UnpaidReview({ inspection, form, onForm, onReview, onCancel }: { inspec
     <div className="cagnotte-admin__actions"><button type="button" onClick={onReview} disabled={unpaid.linkTransmission.sendingActive}>Enregistrer la revue</button>
       <button type="button" onClick={onCancel} disabled={unpaid.linkTransmission.sendingActive || !unpaid.review?.current || unpaid.review.outcome !== "unpaid_confirmed"}>Annuler après revue de l’impayé</button></div>
     {unpaid.review && <p className="cagnotte-admin__status">Dernière revue : {reviewOutcomeLabel(unpaid.review.outcome)} · {formatAdminDate(unpaid.review.reviewedAt)}{unpaid.review.current ? "" : " · devenue ancienne"}</p>}
-  </div>;
+  </fieldset>;
 }
 
 function LineInputs({ inspection, form, onForm, remainingMeansInitial = false }: { inspection: CagnotteAdminInspection; form: Form; onForm: (patch: Partial<Form>) => void; remainingMeansInitial?: boolean }) {
@@ -291,11 +348,14 @@ function LineInputs({ inspection, form, onForm, remainingMeansInitial = false }:
 function Consequences({ refund }: { refund: RefundPreview }) { return <div className="cagnotte-admin__status"><strong>Conséquences calculées par le serveur</strong><MoneyRows rows={[
   ["Part financière déclarée", refund.totalFinancialCents], ["Cagnotte brute restituée", refund.restitution.grossCents],
   ["Correction du gain", refund.correction.appliedCents], ["Compensation", refund.restitution.compensationCents],
+  ["Régularisation créée", refund.correction.regularizationDeltaCents],
   ["Disponible estimé", refund.restitution.availableAfterCents],
 ]} /></div>; }
 function CorrectionConsequences({ value }: { value: CorrectionPreview }) { return <div className={`cagnotte-admin__status${value.kind === "correction_requires_review" ? " review" : ""}`}><strong>{value.kind === "correction_requires_review" ? "CORRECTION_REQUIRES_REVIEW" : "Effet différentiel"}</strong>
+  <p>Révision actuelle : {value.previousRevision} · nouvelle révision : {value.revision}</p>
   {value.reviewReason && <p>{value.reviewReason}</p>}<MoneyRows rows={[["Retour effectif", value.effective.returnedProductNetCents], ["Variation financière", value.differential.totalFinancialCents],
-    ["Variation de restitution", value.differential.cagnotteRestitutionCents], ["Variation du gain", value.differential.loyaltyCents], ["Disponible après correction", value.walletAfter.availableCents]]} /></div>; }
+    ["Variation de restitution", value.differential.cagnotteRestitutionCents], ["Variation du gain", value.differential.loyaltyCents],
+    ["Variation régularisation", value.differential.regularizationDeltaCents], ["Disponible après correction", value.walletAfter.availableCents]]} /></div>; }
 function MoneyRows({ rows }: { rows: Array<[string, number]> }) { return <dl className="cagnotte-admin__amounts">{rows.map(([label, cents]) => <div key={label} style={{ display: "contents" }}><dt>{label}</dt><dd>{formatCents(cents)}</dd></div>)}</dl>; }
 function Input({ label, value, onChange, type = "text", step }: { label: string; value: string; onChange: (value: string) => void; type?: string; step?: number }) { return <label>{label}<input type={type} value={value} step={step} onChange={(event) => onChange(event.target.value)} /></label>; }
 
@@ -307,7 +367,15 @@ function deliveryStatusLabel(status: string) { return status === "sent" ? "Envoy
 function transportStatusLabel(status: string) { return status === "accepted" ? "Pris en charge" : status === "not_sent" ? "Non envoyé" : "Résultat à vérifier"; }
 function reviewOutcomeLabel(outcome: "unpaid_confirmed" | "payment_uncertain") { return outcome === "unpaid_confirmed" ? "Impayé confirmé après vérification" : "Paiement encore indéterminé"; }
 function formatAdminDate(value: string) { const date = new Date(value); return Number.isNaN(date.valueOf()) ? "Date indisponible" : new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(date); }
-function emptyForm(inspection?: CagnotteAdminInspection | null): Form { return { lines: Object.fromEntries((inspection?.lines ?? []).map((line) => [line.lineId, ""])), delivery: "", source: "admin", reference: "", confirmedAt: cagnotteRefundDateTimeLocalValue(), reason: "product_return", declaredFinancial: "", correctionReason: "", correctionReference: "", reviewOutcome: "payment_uncertain", reviewSource: "", reviewReason: "", externalVerificationConfirmed: false }; }
+function reservationStateLabel(state: CagnotteAdminInspection["reservation"]["state"]) { return state === "reserved" ? "Réservée" : state === "consumed" ? "Consommée" : state === "released" ? "Libérée" : "Absente"; }
+function movementEventLabel(event: string) {
+  const labels: Record<string, string> = { payment_confirmed: "Paiement confirmé", delivery_confirmed: "Livraison confirmée", made_available: "Gain rendu disponible",
+    cancelled: "Gain annulé", refund_confirmed: "Retour confirmé", credit_reserved: "Crédit réservé", credit_consumed: "Crédit consommé",
+    credit_released: "Crédit libéré", credit_refunded_after_return: "Crédit restitué après retour",
+    refund_declaration_corrected: "Déclaration corrigée", credit_refund_corrected: "Restitution corrigée" };
+  return labels[event] ?? event;
+}
+function emptyForm(inspection?: CagnotteAdminInspection | null): Form { return { lines: Object.fromEntries((inspection?.lines ?? []).map((line) => [line.lineId, ""])), delivery: "", source: "admin", reference: "", confirmedAt: "", reason: "product_return", declaredFinancial: "", correctionReason: "", correctionReference: "", reviewOutcome: "payment_uncertain", reviewSource: "", reviewReason: "", externalVerificationConfirmed: false }; }
 function isNeutralization(entry: CagnotteAdminInspection["history"][number]) { return entry.type === "correction" && entry.returnedProductNetCents === 0 && entry.financialCents === 0 && entry.cagnotteRestitutionCents === 0; }
 function isZeroInput(value: string) { try { return eurosInputToCents(value) === 0; } catch { return false; } }
 function setFailure(setModel: Dispatch<SetStateAction<CagnotteAdminViewModel>>) { return (error: unknown) => setModel((value) => ({ ...value, notice: message(error), uncertain: error instanceof CagnotteAdminRequestError && error.uncertain })); }

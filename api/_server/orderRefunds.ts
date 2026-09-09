@@ -9,10 +9,11 @@ import {
   prepareCagnotteLedgerOperation,
   prepareCagnotteWalletMutation,
   readCagnotteRefundBasis,
+  readCagnotteWallet,
   writeCagnotteWalletMutation,
 } from "./cagnotteLedger.js";
-import { CAGNOTTE_REGULARIZATION_VERSION, CAGNOTTE_RESERVATION_VERSION, type CagnotteMovement } from "./cagnotteLedgerTypes.js";
-import { prepareCagnotteRefundComposition, readCagnotteConsumedRefundBasis } from "./cagnotteReservations.js";
+import { CAGNOTTE_REGULARIZATION_VERSION, CAGNOTTE_RESERVATION_VERSION, type CagnotteAccrual, type CagnotteMovement, type CagnotteWallet } from "./cagnotteLedgerTypes.js";
+import { prepareCagnotteRefundComposition, readCagnotteConsumedRefundBasis, readCagnotteReservationBasis } from "./cagnotteReservations.js";
 import { readUnpaidOrderContext } from "./unpaidOrderReview.js";
 
 export const ORDER_REFUNDS_ENABLED = false;
@@ -21,6 +22,16 @@ export const ORDER_MIXED_REFUND_VERSION = "order-mixed-refund-record-v1";
 export const ORDER_REFUND_CORRECTION_VERSION = "order-refund-correction-v1";
 const collection = "cagnotteRefunds";
 const historyLimit = 1000;
+
+export type OrderRefundOperationalLog = {
+  event: "cagnotte_refund_recorded" | "cagnotte_refund_correction_recorded" | "cagnotte_correction_requires_review";
+  orderHash: string;
+  eventId: string;
+  version: string;
+  deltas: Record<string, number>;
+  result: string;
+  idempotent: boolean;
+};
 
 function hasOwn(value: object, property: PropertyKey) {
   return Object.prototype.hasOwnProperty.call(value, property);
@@ -257,6 +268,7 @@ export async function executeOrderRefund(input: {
   request: OrderRefundRequest;
   actor: { uid: string; email: string | null };
   now?: () => string;
+  log?: (entry: OrderRefundOperationalLog) => void;
 }) {
   const request = parseOrderRefundRequest(input.request);
   if (request.action === "inspect") return inspectOrderRefunds(input.db, request.orderId);
@@ -268,7 +280,7 @@ export async function executeOrderRefund(input: {
   const content = confirmed ? businessContent(confirmed) : null;
   const key = confirmed ? eventKey(confirmed.source, confirmed.reference) : null;
   const eventRef = key ? input.db.collection(collection).doc(key) : null;
-  return input.db.runTransaction(async (tx) => {
+  const result = await input.db.runTransaction(async (tx) => {
     const orderRef = input.db.collection("orders").doc(request.orderId);
     const orderDoc = await tx.get(orderRef);
     const prior = eventRef ? await tx.get(eventRef) : null;
@@ -587,6 +599,25 @@ export async function executeOrderRefund(input: {
     });
     return publicResult(result, false);
   });
+  if (confirmed && key) {
+    emitOperationalLog(input.log, {
+      event: "cagnotte_refund_recorded",
+      orderHash: hash(["order", request.orderId]),
+      eventId: key,
+      version: result.restitution.reservationState === "consumed" ? ORDER_MIXED_REFUND_VERSION : ORDER_REFUND_VERSION,
+      deltas: {
+        returnedProductNetCents: result.returnedProductNetCents,
+        financialCents: result.totalFinancialCents,
+        cagnotteRestitutionCents: result.cagnotteRestitutionCents,
+        pendingCents: result.correction.pendingDeltaCents,
+        availableCents: result.correction.availableDeltaCents,
+        regularizationCents: result.correction.regularizationDeltaCents,
+      },
+      result: result.kind,
+      idempotent: result.alreadyRecorded === true,
+    });
+  }
+  return result;
 }
 
 async function inspectOrderRefunds(db: Firestore, orderId: string) {
@@ -601,6 +632,34 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
     const order = orderFromSnapshot(orderDoc);
     if (!hasCagnotteEnrollment(order)) fail("refund_historical_order_not_supported");
     const enrollment = validateOrderCagnotteEnrollment(order);
+    const internalOrder = {
+      orderId: order.id,
+      beneficiaryId: enrollment.beneficiaryId,
+      programVersion: enrollment.programVersion,
+      createdAtEpochMs: enrollment.createdAtEpochMs,
+      snapshot: enrollment.snapshot,
+    };
+    const [accrualDoc, walletDoc, movementDocs] = await Promise.all([
+      tx.get(db.collection("cagnotteAccruals").doc(order.id)),
+      tx.get(db.collection("cagnotteWallets").doc(enrollment.beneficiaryId)),
+      tx.get(db.collection("cagnotteMovements").where("orderId", "==", order.id).limit(historyLimit + 1)),
+    ]);
+    if (movementDocs.size > historyLimit) fail("refund_history_requires_verification");
+    let accrual: CagnotteAccrual | null = null;
+    let wallet: CagnotteWallet | null = walletDoc.exists
+      ? readCagnotteWallet(walletDoc.data(), enrollment.beneficiaryId)
+      : null;
+    if (accrualDoc.exists) {
+      const basis = await readCagnotteRefundBasis({ db, transaction: tx, order: internalOrder });
+      accrual = basis.state;
+      wallet = basis.wallet;
+    }
+    const reservationBasis = enrollment.snapshot.appliedCagnotteCents > 0
+      ? await readCagnotteReservationBasis({ db, transaction: tx, intent: order.cagnotteReservationIntent! })
+      : null;
+    if (reservationBasis && !wallet) fail("refund_right_requires_verification");
+    const movements = movementDocs.docs.map((doc) => sanitizedMovement(doc.id, doc.data(), order.id, enrollment.beneficiaryId))
+      .sort((a, b) => b.recordedAtEpochMs - a.recordedAtEpochMs || a.id.localeCompare(b.id));
     const originals = history.docs.filter((doc) => doc.data().kind !== "refund_correction").map((doc) => {
       const event = doc.data() as Event;
       validateStoredEvent(event, doc.id);
@@ -619,9 +678,37 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
       const linked = corrections.filter((entry) => entry.event.targetEventId === lastOriginal.id).sort((a, b) => a.event.revision - b.event.revision);
       if (linked.length) effective = lastItem(linked)!.event.result.effective;
     }
-    const walletDoc = await tx.get(db.collection("cagnotteWallets").doc(enrollment.beneficiaryId));
     const unpaid = await readUnpaidOrderContext({ db, transaction: tx, order, nowEpochMs: Date.now() });
-    const wallet = walletDoc.exists ? walletDoc.data() as Record<string, unknown> : null;
+    const cancelled = accrual?.cancelled ?? (order.orderStatus === "cancelled" || order.paymentStatus === "cancelled" || Boolean(order.cancelledAt));
+    const accrualView = {
+      present: accrual !== null,
+      initialGainCents: accrual?.initialGainCents ?? enrollment.snapshot.loyaltyCents,
+      remainingGainCents: accrual?.remainingGainCents ?? 0,
+      paymentConfirmed: accrual?.paymentConfirmed ?? false,
+      deliveryConfirmed: accrual?.deliveryConfirmed ?? false,
+      credited: accrual?.credited ?? false,
+      compartment: accrual?.compartment ?? "none" as const,
+      cancelled,
+    };
+    const refundHistory = [
+      ...originals.map(({ id, event }) => ({ id, type: "initial_declaration" as const, revision: 0, recordedAt: event.recordedAt,
+        reference: event.reference, declaredFinancialCents: event.content.declaredFinancialCents,
+        returnedProductNetCents: event.result.returnedProductNetCents,
+        financialCents: event.result.totalFinancialCents,
+        cagnotteRestitutionCents: event.result.cagnotteRestitutionCents,
+        resultingAvailableCents: event.result.restitution.availableAfterCents,
+        effective: corrections.every((entry) => entry.event.targetEventId !== id) })),
+      ...corrections.map(({ id, event }) => ({ id, type: "correction" as const, revision: event.revision, recordedAt: event.recordedAt,
+        reference: event.correctionReference, targetEventId: event.targetEventId, declaredFinancialCents: event.content.declaredFinancialCents,
+        targetReference: originals.find((entry) => entry.id === event.targetEventId)?.event.reference,
+        returnedProductNetCents: event.result.effective.returnedProductNetCents,
+        financialCents: event.result.effective.totalFinancialCents,
+        cagnotteRestitutionCents: event.result.effective.cagnotteRestitutionCents,
+        resultingAvailableCents: event.result.walletAfter.availableCents,
+        effective: event.targetEventId === lastOriginal?.id && event.revision === corrections.filter((entry) => entry.event.targetEventId === event.targetEventId).length })),
+    ].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt) || b.revision - a.revision ||
+      Number(b.type === "correction") - Number(a.type === "correction"));
+    const operationalState = adminOperationalState({ accrual: accrualView, wallet, hasRefund: refundHistory.length > 0 });
     return {
       kind: "administrative_refund_inspection" as const,
       order: {
@@ -640,10 +727,33 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
         externalTotalCents: orderPaymentCents(order),
         deliveryCents: eurosToCagnotteCents(order.deliveryFee),
       },
+      operationalState,
+      enrollment: {
+        enrolled: true as const,
+        beneficiaryId: enrollment.beneficiaryId,
+        programVersion: enrollment.programVersion,
+        calculationVersion: enrollment.calculationVersion,
+        createdAtEpochMs: enrollment.createdAtEpochMs,
+      },
+      accrual: accrualView,
       wallet: wallet ? {
-        pendingCents: Number(wallet.pendingCents), availableCents: Number(wallet.availableCents),
-        reservedCents: Number(wallet.reservedCents), regularizationCents: Number(wallet.regularizationCents),
+        pendingCents: wallet.pendingCents, availableCents: wallet.availableCents,
+        reservedCents: wallet.reservedCents, regularizationCents: wallet.regularizationCents,
       } : null,
+      reservation: {
+        applicable: reservationBasis !== null,
+        amountCents: reservationBasis?.reservation.amountCents ?? 0,
+        state: reservationBasis?.reservation.state ?? null,
+        requiresReview: Boolean(reservationBasis && unpaid.reviewRequired),
+        cumulativeRestitutedCents: reservationBasis?.cumulativeRestitutedCents ?? 0,
+      },
+      refund: {
+        history: refundHistory.map((entry) => ({ id: entry.id, type: entry.type, revision: entry.revision, recordedAt: entry.recordedAt, effective: entry.effective })),
+        latest: refundHistory[0] ? { id: refundHistory[0].id, type: refundHistory[0].type, revision: refundHistory[0].revision, recordedAt: refundHistory[0].recordedAt } : null,
+        latestRevision: refundHistory[0]?.revision ?? 0,
+        requiresReview: false,
+      },
+      movements,
       lines: enrollment.snapshot.lines.map((line, index) => ({
         lineId: line.lineId,
         label: order.items?.[index]?.name ?? `Ligne ${index + 1}`,
@@ -652,23 +762,7 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
         remainingNetCents: line.netCents - (effective.lines.find((entry) => entry.lineId === line.lineId)?.returnedNetCents ?? 0),
       })),
       effective,
-      history: [
-        ...originals.map(({ id, event }) => ({ id, type: "initial_declaration" as const, revision: 0, recordedAt: event.recordedAt,
-          reference: event.reference, declaredFinancialCents: event.content.declaredFinancialCents,
-          returnedProductNetCents: event.result.returnedProductNetCents,
-          financialCents: event.result.totalFinancialCents,
-          cagnotteRestitutionCents: event.result.cagnotteRestitutionCents,
-          resultingAvailableCents: event.result.restitution.availableAfterCents,
-          effective: corrections.every((entry) => entry.event.targetEventId !== id) })),
-        ...corrections.map(({ id, event }) => ({ id, type: "correction" as const, revision: event.revision, recordedAt: event.recordedAt,
-          reference: event.correctionReference, targetEventId: event.targetEventId, declaredFinancialCents: event.content.declaredFinancialCents,
-          targetReference: originals.find((entry) => entry.id === event.targetEventId)?.event.reference,
-          returnedProductNetCents: event.result.effective.returnedProductNetCents,
-          financialCents: event.result.effective.totalFinancialCents,
-          cagnotteRestitutionCents: event.result.effective.cagnotteRestitutionCents,
-          resultingAvailableCents: event.result.walletAfter.availableCents,
-          effective: event.targetEventId === lastOriginal?.id && event.revision === corrections.filter((entry) => entry.event.targetEventId === event.targetEventId).length })),
-      ].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt)),
+      history: refundHistory,
       correctionTarget: lastOriginal ? {
         eventId: lastOriginal.id,
         revision: corrections.filter((entry) => entry.event.targetEventId === lastOriginal.id).length,
@@ -679,18 +773,63 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
   });
 }
 
+function sanitizedMovement(id: string, raw: Record<string, unknown>, orderId: string, beneficiaryId: string) {
+  const allowedEvents = new Set([
+    "payment_confirmed", "delivery_confirmed", "made_available", "cancelled", "refund_confirmed",
+    "credit_reserved", "credit_consumed", "credit_released", "credit_refunded_after_return",
+    "refund_declaration_corrected", "credit_refund_corrected",
+  ]);
+  const deltas = [raw.pendingDeltaCents, raw.availableDeltaCents, raw.reservedDeltaCents ?? 0, raw.regularizationDeltaCents ?? 0];
+  if (raw.orderId !== orderId || raw.beneficiaryId !== beneficiaryId || raw.eventKey !== id ||
+    typeof raw.businessEvent !== "string" || !allowedEvents.has(raw.businessEvent) ||
+    !deltas.every((value) => typeof value === "number" && Number.isSafeInteger(value)) ||
+    typeof raw.recordedAtEpochMs !== "number" || !Number.isSafeInteger(raw.recordedAtEpochMs) || raw.recordedAtEpochMs < 0) {
+    fail("refund_journal_requires_verification");
+  }
+  return {
+    id,
+    event: raw.businessEvent,
+    pendingDeltaCents: deltas[0] as number,
+    availableDeltaCents: deltas[1] as number,
+    reservedDeltaCents: deltas[2] as number,
+    regularizationDeltaCents: deltas[3] as number,
+    recordedAtEpochMs: raw.recordedAtEpochMs,
+  };
+}
+
+function adminOperationalState(input: {
+  accrual: {
+    remainingGainCents: number;
+    paymentConfirmed: boolean;
+    deliveryConfirmed: boolean;
+    cancelled: boolean;
+  };
+  wallet: CagnotteWallet | null;
+  hasRefund: boolean;
+}) {
+  if ((input.wallet?.regularizationCents ?? 0) > 0) {
+    return { code: "regularization_pending" as const, label: "RÉGULARISATION À COMPENSER", detail: "Les gains futurs absorberont cette régularisation." };
+  }
+  if (input.accrual.cancelled) return { code: "cancelled" as const, label: "ANNULÉE", detail: "Le gain de cette commande est annulé." };
+  if (input.hasRefund) return { code: "refund_recorded" as const, label: "REMBOURSEMENT/CORRECTION ENREGISTRÉ", detail: "Consultez l’historique administratif effectif." };
+  if (input.accrual.deliveryConfirmed && input.accrual.paymentConfirmed) return { code: "delivered_available" as const, label: "LIVRÉE", detail: "GAIN DISPONIBLE POUR CETTE COMMANDE" };
+  if (input.accrual.paymentConfirmed) return { code: "payment_confirmed_pending" as const, label: "PAIEMENT CONFIRMÉ", detail: "5 % EN ATTENTE" };
+  return { code: "enrolled_payment_pending" as const, label: "INSCRITE", detail: "PAIEMENT À CONFIRMER" };
+}
+
 async function executeOrderRefundCorrection(input: {
   db: Firestore;
   request: CorrectionSelection | CorrectionConfirmation;
   actor: { uid: string; email: string | null };
   now?: () => string;
+  log?: (entry: OrderRefundOperationalLog) => void;
 }) {
   const request = input.request;
   const recordedAt = instant((input.now ?? (() => new Date().toISOString()))());
   const confirmed = request.action === "record_correction" ? request : null;
   const correctionKey = confirmed ? hash(["refund-correction", confirmed.correctionReference]) : null;
   const correctionRef = correctionKey ? input.db.collection(collection).doc(correctionKey) : null;
-  return input.db.runTransaction(async (tx) => {
+  const result = await input.db.runTransaction(async (tx) => {
     const orderRef = input.db.collection("orders").doc(request.orderId);
     const targetRef = input.db.collection(collection).doc(request.targetEventId);
     const [orderDoc, targetDoc, history, priorCorrection] = await Promise.all([
@@ -709,10 +848,10 @@ async function executeOrderRefundCorrection(input: {
       return publicCorrectionResult(prior.result, true);
     }
     if (!orderDoc.exists) fail("refund_order_missing", 404);
-    if (!targetDoc.exists || targetDoc.data()?.kind === "refund_correction") fail("correction_target_missing", 404);
     if (history.size > historyLimit) fail("refund_history_requires_verification");
     const order = orderFromSnapshot(orderDoc);
     if (!hasCagnotteEnrollment(order)) fail("refund_historical_order_not_supported");
+    if (!targetDoc.exists || targetDoc.data()?.kind === "refund_correction") fail("correction_target_missing", 404);
     const enrollment = validateOrderCagnotteEnrollment(order);
     const deliveryCharged = eurosToCagnotteCents(order.deliveryFee);
     const target = targetDoc.data() as Event;
@@ -892,6 +1031,25 @@ async function executeOrderRefundCorrection(input: {
     });
     return publicCorrectionResult(result, false);
   });
+  if (result.kind === "correction_requires_review" || confirmed) {
+    emitOperationalLog(input.log, {
+      event: result.kind === "correction_requires_review" ? "cagnotte_correction_requires_review" : "cagnotte_refund_correction_recorded",
+      orderHash: hash(["order", request.orderId]),
+      eventId: correctionKey ?? request.targetEventId,
+      version: ORDER_REFUND_CORRECTION_VERSION,
+      deltas: {
+        financialCents: result.differential.totalFinancialCents,
+        cagnotteRestitutionCents: result.differential.cagnotteRestitutionCents,
+        loyaltyCents: result.differential.loyaltyCents,
+        pendingCents: result.differential.pendingDeltaCents,
+        availableCents: result.differential.availableDeltaCents,
+        regularizationCents: result.differential.regularizationDeltaCents,
+      },
+      result: result.kind,
+      idempotent: result.alreadyRecorded === true,
+    });
+  }
+  return result;
 }
 
 function correctionBusinessContent(request: CorrectionConfirmation): CorrectionEvent["content"] {
@@ -1246,4 +1404,9 @@ function stable(value: unknown): string {
   return JSON.stringify(value);
 }
 function hash(value: unknown) { return createHash("sha256").update(stable(value)).digest("hex"); }
+
+function emitOperationalLog(log: ((entry: OrderRefundOperationalLog) => void) | undefined, entry: OrderRefundOperationalLog) {
+  if (log) log(entry);
+  else console.info(JSON.stringify(entry));
+}
 function fail(code: string, status = 409): never { throw new OrderRefundError(code, status); }

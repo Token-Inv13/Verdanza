@@ -310,8 +310,8 @@ export async function prepareCagnottePaymentComposition(input: {
   };
 }
 
-/** Read and validate the consumed reservation and its confirmed-refund projection. */
-export async function readCagnotteConsumedRefundBasis(input: {
+/** Read and validate an existing reservation using the canonical reservation journal. */
+export async function readCagnotteReservationBasis(input: {
   db: Firestore;
   transaction: Transaction;
   intent: CagnotteReservationIntent;
@@ -328,12 +328,23 @@ export async function readCagnotteConsumedRefundBasis(input: {
   const refundMovements = await readReservationRefundMovements(input.db, input.transaction, reservation);
   validateReservation(reservation, reservationSnapshot.id, { reserveMovement, consumeMovement, releaseMovement, refundMovements });
   assertReservationIntent(reservation, intent);
-  if (reservation.state !== "consumed") fail("CONFLICT", "Seule une réservation consommée peut être restituée.");
   return {
     reservation,
     cumulativeRestitutedCents: reservation.refundProjection?.cumulativeRestitutedCents ?? 0,
     movementIds: reservation.refundProjection?.events.map((event) => event.eventKey) ?? [],
   };
+}
+
+/** Read and validate the consumed reservation and its confirmed-refund projection. */
+export async function readCagnotteConsumedRefundBasis(input: {
+  db: Firestore;
+  transaction: Transaction;
+  intent: CagnotteReservationIntent;
+}) {
+  const basis = await readCagnotteReservationBasis(input);
+  const { reservation } = basis;
+  if (reservation.state !== "consumed") fail("CONFLICT", "Seule une réservation consommée peut être restituée.");
+  return basis;
 }
 
 /**
