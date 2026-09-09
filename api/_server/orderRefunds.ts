@@ -1,15 +1,17 @@
 import { createHash } from "node:crypto";
-import type { Firestore } from "firebase-admin/firestore";
+import type { Firestore, QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { simulateCagnotteRefund } from "../../src/lib/cagnotteCalculations.js";
 import type { CagnotteSnapshot, CumulativeLineReturn } from "../../src/types/cagnotte.js";
 import { eurosToCagnotteCents, orderPaymentCents, validateOrderCagnotteEnrollment } from "./cagnotteOrders.js";
 import { orderFromSnapshot, hasCagnotteEnrollment } from "./orderProtection.js";
 import {
   applyCagnotteWalletDeltas,
+  cagnotteLedgerMovementId,
   prepareCagnotteLedgerOperation,
   prepareCagnotteWalletMutation,
   readCagnotteRefundBasis,
   readCagnotteWallet,
+  validateCagnotteLedgerMovementForRead,
   writeCagnotteWalletMutation,
 } from "./cagnotteLedger.js";
 import { CAGNOTTE_REGULARIZATION_VERSION, CAGNOTTE_RESERVATION_VERSION, type CagnotteAccrual, type CagnotteMovement, type CagnotteWallet } from "./cagnotteLedgerTypes.js";
@@ -645,22 +647,30 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
       tx.get(db.collection("cagnotteMovements").where("orderId", "==", order.id).limit(historyLimit + 1)),
     ]);
     if (movementDocs.size > historyLimit) fail("refund_history_requires_verification");
-    const inspectedMovements = movementDocs.docs.map((doc) => sanitizedMovement(doc.id, doc.data(), order.id, enrollment.beneficiaryId));
-    const movements = inspectedMovements.flatMap((entry) => entry.kind === "displayable" ? [entry.movement] : [])
-      .sort((a, b) => b.recordedAtEpochMs - a.recordedAtEpochMs || a.id.localeCompare(b.id));
-    const omittedLegacyUndatedCount = inspectedMovements.filter((entry) => entry.kind === "legacy_undated").length;
     let accrual: CagnotteAccrual | null = null;
-    let wallet: CagnotteWallet | null = walletDoc.exists
-      ? readCagnotteWallet(walletDoc.data(), enrollment.beneficiaryId)
-      : null;
-    if (accrualDoc.exists) {
-      const basis = await readCagnotteRefundBasis({ db, transaction: tx, order: internalOrder });
-      accrual = basis.state;
-      wallet = basis.wallet;
+    let wallet: CagnotteWallet | null = null;
+    try {
+      wallet = walletDoc.exists ? readCagnotteWallet(walletDoc.data(), enrollment.beneficiaryId) : null;
+    } catch {
+      fail("refund_journal_requires_verification");
     }
-    const reservationBasis = enrollment.snapshot.appliedCagnotteCents > 0
-      ? await readCagnotteReservationBasis({ db, transaction: tx, intent: order.cagnotteReservationIntent! })
-      : null;
+    if (accrualDoc.exists) {
+      try {
+        const basis = await readCagnotteRefundBasis({ db, transaction: tx, order: internalOrder });
+        accrual = basis.state;
+        wallet = basis.wallet;
+      } catch {
+        fail("refund_journal_requires_verification");
+      }
+    }
+    let reservationBasis: Awaited<ReturnType<typeof readCagnotteReservationBasis>> | null = null;
+    try {
+      reservationBasis = enrollment.snapshot.appliedCagnotteCents > 0
+        ? await readCagnotteReservationBasis({ db, transaction: tx, intent: order.cagnotteReservationIntent! })
+        : null;
+    } catch {
+      fail("refund_journal_requires_verification");
+    }
     if (reservationBasis && !wallet) fail("refund_right_requires_verification");
     const originals = history.docs.filter((doc) => doc.data().kind !== "refund_correction").map((doc) => {
       const event = doc.data() as Event;
@@ -680,6 +690,18 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
       const linked = corrections.filter((entry) => entry.event.targetEventId === lastOriginal.id).sort((a, b) => a.event.revision - b.event.revision);
       if (linked.length) effective = lastItem(linked)!.event.result.effective;
     }
+    const inspectedMovements = validateAdminMovementJournal({
+      order: internalOrder,
+      deliveryCharged: eurosToCagnotteCents(order.deliveryFee),
+      accrual,
+      reservationBasis,
+      originals,
+      corrections,
+      movementDocs: movementDocs.docs,
+    });
+    const movements = inspectedMovements.flatMap((entry) => entry.kind === "displayable" ? [entry.movement] : [])
+      .sort((a, b) => b.recordedAtEpochMs - a.recordedAtEpochMs || a.id.localeCompare(b.id));
+    const omittedLegacyUndatedCount = inspectedMovements.filter((entry) => entry.kind === "legacy_undated").length;
     const unpaid = await readUnpaidOrderContext({ db, transaction: tx, order, nowEpochMs: Date.now() });
     const cancelled = accrual?.cancelled ?? (order.orderStatus === "cancelled" || order.paymentStatus === "cancelled" || Boolean(order.cancelledAt));
     const accrualView = {
@@ -791,37 +813,172 @@ type InspectedMovementProjection =
     } }
   | { kind: "legacy_undated" };
 
-function sanitizedMovement(id: string, raw: Record<string, unknown>, orderId: string, beneficiaryId: string): InspectedMovementProjection {
-  const allowedEvents = new Set([
-    "payment_confirmed", "delivery_confirmed", "made_available", "cancelled", "refund_confirmed",
-    "credit_reserved", "credit_consumed", "credit_released", "credit_refunded_after_return",
-    "refund_declaration_corrected", "credit_refund_corrected",
-  ]);
-  const schema = raw.schemaVersion;
-  const reserved = raw.reservedDeltaCents ?? 0;
-  const regularization = raw.regularizationDeltaCents ?? 0;
-  const deltas = [raw.pendingDeltaCents, raw.availableDeltaCents, reserved, regularization];
-  const legacy = schema === 1 || schema === 2;
-  const hasRecordedAt = hasOwn(raw, "recordedAtEpochMs");
-  const validRecordedAt = typeof raw.recordedAtEpochMs === "number" && Number.isSafeInteger(raw.recordedAtEpochMs) && raw.recordedAtEpochMs >= 0;
-  const incompatibleSchema =
-    (schema === 1 && (regularization !== 0 || hasOwn(raw, "regularizationVersion") || reserved !== 0 || hasOwn(raw, "reservationVersion"))) ||
-    (schema === 2 && (raw.regularizationVersion !== CAGNOTTE_REGULARIZATION_VERSION || reserved !== 0 || hasOwn(raw, "reservationVersion"))) ||
-    (schema !== 1 && schema !== 2 && (schema !== 3 || raw.regularizationVersion !== CAGNOTTE_REGULARIZATION_VERSION || raw.reservationVersion !== CAGNOTTE_RESERVATION_VERSION));
-  if (raw.orderId !== orderId || raw.beneficiaryId !== beneficiaryId || raw.eventKey !== id ||
-    typeof raw.businessEvent !== "string" || !allowedEvents.has(raw.businessEvent) ||
-    !deltas.every((value) => typeof value === "number" && Number.isSafeInteger(value)) || incompatibleSchema ||
-    (hasRecordedAt && !validRecordedAt) || (!legacy && !hasRecordedAt)) {
+type AdminMovementFamily = "ledger" | "reservation" | "refund_correction";
+
+function validateAdminMovementJournal(input: {
+  order: {
+    orderId: string;
+    beneficiaryId: string;
+    programVersion: string;
+    snapshot: CagnotteSnapshot;
+  };
+  deliveryCharged: number;
+  accrual: CagnotteAccrual | null;
+  reservationBasis: Awaited<ReturnType<typeof readCagnotteReservationBasis>> | null;
+  originals: readonly { id: string; event: Event }[];
+  corrections: readonly { id: string; event: CorrectionEvent }[];
+  movementDocs: readonly QueryDocumentSnapshot[];
+}): InspectedMovementProjection[] {
+  try {
+    const movementById = new Map(input.movementDocs.map((doc) => [doc.id, doc.data()]));
+    const expectedFamilies = new Map<string, AdminMovementFamily>();
+    const reservationMovementIds = new Set(input.reservationBasis?.validatedMovementIds ?? []);
+    const expect = (id: string, family: AdminMovementFamily) => {
+      if (!/^[a-f0-9]{64}$/.test(id)) throw new Error("movement_id_invalid");
+      const current = expectedFamilies.get(id);
+      if (current && current !== family) throw new Error("movement_family_conflict");
+      expectedFamilies.set(id, family);
+    };
+    const movement = (id: string) => {
+      const value = movementById.get(id);
+      if (!value) throw new Error("movement_missing");
+      return value;
+    };
+
+    for (const id of reservationMovementIds) expect(id, "reservation");
+    if (input.accrual) {
+      if (input.accrual.credited) expect(cagnotteLedgerMovementId(input.order.orderId, "payment_confirmed"), "ledger");
+      if (input.accrual.deliveryConfirmed) expect(cagnotteLedgerMovementId(input.order.orderId, "delivery_confirmed"), "ledger");
+      if (input.accrual.compartment === "available") expect(cagnotteLedgerMovementId(input.order.orderId, "made_available"), "ledger");
+      if (input.accrual.cancelled) expect(cagnotteLedgerMovementId(input.order.orderId, "cancelled"), "ledger");
+    }
+
+    const linkedReservationRefunds: string[] = [];
+    for (const { event } of input.originals) {
+      const result = normalizeResult(event.result);
+      const expectsLedger = event.content.additionalReturns.length > 0 && result.loyaltyAccrualDecision === "attributed";
+      const expectsRestitution = result.restitution.grossCents > 0;
+      let ledgerSeen = false;
+      let restitutionSeen = false;
+      for (const movementId of event.movementIds) {
+        const value = movement(movementId);
+        if (value.businessEvent === "refund_confirmed") {
+          if (!expectsLedger || ledgerSeen || !input.accrual) throw new Error("ledger_refund_unexpected");
+          const payload = JSON.parse(String(value.payload)) as Record<string, unknown>;
+          if (payload.refundId !== eventKey(event.source, event.reference) ||
+            stable(payload.additionalReturns) !== stable(event.content.additionalReturns) ||
+            value.pendingDeltaCents !== result.correction.pendingDeltaCents ||
+            value.availableDeltaCents !== result.correction.availableDeltaCents ||
+            (value.regularizationDeltaCents ?? 0) !== result.correction.regularizationDeltaCents) {
+            throw new Error("ledger_refund_mismatch");
+          }
+          ledgerSeen = true;
+          expect(movementId, "ledger");
+        } else if (value.businessEvent === "credit_refunded_after_return") {
+          if (!expectsRestitution || restitutionSeen || !reservationMovementIds.has(movementId)) throw new Error("reservation_refund_unexpected");
+          const payload = JSON.parse(String(value.payload)) as Record<string, unknown>;
+          if (payload.refundId !== eventKey(event.source, event.reference) ||
+            payload.grossRestitutionCents !== result.restitution.grossCents ||
+            payload.compensationCents !== result.restitution.compensationCents ||
+            value.pendingDeltaCents !== 0 || value.availableDeltaCents !== result.restitution.availableIncreaseCents ||
+            value.reservedDeltaCents !== 0 || value.regularizationDeltaCents !== -result.restitution.compensationCents) {
+            throw new Error("reservation_refund_mismatch");
+          }
+          restitutionSeen = true;
+          linkedReservationRefunds.push(movementId);
+          expect(movementId, "reservation");
+        } else {
+          throw new Error("refund_movement_family_invalid");
+        }
+      }
+      if (ledgerSeen !== expectsLedger || restitutionSeen !== expectsRestitution) throw new Error("refund_movement_missing");
+    }
+
+    const linkedReservationCorrections: string[] = [];
+    const projectedCorrections = input.reservationBasis?.reservation.refundProjection?.corrections ?? [];
+    for (const { id: correctionId, event } of input.corrections) {
+      const target = input.originals.find((entry) => entry.id === event.targetEventId)?.event;
+      if (!target) throw new Error("correction_target_missing");
+      validateCorrectionResult(event, target, input.order.snapshot, input.deliveryCharged);
+      const differential = event.result.differential;
+      const projected = projectedCorrections.find((entry) => entry.correctionId === correctionId);
+      if (Boolean(input.reservationBasis) !== Boolean(projected) ||
+        event.result.reservationState !== (input.reservationBasis ? "consumed" : "not_applicable")) {
+        throw new Error("correction_projection_missing");
+      }
+      const restitutionDelta = projected?.restitutionDeltaCents ?? 0;
+      const compensation = projected?.compensationCents ?? 0;
+      if (projected && (projected.targetRefundId !== event.targetEventId || projected.revision !== event.revision ||
+        restitutionDelta !== differential.cagnotteRestitutionCents || differential.regularizationDeltaCents !== -compensation ||
+        projected.recordedAtEpochMs !== Date.parse(event.recordedAt))) {
+        throw new Error("correction_projection_mismatch");
+      }
+      if (!projected && (differential.cagnotteRestitutionCents !== 0 || differential.regularizationDeltaCents !== 0)) {
+        throw new Error("correction_restitution_unexpected");
+      }
+      const restitutionAvailable = restitutionDelta > 0 ? restitutionDelta - compensation : restitutionDelta;
+      const loyaltyAvailable = differential.availableDeltaCents - restitutionAvailable;
+      if (!Number.isSafeInteger(loyaltyAvailable)) throw new Error("correction_delta_invalid");
+      const expectedIds: string[] = [];
+      if (differential.pendingDeltaCents !== 0 || loyaltyAvailable !== 0) {
+        const id = hash(["refund-correction-movement", event.targetEventId, event.revision, "loyalty"]);
+        expectedIds.push(id);
+        const expected = correctionMovement(input.order, id, "refund_declaration_corrected", event.recordedAt,
+          { correctionId, targetEventId: event.targetEventId, revision: event.revision },
+          differential.pendingDeltaCents, loyaltyAvailable, 0);
+        if (stable(movement(id)) !== stable(expected)) throw new Error("loyalty_correction_mismatch");
+        expect(id, "refund_correction");
+      }
+      if (restitutionDelta !== 0) {
+        const id = hash(["refund-correction-movement", event.targetEventId, event.revision, "restitution"]);
+        if (projected?.eventKey !== id || !reservationMovementIds.has(id)) throw new Error("restitution_correction_key_invalid");
+        expectedIds.push(id);
+        const expected = correctionMovement(input.order, id, "credit_refund_corrected", event.recordedAt,
+          { correctionId, targetEventId: event.targetEventId, revision: event.revision, restitutionDeltaCents: restitutionDelta, compensationCents: compensation },
+          0, restitutionAvailable, -compensation);
+        if (stable(movement(id)) !== stable(expected)) throw new Error("restitution_correction_mismatch");
+        linkedReservationCorrections.push(id);
+        expect(id, "reservation");
+      }
+      if (stable(event.movementIds) !== stable(expectedIds)) throw new Error("correction_movement_ids_invalid");
+    }
+
+    const projectedRefundIds = input.reservationBasis?.reservation.refundProjection?.events.map((event) => event.eventKey) ?? [];
+    const projectedCorrectionIds = projectedCorrections.map((correction) => correction.correctionId);
+    if (stable([...linkedReservationRefunds].sort()) !== stable([...projectedRefundIds].sort()) ||
+      stable([...linkedReservationCorrections].sort()) !== stable(projectedCorrections.flatMap((correction) => correction.eventKey ? [correction.eventKey] : []).sort()) ||
+      (input.reservationBasis && stable(input.corrections.map((entry) => entry.id).sort()) !== stable([...projectedCorrectionIds].sort()))) {
+      throw new Error("reservation_refund_projection_unlinked");
+    }
+
+    for (const [id, family] of expectedFamilies) {
+      const value = movement(id);
+      if (family === "ledger") {
+        if (!input.accrual) throw new Error("ledger_state_missing");
+        validateCagnotteLedgerMovementForRead(value, id, input.accrual);
+      }
+    }
+    if (movementById.size !== expectedFamilies.size || [...movementById.keys()].some((id) => !expectedFamilies.has(id))) {
+      throw new Error("movement_unexpected");
+    }
+    return input.movementDocs.map((doc) => projectValidatedMovement(doc.id, doc.data()));
+  } catch {
     fail("refund_journal_requires_verification");
   }
+}
+
+function projectValidatedMovement(id: string, raw: Record<string, unknown>): InspectedMovementProjection {
+  const schema = raw.schemaVersion;
+  const legacy = schema === 1 || schema === 2;
+  const hasRecordedAt = hasOwn(raw, "recordedAtEpochMs");
   if (legacy && !hasRecordedAt) return { kind: "legacy_undated" };
   return { kind: "displayable", movement: {
     id,
-    event: raw.businessEvent,
-    pendingDeltaCents: deltas[0] as number,
-    availableDeltaCents: deltas[1] as number,
-    reservedDeltaCents: deltas[2] as number,
-    regularizationDeltaCents: deltas[3] as number,
+    event: raw.businessEvent as string,
+    pendingDeltaCents: raw.pendingDeltaCents as number,
+    availableDeltaCents: raw.availableDeltaCents as number,
+    reservedDeltaCents: (raw.reservedDeltaCents ?? 0) as number,
+    regularizationDeltaCents: (raw.regularizationDeltaCents ?? 0) as number,
     recordedAtEpochMs: raw.recordedAtEpochMs as number,
   } };
 }

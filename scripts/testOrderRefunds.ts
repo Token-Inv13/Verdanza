@@ -8,7 +8,7 @@ import { CAGNOTTE_SERVER_PROGRAM } from "../api/_server/cagnotteProgram.js";
 import { commitOrderStatusTransition, type OrderStatusChange } from "../api/_server/orderStatusTransition.js";
 import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
 import { fixtureSpentGain, assertWalletJournal } from "./cagnotteRegularizationFixtures.js";
-import { applyCagnotteLedgerOperation } from "../api/_server/cagnotteLedger.js";
+import { applyCagnotteLedgerOperation, validateCagnotteLedgerMovementForRead } from "../api/_server/cagnotteLedger.js";
 import { applyCagnotteReservationOperation, createCagnotteReservationIntent } from "../api/_server/cagnotteReservations.js";
 import type { CagnotteReservationTestProgram } from "../api/_server/cagnotteReservationTypes.js";
 import type { CagnotteTestProgram } from "../api/_server/cagnotteLedgerTypes.js";
@@ -94,6 +94,19 @@ async function rewriteOneMovementSchema(f: Fixture, schemaVersion: 1 | 2 | 3, re
   else movement.recordedAtEpochMs = recordedAtEpochMs;
   await document.ref.set(movement);
   return document.id;
+}
+async function rejectMovementMutation(f: Fixture, businessEvent: string, patch: Record<string, unknown>) {
+  const snapshot = await db.collection("cagnotteMovements").where("orderId", "==", f.id).get();
+  const document = snapshot.docs.find((doc) => doc.data().businessEvent === businessEvent);
+  ok(document, `mouvement ${businessEvent} requis`);
+  const original = document.data();
+  await document.ref.set({ ...original, ...patch });
+  try {
+    const response = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+    equal(response.stats.writes, 0);
+  } finally {
+    await document.ref.set(original);
+  }
 }
 async function change(f: Fixture, patch: Omit<OrderStatusChange, "orderId">, config: CagnotteTestProgram | null = accrualProgram) {
   return commitOrderStatusTransition({ db, body: { orderId: f.id, ...patch }, admin: actor,
@@ -746,6 +759,98 @@ try {
     ok(result.movements.some((movement) => movement.event === "credit_refunded_after_return"));
     const movements = JSON.stringify(result.movements);
     for (const forbidden of [f.uid, actor.email!, "Synthetic", "synthetic@example.test", "readiness-inspection", "payload"]) equal(movements.includes(forbidden), false);
+  });
+  await test("H2 refuse un mouvement supplementaire meme derive d un mouvement canonique", async () => {
+    const f = await fixture();
+    const journal = await db.collection("cagnotteMovements").where("orderId", "==", f.id).get();
+    const payment = journal.docs.find((doc) => doc.data().businessEvent === "payment_confirmed");
+    ok(payment);
+    const forgedId = "f".repeat(64);
+    const forgedRef = db.collection("cagnotteMovements").doc(forgedId);
+    await forgedRef.set({ ...payment.data(), eventKey: forgedId });
+    try {
+      const response = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(response.stats.writes, 0);
+    } finally {
+      await forgedRef.delete();
+    }
+  });
+  await test("parite inspection et validateur canonique ledger", async () => {
+    const f = await fixture();
+    const accrual = (await db.collection("cagnotteAccruals").doc(f.id).get()).data() as import("../api/_server/cagnotteLedgerTypes.js").CagnotteAccrual;
+    const journal = await db.collection("cagnotteMovements").where("orderId", "==", f.id).get();
+    const delivery = journal.docs.find((doc) => doc.data().businessEvent === "delivery_confirmed");
+    ok(delivery);
+    validateCagnotteLedgerMovementForRead(delivery.data(), delivery.id, accrual);
+    equal((await call({ action: "inspect", orderId: f.id })).status, 200);
+    let canonicalRefused = false;
+    try { validateCagnotteLedgerMovementForRead({ ...delivery.data(), currency: "USD" }, delivery.id, accrual); }
+    catch { canonicalRefused = true; }
+    equal(canonicalRefused, true);
+    await rejectMovementMutation(f, "delivery_confirmed", { currency: "USD" });
+  });
+  await test("H2 refuse independamment les invariants canoniques ledger falsifies", async () => {
+    const mutations: Array<[string, Record<string, unknown>]> = [
+      ["currency", { currency: "USD" }],
+      ["origin", { origin: "client" }],
+      ["programVersion", { programVersion: "forged-program" }],
+      ["calculationVersion", { calculationVersion: "forged-calculation" }],
+      ["regularizationVersion", { regularizationVersion: "forged-regularization" }],
+      ["reservationVersion", { reservationVersion: "forged-reservation" }],
+      ["payload", { payload: "{\"event\":\"delivery_confirmed\",\"forged\":true}" }],
+      ["eventKey", { eventKey: "0".repeat(64) }],
+      ["businessEvent", { businessEvent: "payment_confirmed" }],
+    ];
+    for (const [field, patch] of mutations) {
+      const f = await fixture();
+      await rejectMovementMutation(f, "delivery_confirmed", patch);
+      ok(field);
+    }
+  });
+  await test("H2 refuse les versions incompatibles des schemas legacy", async () => {
+    for (const [schemaVersion, patch] of [
+      [1, { regularizationVersion: "cagnotte-regularization-v1" }],
+      [2, { regularizationVersion: "forged-regularization" }],
+      [2, { reservationVersion: "cagnotte-reservation-v1" }],
+    ] as const) {
+      const f = await fixture();
+      const id = await rewriteOneMovementSchema(f, schemaVersion, 2000);
+      const ref = db.collection("cagnotteMovements").doc(id);
+      const original = (await ref.get()).data()!;
+      await ref.set({ ...original, ...patch });
+      try { await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification"); }
+      finally { await ref.set(original); }
+    }
+  });
+  await test("H2 refuse les deltas incompatibles payment et made available", async () => {
+    const payment = await fixture();
+    await rejectMovementMutation(payment, "payment_confirmed", { availableDeltaCents: 1 });
+    const release = await fixture();
+    await rejectMovementMutation(release, "made_available", { availableDeltaCents: 499 });
+  });
+  await test("H2 refuse les mouvements reservation reserve consume et release falsifies", async () => {
+    const consumed = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await rejectMovementMutation(consumed, "credit_reserved", { payload: "{}" });
+    await rejectMovementMutation(consumed, "credit_consumed", { reservationVersion: "forged-reservation" });
+    const released = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000, ready: false });
+    await cancelReviewedUnpaid(released);
+    await rejectMovementMutation(released, "credit_released", { reservedDeltaCents: 0 });
+  });
+  await test("H2 refuse les mouvements refund et restitution falsifies", async () => {
+    const simple = await fixture();
+    await record(simple, 2500, "h2-refund-ledger");
+    await rejectMovementMutation(simple, "refund_confirmed", { payload: "{}" });
+    const mixed = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(mixed, 2500, "h2-refund-reservation");
+    await rejectMovementMutation(mixed, "credit_refunded_after_return", { origin: "client" });
+  });
+  await test("H2 refuse chaque famille de mouvement de correction falsifiee", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "h2-correction-original");
+    const target = await correctionTarget(f);
+    await recordCorrection(f, target, 0, 0, 0, "h2-correction");
+    await rejectMovementMutation(f, "refund_declaration_corrected", { currency: "USD" });
+    await rejectMovementMutation(f, "credit_refund_corrected", { payload: "{\"event\":\"credit_refund_corrected\",\"forged\":true}" });
   });
   await test("schema v1 sans horodatage garde l inspection disponible avec historique partiel sans ecriture", async () => {
     const f = await fixture();
