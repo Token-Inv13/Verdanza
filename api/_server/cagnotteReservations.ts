@@ -59,6 +59,19 @@ export function createCagnotteReservationIntent(
   return { ...base, intentFingerprint: fingerprint(base) };
 }
 
+export function canCreateCagnotteReservation(
+  program: CagnotteReservationProgram | null,
+  verifiedUid: string | undefined,
+  requestedCents: number,
+  createdAtEpochMs: number,
+  firebaseProjectId?: string | null,
+) {
+  if (!verifiedUid || !Number.isSafeInteger(requestedCents) || requestedCents <= 0) {
+    return false;
+  }
+  return activeReservationProgram(program, createdAtEpochMs, firebaseProjectId);
+}
+
 export async function applyCagnotteReservationOperation(input: {
   db: Firestore;
   action: ReservationAction;

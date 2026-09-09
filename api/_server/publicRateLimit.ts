@@ -16,6 +16,11 @@ export type PublicSubmissionRoute =
   | "/api/contests"
   | "/api/blog-interactions";
 export type PublicRateLimitSignalType = "network" | "email" | "anonymous";
+export type RateLimitFailurePolicy = "fail_open" | "fail_closed";
+export type RateLimitInfrastructureFailure =
+  | "config_missing"
+  | "storage_unavailable"
+  | "signal_missing";
 
 type PublicRateLimitRule = {
   signal: PublicRateLimitSignalType;
@@ -83,12 +88,13 @@ export type PublicRateLimitResult = {
   failOpen?: boolean;
 };
 
-type EnforcePublicRateLimitInput = {
+export type EnforcePublicRateLimitInput = {
   route: PublicSubmissionRoute;
   request: VercelRequestLike;
   email: string;
   anonymousId?: string;
   authenticated: boolean;
+  failurePolicy?: RateLimitFailurePolicy;
   attemptId?: string;
   attemptPayloadFingerprint?: string;
   nowMs?: number;
@@ -117,26 +123,17 @@ export async function enforcePublicSubmissionRateLimit(
   input: EnforcePublicRateLimitInput,
 ): Promise<PublicRateLimitResult> {
   const nowMs = input.nowMs ?? Date.now();
+  const failurePolicy = input.failurePolicy ?? "fail_open";
   const secret = input.secret ?? process.env.RATE_LIMIT_HMAC_SECRET;
   if (!secret || secret.length < 32) {
-    const result: PublicRateLimitResult = {
-      allowed: true,
-      code: "config_missing",
-      retryAfterSeconds: 0,
-      failOpen: true,
-    };
+    const result = infrastructureFailure("config_missing", failurePolicy);
     logRateLimit("rate_limit_error", input, result, nowMs);
     return result;
   }
 
   const signals = collectSignals(input);
   if (!signals.length) {
-    const result: PublicRateLimitResult = {
-      allowed: true,
-      code: "signal_missing",
-      retryAfterSeconds: 0,
-      failOpen: true,
-    };
+    const result = infrastructureFailure("signal_missing", failurePolicy);
     logRateLimit("rate_limit_error", input, result, nowMs);
     return result;
   }
@@ -234,15 +231,47 @@ export async function enforcePublicSubmissionRateLimit(
     );
     return result;
   } catch {
-    const result: PublicRateLimitResult = {
-      allowed: true,
-      code: "storage_unavailable",
-      retryAfterSeconds: 0,
-      failOpen: true,
-    };
+    const result = infrastructureFailure("storage_unavailable", failurePolicy);
     logRateLimit("rate_limit_error", input, result, nowMs);
     return result;
   }
+}
+
+export function isRateLimitInfrastructureFailure(
+  code: PublicRateLimitResult["code"],
+): code is RateLimitInfrastructureFailure {
+  return code === "config_missing" ||
+    code === "storage_unavailable" ||
+    code === "signal_missing";
+}
+
+export function sendCheckoutSecurityUnavailableResponse(
+  response: VercelResponseLike,
+  result: PublicRateLimitResult,
+  context: {
+    authenticated: boolean;
+    cagnotteMode: "accrual" | "reservation" | "accrual_and_reservation";
+    nowMs: number;
+  },
+) {
+  if (result.allowed || !isRateLimitInfrastructureFailure(result.code)) {
+    throw new Error("checkout_security_failure_response_invalid");
+  }
+  console.warn("cagnotte_rate_limit_fail_closed", {
+    route: "/api/create-order",
+    cause: result.code,
+    authenticated: context.authenticated,
+    cagnotteMode: context.cagnotteMode,
+    timestamp: new Date(context.nowMs).toISOString(),
+  });
+  sendJson(
+    response,
+    {
+      code: "checkout_security_unavailable",
+      error: "Dispositif de sécurité temporairement indisponible. Veuillez réessayer.",
+    },
+    503,
+  );
 }
 
 export function sendPublicRateLimitResponse(
@@ -333,6 +362,19 @@ function collectSignals(input: EnforcePublicRateLimitInput): RateLimitSignal[] {
   const anonymousId = normalizeAnonymousId(input.anonymousId);
   if (anonymousId) signals.push({ type: "anonymous", value: anonymousId });
   return signals;
+}
+
+function infrastructureFailure(
+  code: RateLimitInfrastructureFailure,
+  policy: RateLimitFailurePolicy,
+): PublicRateLimitResult {
+  const failOpen = policy === "fail_open";
+  return {
+    allowed: failOpen,
+    code,
+    retryAfterSeconds: 0,
+    failOpen,
+  };
 }
 
 function resolveRules(
