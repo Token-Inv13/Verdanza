@@ -6,6 +6,8 @@ import { dirname, extname, relative, resolve } from "node:path";
 import cagnotteHandler from "../api/cagnotte.js";
 import orderRefundHandler from "../api/order-refunds.js";
 import { buildCagnotteOrderEnrollment, prepareOrderCagnotteTransition } from "../api/_server/cagnotteOrders.js";
+import { resolveCheckoutRateLimitPolicy } from "../api/_server/checkoutRateLimitPolicy.js";
+import { enforcePublicSubmissionRateLimit } from "../api/_server/publicRateLimit.js";
 import {
   CAGNOTTE_PRODUCTION_FIREBASE_PROJECT_ID,
   CAGNOTTE_PRODUCTION_PROGRAM_DEFINITION,
@@ -174,10 +176,41 @@ await check("mode fermé sans écritures cagnotte ni fallback silencieux", async
 
   const createOrder = read("api/create-order.ts");
   const quoteOrder = read("api/quote-order.ts");
-  assert.match(createOrder, /requestedCents\s*\|\|\s*0\)\s*>\s*0[\s\S]*RESERVATIONS_DISABLED/);
+  assert.match(createOrder, /requestedCagnotteCents\s*>\s*0[\s\S]*RESERVATIONS_DISABLED/);
   assert.match(quoteOrder, /requestedCents\s*>\s*0[\s\S]*RESERVATIONS_DISABLED/);
   assert.match(createOrder, /L’utilisation de la cagnotte est désactivée/);
   assert.match(quoteOrder, /L’utilisation de la cagnotte est désactivée/);
+});
+
+await check("rate-limit fermé ciblé disponible sans changer le défaut historique", async () => {
+  const base = {
+    route: "/api/create-order" as const,
+    request: { method: "POST", headers: {} },
+    email: "",
+    authenticated: true,
+    secret: "",
+  };
+  const opened = await enforcePublicSubmissionRateLimit(base);
+  const closed = await enforcePublicSubmissionRateLimit({ ...base, failurePolicy: "fail_closed" });
+  assert.deepEqual([opened.allowed, opened.code, opened.failOpen], [true, "config_missing", true]);
+  assert.deepEqual([closed.allowed, closed.code, closed.failOpen], [false, "config_missing", false]);
+
+  const productionAccrual = resolveCagnotteProductionProgram({
+    runtimeEnvironment: "production",
+    mode: "accrue",
+    startsAtEpochMs: 123_000,
+    firebaseProjectId: CAGNOTTE_PRODUCTION_FIREBASE_PROJECT_ID,
+  });
+  assert.deepEqual(resolveCheckoutRateLimitPolicy({
+    verifiedUid: "synthetic-verified-user",
+    requestedCagnotteCents: 0,
+    accrualProgram: productionAccrual,
+    reservationProgram: null,
+    firebaseProjectId: CAGNOTTE_PRODUCTION_FIREBASE_PROJECT_ID,
+    operationNowEpochMs: 123_000,
+  }), { failurePolicy: "fail_closed", cagnotteMode: "accrual" });
+  assert.equal(CAGNOTTE_SERVER_PROGRAM, null);
+  assert.equal(CAGNOTTE_RESERVATION_PROGRAM, null);
 });
 
 await check("endpoints fermés avant Firebase, Auth et secret curseur", async () => {

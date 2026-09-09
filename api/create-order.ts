@@ -23,6 +23,7 @@ import type { CagnotteReservationProgram } from "./_server/cagnotteReservationTy
 import { CAGNOTTE_SERVER_PROGRAM } from "./_server/cagnotteProgram.js";
 import type { CagnotteAccrualProgram } from "./_server/cagnotteLedgerTypes.js";
 import { orderPaymentAmount } from "./_server/cagnotteOrders.js";
+import { resolveCheckoutRateLimitPolicy } from "./_server/checkoutRateLimitPolicy.js";
 import {
   sendAdminManualOrderEmail,
   sendManualOrderConfirmationEmail,
@@ -41,6 +42,8 @@ import {
 import {
   assessPublicSubmissionTrap,
   enforcePublicSubmissionRateLimit,
+  isRateLimitInfrastructureFailure,
+  sendCheckoutSecurityUnavailableResponse,
   sendPublicRateLimitResponse,
   sendPublicSubmissionTrapResponse,
 } from "./_server/publicRateLimit.js";
@@ -68,6 +71,7 @@ return async function handler(
     const requestBody =
       typeof request.body === "string" ? JSON.parse(request.body) : request.body;
     const body = parseCheckoutBody(requestBody);
+    const operationNowEpochMs = (dependencies.now ?? Date.now)();
     const accrualProgram = dependencies.accrualProgram === undefined
       ? CAGNOTTE_SERVER_PROGRAM
       : dependencies.accrualProgram;
@@ -92,18 +96,34 @@ return async function handler(
       await sendExistingOrderResponse(db, response, existingRequest.orderId, verifiedUid);
       return;
     }
-    if (Number(body.cagnotteUse?.requestedCents || 0) > 0) {
-      if (!body.authToken || !(await verifiedUid())) {
+    const requestedCagnotteCents = Number(body.cagnotteUse?.requestedCents || 0);
+    let verifiedCustomerId: string | undefined;
+    if (requestedCagnotteCents > 0) {
+      verifiedCustomerId = await verifiedUid();
+      if (!body.authToken || !verifiedCustomerId) {
         throw new CagnotteCheckoutError("AUTH_REQUIRED", "Authentification requise pour utiliser la cagnotte.");
       }
       if (!reservationProgram) {
         throw new CagnotteCheckoutError("RESERVATIONS_DISABLED", "L’utilisation de la cagnotte est désactivée.");
       }
     }
+    if (accrualProgram && body.authToken && !verifiedCustomerId) {
+      verifiedCustomerId = await verifiedUid();
+    }
+
+    const checkoutRateLimitPolicy = resolveCheckoutRateLimitPolicy({
+      verifiedUid: verifiedCustomerId,
+      requestedCagnotteCents,
+      accrualProgram,
+      reservationProgram,
+      firebaseProjectId,
+      operationNowEpochMs,
+    });
 
     const trap = assessPublicSubmissionTrap({
       honeypot: body.company,
       context: body.submissionSecurity,
+      nowMs: operationNowEpochMs,
     });
     if (trap) {
       sendPublicSubmissionTrapResponse(
@@ -121,14 +141,27 @@ return async function handler(
       email: body.customer.email,
       anonymousId: body.submissionSecurity?.anonymousId,
       authenticated: Boolean(body.authToken),
+      failurePolicy: checkoutRateLimitPolicy.failurePolicy,
       attemptId: checkoutRequestId,
       attemptPayloadFingerprint: payloadFingerprint,
+      nowMs: operationNowEpochMs,
       db,
     };
     const rateLimit = dependencies.enforceRateLimit
       ? await dependencies.enforceRateLimit(rateLimitInput)
       : await enforcePublicSubmissionRateLimit(rateLimitInput);
     if (!rateLimit.allowed) {
+      if (
+        checkoutRateLimitPolicy.failurePolicy === "fail_closed" &&
+        isRateLimitInfrastructureFailure(rateLimit.code)
+      ) {
+        sendCheckoutSecurityUnavailableResponse(response, rateLimit, {
+          authenticated: Boolean(verifiedCustomerId),
+          cagnotteMode: checkoutRateLimitPolicy.cagnotteMode,
+          nowMs: operationNowEpochMs,
+        });
+        return;
+      }
       sendPublicRateLimitResponse(response, rateLimit);
       return;
     }
@@ -162,7 +195,7 @@ return async function handler(
       }
       throw error;
     }
-    const customerId = await verifiedUid();
+    const customerId = verifiedCustomerId ?? await verifiedUid();
     const analyticsRevocationToken = body.analyticsContext?.clientId
       ? crypto.randomBytes(32).toString("base64url")
       : undefined;
@@ -181,7 +214,7 @@ return async function handler(
       accrualProgram,
       reservationProgram,
       firebaseProjectId,
-      nowEpochMs: (dependencies.now ?? Date.now)(),
+      nowEpochMs: operationNowEpochMs,
     });
     if (!creation.created) {
       await sendExistingOrderResponse(db, response, creation.orderId, verifiedUid);
