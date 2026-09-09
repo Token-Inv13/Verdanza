@@ -9,12 +9,14 @@ import { readUnpaidOrderContext } from "../api/_server/unpaidOrderReview.js";
 import { applyCagnotteLedgerOperation } from "../api/_server/cagnotteLedger.js";
 import { CAGNOTTE_RESERVATION_PROGRAM } from "../api/_server/cagnotteReservations.js";
 import { CAGNOTTE_RESERVATION_VERSION, type CagnotteInternalOrder, type CagnotteTestProgram, type CagnotteWallet } from "../api/_server/cagnotteLedgerTypes.js";
+import type { CagnotteAccrualProgram } from "../api/_server/cagnotteLedgerTypes.js";
 import type { CagnotteReservationTestProgram } from "../api/_server/cagnotteReservationTypes.js";
 import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
 import { assertWalletJournal, fixtureSpentGain } from "./cagnotteRegularizationFixtures.js";
 import { CAGNOTTE_DEMO, connectCagnotteEmulator, validateCagnotteTestEnvironment } from "./cagnotteEmulator.js";
 import type { VerifiedFirebaseUser } from "../api/_server/adminAuth.js";
 import type { VercelRequestLike, VercelResponseLike } from "../api/_server/http.js";
+import type { EnforcePublicRateLimitInput, PublicRateLimitResult } from "../api/_server/publicRateLimit.js";
 import type { Order } from "../src/types/index.js";
 
 validateCagnotteTestEnvironment(process.env);
@@ -186,6 +188,176 @@ try {
     assert.equal(record(results[0].body).orderId, record(results[1].body).orderId);
     assert.equal((await orders()).length, 1);
     assertWallet(await wallet("customer-a"), [0, 1_200, 800, 0]);
+    assert.equal((await rawDb.collection("products").doc("product-main").get()).data()?.stock, 990);
+    assert.equal((await rawDb.collection("cagnotteReservations").get()).size, 1);
+  });
+
+  await test("Rate limit", "A/B restent fail-open et C/D sont dérivés après vérification serveur", async () => {
+    await seed();
+    const policies: string[] = [];
+    const allowed = async (input: EnforcePublicRateLimitInput): Promise<PublicRateLimitResult> => {
+      policies.push(String(input.failurePolicy));
+      return { allowed: true, code: "config_missing", retryAfterSeconds: 0, failOpen: true };
+    };
+    const anonymousBody = { ...checkoutBody(), authToken: undefined, cagnotteUse: undefined, checkoutRequestId: randomUUID() };
+    assert.equal((await create(anonymousBody, null, undefined, undefined, false, null, { enforceRateLimit: allowed })).status, 200);
+    await clear(); await seed();
+    const authenticatedBody = { ...checkoutBody(), cagnotteUse: undefined, checkoutRequestId: randomUUID() };
+    assert.equal((await create(authenticatedBody, null, "customer-a", undefined, false, null, { enforceRateLimit: allowed })).status, 200);
+    await clear(); await seed();
+    const accrualOnly = await create(authenticatedBody, null, "customer-a", undefined, false, accrualProgram, { enforceRateLimit: allowed });
+    assert.equal(accrualOnly.status, 200);
+    await clear(); await seed(); await fund("customer-a", "fund-policy-reservation");
+    const proposal = record(record((await quote(quoteBody(), program, "customer-a", null)).body).cagnotteUse);
+    const reservationOnly = await create(acceptedCheckout(proposal), program, "customer-a", undefined, false, null, { enforceRateLimit: allowed });
+    assert.equal(reservationOnly.status, 200);
+    assert.deepEqual(policies, ["fail_open", "fail_open", "fail_closed", "fail_closed"]);
+  });
+
+  await test("Rate limit", "C/D retournent 503 sans aucune mutation métier sur panne de sécurité", async () => {
+    const failures = ["config_missing", "signal_missing", "storage_unavailable"] as const;
+    for (const cause of failures) {
+      await clear(); await seed();
+      const accrualBefore = await businessSnapshot();
+      const accrualResult = await create(
+        { ...checkoutBody(), cagnotteUse: undefined },
+        null,
+        "customer-a",
+        undefined,
+        false,
+        accrualProgram,
+        { enforceRateLimit: async () => ({ allowed: false, code: cause, retryAfterSeconds: 0, failOpen: false }) },
+      );
+      assert.equal(accrualResult.status, 503);
+      assert.equal(record(accrualResult.body).code, "checkout_security_unavailable");
+      assert.equal(JSON.stringify(accrualResult.body).includes(cause), false);
+      assertBusinessUnchanged(accrualBefore, await businessSnapshot());
+
+      await clear(); await seed(); await fund("customer-a", `fund-rate-${cause}`);
+      const proposal = record(record((await quote(quoteBody(), program, "customer-a", null)).body).cagnotteUse);
+      const reservationBefore = await businessSnapshot();
+      const reservationResult = await create(
+        acceptedCheckout(proposal),
+        program,
+        "customer-a",
+        undefined,
+        false,
+        null,
+        { enforceRateLimit: async () => ({ allowed: false, code: cause, retryAfterSeconds: 0, failOpen: false }) },
+      );
+      assert.equal(reservationResult.status, 503);
+      assert.equal(record(reservationResult.body).code, "checkout_security_unavailable");
+      assertBusinessUnchanged(reservationBefore, await businessSnapshot());
+    }
+  });
+
+  await test("Rate limit", "acquisition Production seule est fermée, utilise une heure unique et ne réserve rien", async () => {
+    await seed();
+    let nowCalls = 0;
+    let policy = "";
+    const productionAccrual = {
+      mode: "production" as const,
+      programVersion: "rate-limit-production-v1",
+      calculationVersion: "cagnotte-math-v1" as const,
+      startsAtEpochMs: 10_000,
+      newAccrualsEnabled: true,
+    };
+    const result = await create(
+      { ...checkoutBody(), cagnotteUse: undefined },
+      null,
+      "customer-a",
+      undefined,
+      false,
+      productionAccrual,
+      {
+        getFirebaseProjectId: () => "verdanza-1f621",
+        now: () => { nowCalls += 1; return 10_000; },
+        enforceRateLimit: async (input) => {
+          policy = String(input.failurePolicy);
+          assert.equal(input.nowMs, 10_000);
+          return { allowed: true, code: "allowed", retryAfterSeconds: 0 };
+        },
+      },
+    );
+    assert.equal(result.status, 200);
+    assert.equal(policy, "fail_closed");
+    assert.equal(nowCalls, 1);
+    const stored = await order(String(record(result.body).orderId));
+    assert.equal(stored.cagnotte?.createdAtEpochMs, 10_000);
+    assert.equal((await rawDb.collection("cagnotteReservations").get()).size, 0);
+  });
+
+  await test("Rate limit", "réservation active avec acquisition drain reste fermée sans nouvel enrollment", async () => {
+    await seed(); await fund("customer-a", "fund-reserve-drain");
+    const drain = { ...accrualProgram, newAccrualsEnabled: false };
+    const proposal = record(record((await quote(quoteBody(), program, "customer-a", drain)).body).cagnotteUse);
+    const unauthenticated = { ...acceptedCheckout(proposal), authToken: undefined };
+    const beforeUnauthenticated = await businessSnapshot();
+    assert.equal((await create(unauthenticated, program, undefined, undefined, false, drain)).status, 401);
+    assertBusinessUnchanged(beforeUnauthenticated, await businessSnapshot());
+    let policy = "";
+    const result = await create(acceptedCheckout(proposal), program, "customer-a", undefined, false, drain, {
+      enforceRateLimit: async (input) => {
+        policy = String(input.failurePolicy);
+        return { allowed: true, code: "allowed", retryAfterSeconds: 0 };
+      },
+    });
+    assert.equal(result.status, 200);
+    assert.equal(policy, "fail_closed");
+    const stored = await order(String(record(result.body).orderId));
+    assert.equal(stored.cagnotte?.accrualEnrollment, "not_enrolled");
+    assert.equal((await rawDb.collection("cagnotteReservations").get()).size, 1);
+  });
+
+  await test("Rate limit", "acquisition drain seule conserve le mode historique", async () => {
+    await seed();
+    const drain = { ...accrualProgram, newAccrualsEnabled: false };
+    let policy = "";
+    const result = await create(
+      { ...checkoutBody(), cagnotteUse: undefined },
+      null,
+      "customer-a",
+      undefined,
+      false,
+      drain,
+      { enforceRateLimit: async (input) => {
+        policy = String(input.failurePolicy);
+        return { allowed: true, code: "storage_unavailable", retryAfterSeconds: 0, failOpen: true };
+      } },
+    );
+    assert.equal(result.status, 200);
+    assert.equal(policy, "fail_open");
+    assert.equal((await order(String(record(result.body).orderId))).cagnotte, undefined);
+  });
+
+  await test("Rate limit", "project mismatch précède le limiteur et ne produit aucune mutation", async () => {
+    await seed();
+    const before = await businessSnapshot();
+    let limiterCalls = 0;
+    const result = await create(
+      { ...checkoutBody(), cagnotteUse: undefined },
+      null,
+      "customer-a",
+      undefined,
+      false,
+      {
+        mode: "production",
+        programVersion: "rate-limit-production-v1",
+        calculationVersion: "cagnotte-math-v1",
+        startsAtEpochMs: 1_000,
+        newAccrualsEnabled: true,
+      },
+      {
+        getFirebaseProjectId: () => "wrong-project",
+        enforceRateLimit: async () => {
+          limiterCalls += 1;
+          return { allowed: true, code: "allowed", retryAfterSeconds: 0 };
+        },
+      },
+    );
+    assert.equal(result.status, 400);
+    assert.equal(limiterCalls, 0);
+    assertBusinessUnchanged(before, await businessSnapshot());
   });
 
   await test("Identité", "bénéficiaire et bloc cagnotte déclarés par le client ne font pas autorité", async () => {
@@ -218,8 +390,15 @@ try {
     assert.equal((await orders()).length, 1);
     const before = await businessSnapshot();
     const suspended = { ...program, reservationsEnabled: false };
-    const replay = await create(request, suspended, "customer-a");
+    let limiterCalls = 0;
+    const replay = await create(request, suspended, "customer-a", undefined, false, accrualProgram, {
+      enforceRateLimit: async () => {
+        limiterCalls += 1;
+        return { allowed: false, code: "storage_unavailable", retryAfterSeconds: 0, failOpen: false };
+      },
+    });
     assert.equal(replay.status, 200);
+    assert.equal(limiterCalls, 0);
     assert.deepEqual(await businessSnapshot(), before);
     assert.equal(effects, 1);
     assert.equal((await create(request, suspended, "customer-b")).status, 409);
@@ -429,7 +608,12 @@ async function create(
   identity: string | undefined,
   processSideEffects?: () => Promise<never>,
   failBeforeCommit = false,
-  selectedAccrualProgram: CagnotteTestProgram | null = selectedProgram ? accrualProgram : null,
+  selectedAccrualProgram: CagnotteAccrualProgram | null = selectedProgram ? accrualProgram : null,
+  options: {
+    enforceRateLimit?: (input: EnforcePublicRateLimitInput) => Promise<PublicRateLimitResult>;
+    getFirebaseProjectId?: () => string | null;
+    now?: () => number;
+  } = {},
 ) {
   let transactionDepth = 0;
   const checked = checkedDatabase(() => transactionDepth, (value) => { transactionDepth = value; }, failBeforeCommit);
@@ -437,9 +621,10 @@ async function create(
     getDb: () => checked,
     accrualProgram: selectedAccrualProgram,
     reservationProgram: selectedProgram,
-    now: () => 10_000,
+    getFirebaseProjectId: options.getFirebaseProjectId,
+    now: options.now ?? (() => 10_000),
     verifyToken: async () => ({ uid: identity || "", email: "customer@example.test", emailVerified: true }),
-    enforceRateLimit: async () => ({ allowed: true, code: "allowed", retryAfterSeconds: 0 }),
+    enforceRateLimit: options.enforceRateLimit ?? (async () => ({ allowed: true, code: "allowed", retryAfterSeconds: 0 })),
     processSideEffects: processSideEffects
       ? async () => processSideEffects()
       : async () => {
@@ -628,7 +813,12 @@ function assertWallet(value: CagnotteWallet, expected: [number, number, number, 
 }
 
 async function businessSnapshot() {
-  const names = ["cagnotteAccruals", "cagnotteMovements", "cagnotteReservations", "cagnotteWallets", "coupons", "orders", "stockMovements", "products"];
+  const names = [
+    "analyticsOperationalEvents", "cagnotteAccruals", "cagnotteMovements",
+    "cagnotteReservations", "cagnotteWallets", "checkoutRequests", "contestAuditLogs",
+    "contestPrizes", "counters", "coupons", "invoices", "orders", "orderSideEffects",
+    "paymentLinkRequests", "products", "stockMovements",
+  ];
   return Promise.all(names.map(async (name) => ({
     name,
     docs: (await rawDb.collection(name).orderBy("__name__").get()).docs.map((document) => ({ id: document.id, data: document.data() })),

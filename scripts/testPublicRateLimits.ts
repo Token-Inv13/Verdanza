@@ -7,9 +7,13 @@ import {
   normalizeRateLimitEmail,
   publicRateLimitRules,
   publicRateLimitsCollection,
+  sendCheckoutSecurityUnavailableResponse,
   sendPublicRateLimitResponse,
+  type RateLimitFailurePolicy,
   type PublicSubmissionRoute,
 } from "../api/_server/publicRateLimit.js";
+import { resolveCheckoutRateLimitPolicy } from "../api/_server/checkoutRateLimitPolicy.js";
+import { CAGNOTTE_RESERVATION_VERSION } from "../api/_server/cagnotteLedgerTypes.js";
 import type {
   VercelRequestLike,
   VercelResponseLike,
@@ -177,6 +181,7 @@ function submit(
     nowMs?: number;
     authenticated?: boolean;
     providedSecret?: string;
+    failurePolicy?: RateLimitFailurePolicy;
   } = {},
 ) {
   const route = input.route ?? "/api/create-order";
@@ -187,6 +192,7 @@ function submit(
     email: input.email ?? "client@example.test",
     anonymousId: input.anonymousId,
     authenticated: input.authenticated ?? false,
+    failurePolicy: input.failurePolicy,
     attemptId: route === "/api/create-order" ? attemptId(attempt) : undefined,
     attemptPayloadFingerprint:
       route === "/api/create-order"
@@ -359,6 +365,65 @@ test("une configuration secrete absente echoue en mode ouvert", async () => {
   }
 });
 
+test("le fail-open reste le defaut strict de toutes les routes publiques historiques", async () => {
+  for (const route of [
+    "/api/create-order",
+    "/api/contact",
+    "/api/contests",
+    "/api/blog-interactions",
+  ] as const) {
+    const missingSecret = await submit(new FakeFirestore(), {
+      route,
+      providedSecret: "",
+    });
+    const storageUnavailable = await submit(new ThrowingFirestore(), { route });
+    assert.deepEqual(
+      [missingSecret.allowed, missingSecret.code, missingSecret.failOpen],
+      [true, "config_missing", true],
+    );
+    assert.deepEqual(
+      [storageUnavailable.allowed, storageUnavailable.code, storageUnavailable.failOpen],
+      [true, "storage_unavailable", true],
+    );
+  }
+});
+
+test("les defaillances techniques echouent fermees seulement sur demande explicite", async () => {
+  const missingSecret = await submit(new FakeFirestore(), {
+    providedSecret: "",
+    failurePolicy: "fail_closed",
+  });
+  const storageUnavailable = await submit(new ThrowingFirestore(), {
+    failurePolicy: "fail_closed",
+  });
+  assert.deepEqual(
+    [missingSecret.allowed, missingSecret.code, missingSecret.failOpen],
+    [false, "config_missing", false],
+  );
+  assert.deepEqual(
+    [storageUnavailable.allowed, storageUnavailable.code, storageUnavailable.failOpen],
+    [false, "storage_unavailable", false],
+  );
+});
+
+test("signal_missing respecte les politiques ouverte et fermee", async () => {
+  const base = {
+    route: "/api/create-order" as const,
+    request: { method: "POST", headers: {} } as VercelRequestLike,
+    email: "",
+    authenticated: true,
+    secret,
+    db: new FakeFirestore() as unknown as FirebaseFirestore.Firestore,
+  };
+  const opened = await enforcePublicSubmissionRateLimit(base);
+  const closed = await enforcePublicSubmissionRateLimit({
+    ...base,
+    failurePolicy: "fail_closed",
+  });
+  assert.deepEqual([opened.allowed, opened.code, opened.failOpen], [true, "signal_missing", true]);
+  assert.deepEqual([closed.allowed, closed.code, closed.failOpen], [false, "signal_missing", false]);
+});
+
 test("une panne du stockage du limiteur echoue en mode ouvert", async () => {
   const result = await submit(new ThrowingFirestore());
   assert.equal(result.allowed, true);
@@ -477,6 +542,144 @@ test("la reponse 429 est generique et conserve Retry-After", () => {
   assert.equal(response.headers.get("retry-after"), "321");
   assert.equal(body.code, "public_submission_rate_limited");
   assert.equal(JSON.stringify(body).includes("@"), false);
+});
+
+test("une defaillance fermee retourne 503 sans exposer la cause technique", async () => {
+  const response = new FakeResponse();
+  const logs = await captureLogs(async () => {
+    sendCheckoutSecurityUnavailableResponse(
+      response as unknown as VercelResponseLike,
+      {
+        allowed: false,
+        code: "storage_unavailable",
+        retryAfterSeconds: 0,
+        failOpen: false,
+      },
+      {
+        authenticated: true,
+        cagnotteMode: "accrual_and_reservation",
+        nowMs: baseNow,
+      },
+    );
+  });
+  assert.equal(response.statusCode, 503);
+  assert.deepEqual(response.body, {
+    code: "checkout_security_unavailable",
+    error: "Dispositif de sécurité temporairement indisponible. Veuillez réessayer.",
+  });
+  const publicBody = JSON.stringify(response.body);
+  assert.equal(publicBody.includes("storage_unavailable"), false);
+  const serializedLogs = JSON.stringify(logs);
+  assert.equal(serializedLogs.includes("cagnotte_rate_limit_fail_closed"), true);
+  assert.equal(serializedLogs.includes("storage_unavailable"), true);
+  assert.equal(serializedLogs.includes("@"), false);
+  const [event, payload] = logs[0] as [string, Record<string, unknown>];
+  assert.equal(event, "cagnotte_rate_limit_fail_closed");
+  assert.deepEqual(Object.keys(payload).sort(), [
+    "authenticated",
+    "cagnotteMode",
+    "cause",
+    "route",
+    "timestamp",
+  ]);
+});
+
+test("saturation et conflit gardent 429 et 409 en politique fermee", async () => {
+  const db = new FakeFirestore();
+  await submit(db, { attempt: 201, failurePolicy: "fail_closed" });
+  const conflict = await submit(db, {
+    attempt: 201,
+    fingerprint: "different",
+    failurePolicy: "fail_closed",
+  });
+  await submit(db, { attempt: 202, failurePolicy: "fail_closed" });
+  await submit(db, { attempt: 203, failurePolicy: "fail_closed" });
+  const saturated = await submit(db, { attempt: 204, failurePolicy: "fail_closed" });
+  const conflictResponse = new FakeResponse();
+  const saturatedResponse = new FakeResponse();
+  sendPublicRateLimitResponse(conflictResponse as unknown as VercelResponseLike, conflict);
+  sendPublicRateLimitResponse(saturatedResponse as unknown as VercelResponseLike, saturated);
+  assert.equal(conflictResponse.statusCode, 409);
+  assert.equal((conflictResponse.body as { code: string }).code, "checkout_request_conflict");
+  assert.equal(saturatedResponse.statusCode, 429);
+  assert.equal((saturatedResponse.body as { code: string }).code, "public_submission_rate_limited");
+});
+
+test("la sensibilite checkout derive uniquement de l'identite verifiee et des programmes serveur", () => {
+  const localAccrual = {
+    mode: "local_test" as const,
+    programVersion: "rate-limit-test-v1",
+    calculationVersion: "cagnotte-math-v1" as const,
+    startsAtEpochMs: 1_000,
+    newAccrualsEnabled: true,
+  };
+  const localReservation = {
+    mode: "local_test" as const,
+    programVersion: "rate-limit-test-v1",
+    calculationVersion: "cagnotte-math-v1" as const,
+    startsAtEpochMs: 1_000,
+    reservationVersion: CAGNOTTE_RESERVATION_VERSION,
+    reservationsEnabled: true,
+  };
+  const base = {
+    requestedCagnotteCents: 0,
+    accrualProgram: localAccrual,
+    reservationProgram: null,
+    operationNowEpochMs: 10_000,
+  };
+  assert.deepEqual(resolveCheckoutRateLimitPolicy(base), {
+    failurePolicy: "fail_open",
+    cagnotteMode: "none",
+  });
+  assert.deepEqual(resolveCheckoutRateLimitPolicy({
+    ...base,
+    verifiedUid: "verified-user",
+    accrualProgram: null,
+  }), { failurePolicy: "fail_open", cagnotteMode: "none" });
+  assert.deepEqual(resolveCheckoutRateLimitPolicy({
+    ...base,
+    verifiedUid: "verified-user",
+  }), { failurePolicy: "fail_closed", cagnotteMode: "accrual" });
+  assert.deepEqual(resolveCheckoutRateLimitPolicy({
+    ...base,
+    verifiedUid: "verified-user",
+    requestedCagnotteCents: 100,
+    accrualProgram: null,
+    reservationProgram: localReservation,
+  }), { failurePolicy: "fail_closed", cagnotteMode: "reservation" });
+  assert.deepEqual(resolveCheckoutRateLimitPolicy({
+    ...base,
+    verifiedUid: "verified-user",
+    requestedCagnotteCents: 100,
+    reservationProgram: localReservation,
+  }), { failurePolicy: "fail_closed", cagnotteMode: "accrual_and_reservation" });
+  assert.deepEqual(resolveCheckoutRateLimitPolicy({
+    ...base,
+    verifiedUid: "verified-user",
+    accrualProgram: { ...localAccrual, newAccrualsEnabled: false },
+  }), { failurePolicy: "fail_open", cagnotteMode: "none" });
+  assert.deepEqual(resolveCheckoutRateLimitPolicy({
+    ...base,
+    verifiedUid: "verified-user",
+    operationNowEpochMs: 999,
+  }), { failurePolicy: "fail_open", cagnotteMode: "none" });
+});
+
+test("un programme Production sur un autre projet echoue avant toute decision de limiteur", () => {
+  assert.throws(() => resolveCheckoutRateLimitPolicy({
+    verifiedUid: "verified-user",
+    requestedCagnotteCents: 0,
+    accrualProgram: {
+      mode: "production",
+      programVersion: "rate-limit-production-v1",
+      calculationVersion: "cagnotte-math-v1",
+      startsAtEpochMs: 1_000,
+      newAccrualsEnabled: true,
+    },
+    reservationProgram: null,
+    firebaseProjectId: "wrong-project",
+    operationNowEpochMs: 10_000,
+  }), /Projet Firebase Admin incompatible/);
 });
 
 test("les seuils sont centralises et documentables", () => {
