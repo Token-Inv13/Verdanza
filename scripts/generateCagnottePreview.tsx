@@ -259,7 +259,7 @@ function ready(data: CagnotteReadResponse): CagnottePanelState {
 }
 
 function adminModel(mode: "refund" | "correction" | "unpaid", inspection: CagnotteAdminInspection): CagnotteAdminViewModel {
-  return { phase: "ready", inspection, mode, refundPreview: null, correctionPreview: null, notice: "", uncertain: false };
+  return { phase: "ready", inspection, mode, refundPreview: null, correctionPreview: null, notice: "", uncertain: false, busy: false };
 }
 
 function administrationFormFixture(): Parameters<typeof CagnotteAdminToolsView>[0]["form"] {
@@ -280,7 +280,14 @@ function administrationInspectionFixture(): CagnotteAdminInspection {
     order: { id: "CMD-DEMO-100", customer: { id: "client-demo", name: "Camille Démo", email: "camille@example.test" },
       orderStatus: "delivered", paymentStatus: "paid", totalCents: 10000, paymentAmountCents: 9200, deliveryCents: 0 },
     financing: { productsNetCents: 10000, cagnotteCents: 800, externalProductsCents: 9200, externalTotalCents: 9200, deliveryCents: 0 },
+    operationalState: { code: "refund_recorded", label: "REMBOURSEMENT/CORRECTION ENREGISTRÉ", detail: "Consultez l’historique administratif effectif." },
+    enrollment: { enrolled: true, beneficiaryId: "client-demo", programVersion: "programme-demo-v1", calculationVersion: "cagnotte-math-v1", createdAtEpochMs: 1000 },
+    accrual: { present: true, initialGainCents: 460, remainingGainCents: 345, paymentConfirmed: true, deliveryConfirmed: true, credited: true, compartment: "available", cancelled: false },
     wallet: { pendingCents: 0, availableCents: 1745, reservedCents: 0, regularizationCents: 0 },
+    reservation: { applicable: true, amountCents: 800, state: "consumed", requiresReview: false, cumulativeRestitutedCents: 200 },
+    refund: { history: [{ id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T11:00:00.000Z", effective: true }],
+      latest: { id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T11:00:00.000Z" }, latestRevision: 0, requiresReview: false },
+    movements: [{ id: "f".repeat(64), event: "credit_refunded_after_return", pendingDeltaCents: 0, availableDeltaCents: 200, reservedDeltaCents: 0, regularizationDeltaCents: 0, recordedAtEpochMs: 1000 }],
     lines: [{ lineId: "fleurs", label: "Fleurs CBD fictives", initialNetCents: 10000, returnedNetCents: 2500, remainingNetCents: 7500 }],
     effective,
     history: [{ id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T11:00:00.000Z", reference: "retour-demo-25", declaredFinancialCents: 2300,

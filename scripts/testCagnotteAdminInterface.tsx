@@ -12,6 +12,8 @@ import { createCagnotteAdminRefreshChannel, createCagnotteAdminResponseIdentity,
 import { cagnotteRefundDateTimeLocalToIso, cagnotteRefundDateTimeLocalValue } from "../src/lib/cagnotteAdminDate.js";
 import { formatAdminDateTime } from "../src/lib/adminDatePresentation.js";
 import { isExpectedNonAdminLookupError } from "../src/lib/adminLookupPresentation.js";
+import { shouldMountCagnotteAdminTools } from "../src/lib/cagnotteAdminEligibility.js";
+import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
 import { CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED } from "../src/config/cagnotteFeatures.js";
 import type { CagnotteAdminInspection, CorrectionPreview, RefundPreview } from "../src/types/cagnotteAdmin.js";
 
@@ -20,17 +22,41 @@ function test(name: string, run: () => void | Promise<void>) {
   return Promise.resolve().then(run).then(() => { tests += 1; console.log(`OK [Interface admin] ${name}`); });
 }
 const inspection = fixture();
-const base: CagnotteAdminViewModel = { phase: "ready", inspection, mode: "refund", refundPreview: null, correctionPreview: null, notice: "", uncertain: false };
+const base: CagnotteAdminViewModel = { phase: "ready", inspection, mode: "refund", refundPreview: null, correctionPreview: null, notice: "", uncertain: false, busy: false };
 
 await test("garde normal desactive : aucun rendu ni appel", () => {
   equal(CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED, false);
   equal(renderToStaticMarkup(<CagnotteAdminTools orderId="demo" enabled={false} />), "");
+});
+await test("commande historique : aucun montage meme avec garde simulee ouverte", () => {
+  equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "firestore", order: { id: "historique", customerId: "client" } }), false);
+});
+await test("commande inscrite serveur : montage seulement avec garde simulee ouverte", () => {
+  const order = eligibleOrder();
+  equal(shouldMountCagnotteAdminTools({ displayEnabled: false, orderSource: "firestore", order }), false);
+  equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "archive", order }), false);
+  equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "firestore", order }), true);
 });
 await test("vrai composant : libelles, financement et cinq operations", () => {
   const html = renderToStaticMarkup(<CagnotteAdminToolsView model={base} />);
   for (const text of ["Enregistrer un remboursement déjà confirmé", "Cette action enregistre votre déclaration.",
     "Elle n’effectue aucun remboursement bancaire.", "Consulter", "Confirmer paiement / livraison", "Revoir / annuler un impayé",
     "Enregistrer un retour", "Corriger une déclaration", "Tout le montant restant"]) match(html, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+await test("inspection lisible distingue inscription, gain commande et portefeuille global", () => {
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={base} />);
+  for (const text of ["REMBOURSEMENT/CORRECTION ENREGISTRÉ", "Inscription de la commande", "Inscrite :", "Gain de cette commande",
+    "Gain estimé", "Gain en attente", "Gain disponible", "Gain annulé ou réduit", "Portefeuille global du client",
+    "Disponible global", "Réservation de cette commande", "Consommée", "Journal cagnotte de la commande"]) match(html, new RegExp(text));
+});
+await test("etats paiement en attente, livre, annule et regularisation sont explicites", () => {
+  const cases = [
+    [{ code: "payment_confirmed_pending" as const, label: "PAIEMENT CONFIRMÉ", detail: "5 % EN ATTENTE" }, /PAIEMENT CONFIRMÉ[\s\S]*5 % EN ATTENTE/],
+    [{ code: "delivered_available" as const, label: "LIVRÉE", detail: "GAIN DISPONIBLE POUR CETTE COMMANDE" }, /LIVRÉE[\s\S]*Gain disponible pour cette commande/],
+    [{ code: "cancelled" as const, label: "ANNULÉE", detail: "Le gain de cette commande est annulé." }, /ANNULÉE/],
+    [{ code: "regularization_pending" as const, label: "RÉGULARISATION À COMPENSER", detail: "Les gains futurs absorberont cette régularisation." }, /RÉGULARISATION À COMPENSER/],
+  ] as const;
+  for (const [operationalState, pattern] of cases) match(renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: { ...inspection, operationalState } }} />), pattern);
 });
 await test("preview et resultat persisté presentent les effets separement", () => {
   const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, refundPreview: refund(), notice: "Déclaration enregistrée." }} />);
@@ -39,9 +65,11 @@ await test("preview et resultat persisté presentent les effets separement", () 
 await test("correction a verifier affiche le refus cible et sa limite", () => {
   const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, mode: "correction", correctionPreview: correctionReview(), notice: "Vérification requise" }} />);
   match(html, /CORRECTION_REQUIRES_REVIEW/); match(html, /réservé ou utilisé/); match(html, /L’original reste dans l’historique/);
+  match(html, /Révision actuelle : 0/); match(html, /nouvelle révision : 1/); match(html, /Variation régularisation/);
 });
 await test("impaye separe transport et reglement, seuil sans automatisme", () => {
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, mode: "unpaid" }} />);
+  const reserved = { ...inspection, reservation: { ...inspection.reservation, state: "reserved" as const, cumulativeRestitutedCents: 0 } };
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: reserved, mode: "unpaid" }} />);
   for (const text of ["À revoir · plus de 72 heures", "Cagnotte réservée", "Règlement de la commande", "Lien CB envoyé", "Transmission du lien", "Résultat à vérifier", "n’est ni une preuve de paiement ni une preuve d’impayé", "ne révoque pas le lien externe"]) match(html, new RegExp(text));
   doesNotMatch(html, />to_confirm<|>unknown<|Cagnotte consommée/);
 });
@@ -79,6 +107,19 @@ await test("revue et date sont presentees sans codes internes", () => {
 await test("bouton desactive visuellement distinct", async () => {
   const css = await readFile(resolve("src/styles/cagnotte-admin.css"), "utf8");
   match(css, /\.cagnotte-admin button:disabled\{[^}]*cursor:not-allowed[^}]*opacity:/);
+});
+await test("mutation en cours desactive les controles et expose aria-busy", () => {
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, busy: true }} />);
+  match(html, /aria-busy="true"/); match(html, /<fieldset disabled=""/); match(html, /button[^>]*disabled=""/);
+});
+await test("reponse incertaine impose une inspection avant retry et garde la preview", async () => {
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, uncertain: true, refundPreview: refund(), notice: "Réponse absente" }} />);
+  match(html, /Résultat réseau incertain/); match(html, /Réinspecter avant toute nouvelle tentative/);
+  match(html, /Confirmer l’enregistrement<\/button>/); match(html, /button[^>]*disabled=""[^>]*>Confirmer l’enregistrement/);
+  const source = await readFile(resolve("src/components/cagnotte/CagnotteAdminTools.tsx"), "utf8");
+  match(source, /pendingRefund\.current \?\?=/); match(source, /pendingCorrection\.current \?\?=/);
+  match(source, /reinspectBeforeRetry[\s\S]*inspectCagnotteOrder\(orderId\)[\s\S]*uncertain: false/);
+  doesNotMatch(source.match(/const reinspectBeforeRetry[\s\S]*?\n {2}\}\);/)?.[0] ?? "", /pendingRefund\.current = null|pendingCorrection\.current = null|setForm\(/);
 });
 await test("verrou synchrone : double clic et entree ne lancent qu une operation", async () => {
   const lock = { current: false }; let calls = 0, release!: () => void;
@@ -168,13 +209,25 @@ function fixture(): CagnotteAdminInspection {
   return { kind: "administrative_refund_inspection", order: { id: "CMD-FICTIVE", customer: { id: "client-fictif", name: "Camille Fictive", email: "camille@example.test" },
     orderStatus: "delivered", paymentStatus: "paid", totalCents: 10000, paymentAmountCents: 9200, deliveryCents: 0 },
     financing: { productsNetCents: 10000, cagnotteCents: 800, externalProductsCents: 9200, externalTotalCents: 9200, deliveryCents: 0 },
+    operationalState: { code: "refund_recorded", label: "REMBOURSEMENT/CORRECTION ENREGISTRÉ", detail: "Consultez l’historique administratif effectif." },
+    enrollment: { enrolled: true, beneficiaryId: "client-fictif", programVersion: "programme-fictif-v1", calculationVersion: "cagnotte-math-v1", createdAtEpochMs: 1000 },
+    accrual: { present: true, initialGainCents: 460, remainingGainCents: 345, paymentConfirmed: true, deliveryConfirmed: true, credited: true, compartment: "available", cancelled: false },
     wallet: { pendingCents: 0, availableCents: 1745, reservedCents: 0, regularizationCents: 0 },
+    reservation: { applicable: true, amountCents: 800, state: "consumed", requiresReview: false, cumulativeRestitutedCents: 200 },
+    refund: { history: [{ id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T10:00:00.000Z", effective: true }],
+      latest: { id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T10:00:00.000Z" }, latestRevision: 0, requiresReview: false },
+    movements: [{ id: "f".repeat(64), event: "credit_refunded_after_return", pendingDeltaCents: 0, availableDeltaCents: 200, reservedDeltaCents: 0, regularizationDeltaCents: 0, recordedAtEpochMs: 1000 }],
     lines: [{ lineId: "line-0", label: "Produit fictif", initialNetCents: 10000, returnedNetCents: 2500, remainingNetCents: 7500 }], effective,
     history: [{ id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T10:00:00.000Z", reference: "demo", declaredFinancialCents: 2300,
       returnedProductNetCents: 2500, financialCents: 2300, cagnotteRestitutionCents: 200, resultingAvailableCents: 1745, effective: true }],
     correctionTarget: { eventId: "a".repeat(64), revision: 0, effective }, unpaid: { reservedAmountCents: 800, reservationState: "reserved", reservedAt: "2026-09-02T08:00:00.000Z", ageHours: 100, reviewRequired: true,
       payment: { status: "payment_link_sent", uncertain: true, confirmedAt: null }, linkTransmission: { requestId: "demo", status: "unknown", transportStatus: "unknown", sendingActive: false, uncertain: true },
       stateVersion: "b".repeat(64), review: null } };
+}
+function eligibleOrder() {
+  const snapshot = calculateCagnotte({ lines: [{ lineId: "line", initialCents: 10000 }], discounts: [], requestedCagnotteCents: 0, availableCagnotteCents: 0 });
+  return { id: "CMD-INSCRITE", customerId: "client-fictif", cagnotte: { schemaVersion: 1 as const, beneficiaryId: "client-fictif",
+    programVersion: "programme-fictif-v1", calculationVersion: "cagnotte-math-v1" as const, createdAtEpochMs: 1000, snapshot } };
 }
 function refund(): RefundPreview { return { kind: "administrative_refund_recorded", orderId: "CMD-FICTIVE", currency: "EUR", additionalReturns: [{ lineId: "line-0", additionalNetCents: 2500 }],
   productFinancialCents: 2300, cagnotteRestitutionCents: 200, deliveryFinancialCents: 0, totalFinancialCents: 2300,

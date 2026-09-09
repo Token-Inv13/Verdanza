@@ -3,7 +3,7 @@ import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { connectCagnotteEmulator, CAGNOTTE_DEMO } from "./cagnotteEmulator.js";
 import { createOrderRefundHandler, handleOrderRefund } from "../api/_server/orderRefundRoute.js";
-import { ORDER_REFUNDS_ENABLED } from "../api/_server/orderRefunds.js";
+import { ORDER_REFUNDS_ENABLED, type OrderRefundOperationalLog } from "../api/_server/orderRefunds.js";
 import { CAGNOTTE_SERVER_PROGRAM } from "../api/_server/cagnotteProgram.js";
 import { commitOrderStatusTransition, type OrderStatusChange } from "../api/_server/orderStatusTransition.js";
 import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
@@ -106,7 +106,7 @@ async function invoke(handler: ReturnType<typeof createOrderRefundHandler>, body
   await handler({ method, body, headers } as VercelRequestLike, response as unknown as VercelResponseLike);
   return { status, ...payload };
 }
-type Options = { identity?: VerifiedFirebaseUser | Error; noToken?: boolean; enabled?: boolean; fail?: boolean; loseAck?: boolean; before?: () => Promise<void>; betweenAttempts?: () => Promise<void> };
+type Options = { identity?: VerifiedFirebaseUser | Error; noToken?: boolean; enabled?: boolean; fail?: boolean; loseAck?: boolean; before?: () => Promise<void>; betweenAttempts?: () => Promise<void>; logs?: OrderRefundOperationalLog[] };
 async function call(body: Record<string, unknown>, options: Options = {}) {
   let transactions = 0, writes = 0, walletWrites = 0, callbacks = 0, verificationCalls = 0;
   const checked = new Proxy(db, { get(target, key) {
@@ -142,7 +142,8 @@ async function call(body: Record<string, unknown>, options: Options = {}) {
     const value = Reflect.get(target, key); return typeof value === "function" ? value.bind(target) : value;
   } }) as Firestore;
   const handler = createOrderRefundHandler({ enabled: options.enabled ?? true, getDb: () => checked, now: clock,
-    verifyToken: async () => { verificationCalls++; if (options.identity instanceof Error) throw options.identity; return options.identity ?? actor; } });
+    verifyToken: async () => { verificationCalls++; if (options.identity instanceof Error) throw options.identity; return options.identity ?? actor; },
+    log: (entry) => options.logs?.push(entry) });
   return { ...await invoke(handler, { ...body, ...(options.noToken ? {} : { authToken: "synthetic" }) }), stats: { transactions, writes, walletWrites, callbacks, verificationCalls } };
 }
 async function preview(body: Record<string, unknown>) { const r = await call(body); equal(r.status, 200, JSON.stringify(r)); equal(r.stats.writes, 0); return r.result!; }
@@ -276,7 +277,10 @@ try {
     const r = await record(f, 2500, "mixed-other-regularization");
     equal(r.result.productFinancialCents, 2300); equal(r.result.correction.regularizationDeltaCents, 115);
     equal(r.result.restitution.compensationCents, 200); equal(r.result.restitution.availableIncreaseCents, 0);
-    eq(await walletBalance(f), [0, 0, 0, 415]); await assertWalletJournal(db, f.uid);
+    eq(await walletBalance(f), [0, 0, 0, 415]);
+    const inspected = await call({ action: "inspect", orderId: f.id }); equal(inspected.status, 200);
+    equal((inspected.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection).operationalState.code, "regularization_pending");
+    await assertWalletJournal(db, f.uid);
   });
   await test("gain suspendu : consommation prouvee et restitution sans droit retroactif", async () => {
     const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000, paymentProgram: null });
@@ -440,7 +444,12 @@ try {
   await test("presence seule de gain ne prouve pas le paiement", async () => {
     const f = await fixture(); await db.collection("orders").doc(f.id).update({ paymentConfirmedAt: FieldValue.delete() }); await refused(selection(f), "refund_prior_payment_requires_verification");
   });
-  await test("historique non inscrit refuse", async () => { const f = await fixture({ enrolled: false }); await refused(selection(f), "refund_historical_order_not_supported"); });
+  await test("historique non inscrit refuse inspect refund et correction sans ecriture", async () => {
+    const f = await fixture({ enrolled: false });
+    for (const request of [selection(f), { action: "inspect", orderId: f.id }, correctionSelection(f, "a".repeat(64), 0, 0, 0)]) {
+      await refused(request, "refund_historical_order_not_supported");
+    }
+  });
   for (const malformed of [null, {}, { snapshot: { appliedCagnotteCents: 1 } }]) await test(`inscription invalide ou mixte ${JSON.stringify(malformed)}`, async () => {
     const f = await fixture(); await db.collection("orders").doc(f.id).update({ cagnotte: malformed }); await refused(selection(f), "refund_enrollment_invalid");
   });
@@ -682,7 +691,69 @@ try {
     await recordCorrection(f, target, 0, 0, 0, "final2-inspect-correction");
     const response = await call({ action: "inspect", orderId: f.id }); equal(response.status, 200);
     const serialized = JSON.stringify(response.result); for (const forbidden of ["fingerprint", "movementIds", "actor", "intentFingerprint", "paymentReference"]) equal(serialized.includes(forbidden), false);
-    equal((response.result as unknown as { history: unknown[] }).history.length, 2);
+    const inspection = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(inspection.history.length, 2); equal(inspection.refund.latest?.type, "correction"); equal(inspection.refund.latestRevision, 1);
+  });
+  await test("inspection structuree avant acquisition reste une lecture sans portefeuille artificiel", async () => {
+    const f = await fixture({ ready: false }); const before = await dump();
+    const response = await call({ action: "inspect", orderId: f.id }); equal(response.status, 200, JSON.stringify(response));
+    equal(response.stats.writes, 0); eq(await dump(), before);
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(result.enrollment.enrolled, true); equal(result.enrollment.beneficiaryId, f.uid);
+    equal(result.accrual.present, false); equal(result.accrual.initialGainCents, 500); equal(result.accrual.compartment, "none");
+    equal(result.wallet, null); equal(result.reservation.applicable, false);
+    equal(result.operationalState.code, "enrolled_payment_pending"); equal(result.operationalState.detail, "PAIEMENT À CONFIRMER");
+  });
+  await test("inspection derive les etats pending available et cancelled du journal valide", async () => {
+    const pendingOrder = await fixture({ ready: false }); await change(pendingOrder, paid);
+    const pendingInspection = (await call({ action: "inspect", orderId: pendingOrder.id })).result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(pendingInspection.operationalState.code, "payment_confirmed_pending"); equal(pendingInspection.accrual.compartment, "pending");
+    const availableOrder = await fixture();
+    const availableInspection = (await call({ action: "inspect", orderId: availableOrder.id })).result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(availableInspection.operationalState.code, "delivered_available"); equal(availableInspection.accrual.compartment, "available");
+    const cancelledOrder = await fixture(); await change(cancelledOrder, { orderStatus: "cancelled" }, null);
+    const cancelledInspection = (await call({ action: "inspect", orderId: cancelledOrder.id })).result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(cancelledInspection.operationalState.code, "cancelled"); equal(cancelledInspection.accrual.cancelled, true);
+  });
+  await test("inspection structuree reutilise acquisition portefeuille reservation refund et mouvements filtres", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "readiness-inspection");
+    const response = await call({ action: "inspect", orderId: f.id }); equal(response.status, 200, JSON.stringify(response));
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    eq(result.accrual, { present: true, initialGainCents: 460, remainingGainCents: 345, paymentConfirmed: true,
+      deliveryConfirmed: true, credited: true, compartment: "available", cancelled: false });
+    equal(result.wallet?.availableCents, 1745); equal(result.reservation.applicable, true); equal(result.reservation.state, "consumed");
+    equal(result.reservation.amountCents, 800); equal(result.reservation.cumulativeRestitutedCents, 200);
+    equal(result.refund.history.length, 1); equal(result.refund.latestRevision, 0); equal(result.operationalState.code, "refund_recorded");
+    ok(result.movements.some((movement) => movement.event === "credit_refunded_after_return"));
+    const movements = JSON.stringify(result.movements);
+    for (const forbidden of [f.uid, actor.email!, "Synthetic", "synthetic@example.test", "readiness-inspection", "payload"]) equal(movements.includes(forbidden), false);
+  });
+  await test("logs operationnels sont structures, idempotents et sans PII ni reference brute", async () => {
+    const f = await fixture(), body = selection(f), p = await preview(body), command = confirmation(body, p, "sensitive-business-reference");
+    const firstLogs: OrderRefundOperationalLog[] = []; const first = await call(command, { logs: firstLogs }); equal(first.status, 200);
+    equal(firstLogs.length, 1); equal(firstLogs[0].event, "cagnotte_refund_recorded"); equal(firstLogs[0].idempotent, false);
+    const replayLogs: OrderRefundOperationalLog[] = []; const replay = await call(command, { logs: replayLogs }); equal(replay.status, 200);
+    equal(replayLogs.length, 1); equal(replayLogs[0].idempotent, true); equal(replayLogs[0].eventId, firstLogs[0].eventId);
+    const target = await correctionTarget(f); const correctionBody = correctionSelection(f, target, 0, 1000, 1000);
+    const correctionPreview = await preview(correctionBody); const correctionLogs: OrderRefundOperationalLog[] = [];
+    const correction = await call({ ...correctionBody, action: "record_correction", correctionReference: "sensitive-correction-reference",
+      expectedPreviewVersion: correctionPreview.previewVersion }, { logs: correctionLogs }); equal(correction.status, 200);
+    equal(correctionLogs.length, 1); equal(correctionLogs[0].event, "cagnotte_refund_correction_recorded"); equal(correctionLogs[0].idempotent, false);
+    const serialized = JSON.stringify([...firstLogs, ...replayLogs, ...correctionLogs]);
+    for (const forbidden of [f.id, f.uid, actor.email!, "sensitive-business-reference", "sensitive-correction-reference", "synthetic@example.test"]) equal(serialized.includes(forbidden), false);
+    ok(/^[a-f0-9]{64}$/.test(firstLogs[0].orderHash)); ok(Object.keys(firstLogs[0].deltas).every((key) => key.endsWith("Cents")));
+  });
+  await test("correction a revoir emet uniquement le diagnostic structure", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "readiness-review-original"); const target = await correctionTarget(f);
+    const intent = createCagnotteReservationIntent({ orderId: `${f.id}-later`, beneficiaryId: f.uid, createdAtEpochMs: Date.parse("2000-01-04T00:00:00.000Z"),
+      calculation: { lines: [{ lineId: "later", initialCents: 1000 }], discounts: [], requestedCagnotteCents: 100, availableCagnotteCents: 1745, advantages: [] } }, program)!;
+    await applyCagnotteReservationOperation({ db, action: "reserve", intent, program, recordedAtEpochMs: Date.parse("2000-01-04T00:00:00.000Z") });
+    const logs: OrderRefundOperationalLog[] = [];
+    const response = await call(correctionSelection(f, target, 0, 0, 0), { logs }); equal(response.status, 200);
+    equal(response.result!.kind, "correction_requires_review"); equal(response.stats.writes, 0);
+    equal(logs.length, 1); equal(logs[0].event, "cagnotte_correction_requires_review"); equal(logs[0].idempotent, false);
   });
   await test("concordance finale de tous les portefeuilles et journaux", async () => { for (const wallet of (await db.collection("cagnotteWallets").get()).docs) await assertWalletJournal(db, wallet.id); });
   console.log(`LOT 4C : ${tests} scenarios HTTP/emulateur reussis. Confirmation administrative seulement, aucune operation bancaire.`);

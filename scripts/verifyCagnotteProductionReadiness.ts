@@ -302,6 +302,39 @@ await check("aucun rate limit ou ciblage client contournable sur les nouvelles r
   assert.doesNotMatch(read("api/_server/orderRefunds.ts").slice(0, 12_000), /targetUid/);
 });
 
+await check("workflow refund complet et inspection admin structurée prêts derrière les gardes", () => {
+  const refunds = read("api/_server/orderRefunds.ts");
+  const route = read("api/_server/orderRefundRoute.ts");
+  const admin = read("src/components/cagnotte/CagnotteAdminTools.tsx");
+  const adminPage = read("src/pages/admin/AdminPage.tsx");
+  const eligibility = read("src/lib/cagnotteAdminEligibility.ts");
+  const service = read("src/services/cagnotteAdminService.ts");
+  const adminTypes = read("src/types/cagnotteAdmin.ts");
+  for (const action of ["inspect", "preview", "record_confirmed", "preview_correction", "record_correction"]) assert.match(refunds, new RegExp(`action: "${action}"`));
+  assert.ok(route.indexOf("dependencies.enabled !== true") < route.indexOf("request.body"));
+  assert.match(refunds, /refund_historical_order_not_supported/);
+  for (const field of ["operationalState", "enrollment", "accrual", "wallet", "reservation", "refund", "movements"]) {
+    assert.match(adminTypes, new RegExp(`\\b${field}:`));
+    assert.match(refunds, new RegExp(`\\b${field}(?:,|:)`));
+  }
+  for (const event of ["cagnotte_refund_recorded", "cagnotte_refund_correction_recorded", "cagnotte_correction_requires_review"]) assert.match(refunds, new RegExp(event));
+  assert.match(adminPage, /shouldMountCagnotteAdminTools/);
+  assert.match(eligibility, /simulateCagnotteRefund/);
+  assert.match(admin, /Réinspecter avant toute nouvelle tentative/);
+  assert.match(admin, /pendingRefund\.current \?\?=/);
+  assert.match(admin, /pendingCorrection\.current \?\?=/);
+  assert.doesNotMatch(service, /\/api\/cagnotte|CAGNOTTE_READ_CURSOR_SECRET/);
+});
+
+await check("documentation opérationnelle conserve l ordre inert-first et le drain", () => {
+  const documentation = read("docs/cagnotte/PROGRAMME-PRODUCTION-INERT-FIRST.md");
+  assert.match(documentation, /refunds API → admin UI → acquisition/);
+  assert.match(documentation, /Aucune de ces actions ne contacte un prestataire de paiement/);
+  assert.match(documentation, /commande sans snapshot serveur `cagnotte` reste historique/);
+  assert.match(documentation, /Après une réponse réseau incertaine/);
+  assert.match(documentation, /Drain après incident/);
+});
+
 await check("règles Firestore candidates et protections commandes", () => {
   const rulesBytes = readFileSync(resolve("firestore.rules"));
   const rules = rulesBytes.toString("utf8").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
