@@ -88,6 +88,10 @@ export type CagnotteAdminInspection = {
     requiresReview: boolean;
   };
   movements: CagnotteAdminMovement[];
+  movementHistory: {
+    complete: boolean;
+    omittedLegacyUndatedCount: number;
+  };
   lines: AdminRefundLine[];
   effective: RefundCumuls;
   history: Array<{

@@ -49,6 +49,14 @@ await test("inspection lisible distingue inscription, gain commande et portefeui
     "Gain estimé", "Gain en attente", "Gain disponible", "Gain annulé ou réduit", "Portefeuille global du client",
     "Disponible global", "Réservation de cette commande", "Consommée", "Journal cagnotte de la commande"]) match(html, new RegExp(text));
 });
+await test("historique legacy partiel affiche un avertissement discret sans corruption", () => {
+  const partial = { ...inspection, movementHistory: { complete: false, omittedLegacyUndatedCount: 2 } };
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: partial }} />);
+  match(html, /Journal partiel : certains anciens mouvements/);
+  match(html, /ne sont pas affichés dans cette chronologie/);
+  match(html, /\(2\)/);
+  doesNotMatch(html, /corruption/i);
+});
 await test("etats paiement en attente, livre, annule et regularisation sont explicites", () => {
   const cases = [
     [{ code: "payment_confirmed_pending" as const, label: "PAIEMENT CONFIRMÉ", detail: "5 % EN ATTENTE" }, /PAIEMENT CONFIRMÉ[\s\S]*5 % EN ATTENTE/],
@@ -217,6 +225,7 @@ function fixture(): CagnotteAdminInspection {
     refund: { history: [{ id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T10:00:00.000Z", effective: true }],
       latest: { id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T10:00:00.000Z" }, latestRevision: 0, requiresReview: false },
     movements: [{ id: "f".repeat(64), event: "credit_refunded_after_return", pendingDeltaCents: 0, availableDeltaCents: 200, reservedDeltaCents: 0, regularizationDeltaCents: 0, recordedAtEpochMs: 1000 }],
+    movementHistory: { complete: true, omittedLegacyUndatedCount: 0 },
     lines: [{ lineId: "line-0", label: "Produit fictif", initialNetCents: 10000, returnedNetCents: 2500, remainingNetCents: 7500 }], effective,
     history: [{ id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T10:00:00.000Z", reference: "demo", declaredFinancialCents: 2300,
       returnedProductNetCents: 2500, financialCents: 2300, cagnotteRestitutionCents: 200, resultingAvailableCents: 1745, effective: true }],

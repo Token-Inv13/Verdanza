@@ -645,6 +645,10 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
       tx.get(db.collection("cagnotteMovements").where("orderId", "==", order.id).limit(historyLimit + 1)),
     ]);
     if (movementDocs.size > historyLimit) fail("refund_history_requires_verification");
+    const inspectedMovements = movementDocs.docs.map((doc) => sanitizedMovement(doc.id, doc.data(), order.id, enrollment.beneficiaryId));
+    const movements = inspectedMovements.flatMap((entry) => entry.kind === "displayable" ? [entry.movement] : [])
+      .sort((a, b) => b.recordedAtEpochMs - a.recordedAtEpochMs || a.id.localeCompare(b.id));
+    const omittedLegacyUndatedCount = inspectedMovements.filter((entry) => entry.kind === "legacy_undated").length;
     let accrual: CagnotteAccrual | null = null;
     let wallet: CagnotteWallet | null = walletDoc.exists
       ? readCagnotteWallet(walletDoc.data(), enrollment.beneficiaryId)
@@ -658,8 +662,6 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
       ? await readCagnotteReservationBasis({ db, transaction: tx, intent: order.cagnotteReservationIntent! })
       : null;
     if (reservationBasis && !wallet) fail("refund_right_requires_verification");
-    const movements = movementDocs.docs.map((doc) => sanitizedMovement(doc.id, doc.data(), order.id, enrollment.beneficiaryId))
-      .sort((a, b) => b.recordedAtEpochMs - a.recordedAtEpochMs || a.id.localeCompare(b.id));
     const originals = history.docs.filter((doc) => doc.data().kind !== "refund_correction").map((doc) => {
       const event = doc.data() as Event;
       validateStoredEvent(event, doc.id);
@@ -754,6 +756,10 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
         requiresReview: false,
       },
       movements,
+      movementHistory: {
+        complete: omittedLegacyUndatedCount === 0,
+        omittedLegacyUndatedCount,
+      },
       lines: enrollment.snapshot.lines.map((line, index) => ({
         lineId: line.lineId,
         label: order.items?.[index]?.name ?? `Ligne ${index + 1}`,
@@ -773,28 +779,51 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
   });
 }
 
-function sanitizedMovement(id: string, raw: Record<string, unknown>, orderId: string, beneficiaryId: string) {
+type InspectedMovementProjection =
+  | { kind: "displayable"; movement: {
+      id: string;
+      event: string;
+      pendingDeltaCents: number;
+      availableDeltaCents: number;
+      reservedDeltaCents: number;
+      regularizationDeltaCents: number;
+      recordedAtEpochMs: number;
+    } }
+  | { kind: "legacy_undated" };
+
+function sanitizedMovement(id: string, raw: Record<string, unknown>, orderId: string, beneficiaryId: string): InspectedMovementProjection {
   const allowedEvents = new Set([
     "payment_confirmed", "delivery_confirmed", "made_available", "cancelled", "refund_confirmed",
     "credit_reserved", "credit_consumed", "credit_released", "credit_refunded_after_return",
     "refund_declaration_corrected", "credit_refund_corrected",
   ]);
-  const deltas = [raw.pendingDeltaCents, raw.availableDeltaCents, raw.reservedDeltaCents ?? 0, raw.regularizationDeltaCents ?? 0];
+  const schema = raw.schemaVersion;
+  const reserved = raw.reservedDeltaCents ?? 0;
+  const regularization = raw.regularizationDeltaCents ?? 0;
+  const deltas = [raw.pendingDeltaCents, raw.availableDeltaCents, reserved, regularization];
+  const legacy = schema === 1 || schema === 2;
+  const hasRecordedAt = hasOwn(raw, "recordedAtEpochMs");
+  const validRecordedAt = typeof raw.recordedAtEpochMs === "number" && Number.isSafeInteger(raw.recordedAtEpochMs) && raw.recordedAtEpochMs >= 0;
+  const incompatibleSchema =
+    (schema === 1 && (regularization !== 0 || hasOwn(raw, "regularizationVersion") || reserved !== 0 || hasOwn(raw, "reservationVersion"))) ||
+    (schema === 2 && (raw.regularizationVersion !== CAGNOTTE_REGULARIZATION_VERSION || reserved !== 0 || hasOwn(raw, "reservationVersion"))) ||
+    (schema !== 1 && schema !== 2 && (schema !== 3 || raw.regularizationVersion !== CAGNOTTE_REGULARIZATION_VERSION || raw.reservationVersion !== CAGNOTTE_RESERVATION_VERSION));
   if (raw.orderId !== orderId || raw.beneficiaryId !== beneficiaryId || raw.eventKey !== id ||
     typeof raw.businessEvent !== "string" || !allowedEvents.has(raw.businessEvent) ||
-    !deltas.every((value) => typeof value === "number" && Number.isSafeInteger(value)) ||
-    typeof raw.recordedAtEpochMs !== "number" || !Number.isSafeInteger(raw.recordedAtEpochMs) || raw.recordedAtEpochMs < 0) {
+    !deltas.every((value) => typeof value === "number" && Number.isSafeInteger(value)) || incompatibleSchema ||
+    (hasRecordedAt && !validRecordedAt) || (!legacy && !hasRecordedAt)) {
     fail("refund_journal_requires_verification");
   }
-  return {
+  if (legacy && !hasRecordedAt) return { kind: "legacy_undated" };
+  return { kind: "displayable", movement: {
     id,
     event: raw.businessEvent,
     pendingDeltaCents: deltas[0] as number,
     availableDeltaCents: deltas[1] as number,
     reservedDeltaCents: deltas[2] as number,
     regularizationDeltaCents: deltas[3] as number,
-    recordedAtEpochMs: raw.recordedAtEpochMs,
-  };
+    recordedAtEpochMs: raw.recordedAtEpochMs as number,
+  } };
 }
 
 function adminOperationalState(input: {

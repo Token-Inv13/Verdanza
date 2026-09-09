@@ -77,6 +77,24 @@ async function fixture(options: { amounts?: number[]; delivery?: number; discoun
   return f;
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
+async function rewriteOneMovementSchema(f: Fixture, schemaVersion: 1 | 2 | 3, recordedAtEpochMs?: unknown) {
+  const snapshot = await db.collection("cagnotteMovements").where("orderId", "==", f.id).get();
+  const document = snapshot.docs[0];
+  ok(document, "un mouvement de fixture est requis");
+  const movement = { ...document.data(), schemaVersion };
+  if (schemaVersion !== 3) {
+    delete movement.reservationVersion;
+    delete movement.reservedDeltaCents;
+  }
+  if (schemaVersion === 1) {
+    delete movement.regularizationVersion;
+    delete movement.regularizationDeltaCents;
+  }
+  if (recordedAtEpochMs === undefined) delete movement.recordedAtEpochMs;
+  else movement.recordedAtEpochMs = recordedAtEpochMs;
+  await document.ref.set(movement);
+  return document.id;
+}
 async function change(f: Fixture, patch: Omit<OrderStatusChange, "orderId">, config: CagnotteTestProgram | null = accrualProgram) {
   return commitOrderStatusTransition({ db, body: { orderId: f.id, ...patch }, admin: actor,
     accrualProgram: config, reservationProgram: program, now: () => "2000-01-01T00:00:00.000Z" });
@@ -728,6 +746,89 @@ try {
     ok(result.movements.some((movement) => movement.event === "credit_refunded_after_return"));
     const movements = JSON.stringify(result.movements);
     for (const forbidden of [f.uid, actor.email!, "Synthetic", "synthetic@example.test", "readiness-inspection", "payload"]) equal(movements.includes(forbidden), false);
+  });
+  await test("schema v1 sans horodatage garde l inspection disponible avec historique partiel sans ecriture", async () => {
+    const f = await fixture();
+    const beforeProjection = (await call({ action: "inspect", orderId: f.id })).result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    const omittedId = await rewriteOneMovementSchema(f, 1);
+    const before = await dump();
+    const response = await call({ action: "inspect", orderId: f.id });
+    equal(response.status, 200, JSON.stringify(response));
+    equal(response.stats.writes, 0);
+    eq(await dump(), before);
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    eq(result.movementHistory, { complete: false, omittedLegacyUndatedCount: 1 });
+    equal(result.movements.some((movement) => movement.id === omittedId), false);
+    ok(result.movements.length > 0, "les mouvements v3 horodates restent affiches");
+    eq(result.wallet, beforeProjection.wallet);
+    eq(result.accrual, beforeProjection.accrual);
+    eq(result.refund, beforeProjection.refund);
+    eq(result.effective, beforeProjection.effective);
+  });
+  await test("schema v2 sans horodatage est omis explicitement de la seule chronologie", async () => {
+    const f = await fixture();
+    const omittedId = await rewriteOneMovementSchema(f, 2);
+    const before = await dump();
+    const response = await call({ action: "inspect", orderId: f.id });
+    equal(response.status, 200, JSON.stringify(response));
+    equal(response.stats.writes, 0);
+    eq(await dump(), before);
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    eq(result.movementHistory, { complete: false, omittedLegacyUndatedCount: 1 });
+    equal(result.movements.some((movement) => movement.id === omittedId), false);
+  });
+  await test("schema v1 et v2 avec horodatage valide restent affiches", async () => {
+    for (const schemaVersion of [1, 2] as const) {
+      const f = await fixture();
+      const displayedId = await rewriteOneMovementSchema(f, schemaVersion, 1234 + schemaVersion);
+      const before = await dump();
+      const response = await call({ action: "inspect", orderId: f.id });
+      equal(response.status, 200, JSON.stringify(response));
+      equal(response.stats.writes, 0);
+      eq(await dump(), before);
+      const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+      eq(result.movementHistory, { complete: true, omittedLegacyUndatedCount: 0 });
+      equal(result.movements.find((movement) => movement.id === displayedId)?.recordedAtEpochMs, 1234 + schemaVersion);
+    }
+  });
+  await test("schema v1 et v2 avec horodatage present mais invalide restent refuses", async () => {
+    for (const schemaVersion of [1, 2] as const) for (const invalid of ["1234", -1, 1.5]) {
+      const f = await fixture();
+      await rewriteOneMovementSchema(f, schemaVersion, invalid);
+      await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      await rewriteOneMovementSchema(f, schemaVersion, 2000);
+    }
+  });
+  await test("schema v3 exige un horodatage valide et affiche le mouvement", async () => {
+    const missing = await fixture();
+    await rewriteOneMovementSchema(missing, 3);
+    await refused({ action: "inspect", orderId: missing.id }, "refund_journal_requires_verification");
+    await rewriteOneMovementSchema(missing, 3, 2000);
+    for (const invalid of ["4321", -1, 1.5]) {
+      const malformed = await fixture();
+      await rewriteOneMovementSchema(malformed, 3, invalid);
+      await refused({ action: "inspect", orderId: malformed.id }, "refund_journal_requires_verification");
+      await rewriteOneMovementSchema(malformed, 3, 2000);
+    }
+    const valid = await fixture();
+    const displayedId = await rewriteOneMovementSchema(valid, 3, 4321);
+    const before = await dump();
+    const response = await call({ action: "inspect", orderId: valid.id });
+    equal(response.status, 200, JSON.stringify(response));
+    equal(response.stats.writes, 0);
+    eq(await dump(), before);
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    eq(result.movementHistory, { complete: true, omittedLegacyUndatedCount: 0 });
+    equal(result.movements.find((movement) => movement.id === displayedId)?.recordedAtEpochMs, 4321);
+  });
+  await test("schema de mouvement inconnu reste refuse", async () => {
+    const f = await fixture();
+    const snapshot = await db.collection("cagnotteMovements").where("orderId", "==", f.id).get();
+    const document = snapshot.docs[0];
+    ok(document);
+    await document.ref.set({ ...document.data(), schemaVersion: 99 });
+    await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+    await document.ref.set({ ...document.data(), schemaVersion: 3 });
   });
   await test("logs operationnels sont structures, idempotents et sans PII ni reference brute", async () => {
     const f = await fixture(), body = selection(f), p = await preview(body), command = confirmation(body, p, "sensitive-business-reference");

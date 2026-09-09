@@ -288,6 +288,7 @@ function administrationInspectionFixture(): CagnotteAdminInspection {
     refund: { history: [{ id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T11:00:00.000Z", effective: true }],
       latest: { id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T11:00:00.000Z" }, latestRevision: 0, requiresReview: false },
     movements: [{ id: "f".repeat(64), event: "credit_refunded_after_return", pendingDeltaCents: 0, availableDeltaCents: 200, reservedDeltaCents: 0, regularizationDeltaCents: 0, recordedAtEpochMs: 1000 }],
+    movementHistory: { complete: true, omittedLegacyUndatedCount: 0 },
     lines: [{ lineId: "fleurs", label: "Fleurs CBD fictives", initialNetCents: 10000, returnedNetCents: 2500, remainingNetCents: 7500 }],
     effective,
     history: [{ id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T11:00:00.000Z", reference: "retour-demo-25", declaredFinancialCents: 2300,

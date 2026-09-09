@@ -255,6 +255,7 @@ export function CagnotteAdminToolsView({ model, form = emptyForm(model.inspectio
 
 function AdminMovementHistory({ inspection }: { inspection: CagnotteAdminInspection }) {
   return <article className="cagnotte-admin__box" style={{ marginTop: "1rem" }}><h4>Journal cagnotte de la commande</h4>
+    {!inspection.movementHistory.complete && <p className="cagnotte-admin__warning">Journal partiel : certains anciens mouvements, créés avant l’ajout de l’horodatage du journal, ne sont pas affichés dans cette chronologie. ({inspection.movementHistory.omittedLegacyUndatedCount})</p>}
     {!inspection.movements.length && <p>Aucun mouvement.</p>}
     <div className="cagnotte-admin__history">{inspection.movements.map((movement) => <section key={movement.id} className="cagnotte-admin__history-entry">
       <strong>{movementEventLabel(movement.event)}</strong><p>Référence interne : <code>{movement.id}</code></p>
