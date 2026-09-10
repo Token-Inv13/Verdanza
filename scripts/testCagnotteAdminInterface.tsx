@@ -8,7 +8,7 @@ import {
   CagnotteAdminToolsView,
   type CagnotteAdminViewModel,
 } from "../src/components/cagnotte/CagnotteAdminTools.js";
-import { cagnotteAdminFailureState, cagnotteAdminFormUpdatedState, cagnotteAdminFrozenOperationState, cagnotteAdminInspectionSuccessState, cagnotteAdminLoadingState } from "../src/lib/cagnotteAdminState.js";
+import { cagnotteAdminDefinitiveRejectionState, cagnotteAdminFailureState, cagnotteAdminFormUpdatedState, cagnotteAdminFrozenOperationState, cagnotteAdminInspectionSuccessState, cagnotteAdminLoadingState } from "../src/lib/cagnotteAdminState.js";
 import { clearCagnotteAdminPendingOperation, createCagnotteAdminRefreshChannel, createCagnotteAdminResponseIdentity, eurosInputToCents, freezeCagnotteAdminCorrection, freezeCagnotteAdminRefund, refreshCagnotteAdminAfterWrite, retryCagnotteAdminFrozenOperation, runCagnotteAdminLocked } from "../src/lib/cagnotteAdminController.js";
 import { CagnotteAdminRequestError } from "../src/services/cagnotteAdminService.js";
 import { cagnotteRefundDateTimeLocalToIso, cagnotteRefundDateTimeLocalValue } from "../src/lib/cagnotteAdminDate.js";
@@ -173,6 +173,19 @@ await test("operation correction incertaine survit a la course et ne change pas 
   equal(resolved.uncertain, false); equal(resolved.pendingOperation, null); equal(resolved.correctionPreview, null);
   const pending = { current: operation };
   clearCagnotteAdminPendingOperation(pending); equal(pending.current, null);
+});
+await test("rejet definitif du premier envoi invalide les apercus et rend une nouvelle preview obligatoire", () => {
+  const operation = freezeCagnotteAdminRefund({ orderId: inspection.order.id,
+    additionalReturns: [{ lineId: "line-0", additionalNetCents: 2500 }], deliveryRefundCents: 0,
+    source: "admin", reference: "rejet-definitif", declaredFinancialCents: 2300, reason: "product_return",
+    confirmedAt: "2026-09-06T10:00:00.000Z", expectedPreviewVersion: "c".repeat(64) });
+  const state = cagnotteAdminDefinitiveRejectionState({ ...base, refundPreview: refund(), correctionPreview: correctionReview(),
+    uncertain: true, pendingOperation: operation, recoveryBlocked: true },
+  new CagnotteAdminRequestError("Prévisualisation périmée.", "refund_preview_stale", false));
+  equal(state.refundPreview, null); equal(state.correctionPreview, null); equal(state.pendingOperation, null);
+  equal(state.uncertain, false); equal(state.recoveryBlocked, false); match(state.notice, /périmée/i);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={state} />);
+  doesNotMatch(html, /Conséquences calculées par le serveur|Rejouer exactement l’opération précédente/);
 });
 await test("acquisition non inscrite affiche zero gain mais conserve financement et reservation", () => {
   const notEnrolled: CagnotteAdminInspection = { ...inspection,

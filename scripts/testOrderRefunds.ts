@@ -1,4 +1,5 @@
 import { deepStrictEqual as eq, equal, ok } from "node:assert/strict";
+import { createHash } from "node:crypto";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { connectCagnotteEmulator, CAGNOTTE_DEMO } from "./cagnotteEmulator.js";
@@ -84,6 +85,34 @@ async function fixture(options: { amounts?: number[]; delivery?: number; discoun
   const paymentProgram = Object.hasOwn(options, "paymentProgram") ? options.paymentProgram! : accrualProgram;
   if (options.ready !== false) await change(f, { ...paid, orderStatus: "delivered" }, paymentProgram);
   return f;
+}
+async function lineIdentityFixture(explicitLineIds: boolean) {
+  const id = `refund-order-${++seq}`, uid = `refund-customer-${seq}`;
+  const calculationLines = explicitLineIds
+    ? [{ lineId: "B", initialCents: 2000 }, { lineId: "A", initialCents: 1000 }, { lineId: "gift", initialCents: 0, isGift: true as const }]
+    : [{ lineId: "order-line-0", initialCents: 2000 }, { lineId: "order-line-1", initialCents: 1000 }];
+  const snapshot = calculateCagnotte({ lines: calculationLines, discounts: [], requestedCagnotteCents: 0, availableCagnotteCents: 0, advantages: [] });
+  const items = explicitLineIds
+    ? [
+      { lineId: "B", productId: "refund-product", name: "Produit B", quantity: 1, unitPrice: 20, lineTotal: 20 },
+      { lineId: "A", productId: "refund-product", name: "Produit A", quantity: 1, unitPrice: 10, lineTotal: 10 },
+      { lineId: "gift", productId: "refund-product", name: "Cadeau promotionnel", quantity: 1, unitPrice: 0, lineTotal: 0, isGift: true },
+    ]
+    : [
+      { productId: "refund-product", name: "Ligne historique 1", quantity: 1, unitPrice: 20, lineTotal: 20 },
+      { productId: "refund-product", name: "Ligne historique 2", quantity: 1, unitPrice: 10, lineTotal: 10 },
+    ];
+  const data: Record<string, unknown> = {
+    customerId: uid, customerName: "Synthetic", customerEmail: "synthetic@example.test",
+    orderStatus: "confirmed", paymentStatus: "to_confirm", deliveryMethod: "postal", deliveryFee: 0,
+    subtotal: snapshot.subtotalCents / 100, total: snapshot.eligibleCents / 100,
+    discountAmount: 0, promotionDiscountTotal: 0,
+    createdAt: "2000-01-01T00:00:00.000Z", updatedAt: "2000-01-01T00:00:00.000Z", items,
+    cagnotte: { schemaVersion: 1, beneficiaryId: uid, programVersion: program.programVersion,
+      calculationVersion: "cagnotte-math-v1", createdAtEpochMs: 2000, snapshot },
+  };
+  await db.collection("orders").doc(id).set(data);
+  return { id, uid, snapshot, data };
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 async function rewriteOneMovementSchema(f: Fixture, schemaVersion: 1 | 2 | 3, recordedAtEpochMs?: unknown) {
@@ -217,6 +246,24 @@ async function refused(body: Record<string, unknown>, code?: string, options: Op
   if (code) equal(r.code, code); eq(await dump(), before); return r;
 }
 function gate() { let release!: () => void; const promise = new Promise<void>((r) => { release = r; }); return { promise, release }; }
+function stableHashValue(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableHashValue).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableHashValue((value as Record<string, unknown>)[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+function testHash(value: unknown) { return createHash("sha256").update(stableHashValue(value)).digest("hex"); }
+async function expectCorruptHistoryRejectedEverywhere(
+  f: Fixture,
+  inspectCode: "refund_history_requires_verification" | "refund_journal_requires_verification" = "refund_history_requires_verification",
+) {
+  await refused({ action: "inspect", orderId: f.id }, inspectCode);
+  await refused({
+    action: "record_confirmed", orderId: f.id, currency: "EUR",
+    additionalReturns: [{ lineId: "line-0", additionalNetCents: 100 }], deliveryRefundCents: 0,
+    source: "admin", reference: `h6-chain-${++seq}`, declaredFinancialCents: 100,
+    reason: "product_return", confirmedAt: confirmDate, expectedPreviewVersion: "e".repeat(64),
+  }, "refund_history_requires_verification");
+}
 
 try {
   equal(CAGNOTTE_SERVER_PROGRAM, null); equal(ORDER_REFUNDS_ENABLED, false);
@@ -616,6 +663,152 @@ try {
     await doc.ref.update({ "result.after.totalFinancialCents": 999 }); await refused(selection(f), "refund_history_requires_verification");
     await refused(original.command, "refund_history_requires_verification");
   });
+  await test("H6 parite inspect record refuse sequence initiale duplicatee ou trouee", async () => {
+    for (const mode of ["start_at_two", "duplicate", "gap"] as const) {
+      const f = await fixture();
+      await record(f, 1000, `h6-${mode}-first`);
+      if (mode !== "start_at_two") await record(f, 1000, `h6-${mode}-second`);
+      const docs = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+        .filter((doc) => doc.data().kind !== "refund_correction").sort((a, b) => a.data().sequence - b.data().sequence);
+      const target = mode === "start_at_two" ? docs[0] : docs[1];
+      ok(target);
+      await target.ref.update({ sequence: mode === "gap" ? 3 : mode === "duplicate" ? 1 : 2 });
+      await expectCorruptHistoryRejectedEverywhere(f);
+    }
+  });
+  await test("H6 parite inspect record refuse un before initial non nul et une ligne cumul orpheline", async () => {
+    const initial = await fixture();
+    await record(initial, 2500, "h6-before-nonzero");
+    const initialDoc = (await db.collection("cagnotteRefunds").where("orderId", "==", initial.id).get()).docs[0];
+    const initialEvent = initialDoc.data();
+    await initialDoc.ref.set({ ...initialEvent, result: { ...initialEvent.result,
+      before: { ...initialEvent.result.before, lines: [{ lineId: "line-0", returnedNetCents: 100 }],
+        returnedProductNetCents: 100, productFinancialCents: 100, totalFinancialCents: 100 },
+      after: { ...initialEvent.result.after, lines: [{ lineId: "line-0", returnedNetCents: 2600 }],
+        returnedProductNetCents: 2600, productFinancialCents: 2600, totalFinancialCents: 2600 },
+    } });
+    await expectCorruptHistoryRejectedEverywhere(initial);
+
+    const orphanLine = await fixture();
+    await record(orphanLine, 2500, "h6-orphan-line");
+    const orphanDoc = (await db.collection("cagnotteRefunds").where("orderId", "==", orphanLine.id).get()).docs[0];
+    const orphanEvent = orphanDoc.data();
+    await orphanDoc.ref.set({ ...orphanEvent, result: { ...orphanEvent.result,
+      before: { ...orphanEvent.result.before, lines: [...orphanEvent.result.before.lines, { lineId: "orphan", returnedNetCents: 0 }] },
+      after: { ...orphanEvent.result.after, lines: [...orphanEvent.result.after.lines, { lineId: "orphan", returnedNetCents: 0 }] },
+    } });
+    await expectCorruptHistoryRejectedEverywhere(orphanLine);
+  });
+  await test("H6 parite inspect record refuse second before different du premier after", async () => {
+    const f = await fixture();
+    await record(f, 1000, "h6-continuity-first");
+    await record(f, 1000, "h6-continuity-second");
+    const docs = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+      .filter((doc) => doc.data().kind !== "refund_correction").sort((a, b) => a.data().sequence - b.data().sequence);
+    const second = docs[1];
+    ok(second);
+    const event = second.data();
+    await second.ref.set({ ...event, result: { ...event.result,
+      before: { ...event.result.before, lines: [{ lineId: "line-0", returnedNetCents: 1100 }],
+        returnedProductNetCents: 1100, productFinancialCents: 1100, totalFinancialCents: 1100 },
+      after: { ...event.result.after, lines: [{ lineId: "line-0", returnedNetCents: 2100 }],
+        returnedProductNetCents: 2100, productFinancialCents: 2100, totalFinancialCents: 2100 },
+    } });
+    await expectCorruptHistoryRejectedEverywhere(f);
+  });
+  await test("H6 parite inspect record recalcule after financier et restitution depuis le snapshot", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "h6-after-recompute");
+    const doc = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs.find((entry) => entry.data().kind !== "refund_correction");
+    ok(doc);
+    const event = doc.data();
+    await doc.ref.set({ ...event, result: { ...event.result,
+      productFinancialCents: 2200, cagnotteRestitutionCents: 300, totalFinancialCents: 2200,
+      after: { ...event.result.after, productFinancialCents: 2200, cagnotteRestitutionCents: 300, totalFinancialCents: 2200 },
+      restitution: { ...event.result.restitution, grossCents: 300, availableIncreaseCents: 300, cumulativeCents: 300 },
+    } });
+    await expectCorruptHistoryRejectedEverywhere(f);
+  });
+  await test("H6 parite inspect record refuse correction orpheline revision trouee previous et effective falsifies", async () => {
+    for (const mode of ["orphan", "revision_gap", "previous", "effective"] as const) {
+      const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+      await record(f, 2500, `h6-correction-${mode}-original`);
+      const target = await correctionTarget(f);
+      await recordCorrection(f, target, 0, 1000, 920, `h6-correction-${mode}`);
+      const doc = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs.find((entry) => entry.data().kind === "refund_correction");
+      ok(doc);
+      const event = doc.data();
+      if (mode === "orphan") {
+        const targetEventId = "a".repeat(64);
+        const content = { ...event.content, targetEventId };
+        await doc.ref.set({ ...event, targetEventId, content, fingerprint: testHash(content),
+          result: { ...event.result, targetEventId } });
+      } else if (mode === "revision_gap") {
+        const content = { ...event.content, expectedRevision: 1 };
+        await doc.ref.set({ ...event, previousRevision: 1, revision: 2, content, fingerprint: testHash(content),
+          result: { ...event.result, previousRevision: 1, revision: 2 } });
+      } else if (mode === "previous") {
+        await doc.ref.update({ "result.previousEffective.totalFinancialCents": event.result.previousEffective.totalFinancialCents + 1 });
+      } else {
+        await doc.ref.update({ "result.effective.totalFinancialCents": event.result.effective.totalFinancialCents + 1 });
+      }
+      await expectCorruptHistoryRejectedEverywhere(f);
+    }
+  });
+  await test("H6 parite inspect record refuse revision correction dupliquee", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "h6-correction-duplicate-original");
+    const target = await correctionTarget(f);
+    await recordCorrection(f, target, 0, 1000, 920, "h6-correction-duplicate-first");
+    await recordCorrection(f, target, 1, 1500, 1380, "h6-correction-duplicate-second");
+    const corrections = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+      .filter((entry) => entry.data().kind === "refund_correction").sort((a, b) => a.data().revision - b.data().revision);
+    const duplicate = corrections[1];
+    ok(duplicate);
+    const event = duplicate.data();
+    const content = { ...event.content, expectedRevision: 0 };
+    await duplicate.ref.set({ ...event, previousRevision: 0, revision: 1, content, fingerprint: testHash(content),
+      result: { ...event.result, previousRevision: 0, revision: 1 } });
+    await expectCorruptHistoryRejectedEverywhere(f);
+  });
+  await test("H6 parite inspect record refuse corrections revision 1 puis 3", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "h6-correction-gap-original");
+    const target = await correctionTarget(f);
+    await recordCorrection(f, target, 0, 1000, 920, "h6-correction-gap-first");
+    await recordCorrection(f, target, 1, 1500, 1380, "h6-correction-gap-second");
+    const corrections = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+      .filter((entry) => entry.data().kind === "refund_correction").sort((a, b) => a.data().revision - b.data().revision);
+    const gap = corrections[1];
+    ok(gap);
+    const event = gap.data();
+    const content = { ...event.content, expectedRevision: 2 };
+    await gap.ref.set({ ...event, previousRevision: 2, revision: 3, content, fingerprint: testHash(content),
+      result: { ...event.result, previousRevision: 2, revision: 3 } });
+    await expectCorruptHistoryRejectedEverywhere(f);
+  });
+  await test("H6 parite inspect record refuse movement reutilise ou remboursement non lie", async () => {
+    const reused = await fixture();
+    await record(reused, 1000, "h6-movement-first");
+    await record(reused, 1000, "h6-movement-second");
+    const events = (await db.collection("cagnotteRefunds").where("orderId", "==", reused.id).get()).docs
+      .filter((entry) => entry.data().kind !== "refund_correction").sort((a, b) => a.data().sequence - b.data().sequence);
+    await events[1].ref.update({ movementIds: events[0].data().movementIds });
+    await expectCorruptHistoryRejectedEverywhere(reused, "refund_journal_requires_verification");
+
+    const unlinked = await fixture();
+    await record(unlinked, 1000, "h6-movement-unlinked");
+    const movement = (await db.collection("cagnotteMovements").where("orderId", "==", unlinked.id)
+      .where("businessEvent", "==", "refund_confirmed").get()).docs[0];
+    ok(movement);
+    const unlinkedRef = db.collection("cagnotteMovements").doc("b".repeat(64));
+    await unlinkedRef.set({ ...movement.data(), eventKey: "b".repeat(64) });
+    try {
+      await expectCorruptHistoryRejectedEverywhere(unlinked, "refund_journal_requires_verification");
+    } finally {
+      await unlinkedRef.delete();
+    }
+  });
   await test("finalisation 2 scenario 100/8/92 puis neutralisation differentielle", async () => {
     const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
     eq(await walletBalance(f), [0, 1660, 0, 0]);
@@ -743,6 +936,46 @@ try {
     const serialized = JSON.stringify(response.result); for (const forbidden of ["fingerprint", "movementIds", "actor", "intentFingerprint", "paymentReference"]) equal(serialized.includes(forbidden), false);
     const inspection = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
     equal(inspection.history.length, 2); equal(inspection.refund.latest?.type, "correction"); equal(inspection.refund.latestRevision, 1);
+  });
+  await test("H6 associe les libelles et retours par lineId malgre tri et cadeau promotionnel", async () => {
+    const f = await lineIdentityFixture(true);
+    await change(f, { ...paid, orderStatus: "delivered" });
+    const response = await call({ action: "inspect", orderId: f.id });
+    equal(response.status, 200, JSON.stringify(response));
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    eq(Object.fromEntries(result.lines.map((line) => [line.lineId, line.label])), {
+      A: "Produit A", B: "Produit B", gift: "Cadeau promotionnel",
+    });
+    const returnedA = await preview({ action: "preview", orderId: f.id, currency: "EUR",
+      additionalReturns: [{ lineId: "A", additionalNetCents: 1000 }], deliveryRefundCents: 0 });
+    eq(returnedA.additionalReturns, [{ lineId: "A", additionalNetCents: 1000 }]);
+    const returnedB = await preview({ action: "preview", orderId: f.id, currency: "EUR",
+      additionalReturns: [{ lineId: "B", additionalNetCents: 2000 }], deliveryRefundCents: 0 });
+    eq(returnedB.additionalReturns, [{ lineId: "B", additionalNetCents: 2000 }]);
+    await refused({ action: "preview", orderId: f.id, currency: "EUR",
+      additionalReturns: [{ lineId: "gift", additionalNetCents: 1 }], deliveryRefundCents: 0 });
+  });
+  await test("H6 conserve les identites historiques order-line par index source", async () => {
+    const f = await lineIdentityFixture(false);
+    const response = await call({ action: "inspect", orderId: f.id });
+    equal(response.status, 200, JSON.stringify(response));
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    eq(Object.fromEntries(result.lines.map((line) => [line.lineId, line.label])), {
+      "order-line-0": "Ligne historique 1", "order-line-1": "Ligne historique 2",
+    });
+  });
+  await test("H6 refuse les lignes commande absentes dupliquees ou incompatibles avec le snapshot", async () => {
+    for (const mutate of [
+      (items: Array<Record<string, unknown>>) => items.slice(1),
+      (items: Array<Record<string, unknown>>) => items.map((item, index) => index === 1 ? { ...item, lineId: "B" } : item),
+      (items: Array<Record<string, unknown>>) => items.map((item, index) => index === 0 ? { ...item, lineTotal: 19 } : item),
+    ]) {
+      const f = await lineIdentityFixture(true);
+      const orderRef = db.collection("orders").doc(f.id);
+      const order = (await orderRef.get()).data()!;
+      await orderRef.update({ items: mutate(order.items as Array<Record<string, unknown>>) });
+      await refused({ action: "inspect", orderId: f.id }, "refund_order_lines_require_verification");
+    }
   });
   await test("inspection structuree avant acquisition reste une lecture sans portefeuille artificiel", async () => {
     const f = await fixture({ ready: false }); const before = await dump();

@@ -880,7 +880,7 @@ function reconstructOrderRefundHistory(input: {
     fail("refund_history_requires_verification");
   }
   if (unexpectedRefundMovement || stable(projectedRefundKeys) !== stable(confirmedRefundKeys)) failMovement();
-  return { originals, corrections, effective };
+  return { originals, corrections, effective, referencedMovementIds: [...referencedMovements].sort() };
 }
 
 type InspectedMovementProjection =

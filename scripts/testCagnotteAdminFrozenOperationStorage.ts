@@ -14,7 +14,8 @@ import {
   createCagnotteAdminFrozenOperationStore,
   type CagnotteAdminStorageLike,
 } from "../src/lib/cagnotteAdminFrozenOperationStorage.js";
-import { cagnotteAdminRestoredOperationState, createCagnotteAdminInitialState } from "../src/lib/cagnotteAdminState.js";
+import { cagnotteAdminDefinitiveRejectionState, cagnotteAdminRestoredOperationState, createCagnotteAdminInitialState } from "../src/lib/cagnotteAdminState.js";
+import { CagnotteAdminRequestError } from "../src/services/cagnotteAdminService.js";
 import type { CagnotteAdminInspection } from "../src/types/cagnotteAdmin.js";
 
 let tests = 0;
@@ -411,7 +412,92 @@ await test("30 arrays bornes et centimes entiers sont valides strictement", () =
   equal(store.load(ORDER_A).status, "empty");
 });
 
-console.log(`HOTFIX 4F2-H5 : ${tests} contrôles storage/controller réussis.`);
+await test("31 premier envoi refund ou correction libere exactement un rejet definitif 400 401 ou 409", async () => {
+  for (const operation of [refundOperation(), correctionOperation()]) {
+    for (const code of ["refund_payload_invalid", "admin_token_required", operation.kind === "refund" ? "refund_preview_stale" : "correction_preview_stale"]) {
+      const storage = new MemoryStorage();
+      const store = makeStore(storage);
+      let cleared = 0;
+      await rejects(() => sendCagnotteAdminOperationWithDurableRecovery(store, operation, async () => {
+        throw new CagnotteAdminRequestError(code, code, false);
+      }, () => undefined, () => { cleared += 1; }), (error: unknown) => error instanceof CagnotteAdminRequestError && error.code === code);
+      equal(cleared, 1, `${operation.kind}:${code}`);
+      equal(store.load(operation.orderId).status, "empty", `${operation.kind}:${code}`);
+      const refreshed = operation.kind === "refund"
+        ? freezeCagnotteAdminRefund({ ...operation.payload, reference: `${operation.payload.reference}-next`, expectedPreviewVersion: "e".repeat(64) })
+        : freezeCagnotteAdminCorrection({ ...operation.payload, correctionReference: `${operation.payload.correctionReference}-next`, expectedPreviewVersion: "f".repeat(64) });
+      equal(await sendCagnotteAdminOperationWithDurableRecovery(store, refreshed, async () => "accepted"), "accepted");
+      equal(store.load(operation.orderId).status, "ready");
+      store.clearAfterResolution(refreshed);
+    }
+  }
+});
+
+await test("32 rejet definitif invalide les previews et deverrouille le modele", () => {
+  const operation = refundOperation();
+  const state = cagnotteAdminDefinitiveRejectionState({
+    ...createCagnotteAdminInitialState(),
+    phase: "ready",
+    refundPreview: {} as never,
+    correctionPreview: {} as never,
+    uncertain: true,
+    pendingOperation: operation,
+    recoveryBlocked: true,
+  }, new CagnotteAdminRequestError("Prévisualisation périmée.", "refund_preview_stale", false));
+  equal(state.phase, "ready");
+  equal(state.refundPreview, null);
+  equal(state.correctionPreview, null);
+  equal(state.uncertain, false);
+  equal(state.pendingOperation, null);
+  equal(state.recoveryBlocked, false);
+  match(state.notice, /périmée/i);
+});
+
+await test("33 echec de suppression apres rejet definitif conserve le verrou fail closed", async () => {
+  for (const operation of [refundOperation(), correctionOperation()]) {
+    for (const failure of ["throw", "silent"] as const) {
+      const storage = new MemoryStorage();
+      const store = makeStore(storage);
+      let cleared = 0;
+      if (failure === "throw") storage.failRemove = true;
+      else storage.silentRemove = true;
+      await rejects(() => sendCagnotteAdminOperationWithDurableRecovery(store, operation, async () => {
+        throw new CagnotteAdminRequestError("Conflit définitif.", "conflict", false);
+      }, () => undefined, () => { cleared += 1; }), /verrou local/);
+      storage.failRemove = false;
+      storage.silentRemove = false;
+      equal(cleared, 0);
+      equal(store.load(operation.orderId).status, "ready");
+    }
+  }
+});
+
+await test("34 retry deja incertain reste verrouille pour refund et correction sur 401 409 et 500", async () => {
+  for (const operation of [refundOperation(), correctionOperation()]) {
+    for (const [code, uncertain] of [["admin_token_required", false], ["refund_preview_stale", false], ["server_unavailable", true]] as const) {
+      const storage = new MemoryStorage();
+      const store = makeStore(storage);
+      store.persistBeforeSend(operation);
+      store.updateState(operation, "uncertain");
+      await rejects(() => retryCagnotteAdminFrozenOperationDurably(store, operation, operation.orderId, {
+        refund: async () => {
+          const during = store.load(operation.orderId);
+          equal(during.status === "ready" && during.record.state, "uncertain");
+          throw new CagnotteAdminRequestError(code, code, uncertain);
+        },
+        correction: async () => {
+          const during = store.load(operation.orderId);
+          equal(during.status === "ready" && during.record.state, "uncertain");
+          throw new CagnotteAdminRequestError(code, code, uncertain);
+        },
+      }), (error: unknown) => error instanceof CagnotteAdminRequestError && error.code === code);
+      const after = store.load(operation.orderId);
+      equal(after.status === "ready" && after.record.state, "uncertain", `${operation.kind}:${code}`);
+    }
+  }
+});
+
+console.log(`HOTFIX 4F2-H6 : ${tests} contrôles storage/controller réussis.`);
 
 function makeStore(storage: MemoryStorage, events?: StorageEvents) {
   return createCagnotteAdminFrozenOperationStore({ storage, now: () => NOW, subscribeToStorageChanges: events?.subscribe });
