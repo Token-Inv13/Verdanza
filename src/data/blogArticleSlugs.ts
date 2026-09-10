@@ -1,4 +1,5 @@
 export const publishedBlogArticleSlugs = [
+  "pourcentage-mg-g-ppm-analyse-cbd",
   "manucure-fleurs-cbd-feuilles-tiges",
   "photos-fleurs-cbd-lumiere-echelle",
   "calibre-fleurs-cbd-taille-tetes",

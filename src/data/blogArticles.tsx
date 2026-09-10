@@ -6,6 +6,269 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "pourcentage-mg-g-ppm-analyse-cbd",
+    title: "Analyse CBD : comprendre %, mg/g et ppm sans se tromper",
+    seoTitle: "Analyse CBD : comprendre %, mg/g et ppm | Verdanza",
+    description:
+      "Pourcentage, mg/g, mg/kg et ppm : apprenez à comparer les unités d'une analyse CBD, à vérifier leur base de calcul et à éviter les conversions trompeuses.",
+    excerpt:
+      "Une même concentration peut être exprimée en %, mg/g ou ppm. Ce guide explique les équivalences utiles et les vérifications à faire avant toute comparaison.",
+    category: "Guide qualité",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-09-10T12:40:00+02:00",
+    dateModified: "2026-09-10T12:40:00+02:00",
+    readingTime: "8 min",
+    status: "published",
+    images: {
+      square: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-1x1.webp",
+      landscape: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-4x3.webp",
+      wide: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-16x9.webp",
+    },
+    relatedSlugs: [
+      "comment-lire-analyse-cbd",
+      "etiquette-numero-lot-cbd-tracabilite",
+      "denominations-cbd-cbn-cbg",
+    ],
+    links: [
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/comment-lire-analyse-cbd",
+        label: "Lire une analyse CBD",
+      },
+      {
+        to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+        label: "Vérifier le numéro de lot",
+      },
+      {
+        to: "/blog/denominations-cbd-cbn-cbg",
+        label: "Comprendre CBD, CBN et CBG",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Un bulletin d'analyse peut exprimer une concentration en
+            pourcentage, en milligrammes par gramme, en milligrammes par
+            kilogramme ou en parties par million. Ces écritures ne se lisent
+            pas de la même manière, mais elles peuvent décrire une même
+            proportion lorsque la base de calcul est identique.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Une conversion d'unité ne rend pas deux résultats comparables par
+            elle-même. Il faut aussi vérifier le produit analysé, le numéro de
+            lot, la méthode, la date, la base de calcul et la molécule concernée.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "unites-concentration",
+        text: "Ce que mesurent les unités d'une analyse CBD",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une concentration massique met en relation la masse d'un composé
+            avec la masse de l'échantillon. Le symbole % signifie ici « pour
+            cent », tandis que mg/g indique un nombre de milligrammes par
+            gramme. mg/kg rapporte le résultat à un kilogramme, et ppm signifie
+            « parties par million ».
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Équivalences de concentration massique lorsque la base de calcul est la même.",
+          headers: ["Écriture", "Équivalence", "Lecture"],
+          rows: [
+            ["1 %", "10 mg/g", "Une part sur cent de la masse analysée."],
+            ["0,1 %", "1 mg/g", "Une part sur mille de la masse analysée."],
+            ["1 mg/g", "1 000 mg/kg", "Un milligramme par gramme d'échantillon."],
+            ["1 mg/kg", "1 ppm", "Une partie par million sur une base massique."],
+            ["1 %", "10 000 ppm", "Dix mille parties par million."],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "conversion-pourcentage-mg-g",
+        text: "Passer du pourcentage aux mg/g",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Pour une concentration exprimée sur une même base massique, il
+            suffit de multiplier le pourcentage par 10 pour obtenir des mg/g.
+            Ainsi, 4 % correspondent à 40 mg/g. Dans l'autre sens, 25 mg/g
+            correspondent à 2,5 %. Cette opération décrit uniquement un
+            changement d'unité, pas une nouvelle mesure.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "multiplier le pourcentage par 10 pour obtenir des mg/g ;",
+          "diviser les mg/g par 10 pour retrouver le pourcentage ;",
+          "conserver les décimales utiles au lieu d'arrondir trop tôt ;",
+          "vérifier que les deux résultats portent sur la même molécule ;",
+          "ne pas additionner des lignes dont les bases de calcul diffèrent.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "ppm-mg-kg",
+        text: "Comprendre le lien entre ppm et mg/kg",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Sur une base massique, 1 ppm correspond à 1 mg/kg. Cette unité est
+            pratique pour présenter de faibles concentrations. Pour passer des
+            mg/kg aux mg/g, il faut diviser par 1 000. Un résultat de 500 mg/kg
+            correspond donc à 0,5 mg/g, soit 0,05 % si toutes les valeurs
+            reposent sur la même base.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Le terme ppm peut être utilisé avec d'autres bases dans certains
+            domaines. Sur un bulletin, l'unité complète, la matrice et les notes
+            de méthode restent prioritaires sur une équivalence mémorisée.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "base-calcul",
+        text: "Pourquoi la base de calcul change la comparaison",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Certains laboratoires présentent les résultats sur le produit tel
+            qu'il a été reçu. D'autres tableaux peuvent mentionner une matière
+            sèche ou une correction particulière. Deux nombres convertis dans
+            la même unité peuvent donc rester différents parce qu'ils ne
+            décrivent pas exactement la même base.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "rechercher les mentions « tel quel », « matière sèche » ou leur équivalent ;",
+          "lire les notes placées sous le tableau de résultats ;",
+          "vérifier si l'incertitude de mesure est indiquée ;",
+          "comparer des analyses portant sur une matrice similaire ;",
+          "demander une précision au vendeur ou au laboratoire en cas d'ambiguïté.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "total-molecule",
+        text: "Ne pas confondre une molécule et une valeur totale",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une ligne « CBD » ne désigne pas nécessairement la même chose
+            qu'une ligne « CBD total ». Une valeur totale peut intégrer une
+            forme acide selon une formule précisée par le laboratoire. La
+            conversion de % vers mg/g ne résout pas cette différence de
+            définition. Le guide sur les {" "}
+            <Link to="/blog/denominations-cbd-cbn-cbg">
+              dénominations CBD, CBN et CBG
+            </Link>{" "}
+            aide à identifier les lignes avant de comparer les chiffres.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "nd-loq-lod",
+        text: "ND, LOD et LOQ : des mentions qui encadrent le résultat",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La limite de détection, souvent abrégée LOD, indique le niveau à
+            partir duquel la méthode distingue un signal. La limite de
+            quantification, ou LOQ, correspond au niveau à partir duquel un
+            résultat chiffré peut être établi selon les critères de la méthode.
+            La mention ND signifie généralement « non détecté » dans ces
+            conditions ; elle ne doit pas être automatiquement traduite par un
+            zéro absolu.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "methode-comparaison",
+        text: "Une méthode rapide pour comparer deux bulletins",
+      },
+      {
+        type: "list",
+        items: [
+          "confirmer que chaque bulletin correspond au bon produit et au bon lot ;",
+          "repérer la molécule ou la valeur totale réellement comparée ;",
+          "noter l'unité et la base de calcul de chaque résultat ;",
+          "convertir ensuite les valeurs vers une unité commune ;",
+          "tenir compte des LOD, LOQ, arrondis et incertitudes indiqués.",
+        ],
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Pour replacer ces unités dans l'ensemble du document, commencez par
+            le guide {" "}
+            <Link to="/blog/comment-lire-analyse-cbd">
+              comment lire une analyse CBD
+            </Link>. Le numéro de lot visible sur le bulletin doit également
+            correspondre à l'étiquette du produit afin que la comparaison soit
+            pertinente.
+          </>
+        ),
+      },
+      {
+        type: "links",
+        title: "Compléter la lecture d'une analyse",
+        links: [
+          {
+            to: "/blog/comment-lire-analyse-cbd",
+            label: "Lire les rubriques d'une analyse CBD",
+          },
+          {
+            to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+            label: "Relier l'analyse au numéro de lot",
+          },
+          {
+            to: "/qualite-conformite",
+            label: "Consulter les engagements qualité Verdanza",
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "manucure-fleurs-cbd-feuilles-tiges",
     title: "Manucure des fleurs CBD : que montrent feuilles, tiges et coupe ?",
     seoTitle: "Manucure des fleurs CBD : feuilles, tiges et coupe | Verdanza",

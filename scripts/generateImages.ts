@@ -59,6 +59,10 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" }
 > = {
+  "pourcentage-mg-g-ppm-analyse-cbd": {
+    label: "Unités d'analyse CBD",
+    kind: "analysis",
+  },
   "manucure-fleurs-cbd-feuilles-tiges": {
     label: "Manucure des fleurs CBD",
     sources: [
