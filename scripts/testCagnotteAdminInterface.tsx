@@ -24,7 +24,7 @@ function test(name: string, run: () => void | Promise<void>) {
   return Promise.resolve().then(run).then(() => { tests += 1; console.log(`OK [Interface admin] ${name}`); });
 }
 const inspection = fixture();
-const base: CagnotteAdminViewModel = { phase: "ready", inspection, mode: "refund", refundPreview: null, correctionPreview: null, notice: "", uncertain: false, pendingOperation: null, busy: false };
+const base: CagnotteAdminViewModel = { phase: "ready", inspection, mode: "refund", refundPreview: null, correctionPreview: null, notice: "", uncertain: false, pendingOperation: null, recoveryBlocked: false, busy: false };
 
 await test("garde normal desactive : aucun rendu ni appel", () => {
   equal(CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED, false);
@@ -139,8 +139,8 @@ await test("operation refund incertaine reste gelee jusqu a sa preuve exacte", a
   const raced = cagnotteAdminInspectionSuccessState(state, { ...inspection, history: [] });
   equal(raced.uncertain, true); equal(raced.pendingOperation, operation); ok(raced.refundPreview);
   const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...raced, phase: "ready" }} />);
-  match(html, /Résultat réseau incertain/); match(html, /Réinspecter avant toute nouvelle tentative/); match(html, /Rejouer exactement la même opération/);
-  match(html, /L’opération initiale n’est pas encore confirmée/); match(html, /Aucune nouvelle déclaration ne peut être créée/);
+  match(html, /Une opération précédente reste à confirmer/); match(html, /Réinspecter avant toute nouvelle tentative/); match(html, /Rejouer exactement l’opération précédente/);
+  match(html, /Type : remboursement/); match(html, /Référence métier : Reference-Figee/); match(html, /Aucune nouvelle déclaration ne peut être créée/);
   match(html, /Confirmer l’enregistrement<\/button>/); match(html, /button[^>]*disabled=""[^>]*>Confirmer l’enregistrement/);
   const wrongReference = cagnotteAdminInspectionSuccessState(raced, { ...inspection, history: [{ ...inspection.history[0], source: "admin", reference: "autre-reference" }] });
   equal(wrongReference.uncertain, true); equal(wrongReference.pendingOperation, operation);

@@ -54,6 +54,7 @@
     "test:order-refunds": "node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
     "test:cagnotte-admin-reviews": "node --import tsx scripts/runCagnotteLedgerTests.ts --admin-reviews-only",
     "test:cagnotte-admin-ui": "node --import tsx scripts/testCagnotteAdminInterface.tsx",
+    "test:cagnotte-admin-storage": "node --import tsx scripts/testCagnotteAdminFrozenOperationStorage.ts",
     "test:cagnotte-payment-links": "node --import tsx scripts/runCagnotteLedgerTests.ts --payment-links-only",
     "preview:cagnotte": "node --import tsx scripts/generateCagnottePreview.tsx",
     "test:fixed-price-migration": "node --import tsx scripts/testFixedPriceMigration.ts",

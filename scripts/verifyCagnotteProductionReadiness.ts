@@ -310,6 +310,8 @@ await check("workflow refund complet et inspection admin structurée prêts derr
   const eligibility = read("src/lib/cagnotteAdminEligibility.ts");
   const service = read("src/services/cagnotteAdminService.ts");
   const adminTypes = read("src/types/cagnotteAdmin.ts");
+  const adminController = read("src/lib/cagnotteAdminController.ts");
+  const recoveryStorage = read("src/lib/cagnotteAdminFrozenOperationStorage.ts");
   for (const action of ["inspect", "preview", "record_confirmed", "preview_correction", "record_correction"]) assert.match(refunds, new RegExp(`action: "${action}"`));
   assert.ok(route.indexOf("dependencies.enabled !== true") < route.indexOf("request.body"));
   assert.match(refunds, /refund_historical_order_not_supported/);
@@ -323,6 +325,15 @@ await check("workflow refund complet et inspection admin structurée prêts derr
   assert.match(admin, /Réinspecter avant toute nouvelle tentative/);
   assert.match(admin, /pendingRefund\.current \?\?=/);
   assert.match(admin, /pendingCorrection\.current \?\?=/);
+  assert.match(admin, /frozenOperationStore\.subscribe\(orderId/);
+  assert.match(admin, /Une opération précédente reste à confirmer/);
+  assert.doesNotMatch(admin, /window\.localStorage|localStorage\.(?:getItem|setItem|removeItem)/);
+  assert.ok(adminController.indexOf("store.persistBeforeSend(operation)") < adminController.indexOf("const result = await send(operation)"));
+  assert.match(adminController, /resolveCagnotteAdminFrozenOperationFromInspection[\s\S]*isCagnotteAdminFrozenOperationRecorded[\s\S]*store\.clearAfterResolution/);
+  assert.match(recoveryStorage, /verdanza:cagnotte-admin:frozen-operation:v1:/);
+  assert.match(recoveryStorage, /schemaVersion:\s*typeof CAGNOTTE_ADMIN_FROZEN_OPERATION_SCHEMA_VERSION/);
+  assert.match(recoveryStorage, /window\.localStorage/);
+  assert.match(recoveryStorage, /strictObject/);
   assert.doesNotMatch(service, /\/api\/cagnotte|CAGNOTTE_READ_CURSOR_SECRET/);
 });
 
