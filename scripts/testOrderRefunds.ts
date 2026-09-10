@@ -314,12 +314,22 @@ try {
     await fixture({ beneficiary: f.uid, amounts: [20000], usedCagnotteCents: 2160, initialWalletCents: 0, paymentProgram: null });
     eq(await walletBalance(f), [0, 0, 0, 0]);
     await record(otherGain, 10000, "other-order-regularization"); eq(await walletBalance(f), [0, 0, 0, 500]);
+    const beforeOwnRefund = await call({ action: "inspect", orderId: f.id }); equal(beforeOwnRefund.status, 200);
+    equal((beforeOwnRefund.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection).operationalState.code, "delivered_available");
     const r = await record(f, 2500, "mixed-other-regularization");
     equal(r.result.productFinancialCents, 2300); equal(r.result.correction.regularizationDeltaCents, 115);
     equal(r.result.restitution.compensationCents, 200); equal(r.result.restitution.availableIncreaseCents, 0);
     eq(await walletBalance(f), [0, 0, 0, 415]);
     const inspected = await call({ action: "inspect", orderId: f.id }); equal(inspected.status, 200);
-    equal((inspected.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection).operationalState.code, "regularization_pending");
+    equal((inspected.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection).operationalState.code, "refund_recorded");
+    const cancelled = await fixture({ beneficiary: f.uid, ready: false }); await change(cancelled, { orderStatus: "cancelled" }, null);
+    const notEnrolled = await fixture({ beneficiary: f.uid, ready: false, accrualEnrollment: "not_enrolled" });
+    const paymentPending = await fixture({ beneficiary: f.uid, ready: false }); await change(paymentPending, paid);
+    for (const [candidate, expected] of [[cancelled, "cancelled"], [notEnrolled, "accrual_not_enrolled"], [paymentPending, "payment_confirmed_pending"]] as const) {
+      const response = await call({ action: "inspect", orderId: candidate.id }); equal(response.status, 200);
+      const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+      equal(result.operationalState.code, expected); equal(result.wallet?.regularizationCents, 415);
+    }
     await assertWalletJournal(db, f.uid);
   });
   await test("gain suspendu : consommation prouvee et restitution sans droit retroactif", async () => {
@@ -767,13 +777,35 @@ try {
     equal(result.financing.cagnotteCents, 800); equal(result.financing.externalProductsCents, 9200);
     const refundPreview = await call(selection(f)); equal(refundPreview.status, 200, JSON.stringify(refundPreview)); equal(refundPreview.stats.writes, 0);
   });
-  await test("acquisition not_enrolled refuse un droit de gain pourtant canonique", async () => {
-    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000, accrualEnrollment: "not_enrolled" });
-    await applyCagnotteLedgerOperation({ db, program: accrualProgram, command: { event: "payment_and_delivery_confirmed", order: {
-      orderId: f.id, beneficiaryId: f.uid, programVersion: program.programVersion, createdAtEpochMs: 2000, snapshot: f.snapshot,
-    } } });
-    const response = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
-    equal(response.stats.writes, 0);
+  await test("acquisition not_enrolled refuse les vrais droits pending et available", async () => {
+    for (const event of ["payment_confirmed", "payment_and_delivery_confirmed"] as const) {
+      const f = await fixture({ ready: false, usedCagnotteCents: 800, initialWalletCents: 2000, accrualEnrollment: "not_enrolled" });
+      await applyCagnotteLedgerOperation({ db, program: accrualProgram, command: { event, order: {
+        orderId: f.id, beneficiaryId: f.uid, programVersion: program.programVersion, createdAtEpochMs: 2000, snapshot: f.snapshot,
+      } } });
+      const storedAccrual = (await db.collection("cagnotteAccruals").doc(f.id).get()).data()!;
+      equal(storedAccrual.credited, true); equal(storedAccrual.compartment, event === "payment_confirmed" ? "pending" : "available");
+      const response = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(response.stats.writes, 0);
+    }
+  });
+  await test("annulation not_enrolled accepte seulement le tombstone canonique sans credit", async () => {
+    const f = await fixture({ ready: false, usedCagnotteCents: 800, initialWalletCents: 2000, accrualEnrollment: "not_enrolled" });
+    await cancelReviewedUnpaid(f);
+    const response = await call({ action: "inspect", orderId: f.id }); equal(response.status, 200, JSON.stringify(response)); equal(response.stats.writes, 0);
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(result.enrollment.enrolled, false); equal(result.operationalState.code, "cancelled");
+    eq(result.accrual, { present: true, initialGainCents: 0, remainingGainCents: 0, paymentConfirmed: false,
+      deliveryConfirmed: false, credited: false, compartment: "none", cancelled: true });
+    equal(result.reservation.state, "released");
+    await rejectMovementMutation(f, "cancelled", { currency: "USD" });
+    const accrualRef = db.collection("cagnotteAccruals").doc(f.id);
+    const original = (await accrualRef.get()).data()!;
+    try {
+      await accrualRef.set({ ...original, credited: true, compartment: "pending", remainingGainCents: 1 });
+      const rejected = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(rejected.stats.writes, 0);
+    } finally { await accrualRef.set(original); }
   });
   await test("inspection derive les etats pending available et cancelled du journal valide", async () => {
     const pendingOrder = await fixture({ ready: false }); await change(pendingOrder, paid);
@@ -796,6 +828,7 @@ try {
     equal(result.wallet?.availableCents, 1745); equal(result.reservation.applicable, true); equal(result.reservation.state, "consumed");
     equal(result.reservation.amountCents, 800); equal(result.reservation.cumulativeRestitutedCents, 200);
     equal(result.refund.history.length, 1); equal(result.refund.latestRevision, 0); equal(result.operationalState.code, "refund_recorded");
+    equal(result.history[0].source, "admin"); equal(result.history[0].reference, "readiness-inspection");
     ok(result.movements.some((movement) => movement.event === "credit_refunded_after_return"));
     const movements = JSON.stringify(result.movements);
     for (const forbidden of [f.uid, actor.email!, "Synthetic", "synthetic@example.test", "readiness-inspection", "payload"]) equal(movements.includes(forbidden), false);

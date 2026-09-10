@@ -1,5 +1,5 @@
 import React from "react";
-import { doesNotMatch, equal, match, ok, throws } from "node:assert/strict";
+import { doesNotMatch, equal, match, ok, rejects, throws } from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -8,8 +8,8 @@ import {
   CagnotteAdminToolsView,
   type CagnotteAdminViewModel,
 } from "../src/components/cagnotte/CagnotteAdminTools.js";
-import { cagnotteAdminFailureState, cagnotteAdminFormUpdatedState, cagnotteAdminInspectionSuccessState, cagnotteAdminLoadingState } from "../src/lib/cagnotteAdminState.js";
-import { clearCagnotteAdminPendingOperation, createCagnotteAdminRefreshChannel, createCagnotteAdminResponseIdentity, eurosInputToCents, refreshCagnotteAdminAfterWrite, runCagnotteAdminLocked } from "../src/lib/cagnotteAdminController.js";
+import { cagnotteAdminFailureState, cagnotteAdminFormUpdatedState, cagnotteAdminFrozenOperationState, cagnotteAdminInspectionSuccessState, cagnotteAdminLoadingState } from "../src/lib/cagnotteAdminState.js";
+import { clearCagnotteAdminPendingOperation, createCagnotteAdminRefreshChannel, createCagnotteAdminResponseIdentity, eurosInputToCents, freezeCagnotteAdminCorrection, freezeCagnotteAdminRefund, refreshCagnotteAdminAfterWrite, retryCagnotteAdminFrozenOperation, runCagnotteAdminLocked } from "../src/lib/cagnotteAdminController.js";
 import { CagnotteAdminRequestError } from "../src/services/cagnotteAdminService.js";
 import { cagnotteRefundDateTimeLocalToIso, cagnotteRefundDateTimeLocalValue } from "../src/lib/cagnotteAdminDate.js";
 import { formatAdminDateTime } from "../src/lib/adminDatePresentation.js";
@@ -24,7 +24,7 @@ function test(name: string, run: () => void | Promise<void>) {
   return Promise.resolve().then(run).then(() => { tests += 1; console.log(`OK [Interface admin] ${name}`); });
 }
 const inspection = fixture();
-const base: CagnotteAdminViewModel = { phase: "ready", inspection, mode: "refund", refundPreview: null, correctionPreview: null, notice: "", uncertain: false, busy: false };
+const base: CagnotteAdminViewModel = { phase: "ready", inspection, mode: "refund", refundPreview: null, correctionPreview: null, notice: "", uncertain: false, pendingOperation: null, busy: false };
 
 await test("garde normal desactive : aucun rendu ni appel", () => {
   equal(CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED, false);
@@ -49,7 +49,7 @@ await test("inspection lisible distingue inscription, gain commande et portefeui
   const html = renderToStaticMarkup(<CagnotteAdminToolsView model={base} />);
   for (const text of ["REMBOURSEMENT/CORRECTION ENREGISTRÉ", "Inscription de la commande", "Acquisition fidélité :", "inscrite", "Gain de cette commande",
     "Gain estimé", "Gain en attente", "Gain disponible", "Gain annulé ou réduit", "Portefeuille global du client",
-    "Disponible global", "Réservation de cette commande", "Consommée", "Journal cagnotte de la commande"]) match(html, new RegExp(text));
+    "Disponible global", "La régularisation est globale au client et peut provenir d’autres commandes.", "Réservation de cette commande", "Consommée", "Journal cagnotte de la commande"]) match(html, new RegExp(text));
 });
 await test("historique legacy partiel affiche un avertissement discret sans corruption", () => {
   const partial = { ...inspection, movementHistory: { complete: false, omittedLegacyUndatedCount: 2 } };
@@ -59,12 +59,11 @@ await test("historique legacy partiel affiche un avertissement discret sans corr
   match(html, /\(2\)/);
   doesNotMatch(html, /corruption/i);
 });
-await test("etats paiement en attente, livre, annule et regularisation sont explicites", () => {
+await test("etats par commande paiement en attente livre et annule sont explicites", () => {
   const cases = [
     [{ code: "payment_confirmed_pending" as const, label: "PAIEMENT CONFIRMÉ", detail: "5 % EN ATTENTE" }, /PAIEMENT CONFIRMÉ[\s\S]*5 % EN ATTENTE/],
     [{ code: "delivered_available" as const, label: "LIVRÉE", detail: "GAIN DISPONIBLE POUR CETTE COMMANDE" }, /LIVRÉE[\s\S]*Gain disponible pour cette commande/],
     [{ code: "cancelled" as const, label: "ANNULÉE", detail: "Le gain de cette commande est annulé." }, /ANNULÉE/],
-    [{ code: "regularization_pending" as const, label: "RÉGULARISATION À COMPENSER", detail: "Les gains futurs absorberont cette régularisation." }, /RÉGULARISATION À COMPENSER/],
   ] as const;
   for (const [operationalState, pattern] of cases) match(renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: { ...inspection, operationalState } }} />), pattern);
 });
@@ -122,29 +121,58 @@ await test("mutation en cours desactive les controles et expose aria-busy", () =
   const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, busy: true }} />);
   match(html, /aria-busy="true"/); match(html, /<fieldset disabled=""/); match(html, /button[^>]*disabled=""/);
 });
-await test("etat incertain reste verrouille apres toute erreur et modification locale", () => {
-  let state = cagnotteAdminFailureState(base, new CagnotteAdminRequestError("Réponse absente", "response_unknown", true));
-  equal(state.uncertain, true);
+await test("operation refund incertaine reste gelee jusqu a sa preuve exacte", async () => {
+  const input = { orderId: inspection.order.id, additionalReturns: [{ lineId: "line-0", additionalNetCents: 2500 }], deliveryRefundCents: 0,
+    source: "admin" as const, reference: "Reference-Figee", declaredFinancialCents: 2300, reason: "product_return" as const,
+    confirmedAt: "2026-09-06T10:00:00.000Z", expectedPreviewVersion: "c".repeat(64) };
+  const operation = freezeCagnotteAdminRefund(input);
+  input.reference = "nouvelle-reference-interdite";
+  let state = cagnotteAdminFrozenOperationState({ ...base, refundPreview: refund() }, operation,
+    new CagnotteAdminRequestError("Réponse absente", "response_unknown", true));
+  equal(state.uncertain, true); equal(operation.payload.reference, "Reference-Figee");
   for (const [code, uncertain] of [["admin_token_required", false], ["admin_required", false], ["conflict", false], ["rate_limited", false], ["server", true], ["network", true]] as const) {
     state = cagnotteAdminFailureState(state, new CagnotteAdminRequestError(code, code, uncertain), "error");
-    equal(state.uncertain, true, code);
+    equal(state.uncertain, true, code); equal(state.pendingOperation, operation, code);
   }
   state = cagnotteAdminLoadingState(state); equal(state.uncertain, true);
   state = cagnotteAdminFormUpdatedState(state); equal(state.uncertain, true);
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...state, phase: "ready", inspection, refundPreview: refund() }} />);
-  match(html, /Résultat réseau incertain/); match(html, /Réinspecter avant toute nouvelle tentative/);
+  const raced = cagnotteAdminInspectionSuccessState(state, { ...inspection, history: [] });
+  equal(raced.uncertain, true); equal(raced.pendingOperation, operation); ok(raced.refundPreview);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...raced, phase: "ready" }} />);
+  match(html, /Résultat réseau incertain/); match(html, /Réinspecter avant toute nouvelle tentative/); match(html, /Rejouer exactement la même opération/);
+  match(html, /L’opération initiale n’est pas encore confirmée/); match(html, /Aucune nouvelle déclaration ne peut être créée/);
   match(html, /Confirmer l’enregistrement<\/button>/); match(html, /button[^>]*disabled=""[^>]*>Confirmer l’enregistrement/);
+  const wrongReference = cagnotteAdminInspectionSuccessState(raced, { ...inspection, history: [{ ...inspection.history[0], source: "admin", reference: "autre-reference" }] });
+  equal(wrongReference.uncertain, true); equal(wrongReference.pendingOperation, operation);
+  const committed = { ...inspection, history: [{ ...inspection.history[0], source: "admin" as const, reference: "reference-figee" }] };
+  let replayed = "";
+  await retryCagnotteAdminFrozenOperation(operation, inspection.order.id, { refund: async (payload) => { replayed = JSON.stringify(payload); return { ...refund(), alreadyRecorded: true }; }, correction: async () => correctionReview() });
+  equal(replayed, JSON.stringify(operation.payload));
+  const resolved = cagnotteAdminInspectionSuccessState(raced, committed, "Déclaration retrouvée");
+  equal(resolved.uncertain, false); equal(resolved.pendingOperation, null); equal(resolved.refundPreview, null);
 });
-await test("inspection reussie deverrouille et invalide previews et payloads", () => {
-  const locked = { ...base, uncertain: true, refundPreview: refund(), correctionPreview: correctionReview() };
-  const refreshed = cagnotteAdminInspectionSuccessState(locked, inspection, "Inspection actualisée");
-  equal(refreshed.uncertain, false); equal(refreshed.refundPreview, null); equal(refreshed.correctionPreview, null);
-  const refundPending = { current: { reference: "ancienne-reference" } as { reference: string } | null };
-  const correctionPending = { current: { reference: "ancienne-correction" } as { reference: string } | null };
-  clearCagnotteAdminPendingOperation(refundPending); clearCagnotteAdminPendingOperation(correctionPending);
-  equal(refundPending.current, null); equal(correctionPending.current, null);
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={refreshed} />);
-  match(html, /button[^>]*disabled=""[^>]*>Confirmer l’enregistrement/);
+await test("operation correction incertaine survit a la course et ne change pas de commande", async () => {
+  const input = { orderId: inspection.order.id, targetEventId: inspection.history[0].id, expectedRevision: 0,
+    replacementReturns: [{ lineId: "line-0", additionalNetCents: 2500 }], deliveryRefundCents: 0, declaredFinancialCents: 2300,
+    correctionReason: "Correction figée", correctionReference: "Correction-Figee", expectedPreviewVersion: "d".repeat(64) };
+  const operation = freezeCagnotteAdminCorrection(input);
+  input.correctionReference = "seconde-reference-interdite";
+  let state = cagnotteAdminFrozenOperationState({ ...base, mode: "correction", correctionPreview: correctionReview() }, operation,
+    new CagnotteAdminRequestError("Serveur indisponible", "server", true));
+  state = cagnotteAdminInspectionSuccessState(state, inspection);
+  equal(state.uncertain, true); equal(state.pendingOperation, operation); ok(state.correctionPreview);
+  await rejects(() => retryCagnotteAdminFrozenOperation(operation, "AUTRE-COMMANDE", { refund: async () => refund(), correction: async () => correctionReview() }), /autre commande/);
+  const committed = { ...inspection, history: [...inspection.history, { id: "e".repeat(64), type: "correction" as const, revision: 1,
+    recordedAt: "2026-09-06T10:05:00.000Z", reference: "correction-figee", declaredFinancialCents: 2300,
+    returnedProductNetCents: 2500, financialCents: 2300, cagnotteRestitutionCents: 200, resultingAvailableCents: 1660,
+    effective: true, targetEventId: inspection.history[0].id }] };
+  let replayed = "";
+  await retryCagnotteAdminFrozenOperation(operation, inspection.order.id, { refund: async () => refund(), correction: async (payload) => { replayed = JSON.stringify(payload); return { ...correctionReview(), alreadyRecorded: true }; } });
+  equal(replayed, JSON.stringify(operation.payload)); equal(operation.payload.correctionReference, "Correction-Figee");
+  const resolved = cagnotteAdminInspectionSuccessState(state, committed);
+  equal(resolved.uncertain, false); equal(resolved.pendingOperation, null); equal(resolved.correctionPreview, null);
+  const pending = { current: operation };
+  clearCagnotteAdminPendingOperation(pending); equal(pending.current, null);
 });
 await test("acquisition non inscrite affiche zero gain mais conserve financement et reservation", () => {
   const notEnrolled: CagnotteAdminInspection = { ...inspection,
@@ -254,7 +282,7 @@ function fixture(): CagnotteAdminInspection {
     movements: [{ id: "f".repeat(64), event: "credit_refunded_after_return", pendingDeltaCents: 0, availableDeltaCents: 200, reservedDeltaCents: 0, regularizationDeltaCents: 0, recordedAtEpochMs: 1000 }],
     movementHistory: { complete: true, omittedLegacyUndatedCount: 0 },
     lines: [{ lineId: "line-0", label: "Produit fictif", initialNetCents: 10000, returnedNetCents: 2500, remainingNetCents: 7500 }], effective,
-    history: [{ id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T10:00:00.000Z", reference: "demo", declaredFinancialCents: 2300,
+    history: [{ id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T10:00:00.000Z", reference: "demo", source: "admin", declaredFinancialCents: 2300,
       returnedProductNetCents: 2500, financialCents: 2300, cagnotteRestitutionCents: 200, resultingAvailableCents: 1745, effective: true }],
     correctionTarget: { eventId: "a".repeat(64), revision: 0, effective }, unpaid: { reservedAmountCents: 800, reservationState: "reserved", reservedAt: "2026-09-02T08:00:00.000Z", ageHours: 100, reviewRequired: true,
       payment: { status: "payment_link_sent", uncertain: true, confirmedAt: null }, linkTransmission: { requestId: "demo", status: "unknown", transportStatus: "unknown", sendingActive: false, uncertain: true },
