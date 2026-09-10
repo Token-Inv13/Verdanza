@@ -56,3 +56,7 @@ export function createCagnotteAdminResponseIdentity() {
     invalidate() { current += 1; },
   };
 }
+
+export function clearCagnotteAdminPendingOperation<T>(pending: { current: T | null }) {
+  pending.current = null;
+}

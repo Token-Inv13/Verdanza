@@ -634,6 +634,7 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
     const order = orderFromSnapshot(orderDoc);
     if (!hasCagnotteEnrollment(order)) fail("refund_historical_order_not_supported");
     const enrollment = validateOrderCagnotteEnrollment(order);
+    const accrualEnrollment = enrollment.accrualEnrollment ?? "enrolled";
     const internalOrder = {
       orderId: order.id,
       beneficiaryId: enrollment.beneficiaryId,
@@ -652,6 +653,9 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
     try {
       wallet = walletDoc.exists ? readCagnotteWallet(walletDoc.data(), enrollment.beneficiaryId) : null;
     } catch {
+      fail("refund_journal_requires_verification");
+    }
+    if (accrualEnrollment === "not_enrolled" && accrualDoc.exists) {
       fail("refund_journal_requires_verification");
     }
     if (accrualDoc.exists) {
@@ -706,7 +710,7 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
     const cancelled = accrual?.cancelled ?? (order.orderStatus === "cancelled" || order.paymentStatus === "cancelled" || Boolean(order.cancelledAt));
     const accrualView = {
       present: accrual !== null,
-      initialGainCents: accrual?.initialGainCents ?? enrollment.snapshot.loyaltyCents,
+      initialGainCents: accrual?.initialGainCents ?? (accrualEnrollment === "enrolled" ? enrollment.snapshot.loyaltyCents : 0),
       remainingGainCents: accrual?.remainingGainCents ?? 0,
       paymentConfirmed: accrual?.paymentConfirmed ?? false,
       deliveryConfirmed: accrual?.deliveryConfirmed ?? false,
@@ -732,7 +736,7 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
         effective: event.targetEventId === lastOriginal?.id && event.revision === corrections.filter((entry) => entry.event.targetEventId === event.targetEventId).length })),
     ].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt) || b.revision - a.revision ||
       Number(b.type === "correction") - Number(a.type === "correction"));
-    const operationalState = adminOperationalState({ accrual: accrualView, wallet, hasRefund: refundHistory.length > 0 });
+    const operationalState = adminOperationalState({ accrualEnrollment, accrual: accrualView, wallet, hasRefund: refundHistory.length > 0 });
     return {
       kind: "administrative_refund_inspection" as const,
       order: {
@@ -753,7 +757,8 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
       },
       operationalState,
       enrollment: {
-        enrolled: true as const,
+        enrolled: accrualEnrollment === "enrolled",
+        accrualEnrollment,
         beneficiaryId: enrollment.beneficiaryId,
         programVersion: enrollment.programVersion,
         calculationVersion: enrollment.calculationVersion,
@@ -984,6 +989,7 @@ function projectValidatedMovement(id: string, raw: Record<string, unknown>): Ins
 }
 
 function adminOperationalState(input: {
+  accrualEnrollment: "enrolled" | "not_enrolled";
   accrual: {
     remainingGainCents: number;
     paymentConfirmed: boolean;
@@ -993,6 +999,10 @@ function adminOperationalState(input: {
   wallet: CagnotteWallet | null;
   hasRefund: boolean;
 }) {
+  if (input.accrualEnrollment === "not_enrolled") {
+    return { code: "accrual_not_enrolled" as const, label: "AUCUN GAIN POUR CETTE COMMANDE",
+      detail: "La commande utilise éventuellement la cagnotte, mais l’acquisition fidélité n’était pas active lors de sa création." };
+  }
   if ((input.wallet?.regularizationCents ?? 0) > 0) {
     return { code: "regularization_pending" as const, label: "RÉGULARISATION À COMPENSER", detail: "Les gains futurs absorberont cette régularisation." };
   }
@@ -1592,7 +1602,19 @@ function stable(value: unknown): string {
 function hash(value: unknown) { return createHash("sha256").update(stable(value)).digest("hex"); }
 
 function emitOperationalLog(log: ((entry: OrderRefundOperationalLog) => void) | undefined, entry: OrderRefundOperationalLog) {
-  if (log) log(entry);
-  else console.info(JSON.stringify(entry));
+  try {
+    if (log) log(entry);
+    else console.info(JSON.stringify(entry));
+  } catch {
+    try {
+      console.warn(JSON.stringify({
+        event: "cagnotte_operational_log_failed",
+        originalEvent: entry.event,
+        orderHash: entry.orderHash,
+      }));
+    } catch {
+      // Observability is best-effort and cannot alter an already committed result.
+    }
+  }
 }
 function fail(code: string, status = 409): never { throw new OrderRefundError(code, status); }

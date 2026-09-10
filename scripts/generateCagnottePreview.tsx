@@ -281,7 +281,7 @@ function administrationInspectionFixture(): CagnotteAdminInspection {
       orderStatus: "delivered", paymentStatus: "paid", totalCents: 10000, paymentAmountCents: 9200, deliveryCents: 0 },
     financing: { productsNetCents: 10000, cagnotteCents: 800, externalProductsCents: 9200, externalTotalCents: 9200, deliveryCents: 0 },
     operationalState: { code: "refund_recorded", label: "REMBOURSEMENT/CORRECTION ENREGISTRÉ", detail: "Consultez l’historique administratif effectif." },
-    enrollment: { enrolled: true, beneficiaryId: "client-demo", programVersion: "programme-demo-v1", calculationVersion: "cagnotte-math-v1", createdAtEpochMs: 1000 },
+    enrollment: { enrolled: true, accrualEnrollment: "enrolled", beneficiaryId: "client-demo", programVersion: "programme-demo-v1", calculationVersion: "cagnotte-math-v1", createdAtEpochMs: 1000 },
     accrual: { present: true, initialGainCents: 460, remainingGainCents: 345, paymentConfirmed: true, deliveryConfirmed: true, credited: true, compartment: "available", cancelled: false },
     wallet: { pendingCents: 0, availableCents: 1745, reservedCents: 0, regularizationCents: 0 },
     reservation: { applicable: true, amountCents: 800, state: "consumed", requiresReview: false, cumulativeRestitutedCents: 200 },

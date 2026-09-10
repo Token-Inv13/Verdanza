@@ -27,6 +27,13 @@ const confirmDate = "2000-01-02T00:00:00.000Z";
 const paid = { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" } as const;
 let seq = 0, tests = 0;
 async function test(name: string, run: () => Promise<unknown>) { try { await run(); tests++; console.log(`OK [Remboursements 4C] ${name}`); } catch (error) { console.error(`FAIL ${name}`); throw error; } }
+async function captureWarnings<T>(run: () => Promise<T>) {
+  const warnings: string[] = [];
+  const previous = console.warn;
+  console.warn = (...args: unknown[]) => { warnings.push(args.map(String).join(" ")); };
+  try { return { result: await run(), warnings }; }
+  finally { console.warn = previous; }
+}
 async function fundWallet(uid: string, amountCents: number, orderId: string) {
   const snapshot = calculateCagnotte({ lines: [{ lineId: "funding-line", initialCents: amountCents * 20 }], discounts: [],
     requestedCagnotteCents: 0, availableCagnotteCents: 0, advantages: [] });
@@ -36,7 +43,8 @@ async function fundWallet(uid: string, amountCents: number, orderId: string) {
   } } });
 }
 async function fixture(options: { amounts?: number[]; delivery?: number; discount?: number; gift?: boolean; enrolled?: boolean; ready?: boolean; beneficiary?: string;
-  usedCagnotteCents?: number; initialWalletCents?: number; paymentProgram?: CagnotteTestProgram | null } = {}) {
+  usedCagnotteCents?: number; initialWalletCents?: number; paymentProgram?: CagnotteTestProgram | null;
+  accrualEnrollment?: "enrolled" | "not_enrolled" } = {}) {
   const id = `refund-order-${++seq}`, uid = options.beneficiary ?? `refund-customer-${seq}`;
   const amounts = options.amounts ?? [10000];
   const lines = amounts.map((initialCents, index) => ({ lineId: `line-${index}`, initialCents }));
@@ -60,7 +68,8 @@ async function fixture(options: { amounts?: number[]; delivery?: number; discoun
     items: snapshot.lines.map((l) => ({ lineId: l.lineId, productId: "refund-product", name: "Synthetic", quantity: 1, unitPrice: l.initialCents / 100, lineTotal: l.initialCents / 100 })),
   };
   if (options.enrolled !== false) data.cagnotte = { schemaVersion: 1, beneficiaryId: uid, programVersion: program.programVersion,
-    calculationVersion: "cagnotte-math-v1", createdAtEpochMs: 2000, snapshot };
+    calculationVersion: "cagnotte-math-v1", createdAtEpochMs: 2000, snapshot,
+    ...(options.accrualEnrollment ? { accrualEnrollment: options.accrualEnrollment } : {}) };
   if (snapshot.appliedCagnotteCents > 0) {
     const intent = createCagnotteReservationIntent({ orderId: id, beneficiaryId: uid, createdAtEpochMs: 2000,
       calculation: { lines: [...lines, ...(options.gift ? [{ lineId: "gift", initialCents: 0, isGift: true as const }] : [])],
@@ -137,7 +146,7 @@ async function invoke(handler: ReturnType<typeof createOrderRefundHandler>, body
   await handler({ method, body, headers } as VercelRequestLike, response as unknown as VercelResponseLike);
   return { status, ...payload };
 }
-type Options = { identity?: VerifiedFirebaseUser | Error; noToken?: boolean; enabled?: boolean; fail?: boolean; loseAck?: boolean; before?: () => Promise<void>; betweenAttempts?: () => Promise<void>; logs?: OrderRefundOperationalLog[] };
+type Options = { identity?: VerifiedFirebaseUser | Error; noToken?: boolean; enabled?: boolean; fail?: boolean; loseAck?: boolean; before?: () => Promise<void>; betweenAttempts?: () => Promise<void>; logs?: OrderRefundOperationalLog[]; loggerThrows?: boolean };
 async function call(body: Record<string, unknown>, options: Options = {}) {
   let transactions = 0, writes = 0, walletWrites = 0, callbacks = 0, verificationCalls = 0;
   const checked = new Proxy(db, { get(target, key) {
@@ -174,7 +183,7 @@ async function call(body: Record<string, unknown>, options: Options = {}) {
   } }) as Firestore;
   const handler = createOrderRefundHandler({ enabled: options.enabled ?? true, getDb: () => checked, now: clock,
     verifyToken: async () => { verificationCalls++; if (options.identity instanceof Error) throw options.identity; return options.identity ?? actor; },
-    log: (entry) => options.logs?.push(entry) });
+    log: (entry) => { options.logs?.push(entry); if (options.loggerThrows) throw new Error("Synthetic logger failure"); } });
   return { ...await invoke(handler, { ...body, ...(options.noToken ? {} : { authToken: "synthetic" }) }), stats: { transactions, writes, walletWrites, callbacks, verificationCalls } };
 }
 async function preview(body: Record<string, unknown>) { const r = await call(body); equal(r.status, 200, JSON.stringify(r)); equal(r.stats.writes, 0); return r.result!; }
@@ -730,10 +739,41 @@ try {
     const response = await call({ action: "inspect", orderId: f.id }); equal(response.status, 200, JSON.stringify(response));
     equal(response.stats.writes, 0); eq(await dump(), before);
     const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
-    equal(result.enrollment.enrolled, true); equal(result.enrollment.beneficiaryId, f.uid);
+    equal(result.enrollment.enrolled, true); equal(result.enrollment.accrualEnrollment, "enrolled"); equal(result.enrollment.beneficiaryId, f.uid);
     equal(result.accrual.present, false); equal(result.accrual.initialGainCents, 500); equal(result.accrual.compartment, "none");
     equal(result.wallet, null); equal(result.reservation.applicable, false);
     equal(result.operationalState.code, "enrolled_payment_pending"); equal(result.operationalState.detail, "PAIEMENT À CONFIRMER");
+  });
+  await test("inscription acquisition explicite conserve le comportement existant", async () => {
+    const f = await fixture({ ready: false, accrualEnrollment: "enrolled" });
+    const response = await call({ action: "inspect", orderId: f.id }); equal(response.status, 200, JSON.stringify(response));
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(result.enrollment.enrolled, true); equal(result.enrollment.accrualEnrollment, "enrolled");
+    equal(result.accrual.initialGainCents, 500); equal(result.operationalState.code, "enrolled_payment_pending");
+  });
+  await test("acquisition drain et reservation consommee restent inspectables sans gain hypothetique", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000, accrualEnrollment: "not_enrolled" });
+    equal((await stored(f)).cagnotte.accrualEnrollment, "not_enrolled");
+    equal((await db.collection("cagnotteAccruals").doc(f.id).get()).exists, false);
+    equal((await db.collection("cagnotteReservations").doc(f.id).get()).data()!.state, "consumed");
+    const response = await call({ action: "inspect", orderId: f.id }); equal(response.status, 200, JSON.stringify(response)); equal(response.stats.writes, 0);
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(result.enrollment.enrolled, false); equal(result.enrollment.accrualEnrollment, "not_enrolled");
+    eq(result.accrual, { present: false, initialGainCents: 0, remainingGainCents: 0, paymentConfirmed: false,
+      deliveryConfirmed: false, credited: false, compartment: "none", cancelled: false });
+    equal(result.operationalState.code, "accrual_not_enrolled");
+    equal(result.operationalState.label, "AUCUN GAIN POUR CETTE COMMANDE");
+    equal(result.reservation.applicable, true); equal(result.reservation.state, "consumed"); equal(result.reservation.amountCents, 800);
+    equal(result.financing.cagnotteCents, 800); equal(result.financing.externalProductsCents, 9200);
+    const refundPreview = await call(selection(f)); equal(refundPreview.status, 200, JSON.stringify(refundPreview)); equal(refundPreview.stats.writes, 0);
+  });
+  await test("acquisition not_enrolled refuse un droit de gain pourtant canonique", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000, accrualEnrollment: "not_enrolled" });
+    await applyCagnotteLedgerOperation({ db, program: accrualProgram, command: { event: "payment_and_delivery_confirmed", order: {
+      orderId: f.id, beneficiaryId: f.uid, programVersion: program.programVersion, createdAtEpochMs: 2000, snapshot: f.snapshot,
+    } } });
+    const response = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+    equal(response.stats.writes, 0);
   });
   await test("inspection derive les etats pending available et cancelled du journal valide", async () => {
     const pendingOrder = await fixture({ ready: false }); await change(pendingOrder, paid);
@@ -960,6 +1000,48 @@ try {
     const response = await call(correctionSelection(f, target, 0, 0, 0), { logs }); equal(response.status, 200);
     equal(response.result!.kind, "correction_requires_review"); equal(response.stats.writes, 0);
     equal(logs.length, 1); equal(logs[0].event, "cagnotte_correction_requires_review"); equal(logs[0].idempotent, false);
+  });
+  await test("echec logger apres refund conserve succes et rejeu idempotent", async () => {
+    const f = await fixture(); const body = selection(f), p = await preview(body);
+    const command = confirmation(body, p, "logger-refund-sensitive-reference");
+    const first = await captureWarnings(() => call(command, { loggerThrows: true }));
+    equal(first.result.status, 200, JSON.stringify(first.result)); equal(first.result.result!.alreadyRecorded, false);
+    equal((await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).size, 1);
+    eq(await balance(f), [0, 375, 0]); equal(first.warnings.length, 1);
+    const fallback = JSON.parse(first.warnings[0]) as Record<string, unknown>;
+    eq(Object.keys(fallback).sort(), ["event", "orderHash", "originalEvent"]);
+    equal(fallback.event, "cagnotte_operational_log_failed"); equal(fallback.originalEvent, "cagnotte_refund_recorded");
+    equal(String(fallback.orderHash).length, 64); equal(first.warnings[0].includes(f.id), false);
+    equal(first.warnings[0].includes(f.uid), false); equal(first.warnings[0].includes("logger-refund-sensitive-reference"), false);
+    const beforeRetry = await dump();
+    const replay = await captureWarnings(() => call(command, { loggerThrows: true }));
+    equal(replay.result.status, 200); equal(replay.result.result!.alreadyRecorded, true); equal(replay.result.stats.writes, 0);
+    eq(await dump(), beforeRetry);
+  });
+  await test("echec logger apres correction conserve succes et rejeu idempotent", async () => {
+    const f = await fixture(); await record(f, 2500, "logger-correction-original"); const target = await correctionTarget(f);
+    const body = correctionSelection(f, target, 0, 0, 0); const p = await preview(body);
+    const command = { ...body, action: "record_correction", correctionReference: "logger-correction-sensitive-reference", expectedPreviewVersion: p.previewVersion };
+    const first = await captureWarnings(() => call(command, { loggerThrows: true }));
+    equal(first.result.status, 200, JSON.stringify(first.result)); equal(first.result.result!.alreadyRecorded, false);
+    const history = await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get();
+    equal(history.docs.filter((doc) => doc.data().kind === "refund_correction").length, 1); equal(first.warnings.length, 1);
+    equal(first.warnings[0].includes(f.id), false); equal(first.warnings[0].includes("logger-correction-sensitive-reference"), false);
+    const beforeRetry = await dump();
+    const replay = await captureWarnings(() => call(command, { loggerThrows: true }));
+    equal(replay.result.status, 200); equal(replay.result.result!.alreadyRecorded, true); equal(replay.result.stats.writes, 0);
+    eq(await dump(), beforeRetry);
+  });
+  await test("echec logger conserve correction_requires_review", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "logger-review-original"); const target = await correctionTarget(f);
+    const intent = createCagnotteReservationIntent({ orderId: `${f.id}-later`, beneficiaryId: f.uid, createdAtEpochMs: Date.parse("2000-01-04T00:00:00.000Z"),
+      calculation: { lines: [{ lineId: "later", initialCents: 1000 }], discounts: [], requestedCagnotteCents: 100, availableCagnotteCents: 1745, advantages: [] } }, program)!;
+    await applyCagnotteReservationOperation({ db, action: "reserve", intent, program, recordedAtEpochMs: Date.parse("2000-01-04T00:00:00.000Z") });
+    const before = await dump();
+    const response = await captureWarnings(() => call(correctionSelection(f, target, 0, 0, 0), { loggerThrows: true }));
+    equal(response.result.status, 200, JSON.stringify(response.result)); equal(response.result.result!.kind, "correction_requires_review");
+    equal(response.result.stats.writes, 0); eq(await dump(), before); equal(response.warnings.length, 1);
   });
   await test("concordance finale de tous les portefeuilles et journaux", async () => { for (const wallet of (await db.collection("cagnotteWallets").get()).docs) await assertWalletJournal(db, wallet.id); });
   console.log(`LOT 4C : ${tests} scenarios HTTP/emulateur reussis. Confirmation administrative seulement, aucune operation bancaire.`);

@@ -18,6 +18,7 @@ export type RefundCumuls = {
 export type CagnotteAdminOperationalState = {
   code:
     | "enrolled_payment_pending"
+    | "accrual_not_enrolled"
     | "payment_confirmed_pending"
     | "delivered_available"
     | "cancelled"
@@ -57,7 +58,8 @@ export type CagnotteAdminInspection = {
   };
   operationalState: CagnotteAdminOperationalState;
   enrollment: {
-    enrolled: true;
+    enrolled: boolean;
+    accrualEnrollment: "enrolled" | "not_enrolled";
     beneficiaryId: string;
     programVersion: string;
     calculationVersion: string;

@@ -8,7 +8,9 @@ import {
   CagnotteAdminToolsView,
   type CagnotteAdminViewModel,
 } from "../src/components/cagnotte/CagnotteAdminTools.js";
-import { createCagnotteAdminRefreshChannel, createCagnotteAdminResponseIdentity, eurosInputToCents, refreshCagnotteAdminAfterWrite, runCagnotteAdminLocked } from "../src/lib/cagnotteAdminController.js";
+import { cagnotteAdminFailureState, cagnotteAdminFormUpdatedState, cagnotteAdminInspectionSuccessState, cagnotteAdminLoadingState } from "../src/lib/cagnotteAdminState.js";
+import { clearCagnotteAdminPendingOperation, createCagnotteAdminRefreshChannel, createCagnotteAdminResponseIdentity, eurosInputToCents, refreshCagnotteAdminAfterWrite, runCagnotteAdminLocked } from "../src/lib/cagnotteAdminController.js";
+import { CagnotteAdminRequestError } from "../src/services/cagnotteAdminService.js";
 import { cagnotteRefundDateTimeLocalToIso, cagnotteRefundDateTimeLocalValue } from "../src/lib/cagnotteAdminDate.js";
 import { formatAdminDateTime } from "../src/lib/adminDatePresentation.js";
 import { isExpectedNonAdminLookupError } from "../src/lib/adminLookupPresentation.js";
@@ -45,7 +47,7 @@ await test("vrai composant : libelles, financement et cinq operations", () => {
 });
 await test("inspection lisible distingue inscription, gain commande et portefeuille global", () => {
   const html = renderToStaticMarkup(<CagnotteAdminToolsView model={base} />);
-  for (const text of ["REMBOURSEMENT/CORRECTION ENREGISTRÉ", "Inscription de la commande", "Inscrite :", "Gain de cette commande",
+  for (const text of ["REMBOURSEMENT/CORRECTION ENREGISTRÉ", "Inscription de la commande", "Acquisition fidélité :", "inscrite", "Gain de cette commande",
     "Gain estimé", "Gain en attente", "Gain disponible", "Gain annulé ou réduit", "Portefeuille global du client",
     "Disponible global", "Réservation de cette commande", "Consommée", "Journal cagnotte de la commande"]) match(html, new RegExp(text));
 });
@@ -120,14 +122,39 @@ await test("mutation en cours desactive les controles et expose aria-busy", () =
   const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, busy: true }} />);
   match(html, /aria-busy="true"/); match(html, /<fieldset disabled=""/); match(html, /button[^>]*disabled=""/);
 });
-await test("reponse incertaine impose une inspection avant retry et garde la preview", async () => {
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, uncertain: true, refundPreview: refund(), notice: "Réponse absente" }} />);
+await test("etat incertain reste verrouille apres toute erreur et modification locale", () => {
+  let state = cagnotteAdminFailureState(base, new CagnotteAdminRequestError("Réponse absente", "response_unknown", true));
+  equal(state.uncertain, true);
+  for (const [code, uncertain] of [["admin_token_required", false], ["admin_required", false], ["conflict", false], ["rate_limited", false], ["server", true], ["network", true]] as const) {
+    state = cagnotteAdminFailureState(state, new CagnotteAdminRequestError(code, code, uncertain), "error");
+    equal(state.uncertain, true, code);
+  }
+  state = cagnotteAdminLoadingState(state); equal(state.uncertain, true);
+  state = cagnotteAdminFormUpdatedState(state); equal(state.uncertain, true);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...state, phase: "ready", inspection, refundPreview: refund() }} />);
   match(html, /Résultat réseau incertain/); match(html, /Réinspecter avant toute nouvelle tentative/);
   match(html, /Confirmer l’enregistrement<\/button>/); match(html, /button[^>]*disabled=""[^>]*>Confirmer l’enregistrement/);
-  const source = await readFile(resolve("src/components/cagnotte/CagnotteAdminTools.tsx"), "utf8");
-  match(source, /pendingRefund\.current \?\?=/); match(source, /pendingCorrection\.current \?\?=/);
-  match(source, /reinspectBeforeRetry[\s\S]*inspectCagnotteOrder\(orderId\)[\s\S]*uncertain: false/);
-  doesNotMatch(source.match(/const reinspectBeforeRetry[\s\S]*?\n {2}\}\);/)?.[0] ?? "", /pendingRefund\.current = null|pendingCorrection\.current = null|setForm\(/);
+});
+await test("inspection reussie deverrouille et invalide previews et payloads", () => {
+  const locked = { ...base, uncertain: true, refundPreview: refund(), correctionPreview: correctionReview() };
+  const refreshed = cagnotteAdminInspectionSuccessState(locked, inspection, "Inspection actualisée");
+  equal(refreshed.uncertain, false); equal(refreshed.refundPreview, null); equal(refreshed.correctionPreview, null);
+  const refundPending = { current: { reference: "ancienne-reference" } as { reference: string } | null };
+  const correctionPending = { current: { reference: "ancienne-correction" } as { reference: string } | null };
+  clearCagnotteAdminPendingOperation(refundPending); clearCagnotteAdminPendingOperation(correctionPending);
+  equal(refundPending.current, null); equal(correctionPending.current, null);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={refreshed} />);
+  match(html, /button[^>]*disabled=""[^>]*>Confirmer l’enregistrement/);
+});
+await test("acquisition non inscrite affiche zero gain mais conserve financement et reservation", () => {
+  const notEnrolled: CagnotteAdminInspection = { ...inspection,
+    operationalState: { code: "accrual_not_enrolled", label: "AUCUN GAIN POUR CETTE COMMANDE", detail: "La commande utilise éventuellement la cagnotte, mais l’acquisition fidélité n’était pas active lors de sa création." },
+    enrollment: { ...inspection.enrollment, enrolled: false, accrualEnrollment: "not_enrolled" },
+    accrual: { present: false, initialGainCents: 0, remainingGainCents: 0, paymentConfirmed: false, deliveryConfirmed: false, credited: false, compartment: "none", cancelled: false },
+  };
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: notEnrolled }} />);
+  for (const text of ["AUCUN GAIN POUR CETTE COMMANDE", "Acquisition fidélité :", "non inscrite", "Aucun gain attribué", "Gain attribué", "0,00", "Consommée", "Cagnotte consommée", "8,00", "Paiement externe total", "92,00"]) match(html, new RegExp(text));
+  doesNotMatch(html, /Gain estimé|Gain en attente|Gain disponible|PAIEMENT À CONFIRMER/);
 });
 await test("verrou synchrone : double clic et entree ne lancent qu une operation", async () => {
   const lock = { current: false }; let calls = 0, release!: () => void;
@@ -218,7 +245,7 @@ function fixture(): CagnotteAdminInspection {
     orderStatus: "delivered", paymentStatus: "paid", totalCents: 10000, paymentAmountCents: 9200, deliveryCents: 0 },
     financing: { productsNetCents: 10000, cagnotteCents: 800, externalProductsCents: 9200, externalTotalCents: 9200, deliveryCents: 0 },
     operationalState: { code: "refund_recorded", label: "REMBOURSEMENT/CORRECTION ENREGISTRÉ", detail: "Consultez l’historique administratif effectif." },
-    enrollment: { enrolled: true, beneficiaryId: "client-fictif", programVersion: "programme-fictif-v1", calculationVersion: "cagnotte-math-v1", createdAtEpochMs: 1000 },
+    enrollment: { enrolled: true, accrualEnrollment: "enrolled", beneficiaryId: "client-fictif", programVersion: "programme-fictif-v1", calculationVersion: "cagnotte-math-v1", createdAtEpochMs: 1000 },
     accrual: { present: true, initialGainCents: 460, remainingGainCents: 345, paymentConfirmed: true, deliveryConfirmed: true, credited: true, compartment: "available", cancelled: false },
     wallet: { pendingCents: 0, availableCents: 1745, reservedCents: 0, regularizationCents: 0 },
     reservation: { applicable: true, amountCents: 800, state: "consumed", requiresReview: false, cumulativeRestitutedCents: 200 },
