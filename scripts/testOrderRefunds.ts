@@ -258,11 +258,24 @@ async function expectCorruptHistoryRejectedEverywhere(
 ) {
   await refused({ action: "inspect", orderId: f.id }, inspectCode);
   await refused({
+    action: "preview", orderId: f.id, currency: "EUR",
+    additionalReturns: [{ lineId: "line-0", additionalNetCents: 100 }], deliveryRefundCents: 0,
+  }, "refund_history_requires_verification");
+  await refused({
     action: "record_confirmed", orderId: f.id, currency: "EUR",
     additionalReturns: [{ lineId: "line-0", additionalNetCents: 100 }], deliveryRefundCents: 0,
     source: "admin", reference: `h6-chain-${++seq}`, declaredFinancialCents: 100,
     reason: "product_return", confirmedAt: confirmDate, expectedPreviewVersion: "e".repeat(64),
   }, "refund_history_requires_verification");
+  const originals = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+    .filter((doc) => doc.data().kind !== "refund_correction")
+    .sort((left, right) => left.data().sequence - right.data().sequence);
+  const targetEventId = originals[originals.length - 1]?.id;
+  if (!targetEventId) return;
+  const correction = correctionSelection(f, targetEventId, 0, 100, 100);
+  await refused(correction, "refund_history_requires_verification");
+  await refused({ ...correction, action: "record_correction", correctionReference: `h8-chain-${++seq}`,
+    expectedPreviewVersion: "f".repeat(64) }, "refund_history_requires_verification");
 }
 
 try {
@@ -626,6 +639,37 @@ try {
     const retry = results[0].status === 409 ? ca : cb; const fresh = await preview(s);
     equal((await call({ ...retry, expectedPreviewVersion: fresh.previewVersion })).status, 200); eq(await balance(f), [0, 250, 0]);
   });
+  await test("retry exact stale ne peut pas apparaitre apres un remboursement concurrent", async () => {
+    const f = await fixture();
+    const body = selection(f, 2500);
+    const stale = confirmation(body, await preview(body), "h8-stale-refund");
+    const response = await call(stale, { betweenAttempts: async () => {
+      await record(f, 1000, "h8-competing-refund");
+    } });
+    equal(response.status, 409, JSON.stringify(response));
+    equal(response.code, "refund_preview_stale");
+    equal(response.stats.callbacks, 2);
+    const events = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs.map((doc) => doc.data());
+    equal(events.some((event) => event.reference === "h8-stale-refund"), false);
+    equal(events.filter((event) => event.reference === "h8-competing-refund").length, 1);
+  });
+  await test("retry exact stale ne peut pas apparaitre apres une correction concurrente", async () => {
+    const f = await fixture();
+    await record(f, 2500, "h8-correction-original");
+    const target = await correctionTarget(f);
+    const body = correctionSelection(f, target, 0, 1000, 1000);
+    const stale = { ...body, action: "record_correction", correctionReference: "h8-stale-correction",
+      expectedPreviewVersion: (await preview(body)).previewVersion };
+    const response = await call(stale, { betweenAttempts: async () => {
+      await recordCorrection(f, target, 0, 1500, 1500, "h8-competing-correction");
+    } });
+    equal(response.status, 409, JSON.stringify(response));
+    equal(response.code, "correction_preview_stale");
+    equal(response.stats.callbacks, 2);
+    const events = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs.map((doc) => doc.data());
+    equal(events.some((event) => event.correctionReference === "h8-stale-correction"), false);
+    equal(events.filter((event) => event.correctionReference === "h8-competing-correction").length, 1);
+  });
   for (const event of ["delivered", "cancelled"] as const) await test(`callback avorte puis ${event} entre lectures et commit, plan recalcule`, async () => {
     const f = await fixture({ ready: false }); await change(f, paid); const s = selection(f), c = confirmation(s, await preview(s), `race-${event}`);
     const r = await call(c, { betweenAttempts: async () => { await change(f, { orderStatus: event }); } });
@@ -835,6 +879,9 @@ try {
     eq([correctionHistory.returnedProductNetCents, correctionHistory.financialCents, correctionHistory.cagnotteRestitutionCents,
       correctionHistory.resultingAvailableCents, correctionHistory.effective], [0, 0, 0, 1660, true]);
     equal(correctionHistory.targetReference, "final2-original-25");
+    const persistedCorrection = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+      .find((doc) => doc.data().kind === "refund_correction")!.data();
+    equal(correctionHistory.businessFingerprint, persistedCorrection.fingerprint);
     const originalReplay = await call(original.command); equal(originalReplay.status, 200); equal((originalReplay.result as unknown as { corrected: boolean }).corrected, true);
     const before = await dump(); const replay = await call(correction.command); equal(replay.status, 200); equal(replay.result!.alreadyRecorded, true); eq(await dump(), before);
     await assertWalletJournal(db, f.uid);
@@ -933,9 +980,10 @@ try {
     await record(f, 2500, "final2-inspect-original"); const target = await correctionTarget(f);
     await recordCorrection(f, target, 0, 0, 0, "final2-inspect-correction");
     const response = await call({ action: "inspect", orderId: f.id }); equal(response.status, 200);
-    const serialized = JSON.stringify(response.result); for (const forbidden of ["fingerprint", "movementIds", "actor", "intentFingerprint", "paymentReference"]) equal(serialized.includes(forbidden), false);
+    const serialized = JSON.stringify(response.result); for (const forbidden of ["movementIds", "actor", "intentFingerprint", "paymentReference"]) equal(serialized.includes(forbidden), false);
     const inspection = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
     equal(inspection.history.length, 2); equal(inspection.refund.latest?.type, "correction"); equal(inspection.refund.latestRevision, 1);
+    ok(inspection.history.every((entry) => /^[a-f0-9]{64}$/.test(entry.businessFingerprint)));
   });
   await test("H6 associe les libelles et retours par lineId malgre tri et cadeau promotionnel", async () => {
     const f = await lineIdentityFixture(true);
@@ -986,6 +1034,19 @@ try {
     equal(result.accrual.present, false); equal(result.accrual.initialGainCents, 500); equal(result.accrual.compartment, "none");
     equal(result.wallet, null); equal(result.reservation.applicable, false);
     equal(result.operationalState.code, "enrolled_payment_pending"); equal(result.operationalState.detail, "PAIEMENT À CONFIRMER");
+  });
+  await test("inspection fail closed si acquisition inscrite manque apres paiement canonique ou livraison", async () => {
+    const paidWithoutAccrual = await fixture({ ready: false });
+    await change(paidWithoutAccrual, paid, null);
+    equal((await db.collection("cagnotteAccruals").doc(paidWithoutAccrual.id).get()).exists, false);
+    const paidResponse = await refused({ action: "inspect", orderId: paidWithoutAccrual.id }, "refund_journal_requires_verification");
+    equal(paidResponse.stats.writes, 0);
+
+    const deliveredWithoutAccrual = await fixture({ ready: false });
+    await change(deliveredWithoutAccrual, { orderStatus: "delivered" }, null);
+    equal((await db.collection("cagnotteAccruals").doc(deliveredWithoutAccrual.id).get()).exists, false);
+    const deliveredResponse = await refused({ action: "inspect", orderId: deliveredWithoutAccrual.id }, "refund_journal_requires_verification");
+    equal(deliveredResponse.stats.writes, 0);
   });
   await test("inscription acquisition explicite conserve le comportement existant", async () => {
     const f = await fixture({ ready: false, accrualEnrollment: "enrolled" });
@@ -1062,6 +1123,8 @@ try {
     equal(result.reservation.amountCents, 800); equal(result.reservation.cumulativeRestitutedCents, 200);
     equal(result.refund.history.length, 1); equal(result.refund.latestRevision, 0); equal(result.operationalState.code, "refund_recorded");
     equal(result.history[0].source, "admin"); equal(result.history[0].reference, "readiness-inspection");
+    const storedEvent = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs[0].data();
+    equal(result.history[0].businessFingerprint, storedEvent.fingerprint); equal(result.history[0].businessFingerprint.length, 64);
     ok(result.movements.some((movement) => movement.event === "credit_refunded_after_return"));
     const movements = JSON.stringify(result.movements);
     for (const forbidden of [f.uid, actor.email!, "Synthetic", "synthetic@example.test", "readiness-inspection", "payload"]) equal(movements.includes(forbidden), false);

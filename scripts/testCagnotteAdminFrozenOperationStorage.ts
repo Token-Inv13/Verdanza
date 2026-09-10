@@ -17,10 +17,15 @@ import {
   CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE,
   cagnotteAdminFrozenOperationFingerprint,
   createCagnotteAdminFrozenOperationStore,
+  type CagnotteAdminExclusiveClaim,
   type CagnotteAdminStorageLike,
 } from "../src/lib/cagnotteAdminFrozenOperationStorage.js";
+import {
+  cagnotteAdminCorrectionBusinessFingerprint,
+  cagnotteAdminRefundBusinessFingerprint,
+} from "../src/lib/cagnotteAdminOperationIdentity.js";
 import { cagnotteAdminDefinitiveRejectionState, cagnotteAdminInspectionSuccessState, cagnotteAdminRestoredOperationState, cagnotteAdminTerminalReinspectionState, createCagnotteAdminInitialState } from "../src/lib/cagnotteAdminState.js";
-import { CagnotteAdminRequestError } from "../src/services/cagnotteAdminService.js";
+import { CagnotteAdminRequestError, readCagnotteAdminResponse } from "../src/services/cagnotteAdminService.js";
 import type { CagnotteAdminInspection } from "../src/types/cagnotteAdmin.js";
 
 let tests = 0;
@@ -61,6 +66,32 @@ class StorageEvents {
     return () => this.listeners.delete(listener);
   };
   emit(key: string | null) { for (const listener of this.listeners) listener(key); }
+}
+
+const immediateClaim: CagnotteAdminExclusiveClaim = {
+  request: async (_name, run) => run(),
+};
+
+class SerialClaims implements CagnotteAdminExclusiveClaim {
+  active = false;
+  private tails = new Map<string, Promise<void>>();
+
+  async request<T>(name: string, run: () => T | Promise<T>): Promise<T> {
+    const previous = this.tails.get(name) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolvePromise) => { release = resolvePromise; });
+    const tail = previous.then(() => current);
+    this.tails.set(name, tail);
+    await previous;
+    this.active = true;
+    try {
+      return await run();
+    } finally {
+      this.active = false;
+      release();
+      if (this.tails.get(name) === tail) this.tails.delete(name);
+    }
+  }
 }
 
 const ORDER_A = "CMD-FICTIVE-A";
@@ -400,8 +431,7 @@ await test("29 correction exacte est seule a autoriser le clear", () => {
   const store = makeStore(storage);
   const operation = correctionOperation();
   store.persistBeforeSend(operation);
-  const exact = inspection(ORDER_A, [{ type: "correction", targetEventId: operation.payload.targetEventId,
-    revision: operation.payload.expectedRevision + 1, reference: operation.payload.correctionReference.toUpperCase() }]);
+  const exact = correctionInspection(operation);
   equal(resolveCagnotteAdminFrozenOperationFromInspection(store, operation, exact), true);
   equal(store.load(ORDER_A).status, "empty");
 });
@@ -480,9 +510,9 @@ await test("33 echec de suppression apres rejet definitif conserve le verrou fai
   }
 });
 
-await test("34 retry deja incertain reste verrouille pour refund et correction sur 401 409 et 500", async () => {
+await test("34 retry deja incertain reste verrouille sur auth refus reseau et serveur", async () => {
   for (const operation of [refundOperation(), correctionOperation()]) {
-    for (const [code, uncertain] of [["admin_token_required", false], ["refund_preview_stale", false], ["server_unavailable", true]] as const) {
+    for (const [code, uncertain] of [["admin_token_required", false], ["admin_required", false], ["server_unavailable", true], ["response_unknown", true]] as const) {
       const storage = new MemoryStorage();
       const store = makeStore(storage);
       store.persistBeforeSend(operation);
@@ -506,7 +536,112 @@ await test("34 retry deja incertain reste verrouille pour refund et correction s
   }
 });
 
-await test("35 marqueur terminal versionne contient seulement empreinte resultat et horodatage", () => {
+await test("35 retry exact perime est terminal et exige une nouvelle preview", async () => {
+  for (const operation of [refundOperation(), correctionOperation()]) {
+    const storage = new MemoryStorage();
+    const store = makeStore(storage);
+    store.persistBeforeSend(operation);
+    store.updateState(operation, "uncertain");
+    const code = operation.kind === "refund" ? "refund_preview_stale" : "correction_preview_stale";
+    let cleared = 0;
+    await rejects(() => retryCagnotteAdminFrozenOperationDurably(store, operation, operation.orderId, {
+      refund: async () => { throw new CagnotteAdminRequestError("Prévisualisation périmée.", code, false); },
+      correction: async () => { throw new CagnotteAdminRequestError("Prévisualisation périmée.", code, false); },
+    }, () => { cleared += 1; }), (error: unknown) => error instanceof CagnotteAdminRequestError && error.code === code);
+    equal(cleared, 1);
+    equal(store.load(operation.orderId).status, "empty");
+    equal(store.loadResolution(operation.orderId).status, "ready");
+    const next = operation.kind === "refund"
+      ? freezeCagnotteAdminRefund({ ...operation.payload, reference: `${operation.payload.reference}-fresh`, expectedPreviewVersion: "e".repeat(64) })
+      : freezeCagnotteAdminCorrection({ ...operation.payload, correctionReference: `${operation.payload.correctionReference}-fresh`, expectedPreviewVersion: "f".repeat(64) });
+    equal(await sendCagnotteAdminOperationWithDurableRecovery(store, next, async () => "accepted"), "accepted");
+    store.clearAfterResolution(next);
+  }
+});
+
+await test("36 reponse 2xx malformee ou sans resultat garde refund et correction incertains", async () => {
+  const responses = [
+    () => new Response("{", { status: 200, headers: { "content-type": "application/json" } }),
+    () => new Response("{}", { status: 200, headers: { "content-type": "application/json" } }),
+    () => new Response('{"result":null}', { status: 200, headers: { "content-type": "application/json" } }),
+    () => new Response('{"result":[]}', { status: 200, headers: { "content-type": "application/json" } }),
+  ];
+  for (const operation of [refundOperation(), correctionOperation()]) {
+    for (const response of responses) {
+      const storage = new MemoryStorage();
+      const store = makeStore(storage);
+      await rejects(() => sendCagnotteAdminOperationWithDurableRecovery(store, operation,
+        async () => readCagnotteAdminResponse<Record<string, unknown>>(response())),
+      (error: unknown) => error instanceof CagnotteAdminRequestError && error.code === "response_invalid" && error.uncertain);
+      const frozen = store.load(operation.orderId);
+      equal(frozen.status === "ready" && frozen.record.state, "uncertain");
+    }
+  }
+});
+
+await test("37 claim inter onglets est atomique et libere avant HTTP", async () => {
+  const storage = new MemoryStorage();
+  const claims = new SerialClaims();
+  const tabA = makeStore(storage, undefined, claims);
+  const tabB = makeStore(storage, undefined, claims);
+  const firstOperation = refundOperation();
+  const secondOperation = freezeCagnotteAdminRefund({ ...firstOperation.payload, reference: "refund-concurrent-tab" });
+  let releaseSend!: () => void;
+  let enteredSend!: () => void;
+  const entered = new Promise<void>((resolvePromise) => { enteredSend = resolvePromise; });
+  const hold = new Promise<void>((resolvePromise) => { releaseSend = resolvePromise; });
+  let sends = 0;
+  const first = sendCagnotteAdminOperationWithDurableRecovery(tabA, firstOperation, async () => {
+    sends += 1;
+    equal(claims.active, false);
+    enteredSend();
+    await hold;
+    return "accepted";
+  });
+  await entered;
+  const second = sendCagnotteAdminOperationWithDurableRecovery(tabB, secondOperation, async () => { sends += 1; return "unexpected"; });
+  await rejects(() => second, /opération précédente/i);
+  equal(sends, 1);
+  releaseSend();
+  equal(await first, "accepted");
+});
+
+await test("38 absence de Web Locks echoue ferme avant HTTP", async () => {
+  const storage = new MemoryStorage();
+  const store = createCagnotteAdminFrozenOperationStore({ storage, now: () => NOW });
+  let sends = 0;
+  await rejects(() => sendCagnotteAdminOperationWithDurableRecovery(store, refundOperation(), async () => { sends += 1; }),
+    new RegExp(CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  equal(sends, 0);
+  equal(store.load(ORDER_A).status, "empty");
+});
+
+await test("39 resolution exige l empreinte metier complete et ignore seulement la version de preview", () => {
+  for (const operation of [refundOperation(), correctionOperation()]) {
+    const storage = new MemoryStorage();
+    const store = makeStore(storage);
+    store.persistBeforeSend(operation);
+    const changed = operation.kind === "refund"
+      ? freezeCagnotteAdminRefund({ ...operation.payload, additionalReturns: [{ ...operation.payload.additionalReturns[0], additionalNetCents: 2400 }] })
+      : freezeCagnotteAdminCorrection({ ...operation.payload, declaredFinancialCents: operation.payload.declaredFinancialCents + 1 });
+    const wrong = operation.kind === "refund" ? refundInspection(changed as ReturnType<typeof refundOperation>) : correctionInspection(changed as ReturnType<typeof correctionOperation>);
+    equal(resolveCagnotteAdminFrozenOperationFromInspection(store, operation, wrong), false);
+    const refreshed = operation.kind === "refund"
+      ? freezeCagnotteAdminRefund({ ...operation.payload, expectedPreviewVersion: "9".repeat(64) })
+      : freezeCagnotteAdminCorrection({ ...operation.payload, expectedPreviewVersion: "8".repeat(64) });
+    const originalFingerprint = operation.kind === "refund"
+      ? cagnotteAdminRefundBusinessFingerprint(operation.payload)
+      : cagnotteAdminCorrectionBusinessFingerprint(operation.payload);
+    const refreshedFingerprint = refreshed.kind === "refund"
+      ? cagnotteAdminRefundBusinessFingerprint(refreshed.payload)
+      : cagnotteAdminCorrectionBusinessFingerprint(refreshed.payload);
+    equal(originalFingerprint, refreshedFingerprint);
+    const exact = operation.kind === "refund" ? refundInspection(operation) : correctionInspection(operation);
+    equal(resolveCagnotteAdminFrozenOperationFromInspection(store, operation, exact), true);
+  }
+});
+
+await test("40 marqueur terminal versionne contient seulement empreinte resultat et horodatage", () => {
   const storage = new MemoryStorage();
   const store = makeStore(storage);
   const operation = refundOperation();
@@ -560,8 +695,7 @@ await test("37 resolution recorded conserve l operation jusqu a la preuve serveu
     equal(resolveCagnotteAdminFrozenOperationFromInspection(tabB, operation, inspection(operation.orderId, [])), false);
     const exact = operation.kind === "refund"
       ? refundInspection(operation)
-      : inspection(operation.orderId, [{ type: "correction", targetEventId: operation.payload.targetEventId,
-        revision: operation.payload.expectedRevision + 1, reference: operation.payload.correctionReference }]);
+      : correctionInspection(operation);
     equal(resolveCagnotteAdminFrozenOperationFromInspection(tabB, operation, exact), true);
   }
 });
@@ -683,10 +817,10 @@ await test("46 lecture indisponible du snapshot de reprise reste fail closed", (
   equal(reconcileCagnotteAdminFrozenOperationStorage(store, ORDER_A, refundOperation(), null).status, "blocked");
 });
 
-console.log(`HOTFIX 4F2-H7 : ${tests} contrôles storage/controller réussis.`);
+console.log(`HOTFIX 4F2-H8 : ${tests} contrôles storage/controller réussis.`);
 
-function makeStore(storage: MemoryStorage, events?: StorageEvents) {
-  return createCagnotteAdminFrozenOperationStore({ storage, now: () => NOW, subscribeToStorageChanges: events?.subscribe });
+function makeStore(storage: MemoryStorage, events?: StorageEvents, exclusiveClaim: CagnotteAdminExclusiveClaim = immediateClaim) {
+  return createCagnotteAdminFrozenOperationStore({ storage, now: () => NOW, subscribeToStorageChanges: events?.subscribe, exclusiveClaim });
 }
 
 function refundOperation(orderId = ORDER_A) {
@@ -722,7 +856,14 @@ function inspection(orderId: string, history: Array<Record<string, unknown>>) {
 }
 
 function refundInspection(operation: ReturnType<typeof refundOperation>) {
-  return inspection(operation.orderId, [{ type: "initial_declaration", source: operation.payload.source, reference: operation.payload.reference.toUpperCase() }]);
+  return inspection(operation.orderId, [{ type: "initial_declaration", source: operation.payload.source, reference: operation.payload.reference.toUpperCase(),
+    businessFingerprint: cagnotteAdminRefundBusinessFingerprint(operation.payload) }]);
+}
+
+function correctionInspection(operation: ReturnType<typeof correctionOperation>) {
+  return inspection(operation.orderId, [{ type: "correction", targetEventId: operation.payload.targetEventId,
+    revision: operation.payload.expectedRevision + 1, reference: operation.payload.correctionReference.toUpperCase(),
+    businessFingerprint: cagnotteAdminCorrectionBusinessFingerprint(operation.payload) }]);
 }
 
 function stableForTest(value: unknown): string {

@@ -17,6 +17,7 @@ import { isExpectedNonAdminLookupError } from "../src/lib/adminLookupPresentatio
 import { shouldMountCagnotteAdminTools } from "../src/lib/cagnotteAdminEligibility.js";
 import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
 import { CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED } from "../src/config/cagnotteFeatures.js";
+import { cagnotteAdminCorrectionBusinessFingerprint, cagnotteAdminRefundBusinessFingerprint } from "../src/lib/cagnotteAdminOperationIdentity.js";
 import type { CagnotteAdminInspection, CorrectionPreview, RefundPreview } from "../src/types/cagnotteAdmin.js";
 
 let tests = 0;
@@ -39,11 +40,12 @@ await test("commande inscrite serveur : montage seulement avec garde simulee ouv
   equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "archive", order }), false);
   equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "firestore", order }), true);
 });
-await test("vrai composant : libelles, financement et cinq operations", () => {
+await test("vrai composant : libelles, financement et operations applicables", () => {
   const html = renderToStaticMarkup(<CagnotteAdminToolsView model={base} />);
   for (const text of ["Enregistrer un remboursement déjà confirmé", "Cette action enregistre votre déclaration.",
-    "Elle n’effectue aucun remboursement bancaire.", "Consulter", "Confirmer paiement / livraison", "Revoir / annuler un impayé",
+    "Elle n’effectue aucun remboursement bancaire.", "Consulter", "Confirmer paiement / livraison",
     "Enregistrer un retour", "Corriger une déclaration", "Tout le montant restant"]) match(html, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  doesNotMatch(html, /Revoir \/ annuler un impayé/);
 });
 await test("inspection lisible distingue inscription, gain commande et portefeuille global", () => {
   const html = renderToStaticMarkup(<CagnotteAdminToolsView model={base} />);
@@ -77,10 +79,26 @@ await test("correction a verifier affiche le refus cible et sa limite", () => {
   match(html, /Révision actuelle : 0/); match(html, /nouvelle révision : 1/); match(html, /Variation régularisation/);
 });
 await test("impaye separe transport et reglement, seuil sans automatisme", () => {
-  const reserved = { ...inspection, reservation: { ...inspection.reservation, state: "reserved" as const, cumulativeRestitutedCents: 0 } };
+  const reserved = { ...inspection,
+    reservation: { ...inspection.reservation, state: "reserved" as const, cumulativeRestitutedCents: 0 },
+    unpaid: { ...inspection.unpaid, reservationState: "reserved" as const } };
   const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: reserved, mode: "unpaid" }} />);
   for (const text of ["À revoir · plus de 72 heures", "Cagnotte réservée", "Règlement de la commande", "Lien CB envoyé", "Transmission du lien", "Résultat à vérifier", "n’est ni une preuve de paiement ni une preuve d’impayé", "ne révoque pas le lien externe"]) match(html, new RegExp(text));
   doesNotMatch(html, />to_confirm<|>unknown<|Cagnotte consommée/);
+});
+await test("impaye est masque hors reservation active", () => {
+  for (const state of ["consumed", "released", null] as const) {
+    const inactive = { ...inspection,
+      reservation: { ...inspection.reservation, state },
+      unpaid: { ...inspection.unpaid, reservationState: state } };
+    const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: inactive, mode: "unpaid" }} />);
+    doesNotMatch(html, /Revoir \/ annuler un impayé|Enregistrer la revue|Annuler la commande/);
+  }
+  const inconsistent = { ...inspection,
+    reservation: { ...inspection.reservation, state: "reserved" as const },
+    unpaid: { ...inspection.unpaid, reservationState: "consumed" as const } };
+  doesNotMatch(renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: inconsistent, mode: "unpaid" }} />),
+    /Revoir \/ annuler un impayé|Enregistrer la revue|Annuler la commande/);
 });
 await test("financement consomme utilise le libelle correspondant", () => {
   const consumed = { ...inspection, unpaid: { ...inspection.unpaid, reservationState: "consumed", reservedAmountCents: 0 } };
@@ -96,7 +114,7 @@ await test("historique apres neutralisation conserve l original et rend la corre
     lines: inspection.lines.map((line) => ({ ...line, returnedNetCents: 0, remainingNetCents: line.initialNetCents })),
     history: [
       { ...inspection.history[0], effective: false },
-      { id: "e".repeat(64), type: "correction", revision: 1, recordedAt: "2026-09-06T10:05:00.000Z", reference: "neutralisation-demo",
+      { id: "e".repeat(64), type: "correction", revision: 1, recordedAt: "2026-09-06T10:05:00.000Z", reference: "neutralisation-demo", businessFingerprint: "e".repeat(64),
         declaredFinancialCents: 0, returnedProductNetCents: 0, financialCents: 0, cagnotteRestitutionCents: 0,
         resultingAvailableCents: 1660, effective: true, targetEventId: inspection.history[0].id, targetReference: "demo" },
     ], correctionTarget: { eventId: inspection.history[0].id, revision: 1, effective: zero } };
@@ -107,7 +125,10 @@ await test("historique apres neutralisation conserve l original et rend la corre
   doesNotMatch(html, /Conséquences calculées par le serveur|Effet différentiel/);
 });
 await test("revue et date sont presentees sans codes internes", () => {
-  const reviewed = { ...inspection, unpaid: { ...inspection.unpaid, review: { outcome: "unpaid_confirmed" as const, source: "fixture", reason: "fixture", reviewedAt: "2026-09-06T10:00:00.000Z", reviewedByEmail: "admin@example.test", current: true } } };
+  const reviewed = { ...inspection,
+    reservation: { ...inspection.reservation, state: "reserved" as const },
+    unpaid: { ...inspection.unpaid, reservationState: "reserved" as const,
+      review: { outcome: "unpaid_confirmed" as const, source: "fixture", reason: "fixture", reviewedAt: "2026-09-06T10:00:00.000Z", reviewedByEmail: "admin@example.test", current: true } } };
   const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: reviewed, mode: "unpaid" }} />);
   match(html, /Dernière revue : Impayé confirmé après vérification/);
   match(html, /6 sept. 2026/);
@@ -144,7 +165,8 @@ await test("operation refund incertaine reste gelee jusqu a sa preuve exacte", a
   match(html, /Confirmer l’enregistrement<\/button>/); match(html, /button[^>]*disabled=""[^>]*>Confirmer l’enregistrement/);
   const wrongReference = cagnotteAdminInspectionSuccessState(raced, { ...inspection, history: [{ ...inspection.history[0], source: "admin", reference: "autre-reference" }] });
   equal(wrongReference.uncertain, true); equal(wrongReference.pendingOperation, operation);
-  const committed = { ...inspection, history: [{ ...inspection.history[0], source: "admin" as const, reference: "reference-figee" }] };
+  const committed = { ...inspection, history: [{ ...inspection.history[0], source: "admin" as const, reference: "reference-figee",
+    businessFingerprint: cagnotteAdminRefundBusinessFingerprint(operation.payload) }] };
   let replayed = "";
   await retryCagnotteAdminFrozenOperation(operation, inspection.order.id, { refund: async (payload) => { replayed = JSON.stringify(payload); return { ...refund(), alreadyRecorded: true }; }, correction: async () => correctionReview() });
   equal(replayed, JSON.stringify(operation.payload));
@@ -163,7 +185,7 @@ await test("operation correction incertaine survit a la course et ne change pas 
   equal(state.uncertain, true); equal(state.pendingOperation, operation); ok(state.correctionPreview);
   await rejects(() => retryCagnotteAdminFrozenOperation(operation, "AUTRE-COMMANDE", { refund: async () => refund(), correction: async () => correctionReview() }), /autre commande/);
   const committed = { ...inspection, history: [...inspection.history, { id: "e".repeat(64), type: "correction" as const, revision: 1,
-    recordedAt: "2026-09-06T10:05:00.000Z", reference: "correction-figee", declaredFinancialCents: 2300,
+    recordedAt: "2026-09-06T10:05:00.000Z", reference: "correction-figee", businessFingerprint: cagnotteAdminCorrectionBusinessFingerprint(operation.payload), declaredFinancialCents: 2300,
     returnedProductNetCents: 2500, financialCents: 2300, cagnotteRestitutionCents: 200, resultingAvailableCents: 1660,
     effective: true, targetEventId: inspection.history[0].id }] };
   let replayed = "";
@@ -295,9 +317,9 @@ function fixture(): CagnotteAdminInspection {
     movements: [{ id: "f".repeat(64), event: "credit_refunded_after_return", pendingDeltaCents: 0, availableDeltaCents: 200, reservedDeltaCents: 0, regularizationDeltaCents: 0, recordedAtEpochMs: 1000 }],
     movementHistory: { complete: true, omittedLegacyUndatedCount: 0 },
     lines: [{ lineId: "line-0", label: "Produit fictif", initialNetCents: 10000, returnedNetCents: 2500, remainingNetCents: 7500 }], effective,
-    history: [{ id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T10:00:00.000Z", reference: "demo", source: "admin", declaredFinancialCents: 2300,
+    history: [{ id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T10:00:00.000Z", reference: "demo", businessFingerprint: "a".repeat(64), source: "admin", declaredFinancialCents: 2300,
       returnedProductNetCents: 2500, financialCents: 2300, cagnotteRestitutionCents: 200, resultingAvailableCents: 1745, effective: true }],
-    correctionTarget: { eventId: "a".repeat(64), revision: 0, effective }, unpaid: { reservedAmountCents: 800, reservationState: "reserved", reservedAt: "2026-09-02T08:00:00.000Z", ageHours: 100, reviewRequired: true,
+    correctionTarget: { eventId: "a".repeat(64), revision: 0, effective }, unpaid: { reservedAmountCents: 0, reservationState: "consumed", reservedAt: "2026-09-02T08:00:00.000Z", ageHours: 100, reviewRequired: true,
       payment: { status: "payment_link_sent", uncertain: true, confirmedAt: null }, linkTransmission: { requestId: "demo", status: "unknown", transportStatus: "unknown", sendingActive: false, uncertain: true },
       stateVersion: "b".repeat(64), review: null } };
 }

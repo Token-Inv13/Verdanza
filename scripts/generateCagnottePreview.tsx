@@ -291,7 +291,7 @@ function administrationInspectionFixture(): CagnotteAdminInspection {
     movementHistory: { complete: true, omittedLegacyUndatedCount: 0 },
     lines: [{ lineId: "fleurs", label: "Fleurs CBD fictives", initialNetCents: 10000, returnedNetCents: 2500, remainingNetCents: 7500 }],
     effective,
-    history: [{ id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T11:00:00.000Z", reference: "retour-demo-25", declaredFinancialCents: 2300,
+    history: [{ id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T11:00:00.000Z", reference: "retour-demo-25", businessFingerprint: "a".repeat(64), declaredFinancialCents: 2300,
       returnedProductNetCents: 2500, financialCents: 2300, cagnotteRestitutionCents: 200, resultingAvailableCents: 1745, effective: true }],
     correctionTarget: { eventId: "a".repeat(64), revision: 0, effective },
     unpaid: { reservedAmountCents: 800, reservationState: "reserved", reservedAt: "2026-09-02T08:00:00.000Z", ageHours: 99, reviewRequired: true,
