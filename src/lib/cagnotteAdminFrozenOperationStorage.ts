@@ -1,0 +1,290 @@
+import type { CagnotteAdminFrozenOperation } from "./cagnotteAdminController";
+import type { RecordOrderRefundInput, RecordRefundCorrectionInput } from "../services/cagnotteAdminService";
+
+export const CAGNOTTE_ADMIN_FROZEN_OPERATION_SCHEMA_VERSION = 1 as const;
+export const CAGNOTTE_ADMIN_FROZEN_OPERATION_KEY_PREFIX = "verdanza:cagnotte-admin:frozen-operation:v1:";
+export const CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE = "Impossible de sécuriser cette opération pour une reprise en cas de réponse interrompue. Aucun enregistrement n’a été envoyé.";
+export const CAGNOTTE_ADMIN_STORAGE_INVALID_NOTICE = "Les données locales de reprise de cette commande sont invalides. Aucune nouvelle opération n’est autorisée tant que leur résolution n’est pas établie.";
+
+export type CagnotteAdminFrozenOperationState = "in_flight" | "uncertain" | "awaiting_confirmation";
+
+export type CagnotteAdminStoredFrozenOperation = {
+  schemaVersion: typeof CAGNOTTE_ADMIN_FROZEN_OPERATION_SCHEMA_VERSION;
+  state: CagnotteAdminFrozenOperationState;
+  operation: CagnotteAdminFrozenOperation;
+  createdAtEpochMs: number;
+};
+
+export type CagnotteAdminFrozenOperationLoadResult =
+  | { status: "empty" }
+  | { status: "ready"; record: CagnotteAdminStoredFrozenOperation }
+  | { status: "blocked"; reason: "invalid" | "unavailable"; message: string };
+
+export interface CagnotteAdminStorageLike {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+export interface CagnotteAdminFrozenOperationStore {
+  key(orderId: string): string;
+  load(orderId: string): CagnotteAdminFrozenOperationLoadResult;
+  persistBeforeSend(operation: CagnotteAdminFrozenOperation): CagnotteAdminStoredFrozenOperation;
+  updateState(operation: CagnotteAdminFrozenOperation, state: CagnotteAdminFrozenOperationState): CagnotteAdminStoredFrozenOperation;
+  clearAfterResolution(operation: CagnotteAdminFrozenOperation): void;
+  subscribe(orderId: string, listener: () => void): () => void;
+}
+
+export class CagnotteAdminFrozenOperationStorageError extends Error {
+  constructor(message: string, readonly reason: "conflict" | "invalid" | "unavailable") {
+    super(message);
+    this.name = "CagnotteAdminFrozenOperationStorageError";
+  }
+}
+
+export function createCagnotteAdminFrozenOperationStore(options: {
+  storage: CagnotteAdminStorageLike | (() => CagnotteAdminStorageLike);
+  now?: () => number;
+  subscribeToStorageChanges?: (listener: (key: string | null) => void) => () => void;
+}): CagnotteAdminFrozenOperationStore {
+  const storageProvider = typeof options.storage === "function" ? options.storage : () => options.storage as CagnotteAdminStorageLike;
+  const now = options.now ?? Date.now;
+
+  const key = (orderId: string) => `${CAGNOTTE_ADMIN_FROZEN_OPERATION_KEY_PREFIX}${identifier(orderId, 128)}`;
+
+  const load = (orderId: string): CagnotteAdminFrozenOperationLoadResult => {
+    let raw: string | null;
+    try {
+      raw = storageProvider().getItem(key(orderId));
+    } catch {
+      return { status: "blocked", reason: "unavailable", message: CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE };
+    }
+    if (raw === null) return { status: "empty" };
+    try {
+      const record = storedRecord(JSON.parse(raw), orderId);
+      return { status: "ready", record };
+    } catch {
+      return { status: "blocked", reason: "invalid", message: CAGNOTTE_ADMIN_STORAGE_INVALID_NOTICE };
+    }
+  };
+
+  const writeAndConfirm = (orderId: string, record: CagnotteAdminStoredFrozenOperation) => {
+    const storageKey = key(orderId);
+    try {
+      storageProvider().setItem(storageKey, JSON.stringify(record));
+    } catch {
+      throw new CagnotteAdminFrozenOperationStorageError(CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE, "unavailable");
+    }
+    const confirmed = load(orderId);
+    if (confirmed.status !== "ready" || !sameStoredRecord(confirmed.record, record)) {
+      throw new CagnotteAdminFrozenOperationStorageError(CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE, "unavailable");
+    }
+    return confirmed.record;
+  };
+
+  return {
+    key,
+    load,
+    persistBeforeSend(operation) {
+      const validated = validateForMutation(operation);
+      const existing = load(validated.orderId);
+      if (existing.status === "ready") {
+        throw new CagnotteAdminFrozenOperationStorageError("Une opération précédente reste à confirmer pour cette commande.", "conflict");
+      }
+      if (existing.status === "blocked") {
+        throw new CagnotteAdminFrozenOperationStorageError(existing.message, existing.reason);
+      }
+      const createdAtEpochMs = now();
+      if (!Number.isSafeInteger(createdAtEpochMs) || createdAtEpochMs < 0) {
+        throw new CagnotteAdminFrozenOperationStorageError(CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE, "unavailable");
+      }
+      return writeAndConfirm(validated.orderId, {
+        schemaVersion: CAGNOTTE_ADMIN_FROZEN_OPERATION_SCHEMA_VERSION,
+        state: "in_flight",
+        operation: validated,
+        createdAtEpochMs,
+      });
+    },
+    updateState(operation, state) {
+      const validated = validateForMutation(operation);
+      const existing = load(validated.orderId);
+      if (existing.status !== "ready") {
+        const reason = existing.status === "blocked" ? existing.reason : "conflict";
+        const message = existing.status === "blocked" ? existing.message : "L’opération durable à mettre à jour est introuvable.";
+        throw new CagnotteAdminFrozenOperationStorageError(message, reason);
+      }
+      if (!sameFrozenOperation(existing.record.operation, validated)) {
+        throw new CagnotteAdminFrozenOperationStorageError("Une autre opération durable est déjà enregistrée pour cette commande.", "conflict");
+      }
+      return writeAndConfirm(validated.orderId, { ...existing.record, state });
+    },
+    clearAfterResolution(operation) {
+      const validated = validateForMutation(operation);
+      const existing = load(validated.orderId);
+      if (existing.status === "blocked") {
+        throw new CagnotteAdminFrozenOperationStorageError(existing.message, existing.reason);
+      }
+      if (existing.status === "ready" && !sameFrozenOperation(existing.record.operation, validated)) {
+        throw new CagnotteAdminFrozenOperationStorageError("Une autre opération durable est enregistrée pour cette commande.", "conflict");
+      }
+      if (existing.status === "empty") return;
+      try {
+        storageProvider().removeItem(key(validated.orderId));
+      } catch {
+        throw new CagnotteAdminFrozenOperationStorageError("La confirmation serveur est acquise, mais le verrou local n’a pas pu être supprimé. La commande reste verrouillée.", "unavailable");
+      }
+      const confirmed = load(validated.orderId);
+      if (confirmed.status !== "empty") {
+        throw new CagnotteAdminFrozenOperationStorageError("La confirmation serveur est acquise, mais le verrou local n’a pas pu être supprimé. La commande reste verrouillée.", "unavailable");
+      }
+    },
+    subscribe(orderId, listener) {
+      const watchedKey = key(orderId);
+      return options.subscribeToStorageChanges?.((changedKey) => {
+        if (changedKey === watchedKey) listener();
+      }) ?? (() => undefined);
+    },
+  };
+}
+
+export const browserCagnotteAdminFrozenOperationStore = createCagnotteAdminFrozenOperationStore({
+  storage: () => {
+    if (typeof window === "undefined") throw new Error("Browser storage unavailable");
+    return window.localStorage;
+  },
+  subscribeToStorageChanges: (listener) => {
+    if (typeof window === "undefined") return () => undefined;
+    const onStorage = (event: StorageEvent) => listener(event.key);
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  },
+});
+
+export function sameFrozenOperation(left: CagnotteAdminFrozenOperation, right: CagnotteAdminFrozenOperation) {
+  return stable(left) === stable(right);
+}
+
+function storedRecord(value: unknown, expectedOrderId: string): CagnotteAdminStoredFrozenOperation {
+  const record = strictObject(value, ["schemaVersion", "state", "operation", "createdAtEpochMs"]);
+  if (record.schemaVersion !== CAGNOTTE_ADMIN_FROZEN_OPERATION_SCHEMA_VERSION) throw new Error("Unknown schema");
+  if (record.state !== "in_flight" && record.state !== "uncertain" && record.state !== "awaiting_confirmation") throw new Error("Unknown state");
+  if (!Number.isSafeInteger(record.createdAtEpochMs) || (record.createdAtEpochMs as number) < 0) throw new Error("Invalid creation time");
+  return {
+    schemaVersion: CAGNOTTE_ADMIN_FROZEN_OPERATION_SCHEMA_VERSION,
+    state: record.state,
+    operation: frozenOperation(record.operation, expectedOrderId),
+    createdAtEpochMs: record.createdAtEpochMs as number,
+  };
+}
+
+function validateForMutation(operation: CagnotteAdminFrozenOperation) {
+  try {
+    return frozenOperation(operation, operation.orderId);
+  } catch {
+    throw new CagnotteAdminFrozenOperationStorageError(CAGNOTTE_ADMIN_STORAGE_INVALID_NOTICE, "invalid");
+  }
+}
+
+function frozenOperation(value: unknown, expectedOrderId: string): CagnotteAdminFrozenOperation {
+  const operation = strictObject(value, ["kind", "orderId", "payload"]);
+  const orderId = identifier(operation.orderId, 128);
+  if (orderId !== expectedOrderId) throw new Error("Order mismatch");
+  if (operation.kind === "refund") return { kind: "refund", orderId, payload: refundPayload(operation.payload, orderId) };
+  if (operation.kind === "correction") return { kind: "correction", orderId, payload: correctionPayload(operation.payload, orderId) };
+  throw new Error("Unknown operation kind");
+}
+
+function refundPayload(value: unknown, expectedOrderId: string): RecordOrderRefundInput {
+  const payload = strictObject(value, ["orderId", "additionalReturns", "deliveryRefundCents", "source", "reference", "declaredFinancialCents", "reason", "confirmedAt", "expectedPreviewVersion"]);
+  const orderId = identifier(payload.orderId, 128);
+  if (orderId !== expectedOrderId) throw new Error("Payload order mismatch");
+  if (payload.source !== "admin" && payload.source !== "provider_reference") throw new Error("Invalid source");
+  if (payload.reason !== "product_return" && payload.reason !== "order_cancellation" && payload.reason !== "delivery_refund") throw new Error("Invalid reason");
+  return {
+    orderId,
+    additionalReturns: returnLines(payload.additionalReturns),
+    deliveryRefundCents: cents(payload.deliveryRefundCents),
+    source: payload.source,
+    reference: identifier(payload.reference, 80),
+    declaredFinancialCents: cents(payload.declaredFinancialCents),
+    reason: payload.reason,
+    confirmedAt: instant(payload.confirmedAt),
+    expectedPreviewVersion: shaIdentifier(payload.expectedPreviewVersion),
+  };
+}
+
+function correctionPayload(value: unknown, expectedOrderId: string): RecordRefundCorrectionInput {
+  const payload = strictObject(value, ["orderId", "targetEventId", "expectedRevision", "replacementReturns", "deliveryRefundCents", "declaredFinancialCents", "correctionReason", "correctionReference", "expectedPreviewVersion"]);
+  const orderId = identifier(payload.orderId, 128);
+  if (orderId !== expectedOrderId) throw new Error("Payload order mismatch");
+  if (!Number.isSafeInteger(payload.expectedRevision) || (payload.expectedRevision as number) < 0) throw new Error("Invalid revision");
+  if (typeof payload.correctionReason !== "string" || payload.correctionReason !== payload.correctionReason.trim() || payload.correctionReason.length < 3 || payload.correctionReason.length > 300) throw new Error("Invalid correction reason");
+  return {
+    orderId,
+    targetEventId: shaIdentifier(payload.targetEventId),
+    expectedRevision: payload.expectedRevision as number,
+    replacementReturns: returnLines(payload.replacementReturns),
+    deliveryRefundCents: cents(payload.deliveryRefundCents),
+    declaredFinancialCents: cents(payload.declaredFinancialCents),
+    correctionReason: payload.correctionReason,
+    correctionReference: identifier(payload.correctionReference, 80),
+    expectedPreviewVersion: shaIdentifier(payload.expectedPreviewVersion),
+  };
+}
+
+function returnLines(value: unknown) {
+  if (!Array.isArray(value) || value.length > 200) throw new Error("Invalid return lines");
+  const seen = new Set<string>();
+  return value.map((entry) => {
+    const line = strictObject(entry, ["lineId", "additionalNetCents"]);
+    const lineId = identifier(line.lineId, 128);
+    const additionalNetCents = cents(line.additionalNetCents);
+    if (additionalNetCents === 0 || seen.has(lineId)) throw new Error("Invalid return line");
+    seen.add(lineId);
+    return { lineId, additionalNetCents };
+  });
+}
+
+function strictObject(value: unknown, keys: readonly string[]): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid object");
+  const record = value as Record<string, unknown>;
+  const actual = Object.keys(record).sort();
+  const expected = [...keys].sort();
+  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) throw new Error("Unexpected properties");
+  return record;
+}
+
+function identifier(value: unknown, max: number) {
+  if (typeof value !== "string" || value.length > max || !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(value)) throw new Error("Invalid identifier");
+  return value;
+}
+
+function shaIdentifier(value: unknown) {
+  if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)) throw new Error("Invalid sha identifier");
+  return value;
+}
+
+function instant(value: unknown) {
+  if (typeof value !== "string" || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(value) || !Number.isFinite(Date.parse(value))) throw new Error("Invalid instant");
+  const normalized = new Date(value).toISOString();
+  if (normalized !== value && normalized.replace(".000Z", "Z") !== value) throw new Error("Invalid instant");
+  return value;
+}
+
+function cents(value: unknown) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw new Error("Invalid cents");
+  return value;
+}
+
+function sameStoredRecord(left: CagnotteAdminStoredFrozenOperation, right: CagnotteAdminStoredFrozenOperation) {
+  return stable(left) === stable(right);
+}
+
+function stable(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stable(record[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}

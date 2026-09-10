@@ -11,11 +11,16 @@ export type CagnotteAdminViewModel = {
   notice: string;
   uncertain: boolean;
   pendingOperation: CagnotteAdminFrozenOperation | null;
+  recoveryBlocked: boolean;
   busy: boolean;
 };
 
+export function createCagnotteAdminInitialState(): CagnotteAdminViewModel {
+  return { phase: "loading", inspection: null, mode: "refund", refundPreview: null, correctionPreview: null, notice: "", uncertain: false, pendingOperation: null, recoveryBlocked: false, busy: false };
+}
+
 export function cagnotteAdminLoadingState(value: CagnotteAdminViewModel): CagnotteAdminViewModel {
-  return { ...value, phase: "loading", notice: "" };
+  return { ...value, phase: "loading", notice: value.recoveryBlocked || value.pendingOperation ? value.notice : "" };
 }
 
 export function cagnotteAdminFailureState(
@@ -24,7 +29,7 @@ export function cagnotteAdminFailureState(
   phase: CagnotteAdminViewModel["phase"] = value.phase,
 ): CagnotteAdminViewModel {
   const newlyUncertain = error instanceof CagnotteAdminRequestError && error.uncertain;
-  return { ...value, phase, notice: message(error), uncertain: value.uncertain || value.pendingOperation !== null || newlyUncertain };
+  return { ...value, phase, notice: message(error), uncertain: value.recoveryBlocked || value.uncertain || value.pendingOperation !== null || newlyUncertain };
 }
 
 export function cagnotteAdminInspectionSuccessState(
@@ -32,10 +37,13 @@ export function cagnotteAdminInspectionSuccessState(
   inspection: CagnotteAdminInspection,
   notice = "",
 ): CagnotteAdminViewModel {
+  if (value.recoveryBlocked) {
+    return { ...value, phase: "ready", inspection, uncertain: true };
+  }
   if (value.pendingOperation && !isCagnotteAdminFrozenOperationRecorded(value.pendingOperation, inspection)) {
     return { ...value, phase: "ready", inspection, notice: CAGNOTTE_ADMIN_FROZEN_NOTICE, uncertain: true };
   }
-  return { ...value, phase: "ready", inspection, refundPreview: null, correctionPreview: null, notice, uncertain: false, pendingOperation: null };
+  return { ...value, phase: "ready", inspection, refundPreview: null, correctionPreview: null, notice, uncertain: false, pendingOperation: null, recoveryBlocked: false };
 }
 
 export function cagnotteAdminFrozenOperationState(
@@ -43,11 +51,26 @@ export function cagnotteAdminFrozenOperationState(
   operation: CagnotteAdminFrozenOperation,
   error?: unknown,
 ): CagnotteAdminViewModel {
-  return { ...value, notice: error === undefined ? CAGNOTTE_ADMIN_FROZEN_NOTICE : message(error), uncertain: true, pendingOperation: operation };
+  return { ...value, notice: error === undefined ? CAGNOTTE_ADMIN_FROZEN_NOTICE : message(error), uncertain: true, pendingOperation: operation, recoveryBlocked: false };
+}
+
+export function cagnotteAdminRestoredOperationState(
+  value: CagnotteAdminViewModel,
+  operation: CagnotteAdminFrozenOperation,
+): CagnotteAdminViewModel {
+  return { ...value, notice: "Une opération précédente reste à confirmer.", uncertain: true, pendingOperation: operation, recoveryBlocked: false };
+}
+
+export function cagnotteAdminStorageBlockedState(
+  value: CagnotteAdminViewModel,
+  notice: string,
+  operation: CagnotteAdminFrozenOperation | null = value.pendingOperation,
+): CagnotteAdminViewModel {
+  return { ...value, notice, uncertain: true, pendingOperation: operation, recoveryBlocked: true };
 }
 
 export function cagnotteAdminFormUpdatedState(value: CagnotteAdminViewModel): CagnotteAdminViewModel {
-  if (value.pendingOperation) return value;
+  if (value.pendingOperation || value.recoveryBlocked) return value;
   return { ...value, refundPreview: null, correctionPreview: null, notice: "" };
 }
 

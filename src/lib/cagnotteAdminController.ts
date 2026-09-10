@@ -1,5 +1,6 @@
 import type { CagnotteAdminInspection } from "../types/cagnotteAdmin";
 import type { RecordOrderRefundInput, RecordRefundCorrectionInput } from "../services/cagnotteAdminService";
+import type { CagnotteAdminFrozenOperationStore } from "./cagnotteAdminFrozenOperationStorage";
 
 export type CagnotteAdminFrozenOperation =
   | { kind: "refund"; orderId: string; payload: RecordOrderRefundInput }
@@ -37,6 +38,55 @@ export async function retryCagnotteAdminFrozenOperation<TRefund, TCorrection>(
 ) {
   if (operation.orderId !== currentOrderId) throw new Error("L’opération gelée appartient à une autre commande.");
   return operation.kind === "refund" ? handlers.refund(operation.payload) : handlers.correction(operation.payload);
+}
+
+export async function sendCagnotteAdminOperationWithDurableRecovery<T>(
+  store: CagnotteAdminFrozenOperationStore,
+  operation: CagnotteAdminFrozenOperation,
+  send: (operation: CagnotteAdminFrozenOperation) => Promise<T>,
+  onPersisted: (operation: CagnotteAdminFrozenOperation) => void = () => undefined,
+) {
+  store.persistBeforeSend(operation);
+  onPersisted(operation);
+  try {
+    const result = await send(operation);
+    try { store.updateState(operation, "awaiting_confirmation"); } catch { /* The confirmed in_flight record remains fail-closed. */ }
+    return result;
+  } catch (error) {
+    try { store.updateState(operation, "uncertain"); } catch { /* The confirmed in_flight record remains fail-closed. */ }
+    throw error;
+  }
+}
+
+export async function retryCagnotteAdminFrozenOperationDurably<TRefund, TCorrection>(
+  store: CagnotteAdminFrozenOperationStore,
+  operation: CagnotteAdminFrozenOperation,
+  currentOrderId: string,
+  handlers: {
+    refund: (payload: RecordOrderRefundInput) => Promise<TRefund>;
+    correction: (payload: RecordRefundCorrectionInput) => Promise<TCorrection>;
+  },
+) {
+  if (operation.orderId !== currentOrderId) throw new Error("L’opération gelée appartient à une autre commande.");
+  store.updateState(operation, "in_flight");
+  try {
+    const result = await retryCagnotteAdminFrozenOperation(operation, currentOrderId, handlers);
+    try { store.updateState(operation, "awaiting_confirmation"); } catch { /* The prior durable record remains fail-closed. */ }
+    return result;
+  } catch (error) {
+    try { store.updateState(operation, "uncertain"); } catch { /* A prior durable record still protects the operation. */ }
+    throw error;
+  }
+}
+
+export function resolveCagnotteAdminFrozenOperationFromInspection(
+  store: CagnotteAdminFrozenOperationStore,
+  operation: CagnotteAdminFrozenOperation,
+  inspection: CagnotteAdminInspection,
+) {
+  if (!isCagnotteAdminFrozenOperationRecorded(operation, inspection)) return false;
+  store.clearAfterResolution(operation);
+  return true;
 }
 
 function normalizedReference(value: string) {
