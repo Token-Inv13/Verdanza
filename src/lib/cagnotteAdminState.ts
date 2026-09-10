@@ -85,6 +85,22 @@ export function cagnotteAdminDefinitiveRejectionState(
   };
 }
 
+export function cagnotteAdminTerminalReinspectionState(
+  value: CagnotteAdminViewModel,
+  notice: string,
+): CagnotteAdminViewModel {
+  return {
+    ...value,
+    phase: "loading",
+    refundPreview: null,
+    correctionPreview: null,
+    notice,
+    uncertain: true,
+    pendingOperation: null,
+    recoveryBlocked: false,
+  };
+}
+
 export function cagnotteAdminFormUpdatedState(value: CagnotteAdminViewModel): CagnotteAdminViewModel {
   if (value.pendingOperation || value.recoveryBlocked) return value;
   return { ...value, refundPreview: null, correctionPreview: null, notice: "" };

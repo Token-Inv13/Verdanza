@@ -1,12 +1,57 @@
 import type { CagnotteAdminInspection } from "../types/cagnotteAdmin";
 import { CagnotteAdminRequestError, type RecordOrderRefundInput, type RecordRefundCorrectionInput } from "../services/cagnotteAdminService";
-import type { CagnotteAdminFrozenOperationStore } from "./cagnotteAdminFrozenOperationStorage";
+import {
+  cagnotteAdminFrozenOperationFingerprint,
+  sameFrozenOperation,
+  type CagnotteAdminFrozenOperationStore,
+  type CagnotteAdminStoredFrozenOperation,
+} from "./cagnotteAdminFrozenOperationStorage";
 
 export type CagnotteAdminFrozenOperation =
   | { kind: "refund"; orderId: string; payload: RecordOrderRefundInput }
   | { kind: "correction"; orderId: string; payload: RecordRefundCorrectionInput };
 
 export const CAGNOTTE_ADMIN_FROZEN_NOTICE = "L’opération initiale n’est pas encore confirmée. Vous pouvez réinspecter ou rejouer exactement la même opération. Aucune nouvelle déclaration ne peut être créée pour le moment.";
+export const CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_REQUIRED_NOTICE = "Le verrou local a disparu sans preuve terminale valide pour cette opération. La commande reste verrouillée jusqu’à une réinspection serveur concluante.";
+
+export type CagnotteAdminStorageReconciliation =
+  | { status: "empty" }
+  | { status: "frozen"; record: CagnotteAdminStoredFrozenOperation }
+  | { status: "deferred" }
+  | { status: "definitive_rejection" }
+  | { status: "recorded" }
+  | { status: "blocked"; message: string };
+
+export function reconcileCagnotteAdminFrozenOperationStorage(
+  store: CagnotteAdminFrozenOperationStore,
+  orderId: string,
+  currentOperation: CagnotteAdminFrozenOperation | null,
+  mutationInFlight: CagnotteAdminFrozenOperation | null,
+): CagnotteAdminStorageReconciliation {
+  const snapshot = store.loadRecovery(orderId);
+  if (snapshot.frozen.status === "blocked") return { status: "blocked", message: snapshot.frozen.message };
+  if (snapshot.frozen.status === "ready") {
+    if (currentOperation && !sameFrozenOperation(currentOperation, snapshot.frozen.record.operation)) {
+      return { status: "blocked", message: "Une autre opération durable est enregistrée pour cette commande." };
+    }
+    return { status: "frozen", record: snapshot.frozen.record };
+  }
+  if (snapshot.resolution.status === "blocked") return { status: "blocked", message: snapshot.resolution.message };
+  if (!currentOperation) return { status: "empty" };
+  if (mutationInFlight) {
+    if (!sameFrozenOperation(currentOperation, mutationInFlight)) {
+      return { status: "blocked", message: "Une autre opération est en cours pour cette commande." };
+    }
+    return { status: "deferred" };
+  }
+  if (snapshot.resolution.status === "empty") {
+    return { status: "blocked", message: CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_REQUIRED_NOTICE };
+  }
+  if (snapshot.resolution.resolution.operationFingerprint !== cagnotteAdminFrozenOperationFingerprint(currentOperation)) {
+    return { status: "blocked", message: CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_REQUIRED_NOTICE };
+  }
+  return { status: snapshot.resolution.resolution.outcome };
+}
 
 export function freezeCagnotteAdminRefund(input: RecordOrderRefundInput): CagnotteAdminFrozenOperation {
   return { kind: "refund", orderId: input.orderId, payload: { ...input, additionalReturns: input.additionalReturns.map((line) => ({ ...line })) } };

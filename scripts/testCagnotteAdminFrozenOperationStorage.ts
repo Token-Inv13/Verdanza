@@ -1,7 +1,10 @@
 import { deepEqual, doesNotMatch, equal, match, ok, rejects, throws } from "node:assert/strict";
+import { createHash } from "node:crypto";
 import {
+  CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_REQUIRED_NOTICE,
   freezeCagnotteAdminCorrection,
   freezeCagnotteAdminRefund,
+  reconcileCagnotteAdminFrozenOperationStorage,
   resolveCagnotteAdminFrozenOperationFromInspection,
   retryCagnotteAdminFrozenOperationDurably,
   sendCagnotteAdminOperationWithDurableRecovery,
@@ -9,12 +12,14 @@ import {
 } from "../src/lib/cagnotteAdminController.js";
 import {
   CAGNOTTE_ADMIN_FROZEN_OPERATION_KEY_PREFIX,
+  CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_KEY_PREFIX,
   CAGNOTTE_ADMIN_STORAGE_INVALID_NOTICE,
   CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE,
+  cagnotteAdminFrozenOperationFingerprint,
   createCagnotteAdminFrozenOperationStore,
   type CagnotteAdminStorageLike,
 } from "../src/lib/cagnotteAdminFrozenOperationStorage.js";
-import { cagnotteAdminDefinitiveRejectionState, cagnotteAdminRestoredOperationState, createCagnotteAdminInitialState } from "../src/lib/cagnotteAdminState.js";
+import { cagnotteAdminDefinitiveRejectionState, cagnotteAdminInspectionSuccessState, cagnotteAdminRestoredOperationState, cagnotteAdminTerminalReinspectionState, createCagnotteAdminInitialState } from "../src/lib/cagnotteAdminState.js";
 import { CagnotteAdminRequestError } from "../src/services/cagnotteAdminService.js";
 import type { CagnotteAdminInspection } from "../src/types/cagnotteAdmin.js";
 
@@ -293,6 +298,7 @@ await test("21 race reload avant commit conserve puis resout une seule operation
   await rejects(() => request, /Réponse perdue/);
   equal(mutationCalls, 1);
   equal(reloadedStore.load(ORDER_A).status, "ready");
+  equal(reloadedStore.loadResolution(ORDER_A).status, "empty");
   equal(resolveCagnotteAdminFrozenOperationFromInspection(reloadedStore, operation, refundInspection(operation)), true);
   equal(reloadedStore.load(ORDER_A).status, "empty");
 });
@@ -423,6 +429,8 @@ await test("31 premier envoi refund ou correction libere exactement un rejet def
       }, () => undefined, () => { cleared += 1; }), (error: unknown) => error instanceof CagnotteAdminRequestError && error.code === code);
       equal(cleared, 1, `${operation.kind}:${code}`);
       equal(store.load(operation.orderId).status, "empty", `${operation.kind}:${code}`);
+      const resolution = store.loadResolution(operation.orderId);
+      equal(resolution.status === "ready" && resolution.resolution.outcome, "definitive_rejection", `${operation.kind}:${code}`);
       const refreshed = operation.kind === "refund"
         ? freezeCagnotteAdminRefund({ ...operation.payload, reference: `${operation.payload.reference}-next`, expectedPreviewVersion: "e".repeat(64) })
         : freezeCagnotteAdminCorrection({ ...operation.payload, correctionReference: `${operation.payload.correctionReference}-next`, expectedPreviewVersion: "f".repeat(64) });
@@ -493,11 +501,189 @@ await test("34 retry deja incertain reste verrouille pour refund et correction s
       }), (error: unknown) => error instanceof CagnotteAdminRequestError && error.code === code);
       const after = store.load(operation.orderId);
       equal(after.status === "ready" && after.record.state, "uncertain", `${operation.kind}:${code}`);
+      equal(store.loadResolution(operation.orderId).status, "empty", `${operation.kind}:${code}`);
     }
   }
 });
 
-console.log(`HOTFIX 4F2-H6 : ${tests} contrôles storage/controller réussis.`);
+await test("35 marqueur terminal versionne contient seulement empreinte resultat et horodatage", () => {
+  const storage = new MemoryStorage();
+  const store = makeStore(storage);
+  const operation = refundOperation();
+  store.persistBeforeSend(operation);
+  store.clearAfterDefinitiveRejection(operation);
+  equal(store.resolutionKey(ORDER_A), `${CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_KEY_PREFIX}${ORDER_A}`);
+  const raw = storage.values.get(store.resolutionKey(ORDER_A)) ?? "";
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
+  deepEqual(Object.keys(parsed).sort(), ["operationFingerprint", "orderId", "outcome", "resolvedAtEpochMs", "schemaVersion"]);
+  equal(parsed.outcome, "definitive_rejection");
+  equal(parsed.resolvedAtEpochMs, NOW);
+  equal(parsed.operationFingerprint, createHash("sha256").update(stableForTest(operation)).digest("hex"));
+  equal(cagnotteAdminFrozenOperationFingerprint(operation), parsed.operationFingerprint);
+  doesNotMatch(raw, /additionalReturns|reference|confirmedAt|previewVersion|authorization|bearer|email|customer|cookie|session|password|secret/i);
+});
+
+await test("36 rejet definitif A vers B libere refund et correction apres reinspection fraiche", () => {
+  for (const operation of [refundOperation(), correctionOperation()]) {
+    const storage = new MemoryStorage();
+    const tabA = makeStore(storage);
+    const tabB = makeStore(storage);
+    tabA.persistBeforeSend(operation);
+    const restored = tabB.load(operation.orderId);
+    ok(restored.status === "ready");
+    const current = restored.status === "ready" ? restored.record.operation : operation;
+    tabA.clearAfterDefinitiveRejection(operation);
+    equal(reconcileCagnotteAdminFrozenOperationStorage(tabB, operation.orderId, current, null).status, "definitive_rejection");
+    const awaitingInspection = cagnotteAdminTerminalReinspectionState({
+      ...createCagnotteAdminInitialState(), phase: "ready", refundPreview: {} as never, correctionPreview: {} as never,
+      uncertain: true, pendingOperation: current,
+    }, "Réinspection serveur en cours.");
+    equal(awaitingInspection.phase, "loading");
+    equal(awaitingInspection.refundPreview, null);
+    equal(awaitingInspection.correctionPreview, null);
+    equal(awaitingInspection.pendingOperation, null);
+    equal(awaitingInspection.uncertain, true);
+    const ready = cagnotteAdminInspectionSuccessState(awaitingInspection, inspection(operation.orderId, []));
+    equal(ready.phase, "ready");
+    equal(ready.uncertain, false);
+  }
+});
+
+await test("37 resolution recorded conserve l operation jusqu a la preuve serveur exacte", () => {
+  for (const operation of [refundOperation(), correctionOperation()]) {
+    const storage = new MemoryStorage();
+    const tabA = makeStore(storage);
+    const tabB = makeStore(storage);
+    tabA.persistBeforeSend(operation);
+    tabA.clearAfterResolution(operation);
+    equal(reconcileCagnotteAdminFrozenOperationStorage(tabB, operation.orderId, operation, null).status, "recorded");
+    equal(resolveCagnotteAdminFrozenOperationFromInspection(tabB, operation, inspection(operation.orderId, [])), false);
+    const exact = operation.kind === "refund"
+      ? refundInspection(operation)
+      : inspection(operation.orderId, [{ type: "correction", targetEventId: operation.payload.targetEventId,
+        revision: operation.payload.expectedRevision + 1, reference: operation.payload.correctionReference }]);
+    equal(resolveCagnotteAdminFrozenOperationFromInspection(tabB, operation, exact), true);
+  }
+});
+
+await test("38 suppression simple sans marqueur ne deverrouille jamais", () => {
+  const storage = new MemoryStorage();
+  const store = makeStore(storage);
+  const operation = refundOperation();
+  store.persistBeforeSend(operation);
+  storage.values.delete(store.key(ORDER_A));
+  const result = reconcileCagnotteAdminFrozenOperationStorage(store, ORDER_A, operation, null);
+  equal(result.status, "blocked");
+  if (result.status === "blocked") equal(result.message, CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_REQUIRED_NOTICE);
+});
+
+await test("39 un ancien marqueur exact pour X ne deverrouille pas une nouvelle operation Y", () => {
+  const storage = new MemoryStorage();
+  const store = makeStore(storage);
+  const operationX = refundOperation();
+  const operationY = freezeCagnotteAdminRefund({ ...operationX.payload, reference: "refund-h7-operation-y" });
+  store.persistBeforeSend(operationX);
+  store.clearAfterDefinitiveRejection(operationX);
+  store.persistBeforeSend(operationY);
+  storage.values.delete(store.key(ORDER_A));
+  equal(reconcileCagnotteAdminFrozenOperationStorage(store, ORDER_A, operationY, null).status, "blocked");
+});
+
+await test("40 marqueur d une autre commande est invalide et fail closed", () => {
+  const storage = new MemoryStorage();
+  const store = makeStore(storage);
+  storage.values.set(store.resolutionKey(ORDER_A), JSON.stringify({
+    schemaVersion: 1, orderId: ORDER_B, operationFingerprint: cagnotteAdminFrozenOperationFingerprint(refundOperation(ORDER_B)),
+    outcome: "definitive_rejection", resolvedAtEpochMs: NOW,
+  }));
+  equal(store.loadResolution(ORDER_A).status, "blocked");
+  equal(reconcileCagnotteAdminFrozenOperationStorage(store, ORDER_A, refundOperation(), null).status, "blocked");
+});
+
+await test("41 marqueur corrompu schema outcome ou empreinte inconnus reste fail closed", () => {
+  const operation = refundOperation();
+  const invalidValues = [
+    "{invalid",
+    JSON.stringify({ schemaVersion: 2, orderId: ORDER_A, operationFingerprint: "a".repeat(64), outcome: "definitive_rejection", resolvedAtEpochMs: NOW }),
+    JSON.stringify({ schemaVersion: 1, orderId: ORDER_A, operationFingerprint: "a".repeat(64), outcome: "unknown", resolvedAtEpochMs: NOW }),
+    JSON.stringify({ schemaVersion: 1, orderId: ORDER_A, operationFingerprint: "not-a-hash", outcome: "recorded", resolvedAtEpochMs: NOW }),
+  ];
+  for (const raw of invalidValues) {
+    const storage = new MemoryStorage();
+    const store = makeStore(storage);
+    storage.values.set(store.resolutionKey(ORDER_A), raw);
+    equal(reconcileCagnotteAdminFrozenOperationStorage(store, ORDER_A, operation, null).status, "blocked");
+  }
+});
+
+await test("42 ordre des evenements storage ne change pas la resolution finale", () => {
+  for (const eventOrder of [["resolution", "frozen"], ["frozen", "resolution"]] as const) {
+    const storage = new MemoryStorage();
+    const events = new StorageEvents();
+    const tabA = makeStore(storage, events);
+    const tabB = makeStore(storage, events);
+    const operation = refundOperation();
+    tabA.persistBeforeSend(operation);
+    let lastStatus = "";
+    const unsubscribe = tabB.subscribe(ORDER_A, () => {
+      lastStatus = reconcileCagnotteAdminFrozenOperationStorage(tabB, ORDER_A, operation, null).status;
+    });
+    tabA.clearAfterDefinitiveRejection(operation);
+    for (const event of eventOrder) events.emit(event === "resolution" ? tabA.resolutionKey(ORDER_A) : tabA.key(ORDER_A));
+    equal(lastStatus, "definitive_rejection");
+    unsubscribe();
+  }
+});
+
+await test("43 marker observe avant suppression laisse le frozen autoritaire", () => {
+  const storage = new MemoryStorage();
+  const store = makeStore(storage);
+  const operation = refundOperation();
+  store.persistBeforeSend(operation);
+  storage.values.set(store.resolutionKey(ORDER_A), JSON.stringify({
+    schemaVersion: 1, orderId: ORDER_A, operationFingerprint: cagnotteAdminFrozenOperationFingerprint(operation),
+    outcome: "definitive_rejection", resolvedAtEpochMs: NOW,
+  }));
+  equal(reconcileCagnotteAdminFrozenOperationStorage(store, ORDER_A, operation, null).status, "frozen");
+  storage.values.delete(store.key(ORDER_A));
+  equal(reconcileCagnotteAdminFrozenOperationStorage(store, ORDER_A, operation, null).status, "definitive_rejection");
+});
+
+await test("44 evenement terminal pendant requete en vol est differe puis traite", () => {
+  const storage = new MemoryStorage();
+  const tabA = makeStore(storage);
+  const tabB = makeStore(storage);
+  const operation = correctionOperation();
+  tabA.persistBeforeSend(operation);
+  tabA.clearAfterDefinitiveRejection(operation);
+  equal(reconcileCagnotteAdminFrozenOperationStorage(tabB, ORDER_A, operation, operation).status, "deferred");
+  equal(reconcileCagnotteAdminFrozenOperationStorage(tabB, ORDER_A, operation, null).status, "definitive_rejection");
+});
+
+await test("45 echec ou silence d ecriture du marqueur conserve le verrou", () => {
+  for (const failure of ["throw", "silent"] as const) {
+    const storage = new MemoryStorage();
+    const store = makeStore(storage);
+    const operation = refundOperation();
+    store.persistBeforeSend(operation);
+    if (failure === "throw") storage.failSet = true;
+    else storage.silentSet = true;
+    throws(() => store.clearAfterDefinitiveRejection(operation), /enregistrement|reprise/i);
+    storage.failSet = false;
+    storage.silentSet = false;
+    equal(store.load(ORDER_A).status, "ready");
+    equal(store.loadResolution(ORDER_A).status, "empty");
+  }
+});
+
+await test("46 lecture indisponible du snapshot de reprise reste fail closed", () => {
+  const storage = new MemoryStorage();
+  const store = makeStore(storage);
+  storage.failGet = true;
+  equal(reconcileCagnotteAdminFrozenOperationStorage(store, ORDER_A, refundOperation(), null).status, "blocked");
+});
+
+console.log(`HOTFIX 4F2-H7 : ${tests} contrôles storage/controller réussis.`);
 
 function makeStore(storage: MemoryStorage, events?: StorageEvents) {
   return createCagnotteAdminFrozenOperationStore({ storage, now: () => NOW, subscribeToStorageChanges: events?.subscribe });
@@ -537,4 +723,13 @@ function inspection(orderId: string, history: Array<Record<string, unknown>>) {
 
 function refundInspection(operation: ReturnType<typeof refundOperation>) {
   return inspection(operation.orderId, [{ type: "initial_declaration", source: operation.payload.source, reference: operation.payload.reference.toUpperCase() }]);
+}
+
+function stableForTest(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableForTest).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>).sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableForTest(entry)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
 }

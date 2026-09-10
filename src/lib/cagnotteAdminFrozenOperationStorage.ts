@@ -3,6 +3,8 @@ import type { RecordOrderRefundInput, RecordRefundCorrectionInput } from "../ser
 
 export const CAGNOTTE_ADMIN_FROZEN_OPERATION_SCHEMA_VERSION = 1 as const;
 export const CAGNOTTE_ADMIN_FROZEN_OPERATION_KEY_PREFIX = "verdanza:cagnotte-admin:frozen-operation:v1:";
+export const CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_SCHEMA_VERSION = 1 as const;
+export const CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_KEY_PREFIX = "verdanza:cagnotte-admin:frozen-resolution:v1:";
 export const CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE = "Impossible de sécuriser cette opération pour une reprise en cas de réponse interrompue. Aucun enregistrement n’a été envoyé.";
 export const CAGNOTTE_ADMIN_STORAGE_INVALID_NOTICE = "Les données locales de reprise de cette commande sont invalides. Aucune nouvelle opération n’est autorisée tant que leur résolution n’est pas établie.";
 
@@ -15,10 +17,30 @@ export type CagnotteAdminStoredFrozenOperation = {
   createdAtEpochMs: number;
 };
 
+export type CagnotteAdminTerminalResolutionOutcome = "definitive_rejection" | "recorded";
+
+export type CagnotteAdminTerminalResolution = {
+  schemaVersion: typeof CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_SCHEMA_VERSION;
+  orderId: string;
+  operationFingerprint: string;
+  outcome: CagnotteAdminTerminalResolutionOutcome;
+  resolvedAtEpochMs: number;
+};
+
 export type CagnotteAdminFrozenOperationLoadResult =
   | { status: "empty" }
   | { status: "ready"; record: CagnotteAdminStoredFrozenOperation }
   | { status: "blocked"; reason: "invalid" | "unavailable"; message: string };
+
+export type CagnotteAdminTerminalResolutionLoadResult =
+  | { status: "empty" }
+  | { status: "ready"; resolution: CagnotteAdminTerminalResolution }
+  | { status: "blocked"; reason: "invalid" | "unavailable"; message: string };
+
+export type CagnotteAdminRecoveryStorageSnapshot = {
+  frozen: CagnotteAdminFrozenOperationLoadResult;
+  resolution: CagnotteAdminTerminalResolutionLoadResult;
+};
 
 export interface CagnotteAdminStorageLike {
   getItem(key: string): string | null;
@@ -28,7 +50,10 @@ export interface CagnotteAdminStorageLike {
 
 export interface CagnotteAdminFrozenOperationStore {
   key(orderId: string): string;
+  resolutionKey(orderId: string): string;
   load(orderId: string): CagnotteAdminFrozenOperationLoadResult;
+  loadResolution(orderId: string): CagnotteAdminTerminalResolutionLoadResult;
+  loadRecovery(orderId: string): CagnotteAdminRecoveryStorageSnapshot;
   persistBeforeSend(operation: CagnotteAdminFrozenOperation): CagnotteAdminStoredFrozenOperation;
   updateState(operation: CagnotteAdminFrozenOperation, state: CagnotteAdminFrozenOperationState): CagnotteAdminStoredFrozenOperation;
   clearAfterResolution(operation: CagnotteAdminFrozenOperation): void;
@@ -52,6 +77,7 @@ export function createCagnotteAdminFrozenOperationStore(options: {
   const now = options.now ?? Date.now;
 
   const key = (orderId: string) => `${CAGNOTTE_ADMIN_FROZEN_OPERATION_KEY_PREFIX}${identifier(orderId, 128)}`;
+  const resolutionKey = (orderId: string) => `${CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_KEY_PREFIX}${identifier(orderId, 128)}`;
 
   const load = (orderId: string): CagnotteAdminFrozenOperationLoadResult => {
     let raw: string | null;
@@ -64,6 +90,21 @@ export function createCagnotteAdminFrozenOperationStore(options: {
     try {
       const record = storedRecord(JSON.parse(raw), orderId);
       return { status: "ready", record };
+    } catch {
+      return { status: "blocked", reason: "invalid", message: CAGNOTTE_ADMIN_STORAGE_INVALID_NOTICE };
+    }
+  };
+
+  const loadResolution = (orderId: string): CagnotteAdminTerminalResolutionLoadResult => {
+    let raw: string | null;
+    try {
+      raw = storageProvider().getItem(resolutionKey(orderId));
+    } catch {
+      return { status: "blocked", reason: "unavailable", message: CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE };
+    }
+    if (raw === null) return { status: "empty" };
+    try {
+      return { status: "ready", resolution: terminalResolution(JSON.parse(raw), orderId) };
     } catch {
       return { status: "blocked", reason: "invalid", message: CAGNOTTE_ADMIN_STORAGE_INVALID_NOTICE };
     }
@@ -83,8 +124,39 @@ export function createCagnotteAdminFrozenOperationStore(options: {
     return confirmed.record;
   };
 
-  const clearAndConfirm = (
+  const writeResolutionAndConfirm = (
     operation: CagnotteAdminFrozenOperation,
+    outcome: CagnotteAdminTerminalResolutionOutcome,
+  ) => {
+    const prior = loadResolution(operation.orderId);
+    if (prior.status === "blocked") {
+      throw new CagnotteAdminFrozenOperationStorageError(prior.message, prior.reason);
+    }
+    const resolvedAtEpochMs = now();
+    if (!Number.isSafeInteger(resolvedAtEpochMs) || resolvedAtEpochMs < 0) {
+      throw new CagnotteAdminFrozenOperationStorageError(CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE, "unavailable");
+    }
+    const resolution: CagnotteAdminTerminalResolution = {
+      schemaVersion: CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_SCHEMA_VERSION,
+      orderId: operation.orderId,
+      operationFingerprint: cagnotteAdminFrozenOperationFingerprint(operation),
+      outcome,
+      resolvedAtEpochMs,
+    };
+    try {
+      storageProvider().setItem(resolutionKey(operation.orderId), JSON.stringify(resolution));
+    } catch {
+      throw new CagnotteAdminFrozenOperationStorageError(CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE, "unavailable");
+    }
+    const confirmed = loadResolution(operation.orderId);
+    if (confirmed.status !== "ready" || !sameTerminalResolution(confirmed.resolution, resolution)) {
+      throw new CagnotteAdminFrozenOperationStorageError(CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE, "unavailable");
+    }
+  };
+
+  const resolveAndClear = (
+    operation: CagnotteAdminFrozenOperation,
+    outcome: CagnotteAdminTerminalResolutionOutcome,
     unavailableMessage: string,
     requireExisting: boolean,
   ) => {
@@ -97,11 +169,11 @@ export function createCagnotteAdminFrozenOperationStore(options: {
       if (requireExisting) {
         throw new CagnotteAdminFrozenOperationStorageError("L’opération durable à supprimer est introuvable.", "conflict");
       }
-      return;
-    }
-    if (!sameFrozenOperation(existing.record.operation, validated)) {
+    } else if (!sameFrozenOperation(existing.record.operation, validated)) {
       throw new CagnotteAdminFrozenOperationStorageError("Une autre opération durable est enregistrée pour cette commande.", "conflict");
     }
+    writeResolutionAndConfirm(validated, outcome);
+    if (existing.status === "empty") return;
     try {
       storageProvider().removeItem(key(validated.orderId));
     } catch {
@@ -115,7 +187,12 @@ export function createCagnotteAdminFrozenOperationStore(options: {
 
   return {
     key,
+    resolutionKey,
     load,
+    loadResolution,
+    loadRecovery(orderId) {
+      return { frozen: load(orderId), resolution: loadResolution(orderId) };
+    },
     persistBeforeSend(operation) {
       const validated = validateForMutation(operation);
       const existing = load(validated.orderId);
@@ -124,6 +201,10 @@ export function createCagnotteAdminFrozenOperationStore(options: {
       }
       if (existing.status === "blocked") {
         throw new CagnotteAdminFrozenOperationStorageError(existing.message, existing.reason);
+      }
+      const resolution = loadResolution(validated.orderId);
+      if (resolution.status === "blocked") {
+        throw new CagnotteAdminFrozenOperationStorageError(resolution.message, resolution.reason);
       }
       const createdAtEpochMs = now();
       if (!Number.isSafeInteger(createdAtEpochMs) || createdAtEpochMs < 0) {
@@ -150,15 +231,16 @@ export function createCagnotteAdminFrozenOperationStore(options: {
       return writeAndConfirm(validated.orderId, { ...existing.record, state });
     },
     clearAfterResolution(operation) {
-      clearAndConfirm(operation, "La confirmation serveur est acquise, mais le verrou local n’a pas pu être supprimé. La commande reste verrouillée.", false);
+      resolveAndClear(operation, "recorded", "La confirmation serveur est acquise, mais le verrou local n’a pas pu être supprimé. La commande reste verrouillée.", false);
     },
     clearAfterDefinitiveRejection(operation) {
-      clearAndConfirm(operation, "Le rejet serveur est définitif, mais le verrou local n’a pas pu être supprimé. La commande reste verrouillée.", true);
+      resolveAndClear(operation, "definitive_rejection", "Le rejet serveur est définitif, mais le verrou local n’a pas pu être supprimé. La commande reste verrouillée.", true);
     },
     subscribe(orderId, listener) {
       const watchedKey = key(orderId);
+      const watchedResolutionKey = resolutionKey(orderId);
       return options.subscribeToStorageChanges?.((changedKey) => {
-        if (changedKey === watchedKey) listener();
+        if (changedKey === watchedKey || changedKey === watchedResolutionKey) listener();
       }) ?? (() => undefined);
     },
   };
@@ -181,6 +263,10 @@ export function sameFrozenOperation(left: CagnotteAdminFrozenOperation, right: C
   return stable(left) === stable(right);
 }
 
+export function cagnotteAdminFrozenOperationFingerprint(operation: CagnotteAdminFrozenOperation) {
+  return sha256(stable(validateForMutation(operation)));
+}
+
 function storedRecord(value: unknown, expectedOrderId: string): CagnotteAdminStoredFrozenOperation {
   const record = strictObject(value, ["schemaVersion", "state", "operation", "createdAtEpochMs"]);
   if (record.schemaVersion !== CAGNOTTE_ADMIN_FROZEN_OPERATION_SCHEMA_VERSION) throw new Error("Unknown schema");
@@ -191,6 +277,23 @@ function storedRecord(value: unknown, expectedOrderId: string): CagnotteAdminSto
     state: record.state,
     operation: frozenOperation(record.operation, expectedOrderId),
     createdAtEpochMs: record.createdAtEpochMs as number,
+  };
+}
+
+function terminalResolution(value: unknown, expectedOrderId: string): CagnotteAdminTerminalResolution {
+  const resolution = strictObject(value, ["schemaVersion", "orderId", "operationFingerprint", "outcome", "resolvedAtEpochMs"]);
+  if (resolution.schemaVersion !== CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_SCHEMA_VERSION) throw new Error("Unknown terminal resolution schema");
+  const orderId = identifier(resolution.orderId, 128);
+  if (orderId !== expectedOrderId) throw new Error("Terminal resolution order mismatch");
+  if (typeof resolution.operationFingerprint !== "string" || !/^[a-f0-9]{64}$/.test(resolution.operationFingerprint)) throw new Error("Invalid operation fingerprint");
+  if (resolution.outcome !== "definitive_rejection" && resolution.outcome !== "recorded") throw new Error("Invalid terminal outcome");
+  if (!Number.isSafeInteger(resolution.resolvedAtEpochMs) || (resolution.resolvedAtEpochMs as number) < 0) throw new Error("Invalid resolution time");
+  return {
+    schemaVersion: CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_SCHEMA_VERSION,
+    orderId,
+    operationFingerprint: resolution.operationFingerprint,
+    outcome: resolution.outcome,
+    resolvedAtEpochMs: resolution.resolvedAtEpochMs as number,
   };
 }
 
@@ -297,6 +400,10 @@ function sameStoredRecord(left: CagnotteAdminStoredFrozenOperation, right: Cagno
   return stable(left) === stable(right);
 }
 
+function sameTerminalResolution(left: CagnotteAdminTerminalResolution, right: CagnotteAdminTerminalResolution) {
+  return stable(left) === stable(right);
+}
+
 function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
   if (value && typeof value === "object") {
@@ -304,4 +411,58 @@ function stable(value: unknown): string {
     return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stable(record[key])}`).join(",")}}`;
   }
   return JSON.stringify(value);
+}
+
+function sha256(value: string) {
+  const constants = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+  ];
+  const bytes = new TextEncoder().encode(value);
+  const paddedLength = Math.ceil((bytes.length + 9) / 64) * 64;
+  const padded = new Uint8Array(paddedLength);
+  padded.set(bytes);
+  padded[bytes.length] = 0x80;
+  const bitLength = BigInt(bytes.length) * 8n;
+  for (let index = 0; index < 8; index += 1) padded[paddedLength - 1 - index] = Number((bitLength >> BigInt(index * 8)) & 0xffn);
+  const state = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+  const words = new Uint32Array(64);
+  for (let offset = 0; offset < padded.length; offset += 64) {
+    for (let index = 0; index < 16; index += 1) {
+      const wordOffset = offset + index * 4;
+      words[index] = ((padded[wordOffset] << 24) | (padded[wordOffset + 1] << 16) | (padded[wordOffset + 2] << 8) | padded[wordOffset + 3]) >>> 0;
+    }
+    for (let index = 16; index < 64; index += 1) {
+      const x = words[index - 15];
+      const y = words[index - 2];
+      const sigma0 = rotateRight(x, 7) ^ rotateRight(x, 18) ^ (x >>> 3);
+      const sigma1 = rotateRight(y, 17) ^ rotateRight(y, 19) ^ (y >>> 10);
+      words[index] = (words[index - 16] + sigma0 + words[index - 7] + sigma1) >>> 0;
+    }
+    let [a, b, c, d, e, f, g, h] = state;
+    for (let index = 0; index < 64; index += 1) {
+      const sum1 = rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25);
+      const choice = (e & f) ^ (~e & g);
+      const temp1 = (h + sum1 + choice + constants[index] + words[index]) >>> 0;
+      const sum0 = rotateRight(a, 2) ^ rotateRight(a, 13) ^ rotateRight(a, 22);
+      const majority = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (sum0 + majority) >>> 0;
+      h = g; g = f; f = e; e = (d + temp1) >>> 0; d = c; c = b; b = a; a = (temp1 + temp2) >>> 0;
+    }
+    state[0] = (state[0] + a) >>> 0; state[1] = (state[1] + b) >>> 0;
+    state[2] = (state[2] + c) >>> 0; state[3] = (state[3] + d) >>> 0;
+    state[4] = (state[4] + e) >>> 0; state[5] = (state[5] + f) >>> 0;
+    state[6] = (state[6] + g) >>> 0; state[7] = (state[7] + h) >>> 0;
+  }
+  return state.map((word) => word.toString(16).padStart(8, "0")).join("");
+}
+
+function rotateRight(value: number, amount: number) {
+  return (value >>> amount) | (value << (32 - amount));
 }
