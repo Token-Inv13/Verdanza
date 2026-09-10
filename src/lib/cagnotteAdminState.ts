@@ -69,6 +69,22 @@ export function cagnotteAdminStorageBlockedState(
   return { ...value, notice, uncertain: true, pendingOperation: operation, recoveryBlocked: true };
 }
 
+export function cagnotteAdminDefinitiveRejectionState(
+  value: CagnotteAdminViewModel,
+  error: CagnotteAdminRequestError,
+): CagnotteAdminViewModel {
+  return {
+    ...value,
+    phase: "ready",
+    refundPreview: null,
+    correctionPreview: null,
+    notice: message(error),
+    uncertain: false,
+    pendingOperation: null,
+    recoveryBlocked: false,
+  };
+}
+
 export function cagnotteAdminFormUpdatedState(value: CagnotteAdminViewModel): CagnotteAdminViewModel {
   if (value.pendingOperation || value.recoveryBlocked) return value;
   return { ...value, refundPreview: null, correctionPreview: null, notice: "" };

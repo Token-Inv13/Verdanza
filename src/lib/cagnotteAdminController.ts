@@ -1,5 +1,5 @@
 import type { CagnotteAdminInspection } from "../types/cagnotteAdmin";
-import type { RecordOrderRefundInput, RecordRefundCorrectionInput } from "../services/cagnotteAdminService";
+import { CagnotteAdminRequestError, type RecordOrderRefundInput, type RecordRefundCorrectionInput } from "../services/cagnotteAdminService";
 import type { CagnotteAdminFrozenOperationStore } from "./cagnotteAdminFrozenOperationStorage";
 
 export type CagnotteAdminFrozenOperation =
@@ -45,6 +45,7 @@ export async function sendCagnotteAdminOperationWithDurableRecovery<T>(
   operation: CagnotteAdminFrozenOperation,
   send: (operation: CagnotteAdminFrozenOperation) => Promise<T>,
   onPersisted: (operation: CagnotteAdminFrozenOperation) => void = () => undefined,
+  onDefinitiveRejectionCleared: (operation: CagnotteAdminFrozenOperation) => void = () => undefined,
 ) {
   store.persistBeforeSend(operation);
   onPersisted(operation);
@@ -53,6 +54,11 @@ export async function sendCagnotteAdminOperationWithDurableRecovery<T>(
     try { store.updateState(operation, "awaiting_confirmation"); } catch { /* The confirmed in_flight record remains fail-closed. */ }
     return result;
   } catch (error) {
+    if (error instanceof CagnotteAdminRequestError && !error.uncertain) {
+      store.clearAfterDefinitiveRejection(operation);
+      onDefinitiveRejectionCleared(operation);
+      throw error;
+    }
     try { store.updateState(operation, "uncertain"); } catch { /* The confirmed in_flight record remains fail-closed. */ }
     throw error;
   }
@@ -68,7 +74,8 @@ export async function retryCagnotteAdminFrozenOperationDurably<TRefund, TCorrect
   },
 ) {
   if (operation.orderId !== currentOrderId) throw new Error("L’opération gelée appartient à une autre commande.");
-  store.updateState(operation, "in_flight");
+  // A restored operation was already ambiguous. Keep that durable fact throughout every retry.
+  store.updateState(operation, "uncertain");
   try {
     const result = await retryCagnotteAdminFrozenOperation(operation, currentOrderId, handlers);
     try { store.updateState(operation, "awaiting_confirmation"); } catch { /* The prior durable record remains fail-closed. */ }

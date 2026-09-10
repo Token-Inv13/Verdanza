@@ -32,6 +32,7 @@ export interface CagnotteAdminFrozenOperationStore {
   persistBeforeSend(operation: CagnotteAdminFrozenOperation): CagnotteAdminStoredFrozenOperation;
   updateState(operation: CagnotteAdminFrozenOperation, state: CagnotteAdminFrozenOperationState): CagnotteAdminStoredFrozenOperation;
   clearAfterResolution(operation: CagnotteAdminFrozenOperation): void;
+  clearAfterDefinitiveRejection(operation: CagnotteAdminFrozenOperation): void;
   subscribe(orderId: string, listener: () => void): () => void;
 }
 
@@ -82,6 +83,36 @@ export function createCagnotteAdminFrozenOperationStore(options: {
     return confirmed.record;
   };
 
+  const clearAndConfirm = (
+    operation: CagnotteAdminFrozenOperation,
+    unavailableMessage: string,
+    requireExisting: boolean,
+  ) => {
+    const validated = validateForMutation(operation);
+    const existing = load(validated.orderId);
+    if (existing.status === "blocked") {
+      throw new CagnotteAdminFrozenOperationStorageError(existing.message, existing.reason);
+    }
+    if (existing.status === "empty") {
+      if (requireExisting) {
+        throw new CagnotteAdminFrozenOperationStorageError("L’opération durable à supprimer est introuvable.", "conflict");
+      }
+      return;
+    }
+    if (!sameFrozenOperation(existing.record.operation, validated)) {
+      throw new CagnotteAdminFrozenOperationStorageError("Une autre opération durable est enregistrée pour cette commande.", "conflict");
+    }
+    try {
+      storageProvider().removeItem(key(validated.orderId));
+    } catch {
+      throw new CagnotteAdminFrozenOperationStorageError(unavailableMessage, "unavailable");
+    }
+    const confirmed = load(validated.orderId);
+    if (confirmed.status !== "empty") {
+      throw new CagnotteAdminFrozenOperationStorageError(unavailableMessage, "unavailable");
+    }
+  };
+
   return {
     key,
     load,
@@ -119,24 +150,10 @@ export function createCagnotteAdminFrozenOperationStore(options: {
       return writeAndConfirm(validated.orderId, { ...existing.record, state });
     },
     clearAfterResolution(operation) {
-      const validated = validateForMutation(operation);
-      const existing = load(validated.orderId);
-      if (existing.status === "blocked") {
-        throw new CagnotteAdminFrozenOperationStorageError(existing.message, existing.reason);
-      }
-      if (existing.status === "ready" && !sameFrozenOperation(existing.record.operation, validated)) {
-        throw new CagnotteAdminFrozenOperationStorageError("Une autre opération durable est enregistrée pour cette commande.", "conflict");
-      }
-      if (existing.status === "empty") return;
-      try {
-        storageProvider().removeItem(key(validated.orderId));
-      } catch {
-        throw new CagnotteAdminFrozenOperationStorageError("La confirmation serveur est acquise, mais le verrou local n’a pas pu être supprimé. La commande reste verrouillée.", "unavailable");
-      }
-      const confirmed = load(validated.orderId);
-      if (confirmed.status !== "empty") {
-        throw new CagnotteAdminFrozenOperationStorageError("La confirmation serveur est acquise, mais le verrou local n’a pas pu être supprimé. La commande reste verrouillée.", "unavailable");
-      }
+      clearAndConfirm(operation, "La confirmation serveur est acquise, mais le verrou local n’a pas pu être supprimé. La commande reste verrouillée.", false);
+    },
+    clearAfterDefinitiveRejection(operation) {
+      clearAndConfirm(operation, "Le rejet serveur est définitif, mais le verrou local n’a pas pu être supprimé. La commande reste verrouillée.", true);
     },
     subscribe(orderId, listener) {
       const watchedKey = key(orderId);

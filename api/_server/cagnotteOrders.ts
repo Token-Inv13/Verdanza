@@ -89,7 +89,7 @@ function cagnotteCalculationForOrder(
   availableCagnotteCents: number,
 ): CagnotteCalculationInput {
   const lines = order.items.map((item, index) => ({
-    lineId: item.lineId || `order-line-${index}`,
+    lineId: cagnotteOrderItemLineId(item, index),
     initialCents: eurosToCagnotteCents(item.lineTotal),
     ...(item.isGift ? { isGift: true } : {}),
   }));
@@ -120,6 +120,11 @@ function cagnotteCalculationForOrder(
     availableCagnotteCents,
     advantages,
   };
+}
+
+/** Stable identity shared by enrollment and every later order-line projection. */
+export function cagnotteOrderItemLineId(item: Pick<Order["items"][number], "lineId">, index: number) {
+  return item.lineId || `order-line-${index}`;
 }
 
 function promotionCoversLine(promotion: AppliedPromotion, item: Order["items"][number]) {

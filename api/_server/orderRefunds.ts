@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import type { Firestore, QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { simulateCagnotteRefund } from "../../src/lib/cagnotteCalculations.js";
 import type { CagnotteSnapshot, CumulativeLineReturn } from "../../src/types/cagnotte.js";
-import { eurosToCagnotteCents, orderPaymentCents, validateOrderCagnotteEnrollment } from "./cagnotteOrders.js";
+import type { Order } from "../../src/types/index.js";
+import { cagnotteOrderItemLineId, eurosToCagnotteCents, orderPaymentCents, validateOrderCagnotteEnrollment } from "./cagnotteOrders.js";
 import { orderFromSnapshot, hasCagnotteEnrollment } from "./orderProtection.js";
 import {
   applyCagnotteWalletDeltas,
@@ -356,110 +357,22 @@ export async function executeOrderRefund(input: {
     const history = await tx.get(input.db.collection(collection).where("orderId", "==", order.id).limit(historyLimit + 1));
     if (history.size > historyLimit) fail("refund_history_requires_verification");
     const refundMovements = await tx.get(input.db.collection("cagnotteMovements").where("orderId", "==", order.id));
-    const movementById = new Map(refundMovements.docs.map((doc) => [doc.id, doc.data()]));
-    const correctionEvents = history.docs.filter((doc) => doc.data().kind === "refund_correction").map((doc) => {
-      const event = doc.data() as CorrectionEvent;
-      validateStoredCorrectionEvent(event, doc.id);
-      return event;
-    }).sort((a, b) => a.recordedAt.localeCompare(b.recordedAt) || a.revision - b.revision);
-    const events = history.docs.filter((doc) => doc.data().kind !== "refund_correction").map((doc) => {
-      const event = doc.data() as Event;
-      validateStoredEvent(event, doc.id);
-      return event;
-    }).sort((a, b) => a.sequence - b.sequence);
-    let reconstructed = cumulative(
-      enrollment.snapshot.lines.map((line) => ({ lineId: line.lineId, returnedNetCents: 0 })).sort(byLine),
-      0, 0, 0,
-    );
-    const referencedMovements = new Set<string>();
-    for (const [index, event] of events.entries()) {
-      const result = normalizeResult(event.result);
-      if (event.orderId !== order.id || event.beneficiaryId !== enrollment.beneficiaryId || event.sequence !== index + 1 ||
-        stable(result.before) !== stable(reconstructed) || event.version !== recordVersion ||
-        result.loyaltyAccrualDecision !== decision) fail("refund_history_requires_verification");
-      const lines = addReturns(reconstructed.lines, event.content.additionalReturns);
-      const simulation = simulateCagnotteRefund(enrollment.snapshot, reconstructed.lines, lines);
-      const next = cumulative(lines, simulation.next.financialRefundCents, simulation.next.cagnotteRestitutionCents,
-        sum(reconstructed.deliveryFinancialCents, event.content.deliveryRefundCents));
-      if (next.deliveryFinancialCents > deliveryCharged || stable(next) !== stable(result.after) ||
-        result.returnedProductNetCents !== simulation.delta.returnedNetCents ||
-        result.productFinancialCents !== simulation.delta.financialRefundCents ||
-        result.cagnotteRestitutionCents !== simulation.delta.cagnotteRestitutionCents ||
-        result.correction.theoreticalCents !== simulation.delta.loyaltyCorrectionCents ||
-        result.restitution.grossCents !== simulation.delta.cagnotteRestitutionCents ||
-        result.restitution.cumulativeCents !== simulation.next.cagnotteRestitutionCents) fail("refund_history_requires_verification");
-      const expectedLedgerMovement = event.content.additionalReturns.length > 0 && decision === "attributed";
-      const expectedRestitutionMovement = simulation.delta.cagnotteRestitutionCents > 0;
-      if (event.movementIds.length !== Number(expectedLedgerMovement) + Number(expectedRestitutionMovement)) fail("refund_history_requires_verification");
-      for (const movementId of event.movementIds) {
-        if (referencedMovements.has(movementId)) fail("refund_history_requires_verification");
-        const movement = movementById.get(movementId);
-        if (!movement || movement.orderId !== order.id || movement.beneficiaryId !== enrollment.beneficiaryId) fail("refund_history_requires_verification");
-        if (movement.businessEvent === "refund_confirmed") {
-          if (!expectedLedgerMovement || JSON.parse(movement.payload).refundId !== eventKey(event.source, event.reference) ||
-            stable(JSON.parse(movement.payload).additionalReturns) !== stable(event.content.additionalReturns) ||
-            movement.pendingDeltaCents !== result.correction.pendingDeltaCents || movement.availableDeltaCents !== result.correction.availableDeltaCents ||
-            (movement.regularizationDeltaCents ?? 0) !== result.correction.regularizationDeltaCents) fail("refund_history_requires_verification");
-        } else if (movement.businessEvent === "credit_refunded_after_return") {
-          const payload = JSON.parse(movement.payload);
-          if (!expectedRestitutionMovement || payload.refundId !== eventKey(event.source, event.reference) ||
-            payload.grossRestitutionCents !== result.restitution.grossCents || payload.compensationCents !== result.restitution.compensationCents ||
-            movement.pendingDeltaCents !== 0 || movement.availableDeltaCents !== result.restitution.availableIncreaseCents ||
-            movement.reservedDeltaCents !== 0 || movement.regularizationDeltaCents !== -result.restitution.compensationCents) fail("refund_history_requires_verification");
-        } else {
-          fail("refund_history_requires_verification");
-        }
-        referencedMovements.add(movementId);
-      }
-      reconstructed = next;
-      const linkedCorrections = correctionEvents.filter((correctionEvent) =>
-        correctionEvent.targetEventId === eventKey(event.source, event.reference)).sort((a, b) => a.revision - b.revision);
-      for (const [correctionIndex, correctionEvent] of linkedCorrections.entries()) {
-        if (correctionEvent.previousRevision !== correctionIndex || correctionEvent.revision !== correctionIndex + 1 ||
-          stable(correctionEvent.result.previousEffective) !== stable(reconstructed)) fail("refund_history_requires_verification");
-        validateCorrectionResult(correctionEvent, event, enrollment.snapshot, deliveryCharged);
-        let correctionPending = 0, correctionAvailable = 0, correctionRegularization = 0;
-        for (const movementId of correctionEvent.movementIds) {
-          if (referencedMovements.has(movementId)) fail("refund_history_requires_verification");
-          const movement = movementById.get(movementId);
-          if (!movement || movement.orderId !== order.id || movement.beneficiaryId !== enrollment.beneficiaryId ||
-            !["refund_declaration_corrected", "credit_refund_corrected"].includes(movement.businessEvent)) {
-            fail("refund_history_requires_verification");
-          }
-          const payload = JSON.parse(String(movement.payload)) as Record<string, unknown>;
-          if (payload.correctionId !== hash(["refund-correction", correctionEvent.correctionReference]) ||
-            payload.targetEventId !== correctionEvent.targetEventId || payload.revision !== correctionEvent.revision ||
-            payload.event !== movement.businessEvent || movement.reservedDeltaCents !== 0) fail("refund_history_requires_verification");
-          correctionPending += Number(movement.pendingDeltaCents);
-          correctionAvailable += Number(movement.availableDeltaCents);
-          correctionRegularization += Number(movement.regularizationDeltaCents ?? 0);
-          referencedMovements.add(movementId);
-        }
-        if (correctionPending !== correctionEvent.result.differential.pendingDeltaCents ||
-          correctionAvailable !== correctionEvent.result.differential.availableDeltaCents ||
-          correctionRegularization !== correctionEvent.result.differential.regularizationDeltaCents) fail("refund_history_requires_verification");
-        reconstructed = correctionEvent.result.effective;
-      }
-    }
-    const unexpectedRefundMovement = refundMovements.docs.some((doc) =>
-      ["refund_confirmed", "credit_refunded_after_return", "refund_declaration_corrected", "credit_refund_corrected"].includes(doc.data().businessEvent) && !referencedMovements.has(doc.id));
-    const projectedRefundKeys = [
-      ...(reservationBasis?.reservation.refundProjection?.events.map((event) => event.eventKey) ?? []),
-      ...(reservationBasis?.reservation.refundProjection?.corrections?.flatMap((correction) =>
-        correction.eventKey ? [correction.eventKey] : []) ?? []),
-    ];
-    const confirmedRefundKeys = [
-      ...events.flatMap((event) => event.movementIds.filter((movementId) =>
-        movementById.get(movementId)?.businessEvent === "credit_refunded_after_return")),
-      ...correctionEvents.flatMap((event) => event.movementIds.filter((movementId) =>
-        movementById.get(movementId)?.businessEvent === "credit_refund_corrected")),
-    ];
-    if (unexpectedRefundMovement ||
-      (basis.state && stable([...basis.state.cumulativeReturns].sort(byLine)) !== stable(reconstructed.lines)) ||
-      (reservationBasis && (reservationBasis.cumulativeRestitutedCents !== reconstructed.cagnotteRestitutionCents ||
-        stable(projectedRefundKeys) !== stable(confirmedRefundKeys)))) {
-      fail("refund_history_requires_verification");
-    }
+    const reconstruction = reconstructOrderRefundHistory({
+      orderId: order.id,
+      beneficiaryId: enrollment.beneficiaryId,
+      snapshot: enrollment.snapshot,
+      recordVersion,
+      decision,
+      deliveryCharged,
+      accrual: basis.state,
+      reservationBasis,
+      historyDocs: history.docs,
+      movementDocs: refundMovements.docs,
+      movementFailureCode: "refund_history_requires_verification",
+    });
+    const events = reconstruction.originals.map((entry) => entry.event);
+    const correctionEvents = reconstruction.corrections.map((entry) => entry.event);
+    const reconstructed = reconstruction.effective;
 
     const nextLines = addReturns(reconstructed.lines, request.additionalReturns);
     const simulation = simulateCagnotteRefund(enrollment.snapshot, reconstructed.lines, nextLines);
@@ -676,24 +589,27 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
       fail("refund_journal_requires_verification");
     }
     if (reservationBasis && !wallet) fail("refund_right_requires_verification");
-    const originals = history.docs.filter((doc) => doc.data().kind !== "refund_correction").map((doc) => {
-      const event = doc.data() as Event;
-      validateStoredEvent(event, doc.id);
-      return { id: doc.id, event };
-    }).sort((a, b) => a.event.sequence - b.event.sequence);
-    const corrections = history.docs.filter((doc) => doc.data().kind === "refund_correction").map((doc) => {
-      const event = doc.data() as CorrectionEvent;
-      validateStoredCorrectionEvent(event, doc.id);
-      return { id: doc.id, event };
-    }).sort((a, b) => a.event.recordedAt.localeCompare(b.event.recordedAt));
-    let effective = lastItem(originals)?.event.result.after ?? cumulative(
-      enrollment.snapshot.lines.map((line) => ({ lineId: line.lineId, returnedNetCents: 0 })).sort(byLine), 0, 0, 0,
-    );
+    const orderItemsByLineId = refundOrderItemsByLineId(order, enrollment.snapshot);
+    const mixed = enrollment.snapshot.appliedCagnotteCents > 0;
+    const hasOriginalHistory = history.docs.some((doc) => doc.data().kind !== "refund_correction");
+    const decision = mixed && hasOriginalHistory
+      ? validatePaymentEvidence(order.cagnottePaymentEvidence, instant(order.paidAt))
+      : "attributed";
+    const reconstruction = reconstructOrderRefundHistory({
+      orderId: order.id,
+      beneficiaryId: enrollment.beneficiaryId,
+      snapshot: enrollment.snapshot,
+      recordVersion: mixed ? ORDER_MIXED_REFUND_VERSION : ORDER_REFUND_VERSION,
+      decision,
+      deliveryCharged: eurosToCagnotteCents(order.deliveryFee),
+      accrual,
+      reservationBasis,
+      historyDocs: history.docs,
+      movementDocs: movementDocs.docs,
+      movementFailureCode: "refund_journal_requires_verification",
+    });
+    const { originals, corrections, effective } = reconstruction;
     const lastOriginal = lastItem(originals);
-    if (lastOriginal) {
-      const linked = corrections.filter((entry) => entry.event.targetEventId === lastOriginal.id).sort((a, b) => a.event.revision - b.event.revision);
-      if (linked.length) effective = lastItem(linked)!.event.result.effective;
-    }
     const inspectedMovements = validateAdminMovementJournal({
       order: internalOrder,
       deliveryCharged: eurosToCagnotteCents(order.deliveryFee),
@@ -790,7 +706,7 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
       },
       lines: enrollment.snapshot.lines.map((line, index) => ({
         lineId: line.lineId,
-        label: order.items?.[index]?.name ?? `Ligne ${index + 1}`,
+        label: orderItemsByLineId.get(line.lineId)?.name ?? `Ligne ${index + 1}`,
         initialNetCents: line.netCents,
         returnedNetCents: effective.lines.find((entry) => entry.lineId === line.lineId)?.returnedNetCents ?? 0,
         remainingNetCents: line.netCents - (effective.lines.find((entry) => entry.lineId === line.lineId)?.returnedNetCents ?? 0),
@@ -805,6 +721,166 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
       unpaid,
     };
   });
+}
+
+function refundOrderItemsByLineId(order: Pick<Order, "items">, snapshot: CagnotteSnapshot) {
+  if (!Array.isArray(order.items) || order.items.length !== snapshot.lines.length) {
+    fail("refund_order_lines_require_verification");
+  }
+  const snapshotById = new Map<string, CagnotteSnapshot["lines"][number]>();
+  for (const line of snapshot.lines) {
+    if (snapshotById.has(line.lineId)) fail("refund_order_lines_require_verification");
+    snapshotById.set(line.lineId, line);
+  }
+  const itemsById = new Map<string, Order["items"][number]>();
+  for (const [index, item] of order.items.entries()) {
+    const lineId = cagnotteOrderItemLineId(item, index);
+    const line = snapshotById.get(lineId);
+    if (!line || itemsById.has(lineId)) fail("refund_order_lines_require_verification");
+    try {
+      if (eurosToCagnotteCents(item.lineTotal) !== line.initialCents || Boolean(item.isGift) !== Boolean(line.isGift)) {
+        fail("refund_order_lines_require_verification");
+      }
+    } catch (error) {
+      if (error instanceof OrderRefundError) throw error;
+      fail("refund_order_lines_require_verification");
+    }
+    itemsById.set(lineId, item);
+  }
+  if (itemsById.size !== snapshotById.size) fail("refund_order_lines_require_verification");
+  return itemsById;
+}
+
+function reconstructOrderRefundHistory(input: {
+  orderId: string;
+  beneficiaryId: string;
+  snapshot: CagnotteSnapshot;
+  recordVersion: string;
+  decision: "attributed" | "not_attributed";
+  deliveryCharged: number;
+  accrual: CagnotteAccrual | null;
+  reservationBasis: Awaited<ReturnType<typeof readCagnotteReservationBasis>> | null;
+  historyDocs: readonly QueryDocumentSnapshot[];
+  movementDocs: readonly QueryDocumentSnapshot[];
+  movementFailureCode: "refund_history_requires_verification" | "refund_journal_requires_verification";
+}) {
+  const failMovement = (): never => fail(input.movementFailureCode);
+  const movementById = new Map(input.movementDocs.map((doc) => [doc.id, doc.data()]));
+  const corrections = input.historyDocs.filter((doc) => doc.data().kind === "refund_correction").map((doc) => {
+    const event = doc.data() as CorrectionEvent;
+    validateStoredCorrectionEvent(event, doc.id);
+    if (event.orderId !== input.orderId || event.beneficiaryId !== input.beneficiaryId) fail("refund_history_requires_verification");
+    return { id: doc.id, event };
+  }).sort((a, b) => a.event.recordedAt.localeCompare(b.event.recordedAt) || a.event.revision - b.event.revision);
+  const originals = input.historyDocs.filter((doc) => doc.data().kind !== "refund_correction").map((doc) => {
+    const event = doc.data() as Event;
+    validateStoredEvent(event, doc.id);
+    return { id: doc.id, event };
+  }).sort((a, b) => a.event.sequence - b.event.sequence);
+  let effective = cumulative(
+    input.snapshot.lines.map((line) => ({ lineId: line.lineId, returnedNetCents: 0 })).sort(byLine),
+    0, 0, 0,
+  );
+  const referencedMovements = new Set<string>();
+  const linkedCorrectionIds = new Set<string>();
+  for (const [index, { id: originalId, event }] of originals.entries()) {
+    const result = normalizeResult(event.result);
+    if (event.orderId !== input.orderId || event.beneficiaryId !== input.beneficiaryId || event.sequence !== index + 1 ||
+      stable(result.before) !== stable(effective) || event.version !== input.recordVersion ||
+      result.loyaltyAccrualDecision !== input.decision) fail("refund_history_requires_verification");
+    const lines = addReturns(effective.lines, event.content.additionalReturns);
+    const simulation = simulateCagnotteRefund(input.snapshot, effective.lines, lines);
+    const next = cumulative(lines, simulation.next.financialRefundCents, simulation.next.cagnotteRestitutionCents,
+      sum(effective.deliveryFinancialCents, event.content.deliveryRefundCents));
+    if (next.deliveryFinancialCents > input.deliveryCharged || stable(next) !== stable(result.after) ||
+      result.returnedProductNetCents !== simulation.delta.returnedNetCents ||
+      result.productFinancialCents !== simulation.delta.financialRefundCents ||
+      result.cagnotteRestitutionCents !== simulation.delta.cagnotteRestitutionCents ||
+      result.correction.theoreticalCents !== simulation.delta.loyaltyCorrectionCents ||
+      result.restitution.grossCents !== simulation.delta.cagnotteRestitutionCents ||
+      result.restitution.cumulativeCents !== simulation.next.cagnotteRestitutionCents) fail("refund_history_requires_verification");
+    const expectedLedgerMovement = event.content.additionalReturns.length > 0 && input.decision === "attributed";
+    const expectedRestitutionMovement = simulation.delta.cagnotteRestitutionCents > 0;
+    if (event.movementIds.length !== Number(expectedLedgerMovement) + Number(expectedRestitutionMovement)) failMovement();
+    for (const movementId of event.movementIds) {
+      if (referencedMovements.has(movementId)) failMovement();
+      const movement = movementById.get(movementId);
+      if (!movement) fail(input.movementFailureCode);
+      if (movement.orderId !== input.orderId || movement.beneficiaryId !== input.beneficiaryId) failMovement();
+      if (movement.businessEvent === "refund_confirmed") {
+        const payload = JSON.parse(String(movement.payload)) as Record<string, unknown>;
+        if (!expectedLedgerMovement || payload.refundId !== originalId ||
+          stable(payload.additionalReturns) !== stable(event.content.additionalReturns) ||
+          movement.pendingDeltaCents !== result.correction.pendingDeltaCents || movement.availableDeltaCents !== result.correction.availableDeltaCents ||
+          (movement.regularizationDeltaCents ?? 0) !== result.correction.regularizationDeltaCents) failMovement();
+      } else if (movement.businessEvent === "credit_refunded_after_return") {
+        const payload = JSON.parse(String(movement.payload)) as Record<string, unknown>;
+        if (!expectedRestitutionMovement || payload.refundId !== originalId ||
+          payload.grossRestitutionCents !== result.restitution.grossCents || payload.compensationCents !== result.restitution.compensationCents ||
+          movement.pendingDeltaCents !== 0 || movement.availableDeltaCents !== result.restitution.availableIncreaseCents ||
+          movement.reservedDeltaCents !== 0 || movement.regularizationDeltaCents !== -result.restitution.compensationCents) failMovement();
+      } else {
+        failMovement();
+      }
+      referencedMovements.add(movementId);
+    }
+    effective = next;
+    const linkedCorrections = corrections.filter((entry) => entry.event.targetEventId === originalId)
+      .sort((a, b) => a.event.revision - b.event.revision);
+    for (const [correctionIndex, { id: correctionId, event: correctionEvent }] of linkedCorrections.entries()) {
+      if (linkedCorrectionIds.has(correctionId) || correctionEvent.previousRevision !== correctionIndex ||
+        correctionEvent.revision !== correctionIndex + 1 || stable(correctionEvent.result.previousEffective) !== stable(effective)) {
+        fail("refund_history_requires_verification");
+      }
+      validateCorrectionResult(correctionEvent, event, input.snapshot, input.deliveryCharged);
+      let correctionPending = 0, correctionAvailable = 0, correctionRegularization = 0;
+      for (const movementId of correctionEvent.movementIds) {
+        if (referencedMovements.has(movementId)) failMovement();
+        const movement = movementById.get(movementId);
+        if (!movement) fail(input.movementFailureCode);
+        if (movement.orderId !== input.orderId || movement.beneficiaryId !== input.beneficiaryId ||
+          !["refund_declaration_corrected", "credit_refund_corrected"].includes(movement.businessEvent)) {
+          failMovement();
+        }
+        const payload = JSON.parse(String(movement.payload)) as Record<string, unknown>;
+        if (payload.correctionId !== correctionId || payload.targetEventId !== correctionEvent.targetEventId ||
+          payload.revision !== correctionEvent.revision || payload.event !== movement.businessEvent || movement.reservedDeltaCents !== 0) {
+          failMovement();
+        }
+        correctionPending += Number(movement.pendingDeltaCents);
+        correctionAvailable += Number(movement.availableDeltaCents);
+        correctionRegularization += Number(movement.regularizationDeltaCents ?? 0);
+        referencedMovements.add(movementId);
+      }
+      if (correctionPending !== correctionEvent.result.differential.pendingDeltaCents ||
+        correctionAvailable !== correctionEvent.result.differential.availableDeltaCents ||
+        correctionRegularization !== correctionEvent.result.differential.regularizationDeltaCents) {
+        failMovement();
+      }
+      linkedCorrectionIds.add(correctionId);
+      effective = correctionEvent.result.effective;
+    }
+  }
+  const unexpectedRefundMovement = input.movementDocs.some((doc) =>
+    ["refund_confirmed", "credit_refunded_after_return", "refund_declaration_corrected", "credit_refund_corrected"].includes(doc.data().businessEvent) &&
+    !referencedMovements.has(doc.id));
+  const projectedRefundKeys = [
+    ...(input.reservationBasis?.reservation.refundProjection?.events.map((event) => event.eventKey) ?? []),
+    ...(input.reservationBasis?.reservation.refundProjection?.corrections?.flatMap((correction) => correction.eventKey ? [correction.eventKey] : []) ?? []),
+  ];
+  const confirmedRefundKeys = [
+    ...originals.flatMap(({ event }) => event.movementIds.filter((movementId) =>
+      movementById.get(movementId)?.businessEvent === "credit_refunded_after_return")),
+    ...corrections.flatMap(({ event }) => event.movementIds.filter((movementId) =>
+      movementById.get(movementId)?.businessEvent === "credit_refund_corrected")),
+  ];
+  if (linkedCorrectionIds.size !== corrections.length ||
+    (input.accrual && stable([...input.accrual.cumulativeReturns].sort(byLine)) !== stable(effective.lines)) ||
+    (input.reservationBasis && input.reservationBasis.cumulativeRestitutedCents !== effective.cagnotteRestitutionCents)) {
+    fail("refund_history_requires_verification");
+  }
+  if (unexpectedRefundMovement || stable(projectedRefundKeys) !== stable(confirmedRefundKeys)) failMovement();
+  return { originals, corrections, effective };
 }
 
 type InspectedMovementProjection =

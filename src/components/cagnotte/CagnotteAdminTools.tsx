@@ -6,12 +6,13 @@ import {
   recordOrderRefund,
   recordRefundCorrection,
   recordUnpaidReview,
+  CagnotteAdminRequestError,
 } from "../../services/cagnotteAdminService";
 import type { CagnotteAdminInspection, CorrectionPreview, RefundPreview } from "../../types/cagnotteAdmin";
 import { updateOrderAdminFields } from "../../services/ordersService";
 import { clearCagnotteAdminPendingOperation, createCagnotteAdminRefreshChannel, createCagnotteAdminResponseIdentity, eurosInputToCents, freezeCagnotteAdminCorrection, freezeCagnotteAdminRefund, refreshCagnotteAdminAfterWrite, resolveCagnotteAdminFrozenOperationFromInspection, retryCagnotteAdminFrozenOperationDurably, runCagnotteAdminLocked, sendCagnotteAdminOperationWithDurableRecovery, type CagnotteAdminFrozenOperation } from "../../lib/cagnotteAdminController";
 import { browserCagnotteAdminFrozenOperationStore, CagnotteAdminFrozenOperationStorageError, sameFrozenOperation, type CagnotteAdminFrozenOperationLoadResult, type CagnotteAdminFrozenOperationStore } from "../../lib/cagnotteAdminFrozenOperationStorage";
-import { cagnotteAdminFailureState, cagnotteAdminFormUpdatedState, cagnotteAdminFrozenOperationState, cagnotteAdminInspectionSuccessState, cagnotteAdminLoadingState, cagnotteAdminRestoredOperationState, cagnotteAdminStorageBlockedState, createCagnotteAdminInitialState, type CagnotteAdminViewModel } from "../../lib/cagnotteAdminState";
+import { cagnotteAdminDefinitiveRejectionState, cagnotteAdminFailureState, cagnotteAdminFormUpdatedState, cagnotteAdminFrozenOperationState, cagnotteAdminInspectionSuccessState, cagnotteAdminLoadingState, cagnotteAdminRestoredOperationState, cagnotteAdminStorageBlockedState, createCagnotteAdminInitialState, type CagnotteAdminViewModel } from "../../lib/cagnotteAdminState";
 import { cagnotteRefundDateTimeLocalToIso } from "../../lib/cagnotteAdminDate";
 import { paymentStatusLabel } from "../../utils/orderStatus";
 
@@ -170,6 +171,7 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
     };
     const operation = freezeCagnotteAdminRefund(pendingRefund.current);
     let result;
+    let definitiveRejectionCleared = false;
     try {
       result = await sendCagnotteAdminOperationWithDurableRecovery(frozenOperationStore, operation,
         async (durable) => durable.kind === "refund" ? recordOrderRefund(durable.payload) : Promise.reject(new Error("Type d’opération inattendu.")),
@@ -178,9 +180,20 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
           frozenOperation.current = durable;
           setModel((value) => cagnotteAdminFrozenOperationState(value, durable));
           adminRefreshChannel.publish(orderId, peerRefresh.current ?? undefined);
+        }, () => {
+          definitiveRejectionCleared = true;
+          identity.invalidate();
+          clearCagnotteAdminPendingOperation(pendingRefund);
+          clearCagnotteAdminPendingOperation(pendingCorrection);
+          clearCagnotteAdminPendingOperation(frozenOperation);
+          recoveryBlocked.current = false;
         });
     } catch (error) {
-      handleDurableFailure(error, operation, frozenOperationStore, frozenOperation, recoveryBlocked, setModel);
+      if (definitiveRejectionCleared && error instanceof CagnotteAdminRequestError && !error.uncertain) {
+        setModel((value) => cagnotteAdminDefinitiveRejectionState(value, error));
+      } else {
+        handleDurableFailure(error, operation, frozenOperationStore, frozenOperation, recoveryBlocked, setModel);
+      }
       throw error;
     }
     const notice = result.alreadyRecorded ? "Déclaration retrouvée, sans double écriture." : "Déclaration enregistrée. Aucun remboursement bancaire n’a été exécuté.";
@@ -210,6 +223,7 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
       expectedPreviewVersion: model.correctionPreview.previewVersion };
     const operation = freezeCagnotteAdminCorrection(pendingCorrection.current);
     let result;
+    let definitiveRejectionCleared = false;
     try {
       result = await sendCagnotteAdminOperationWithDurableRecovery(frozenOperationStore, operation,
         async (durable) => durable.kind === "correction" ? recordRefundCorrection(durable.payload) : Promise.reject(new Error("Type d’opération inattendu.")),
@@ -218,9 +232,20 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
           frozenOperation.current = durable;
           setModel((value) => cagnotteAdminFrozenOperationState(value, durable));
           adminRefreshChannel.publish(orderId, peerRefresh.current ?? undefined);
+        }, () => {
+          definitiveRejectionCleared = true;
+          identity.invalidate();
+          clearCagnotteAdminPendingOperation(pendingRefund);
+          clearCagnotteAdminPendingOperation(pendingCorrection);
+          clearCagnotteAdminPendingOperation(frozenOperation);
+          recoveryBlocked.current = false;
         });
     } catch (error) {
-      handleDurableFailure(error, operation, frozenOperationStore, frozenOperation, recoveryBlocked, setModel);
+      if (definitiveRejectionCleared && error instanceof CagnotteAdminRequestError && !error.uncertain) {
+        setModel((value) => cagnotteAdminDefinitiveRejectionState(value, error));
+      } else {
+        handleDurableFailure(error, operation, frozenOperationStore, frozenOperation, recoveryBlocked, setModel);
+      }
       throw error;
     }
     const notice = result.alreadyRecorded ? "Correction retrouvée, sans double effet." : "Correction enregistrée. Aucun flux bancaire n’a été modifié.";
