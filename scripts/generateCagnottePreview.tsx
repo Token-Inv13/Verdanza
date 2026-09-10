@@ -259,7 +259,7 @@ function ready(data: CagnotteReadResponse): CagnottePanelState {
 }
 
 function adminModel(mode: "refund" | "correction" | "unpaid", inspection: CagnotteAdminInspection): CagnotteAdminViewModel {
-  return { phase: "ready", inspection, mode, refundPreview: null, correctionPreview: null, notice: "", uncertain: false, busy: false };
+  return { phase: "ready", inspection, mode, refundPreview: null, correctionPreview: null, notice: "", uncertain: false, pendingOperation: null, busy: false };
 }
 
 function administrationFormFixture(): Parameters<typeof CagnotteAdminToolsView>[0]["form"] {

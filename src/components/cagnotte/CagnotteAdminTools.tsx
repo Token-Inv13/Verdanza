@@ -6,11 +6,12 @@ import {
   recordOrderRefund,
   recordRefundCorrection,
   recordUnpaidReview,
+  CagnotteAdminRequestError,
 } from "../../services/cagnotteAdminService";
 import type { CagnotteAdminInspection, CorrectionPreview, RefundPreview } from "../../types/cagnotteAdmin";
 import { updateOrderAdminFields } from "../../services/ordersService";
-import { clearCagnotteAdminPendingOperation, createCagnotteAdminRefreshChannel, createCagnotteAdminResponseIdentity, eurosInputToCents, refreshCagnotteAdminAfterWrite, runCagnotteAdminLocked } from "../../lib/cagnotteAdminController";
-import { cagnotteAdminFailureState, cagnotteAdminFormUpdatedState, cagnotteAdminInspectionSuccessState, cagnotteAdminLoadingState, type CagnotteAdminViewModel } from "../../lib/cagnotteAdminState";
+import { clearCagnotteAdminPendingOperation, createCagnotteAdminRefreshChannel, createCagnotteAdminResponseIdentity, eurosInputToCents, freezeCagnotteAdminCorrection, freezeCagnotteAdminRefund, isCagnotteAdminFrozenOperationRecorded, refreshCagnotteAdminAfterWrite, retryCagnotteAdminFrozenOperation, runCagnotteAdminLocked, type CagnotteAdminFrozenOperation } from "../../lib/cagnotteAdminController";
+import { cagnotteAdminFailureState, cagnotteAdminFormUpdatedState, cagnotteAdminFrozenOperationState, cagnotteAdminInspectionSuccessState, cagnotteAdminLoadingState, type CagnotteAdminViewModel } from "../../lib/cagnotteAdminState";
 import { cagnotteRefundDateTimeLocalToIso } from "../../lib/cagnotteAdminDate";
 import { paymentStatusLabel } from "../../utils/orderStatus";
 
@@ -40,12 +41,13 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload }: {
   enabled: boolean;
   onOrderReload?: () => Promise<void> | void;
 }) {
-  const [model, setModel] = useState<CagnotteAdminViewModel>({ phase: "loading", inspection: null, mode: "refund", refundPreview: null, correctionPreview: null, notice: "", uncertain: false, busy: false });
+  const [model, setModel] = useState<CagnotteAdminViewModel>({ phase: "loading", inspection: null, mode: "refund", refundPreview: null, correctionPreview: null, notice: "", uncertain: false, pendingOperation: null, busy: false });
   const [form, setForm] = useState<Form>(() => emptyForm());
   const identity = useRef(createCagnotteAdminResponseIdentity()).current;
   const submitting = useRef(false);
   const pendingRefund = useRef<Parameters<typeof recordOrderRefund>[0] | null>(null);
   const pendingCorrection = useRef<Parameters<typeof recordRefundCorrection>[0] | null>(null);
+  const frozenOperation = useRef<CagnotteAdminFrozenOperation | null>(null);
   const peerRefresh = useRef<(() => void) | null>(null);
 
   const reload = async (successNotice = "") => {
@@ -55,10 +57,15 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload }: {
     try {
       const inspection = await inspectCagnotteOrder(orderId, controller.signal);
       if (!identity.isCurrent(current)) return;
-      setModel((value) => cagnotteAdminInspectionSuccessState(value, inspection, successNotice));
-      setForm(emptyForm(inspection));
-      clearCagnotteAdminPendingOperation(pendingRefund);
-      clearCagnotteAdminPendingOperation(pendingCorrection);
+      const operation = frozenOperation.current;
+      const resolved = operation === null || isCagnotteAdminFrozenOperationRecorded(operation, inspection);
+      setModel((value) => cagnotteAdminInspectionSuccessState({ ...value, pendingOperation: operation }, inspection, successNotice));
+      if (resolved) {
+        setForm(emptyForm(inspection));
+        clearCagnotteAdminPendingOperation(pendingRefund);
+        clearCagnotteAdminPendingOperation(pendingCorrection);
+        clearCagnotteAdminPendingOperation(frozenOperation);
+      }
     } catch (error) {
       if (!identity.isCurrent(current)) return;
       setModel((value) => cagnotteAdminFailureState(value, error, "error"));
@@ -66,6 +73,9 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload }: {
   };
   useEffect(() => {
     if (!enabled) return;
+    clearCagnotteAdminPendingOperation(pendingRefund);
+    clearCagnotteAdminPendingOperation(pendingCorrection);
+    clearCagnotteAdminPendingOperation(frozenOperation);
     const listener = () => { void reload(); };
     peerRefresh.current = listener;
     const unsubscribe = adminRefreshChannel.subscribe(orderId, listener);
@@ -74,12 +84,16 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload }: {
       unsubscribe();
       if (peerRefresh.current === listener) peerRefresh.current = null;
       identity.invalidate();
+      clearCagnotteAdminPendingOperation(pendingRefund);
+      clearCagnotteAdminPendingOperation(pendingCorrection);
+      clearCagnotteAdminPendingOperation(frozenOperation);
     };
   // The order identity is the security boundary for stale responses.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, orderId]);
 
   const update = (patch: Partial<Form>) => {
+    if (frozenOperation.current) return;
     pendingRefund.current = null;
     pendingCorrection.current = null;
     setForm((value) => ({ ...value, ...patch }));
@@ -104,7 +118,12 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload }: {
       reference: form.reference.trim(), declaredFinancialCents: eurosInputToCents(form.declaredFinancial), reason: form.reason,
       confirmedAt: cagnotteRefundDateTimeLocalToIso(form.confirmedAt), expectedPreviewVersion: model.refundPreview.previewVersion,
     };
-    const result = await recordOrderRefund(pendingRefund.current);
+    const operation = freezeCagnotteAdminRefund(pendingRefund.current);
+    let result;
+    try { result = await recordOrderRefund(pendingRefund.current); }
+    catch (error) { freezeIfUncertain(error, operation, frozenOperation, setModel); throw error; }
+    frozenOperation.current = operation;
+    setModel((value) => ({ ...value, pendingOperation: operation }));
     const notice = result.alreadyRecorded ? "Déclaration retrouvée, sans double écriture." : "Déclaration enregistrée. Aucun remboursement bancaire n’a été exécuté.";
     adminRefreshChannel.publish(orderId, peerRefresh.current ?? undefined);
     await refreshCagnotteAdminAfterWrite(() => reload(notice), onOrderReload);
@@ -130,7 +149,12 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload }: {
       deliveryRefundCents: eurosInputToCents(form.delivery), declaredFinancialCents: eurosInputToCents(form.declaredFinancial),
       correctionReason: form.correctionReason.trim(), correctionReference: form.correctionReference.trim(),
       expectedPreviewVersion: model.correctionPreview.previewVersion };
-    const result = await recordRefundCorrection(pendingCorrection.current);
+    const operation = freezeCagnotteAdminCorrection(pendingCorrection.current);
+    let result;
+    try { result = await recordRefundCorrection(pendingCorrection.current); }
+    catch (error) { freezeIfUncertain(error, operation, frozenOperation, setModel); throw error; }
+    frozenOperation.current = operation;
+    setModel((value) => ({ ...value, pendingOperation: operation }));
     const notice = result.alreadyRecorded ? "Correction retrouvée, sans double effet." : "Correction enregistrée. Aucun flux bancaire n’a été modifié.";
     adminRefreshChannel.publish(orderId, peerRefresh.current ?? undefined);
     await refreshCagnotteAdminAfterWrite(() => reload(notice), onOrderReload);
@@ -156,24 +180,43 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload }: {
     const current = identity.next();
     const inspection = await inspectCagnotteOrder(orderId);
     if (!identity.isCurrent(current)) return;
-    setModel((value) => cagnotteAdminInspectionSuccessState(value, inspection,
-      "Inspection actualisée. Vérifiez l’historique avant de préparer une nouvelle opération."));
-    setForm(emptyForm(inspection));
-    clearCagnotteAdminPendingOperation(pendingRefund);
-    clearCagnotteAdminPendingOperation(pendingCorrection);
+    const operation = frozenOperation.current;
+    const resolved = operation === null || isCagnotteAdminFrozenOperationRecorded(operation, inspection);
+    setModel((value) => cagnotteAdminInspectionSuccessState({ ...value, pendingOperation: operation }, inspection,
+      operation ? "Inspection actualisée. L’opération exacte est confirmée dans l’historique." : "Inspection actualisée."));
+    if (resolved) {
+      setForm(emptyForm(inspection));
+      clearCagnotteAdminPendingOperation(pendingRefund);
+      clearCagnotteAdminPendingOperation(pendingCorrection);
+      clearCagnotteAdminPendingOperation(frozenOperation);
+    }
+  });
+  const retryFrozenOperation = () => runAdminAction(async () => {
+    const operation = frozenOperation.current;
+    if (!operation) return;
+    const result = await retryCagnotteAdminFrozenOperation(operation, orderId, {
+      refund: recordOrderRefund,
+      correction: recordRefundCorrection,
+    });
+    const alreadyRecorded = "alreadyRecorded" in result && result.alreadyRecorded === true;
+    const notice = operation.kind === "refund"
+      ? alreadyRecorded ? "Déclaration retrouvée, sans double écriture." : "Déclaration enregistrée. Aucun remboursement bancaire n’a été exécuté."
+      : alreadyRecorded ? "Correction retrouvée, sans double effet." : "Correction enregistrée. Aucun flux bancaire n’a été modifié.";
+    adminRefreshChannel.publish(orderId, peerRefresh.current ?? undefined);
+    await refreshCagnotteAdminAfterWrite(() => reload(notice), onOrderReload);
   });
 
   if (!enabled) return null;
-  return <CagnotteAdminToolsView model={model} form={form} onForm={update} onMode={(mode) => setModel((value) => ({ ...value, mode }))}
+  return <CagnotteAdminToolsView model={model} form={form} onForm={update} onMode={(mode) => { if (!frozenOperation.current) setModel((value) => ({ ...value, mode })); }}
     onPreviewRefund={previewRefund} onConfirmRefund={confirmRefund} onPreviewCorrection={previewCorrection}
     onConfirmCorrection={confirmCorrection} onReview={submitReview} onCancelUnpaid={cancelUnpaid}
-    onReinspectBeforeRetry={reinspectBeforeRetry} />;
+    onReinspectBeforeRetry={reinspectBeforeRetry} onRetryFrozenOperation={retryFrozenOperation} />;
 }
 
 export function CagnotteAdminToolsView({ model, form = emptyForm(model.inspection ?? undefined), onForm = () => undefined,
   onMode = () => undefined, onPreviewRefund = () => undefined, onConfirmRefund = () => undefined,
   onPreviewCorrection = () => undefined, onConfirmCorrection = () => undefined, onReview = () => undefined,
-  onCancelUnpaid = () => undefined, onReinspectBeforeRetry = () => undefined,
+  onCancelUnpaid = () => undefined, onReinspectBeforeRetry = () => undefined, onRetryFrozenOperation = () => undefined,
 }: {
   model: CagnotteAdminViewModel;
   form?: Form;
@@ -186,6 +229,7 @@ export function CagnotteAdminToolsView({ model, form = emptyForm(model.inspectio
   onReview?: () => void;
   onCancelUnpaid?: () => void;
   onReinspectBeforeRetry?: () => void;
+  onRetryFrozenOperation?: () => void;
 }) {
   const inspection = model.inspection;
   if (model.phase === "loading") return <section className="cagnotte-admin" aria-busy="true">Chargement des données administratives…</section>;
@@ -201,9 +245,9 @@ export function CagnotteAdminToolsView({ model, form = emptyForm(model.inspectio
     </article>
     <div className="cagnotte-admin__actions" aria-label="Opérations quotidiennes">
       <span className="cagnotte-admin__tag">1. Consulter</span><span className="cagnotte-admin__tag">2. Confirmer paiement / livraison</span>
-      {inspection.reservation.applicable && <button className="secondary" type="button" disabled={model.busy} onClick={() => onMode("unpaid")}>3. Revoir / annuler un impayé</button>}
-      <button className="secondary" type="button" disabled={model.busy} onClick={() => onMode("refund")}>4. Enregistrer un retour</button>
-      <button className="secondary" type="button" disabled={model.busy} onClick={() => onMode("correction")}>5. Corriger une déclaration</button>
+      {inspection.reservation.applicable && <button className="secondary" type="button" disabled={model.busy || model.uncertain} onClick={() => onMode("unpaid")}>3. Revoir / annuler un impayé</button>}
+      <button className="secondary" type="button" disabled={model.busy || model.uncertain} onClick={() => onMode("refund")}>4. Enregistrer un retour</button>
+      <button className="secondary" type="button" disabled={model.busy || model.uncertain} onClick={() => onMode("correction")}>5. Corriger une déclaration</button>
     </div>
     <div className="cagnotte-admin__grid">
       <article className="cagnotte-admin__box"><h4>Inscription de la commande</h4>
@@ -219,7 +263,7 @@ export function CagnotteAdminToolsView({ model, form = emptyForm(model.inspectio
       <article className="cagnotte-admin__box"><h4>Portefeuille global du client</h4>{inspection.wallet ? <MoneyRows rows={[
         ["En attente global", inspection.wallet.pendingCents], ["Disponible global", inspection.wallet.availableCents],
         ["Réservé global", inspection.wallet.reservedCents], ["Régularisation", inspection.wallet.regularizationCents],
-      ]} /> : <p>Aucun portefeuille créé.</p>}</article>
+      ]} /> : <p>Aucun portefeuille créé.</p>}<p>La régularisation est globale au client et peut provenir d’autres commandes.</p></article>
       <article className="cagnotte-admin__box"><h4>Réservation de cette commande</h4>{inspection.reservation.applicable ? <>
         <p><strong>État :</strong> {reservationStateLabel(inspection.reservation.state)}</p>
         <MoneyRows rows={[["Montant", inspection.reservation.amountCents], ["Restitué", inspection.reservation.cumulativeRestitutedCents]]} />
@@ -242,8 +286,10 @@ export function CagnotteAdminToolsView({ model, form = emptyForm(model.inspectio
     {model.mode === "unpaid" && inspection.reservation.applicable && <UnpaidReview inspection={inspection} form={form} busy={model.busy} uncertain={model.uncertain} onForm={onForm} onReview={onReview} onCancel={onCancelUnpaid} />}
     {model.notice && <p className={`cagnotte-admin__status${model.uncertain || model.correctionPreview?.kind === "correction_requires_review" ? " review" : ""}`}>{model.notice}</p>}
     {model.uncertain && <div className="cagnotte-admin__status review"><strong>Résultat réseau incertain.</strong>
-      <p>Inspectez la commande avant toute nouvelle tentative. Conservez la même référence métier et la même opération.</p>
+      {model.pendingOperation ? <p>L’opération initiale n’est pas encore confirmée. Vous pouvez réinspecter ou rejouer exactement la même opération. Aucune nouvelle déclaration ne peut être créée pour le moment.</p>
+        : <p>Réinspectez la commande avant toute nouvelle tentative.</p>}
       <button type="button" disabled={model.busy} onClick={onReinspectBeforeRetry}>Réinspecter avant toute nouvelle tentative</button>
+      {model.pendingOperation && <button type="button" disabled={model.busy} onClick={onRetryFrozenOperation}>Rejouer exactement la même opération</button>}
     </div>}
   </section>;
 }
@@ -375,3 +421,8 @@ function emptyForm(inspection?: CagnotteAdminInspection | null): Form { return {
 function isNeutralization(entry: CagnotteAdminInspection["history"][number]) { return entry.type === "correction" && entry.returnedProductNetCents === 0 && entry.financialCents === 0 && entry.cagnotteRestitutionCents === 0; }
 function isZeroInput(value: string) { try { return eurosInputToCents(value) === 0; } catch { return false; } }
 function setFailure(setModel: Dispatch<SetStateAction<CagnotteAdminViewModel>>) { return (error: unknown) => setModel((value) => cagnotteAdminFailureState(value, error)); }
+function freezeIfUncertain(error: unknown, operation: CagnotteAdminFrozenOperation, pending: { current: CagnotteAdminFrozenOperation | null }, setModel: Dispatch<SetStateAction<CagnotteAdminViewModel>>) {
+  if (!(error instanceof CagnotteAdminRequestError) || !error.uncertain) return;
+  pending.current ??= operation;
+  setModel((value) => cagnotteAdminFrozenOperationState(value, pending.current!, error));
+}

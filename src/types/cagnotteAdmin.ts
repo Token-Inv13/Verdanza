@@ -22,7 +22,6 @@ export type CagnotteAdminOperationalState = {
     | "payment_confirmed_pending"
     | "delivered_available"
     | "cancelled"
-    | "regularization_pending"
     | "refund_recorded";
   label: string;
   detail: string;
@@ -102,6 +101,7 @@ export type CagnotteAdminInspection = {
     revision: number;
     recordedAt: string;
     reference: string;
+    source?: "admin" | "provider_reference";
     declaredFinancialCents: number;
     returnedProductNetCents: number;
     financialCents: number;

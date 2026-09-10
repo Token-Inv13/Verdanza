@@ -655,9 +655,6 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
     } catch {
       fail("refund_journal_requires_verification");
     }
-    if (accrualEnrollment === "not_enrolled" && accrualDoc.exists) {
-      fail("refund_journal_requires_verification");
-    }
     if (accrualDoc.exists) {
       try {
         const basis = await readCagnotteRefundBasis({ db, transaction: tx, order: internalOrder });
@@ -666,6 +663,9 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
       } catch {
         fail("refund_journal_requires_verification");
       }
+    }
+    if (accrualEnrollment === "not_enrolled" && accrual && !isZeroCreditCancellationTombstone(accrual)) {
+      fail("refund_journal_requires_verification");
     }
     let reservationBasis: Awaited<ReturnType<typeof readCagnotteReservationBasis>> | null = null;
     try {
@@ -710,7 +710,7 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
     const cancelled = accrual?.cancelled ?? (order.orderStatus === "cancelled" || order.paymentStatus === "cancelled" || Boolean(order.cancelledAt));
     const accrualView = {
       present: accrual !== null,
-      initialGainCents: accrual?.initialGainCents ?? (accrualEnrollment === "enrolled" ? enrollment.snapshot.loyaltyCents : 0),
+      initialGainCents: accrualEnrollment === "not_enrolled" ? 0 : accrual?.initialGainCents ?? enrollment.snapshot.loyaltyCents,
       remainingGainCents: accrual?.remainingGainCents ?? 0,
       paymentConfirmed: accrual?.paymentConfirmed ?? false,
       deliveryConfirmed: accrual?.deliveryConfirmed ?? false,
@@ -720,6 +720,7 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
     };
     const refundHistory = [
       ...originals.map(({ id, event }) => ({ id, type: "initial_declaration" as const, revision: 0, recordedAt: event.recordedAt,
+        source: event.source as "admin" | "provider_reference",
         reference: event.reference, declaredFinancialCents: event.content.declaredFinancialCents,
         returnedProductNetCents: event.result.returnedProductNetCents,
         financialCents: event.result.totalFinancialCents,
@@ -736,7 +737,7 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
         effective: event.targetEventId === lastOriginal?.id && event.revision === corrections.filter((entry) => entry.event.targetEventId === event.targetEventId).length })),
     ].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt) || b.revision - a.revision ||
       Number(b.type === "correction") - Number(a.type === "correction"));
-    const operationalState = adminOperationalState({ accrualEnrollment, accrual: accrualView, wallet, hasRefund: refundHistory.length > 0 });
+    const operationalState = adminOperationalState({ accrualEnrollment, accrual: accrualView, hasRefund: refundHistory.length > 0 });
     return {
       kind: "administrative_refund_inspection" as const,
       order: {
@@ -996,21 +997,23 @@ function adminOperationalState(input: {
     deliveryConfirmed: boolean;
     cancelled: boolean;
   };
-  wallet: CagnotteWallet | null;
   hasRefund: boolean;
 }) {
+  if (input.accrual.cancelled) return { code: "cancelled" as const, label: "ANNULÉE", detail: "Le gain de cette commande est annulé." };
+  if (input.hasRefund) return { code: "refund_recorded" as const, label: "REMBOURSEMENT/CORRECTION ENREGISTRÉ", detail: "Consultez l’historique administratif effectif." };
   if (input.accrualEnrollment === "not_enrolled") {
     return { code: "accrual_not_enrolled" as const, label: "AUCUN GAIN POUR CETTE COMMANDE",
       detail: "La commande utilise éventuellement la cagnotte, mais l’acquisition fidélité n’était pas active lors de sa création." };
   }
-  if ((input.wallet?.regularizationCents ?? 0) > 0) {
-    return { code: "regularization_pending" as const, label: "RÉGULARISATION À COMPENSER", detail: "Les gains futurs absorberont cette régularisation." };
-  }
-  if (input.accrual.cancelled) return { code: "cancelled" as const, label: "ANNULÉE", detail: "Le gain de cette commande est annulé." };
-  if (input.hasRefund) return { code: "refund_recorded" as const, label: "REMBOURSEMENT/CORRECTION ENREGISTRÉ", detail: "Consultez l’historique administratif effectif." };
   if (input.accrual.deliveryConfirmed && input.accrual.paymentConfirmed) return { code: "delivered_available" as const, label: "LIVRÉE", detail: "GAIN DISPONIBLE POUR CETTE COMMANDE" };
   if (input.accrual.paymentConfirmed) return { code: "payment_confirmed_pending" as const, label: "PAIEMENT CONFIRMÉ", detail: "5 % EN ATTENTE" };
   return { code: "enrolled_payment_pending" as const, label: "INSCRITE", detail: "PAIEMENT À CONFIRMER" };
+}
+
+function isZeroCreditCancellationTombstone(accrual: CagnotteAccrual) {
+  return accrual.cancelled && !accrual.paymentConfirmed && !accrual.deliveryConfirmed && !accrual.credited &&
+    accrual.compartment === "none" && accrual.remainingGainCents === 0 &&
+    accrual.cumulativeReturns.every((line) => line.returnedNetCents === 0);
 }
 
 async function executeOrderRefundCorrection(input: {

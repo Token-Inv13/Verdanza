@@ -20,7 +20,7 @@ export async function previewOrderRefund(input: {
   return postRefund<RefundPreview>({ action: "preview", currency: "EUR", ...input });
 }
 
-export async function recordOrderRefund(input: {
+export type RecordOrderRefundInput = {
   orderId: string;
   additionalReturns: Array<{ lineId: string; additionalNetCents: number }>;
   deliveryRefundCents: number;
@@ -30,7 +30,9 @@ export async function recordOrderRefund(input: {
   reason: "product_return" | "order_cancellation" | "delivery_refund";
   confirmedAt: string;
   expectedPreviewVersion: string;
-}) {
+};
+
+export async function recordOrderRefund(input: RecordOrderRefundInput) {
   return postRefund<RefundPreview>({ action: "record_confirmed", currency: "EUR", ...input });
 }
 
@@ -46,7 +48,7 @@ export async function previewRefundCorrection(input: {
   return postRefund<CorrectionPreview>({ action: "preview_correction", currency: "EUR", externalVerificationConfirmed: true, ...input });
 }
 
-export async function recordRefundCorrection(input: {
+export type RecordRefundCorrectionInput = {
   orderId: string;
   targetEventId: string;
   expectedRevision: number;
@@ -56,7 +58,9 @@ export async function recordRefundCorrection(input: {
   correctionReason: string;
   correctionReference: string;
   expectedPreviewVersion: string;
-}) {
+};
+
+export async function recordRefundCorrection(input: RecordRefundCorrectionInput) {
   return postRefund<CorrectionPreview>({ action: "record_correction", currency: "EUR", externalVerificationConfirmed: true, ...input });
 }
 

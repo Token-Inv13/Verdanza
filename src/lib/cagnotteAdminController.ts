@@ -1,3 +1,48 @@
+import type { CagnotteAdminInspection } from "../types/cagnotteAdmin";
+import type { RecordOrderRefundInput, RecordRefundCorrectionInput } from "../services/cagnotteAdminService";
+
+export type CagnotteAdminFrozenOperation =
+  | { kind: "refund"; orderId: string; payload: RecordOrderRefundInput }
+  | { kind: "correction"; orderId: string; payload: RecordRefundCorrectionInput };
+
+export const CAGNOTTE_ADMIN_FROZEN_NOTICE = "L’opération initiale n’est pas encore confirmée. Vous pouvez réinspecter ou rejouer exactement la même opération. Aucune nouvelle déclaration ne peut être créée pour le moment.";
+
+export function freezeCagnotteAdminRefund(input: RecordOrderRefundInput): CagnotteAdminFrozenOperation {
+  return { kind: "refund", orderId: input.orderId, payload: { ...input, additionalReturns: input.additionalReturns.map((line) => ({ ...line })) } };
+}
+
+export function freezeCagnotteAdminCorrection(input: RecordRefundCorrectionInput): CagnotteAdminFrozenOperation {
+  return { kind: "correction", orderId: input.orderId, payload: { ...input, replacementReturns: input.replacementReturns.map((line) => ({ ...line })) } };
+}
+
+export function isCagnotteAdminFrozenOperationRecorded(operation: CagnotteAdminFrozenOperation, inspection: CagnotteAdminInspection) {
+  if (inspection.order.id !== operation.orderId) return false;
+  if (operation.kind === "refund") {
+    const reference = normalizedReference(operation.payload.reference);
+    return inspection.history.some((entry) => entry.type === "initial_declaration" && entry.source === operation.payload.source &&
+      normalizedReference(entry.reference) === reference);
+  }
+  const reference = normalizedReference(operation.payload.correctionReference);
+  return inspection.history.some((entry) => entry.type === "correction" && entry.targetEventId === operation.payload.targetEventId &&
+    entry.revision === operation.payload.expectedRevision + 1 && normalizedReference(entry.reference) === reference);
+}
+
+export async function retryCagnotteAdminFrozenOperation<TRefund, TCorrection>(
+  operation: CagnotteAdminFrozenOperation,
+  currentOrderId: string,
+  handlers: {
+    refund: (payload: RecordOrderRefundInput) => Promise<TRefund>;
+    correction: (payload: RecordRefundCorrectionInput) => Promise<TCorrection>;
+  },
+) {
+  if (operation.orderId !== currentOrderId) throw new Error("L’opération gelée appartient à une autre commande.");
+  return operation.kind === "refund" ? handlers.refund(operation.payload) : handlers.correction(operation.payload);
+}
+
+function normalizedReference(value: string) {
+  return value.trim().toLowerCase();
+}
+
 export function eurosInputToCents(value: string) {
   const normalized = value.trim().replace(",", ".");
   if (!normalized) return 0;
