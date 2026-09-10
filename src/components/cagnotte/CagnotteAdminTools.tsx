@@ -327,12 +327,25 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
     const operation = frozenOperation.current;
     if (!operation) return;
     let result;
+    let definitiveRejectionCleared = false;
     try {
       result = await retryCagnotteAdminFrozenOperationDurably(frozenOperationStore, operation, orderId, {
         refund: (payload) => sendTrackedMutation(operation, () => recordOrderRefund(payload)),
         correction: (payload) => sendTrackedMutation(operation, () => recordRefundCorrection(payload)),
+      }, () => {
+        definitiveRejectionCleared = true;
+        identity.invalidate();
+        clearCagnotteAdminPendingOperation(pendingRefund);
+        clearCagnotteAdminPendingOperation(pendingCorrection);
+        clearCagnotteAdminPendingOperation(frozenOperation);
+        recoveryBlocked.current = false;
       });
     } catch (error) {
+      if (definitiveRejectionCleared && error instanceof CagnotteAdminRequestError && !error.uncertain) {
+        setModel((value) => cagnotteAdminDefinitiveRejectionState(value, error));
+        await reload(error.message);
+        return;
+      }
       handleDurableFailure(error, operation, frozenOperationStore, frozenOperation, recoveryBlocked, setModel);
       throw error;
     } finally {
@@ -375,6 +388,7 @@ export function CagnotteAdminToolsView({ model, form = emptyForm(model.inspectio
   if (model.phase === "loading") return <section className="cagnotte-admin" aria-busy="true">Chargement des données administratives…</section>;
   if (!inspection) return <section className="cagnotte-admin"><strong>Outils cagnotte indisponibles</strong><p>{model.notice}</p>
     {model.uncertain && <FrozenOperationRecovery model={model} onReinspect={onReinspectBeforeRetry} onRetry={onRetryFrozenOperation} />}</section>;
+  const activeUnpaidReservation = inspection.reservation.state === "reserved" && inspection.unpaid.reservationState === "reserved";
   return <section className="cagnotte-admin" aria-label="Outils administratifs de cagnotte" aria-busy={model.busy}>
     <h3>Administration de la cagnotte</h3>
     <p><strong>{inspection.order.id}</strong> · {inspection.order.customer.name} · {inspection.order.customer.email}</p>
@@ -386,7 +400,7 @@ export function CagnotteAdminToolsView({ model, form = emptyForm(model.inspectio
     </article>
     <div className="cagnotte-admin__actions" aria-label="Opérations quotidiennes">
       <span className="cagnotte-admin__tag">1. Consulter</span><span className="cagnotte-admin__tag">2. Confirmer paiement / livraison</span>
-      {inspection.reservation.applicable && <button className="secondary" type="button" disabled={model.busy || model.uncertain} onClick={() => onMode("unpaid")}>3. Revoir / annuler un impayé</button>}
+      {activeUnpaidReservation && <button className="secondary" type="button" disabled={model.busy || model.uncertain} onClick={() => onMode("unpaid")}>3. Revoir / annuler un impayé</button>}
       <button className="secondary" type="button" disabled={model.busy || model.uncertain} onClick={() => onMode("refund")}>4. Enregistrer un retour</button>
       <button className="secondary" type="button" disabled={model.busy || model.uncertain} onClick={() => onMode("correction")}>5. Corriger une déclaration</button>
     </div>
@@ -424,7 +438,7 @@ export function CagnotteAdminToolsView({ model, form = emptyForm(model.inspectio
     <AdminRefundHistory inspection={inspection} />
     {model.mode === "refund" && <RefundForm inspection={inspection} form={form} preview={model.refundPreview} busy={model.busy} uncertain={model.uncertain} onForm={onForm} onPreview={onPreviewRefund} onConfirm={onConfirmRefund} />}
     {model.mode === "correction" && <CorrectionForm inspection={inspection} form={form} preview={model.correctionPreview} busy={model.busy} uncertain={model.uncertain} onForm={onForm} onPreview={onPreviewCorrection} onConfirm={onConfirmCorrection} />}
-    {model.mode === "unpaid" && inspection.reservation.applicable && <UnpaidReview inspection={inspection} form={form} busy={model.busy} uncertain={model.uncertain} onForm={onForm} onReview={onReview} onCancel={onCancelUnpaid} />}
+    {model.mode === "unpaid" && activeUnpaidReservation && <UnpaidReview inspection={inspection} form={form} busy={model.busy} uncertain={model.uncertain} onForm={onForm} onReview={onReview} onCancel={onCancelUnpaid} />}
     {model.notice && <p className={`cagnotte-admin__status${model.uncertain || model.correctionPreview?.kind === "correction_requires_review" ? " review" : ""}`}>{model.notice}</p>}
     {model.uncertain && <FrozenOperationRecovery model={model} onReinspect={onReinspectBeforeRetry} onRetry={onRetryFrozenOperation} />}
   </section>;

@@ -6,6 +6,10 @@ import {
   type CagnotteAdminFrozenOperationStore,
   type CagnotteAdminStoredFrozenOperation,
 } from "./cagnotteAdminFrozenOperationStorage";
+import {
+  cagnotteAdminCorrectionBusinessFingerprint,
+  cagnotteAdminRefundBusinessFingerprint,
+} from "./cagnotteAdminOperationIdentity";
 
 export type CagnotteAdminFrozenOperation =
   | { kind: "refund"; orderId: string; payload: RecordOrderRefundInput }
@@ -64,13 +68,11 @@ export function freezeCagnotteAdminCorrection(input: RecordRefundCorrectionInput
 export function isCagnotteAdminFrozenOperationRecorded(operation: CagnotteAdminFrozenOperation, inspection: CagnotteAdminInspection) {
   if (inspection.order.id !== operation.orderId) return false;
   if (operation.kind === "refund") {
-    const reference = normalizedReference(operation.payload.reference);
-    return inspection.history.some((entry) => entry.type === "initial_declaration" && entry.source === operation.payload.source &&
-      normalizedReference(entry.reference) === reference);
+    const fingerprint = cagnotteAdminRefundBusinessFingerprint(operation.payload);
+    return inspection.history.some((entry) => entry.type === "initial_declaration" && entry.businessFingerprint === fingerprint);
   }
-  const reference = normalizedReference(operation.payload.correctionReference);
-  return inspection.history.some((entry) => entry.type === "correction" && entry.targetEventId === operation.payload.targetEventId &&
-    entry.revision === operation.payload.expectedRevision + 1 && normalizedReference(entry.reference) === reference);
+  const fingerprint = cagnotteAdminCorrectionBusinessFingerprint(operation.payload);
+  return inspection.history.some((entry) => entry.type === "correction" && entry.businessFingerprint === fingerprint);
 }
 
 export async function retryCagnotteAdminFrozenOperation<TRefund, TCorrection>(
@@ -92,7 +94,7 @@ export async function sendCagnotteAdminOperationWithDurableRecovery<T>(
   onPersisted: (operation: CagnotteAdminFrozenOperation) => void = () => undefined,
   onDefinitiveRejectionCleared: (operation: CagnotteAdminFrozenOperation) => void = () => undefined,
 ) {
-  store.persistBeforeSend(operation);
+  await store.claimBeforeSend(operation);
   onPersisted(operation);
   try {
     const result = await send(operation);
@@ -117,6 +119,7 @@ export async function retryCagnotteAdminFrozenOperationDurably<TRefund, TCorrect
     refund: (payload: RecordOrderRefundInput) => Promise<TRefund>;
     correction: (payload: RecordRefundCorrectionInput) => Promise<TCorrection>;
   },
+  onDefinitiveRejectionCleared: (operation: CagnotteAdminFrozenOperation) => void = () => undefined,
 ) {
   if (operation.orderId !== currentOrderId) throw new Error("L’opération gelée appartient à une autre commande.");
   // A restored operation was already ambiguous. Keep that durable fact throughout every retry.
@@ -126,6 +129,11 @@ export async function retryCagnotteAdminFrozenOperationDurably<TRefund, TCorrect
     try { store.updateState(operation, "awaiting_confirmation"); } catch { /* The prior durable record remains fail-closed. */ }
     return result;
   } catch (error) {
+    if (isSafeExactRetryTerminalRejection(error)) {
+      store.clearAfterDefinitiveRejection(operation);
+      onDefinitiveRejectionCleared(operation);
+      throw error;
+    }
     try { store.updateState(operation, "uncertain"); } catch { /* A prior durable record still protects the operation. */ }
     throw error;
   }
@@ -141,8 +149,9 @@ export function resolveCagnotteAdminFrozenOperationFromInspection(
   return true;
 }
 
-function normalizedReference(value: string) {
-  return value.trim().toLowerCase();
+function isSafeExactRetryTerminalRejection(error: unknown) {
+  return error instanceof CagnotteAdminRequestError && !error.uncertain &&
+    (error.code === "refund_preview_stale" || error.code === "correction_preview_stale");
 }
 
 export function eurosInputToCents(value: string) {

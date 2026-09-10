@@ -98,9 +98,31 @@ async function postRefund<T>(body: Record<string, unknown>, signal?: AbortSignal
     if (signal?.aborted) throw error;
     throw new CagnotteAdminRequestError("Réponse absente : reprenez exactement la même opération.", "response_unknown", true);
   }
-  const payload = await response.json().catch(() => ({})) as { result?: T; code?: string; error?: string };
-  if (!response.ok || !payload.result) {
-    throw new CagnotteAdminRequestError(payload.error || "Opération refusée.", payload.code || "request_failed", response.status >= 500);
+  return readCagnotteAdminResponse<T>(response);
+}
+
+export async function readCagnotteAdminResponse<T>(response: Response): Promise<T> {
+  let value: unknown;
+  try {
+    value = await response.json();
+  } catch {
+    if (response.ok) {
+      throw new CagnotteAdminRequestError("Réponse 2xx invalide : reprenez exactement la même opération.", "response_invalid", true);
+    }
+    throw new CagnotteAdminRequestError("Opération refusée.", "request_failed", response.status >= 500);
   }
-  return payload.result;
+  const payload = value && typeof value === "object" && !Array.isArray(value)
+    ? value as { result?: unknown; code?: unknown; error?: unknown }
+    : {};
+  if (!response.ok) {
+    throw new CagnotteAdminRequestError(
+      typeof payload.error === "string" ? payload.error : "Opération refusée.",
+      typeof payload.code === "string" ? payload.code : "request_failed",
+      response.status >= 500,
+    );
+  }
+  if (!("result" in payload) || !payload.result || typeof payload.result !== "object" || Array.isArray(payload.result)) {
+    throw new CagnotteAdminRequestError("Réponse 2xx invalide : reprenez exactement la même opération.", "response_invalid", true);
+  }
+  return payload.result as T;
 }

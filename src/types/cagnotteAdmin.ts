@@ -101,6 +101,7 @@ export type CagnotteAdminInspection = {
     revision: number;
     recordedAt: string;
     reference: string;
+    businessFingerprint: string;
     source?: "admin" | "provider_reference";
     declaredFinancialCents: number;
     returnedProductNetCents: number;
