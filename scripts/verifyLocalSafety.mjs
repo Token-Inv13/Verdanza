@@ -57,6 +57,10 @@ expectScript(
   "verify:full",
   "npm run verify && npm run test:extended && npm run audit:local-full",
 );
+expectScript(
+  "test:cagnotte-admin-ui",
+  "npm run preview:cagnotte && node --import tsx scripts/testCagnotteAdminInterface.tsx",
+);
 expectScript("test:core", chain(coreTests));
 expectScript("test:extended", chain(extendedTests));
 expectScript("audit:local-essential", chain(["audit:prerender", "audit:indexnow"]));

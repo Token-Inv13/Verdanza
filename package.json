@@ -53,7 +53,7 @@
     "test:cagnotte-order-presentation": "node --import tsx scripts/testCagnotteOrderPresentation.tsx",
     "test:order-refunds": "node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
     "test:cagnotte-admin-reviews": "node --import tsx scripts/runCagnotteLedgerTests.ts --admin-reviews-only",
-    "test:cagnotte-admin-ui": "node --import tsx scripts/testCagnotteAdminInterface.tsx",
+    "test:cagnotte-admin-ui": "npm run preview:cagnotte && node --import tsx scripts/testCagnotteAdminInterface.tsx",
     "test:cagnotte-admin-storage": "node --import tsx scripts/testCagnotteAdminFrozenOperationStorage.ts",
     "prepare:cagnotte-firestore-emulator": "node scripts/prepareCagnotteFirestoreEmulator.mjs",
     "test:cagnotte-payment-links": "node --import tsx scripts/runCagnotteLedgerTests.ts --payment-links-only",
