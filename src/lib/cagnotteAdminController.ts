@@ -1,7 +1,6 @@
 import type { CagnotteAdminInspection } from "../types/cagnotteAdmin";
 import { CagnotteAdminRequestError, type RecordOrderRefundInput, type RecordRefundCorrectionInput } from "../services/cagnotteAdminService";
 import {
-  cagnotteAdminFrozenOperationFingerprint,
   sameFrozenOperation,
   type CagnotteAdminFrozenOperationStore,
   type CagnotteAdminStoredFrozenOperation,
@@ -32,7 +31,7 @@ export function reconcileCagnotteAdminFrozenOperationStorage(
   currentOperation: CagnotteAdminFrozenOperation | null,
   mutationInFlight: CagnotteAdminFrozenOperation | null,
 ): CagnotteAdminStorageReconciliation {
-  const snapshot = store.loadRecovery(orderId);
+  const snapshot = store.loadRecovery(orderId, currentOperation);
   if (snapshot.frozen.status === "blocked") return { status: "blocked", message: snapshot.frozen.message };
   if (snapshot.frozen.status === "ready") {
     if (currentOperation && !sameFrozenOperation(currentOperation, snapshot.frozen.record.operation)) {
@@ -49,9 +48,6 @@ export function reconcileCagnotteAdminFrozenOperationStorage(
     return { status: "deferred" };
   }
   if (snapshot.resolution.status === "empty") {
-    return { status: "blocked", message: CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_REQUIRED_NOTICE };
-  }
-  if (snapshot.resolution.resolution.operationFingerprint !== cagnotteAdminFrozenOperationFingerprint(currentOperation)) {
     return { status: "blocked", message: CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_REQUIRED_NOTICE };
   }
   return { status: snapshot.resolution.resolution.outcome };

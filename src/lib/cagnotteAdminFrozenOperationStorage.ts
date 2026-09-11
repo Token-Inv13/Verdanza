@@ -4,8 +4,9 @@ import { cagnotteAdminSha256 as sha256, stableCagnotteAdminHashValue as stable }
 
 export const CAGNOTTE_ADMIN_FROZEN_OPERATION_SCHEMA_VERSION = 1 as const;
 export const CAGNOTTE_ADMIN_FROZEN_OPERATION_KEY_PREFIX = "verdanza:cagnotte-admin:frozen-operation:v1:";
-export const CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_SCHEMA_VERSION = 1 as const;
-export const CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_KEY_PREFIX = "verdanza:cagnotte-admin:frozen-resolution:v1:";
+export const CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_SCHEMA_VERSION = 2 as const;
+export const CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_KEY_PREFIX = "verdanza:cagnotte-admin:frozen-resolution:v2:";
+export const CAGNOTTE_ADMIN_LEGACY_TERMINAL_RESOLUTION_KEY_PREFIX = "verdanza:cagnotte-admin:frozen-resolution:v1:";
 export const CAGNOTTE_ADMIN_CLAIM_LOCK_PREFIX = "verdanza:cagnotte-admin:claim:v1:";
 export const CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE = "Impossible de sécuriser cette opération pour une reprise en cas de réponse interrompue. Aucun enregistrement n’a été envoyé.";
 export const CAGNOTTE_ADMIN_STORAGE_INVALID_NOTICE = "Les données locales de reprise de cette commande sont invalides. Aucune nouvelle opération n’est autorisée tant que leur résolution n’est pas établie.";
@@ -56,10 +57,10 @@ export interface CagnotteAdminExclusiveClaim {
 
 export interface CagnotteAdminFrozenOperationStore {
   key(orderId: string): string;
-  resolutionKey(orderId: string): string;
+  resolutionKey(operation: CagnotteAdminFrozenOperation): string;
   load(orderId: string): CagnotteAdminFrozenOperationLoadResult;
-  loadResolution(orderId: string): CagnotteAdminTerminalResolutionLoadResult;
-  loadRecovery(orderId: string): CagnotteAdminRecoveryStorageSnapshot;
+  loadResolution(operation: CagnotteAdminFrozenOperation): CagnotteAdminTerminalResolutionLoadResult;
+  loadRecovery(orderId: string, operation: CagnotteAdminFrozenOperation | null): CagnotteAdminRecoveryStorageSnapshot;
   claimBeforeSend(operation: CagnotteAdminFrozenOperation): Promise<CagnotteAdminStoredFrozenOperation>;
   persistBeforeSend(operation: CagnotteAdminFrozenOperation): CagnotteAdminStoredFrozenOperation;
   updateState(operation: CagnotteAdminFrozenOperation, state: CagnotteAdminFrozenOperationState): CagnotteAdminStoredFrozenOperation;
@@ -85,7 +86,11 @@ export function createCagnotteAdminFrozenOperationStore(options: {
   const now = options.now ?? Date.now;
 
   const key = (orderId: string) => `${CAGNOTTE_ADMIN_FROZEN_OPERATION_KEY_PREFIX}${identifier(orderId, 128)}`;
-  const resolutionKey = (orderId: string) => `${CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_KEY_PREFIX}${identifier(orderId, 128)}`;
+  const resolutionOrderPrefix = (orderId: string) => `${CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_KEY_PREFIX}${identifier(orderId, 128)}:`;
+  const resolutionKey = (operation: CagnotteAdminFrozenOperation) => {
+    const validated = validateForMutation(operation);
+    return `${resolutionOrderPrefix(validated.orderId)}${cagnotteAdminFrozenOperationFingerprint(validated)}`;
+  };
 
   const load = (orderId: string): CagnotteAdminFrozenOperationLoadResult => {
     let raw: string | null;
@@ -103,16 +108,23 @@ export function createCagnotteAdminFrozenOperationStore(options: {
     }
   };
 
-  const loadResolution = (orderId: string): CagnotteAdminTerminalResolutionLoadResult => {
+  const loadResolution = (operation: CagnotteAdminFrozenOperation): CagnotteAdminTerminalResolutionLoadResult => {
+    let validated: CagnotteAdminFrozenOperation;
+    try {
+      validated = validateForMutation(operation);
+    } catch {
+      return { status: "blocked", reason: "invalid", message: CAGNOTTE_ADMIN_STORAGE_INVALID_NOTICE };
+    }
+    const operationFingerprint = cagnotteAdminFrozenOperationFingerprint(validated);
     let raw: string | null;
     try {
-      raw = storageProvider().getItem(resolutionKey(orderId));
+      raw = storageProvider().getItem(resolutionKey(validated));
     } catch {
       return { status: "blocked", reason: "unavailable", message: CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE };
     }
     if (raw === null) return { status: "empty" };
     try {
-      return { status: "ready", resolution: terminalResolution(JSON.parse(raw), orderId) };
+      return { status: "ready", resolution: terminalResolution(JSON.parse(raw), validated.orderId, operationFingerprint) };
     } catch {
       return { status: "blocked", reason: "invalid", message: CAGNOTTE_ADMIN_STORAGE_INVALID_NOTICE };
     }
@@ -136,9 +148,15 @@ export function createCagnotteAdminFrozenOperationStore(options: {
     operation: CagnotteAdminFrozenOperation,
     outcome: CagnotteAdminTerminalResolutionOutcome,
   ) => {
-    const prior = loadResolution(operation.orderId);
+    const prior = loadResolution(operation);
     if (prior.status === "blocked") {
       throw new CagnotteAdminFrozenOperationStorageError(prior.message, prior.reason);
+    }
+    if (prior.status === "ready") {
+      if (prior.resolution.outcome !== outcome) {
+        throw new CagnotteAdminFrozenOperationStorageError(CAGNOTTE_ADMIN_STORAGE_INVALID_NOTICE, "invalid");
+      }
+      return;
     }
     const resolvedAtEpochMs = now();
     if (!Number.isSafeInteger(resolvedAtEpochMs) || resolvedAtEpochMs < 0) {
@@ -152,11 +170,11 @@ export function createCagnotteAdminFrozenOperationStore(options: {
       resolvedAtEpochMs,
     };
     try {
-      storageProvider().setItem(resolutionKey(operation.orderId), JSON.stringify(resolution));
+      storageProvider().setItem(resolutionKey(operation), JSON.stringify(resolution));
     } catch {
       throw new CagnotteAdminFrozenOperationStorageError(CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE, "unavailable");
     }
-    const confirmed = loadResolution(operation.orderId);
+    const confirmed = loadResolution(operation);
     if (confirmed.status !== "ready" || !sameTerminalResolution(confirmed.resolution, resolution)) {
       throw new CagnotteAdminFrozenOperationStorageError(CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE, "unavailable");
     }
@@ -202,7 +220,7 @@ export function createCagnotteAdminFrozenOperationStore(options: {
     if (existing.status === "blocked") {
       throw new CagnotteAdminFrozenOperationStorageError(existing.message, existing.reason);
     }
-    const resolution = loadResolution(validated.orderId);
+    const resolution = loadResolution(validated);
     if (resolution.status === "blocked") {
       throw new CagnotteAdminFrozenOperationStorageError(resolution.message, resolution.reason);
     }
@@ -223,8 +241,13 @@ export function createCagnotteAdminFrozenOperationStore(options: {
     resolutionKey,
     load,
     loadResolution,
-    loadRecovery(orderId) {
-      return { frozen: load(orderId), resolution: loadResolution(orderId) };
+    loadRecovery(orderId, operation) {
+      const frozen = load(orderId);
+      if (!operation) return { frozen, resolution: { status: "empty" } };
+      if (operation.orderId !== orderId) {
+        return { frozen, resolution: { status: "blocked", reason: "invalid", message: CAGNOTTE_ADMIN_STORAGE_INVALID_NOTICE } };
+      }
+      return { frozen, resolution: loadResolution(operation) };
     },
     claimBeforeSend(operation) {
       const validated = validateForMutation(operation);
@@ -255,9 +278,9 @@ export function createCagnotteAdminFrozenOperationStore(options: {
     },
     subscribe(orderId, listener) {
       const watchedKey = key(orderId);
-      const watchedResolutionKey = resolutionKey(orderId);
+      const watchedResolutionPrefix = resolutionOrderPrefix(orderId);
       return options.subscribeToStorageChanges?.((changedKey) => {
-        if (changedKey === watchedKey || changedKey === watchedResolutionKey) listener();
+        if (changedKey === watchedKey || changedKey?.startsWith(watchedResolutionPrefix)) listener();
       }) ?? (() => undefined);
     },
   };
@@ -304,12 +327,13 @@ function storedRecord(value: unknown, expectedOrderId: string): CagnotteAdminSto
   };
 }
 
-function terminalResolution(value: unknown, expectedOrderId: string): CagnotteAdminTerminalResolution {
+function terminalResolution(value: unknown, expectedOrderId: string, expectedOperationFingerprint: string): CagnotteAdminTerminalResolution {
   const resolution = strictObject(value, ["schemaVersion", "orderId", "operationFingerprint", "outcome", "resolvedAtEpochMs"]);
   if (resolution.schemaVersion !== CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_SCHEMA_VERSION) throw new Error("Unknown terminal resolution schema");
   const orderId = identifier(resolution.orderId, 128);
   if (orderId !== expectedOrderId) throw new Error("Terminal resolution order mismatch");
   if (typeof resolution.operationFingerprint !== "string" || !/^[a-f0-9]{64}$/.test(resolution.operationFingerprint)) throw new Error("Invalid operation fingerprint");
+  if (resolution.operationFingerprint !== expectedOperationFingerprint) throw new Error("Terminal resolution operation mismatch");
   if (resolution.outcome !== "definitive_rejection" && resolution.outcome !== "recorded") throw new Error("Invalid terminal outcome");
   if (!Number.isSafeInteger(resolution.resolvedAtEpochMs) || (resolution.resolvedAtEpochMs as number) < 0) throw new Error("Invalid resolution time");
   return {

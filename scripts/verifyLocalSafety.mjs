@@ -65,6 +65,17 @@ expectScript(
   "test:cagnotte-emulator-diagnostics",
   "node --import tsx scripts/testFirestoreEmulatorProcessDiagnostics.ts",
 );
+expectOrderRefundEmulatorPreparation(scripts["test:order-refunds"]);
+requireValue(
+  [
+    "node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
+    "node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only && npm run prepare:cagnotte-firestore-emulator",
+    "npm run prepare:cagnotte-firestore-emulator ; node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
+    "npm run prepare:other-firestore-emulator && node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
+  ].every((command) => !isExactOrderRefundEmulatorCommand(command)),
+  "test:order-refunds refuse les chaînes sans préparation exacte, tardives ou sans fail-fast",
+  "la garde test:order-refunds accepte une chaîne invalide",
+);
 expectScript("test:core", chain(coreTests));
 expectScript("test:extended", chain(extendedTests));
 expectScript("audit:local-essential", chain(["audit:prerender", "audit:indexnow"]));
@@ -245,6 +256,18 @@ function expectScript(name, expected) {
     `${name} respecte l'ordre local attendu`,
     `${name} ne correspond pas à la chaîne locale attendue`,
   );
+}
+
+function expectOrderRefundEmulatorPreparation(command) {
+  requireValue(
+    isExactOrderRefundEmulatorCommand(command),
+    "test:order-refunds prépare et vérifie l émulateur exact avant le runner avec fail-fast",
+    "test:order-refunds doit préparer l émulateur exact avant le runner refunds avec &&",
+  );
+}
+
+function isExactOrderRefundEmulatorCommand(command) {
+  return command === "npm run prepare:cagnotte-firestore-emulator && node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only";
 }
 
 function requireValue(condition, success, failure) {

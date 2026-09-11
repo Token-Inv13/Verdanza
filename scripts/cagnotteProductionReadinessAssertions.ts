@@ -24,6 +24,13 @@ export function assertCagnotteAdminDurableSendOrdering(source: string) {
   return { claimIndex, persistedCallbackIndex, sendIndex };
 }
 
+export function assertOrderRefundScriptPreparesEmulator(command: unknown) {
+  const expected = "npm run prepare:cagnotte-firestore-emulator && node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only";
+  if (command !== expected) {
+    throw new Error("test:order-refunds doit préparer l émulateur exact avant le runner refunds avec &&.");
+  }
+}
+
 export function assertGitHubWorkflowUsesFullHistoryCheckout(source: string, workflowName: string) {
   const checkoutMatches = [...source.matchAll(/^( *)- name: Checkout\s*$/gm)];
   if (checkoutMatches.length !== 1) throw new Error(`${workflowName}: un unique bloc Checkout est requis.`);

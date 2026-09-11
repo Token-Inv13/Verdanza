@@ -37,6 +37,7 @@ import {
   assertGitHubWorkflowPreparesCagnotteEmulator,
   assertGitHubWorkflowUsesPinnedJava,
   assertGitHubWorkflowUsesFullHistoryCheckout,
+  assertOrderRefundScriptPreparesEmulator,
 } from "./cagnotteProductionReadinessAssertions.js";
 
 const baseMain = "322f65895fb0a75479c92bc4a3054caa4073d2f8";
@@ -118,6 +119,13 @@ await check("checkout complet disponible dans CI et CI Full", () => {
 await check("préparation CI déterministe de l émulateur Firestore", () => {
   const packageJson = JSON.parse(read("package.json"));
   assert.equal(packageJson.scripts["prepare:cagnotte-firestore-emulator"], "node scripts/prepareCagnotteFirestoreEmulator.mjs");
+  assert.doesNotThrow(() => assertOrderRefundScriptPreparesEmulator(packageJson.scripts["test:order-refunds"]));
+  for (const invalid of [
+    "node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
+    "node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only && npm run prepare:cagnotte-firestore-emulator",
+    "npm run prepare:cagnotte-firestore-emulator ; node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
+    "npm run prepare:other-firestore-emulator && node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
+  ]) assert.throws(() => assertOrderRefundScriptPreparesEmulator(invalid), /préparer l émulateur exact/);
   const preparation = read("scripts/prepareCagnotteFirestoreEmulator.mjs");
   assert.match(preparation, /cloud-firestore-emulator-v\$\{version\}\.jar/);
   assert.match(preparation, /const version = "1\.22\.0"/);
@@ -407,6 +415,7 @@ await check("workflow refund complet et inspection admin structurée prêts derr
   assertCagnotteAdminDurableSendOrdering(adminController);
   assert.match(adminController, /resolveCagnotteAdminFrozenOperationFromInspection[\s\S]*isCagnotteAdminFrozenOperationRecorded[\s\S]*store\.clearAfterResolution/);
   assert.match(recoveryStorage, /verdanza:cagnotte-admin:frozen-operation:v1:/);
+  assert.match(recoveryStorage, /verdanza:cagnotte-admin:frozen-resolution:v2:/);
   assert.match(recoveryStorage, /verdanza:cagnotte-admin:frozen-resolution:v1:/);
   assert.match(recoveryStorage, /schemaVersion:\s*typeof CAGNOTTE_ADMIN_FROZEN_OPERATION_SCHEMA_VERSION/);
   assert.match(recoveryStorage, /operationFingerprint:\s*string/);

@@ -1161,7 +1161,6 @@ async function executeOrderRefundCorrection(input: {
     });
     const targetEntry = reconstruction.originals.find((entry) => entry.id === targetDoc.id);
     if (!targetEntry) fail("correction_target_conflict");
-    if (lastItem(reconstruction.originals)?.id !== targetDoc.id) fail("correction_target_not_latest_effective");
     const target = targetEntry.event;
     const corrections = reconstruction.corrections
       .filter((entry) => entry.event.targetEventId === targetDoc.id)
@@ -1176,6 +1175,7 @@ async function executeOrderRefundCorrection(input: {
       }
       return publicCorrectionResult(prior.result, true);
     }
+    if (lastItem(reconstruction.originals)?.id !== targetDoc.id) fail("correction_target_not_latest_effective");
     if (request.expectedRevision !== corrections.length) fail("correction_preview_stale");
     const replacementLines = addReturns(target.result.before.lines, request.replacementReturns);
     const simulation = simulateCagnotteRefund(enrollment.snapshot, target.result.before.lines, replacementLines);

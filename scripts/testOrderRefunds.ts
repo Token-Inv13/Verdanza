@@ -1006,6 +1006,28 @@ try {
     equal(followup.result.correction.remainingGainCents, 345); eq(await walletBalance(f), [0, 1745, 0, 0]);
     await assertWalletJournal(db, f.uid);
   });
+  await test("H15 rejeu exact correction apres remboursement ulterieur reste idempotent", async () => {
+    const f = await fixture();
+    await record(f, 2500, "h15-replay-r1");
+    const target = await correctionTarget(f);
+    const correction = await recordCorrection(f, target, 0, 1000, 1000, "h15-replay-c1");
+    await record(f, 1500, "h15-replay-r2");
+    const before = await dump();
+    const replay = await call(correction.command);
+    equal(replay.status, 200, JSON.stringify(replay));
+    equal(replay.result!.alreadyRecorded, true);
+    equal(replay.stats.writes, 0);
+    eq(await dump(), before);
+    await refused({ ...correction.command, correctionReason: "Même référence H15 avec un contenu métier différent" }, "correction_event_conflict");
+    await refused(correctionSelection(f, target, 1, 500, 500), "correction_target_not_latest_effective");
+
+    const originals = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+      .filter((doc) => doc.data().kind !== "refund_correction")
+      .sort((left, right) => left.data().sequence - right.data().sequence);
+    equal(originals.length, 2);
+    await originals[1].ref.update({ sequence: 99 });
+    await refused(correction.command, "refund_history_requires_verification");
+  });
   await test("correction du compartiment en attente restaure exactement l etat precedent", async () => {
     const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000, ready: false });
     await change(f, paid); eq(await walletBalance(f), [460, 1200, 0, 0]);
