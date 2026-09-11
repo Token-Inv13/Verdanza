@@ -32,7 +32,10 @@ import {
   CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED,
   CAGNOTTE_READ_DISPLAY_ENABLED,
 } from "../src/config/cagnotteFeatures.js";
-import { assertCagnotteAdminDurableSendOrdering } from "./cagnotteProductionReadinessAssertions.js";
+import {
+  assertCagnotteAdminDurableSendOrdering,
+  assertGitHubWorkflowUsesFullHistoryCheckout,
+} from "./cagnotteProductionReadinessAssertions.js";
 
 const baseMain = "322f65895fb0a75479c92bc4a3054caa4073d2f8";
 const expectedRulesHash = "bfac684e58aff26b20dde1cb65abec49e40fc98a7d64272262e53b35b5f6091e";
@@ -56,6 +59,31 @@ const expectedEndpoints = [
   "send-payment-link.ts",
   "update-order-status.ts",
 ];
+
+await check("checkout complet disponible dans CI et CI Full", () => {
+  for (const workflow of [".github/workflows/ci.yml", ".github/workflows/ci-full.yml"]) {
+    assertGitHubWorkflowUsesFullHistoryCheckout(read(workflow), workflow);
+  }
+
+  const fixture = (checkoutOptions: string, otherStep = "") => `jobs:\n  verify:\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v7\n        with:\n${checkoutOptions}${otherStep}`;
+  const valid = fixture("          persist-credentials: false\n          fetch-depth: 0\n");
+  assert.doesNotThrow(() => assertGitHubWorkflowUsesFullHistoryCheckout(valid, "valid fixture"));
+  assert.throws(() => assertGitHubWorkflowUsesFullHistoryCheckout(
+    fixture("          persist-credentials: false\n"), "missing fetch-depth fixture"), /fetch-depth: 0/);
+  assert.throws(() => assertGitHubWorkflowUsesFullHistoryCheckout(
+    fixture("          persist-credentials: false\n          fetch-depth: 1\n"), "shallow fixture"), /fetch-depth: 0/);
+  assert.throws(() => assertGitHubWorkflowUsesFullHistoryCheckout(
+    fixture("          fetch-depth: 0\n"), "missing credentials fixture"), /persist-credentials: false/);
+  assert.throws(() => assertGitHubWorkflowUsesFullHistoryCheckout(
+    fixture("          persist-credentials: true\n          fetch-depth: 0\n"), "persisted credentials fixture"), /persist-credentials: false/);
+  assert.throws(() => assertGitHubWorkflowUsesFullHistoryCheckout(
+    fixture("          persist-credentials: false\n", "      - name: Other\n        run: echo safe\n        fetch-depth: 0\n"),
+    "other step fixture"), /fetch-depth: 0/);
+});
+
+await check("baseline Git historique disponible", () => {
+  assertHistoricalCagnotteBaselineAvailable(baseMain);
+});
 
 class FakeResponse {
   statusCode = 200;
@@ -507,6 +535,17 @@ function packageName(specifier: string) {
 
 function git(args: string[]) {
   return execFileSync("git", args, { encoding: "utf8" }).trim();
+}
+
+function assertHistoricalCagnotteBaselineAvailable(commit: string) {
+  try {
+    execFileSync("git", ["cat-file", "-e", `${commit}^{commit}`], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch {
+    throw new Error("Historical cagnotte baseline commit unavailable. CI checkout must provide full Git history.");
+  }
 }
 
 function request(method: string, url: string, body?: unknown, authorization?: string) {
