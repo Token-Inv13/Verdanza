@@ -1035,18 +1035,54 @@ try {
     equal(result.wallet, null); equal(result.reservation.applicable, false);
     equal(result.operationalState.code, "enrolled_payment_pending"); equal(result.operationalState.detail, "PAIEMENT À CONFIRMER");
   });
-  await test("inspection fail closed si acquisition inscrite manque apres paiement canonique ou livraison", async () => {
-    const paidWithoutAccrual = await fixture({ ready: false });
-    await change(paidWithoutAccrual, paid, null);
-    equal((await db.collection("cagnotteAccruals").doc(paidWithoutAccrual.id).get()).exists, false);
-    const paidResponse = await refused({ action: "inspect", orderId: paidWithoutAccrual.id }, "refund_journal_requires_verification");
-    equal(paidResponse.stats.writes, 0);
-
+  await test("inspection fail closed si acquisition inscrite manque apres paiement meme avec metadonnees invalides", async () => {
+    const paidMetadataCases: Array<[string, Record<string, unknown>]> = [
+      ["metadonnees completes", {}],
+      ["paidAt absent", { paidAt: FieldValue.delete() }],
+      ["paidAt invalide", { paidAt: "date-invalide" }],
+      ["paymentConfirmedAt absent", { paymentConfirmedAt: FieldValue.delete() }],
+      ["paymentConfirmedAt different", { paymentConfirmedAt: "2000-01-02T00:00:00.000Z" }],
+      ["paymentConfirmedBy absent", { paymentConfirmedBy: FieldValue.delete() }],
+      ["finalPaymentMethod absent", { finalPaymentMethod: FieldValue.delete() }],
+      ["finalPaymentMethod invalide", { finalPaymentMethod: "methode-invalide" }],
+    ];
+    for (const [label, metadataPatch] of paidMetadataCases) {
+      const paidWithoutAccrual = await fixture({ ready: false });
+      await change(paidWithoutAccrual, paid, null);
+      if (Object.keys(metadataPatch).length) {
+        await db.collection("orders").doc(paidWithoutAccrual.id).update(metadataPatch);
+      }
+      equal((await db.collection("cagnotteAccruals").doc(paidWithoutAccrual.id).get()).exists, false, label);
+      const paidResponse = await refused({ action: "inspect", orderId: paidWithoutAccrual.id }, "refund_journal_requires_verification");
+      equal(paidResponse.stats.writes, 0, label);
+    }
+  });
+  await test("inspection fail closed si acquisition inscrite manque apres livraison", async () => {
     const deliveredWithoutAccrual = await fixture({ ready: false });
     await change(deliveredWithoutAccrual, { orderStatus: "delivered" }, null);
     equal((await db.collection("cagnotteAccruals").doc(deliveredWithoutAccrual.id).get()).exists, false);
     const deliveredResponse = await refused({ action: "inspect", orderId: deliveredWithoutAccrual.id }, "refund_journal_requires_verification");
     equal(deliveredResponse.stats.writes, 0);
+  });
+  await test("annulation enrolled exige le tombstone garanti par chaque marqueur lifecycle", async () => {
+    const cancelledWithTombstone = await fixture({ ready: false, accrualEnrollment: "enrolled" });
+    await change(cancelledWithTombstone, { orderStatus: "cancelled" }, null);
+    const accrual = (await db.collection("cagnotteAccruals").doc(cancelledWithTombstone.id).get()).data()!;
+    equal(accrual.cancelled, true); equal(accrual.credited, false); equal(accrual.compartment, "none"); equal(accrual.remainingGainCents, 0);
+    const accepted = await call({ action: "inspect", orderId: cancelledWithTombstone.id });
+    equal(accepted.status, 200, JSON.stringify(accepted)); equal(accepted.stats.writes, 0);
+
+    for (const [label, lifecyclePatch] of [
+      ["orderStatus cancelled", { orderStatus: "cancelled" }],
+      ["paymentStatus cancelled", { paymentStatus: "cancelled" }],
+      ["cancelledAt present", { cancelledAt: "2000-01-01T00:00:00.000Z" }],
+    ] as const) {
+      const cancelledWithoutAccrual = await fixture({ ready: false, accrualEnrollment: "enrolled" });
+      await db.collection("orders").doc(cancelledWithoutAccrual.id).update(lifecyclePatch);
+      equal((await db.collection("cagnotteAccruals").doc(cancelledWithoutAccrual.id).get()).exists, false, label);
+      const rejected = await refused({ action: "inspect", orderId: cancelledWithoutAccrual.id }, "refund_journal_requires_verification");
+      equal(rejected.stats.writes, 0, label);
+    }
   });
   await test("inscription acquisition explicite conserve le comportement existant", async () => {
     const f = await fixture({ ready: false, accrualEnrollment: "enrolled" });

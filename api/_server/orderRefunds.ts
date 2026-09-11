@@ -1102,16 +1102,8 @@ function isZeroCreditCancellationTombstone(accrual: CagnotteAccrual) {
 }
 
 function orderRequiresAccrualJournal(order: Order) {
-  if (order.orderStatus === "delivered") return true;
-  if (order.paymentStatus !== "paid") return false;
-  try {
-    const paidAt = instant(order.paidAt);
-    return paidAt === instant(order.paymentConfirmedAt) && hasOwn(order, "paymentConfirmedBy") &&
-      (order.paymentConfirmedBy === null || typeof order.paymentConfirmedBy === "string") &&
-      ["card_payment_link", "cash_on_delivery", "bank_transfer", "other"].includes(order.finalPaymentMethod ?? "");
-  } catch {
-    return false;
-  }
+  return order.paymentStatus === "paid" || order.orderStatus === "delivered" ||
+    order.orderStatus === "cancelled" || order.paymentStatus === "cancelled" || Boolean(order.cancelledAt);
 }
 
 async function executeOrderRefundCorrection(input: {
