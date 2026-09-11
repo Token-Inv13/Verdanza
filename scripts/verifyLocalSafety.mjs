@@ -51,7 +51,7 @@ const fullAudits = [
 
 expectScript(
   "verify",
-  "npm run verify:local-safety && npm run lint && npm run typecheck && npm run typecheck:api && npm run test:cagnotte-admin-storage && npm run test:cagnotte-admin-ui && npm run test:order-refunds && npm run verify:cagnotte-production-readiness && npm run test:core && npm run build:local && npm run audit:local-essential",
+  "npm run verify:local-safety && npm run lint && npm run typecheck && npm run typecheck:api && npm run test:cagnotte-admin-storage && npm run test:cagnotte-admin-ui && npm run test:cagnotte-emulator-diagnostics && npm run test:order-refunds && npm run verify:cagnotte-production-readiness && npm run test:core && npm run build:local && npm run audit:local-essential",
 );
 expectScript(
   "verify:full",
@@ -60,6 +60,10 @@ expectScript(
 expectScript(
   "test:cagnotte-admin-ui",
   "npm run preview:cagnotte && node --import tsx scripts/testCagnotteAdminInterface.tsx",
+);
+expectScript(
+  "test:cagnotte-emulator-diagnostics",
+  "node --import tsx scripts/testFirestoreEmulatorProcessDiagnostics.ts",
 );
 expectScript("test:core", chain(coreTests));
 expectScript("test:extended", chain(extendedTests));

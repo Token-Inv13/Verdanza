@@ -35,6 +35,7 @@ import {
 import {
   assertCagnotteAdminDurableSendOrdering,
   assertGitHubWorkflowPreparesCagnotteEmulator,
+  assertGitHubWorkflowUsesPinnedJava,
   assertGitHubWorkflowUsesFullHistoryCheckout,
 } from "./cagnotteProductionReadinessAssertions.js";
 
@@ -62,13 +63,17 @@ const expectedEndpoints = [
 ];
 
 await check("checkout complet disponible dans CI et CI Full", () => {
+  const pinnedJavaVersions: string[] = [];
   for (const [workflow, verifyStep, verifyScript] of [
     [".github/workflows/ci.yml", "Verify", "verify"],
     [".github/workflows/ci-full.yml", "Verify full", "verify:full"],
   ] as const) {
-    assertGitHubWorkflowUsesFullHistoryCheckout(read(workflow), workflow);
-    assertGitHubWorkflowPreparesCagnotteEmulator(read(workflow), workflow, verifyStep, verifyScript);
+    const workflowSource = read(workflow);
+    assertGitHubWorkflowUsesFullHistoryCheckout(workflowSource, workflow);
+    pinnedJavaVersions.push(assertGitHubWorkflowUsesPinnedJava(workflowSource, workflow));
+    assertGitHubWorkflowPreparesCagnotteEmulator(workflowSource, workflow, verifyStep, verifyScript);
   }
+  assert.deepEqual(pinnedJavaVersions, ["21.0.12", "21.0.12"]);
 
   const fixture = (checkoutOptions: string, otherStep = "") => `jobs:\n  verify:\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v7\n        with:\n${checkoutOptions}${otherStep}`;
   const valid = fixture("          persist-credentials: false\n          fetch-depth: 0\n");
@@ -88,6 +93,17 @@ await check("checkout complet disponible dans CI et CI Full", () => {
   const workflowFixture = (steps: string) => `jobs:\n  verify:\n    steps:\n${steps}`;
   const prepareStep = "      - name: Prepare cagnotte Firestore emulator\n        run: npm run prepare:cagnotte-firestore-emulator\n";
   const verifyStep = "      - name: Verify\n        run: npm run verify\n";
+  const setupJavaStep = "      - name: Setup Java\n        uses: actions/setup-java@v6.0.1\n        with:\n          distribution: 'temurin'\n          java-version: '21.0.12'\n";
+  const runtimeStep = "      - name: Runtime versions\n        run: |\n          node --version\n          npm --version\n          java -version\n          which java\n";
+  assert.doesNotThrow(() => assertGitHubWorkflowUsesPinnedJava(
+    workflowFixture(setupJavaStep + runtimeStep + prepareStep + verifyStep), "valid Java fixture"));
+  assert.throws(() => assertGitHubWorkflowUsesPinnedJava(
+    workflowFixture(runtimeStep + prepareStep + verifyStep), "missing Java fixture"), /Setup Java/);
+  assert.throws(() => assertGitHubWorkflowUsesPinnedJava(
+    workflowFixture(setupJavaStep.replace("21.0.12", "17.0.20") + runtimeStep + prepareStep + verifyStep),
+    "wrong Java fixture"), /Java 21\.0\.12 exact/);
+  assert.throws(() => assertGitHubWorkflowUsesPinnedJava(
+    workflowFixture(runtimeStep + setupJavaStep + prepareStep + verifyStep), "late Java fixture"), /doivent précéder/);
   assert.doesNotThrow(() => assertGitHubWorkflowPreparesCagnotteEmulator(
     workflowFixture(prepareStep + verifyStep), "valid preparation fixture", "Verify", "verify"));
   assert.throws(() => assertGitHubWorkflowPreparesCagnotteEmulator(

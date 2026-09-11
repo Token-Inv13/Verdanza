@@ -73,6 +73,28 @@ export function assertGitHubWorkflowPreparesCagnotteEmulator(
   }
 }
 
+export function assertGitHubWorkflowUsesPinnedJava(source: string, workflowName: string) {
+  const setup = workflowStepBlock(source, "Setup Java", workflowName);
+  const runtime = workflowStepBlock(source, "Runtime versions", workflowName);
+  const preparation = workflowStepBlock(source, "Prepare cagnotte Firestore emulator", workflowName);
+  if (setup.start >= runtime.start || runtime.start >= preparation.start) {
+    throw new Error(`${workflowName}: Setup Java puis Runtime versions doivent précéder la préparation émulateur.`);
+  }
+  for (const [block, indent, expression, error] of [
+    [setup.block, setup.indent + 2, "uses: actions/setup-java@v6.0.1", "actions/setup-java@v6.0.1 est requis"],
+    [setup.block, setup.indent + 2, "with:", "le bloc with de Setup Java est requis"],
+    [setup.block, setup.indent + 4, "distribution: 'temurin'", "la distribution Temurin est requise"],
+    [setup.block, setup.indent + 4, "java-version: '21.0.12'", "Java 21.0.12 exact est requis"],
+    [runtime.block, runtime.indent + 4, "java -version", "Runtime versions doit afficher java -version"],
+    [runtime.block, runtime.indent + 4, "which java", "Runtime versions doit afficher which java"],
+  ] as const) {
+    if (block.search(indentedLine(indent, expression)) === -1) {
+      throw new Error(`${workflowName}: ${error}.`);
+    }
+  }
+  return "21.0.12";
+}
+
 function executableLineIndex(source: string, expression: string) {
   const escaped = expression.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return source.search(new RegExp(`^\\s*${escaped}\\s*$`, "m"));
