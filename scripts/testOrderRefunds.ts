@@ -624,6 +624,35 @@ try {
     await refused({ ...a.command, orderId: g.id }, "refund_event_conflict");
     await refused({ ...a.command, additionalReturns: [{ lineId: "line-0", additionalNetCents: 2000 }] }, "refund_event_conflict");
   });
+  await test("course Firestore meme cle refund : le perdant devient un conflit terminal sans ecriture tardive", async () => {
+    const f = await fixture(), body = selection(f), previewResult = await preview(body);
+    const first = confirmation(body, previewResult, "h10-shared-refund-reference");
+    const second = { ...first, reason: "order_cancellation" };
+    const release = gate(), entered = gate(); let contenders = 0;
+    const before = async () => { if (++contenders === 2) entered.release(); await release.promise; };
+    const firstCall = call(first, { before }), secondCall = call(second, { before });
+    await entered.promise; release.release();
+    const results = await Promise.all([firstCall, secondCall]);
+    eq(results.map((result) => result.status).sort(), [200, 409]);
+    const loserIndex = results[0].status === 409 ? 0 : 1;
+    const conflict = results[loserIndex];
+    const loser = loserIndex === 0 ? first : second;
+    const winner = loserIndex === 0 ? second : first;
+    equal(conflict.code, "refund_event_conflict");
+    ok(conflict.stats.callbacks >= 2, `callbacks=${conflict.stats.callbacks}`);
+    const events = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+      .filter((doc) => doc.data().reference === "h10-shared-refund-reference");
+    equal(events.length, 1);
+    equal(events[0].data().content.reason, winner.reason);
+    const beforeRetry = await dump();
+    const exactRetry = await call(loser);
+    equal(exactRetry.status, 409);
+    equal(exactRetry.code, "refund_event_conflict");
+    eq(await dump(), beforeRetry);
+    const winnerRetry = await call(winner);
+    equal(winnerRetry.status, 200);
+    equal(winnerRetry.result!.alreadyRecorded, true);
+  });
   await test("deux confirmations simultanees du meme evenement", async () => {
     const f = await fixture(), s = selection(f), c = confirmation(s, await preview(s), "concurrent-same"); const release = gate(), entered = gate(); let n = 0;
     const before = async () => { if (++n === 2) entered.release(); await release.promise; };
@@ -931,6 +960,39 @@ try {
     const before = await dump(); const replay = await call(first.command); equal(replay.status, 200); equal(replay.result!.alreadyRecorded, true); eq(await dump(), before);
     await refused({ ...first.command, correctionReason: "Contenu différent mais même clé de correction" }, "correction_event_conflict");
     await refused({ ...first.command, correctionReference: "final2-stale-correction" }, "correction_preview_stale");
+  });
+  await test("course Firestore meme cle correction : le perdant devient un conflit terminal sans ecriture tardive", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "h10-correction-race-original");
+    const target = await correctionTarget(f);
+    const body = correctionSelection(f, target, 0, 0, 0), previewResult = await preview(body);
+    const first = { ...body, action: "record_correction", correctionReference: "h10-shared-correction-reference",
+      expectedPreviewVersion: previewResult.previewVersion };
+    const second = { ...first, correctionReason: "Autre contenu fictif concurrent pour la même référence" };
+    const release = gate(), entered = gate(); let contenders = 0;
+    const before = async () => { if (++contenders === 2) entered.release(); await release.promise; };
+    const firstCall = call(first, { before }), secondCall = call(second, { before });
+    await entered.promise; release.release();
+    const results = await Promise.all([firstCall, secondCall]);
+    eq(results.map((result) => result.status).sort(), [200, 409]);
+    const loserIndex = results[0].status === 409 ? 0 : 1;
+    const conflict = results[loserIndex];
+    const loser = loserIndex === 0 ? first : second;
+    const winner = loserIndex === 0 ? second : first;
+    equal(conflict.code, "correction_event_conflict");
+    ok(conflict.stats.callbacks >= 2, `callbacks=${conflict.stats.callbacks}`);
+    const corrections = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+      .filter((doc) => doc.data().kind === "refund_correction" && doc.data().correctionReference === "h10-shared-correction-reference");
+    equal(corrections.length, 1);
+    equal(corrections[0].data().content.correctionReason, winner.correctionReason);
+    const beforeRetry = await dump();
+    const exactRetry = await call(loser);
+    equal(exactRetry.status, 409);
+    equal(exactRetry.code, "correction_event_conflict");
+    eq(await dump(), beforeRetry);
+    const winnerRetry = await call(winner);
+    equal(winnerRetry.status, 200);
+    equal(winnerRetry.result!.alreadyRecorded, true);
   });
   await test("deux corrections concurrentes : une seule revision appliquee", async () => {
     const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });

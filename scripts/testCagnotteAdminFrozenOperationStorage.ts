@@ -27,6 +27,7 @@ import {
 import { cagnotteAdminDefinitiveRejectionState, cagnotteAdminInspectionSuccessState, cagnotteAdminRestoredOperationState, cagnotteAdminTerminalReinspectionState, createCagnotteAdminInitialState } from "../src/lib/cagnotteAdminState.js";
 import { CagnotteAdminRequestError, readCagnotteAdminResponse } from "../src/services/cagnotteAdminService.js";
 import type { CagnotteAdminInspection } from "../src/types/cagnotteAdmin.js";
+import { assertCagnotteAdminDurableSendOrdering } from "./cagnotteProductionReadinessAssertions.js";
 
 let tests = 0;
 function test(name: string, run: () => void | Promise<void>) {
@@ -71,6 +72,8 @@ class StorageEvents {
 const immediateClaim: CagnotteAdminExclusiveClaim = {
   request: async (_name, run) => run(),
 };
+const durableSendFixtureSignature = "export async function sendCagnotteAdminOperationWithDurableRecovery() {";
+const durableSendFixtureBoundary = "export async function retryCagnotteAdminFrozenOperationDurably() {}";
 
 class SerialClaims implements CagnotteAdminExclusiveClaim {
   active = false;
@@ -512,7 +515,7 @@ await test("33 echec de suppression apres rejet definitif conserve le verrou fai
 
 await test("34 retry deja incertain reste verrouille sur auth refus reseau et serveur", async () => {
   for (const operation of [refundOperation(), correctionOperation()]) {
-    for (const [code, uncertain] of [["admin_token_required", false], ["admin_required", false], ["server_unavailable", true], ["response_unknown", true]] as const) {
+    for (const [code, uncertain] of [["admin_token_required", false], ["admin_required", false], ["request_failed", true], ["server_unavailable", true], ["response_unknown", true]] as const) {
       const storage = new MemoryStorage();
       const store = makeStore(storage);
       store.persistBeforeSend(operation);
@@ -559,6 +562,50 @@ await test("35 retry exact perime est terminal et exige une nouvelle preview", a
   }
 });
 
+await test("H10 retry exact en conflit d idempotence libere le frozen et reconcilie l autre onglet", async () => {
+  for (const operation of [refundOperation(), correctionOperation()]) {
+    const storage = new MemoryStorage();
+    const tabA = makeStore(storage);
+    const tabB = makeStore(storage);
+    tabA.persistBeforeSend(operation);
+    tabA.updateState(operation, "uncertain");
+    const restored = tabB.load(operation.orderId);
+    ok(restored.status === "ready");
+    const current = restored.status === "ready" ? restored.record.operation : operation;
+    const code = operation.kind === "refund" ? "refund_event_conflict" : "correction_event_conflict";
+    let cleared = 0;
+
+    await rejects(() => retryCagnotteAdminFrozenOperationDurably(tabA, operation, operation.orderId, {
+      refund: async () => { throw new CagnotteAdminRequestError("Conflit d’idempotence.", code, false); },
+      correction: async () => { throw new CagnotteAdminRequestError("Conflit d’idempotence.", code, false); },
+    }, () => { cleared += 1; }), (error: unknown) => error instanceof CagnotteAdminRequestError && error.code === code);
+
+    equal(cleared, 1, operation.kind);
+    equal(tabA.load(operation.orderId).status, "empty", operation.kind);
+    const resolution = tabA.loadResolution(operation.orderId);
+    equal(resolution.status === "ready" && resolution.resolution.outcome, "definitive_rejection", operation.kind);
+    equal(reconcileCagnotteAdminFrozenOperationStorage(tabB, operation.orderId, current, null).status, "definitive_rejection", operation.kind);
+
+    const awaitingInspection = cagnotteAdminTerminalReinspectionState({
+      ...createCagnotteAdminInitialState(), phase: "ready", refundPreview: {} as never, correctionPreview: {} as never,
+      uncertain: true, pendingOperation: current,
+    }, "Réinspection serveur en cours.");
+    equal(awaitingInspection.refundPreview, null);
+    equal(awaitingInspection.correctionPreview, null);
+    equal(awaitingInspection.pendingOperation, null);
+    equal(awaitingInspection.uncertain, true);
+    const ready = cagnotteAdminInspectionSuccessState(awaitingInspection, inspection(operation.orderId, []));
+    equal(ready.phase, "ready");
+    equal(ready.uncertain, false);
+
+    const next = operation.kind === "refund"
+      ? freezeCagnotteAdminRefund({ ...operation.payload, reference: `${operation.payload.reference}-after-conflict`, expectedPreviewVersion: "e".repeat(64) })
+      : freezeCagnotteAdminCorrection({ ...operation.payload, correctionReference: `${operation.payload.correctionReference}-after-conflict`, expectedPreviewVersion: "f".repeat(64) });
+    equal(await sendCagnotteAdminOperationWithDurableRecovery(tabA, next, async () => "accepted"), "accepted");
+    tabA.clearAfterResolution(next);
+  }
+});
+
 await test("36 reponse 2xx malformee ou sans resultat garde refund et correction incertains", async () => {
   const responses = [
     () => new Response("{", { status: 200, headers: { "content-type": "application/json" } }),
@@ -575,6 +622,13 @@ await test("36 reponse 2xx malformee ou sans resultat garde refund et correction
       (error: unknown) => error instanceof CagnotteAdminRequestError && error.code === "response_invalid" && error.uncertain);
       const frozen = store.load(operation.orderId);
       equal(frozen.status === "ready" && frozen.record.state, "uncertain");
+      await rejects(() => retryCagnotteAdminFrozenOperationDurably(store, operation, operation.orderId, {
+        refund: async () => readCagnotteAdminResponse<Record<string, unknown>>(response()),
+        correction: async () => readCagnotteAdminResponse<Record<string, unknown>>(response()),
+      }), (error: unknown) => error instanceof CagnotteAdminRequestError && error.code === "response_invalid" && error.uncertain);
+      const afterRetry = store.load(operation.orderId);
+      equal(afterRetry.status === "ready" && afterRetry.record.state, "uncertain");
+      equal(store.loadResolution(operation.orderId).status, "empty");
     }
   }
 });
@@ -817,7 +871,19 @@ await test("46 lecture indisponible du snapshot de reprise reste fail closed", (
   equal(reconcileCagnotteAdminFrozenOperationStorage(store, ORDER_A, refundOperation(), null).status, "blocked");
 });
 
-console.log(`HOTFIX 4F2-H8 : ${tests} contrôles storage/controller réussis.`);
+await test("H10 readiness refuse claim absent tardif ou ancien persist seul", () => {
+  const fixture = (body: string) => `${durableSendFixtureSignature}\n${body}\n}\n${durableSendFixtureBoundary}`;
+  const positive = fixture("await store.claimBeforeSend(operation);\nonPersisted(operation);\nconst result = await send(operation);");
+  const indices = assertCagnotteAdminDurableSendOrdering(positive);
+  ok(indices.claimIndex < indices.persistedCallbackIndex && indices.persistedCallbackIndex < indices.sendIndex);
+
+  throws(() => assertCagnotteAdminDurableSendOrdering(fixture("onPersisted(operation);\nconst result = await send(operation);")), /claimBeforeSend/);
+  throws(() => assertCagnotteAdminDurableSendOrdering(fixture("onPersisted(operation);\nconst result = await send(operation);\nawait store.claimBeforeSend(operation);")), /doit précéder/);
+  throws(() => assertCagnotteAdminDurableSendOrdering(fixture("store.persistBeforeSend(operation);\nonPersisted(operation);\nconst result = await send(operation);")), /claimBeforeSend/);
+  throws(() => assertCagnotteAdminDurableSendOrdering(fixture("// await store.claimBeforeSend(operation);\nonPersisted(operation);\nconst result = await send(operation);")), /claimBeforeSend/);
+});
+
+console.log(`HOTFIX 4F2-H10 : ${tests} contrôles storage/controller réussis.`);
 
 function makeStore(storage: MemoryStorage, events?: StorageEvents, exclusiveClaim: CagnotteAdminExclusiveClaim = immediateClaim) {
   return createCagnotteAdminFrozenOperationStore({ storage, now: () => NOW, subscribeToStorageChanges: events?.subscribe, exclusiveClaim });

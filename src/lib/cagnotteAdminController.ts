@@ -151,7 +151,8 @@ export function resolveCagnotteAdminFrozenOperationFromInspection(
 
 function isSafeExactRetryTerminalRejection(error: unknown) {
   return error instanceof CagnotteAdminRequestError && !error.uncertain &&
-    (error.code === "refund_preview_stale" || error.code === "correction_preview_stale");
+    (error.code === "refund_preview_stale" || error.code === "correction_preview_stale" ||
+      error.code === "refund_event_conflict" || error.code === "correction_event_conflict");
 }
 
 export function eurosInputToCents(value: string) {

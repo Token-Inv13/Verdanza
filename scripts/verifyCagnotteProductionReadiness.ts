@@ -32,6 +32,7 @@ import {
   CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED,
   CAGNOTTE_READ_DISPLAY_ENABLED,
 } from "../src/config/cagnotteFeatures.js";
+import { assertCagnotteAdminDurableSendOrdering } from "./cagnotteProductionReadinessAssertions.js";
 
 const baseMain = "322f65895fb0a75479c92bc4a3054caa4073d2f8";
 const expectedRulesHash = "bfac684e58aff26b20dde1cb65abec49e40fc98a7d64272262e53b35b5f6091e";
@@ -331,7 +332,7 @@ await check("workflow refund complet et inspection admin structurée prêts derr
   assert.match(admin, /flushPendingStorageReconciliation/);
   assert.match(admin, /Une opération précédente reste à confirmer/);
   assert.doesNotMatch(admin, /window\.localStorage|localStorage\.(?:getItem|setItem|removeItem)/);
-  assert.ok(adminController.indexOf("store.persistBeforeSend(operation)") < adminController.indexOf("const result = await send(operation)"));
+  assertCagnotteAdminDurableSendOrdering(adminController);
   assert.match(adminController, /resolveCagnotteAdminFrozenOperationFromInspection[\s\S]*isCagnotteAdminFrozenOperationRecorded[\s\S]*store\.clearAfterResolution/);
   assert.match(recoveryStorage, /verdanza:cagnotte-admin:frozen-operation:v1:/);
   assert.match(recoveryStorage, /verdanza:cagnotte-admin:frozen-resolution:v1:/);
