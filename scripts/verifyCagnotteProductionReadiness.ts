@@ -34,6 +34,7 @@ import {
 } from "../src/config/cagnotteFeatures.js";
 import {
   assertCagnotteAdminDurableSendOrdering,
+  assertGitHubWorkflowPreparesCagnotteEmulator,
   assertGitHubWorkflowUsesFullHistoryCheckout,
 } from "./cagnotteProductionReadinessAssertions.js";
 
@@ -61,8 +62,12 @@ const expectedEndpoints = [
 ];
 
 await check("checkout complet disponible dans CI et CI Full", () => {
-  for (const workflow of [".github/workflows/ci.yml", ".github/workflows/ci-full.yml"]) {
+  for (const [workflow, verifyStep, verifyScript] of [
+    [".github/workflows/ci.yml", "Verify", "verify"],
+    [".github/workflows/ci-full.yml", "Verify full", "verify:full"],
+  ] as const) {
     assertGitHubWorkflowUsesFullHistoryCheckout(read(workflow), workflow);
+    assertGitHubWorkflowPreparesCagnotteEmulator(read(workflow), workflow, verifyStep, verifyScript);
   }
 
   const fixture = (checkoutOptions: string, otherStep = "") => `jobs:\n  verify:\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v7\n        with:\n${checkoutOptions}${otherStep}`;
@@ -79,6 +84,29 @@ await check("checkout complet disponible dans CI et CI Full", () => {
   assert.throws(() => assertGitHubWorkflowUsesFullHistoryCheckout(
     fixture("          persist-credentials: false\n", "      - name: Other\n        run: echo safe\n        fetch-depth: 0\n"),
     "other step fixture"), /fetch-depth: 0/);
+
+  const workflowFixture = (steps: string) => `jobs:\n  verify:\n    steps:\n${steps}`;
+  const prepareStep = "      - name: Prepare cagnotte Firestore emulator\n        run: npm run prepare:cagnotte-firestore-emulator\n";
+  const verifyStep = "      - name: Verify\n        run: npm run verify\n";
+  assert.doesNotThrow(() => assertGitHubWorkflowPreparesCagnotteEmulator(
+    workflowFixture(prepareStep + verifyStep), "valid preparation fixture", "Verify", "verify"));
+  assert.throws(() => assertGitHubWorkflowPreparesCagnotteEmulator(
+    workflowFixture(verifyStep), "missing preparation fixture", "Verify", "verify"), /Prepare cagnotte Firestore emulator/);
+  assert.throws(() => assertGitHubWorkflowPreparesCagnotteEmulator(
+    workflowFixture(verifyStep + prepareStep), "late preparation fixture", "Verify", "verify"), /doit précéder/);
+  assert.throws(() => assertGitHubWorkflowPreparesCagnotteEmulator(
+    workflowFixture(prepareStep.replace("prepare:cagnotte-firestore-emulator", "echo incorrect") + verifyStep),
+    "wrong preparation fixture", "Verify", "verify"), /npm run prepare:cagnotte-firestore-emulator/);
+});
+
+await check("préparation CI déterministe de l émulateur Firestore", () => {
+  const packageJson = JSON.parse(read("package.json"));
+  assert.equal(packageJson.scripts["prepare:cagnotte-firestore-emulator"], "node scripts/prepareCagnotteFirestoreEmulator.mjs");
+  const preparation = read("scripts/prepareCagnotteFirestoreEmulator.mjs");
+  assert.match(preparation, /cloud-firestore-emulator-v\$\{version\}\.jar/);
+  assert.match(preparation, /const version = "1\.22\.0"/);
+  assert.match(preparation, /9b6498b7f62714d67f48f59b3818883cd682dbcd46b9f59511de81c97bb5166c/);
+  assert.doesNotMatch(preparation, /latest/i);
 });
 
 await check("baseline Git historique disponible", () => {

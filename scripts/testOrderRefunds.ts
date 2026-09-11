@@ -224,6 +224,16 @@ async function record(f: Fixture, amount: number, ref: string, delivery = 0) {
   const body = selection(f, amount, delivery), p = await preview(body), command = confirmation(body, p, ref), r = await call(command);
   equal(r.status, 200, JSON.stringify(r)); return { result: r.result!, command };
 }
+async function cancelledNotEnrolledRefund(reference: string) {
+  const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000, paymentProgram: null, accrualEnrollment: "not_enrolled" });
+  await change(f, { orderStatus: "cancelled" }, null);
+  const tombstone = (await db.collection("cagnotteAccruals").doc(f.id).get()).data()!;
+  equal(tombstone.cancelled, true); equal(tombstone.credited, false); equal(tombstone.compartment, "none");
+  equal(tombstone.remainingGainCents, 0); ok(tombstone.cumulativeReturns.every((line: { returnedNetCents: number }) => line.returnedNetCents === 0));
+  const recorded = await record(f, 10000, reference);
+  equal(recorded.result.loyaltyAccrualDecision, "not_attributed");
+  return { f, recorded };
+}
 async function correctionTarget(f: Fixture) {
   const docs = await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get();
   const originals = docs.docs.filter((doc) => doc.data().kind !== "refund_correction").sort((a, b) => b.data().sequence - a.data().sequence);
@@ -462,6 +472,65 @@ try {
     await change(f, { orderStatus: "cancelled" }, null); const r = await record(f, 10000, "mixed-no-gain-cancelled");
     equal(r.result.loyaltyAccrualDecision, "not_attributed"); equal(r.result.correction.appliedCents, 0);
     equal(r.result.restitution.grossCents, 800); eq(await walletBalance(f), [0, 2000, 0, 0]);
+  });
+  await test("tombstone not_enrolled reste inspectable apres remboursement not_attributed", async () => {
+    const { f } = await cancelledNotEnrolledRefund("not-enrolled-tombstone-refund");
+    const response = await call({ action: "inspect", orderId: f.id });
+    equal(response.status, 200, JSON.stringify(response)); equal(response.stats.writes, 0);
+  });
+  await test("tombstone not_enrolled reste inspectable apres correction legitime", async () => {
+    const { f } = await cancelledNotEnrolledRefund("not-enrolled-tombstone-correction-source");
+    const target = await correctionTarget(f);
+    await recordCorrection(f, target, 0, 0, 0, "not-enrolled-tombstone-correction");
+    const response = await call({ action: "inspect", orderId: f.id });
+    equal(response.status, 200, JSON.stringify(response)); equal(response.stats.writes, 0);
+  });
+  await test("acquisition attributed conserve l egalite stricte des retours cumules", async () => {
+    const f = await fixture(); await record(f, 2500, "attributed-cumulative-mismatch");
+    const accrualRef = db.collection("cagnotteAccruals").doc(f.id);
+    const original = (await accrualRef.get()).data()!;
+    try {
+      await accrualRef.update({ cumulativeReturns: [{ lineId: "line-0", returnedNetCents: 0 }] });
+      const rejected = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(rejected.stats.writes, 0);
+    } finally { await accrualRef.set(original); }
+  });
+  await test("not_attributed refuse toujours un tombstone non canonique", async () => {
+    const { f } = await cancelledNotEnrolledRefund("not-enrolled-noncanonical-tombstone");
+    const accrualRef = db.collection("cagnotteAccruals").doc(f.id);
+    const original = (await accrualRef.get()).data()!;
+    try {
+      await accrualRef.update({ credited: true });
+      const rejected = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(rejected.stats.writes, 0);
+    } finally { await accrualRef.set(original); }
+  });
+  await test("not_attributed conserve l egalite stricte de restitution reservation", async () => {
+    const { f } = await cancelledNotEnrolledRefund("not-enrolled-reservation-mismatch");
+    const reservationRef = db.collection("cagnotteReservations").doc(f.id);
+    const original = (await reservationRef.get()).data()!;
+    try {
+      await reservationRef.update({ "refundProjection.cumulativeRestitutedCents": 799 });
+      const rejected = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(rejected.stats.writes, 0);
+    } finally { await reservationRef.set(original); }
+  });
+  await test("not_attributed refuse un mouvement de restitution manquant ou falsifie", async () => {
+    const { f } = await cancelledNotEnrolledRefund("not-enrolled-movement-integrity");
+    const movements = await db.collection("cagnotteMovements").where("orderId", "==", f.id).get();
+    const movement = movements.docs.find((doc) => doc.data().businessEvent === "credit_refunded_after_return");
+    ok(movement, "mouvement de restitution requis");
+    const original = movement.data();
+    try {
+      await movement.ref.delete();
+      const missing = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(missing.stats.writes, 0);
+    } finally { await movement.ref.set(original); }
+    try {
+      await movement.ref.update({ availableDeltaCents: Number(original.availableDeltaCents) + 1 });
+      const forged = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(forged.stats.writes, 0);
+    } finally { await movement.ref.set(original); }
   });
   await test("droit attendu anormalement absent exige verification", async () => {
     const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });

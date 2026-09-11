@@ -54,6 +54,25 @@ export function assertGitHubWorkflowUsesFullHistoryCheckout(source: string, work
   }
 }
 
+export function assertGitHubWorkflowPreparesCagnotteEmulator(
+  source: string,
+  workflowName: string,
+  verifyStepName: "Verify" | "Verify full",
+  verifyScript: "verify" | "verify:full",
+) {
+  const preparation = workflowStepBlock(source, "Prepare cagnotte Firestore emulator", workflowName);
+  const verification = workflowStepBlock(source, verifyStepName, workflowName);
+  if (preparation.start >= verification.start) {
+    throw new Error(`${workflowName}: la préparation émulateur doit précéder ${verifyStepName}.`);
+  }
+  if (preparation.block.search(indentedLine(preparation.indent + 2, "run: npm run prepare:cagnotte-firestore-emulator")) === -1) {
+    throw new Error(`${workflowName}: la préparation doit exécuter npm run prepare:cagnotte-firestore-emulator.`);
+  }
+  if (verification.block.search(indentedLine(verification.indent + 2, `run: npm run ${verifyScript}`)) === -1) {
+    throw new Error(`${workflowName}: ${verifyStepName} doit exécuter npm run ${verifyScript}.`);
+  }
+}
+
 function executableLineIndex(source: string, expression: string) {
   const escaped = expression.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return source.search(new RegExp(`^\\s*${escaped}\\s*$`, "m"));
@@ -62,4 +81,22 @@ function executableLineIndex(source: string, expression: string) {
 function indentedLine(indent: number, expression: string) {
   const escaped = expression.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`^ {${indent}}${escaped}\\s*$`, "m");
+}
+
+function workflowStepBlock(source: string, stepName: string, workflowName: string) {
+  const escapedName = stepName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const matches = [...source.matchAll(new RegExp(`^( *)- name: ${escapedName}\\s*$`, "gm"))];
+  if (matches.length !== 1) throw new Error(`${workflowName}: une unique étape ${stepName} est requise.`);
+  const match = matches[0];
+  const indent = match[1].length;
+  const start = match.index ?? 0;
+  const remaining = source.slice(start).split(/\r?\n/);
+  let end = remaining.length;
+  for (let index = 1; index < remaining.length; index += 1) {
+    if (new RegExp(`^ {${indent}}- name:`).test(remaining[index])) {
+      end = index;
+      break;
+    }
+  }
+  return { start, indent, block: remaining.slice(0, end).join("\n") };
 }

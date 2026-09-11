@@ -19,6 +19,8 @@ import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
 import { CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED } from "../src/config/cagnotteFeatures.js";
 import { cagnotteAdminCorrectionBusinessFingerprint, cagnotteAdminRefundBusinessFingerprint } from "../src/lib/cagnotteAdminOperationIdentity.js";
 import type { CagnotteAdminInspection, CorrectionPreview, RefundPreview } from "../src/types/cagnotteAdmin.js";
+import { adminOrderRow } from "../src/services/ordersService.js";
+import type { Order } from "../src/types/index.js";
 
 let tests = 0;
 function test(name: string, run: () => void | Promise<void>) {
@@ -34,11 +36,39 @@ await test("garde normal desactive : aucun rendu ni appel", () => {
 await test("commande historique : aucun montage meme avec garde simulee ouverte", () => {
   equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "firestore", order: { id: "historique", customerId: "client" } }), false);
 });
-await test("commande inscrite serveur : montage seulement avec garde simulee ouverte", () => {
-  const order = eligibleOrder();
-  equal(shouldMountCagnotteAdminTools({ displayEnabled: false, orderSource: "firestore", order }), false);
-  equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "archive", order }), false);
-  equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "firestore", order }), true);
+await test("projection admin conserve une inscription acquisition seule sans intention", () => {
+  const source = projectableOrder(eligibleOrder());
+  const projected = adminOrderRow(source);
+  equal(projected.cagnotte, source.cagnotte);
+  equal(projected.cagnotteReservationIntent, undefined);
+  equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "firestore", order: projected }), true);
+});
+await test("projection admin conserve une inscription mixte et son intention canonique", () => {
+  const source = projectableOrder(mixedEligibleOrder());
+  const projected = adminOrderRow(source);
+  equal(projected.cagnotte, source.cagnotte);
+  equal(projected.cagnotteReservationIntent, source.cagnotteReservationIntent);
+  equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "firestore", order: projected }), true);
+});
+await test("projection admin refuse historique, inscription invalide, source non Firestore et garde fermee", () => {
+  const ordinary = adminOrderRow(projectableOrder({ id: "CMD-HISTORIQUE", customerId: "client-fictif" }));
+  equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "firestore", order: ordinary }), false);
+  const invalid = adminOrderRow(projectableOrder({ ...eligibleOrder(), cagnotte: { ...eligibleOrder().cagnotte, beneficiaryId: "autre-client" } }));
+  equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "firestore", order: invalid }), false);
+  const enrolled = adminOrderRow(projectableOrder(eligibleOrder()));
+  equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "archive", order: enrolled }), false);
+  equal(shouldMountCagnotteAdminTools({ displayEnabled: false, orderSource: "firestore", order: enrolled }), false);
+});
+await test("meme projection admin alimente mobile et bureau puis recharge par getAdminOrder", async () => {
+  const [adminPage, adminData] = await Promise.all([
+    readFile(resolve("src/pages/admin/AdminPage.tsx"), "utf8"),
+    readFile(resolve("src/hooks/useAdminData.ts"), "utf8"),
+  ]);
+  equal((adminPage.match(/shouldMountCagnotteAdminTools\(\{ displayEnabled: CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED, orderSource, order \}\)/g) ?? []).length, 2);
+  match(adminPage, /<DesktopOrderCard[\s\S]*?order=\{order\}[\s\S]*?onRefresh=\{\(\) => onRefreshOrder \? onRefreshOrder\(order\.id\) : Promise\.resolve\(\)\}/);
+  match(adminPage, /onOrderReload=\{\(\) => onRefreshOrder\?\.\(order\.id\)\}/);
+  match(adminPage, /<AdminCagnotteTools[\s\S]*?onOrderReload=\{onRefresh\}/);
+  match(adminData, /const order = await getAdminOrder\(orderId\);[\s\S]*?entry\.id === orderId \? order : entry/);
 });
 await test("vrai composant : libelles, financement et operations applicables", () => {
   const html = renderToStaticMarkup(<CagnotteAdminToolsView model={base} />);
@@ -327,6 +357,32 @@ function eligibleOrder() {
   const snapshot = calculateCagnotte({ lines: [{ lineId: "line", initialCents: 10000 }], discounts: [], requestedCagnotteCents: 0, availableCagnotteCents: 0 });
   return { id: "CMD-INSCRITE", customerId: "client-fictif", cagnotte: { schemaVersion: 1 as const, beneficiaryId: "client-fictif",
     programVersion: "programme-fictif-v1", calculationVersion: "cagnotte-math-v1" as const, createdAtEpochMs: 1000, snapshot } };
+}
+function mixedEligibleOrder() {
+  const snapshot = calculateCagnotte({ lines: [{ lineId: "line", initialCents: 10000 }], discounts: [], requestedCagnotteCents: 800, availableCagnotteCents: 2000 });
+  const enrollment = { schemaVersion: 1 as const, beneficiaryId: "client-fictif", programVersion: "programme-fictif-v1",
+    calculationVersion: "cagnotte-math-v1" as const, createdAtEpochMs: 1000, snapshot };
+  return { id: "CMD-MIXTE", customerId: "client-fictif", cagnotte: enrollment,
+    cagnotteReservationIntent: { schemaVersion: 1 as const, reservationVersion: "cagnotte-reservation-v1" as const,
+      order: { orderId: "CMD-MIXTE", beneficiaryId: enrollment.beneficiaryId, programVersion: enrollment.programVersion,
+        createdAtEpochMs: enrollment.createdAtEpochMs, snapshot }, amountCents: snapshot.appliedCagnotteCents } };
+}
+function projectableOrder(enrollment: Pick<Order, "id" | "customerId" | "cagnotte" | "cagnotteReservationIntent">): Order {
+  return {
+    ...enrollment,
+    customerEmail: "client@example.test",
+    customerPhone: "0600000000",
+    items: [],
+    subtotal: 100,
+    deliveryFee: 0,
+    total: 100,
+    paymentStatus: "paid",
+    orderStatus: "delivered",
+    deliveryMethod: "postal",
+    deliveryAddress: { firstName: "Camille", lastName: "Fictive", line1: "1 rue du Test", postalCode: "13000", city: "Marseille", country: "France" },
+    createdAt: "2026-09-11T08:00:00.000Z",
+    updatedAt: "2026-09-11T08:00:00.000Z",
+  };
 }
 function refund(): RefundPreview { return { kind: "administrative_refund_recorded", orderId: "CMD-FICTIVE", currency: "EUR", additionalReturns: [{ lineId: "line-0", additionalNetCents: 2500 }],
   productFinancialCents: 2300, cagnotteRestitutionCents: 200, deliveryFinancialCents: 0, totalFinancialCents: 2300,

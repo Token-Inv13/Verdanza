@@ -6445,6 +6445,9 @@ function InvoicesPanel({
 
 type AdminOrderListItem = {
   id: string;
+  customerId?: string;
+  cagnotte?: AdminOrderRow["cagnotte"];
+  cagnotteReservationIntent?: AdminOrderRow["cagnotteReservationIntent"];
   orderType?: string;
   customer: string;
   customerEmail?: string;

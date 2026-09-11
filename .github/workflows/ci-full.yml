@@ -40,6 +40,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Prepare cagnotte Firestore emulator
+        run: npm run prepare:cagnotte-firestore-emulator
+
       - name: Install Chromium
         run: npx --no-install playwright install --with-deps chromium
 

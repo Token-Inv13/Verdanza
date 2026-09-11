@@ -167,6 +167,8 @@ export async function createCheckoutOrder(
 export type AdminOrderRow = {
   id: string;
   customerId?: string;
+  cagnotte?: Order["cagnotte"];
+  cagnotteReservationIntent?: Order["cagnotteReservationIntent"];
   orderType?: OrderType;
   customer: string;
   customerEmail?: string;
@@ -269,11 +271,13 @@ export async function getAdminOrder(orderId: string): Promise<AdminOrderRow | nu
   return adminOrderRow({ id: snapshot.id, ...snapshot.data() } as Order);
 }
 
-function adminOrderRow(order: Order): AdminOrderRow {
+export function adminOrderRow(order: Order): AdminOrderRow {
   const financing = presentOrderFinancing(order);
   return {
         id: order.id,
         customerId: order.customerId,
+        cagnotte: order.cagnotte,
+        cagnotteReservationIntent: order.cagnotteReservationIntent,
         orderType: order.orderType || "order",
         customer: order.customerName || order.customerEmail || "Client",
         customerEmail: order.customerEmail,

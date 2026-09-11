@@ -884,7 +884,7 @@ function reconstructOrderRefundHistory(input: {
       movementById.get(movementId)?.businessEvent === "credit_refund_corrected")),
   ];
   if (linkedCorrectionIds.size !== corrections.length ||
-    (input.accrual && stable([...input.accrual.cumulativeReturns].sort(byLine)) !== stable(effective.lines)) ||
+    (input.decision === "attributed" && input.accrual && stable([...input.accrual.cumulativeReturns].sort(byLine)) !== stable(effective.lines)) ||
     (input.reservationBasis && input.reservationBasis.cumulativeRestitutedCents !== effective.cagnotteRestitutionCents)) {
     fail("refund_history_requires_verification");
   }
