@@ -485,6 +485,75 @@ try {
     const response = await call({ action: "inspect", orderId: f.id });
     equal(response.status, 200, JSON.stringify(response)); equal(response.stats.writes, 0);
   });
+  await test("annulation not_enrolled sans tombstone est refusee pour chaque marqueur", async () => {
+    for (const [label, lifecyclePatch] of [
+      ["orderStatus cancelled", { orderStatus: "cancelled" }],
+      ["paymentStatus cancelled", { paymentStatus: "cancelled" }],
+      ["cancelledAt present", { cancelledAt: "2000-01-04T00:00:00.000Z" }],
+    ] as const) {
+      const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000, paymentProgram: null,
+        accrualEnrollment: "not_enrolled" });
+      await db.collection("orders").doc(f.id).update(lifecyclePatch);
+      equal((await db.collection("cagnotteAccruals").doc(f.id).get()).exists, false, label);
+      const response = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(response.stats.writes, 0, label);
+      const refund = await refused(selection(f, 2500), "refund_cancellation_requires_verification");
+      equal(refund.stats.writes, 0, label);
+    }
+  });
+  await test("correction not_attributed exige un tombstone annule canonique", async () => {
+    const { f } = await cancelledNotEnrolledRefund("not-enrolled-correction-basis-source");
+    const target = await correctionTarget(f);
+    const body = correctionSelection(f, target, 0, 2500, 2300);
+    const accrualRef = db.collection("cagnotteAccruals").doc(f.id);
+    const canonical = (await accrualRef.get()).data()!;
+    try {
+      await accrualRef.delete();
+      const missing = await refused(body);
+      ok(["refund_journal_requires_verification", "refund_ledger_requires_verification"].includes(missing.code!));
+      await accrualRef.set({ ...canonical, cumulativeReturns: [{ lineId: "line-0", returnedNetCents: 1 }] });
+      const nonCanonical = await refused(body);
+      ok(["refund_journal_requires_verification", "refund_ledger_requires_verification"].includes(nonCanonical.code!));
+    } finally {
+      await accrualRef.set(canonical);
+    }
+  });
+  await test("correction partielle not_attributed conserve le tombstone not_enrolled intact", async () => {
+    const { f } = await cancelledNotEnrolledRefund("not-enrolled-tombstone-partial-source");
+    const accrualRef = db.collection("cagnotteAccruals").doc(f.id);
+    const beforeSnapshot = await accrualRef.get();
+    const before = beforeSnapshot.data()!;
+    const target = await correctionTarget(f);
+    const corrected = await recordCorrection(f, target, 0, 2500, 2300, "not-enrolled-tombstone-partial-correction");
+    equal(corrected.result.effective.returnedProductNetCents, 2500);
+    equal(corrected.result.effective.cagnotteRestitutionCents, 200);
+    const afterSnapshot = await accrualRef.get();
+    eq(afterSnapshot.data(), before);
+    equal(afterSnapshot.updateTime?.toMillis(), beforeSnapshot.updateTime?.toMillis());
+    ok(afterSnapshot.data()!.cumulativeReturns.every((line: { returnedNetCents: number }) => line.returnedNetCents === 0));
+    equal(afterSnapshot.data()!.remainingGainCents, 0);
+    eq(await walletBalance(f), [0, 1400, 0, 0]);
+    const reservation = (await db.collection("cagnotteReservations").doc(f.id).get()).data()!;
+    equal(reservation.refundProjection.cumulativeRestitutedCents, 200);
+    equal(reservation.refundProjection.corrections.length, 1);
+    const movements = (await db.collection("cagnotteMovements").where("orderId", "==", f.id).get()).docs.map((doc) => doc.data());
+    equal(movements.filter((movement) => movement.businessEvent === "credit_refund_corrected").length, 1);
+    equal(movements.filter((movement) => movement.businessEvent === "refund_declaration_corrected").length, 0);
+    const inspected = await call({ action: "inspect", orderId: f.id });
+    equal(inspected.status, 200, JSON.stringify(inspected)); equal(inspected.stats.writes, 0);
+    const inspection = inspected.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(inspection.effective.returnedProductNetCents, 2500);
+    equal(inspection.effective.cagnotteRestitutionCents, 200);
+  });
+  await test("correction partielle attributed synchronise toujours les retours accrual", async () => {
+    const f = await fixture();
+    await record(f, 5000, "attributed-partial-correction-source");
+    const target = await correctionTarget(f);
+    const corrected = await recordCorrection(f, target, 0, 2500, 2500, "attributed-partial-correction");
+    const accrual = (await db.collection("cagnotteAccruals").doc(f.id).get()).data()!;
+    eq(accrual.cumulativeReturns, corrected.result.effective.lines);
+    equal(accrual.remainingGainCents, corrected.result.remainingGainCents);
+  });
   await test("acquisition attributed conserve l egalite stricte des retours cumules", async () => {
     const f = await fixture(); await record(f, 2500, "attributed-cumulative-mismatch");
     const accrualRef = db.collection("cagnotteAccruals").doc(f.id);

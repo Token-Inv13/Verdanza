@@ -346,14 +346,12 @@ export async function executeOrderRefund(input: {
       order: internalOrder,
       allowMissingAccrual: decision === "not_attributed",
     });
-    const cancelled = order.orderStatus === "cancelled" || order.paymentStatus === "cancelled" || Boolean(order.cancelledAt);
+    const cancelled = isOrderCancelled(order);
     if (decision === "attributed") {
       if (!basis.state?.paymentConfirmed) fail("refund_right_requires_verification");
       if (basis.state.cancelled !== cancelled) fail("refund_cancellation_requires_verification");
-    } else if (basis.state) {
-      if (basis.state.paymentConfirmed || basis.state.credited || basis.state.remainingGainCents !== 0 ||
-        basis.state.compartment !== "none" || !basis.state.cancelled || !cancelled) fail("refund_right_requires_verification");
-    } else if (cancelled) {
+    } else if (!isValidNotAttributedAccrualBasis(basis.state, cancelled)) {
+      if (basis.state) fail("refund_right_requires_verification");
       fail("refund_cancellation_requires_verification");
     }
     const reservationBasis = mixed
@@ -586,7 +584,8 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
     if (accrualEnrollment === "enrolled" && !accrual && orderRequiresAccrualJournal(order)) {
       fail("refund_journal_requires_verification");
     }
-    if (accrualEnrollment === "not_enrolled" && accrual && !isZeroCreditCancellationTombstone(accrual)) {
+    const cancelledByOrder = isOrderCancelled(order);
+    if (accrualEnrollment === "not_enrolled" && !isValidNotAttributedAccrualBasis(accrual, cancelledByOrder)) {
       fail("refund_journal_requires_verification");
     }
     let reservationBasis: Awaited<ReturnType<typeof readCagnotteReservationBasis>> | null = null;
@@ -632,7 +631,7 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
       .sort((a, b) => b.recordedAtEpochMs - a.recordedAtEpochMs || a.id.localeCompare(b.id));
     const omittedLegacyUndatedCount = inspectedMovements.filter((entry) => entry.kind === "legacy_undated").length;
     const unpaid = await readUnpaidOrderContext({ db, transaction: tx, order, nowEpochMs: Date.now() });
-    const cancelled = accrual?.cancelled ?? (order.orderStatus === "cancelled" || order.paymentStatus === "cancelled" || Boolean(order.cancelledAt));
+    const cancelled = accrual?.cancelled ?? cancelledByOrder;
     const accrualView = {
       present: accrual !== null,
       initialGainCents: accrualEnrollment === "not_enrolled" ? 0 : accrual?.initialGainCents ?? enrollment.snapshot.loyaltyCents,
@@ -1101,6 +1100,14 @@ function isZeroCreditCancellationTombstone(accrual: CagnotteAccrual) {
     accrual.cumulativeReturns.every((line) => line.returnedNetCents === 0);
 }
 
+function isOrderCancelled(order: Order) {
+  return order.orderStatus === "cancelled" || order.paymentStatus === "cancelled" || Boolean(order.cancelledAt);
+}
+
+function isValidNotAttributedAccrualBasis(accrual: CagnotteAccrual | null, cancelled: boolean) {
+  return cancelled ? Boolean(accrual && isZeroCreditCancellationTombstone(accrual)) : accrual === null;
+}
+
 function orderRequiresAccrualJournal(order: Order) {
   return order.paymentStatus === "paid" || order.orderStatus === "delivered" ||
     order.orderStatus === "cancelled" || order.paymentStatus === "cancelled" || Boolean(order.cancelledAt);
@@ -1142,6 +1149,10 @@ async function executeOrderRefundCorrection(input: {
     const paidAt = instant(order.paidAt);
     const decision = mixed ? validatePaymentEvidence(order.cagnottePaymentEvidence, paidAt) : "attributed";
     const basis = await readCagnotteRefundBasis({ db: input.db, transaction: tx, order: internalOrder, allowMissingAccrual: decision === "not_attributed" });
+    const cancelled = isOrderCancelled(order);
+    if (decision === "not_attributed" && !isValidNotAttributedAccrualBasis(basis.state, cancelled)) {
+      fail("refund_journal_requires_verification");
+    }
     const reservationBasis = mixed ? await readConsumedReservation(order.cagnotteReservationIntent, input.db, tx) : null;
     const walletMutation = await prepareCagnotteWalletMutation({ db: input.db, transaction: tx,
       beneficiaryId: enrollment.beneficiaryId, allowMissing: false, missingCode: "CONFLICT" });
@@ -1190,7 +1201,6 @@ async function executeOrderRefundCorrection(input: {
       accrual: basis.state, reservation: reservationBasis?.reservation.refundProjection ?? null });
     if (confirmed && confirmed.expectedPreviewVersion !== previewVersion) fail("correction_preview_stale");
 
-    const cancelled = order.orderStatus === "cancelled" || order.paymentStatus === "cancelled" || Boolean(order.cancelledAt);
     const desiredRemaining = decision === "attributed" && !cancelled ? simulation.next.theoreticalLoyaltyCents : 0;
     const currentRemaining = basis.state?.remainingGainCents ?? 0;
     const loyaltyDelta = desiredRemaining - currentRemaining;
@@ -1278,7 +1288,7 @@ async function executeOrderRefundCorrection(input: {
     validateStoredCorrectionEvent(correctionEvent, correctionKey);
     tx.create(correctionRef, correctionEvent);
     for (const movement of movementWrites) tx.create(input.db.collection("cagnotteMovements").doc(movement.id), movement.value);
-    if (basis.state) tx.set(input.db.collection("cagnotteAccruals").doc(order.id), {
+    if (decision === "attributed" && basis.state) tx.set(input.db.collection("cagnotteAccruals").doc(order.id), {
       ...basis.state, cumulativeReturns: effective.lines, remainingGainCents: desiredRemaining,
     });
     if (reservationBasis) {
