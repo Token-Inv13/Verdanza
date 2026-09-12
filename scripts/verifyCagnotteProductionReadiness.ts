@@ -32,6 +32,13 @@ import {
   CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED,
   CAGNOTTE_READ_DISPLAY_ENABLED,
 } from "../src/config/cagnotteFeatures.js";
+import {
+  assertCagnotteAdminDurableSendOrdering,
+  assertGitHubWorkflowPreparesCagnotteEmulator,
+  assertGitHubWorkflowUsesPinnedJava,
+  assertGitHubWorkflowUsesFullHistoryCheckout,
+  assertOrderRefundScriptPreparesEmulator,
+} from "./cagnotteProductionReadinessAssertions.js";
 
 const baseMain = "322f65895fb0a75479c92bc4a3054caa4073d2f8";
 const expectedRulesHash = "bfac684e58aff26b20dde1cb65abec49e40fc98a7d64272262e53b35b5f6091e";
@@ -55,6 +62,80 @@ const expectedEndpoints = [
   "send-payment-link.ts",
   "update-order-status.ts",
 ];
+
+await check("checkout complet disponible dans CI et CI Full", () => {
+  const pinnedJavaVersions: string[] = [];
+  for (const [workflow, verifyStep, verifyScript] of [
+    [".github/workflows/ci.yml", "Verify", "verify"],
+    [".github/workflows/ci-full.yml", "Verify full", "verify:full"],
+  ] as const) {
+    const workflowSource = read(workflow);
+    assertGitHubWorkflowUsesFullHistoryCheckout(workflowSource, workflow);
+    pinnedJavaVersions.push(assertGitHubWorkflowUsesPinnedJava(workflowSource, workflow));
+    assertGitHubWorkflowPreparesCagnotteEmulator(workflowSource, workflow, verifyStep, verifyScript);
+  }
+  assert.deepEqual(pinnedJavaVersions, ["21.0.12", "21.0.12"]);
+
+  const fixture = (checkoutOptions: string, otherStep = "") => `jobs:\n  verify:\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v7\n        with:\n${checkoutOptions}${otherStep}`;
+  const valid = fixture("          persist-credentials: false\n          fetch-depth: 0\n");
+  assert.doesNotThrow(() => assertGitHubWorkflowUsesFullHistoryCheckout(valid, "valid fixture"));
+  assert.throws(() => assertGitHubWorkflowUsesFullHistoryCheckout(
+    fixture("          persist-credentials: false\n"), "missing fetch-depth fixture"), /fetch-depth: 0/);
+  assert.throws(() => assertGitHubWorkflowUsesFullHistoryCheckout(
+    fixture("          persist-credentials: false\n          fetch-depth: 1\n"), "shallow fixture"), /fetch-depth: 0/);
+  assert.throws(() => assertGitHubWorkflowUsesFullHistoryCheckout(
+    fixture("          fetch-depth: 0\n"), "missing credentials fixture"), /persist-credentials: false/);
+  assert.throws(() => assertGitHubWorkflowUsesFullHistoryCheckout(
+    fixture("          persist-credentials: true\n          fetch-depth: 0\n"), "persisted credentials fixture"), /persist-credentials: false/);
+  assert.throws(() => assertGitHubWorkflowUsesFullHistoryCheckout(
+    fixture("          persist-credentials: false\n", "      - name: Other\n        run: echo safe\n        fetch-depth: 0\n"),
+    "other step fixture"), /fetch-depth: 0/);
+
+  const workflowFixture = (steps: string) => `jobs:\n  verify:\n    steps:\n${steps}`;
+  const prepareStep = "      - name: Prepare cagnotte Firestore emulator\n        run: npm run prepare:cagnotte-firestore-emulator\n";
+  const verifyStep = "      - name: Verify\n        run: npm run verify\n";
+  const setupJavaStep = "      - name: Setup Java\n        uses: actions/setup-java@v6.0.1\n        with:\n          distribution: 'temurin'\n          java-version: '21.0.12'\n";
+  const runtimeStep = "      - name: Runtime versions\n        run: |\n          node --version\n          npm --version\n          java -version\n          which java\n";
+  assert.doesNotThrow(() => assertGitHubWorkflowUsesPinnedJava(
+    workflowFixture(setupJavaStep + runtimeStep + prepareStep + verifyStep), "valid Java fixture"));
+  assert.throws(() => assertGitHubWorkflowUsesPinnedJava(
+    workflowFixture(runtimeStep + prepareStep + verifyStep), "missing Java fixture"), /Setup Java/);
+  assert.throws(() => assertGitHubWorkflowUsesPinnedJava(
+    workflowFixture(setupJavaStep.replace("21.0.12", "17.0.20") + runtimeStep + prepareStep + verifyStep),
+    "wrong Java fixture"), /Java 21\.0\.12 exact/);
+  assert.throws(() => assertGitHubWorkflowUsesPinnedJava(
+    workflowFixture(runtimeStep + setupJavaStep + prepareStep + verifyStep), "late Java fixture"), /doivent précéder/);
+  assert.doesNotThrow(() => assertGitHubWorkflowPreparesCagnotteEmulator(
+    workflowFixture(prepareStep + verifyStep), "valid preparation fixture", "Verify", "verify"));
+  assert.throws(() => assertGitHubWorkflowPreparesCagnotteEmulator(
+    workflowFixture(verifyStep), "missing preparation fixture", "Verify", "verify"), /Prepare cagnotte Firestore emulator/);
+  assert.throws(() => assertGitHubWorkflowPreparesCagnotteEmulator(
+    workflowFixture(verifyStep + prepareStep), "late preparation fixture", "Verify", "verify"), /doit précéder/);
+  assert.throws(() => assertGitHubWorkflowPreparesCagnotteEmulator(
+    workflowFixture(prepareStep.replace("prepare:cagnotte-firestore-emulator", "echo incorrect") + verifyStep),
+    "wrong preparation fixture", "Verify", "verify"), /npm run prepare:cagnotte-firestore-emulator/);
+});
+
+await check("préparation CI déterministe de l émulateur Firestore", () => {
+  const packageJson = JSON.parse(read("package.json"));
+  assert.equal(packageJson.scripts["prepare:cagnotte-firestore-emulator"], "node scripts/prepareCagnotteFirestoreEmulator.mjs");
+  assert.doesNotThrow(() => assertOrderRefundScriptPreparesEmulator(packageJson.scripts["test:order-refunds"]));
+  for (const invalid of [
+    "node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
+    "node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only && npm run prepare:cagnotte-firestore-emulator",
+    "npm run prepare:cagnotte-firestore-emulator ; node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
+    "npm run prepare:other-firestore-emulator && node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
+  ]) assert.throws(() => assertOrderRefundScriptPreparesEmulator(invalid), /préparer l émulateur exact/);
+  const preparation = read("scripts/prepareCagnotteFirestoreEmulator.mjs");
+  assert.match(preparation, /cloud-firestore-emulator-v\$\{version\}\.jar/);
+  assert.match(preparation, /const version = "1\.22\.0"/);
+  assert.match(preparation, /9b6498b7f62714d67f48f59b3818883cd682dbcd46b9f59511de81c97bb5166c/);
+  assert.doesNotMatch(preparation, /latest/i);
+});
+
+await check("baseline Git historique disponible", () => {
+  assertHistoricalCagnotteBaselineAvailable(baseMain);
+});
 
 class FakeResponse {
   statusCode = 200;
@@ -302,6 +383,58 @@ await check("aucun rate limit ou ciblage client contournable sur les nouvelles r
   assert.doesNotMatch(read("api/_server/orderRefunds.ts").slice(0, 12_000), /targetUid/);
 });
 
+await check("workflow refund complet et inspection admin structurée prêts derrière les gardes", () => {
+  const refunds = read("api/_server/orderRefunds.ts");
+  const route = read("api/_server/orderRefundRoute.ts");
+  const admin = read("src/components/cagnotte/CagnotteAdminTools.tsx");
+  const adminPage = read("src/pages/admin/AdminPage.tsx");
+  const eligibility = read("src/lib/cagnotteAdminEligibility.ts");
+  const service = read("src/services/cagnotteAdminService.ts");
+  const adminTypes = read("src/types/cagnotteAdmin.ts");
+  const adminController = read("src/lib/cagnotteAdminController.ts");
+  const recoveryStorage = read("src/lib/cagnotteAdminFrozenOperationStorage.ts");
+  for (const action of ["inspect", "preview", "record_confirmed", "preview_correction", "record_correction"]) assert.match(refunds, new RegExp(`action: "${action}"`));
+  assert.ok(route.indexOf("dependencies.enabled !== true") < route.indexOf("request.body"));
+  assert.match(refunds, /refund_historical_order_not_supported/);
+  for (const field of ["operationalState", "enrollment", "accrual", "wallet", "reservation", "refund", "movements"]) {
+    assert.match(adminTypes, new RegExp(`\\b${field}:`));
+    assert.match(refunds, new RegExp(`\\b${field}(?:,|:)`));
+  }
+  for (const event of ["cagnotte_refund_recorded", "cagnotte_refund_correction_recorded", "cagnotte_correction_requires_review"]) assert.match(refunds, new RegExp(event));
+  assert.match(adminPage, /shouldMountCagnotteAdminTools/);
+  assert.match(eligibility, /simulateCagnotteRefund/);
+  assert.match(admin, /Réinspecter avant toute nouvelle tentative/);
+  assert.match(admin, /pendingRefund\.current \?\?=/);
+  assert.match(admin, /pendingCorrection\.current \?\?=/);
+  assert.match(admin, /frozenOperationStore\.subscribe\(orderId/);
+  assert.match(admin, /mutationInFlightOperation/);
+  assert.match(admin, /reconcileCagnotteAdminFrozenOperationStorage/);
+  assert.match(admin, /flushPendingStorageReconciliation/);
+  assert.match(admin, /Une opération précédente reste à confirmer/);
+  assert.doesNotMatch(admin, /window\.localStorage|localStorage\.(?:getItem|setItem|removeItem)/);
+  assertCagnotteAdminDurableSendOrdering(adminController);
+  assert.match(adminController, /resolveCagnotteAdminFrozenOperationFromInspection[\s\S]*isCagnotteAdminFrozenOperationRecorded[\s\S]*store\.clearAfterResolution/);
+  assert.match(recoveryStorage, /verdanza:cagnotte-admin:frozen-operation:v1:/);
+  assert.match(recoveryStorage, /verdanza:cagnotte-admin:frozen-resolution:v2:/);
+  assert.match(recoveryStorage, /verdanza:cagnotte-admin:frozen-resolution:v1:/);
+  assert.match(recoveryStorage, /schemaVersion:\s*typeof CAGNOTTE_ADMIN_FROZEN_OPERATION_SCHEMA_VERSION/);
+  assert.match(recoveryStorage, /operationFingerprint:\s*string/);
+  assert.match(recoveryStorage, /outcome:\s*CagnotteAdminTerminalResolutionOutcome/);
+  assert.ok(recoveryStorage.indexOf("writeResolutionAndConfirm(validated, outcome)") < recoveryStorage.indexOf("removeItem(key(validated.orderId))"));
+  assert.match(recoveryStorage, /window\.localStorage/);
+  assert.match(recoveryStorage, /strictObject/);
+  assert.doesNotMatch(service, /\/api\/cagnotte|CAGNOTTE_READ_CURSOR_SECRET/);
+});
+
+await check("documentation opérationnelle conserve l ordre inert-first et le drain", () => {
+  const documentation = read("docs/cagnotte/PROGRAMME-PRODUCTION-INERT-FIRST.md");
+  assert.match(documentation, /refunds API → admin UI → acquisition/);
+  assert.match(documentation, /Aucune de ces actions ne contacte un prestataire de paiement/);
+  assert.match(documentation, /commande sans snapshot serveur `cagnotte` reste historique/);
+  assert.match(documentation, /Après une réponse réseau incertaine/);
+  assert.match(documentation, /Drain après incident/);
+});
+
 await check("règles Firestore candidates et protections commandes", () => {
   const rulesBytes = readFileSync(resolve("firestore.rules"));
   const rules = rulesBytes.toString("utf8").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -455,6 +588,17 @@ function packageName(specifier: string) {
 
 function git(args: string[]) {
   return execFileSync("git", args, { encoding: "utf8" }).trim();
+}
+
+function assertHistoricalCagnotteBaselineAvailable(commit: string) {
+  try {
+    execFileSync("git", ["cat-file", "-e", `${commit}^{commit}`], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch {
+    throw new Error("Historical cagnotte baseline commit unavailable. CI checkout must provide full Git history.");
+  }
 }
 
 function request(method: string, url: string, body?: unknown, authorization?: string) {

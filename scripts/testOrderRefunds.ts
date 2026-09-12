@@ -1,14 +1,15 @@
 import { deepStrictEqual as eq, equal, ok } from "node:assert/strict";
+import { createHash } from "node:crypto";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { connectCagnotteEmulator, CAGNOTTE_DEMO } from "./cagnotteEmulator.js";
 import { createOrderRefundHandler, handleOrderRefund } from "../api/_server/orderRefundRoute.js";
-import { ORDER_REFUNDS_ENABLED } from "../api/_server/orderRefunds.js";
+import { ORDER_REFUNDS_ENABLED, type OrderRefundOperationalLog } from "../api/_server/orderRefunds.js";
 import { CAGNOTTE_SERVER_PROGRAM } from "../api/_server/cagnotteProgram.js";
 import { commitOrderStatusTransition, type OrderStatusChange } from "../api/_server/orderStatusTransition.js";
 import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
 import { fixtureSpentGain, assertWalletJournal } from "./cagnotteRegularizationFixtures.js";
-import { applyCagnotteLedgerOperation } from "../api/_server/cagnotteLedger.js";
+import { applyCagnotteLedgerOperation, validateCagnotteLedgerMovementForRead } from "../api/_server/cagnotteLedger.js";
 import { applyCagnotteReservationOperation, createCagnotteReservationIntent } from "../api/_server/cagnotteReservations.js";
 import type { CagnotteReservationTestProgram } from "../api/_server/cagnotteReservationTypes.js";
 import type { CagnotteTestProgram } from "../api/_server/cagnotteLedgerTypes.js";
@@ -27,6 +28,13 @@ const confirmDate = "2000-01-02T00:00:00.000Z";
 const paid = { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" } as const;
 let seq = 0, tests = 0;
 async function test(name: string, run: () => Promise<unknown>) { try { await run(); tests++; console.log(`OK [Remboursements 4C] ${name}`); } catch (error) { console.error(`FAIL ${name}`); throw error; } }
+async function captureWarnings<T>(run: () => Promise<T>) {
+  const warnings: string[] = [];
+  const previous = console.warn;
+  console.warn = (...args: unknown[]) => { warnings.push(args.map(String).join(" ")); };
+  try { return { result: await run(), warnings }; }
+  finally { console.warn = previous; }
+}
 async function fundWallet(uid: string, amountCents: number, orderId: string) {
   const snapshot = calculateCagnotte({ lines: [{ lineId: "funding-line", initialCents: amountCents * 20 }], discounts: [],
     requestedCagnotteCents: 0, availableCagnotteCents: 0, advantages: [] });
@@ -36,7 +44,8 @@ async function fundWallet(uid: string, amountCents: number, orderId: string) {
   } } });
 }
 async function fixture(options: { amounts?: number[]; delivery?: number; discount?: number; gift?: boolean; enrolled?: boolean; ready?: boolean; beneficiary?: string;
-  usedCagnotteCents?: number; initialWalletCents?: number; paymentProgram?: CagnotteTestProgram | null } = {}) {
+  usedCagnotteCents?: number; initialWalletCents?: number; paymentProgram?: CagnotteTestProgram | null;
+  accrualEnrollment?: "enrolled" | "not_enrolled" } = {}) {
   const id = `refund-order-${++seq}`, uid = options.beneficiary ?? `refund-customer-${seq}`;
   const amounts = options.amounts ?? [10000];
   const lines = amounts.map((initialCents, index) => ({ lineId: `line-${index}`, initialCents }));
@@ -60,7 +69,8 @@ async function fixture(options: { amounts?: number[]; delivery?: number; discoun
     items: snapshot.lines.map((l) => ({ lineId: l.lineId, productId: "refund-product", name: "Synthetic", quantity: 1, unitPrice: l.initialCents / 100, lineTotal: l.initialCents / 100 })),
   };
   if (options.enrolled !== false) data.cagnotte = { schemaVersion: 1, beneficiaryId: uid, programVersion: program.programVersion,
-    calculationVersion: "cagnotte-math-v1", createdAtEpochMs: 2000, snapshot };
+    calculationVersion: "cagnotte-math-v1", createdAtEpochMs: 2000, snapshot,
+    ...(options.accrualEnrollment ? { accrualEnrollment: options.accrualEnrollment } : {}) };
   if (snapshot.appliedCagnotteCents > 0) {
     const intent = createCagnotteReservationIntent({ orderId: id, beneficiaryId: uid, createdAtEpochMs: 2000,
       calculation: { lines: [...lines, ...(options.gift ? [{ lineId: "gift", initialCents: 0, isGift: true as const }] : [])],
@@ -76,7 +86,66 @@ async function fixture(options: { amounts?: number[]; delivery?: number; discoun
   if (options.ready !== false) await change(f, { ...paid, orderStatus: "delivered" }, paymentProgram);
   return f;
 }
+async function lineIdentityFixture(explicitLineIds: boolean) {
+  const id = `refund-order-${++seq}`, uid = `refund-customer-${seq}`;
+  const calculationLines = explicitLineIds
+    ? [{ lineId: "B", initialCents: 2000 }, { lineId: "A", initialCents: 1000 }, { lineId: "gift", initialCents: 0, isGift: true as const }]
+    : [{ lineId: "order-line-0", initialCents: 2000 }, { lineId: "order-line-1", initialCents: 1000 }];
+  const snapshot = calculateCagnotte({ lines: calculationLines, discounts: [], requestedCagnotteCents: 0, availableCagnotteCents: 0, advantages: [] });
+  const items = explicitLineIds
+    ? [
+      { lineId: "B", productId: "refund-product", name: "Produit B", quantity: 1, unitPrice: 20, lineTotal: 20 },
+      { lineId: "A", productId: "refund-product", name: "Produit A", quantity: 1, unitPrice: 10, lineTotal: 10 },
+      { lineId: "gift", productId: "refund-product", name: "Cadeau promotionnel", quantity: 1, unitPrice: 0, lineTotal: 0, isGift: true },
+    ]
+    : [
+      { productId: "refund-product", name: "Ligne historique 1", quantity: 1, unitPrice: 20, lineTotal: 20 },
+      { productId: "refund-product", name: "Ligne historique 2", quantity: 1, unitPrice: 10, lineTotal: 10 },
+    ];
+  const data: Record<string, unknown> = {
+    customerId: uid, customerName: "Synthetic", customerEmail: "synthetic@example.test",
+    orderStatus: "confirmed", paymentStatus: "to_confirm", deliveryMethod: "postal", deliveryFee: 0,
+    subtotal: snapshot.subtotalCents / 100, total: snapshot.eligibleCents / 100,
+    discountAmount: 0, promotionDiscountTotal: 0,
+    createdAt: "2000-01-01T00:00:00.000Z", updatedAt: "2000-01-01T00:00:00.000Z", items,
+    cagnotte: { schemaVersion: 1, beneficiaryId: uid, programVersion: program.programVersion,
+      calculationVersion: "cagnotte-math-v1", createdAtEpochMs: 2000, snapshot },
+  };
+  await db.collection("orders").doc(id).set(data);
+  return { id, uid, snapshot, data };
+}
 type Fixture = Awaited<ReturnType<typeof fixture>>;
+async function rewriteOneMovementSchema(f: Fixture, schemaVersion: 1 | 2 | 3, recordedAtEpochMs?: unknown) {
+  const snapshot = await db.collection("cagnotteMovements").where("orderId", "==", f.id).get();
+  const document = snapshot.docs[0];
+  ok(document, "un mouvement de fixture est requis");
+  const movement = { ...document.data(), schemaVersion };
+  if (schemaVersion !== 3) {
+    delete movement.reservationVersion;
+    delete movement.reservedDeltaCents;
+  }
+  if (schemaVersion === 1) {
+    delete movement.regularizationVersion;
+    delete movement.regularizationDeltaCents;
+  }
+  if (recordedAtEpochMs === undefined) delete movement.recordedAtEpochMs;
+  else movement.recordedAtEpochMs = recordedAtEpochMs;
+  await document.ref.set(movement);
+  return document.id;
+}
+async function rejectMovementMutation(f: Fixture, businessEvent: string, patch: Record<string, unknown>) {
+  const snapshot = await db.collection("cagnotteMovements").where("orderId", "==", f.id).get();
+  const document = snapshot.docs.find((doc) => doc.data().businessEvent === businessEvent);
+  ok(document, `mouvement ${businessEvent} requis`);
+  const original = document.data();
+  await document.ref.set({ ...original, ...patch });
+  try {
+    const response = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+    equal(response.stats.writes, 0);
+  } finally {
+    await document.ref.set(original);
+  }
+}
 async function change(f: Fixture, patch: Omit<OrderStatusChange, "orderId">, config: CagnotteTestProgram | null = accrualProgram) {
   return commitOrderStatusTransition({ db, body: { orderId: f.id, ...patch }, admin: actor,
     accrualProgram: config, reservationProgram: program, now: () => "2000-01-01T00:00:00.000Z" });
@@ -106,7 +175,7 @@ async function invoke(handler: ReturnType<typeof createOrderRefundHandler>, body
   await handler({ method, body, headers } as VercelRequestLike, response as unknown as VercelResponseLike);
   return { status, ...payload };
 }
-type Options = { identity?: VerifiedFirebaseUser | Error; noToken?: boolean; enabled?: boolean; fail?: boolean; loseAck?: boolean; before?: () => Promise<void>; betweenAttempts?: () => Promise<void> };
+type Options = { identity?: VerifiedFirebaseUser | Error; noToken?: boolean; enabled?: boolean; fail?: boolean; loseAck?: boolean; before?: () => Promise<void>; betweenAttempts?: () => Promise<void>; logs?: OrderRefundOperationalLog[]; loggerThrows?: boolean };
 async function call(body: Record<string, unknown>, options: Options = {}) {
   let transactions = 0, writes = 0, walletWrites = 0, callbacks = 0, verificationCalls = 0;
   const checked = new Proxy(db, { get(target, key) {
@@ -142,7 +211,8 @@ async function call(body: Record<string, unknown>, options: Options = {}) {
     const value = Reflect.get(target, key); return typeof value === "function" ? value.bind(target) : value;
   } }) as Firestore;
   const handler = createOrderRefundHandler({ enabled: options.enabled ?? true, getDb: () => checked, now: clock,
-    verifyToken: async () => { verificationCalls++; if (options.identity instanceof Error) throw options.identity; return options.identity ?? actor; } });
+    verifyToken: async () => { verificationCalls++; if (options.identity instanceof Error) throw options.identity; return options.identity ?? actor; },
+    log: (entry) => { options.logs?.push(entry); if (options.loggerThrows) throw new Error("Synthetic logger failure"); } });
   return { ...await invoke(handler, { ...body, ...(options.noToken ? {} : { authToken: "synthetic" }) }), stats: { transactions, writes, walletWrites, callbacks, verificationCalls } };
 }
 async function preview(body: Record<string, unknown>) { const r = await call(body); equal(r.status, 200, JSON.stringify(r)); equal(r.stats.writes, 0); return r.result!; }
@@ -153,6 +223,16 @@ function confirmation(body: Record<string, unknown>, p: ResponseResult, referenc
 async function record(f: Fixture, amount: number, ref: string, delivery = 0) {
   const body = selection(f, amount, delivery), p = await preview(body), command = confirmation(body, p, ref), r = await call(command);
   equal(r.status, 200, JSON.stringify(r)); return { result: r.result!, command };
+}
+async function cancelledNotEnrolledRefund(reference: string) {
+  const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000, paymentProgram: null, accrualEnrollment: "not_enrolled" });
+  await change(f, { orderStatus: "cancelled" }, null);
+  const tombstone = (await db.collection("cagnotteAccruals").doc(f.id).get()).data()!;
+  equal(tombstone.cancelled, true); equal(tombstone.credited, false); equal(tombstone.compartment, "none");
+  equal(tombstone.remainingGainCents, 0); ok(tombstone.cumulativeReturns.every((line: { returnedNetCents: number }) => line.returnedNetCents === 0));
+  const recorded = await record(f, 10000, reference);
+  equal(recorded.result.loyaltyAccrualDecision, "not_attributed");
+  return { f, recorded };
 }
 async function correctionTarget(f: Fixture) {
   const docs = await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get();
@@ -176,6 +256,37 @@ async function refused(body: Record<string, unknown>, code?: string, options: Op
   if (code) equal(r.code, code); eq(await dump(), before); return r;
 }
 function gate() { let release!: () => void; const promise = new Promise<void>((r) => { release = r; }); return { promise, release }; }
+function stableHashValue(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableHashValue).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableHashValue((value as Record<string, unknown>)[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+function testHash(value: unknown) { return createHash("sha256").update(stableHashValue(value)).digest("hex"); }
+async function expectCorruptHistoryRejectedEverywhere(
+  f: Fixture,
+  inspectCode: "refund_history_requires_verification" | "refund_journal_requires_verification" = "refund_history_requires_verification",
+) {
+  await refused({ action: "inspect", orderId: f.id }, inspectCode);
+  await refused({
+    action: "preview", orderId: f.id, currency: "EUR",
+    additionalReturns: [{ lineId: "line-0", additionalNetCents: 100 }], deliveryRefundCents: 0,
+  }, "refund_history_requires_verification");
+  await refused({
+    action: "record_confirmed", orderId: f.id, currency: "EUR",
+    additionalReturns: [{ lineId: "line-0", additionalNetCents: 100 }], deliveryRefundCents: 0,
+    source: "admin", reference: `h6-chain-${++seq}`, declaredFinancialCents: 100,
+    reason: "product_return", confirmedAt: confirmDate, expectedPreviewVersion: "e".repeat(64),
+  }, "refund_history_requires_verification");
+  const originals = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+    .filter((doc) => doc.data().kind !== "refund_correction")
+    .sort((left, right) => left.data().sequence - right.data().sequence);
+  const targetEventId = originals[originals.length - 1]?.id;
+  if (!targetEventId) return;
+  const correction = correctionSelection(f, targetEventId, 0, 100, 100);
+  await refused(correction, "refund_history_requires_verification");
+  await refused({ ...correction, action: "record_correction", correctionReference: `h8-chain-${++seq}`,
+    expectedPreviewVersion: "f".repeat(64) }, "refund_history_requires_verification");
+}
 
 try {
   equal(CAGNOTTE_SERVER_PROGRAM, null); equal(ORDER_REFUNDS_ENABLED, false);
@@ -194,6 +305,108 @@ try {
     const f = await fixture(), before = await dump(), p = await preview(selection(f)); eq(await dump(), before);
     equal(p.kind, "refund_preview"); equal(p.totalFinancialCents, 2500); equal(p.correction.theoreticalCents, 125);
     equal(p.recordedAt, undefined);
+  });
+  await test("references de correction bancaires sont refusees au parsing avant transaction", async () => {
+    const f = await fixture();
+    await record(f, 2500, "h18-correction-reference-source");
+    const target = await correctionTarget(f);
+    const body = correctionSelection(f, target, 0, 1000, 1000);
+    const p = await preview(body);
+    const sensitiveReferences = [
+      ["card-13", "4111111111111"],
+      ["card-16", "4111111111111111"],
+      ["card-19", "4111111111111111111"],
+      ["iban-lower", "fr7612345678901234567890123"],
+      ["iban-upper", "FR7612345678901234567890123"],
+    ] as const;
+    for (const [label, correctionReference] of sensitiveReferences) {
+      const before = await dump();
+      const response = await call({ ...body, action: "record_correction", correctionReference, expectedPreviewVersion: p.previewVersion });
+      equal(response.status, 400, label);
+      equal(response.code, "correction_reference_not_business_id", label);
+      equal(response.stats.transactions, 0, label);
+      equal(response.stats.writes, 0, label);
+      equal(response.stats.walletWrites, 0, label);
+      eq(await dump(), before, label);
+    }
+  });
+  await test("references metier normales restent normalisees et acceptes pour une correction", async () => {
+    const f = await fixture();
+    await record(f, 2500, "h18-normal-correction-source");
+    const target = await correctionTarget(f);
+    const correction = await recordCorrection(f, target, 0, 1000, 1000, " H18-CORRECTION-REF-001 ");
+    equal(correction.result.alreadyRecorded, false);
+    const events = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs.map((doc) => doc.data());
+    equal(events.some((event) => event.kind === "refund_correction" && event.correctionReference === "h18-correction-ref-001"), true);
+  });
+  await test("filtre refund card et iban reste identique et sans transaction", async () => {
+    const f = await fixture();
+    const body = selection(f);
+    const p = await preview(body);
+    for (const [label, reference] of [
+      ["card-13", "4111111111111"],
+      ["card-16", "4111111111111111"],
+      ["card-19", "4111111111111111111"],
+      ["iban-lower", "fr7612345678901234567890123"],
+      ["iban-upper", "FR7612345678901234567890123"],
+    ] as const) {
+      const response = await call(confirmation(body, p, reference));
+      equal(response.status, 400, label);
+      equal(response.code, "refund_reference_not_business_id", label);
+      equal(response.stats.transactions, 0, label);
+      equal(response.stats.writes, 0, label);
+    }
+  });
+  await test("retry refund exact precede le plafond livraison et conflit de fingerprint", async () => {
+    const f = await fixture({ delivery: 600 });
+    const first = await record(f, 0, "h18-delivery-retry", 500);
+    await record(f, 0, "h18-delivery-later", 100);
+    const before = await dump();
+    const exactRetry = await call(first.command);
+    equal(exactRetry.status, 200, JSON.stringify(exactRetry));
+    equal(exactRetry.result!.alreadyRecorded, true);
+    equal(exactRetry.stats.writes, 0);
+    eq(await dump(), before);
+    const conflict = await call({ ...first.command, reason: "delivery_refund" });
+    equal(conflict.status, 409);
+    equal(conflict.code, "refund_event_conflict");
+    equal(conflict.stats.writes, 0);
+    eq(await dump(), before);
+    const noPrior = await call({
+      ...selection(f, 0, 1), action: "record_confirmed", source: "admin", reference: "h18-delivery-new",
+      declaredFinancialCents: 1, reason: "delivery_refund", confirmedAt: confirmDate, expectedPreviewVersion: "f".repeat(64),
+    });
+    equal(noPrior.status, 400);
+    equal(noPrior.code, "refund_delivery_exceeds_remaining");
+    equal(noPrior.stats.writes, 0);
+    eq(await dump(), before);
+  });
+  await test("retry correction exact precede aussi le plafond livraison", async () => {
+    const f = await fixture({ delivery: 600 });
+    await record(f, 2500, "h18-correction-delivery-source");
+    const target = await correctionTarget(f);
+    const body = { ...correctionSelection(f, target, 0, 2500, 3000), deliveryRefundCents: 500 };
+    const p = await preview(body);
+    const command = { ...body, action: "record_correction", correctionReference: "h18-correction-delivery-retry", expectedPreviewVersion: p.previewVersion };
+    const recorded = await call(command);
+    equal(recorded.status, 200, JSON.stringify(recorded));
+    const before = await dump();
+    const exactRetry = await call(command);
+    equal(exactRetry.status, 200, JSON.stringify(exactRetry));
+    equal(exactRetry.result!.alreadyRecorded, true);
+    equal(exactRetry.stats.writes, 0);
+    eq(await dump(), before);
+    const conflict = await call({ ...command, deliveryRefundCents: 601, declaredFinancialCents: 3101 });
+    equal(conflict.status, 409);
+    equal(conflict.code, "correction_event_conflict");
+    equal(conflict.stats.writes, 0);
+    eq(await dump(), before);
+    const noPrior = await call({ ...command, correctionReference: "h18-correction-delivery-new", expectedRevision: 1,
+      deliveryRefundCents: 601, declaredFinancialCents: 3101, expectedPreviewVersion: "f".repeat(64) });
+    equal(noPrior.status, 400);
+    equal(noPrior.code, "refund_delivery_exceeds_remaining");
+    equal(noPrior.stats.writes, 0);
+    eq(await dump(), before);
   });
   await test("100 EUR -> 25 -> 75 et reprises anciennes", async () => {
     const f = await fixture(); const original = await stored(f); const a = await record(f, 2500, "main-25");
@@ -273,10 +486,23 @@ try {
     await fixture({ beneficiary: f.uid, amounts: [20000], usedCagnotteCents: 2160, initialWalletCents: 0, paymentProgram: null });
     eq(await walletBalance(f), [0, 0, 0, 0]);
     await record(otherGain, 10000, "other-order-regularization"); eq(await walletBalance(f), [0, 0, 0, 500]);
+    const beforeOwnRefund = await call({ action: "inspect", orderId: f.id }); equal(beforeOwnRefund.status, 200);
+    equal((beforeOwnRefund.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection).operationalState.code, "delivered_available");
     const r = await record(f, 2500, "mixed-other-regularization");
     equal(r.result.productFinancialCents, 2300); equal(r.result.correction.regularizationDeltaCents, 115);
     equal(r.result.restitution.compensationCents, 200); equal(r.result.restitution.availableIncreaseCents, 0);
-    eq(await walletBalance(f), [0, 0, 0, 415]); await assertWalletJournal(db, f.uid);
+    eq(await walletBalance(f), [0, 0, 0, 415]);
+    const inspected = await call({ action: "inspect", orderId: f.id }); equal(inspected.status, 200);
+    equal((inspected.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection).operationalState.code, "refund_recorded");
+    const cancelled = await fixture({ beneficiary: f.uid, ready: false }); await change(cancelled, { orderStatus: "cancelled" }, null);
+    const notEnrolled = await fixture({ beneficiary: f.uid, ready: false, accrualEnrollment: "not_enrolled" });
+    const paymentPending = await fixture({ beneficiary: f.uid, ready: false }); await change(paymentPending, paid);
+    for (const [candidate, expected] of [[cancelled, "cancelled"], [notEnrolled, "accrual_not_enrolled"], [paymentPending, "payment_confirmed_pending"]] as const) {
+      const response = await call({ action: "inspect", orderId: candidate.id }); equal(response.status, 200);
+      const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+      equal(result.operationalState.code, expected); equal(result.wallet?.regularizationCents, 415);
+    }
+    await assertWalletJournal(db, f.uid);
   });
   await test("gain suspendu : consommation prouvee et restitution sans droit retroactif", async () => {
     const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000, paymentProgram: null });
@@ -348,6 +574,134 @@ try {
     await change(f, { orderStatus: "cancelled" }, null); const r = await record(f, 10000, "mixed-no-gain-cancelled");
     equal(r.result.loyaltyAccrualDecision, "not_attributed"); equal(r.result.correction.appliedCents, 0);
     equal(r.result.restitution.grossCents, 800); eq(await walletBalance(f), [0, 2000, 0, 0]);
+  });
+  await test("tombstone not_enrolled reste inspectable apres remboursement not_attributed", async () => {
+    const { f } = await cancelledNotEnrolledRefund("not-enrolled-tombstone-refund");
+    const response = await call({ action: "inspect", orderId: f.id });
+    equal(response.status, 200, JSON.stringify(response)); equal(response.stats.writes, 0);
+  });
+  await test("tombstone not_enrolled reste inspectable apres correction legitime", async () => {
+    const { f } = await cancelledNotEnrolledRefund("not-enrolled-tombstone-correction-source");
+    const target = await correctionTarget(f);
+    await recordCorrection(f, target, 0, 0, 0, "not-enrolled-tombstone-correction");
+    const response = await call({ action: "inspect", orderId: f.id });
+    equal(response.status, 200, JSON.stringify(response)); equal(response.stats.writes, 0);
+  });
+  await test("annulation not_enrolled sans tombstone est refusee pour chaque marqueur", async () => {
+    for (const [label, lifecyclePatch] of [
+      ["orderStatus cancelled", { orderStatus: "cancelled" }],
+      ["paymentStatus cancelled", { paymentStatus: "cancelled" }],
+      ["cancelledAt present", { cancelledAt: "2000-01-04T00:00:00.000Z" }],
+    ] as const) {
+      const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000, paymentProgram: null,
+        accrualEnrollment: "not_enrolled" });
+      await db.collection("orders").doc(f.id).update(lifecyclePatch);
+      equal((await db.collection("cagnotteAccruals").doc(f.id).get()).exists, false, label);
+      const response = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(response.stats.writes, 0, label);
+      const refund = await refused(selection(f, 2500), "refund_cancellation_requires_verification");
+      equal(refund.stats.writes, 0, label);
+    }
+  });
+  await test("correction not_attributed exige un tombstone annule canonique", async () => {
+    const { f } = await cancelledNotEnrolledRefund("not-enrolled-correction-basis-source");
+    const target = await correctionTarget(f);
+    const body = correctionSelection(f, target, 0, 2500, 2300);
+    const accrualRef = db.collection("cagnotteAccruals").doc(f.id);
+    const canonical = (await accrualRef.get()).data()!;
+    try {
+      await accrualRef.delete();
+      const missing = await refused(body);
+      ok(["refund_journal_requires_verification", "refund_ledger_requires_verification"].includes(missing.code!));
+      await accrualRef.set({ ...canonical, cumulativeReturns: [{ lineId: "line-0", returnedNetCents: 1 }] });
+      const nonCanonical = await refused(body);
+      ok(["refund_journal_requires_verification", "refund_ledger_requires_verification"].includes(nonCanonical.code!));
+    } finally {
+      await accrualRef.set(canonical);
+    }
+  });
+  await test("correction partielle not_attributed conserve le tombstone not_enrolled intact", async () => {
+    const { f } = await cancelledNotEnrolledRefund("not-enrolled-tombstone-partial-source");
+    const accrualRef = db.collection("cagnotteAccruals").doc(f.id);
+    const beforeSnapshot = await accrualRef.get();
+    const before = beforeSnapshot.data()!;
+    const target = await correctionTarget(f);
+    const corrected = await recordCorrection(f, target, 0, 2500, 2300, "not-enrolled-tombstone-partial-correction");
+    equal(corrected.result.effective.returnedProductNetCents, 2500);
+    equal(corrected.result.effective.cagnotteRestitutionCents, 200);
+    const afterSnapshot = await accrualRef.get();
+    eq(afterSnapshot.data(), before);
+    equal(afterSnapshot.updateTime?.toMillis(), beforeSnapshot.updateTime?.toMillis());
+    ok(afterSnapshot.data()!.cumulativeReturns.every((line: { returnedNetCents: number }) => line.returnedNetCents === 0));
+    equal(afterSnapshot.data()!.remainingGainCents, 0);
+    eq(await walletBalance(f), [0, 1400, 0, 0]);
+    const reservation = (await db.collection("cagnotteReservations").doc(f.id).get()).data()!;
+    equal(reservation.refundProjection.cumulativeRestitutedCents, 200);
+    equal(reservation.refundProjection.corrections.length, 1);
+    const movements = (await db.collection("cagnotteMovements").where("orderId", "==", f.id).get()).docs.map((doc) => doc.data());
+    equal(movements.filter((movement) => movement.businessEvent === "credit_refund_corrected").length, 1);
+    equal(movements.filter((movement) => movement.businessEvent === "refund_declaration_corrected").length, 0);
+    const inspected = await call({ action: "inspect", orderId: f.id });
+    equal(inspected.status, 200, JSON.stringify(inspected)); equal(inspected.stats.writes, 0);
+    const inspection = inspected.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(inspection.effective.returnedProductNetCents, 2500);
+    equal(inspection.effective.cagnotteRestitutionCents, 200);
+  });
+  await test("correction partielle attributed synchronise toujours les retours accrual", async () => {
+    const f = await fixture();
+    await record(f, 5000, "attributed-partial-correction-source");
+    const target = await correctionTarget(f);
+    const corrected = await recordCorrection(f, target, 0, 2500, 2500, "attributed-partial-correction");
+    const accrual = (await db.collection("cagnotteAccruals").doc(f.id).get()).data()!;
+    eq(accrual.cumulativeReturns, corrected.result.effective.lines);
+    equal(accrual.remainingGainCents, corrected.result.remainingGainCents);
+  });
+  await test("acquisition attributed conserve l egalite stricte des retours cumules", async () => {
+    const f = await fixture(); await record(f, 2500, "attributed-cumulative-mismatch");
+    const accrualRef = db.collection("cagnotteAccruals").doc(f.id);
+    const original = (await accrualRef.get()).data()!;
+    try {
+      await accrualRef.update({ cumulativeReturns: [{ lineId: "line-0", returnedNetCents: 0 }] });
+      const rejected = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(rejected.stats.writes, 0);
+    } finally { await accrualRef.set(original); }
+  });
+  await test("not_attributed refuse toujours un tombstone non canonique", async () => {
+    const { f } = await cancelledNotEnrolledRefund("not-enrolled-noncanonical-tombstone");
+    const accrualRef = db.collection("cagnotteAccruals").doc(f.id);
+    const original = (await accrualRef.get()).data()!;
+    try {
+      await accrualRef.update({ credited: true });
+      const rejected = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(rejected.stats.writes, 0);
+    } finally { await accrualRef.set(original); }
+  });
+  await test("not_attributed conserve l egalite stricte de restitution reservation", async () => {
+    const { f } = await cancelledNotEnrolledRefund("not-enrolled-reservation-mismatch");
+    const reservationRef = db.collection("cagnotteReservations").doc(f.id);
+    const original = (await reservationRef.get()).data()!;
+    try {
+      await reservationRef.update({ "refundProjection.cumulativeRestitutedCents": 799 });
+      const rejected = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(rejected.stats.writes, 0);
+    } finally { await reservationRef.set(original); }
+  });
+  await test("not_attributed refuse un mouvement de restitution manquant ou falsifie", async () => {
+    const { f } = await cancelledNotEnrolledRefund("not-enrolled-movement-integrity");
+    const movements = await db.collection("cagnotteMovements").where("orderId", "==", f.id).get();
+    const movement = movements.docs.find((doc) => doc.data().businessEvent === "credit_refunded_after_return");
+    ok(movement, "mouvement de restitution requis");
+    const original = movement.data();
+    try {
+      await movement.ref.delete();
+      const missing = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(missing.stats.writes, 0);
+    } finally { await movement.ref.set(original); }
+    try {
+      await movement.ref.update({ availableDeltaCents: Number(original.availableDeltaCents) + 1 });
+      const forged = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(forged.stats.writes, 0);
+    } finally { await movement.ref.set(original); }
   });
   await test("droit attendu anormalement absent exige verification", async () => {
     const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
@@ -440,7 +794,12 @@ try {
   await test("presence seule de gain ne prouve pas le paiement", async () => {
     const f = await fixture(); await db.collection("orders").doc(f.id).update({ paymentConfirmedAt: FieldValue.delete() }); await refused(selection(f), "refund_prior_payment_requires_verification");
   });
-  await test("historique non inscrit refuse", async () => { const f = await fixture({ enrolled: false }); await refused(selection(f), "refund_historical_order_not_supported"); });
+  await test("historique non inscrit refuse inspect refund et correction sans ecriture", async () => {
+    const f = await fixture({ enrolled: false });
+    for (const request of [selection(f), { action: "inspect", orderId: f.id }, correctionSelection(f, "a".repeat(64), 0, 0, 0)]) {
+      await refused(request, "refund_historical_order_not_supported");
+    }
+  });
   for (const malformed of [null, {}, { snapshot: { appliedCagnotteCents: 1 } }]) await test(`inscription invalide ou mixte ${JSON.stringify(malformed)}`, async () => {
     const f = await fixture(); await db.collection("orders").doc(f.id).update({ cagnotte: malformed }); await refused(selection(f), "refund_enrollment_invalid");
   });
@@ -505,6 +864,35 @@ try {
     await refused({ ...a.command, orderId: g.id }, "refund_event_conflict");
     await refused({ ...a.command, additionalReturns: [{ lineId: "line-0", additionalNetCents: 2000 }] }, "refund_event_conflict");
   });
+  await test("course Firestore meme cle refund : le perdant devient un conflit terminal sans ecriture tardive", async () => {
+    const f = await fixture(), body = selection(f), previewResult = await preview(body);
+    const first = confirmation(body, previewResult, "h10-shared-refund-reference");
+    const second = { ...first, reason: "order_cancellation" };
+    const release = gate(), entered = gate(); let contenders = 0;
+    const before = async () => { if (++contenders === 2) entered.release(); await release.promise; };
+    const firstCall = call(first, { before }), secondCall = call(second, { before });
+    await entered.promise; release.release();
+    const results = await Promise.all([firstCall, secondCall]);
+    eq(results.map((result) => result.status).sort(), [200, 409]);
+    const loserIndex = results[0].status === 409 ? 0 : 1;
+    const conflict = results[loserIndex];
+    const loser = loserIndex === 0 ? first : second;
+    const winner = loserIndex === 0 ? second : first;
+    equal(conflict.code, "refund_event_conflict");
+    ok(conflict.stats.callbacks >= 2, `callbacks=${conflict.stats.callbacks}`);
+    const events = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+      .filter((doc) => doc.data().reference === "h10-shared-refund-reference");
+    equal(events.length, 1);
+    equal(events[0].data().content.reason, winner.reason);
+    const beforeRetry = await dump();
+    const exactRetry = await call(loser);
+    equal(exactRetry.status, 409);
+    equal(exactRetry.code, "refund_event_conflict");
+    eq(await dump(), beforeRetry);
+    const winnerRetry = await call(winner);
+    equal(winnerRetry.status, 200);
+    equal(winnerRetry.result!.alreadyRecorded, true);
+  });
   await test("deux confirmations simultanees du meme evenement", async () => {
     const f = await fixture(), s = selection(f), c = confirmation(s, await preview(s), "concurrent-same"); const release = gate(), entered = gate(); let n = 0;
     const before = async () => { if (++n === 2) entered.release(); await release.promise; };
@@ -519,6 +907,37 @@ try {
     eq(results.map((r) => r.status).sort(), [200, 409]); equal(results.find((r) => r.status === 409)!.code, "refund_preview_stale");
     const retry = results[0].status === 409 ? ca : cb; const fresh = await preview(s);
     equal((await call({ ...retry, expectedPreviewVersion: fresh.previewVersion })).status, 200); eq(await balance(f), [0, 250, 0]);
+  });
+  await test("retry exact stale ne peut pas apparaitre apres un remboursement concurrent", async () => {
+    const f = await fixture();
+    const body = selection(f, 2500);
+    const stale = confirmation(body, await preview(body), "h8-stale-refund");
+    const response = await call(stale, { betweenAttempts: async () => {
+      await record(f, 1000, "h8-competing-refund");
+    } });
+    equal(response.status, 409, JSON.stringify(response));
+    equal(response.code, "refund_preview_stale");
+    equal(response.stats.callbacks, 2);
+    const events = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs.map((doc) => doc.data());
+    equal(events.some((event) => event.reference === "h8-stale-refund"), false);
+    equal(events.filter((event) => event.reference === "h8-competing-refund").length, 1);
+  });
+  await test("retry exact stale ne peut pas apparaitre apres une correction concurrente", async () => {
+    const f = await fixture();
+    await record(f, 2500, "h8-correction-original");
+    const target = await correctionTarget(f);
+    const body = correctionSelection(f, target, 0, 1000, 1000);
+    const stale = { ...body, action: "record_correction", correctionReference: "h8-stale-correction",
+      expectedPreviewVersion: (await preview(body)).previewVersion };
+    const response = await call(stale, { betweenAttempts: async () => {
+      await recordCorrection(f, target, 0, 1500, 1500, "h8-competing-correction");
+    } });
+    equal(response.status, 409, JSON.stringify(response));
+    equal(response.code, "correction_preview_stale");
+    equal(response.stats.callbacks, 2);
+    const events = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs.map((doc) => doc.data());
+    equal(events.some((event) => event.correctionReference === "h8-stale-correction"), false);
+    equal(events.filter((event) => event.correctionReference === "h8-competing-correction").length, 1);
   });
   for (const event of ["delivered", "cancelled"] as const) await test(`callback avorte puis ${event} entre lectures et commit, plan recalcule`, async () => {
     const f = await fixture({ ready: false }); await change(f, paid); const s = selection(f), c = confirmation(s, await preview(s), `race-${event}`);
@@ -557,6 +976,152 @@ try {
     await doc.ref.update({ "result.after.totalFinancialCents": 999 }); await refused(selection(f), "refund_history_requires_verification");
     await refused(original.command, "refund_history_requires_verification");
   });
+  await test("H6 parite inspect record refuse sequence initiale duplicatee ou trouee", async () => {
+    for (const mode of ["start_at_two", "duplicate", "gap"] as const) {
+      const f = await fixture();
+      await record(f, 1000, `h6-${mode}-first`);
+      if (mode !== "start_at_two") await record(f, 1000, `h6-${mode}-second`);
+      const docs = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+        .filter((doc) => doc.data().kind !== "refund_correction").sort((a, b) => a.data().sequence - b.data().sequence);
+      const target = mode === "start_at_two" ? docs[0] : docs[1];
+      ok(target);
+      await target.ref.update({ sequence: mode === "gap" ? 3 : mode === "duplicate" ? 1 : 2 });
+      await expectCorruptHistoryRejectedEverywhere(f);
+    }
+  });
+  await test("H6 parite inspect record refuse un before initial non nul et une ligne cumul orpheline", async () => {
+    const initial = await fixture();
+    await record(initial, 2500, "h6-before-nonzero");
+    const initialDoc = (await db.collection("cagnotteRefunds").where("orderId", "==", initial.id).get()).docs[0];
+    const initialEvent = initialDoc.data();
+    await initialDoc.ref.set({ ...initialEvent, result: { ...initialEvent.result,
+      before: { ...initialEvent.result.before, lines: [{ lineId: "line-0", returnedNetCents: 100 }],
+        returnedProductNetCents: 100, productFinancialCents: 100, totalFinancialCents: 100 },
+      after: { ...initialEvent.result.after, lines: [{ lineId: "line-0", returnedNetCents: 2600 }],
+        returnedProductNetCents: 2600, productFinancialCents: 2600, totalFinancialCents: 2600 },
+    } });
+    await expectCorruptHistoryRejectedEverywhere(initial);
+
+    const orphanLine = await fixture();
+    await record(orphanLine, 2500, "h6-orphan-line");
+    const orphanDoc = (await db.collection("cagnotteRefunds").where("orderId", "==", orphanLine.id).get()).docs[0];
+    const orphanEvent = orphanDoc.data();
+    await orphanDoc.ref.set({ ...orphanEvent, result: { ...orphanEvent.result,
+      before: { ...orphanEvent.result.before, lines: [...orphanEvent.result.before.lines, { lineId: "orphan", returnedNetCents: 0 }] },
+      after: { ...orphanEvent.result.after, lines: [...orphanEvent.result.after.lines, { lineId: "orphan", returnedNetCents: 0 }] },
+    } });
+    await expectCorruptHistoryRejectedEverywhere(orphanLine);
+  });
+  await test("H6 parite inspect record refuse second before different du premier after", async () => {
+    const f = await fixture();
+    await record(f, 1000, "h6-continuity-first");
+    await record(f, 1000, "h6-continuity-second");
+    const docs = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+      .filter((doc) => doc.data().kind !== "refund_correction").sort((a, b) => a.data().sequence - b.data().sequence);
+    const second = docs[1];
+    ok(second);
+    const event = second.data();
+    await second.ref.set({ ...event, result: { ...event.result,
+      before: { ...event.result.before, lines: [{ lineId: "line-0", returnedNetCents: 1100 }],
+        returnedProductNetCents: 1100, productFinancialCents: 1100, totalFinancialCents: 1100 },
+      after: { ...event.result.after, lines: [{ lineId: "line-0", returnedNetCents: 2100 }],
+        returnedProductNetCents: 2100, productFinancialCents: 2100, totalFinancialCents: 2100 },
+    } });
+    await expectCorruptHistoryRejectedEverywhere(f);
+  });
+  await test("H6 parite inspect record recalcule after financier et restitution depuis le snapshot", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "h6-after-recompute");
+    const doc = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs.find((entry) => entry.data().kind !== "refund_correction");
+    ok(doc);
+    const event = doc.data();
+    await doc.ref.set({ ...event, result: { ...event.result,
+      productFinancialCents: 2200, cagnotteRestitutionCents: 300, totalFinancialCents: 2200,
+      after: { ...event.result.after, productFinancialCents: 2200, cagnotteRestitutionCents: 300, totalFinancialCents: 2200 },
+      restitution: { ...event.result.restitution, grossCents: 300, availableIncreaseCents: 300, cumulativeCents: 300 },
+    } });
+    await expectCorruptHistoryRejectedEverywhere(f);
+  });
+  await test("H6 parite inspect record refuse correction orpheline revision trouee previous et effective falsifies", async () => {
+    for (const mode of ["orphan", "revision_gap", "previous", "effective"] as const) {
+      const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+      await record(f, 2500, `h6-correction-${mode}-original`);
+      const target = await correctionTarget(f);
+      await recordCorrection(f, target, 0, 1000, 920, `h6-correction-${mode}`);
+      const doc = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs.find((entry) => entry.data().kind === "refund_correction");
+      ok(doc);
+      const event = doc.data();
+      if (mode === "orphan") {
+        const targetEventId = "a".repeat(64);
+        const content = { ...event.content, targetEventId };
+        await doc.ref.set({ ...event, targetEventId, content, fingerprint: testHash(content),
+          result: { ...event.result, targetEventId } });
+      } else if (mode === "revision_gap") {
+        const content = { ...event.content, expectedRevision: 1 };
+        await doc.ref.set({ ...event, previousRevision: 1, revision: 2, content, fingerprint: testHash(content),
+          result: { ...event.result, previousRevision: 1, revision: 2 } });
+      } else if (mode === "previous") {
+        await doc.ref.update({ "result.previousEffective.totalFinancialCents": event.result.previousEffective.totalFinancialCents + 1 });
+      } else {
+        await doc.ref.update({ "result.effective.totalFinancialCents": event.result.effective.totalFinancialCents + 1 });
+      }
+      await expectCorruptHistoryRejectedEverywhere(f);
+    }
+  });
+  await test("H6 parite inspect record refuse revision correction dupliquee", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "h6-correction-duplicate-original");
+    const target = await correctionTarget(f);
+    await recordCorrection(f, target, 0, 1000, 920, "h6-correction-duplicate-first");
+    await recordCorrection(f, target, 1, 1500, 1380, "h6-correction-duplicate-second");
+    const corrections = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+      .filter((entry) => entry.data().kind === "refund_correction").sort((a, b) => a.data().revision - b.data().revision);
+    const duplicate = corrections[1];
+    ok(duplicate);
+    const event = duplicate.data();
+    const content = { ...event.content, expectedRevision: 0 };
+    await duplicate.ref.set({ ...event, previousRevision: 0, revision: 1, content, fingerprint: testHash(content),
+      result: { ...event.result, previousRevision: 0, revision: 1 } });
+    await expectCorruptHistoryRejectedEverywhere(f);
+  });
+  await test("H6 parite inspect record refuse corrections revision 1 puis 3", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "h6-correction-gap-original");
+    const target = await correctionTarget(f);
+    await recordCorrection(f, target, 0, 1000, 920, "h6-correction-gap-first");
+    await recordCorrection(f, target, 1, 1500, 1380, "h6-correction-gap-second");
+    const corrections = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+      .filter((entry) => entry.data().kind === "refund_correction").sort((a, b) => a.data().revision - b.data().revision);
+    const gap = corrections[1];
+    ok(gap);
+    const event = gap.data();
+    const content = { ...event.content, expectedRevision: 2 };
+    await gap.ref.set({ ...event, previousRevision: 2, revision: 3, content, fingerprint: testHash(content),
+      result: { ...event.result, previousRevision: 2, revision: 3 } });
+    await expectCorruptHistoryRejectedEverywhere(f);
+  });
+  await test("H6 parite inspect record refuse movement reutilise ou remboursement non lie", async () => {
+    const reused = await fixture();
+    await record(reused, 1000, "h6-movement-first");
+    await record(reused, 1000, "h6-movement-second");
+    const events = (await db.collection("cagnotteRefunds").where("orderId", "==", reused.id).get()).docs
+      .filter((entry) => entry.data().kind !== "refund_correction").sort((a, b) => a.data().sequence - b.data().sequence);
+    await events[1].ref.update({ movementIds: events[0].data().movementIds });
+    await expectCorruptHistoryRejectedEverywhere(reused, "refund_journal_requires_verification");
+
+    const unlinked = await fixture();
+    await record(unlinked, 1000, "h6-movement-unlinked");
+    const movement = (await db.collection("cagnotteMovements").where("orderId", "==", unlinked.id)
+      .where("businessEvent", "==", "refund_confirmed").get()).docs[0];
+    ok(movement);
+    const unlinkedRef = db.collection("cagnotteMovements").doc("b".repeat(64));
+    await unlinkedRef.set({ ...movement.data(), eventKey: "b".repeat(64) });
+    try {
+      await expectCorruptHistoryRejectedEverywhere(unlinked, "refund_journal_requires_verification");
+    } finally {
+      await unlinkedRef.delete();
+    }
+  });
   await test("finalisation 2 scenario 100/8/92 puis neutralisation differentielle", async () => {
     const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
     eq(await walletBalance(f), [0, 1660, 0, 0]);
@@ -583,6 +1148,9 @@ try {
     eq([correctionHistory.returnedProductNetCents, correctionHistory.financialCents, correctionHistory.cagnotteRestitutionCents,
       correctionHistory.resultingAvailableCents, correctionHistory.effective], [0, 0, 0, 1660, true]);
     equal(correctionHistory.targetReference, "final2-original-25");
+    const persistedCorrection = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+      .find((doc) => doc.data().kind === "refund_correction")!.data();
+    equal(correctionHistory.businessFingerprint, persistedCorrection.fingerprint);
     const originalReplay = await call(original.command); equal(originalReplay.status, 200); equal((originalReplay.result as unknown as { corrected: boolean }).corrected, true);
     const before = await dump(); const replay = await call(correction.command); equal(replay.status, 200); equal(replay.result!.alreadyRecorded, true); eq(await dump(), before);
     await assertWalletJournal(db, f.uid);
@@ -609,6 +1177,28 @@ try {
     equal(followup.result.correction.remainingGainCents, 345); eq(await walletBalance(f), [0, 1745, 0, 0]);
     await assertWalletJournal(db, f.uid);
   });
+  await test("H15 rejeu exact correction apres remboursement ulterieur reste idempotent", async () => {
+    const f = await fixture();
+    await record(f, 2500, "h15-replay-r1");
+    const target = await correctionTarget(f);
+    const correction = await recordCorrection(f, target, 0, 1000, 1000, "h15-replay-c1");
+    await record(f, 1500, "h15-replay-r2");
+    const before = await dump();
+    const replay = await call(correction.command);
+    equal(replay.status, 200, JSON.stringify(replay));
+    equal(replay.result!.alreadyRecorded, true);
+    equal(replay.stats.writes, 0);
+    eq(await dump(), before);
+    await refused({ ...correction.command, correctionReason: "Même référence H15 avec un contenu métier différent" }, "correction_event_conflict");
+    await refused(correctionSelection(f, target, 1, 500, 500), "correction_target_not_latest_effective");
+
+    const originals = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+      .filter((doc) => doc.data().kind !== "refund_correction")
+      .sort((left, right) => left.data().sequence - right.data().sequence);
+    equal(originals.length, 2);
+    await originals[1].ref.update({ sequence: 99 });
+    await refused(correction.command, "refund_history_requires_verification");
+  });
   await test("correction du compartiment en attente restaure exactement l etat precedent", async () => {
     const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000, ready: false });
     await change(f, paid); eq(await walletBalance(f), [460, 1200, 0, 0]);
@@ -632,6 +1222,39 @@ try {
     const before = await dump(); const replay = await call(first.command); equal(replay.status, 200); equal(replay.result!.alreadyRecorded, true); eq(await dump(), before);
     await refused({ ...first.command, correctionReason: "Contenu différent mais même clé de correction" }, "correction_event_conflict");
     await refused({ ...first.command, correctionReference: "final2-stale-correction" }, "correction_preview_stale");
+  });
+  await test("course Firestore meme cle correction : le perdant devient un conflit terminal sans ecriture tardive", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "h10-correction-race-original");
+    const target = await correctionTarget(f);
+    const body = correctionSelection(f, target, 0, 0, 0), previewResult = await preview(body);
+    const first = { ...body, action: "record_correction", correctionReference: "h10-shared-correction-reference",
+      expectedPreviewVersion: previewResult.previewVersion };
+    const second = { ...first, correctionReason: "Autre contenu fictif concurrent pour la même référence" };
+    const release = gate(), entered = gate(); let contenders = 0;
+    const before = async () => { if (++contenders === 2) entered.release(); await release.promise; };
+    const firstCall = call(first, { before }), secondCall = call(second, { before });
+    await entered.promise; release.release();
+    const results = await Promise.all([firstCall, secondCall]);
+    eq(results.map((result) => result.status).sort(), [200, 409]);
+    const loserIndex = results[0].status === 409 ? 0 : 1;
+    const conflict = results[loserIndex];
+    const loser = loserIndex === 0 ? first : second;
+    const winner = loserIndex === 0 ? second : first;
+    equal(conflict.code, "correction_event_conflict");
+    ok(conflict.stats.callbacks >= 2, `callbacks=${conflict.stats.callbacks}`);
+    const corrections = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs
+      .filter((doc) => doc.data().kind === "refund_correction" && doc.data().correctionReference === "h10-shared-correction-reference");
+    equal(corrections.length, 1);
+    equal(corrections[0].data().content.correctionReason, winner.correctionReason);
+    const beforeRetry = await dump();
+    const exactRetry = await call(loser);
+    equal(exactRetry.status, 409);
+    equal(exactRetry.code, "correction_event_conflict");
+    eq(await dump(), beforeRetry);
+    const winnerRetry = await call(winner);
+    equal(winnerRetry.status, 200);
+    equal(winnerRetry.result!.alreadyRecorded, true);
   });
   await test("deux corrections concurrentes : une seule revision appliquee", async () => {
     const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
@@ -681,8 +1304,433 @@ try {
     await record(f, 2500, "final2-inspect-original"); const target = await correctionTarget(f);
     await recordCorrection(f, target, 0, 0, 0, "final2-inspect-correction");
     const response = await call({ action: "inspect", orderId: f.id }); equal(response.status, 200);
-    const serialized = JSON.stringify(response.result); for (const forbidden of ["fingerprint", "movementIds", "actor", "intentFingerprint", "paymentReference"]) equal(serialized.includes(forbidden), false);
-    equal((response.result as unknown as { history: unknown[] }).history.length, 2);
+    const serialized = JSON.stringify(response.result); for (const forbidden of ["movementIds", "actor", "intentFingerprint", "paymentReference"]) equal(serialized.includes(forbidden), false);
+    const inspection = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(inspection.history.length, 2); equal(inspection.refund.latest?.type, "correction"); equal(inspection.refund.latestRevision, 1);
+    ok(inspection.history.every((entry) => /^[a-f0-9]{64}$/.test(entry.businessFingerprint)));
+  });
+  await test("H6 associe les libelles et retours par lineId malgre tri et cadeau promotionnel", async () => {
+    const f = await lineIdentityFixture(true);
+    await change(f, { ...paid, orderStatus: "delivered" });
+    const response = await call({ action: "inspect", orderId: f.id });
+    equal(response.status, 200, JSON.stringify(response));
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    eq(Object.fromEntries(result.lines.map((line) => [line.lineId, line.label])), {
+      A: "Produit A", B: "Produit B", gift: "Cadeau promotionnel",
+    });
+    const returnedA = await preview({ action: "preview", orderId: f.id, currency: "EUR",
+      additionalReturns: [{ lineId: "A", additionalNetCents: 1000 }], deliveryRefundCents: 0 });
+    eq(returnedA.additionalReturns, [{ lineId: "A", additionalNetCents: 1000 }]);
+    const returnedB = await preview({ action: "preview", orderId: f.id, currency: "EUR",
+      additionalReturns: [{ lineId: "B", additionalNetCents: 2000 }], deliveryRefundCents: 0 });
+    eq(returnedB.additionalReturns, [{ lineId: "B", additionalNetCents: 2000 }]);
+    await refused({ action: "preview", orderId: f.id, currency: "EUR",
+      additionalReturns: [{ lineId: "gift", additionalNetCents: 1 }], deliveryRefundCents: 0 });
+  });
+  await test("H6 conserve les identites historiques order-line par index source", async () => {
+    const f = await lineIdentityFixture(false);
+    const response = await call({ action: "inspect", orderId: f.id });
+    equal(response.status, 200, JSON.stringify(response));
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    eq(Object.fromEntries(result.lines.map((line) => [line.lineId, line.label])), {
+      "order-line-0": "Ligne historique 1", "order-line-1": "Ligne historique 2",
+    });
+  });
+  await test("H6 refuse les lignes commande absentes dupliquees ou incompatibles avec le snapshot", async () => {
+    for (const mutate of [
+      (items: Array<Record<string, unknown>>) => items.slice(1),
+      (items: Array<Record<string, unknown>>) => items.map((item, index) => index === 1 ? { ...item, lineId: "B" } : item),
+      (items: Array<Record<string, unknown>>) => items.map((item, index) => index === 0 ? { ...item, lineTotal: 19 } : item),
+    ]) {
+      const f = await lineIdentityFixture(true);
+      const orderRef = db.collection("orders").doc(f.id);
+      const order = (await orderRef.get()).data()!;
+      await orderRef.update({ items: mutate(order.items as Array<Record<string, unknown>>) });
+      await refused({ action: "inspect", orderId: f.id }, "refund_order_lines_require_verification");
+    }
+  });
+  await test("inspection structuree avant acquisition reste une lecture sans portefeuille artificiel", async () => {
+    const f = await fixture({ ready: false }); const before = await dump();
+    const response = await call({ action: "inspect", orderId: f.id }); equal(response.status, 200, JSON.stringify(response));
+    equal(response.stats.writes, 0); eq(await dump(), before);
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(result.enrollment.enrolled, true); equal(result.enrollment.accrualEnrollment, "enrolled"); equal(result.enrollment.beneficiaryId, f.uid);
+    equal(result.accrual.present, false); equal(result.accrual.initialGainCents, 500); equal(result.accrual.compartment, "none");
+    equal(result.wallet, null); equal(result.reservation.applicable, false);
+    equal(result.operationalState.code, "enrolled_payment_pending"); equal(result.operationalState.detail, "PAIEMENT À CONFIRMER");
+  });
+  await test("inspection fail closed si acquisition inscrite manque apres paiement meme avec metadonnees invalides", async () => {
+    const paidMetadataCases: Array<[string, Record<string, unknown>]> = [
+      ["metadonnees completes", {}],
+      ["paidAt absent", { paidAt: FieldValue.delete() }],
+      ["paidAt invalide", { paidAt: "date-invalide" }],
+      ["paymentConfirmedAt absent", { paymentConfirmedAt: FieldValue.delete() }],
+      ["paymentConfirmedAt different", { paymentConfirmedAt: "2000-01-02T00:00:00.000Z" }],
+      ["paymentConfirmedBy absent", { paymentConfirmedBy: FieldValue.delete() }],
+      ["finalPaymentMethod absent", { finalPaymentMethod: FieldValue.delete() }],
+      ["finalPaymentMethod invalide", { finalPaymentMethod: "methode-invalide" }],
+    ];
+    for (const [label, metadataPatch] of paidMetadataCases) {
+      const paidWithoutAccrual = await fixture({ ready: false });
+      await change(paidWithoutAccrual, paid, null);
+      if (Object.keys(metadataPatch).length) {
+        await db.collection("orders").doc(paidWithoutAccrual.id).update(metadataPatch);
+      }
+      equal((await db.collection("cagnotteAccruals").doc(paidWithoutAccrual.id).get()).exists, false, label);
+      const paidResponse = await refused({ action: "inspect", orderId: paidWithoutAccrual.id }, "refund_journal_requires_verification");
+      equal(paidResponse.stats.writes, 0, label);
+    }
+  });
+  await test("inspection fail closed si acquisition inscrite manque apres livraison", async () => {
+    const deliveredWithoutAccrual = await fixture({ ready: false });
+    await change(deliveredWithoutAccrual, { orderStatus: "delivered" }, null);
+    equal((await db.collection("cagnotteAccruals").doc(deliveredWithoutAccrual.id).get()).exists, false);
+    const deliveredResponse = await refused({ action: "inspect", orderId: deliveredWithoutAccrual.id }, "refund_journal_requires_verification");
+    equal(deliveredResponse.stats.writes, 0);
+  });
+  await test("annulation enrolled exige le tombstone garanti par chaque marqueur lifecycle", async () => {
+    const cancelledWithTombstone = await fixture({ ready: false, accrualEnrollment: "enrolled" });
+    await change(cancelledWithTombstone, { orderStatus: "cancelled" }, null);
+    const accrual = (await db.collection("cagnotteAccruals").doc(cancelledWithTombstone.id).get()).data()!;
+    equal(accrual.cancelled, true); equal(accrual.credited, false); equal(accrual.compartment, "none"); equal(accrual.remainingGainCents, 0);
+    const accepted = await call({ action: "inspect", orderId: cancelledWithTombstone.id });
+    equal(accepted.status, 200, JSON.stringify(accepted)); equal(accepted.stats.writes, 0);
+
+    for (const [label, lifecyclePatch] of [
+      ["orderStatus cancelled", { orderStatus: "cancelled" }],
+      ["paymentStatus cancelled", { paymentStatus: "cancelled" }],
+      ["cancelledAt present", { cancelledAt: "2000-01-01T00:00:00.000Z" }],
+    ] as const) {
+      const cancelledWithoutAccrual = await fixture({ ready: false, accrualEnrollment: "enrolled" });
+      await db.collection("orders").doc(cancelledWithoutAccrual.id).update(lifecyclePatch);
+      equal((await db.collection("cagnotteAccruals").doc(cancelledWithoutAccrual.id).get()).exists, false, label);
+      const rejected = await refused({ action: "inspect", orderId: cancelledWithoutAccrual.id }, "refund_journal_requires_verification");
+      equal(rejected.stats.writes, 0, label);
+    }
+  });
+  await test("inscription acquisition explicite conserve le comportement existant", async () => {
+    const f = await fixture({ ready: false, accrualEnrollment: "enrolled" });
+    const response = await call({ action: "inspect", orderId: f.id }); equal(response.status, 200, JSON.stringify(response));
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(result.enrollment.enrolled, true); equal(result.enrollment.accrualEnrollment, "enrolled");
+    equal(result.accrual.initialGainCents, 500); equal(result.operationalState.code, "enrolled_payment_pending");
+  });
+  await test("acquisition drain et reservation consommee restent inspectables sans gain hypothetique", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000, accrualEnrollment: "not_enrolled" });
+    equal((await stored(f)).cagnotte.accrualEnrollment, "not_enrolled");
+    equal((await db.collection("cagnotteAccruals").doc(f.id).get()).exists, false);
+    equal((await db.collection("cagnotteReservations").doc(f.id).get()).data()!.state, "consumed");
+    const response = await call({ action: "inspect", orderId: f.id }); equal(response.status, 200, JSON.stringify(response)); equal(response.stats.writes, 0);
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(result.enrollment.enrolled, false); equal(result.enrollment.accrualEnrollment, "not_enrolled");
+    eq(result.accrual, { present: false, initialGainCents: 0, remainingGainCents: 0, paymentConfirmed: false,
+      deliveryConfirmed: false, credited: false, compartment: "none", cancelled: false });
+    equal(result.operationalState.code, "accrual_not_enrolled");
+    equal(result.operationalState.label, "AUCUN GAIN POUR CETTE COMMANDE");
+    equal(result.reservation.applicable, true); equal(result.reservation.state, "consumed"); equal(result.reservation.amountCents, 800);
+    equal(result.financing.cagnotteCents, 800); equal(result.financing.externalProductsCents, 9200);
+    const refundPreview = await call(selection(f)); equal(refundPreview.status, 200, JSON.stringify(refundPreview)); equal(refundPreview.stats.writes, 0);
+  });
+  await test("acquisition not_enrolled refuse les vrais droits pending et available", async () => {
+    for (const event of ["payment_confirmed", "payment_and_delivery_confirmed"] as const) {
+      const f = await fixture({ ready: false, usedCagnotteCents: 800, initialWalletCents: 2000, accrualEnrollment: "not_enrolled" });
+      await applyCagnotteLedgerOperation({ db, program: accrualProgram, command: { event, order: {
+        orderId: f.id, beneficiaryId: f.uid, programVersion: program.programVersion, createdAtEpochMs: 2000, snapshot: f.snapshot,
+      } } });
+      const storedAccrual = (await db.collection("cagnotteAccruals").doc(f.id).get()).data()!;
+      equal(storedAccrual.credited, true); equal(storedAccrual.compartment, event === "payment_confirmed" ? "pending" : "available");
+      const response = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(response.stats.writes, 0);
+    }
+  });
+  await test("annulation not_enrolled accepte seulement le tombstone canonique sans credit", async () => {
+    const f = await fixture({ ready: false, usedCagnotteCents: 800, initialWalletCents: 2000, accrualEnrollment: "not_enrolled" });
+    await cancelReviewedUnpaid(f);
+    const response = await call({ action: "inspect", orderId: f.id }); equal(response.status, 200, JSON.stringify(response)); equal(response.stats.writes, 0);
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(result.enrollment.enrolled, false); equal(result.operationalState.code, "cancelled");
+    eq(result.accrual, { present: true, initialGainCents: 0, remainingGainCents: 0, paymentConfirmed: false,
+      deliveryConfirmed: false, credited: false, compartment: "none", cancelled: true });
+    equal(result.reservation.state, "released");
+    await rejectMovementMutation(f, "cancelled", { currency: "USD" });
+    const accrualRef = db.collection("cagnotteAccruals").doc(f.id);
+    const original = (await accrualRef.get()).data()!;
+    try {
+      await accrualRef.set({ ...original, credited: true, compartment: "pending", remainingGainCents: 1 });
+      const rejected = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(rejected.stats.writes, 0);
+    } finally { await accrualRef.set(original); }
+  });
+  await test("inspection derive les etats pending available et cancelled du journal valide", async () => {
+    const pendingOrder = await fixture({ ready: false }); await change(pendingOrder, paid);
+    const pendingInspection = (await call({ action: "inspect", orderId: pendingOrder.id })).result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(pendingInspection.operationalState.code, "payment_confirmed_pending"); equal(pendingInspection.accrual.compartment, "pending");
+    const availableOrder = await fixture();
+    const availableInspection = (await call({ action: "inspect", orderId: availableOrder.id })).result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(availableInspection.operationalState.code, "delivered_available"); equal(availableInspection.accrual.compartment, "available");
+    const cancelledOrder = await fixture(); await change(cancelledOrder, { orderStatus: "cancelled" }, null);
+    const cancelledInspection = (await call({ action: "inspect", orderId: cancelledOrder.id })).result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    equal(cancelledInspection.operationalState.code, "cancelled"); equal(cancelledInspection.accrual.cancelled, true);
+  });
+  await test("inspection structuree reutilise acquisition portefeuille reservation refund et mouvements filtres", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "readiness-inspection");
+    const response = await call({ action: "inspect", orderId: f.id }); equal(response.status, 200, JSON.stringify(response));
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    eq(result.accrual, { present: true, initialGainCents: 460, remainingGainCents: 345, paymentConfirmed: true,
+      deliveryConfirmed: true, credited: true, compartment: "available", cancelled: false });
+    equal(result.wallet?.availableCents, 1745); equal(result.reservation.applicable, true); equal(result.reservation.state, "consumed");
+    equal(result.reservation.amountCents, 800); equal(result.reservation.cumulativeRestitutedCents, 200);
+    equal(result.refund.history.length, 1); equal(result.refund.latestRevision, 0); equal(result.operationalState.code, "refund_recorded");
+    equal(result.history[0].source, "admin"); equal(result.history[0].reference, "readiness-inspection");
+    const storedEvent = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs[0].data();
+    equal(result.history[0].businessFingerprint, storedEvent.fingerprint); equal(result.history[0].businessFingerprint.length, 64);
+    ok(result.movements.some((movement) => movement.event === "credit_refunded_after_return"));
+    const movements = JSON.stringify(result.movements);
+    for (const forbidden of [f.uid, actor.email!, "Synthetic", "synthetic@example.test", "readiness-inspection", "payload"]) equal(movements.includes(forbidden), false);
+  });
+  await test("H2 refuse un mouvement supplementaire meme derive d un mouvement canonique", async () => {
+    const f = await fixture();
+    const journal = await db.collection("cagnotteMovements").where("orderId", "==", f.id).get();
+    const payment = journal.docs.find((doc) => doc.data().businessEvent === "payment_confirmed");
+    ok(payment);
+    const forgedId = "f".repeat(64);
+    const forgedRef = db.collection("cagnotteMovements").doc(forgedId);
+    await forgedRef.set({ ...payment.data(), eventKey: forgedId });
+    try {
+      const response = await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      equal(response.stats.writes, 0);
+    } finally {
+      await forgedRef.delete();
+    }
+  });
+  await test("parite inspection et validateur canonique ledger", async () => {
+    const f = await fixture();
+    const accrual = (await db.collection("cagnotteAccruals").doc(f.id).get()).data() as import("../api/_server/cagnotteLedgerTypes.js").CagnotteAccrual;
+    const journal = await db.collection("cagnotteMovements").where("orderId", "==", f.id).get();
+    const delivery = journal.docs.find((doc) => doc.data().businessEvent === "delivery_confirmed");
+    ok(delivery);
+    validateCagnotteLedgerMovementForRead(delivery.data(), delivery.id, accrual);
+    equal((await call({ action: "inspect", orderId: f.id })).status, 200);
+    let canonicalRefused = false;
+    try { validateCagnotteLedgerMovementForRead({ ...delivery.data(), currency: "USD" }, delivery.id, accrual); }
+    catch { canonicalRefused = true; }
+    equal(canonicalRefused, true);
+    await rejectMovementMutation(f, "delivery_confirmed", { currency: "USD" });
+  });
+  await test("H2 refuse independamment les invariants canoniques ledger falsifies", async () => {
+    const mutations: Array<[string, Record<string, unknown>]> = [
+      ["currency", { currency: "USD" }],
+      ["origin", { origin: "client" }],
+      ["programVersion", { programVersion: "forged-program" }],
+      ["calculationVersion", { calculationVersion: "forged-calculation" }],
+      ["regularizationVersion", { regularizationVersion: "forged-regularization" }],
+      ["reservationVersion", { reservationVersion: "forged-reservation" }],
+      ["payload", { payload: "{\"event\":\"delivery_confirmed\",\"forged\":true}" }],
+      ["eventKey", { eventKey: "0".repeat(64) }],
+      ["businessEvent", { businessEvent: "payment_confirmed" }],
+    ];
+    for (const [field, patch] of mutations) {
+      const f = await fixture();
+      await rejectMovementMutation(f, "delivery_confirmed", patch);
+      ok(field);
+    }
+  });
+  await test("H2 refuse les versions incompatibles des schemas legacy", async () => {
+    for (const [schemaVersion, patch] of [
+      [1, { regularizationVersion: "cagnotte-regularization-v1" }],
+      [2, { regularizationVersion: "forged-regularization" }],
+      [2, { reservationVersion: "cagnotte-reservation-v1" }],
+    ] as const) {
+      const f = await fixture();
+      const id = await rewriteOneMovementSchema(f, schemaVersion, 2000);
+      const ref = db.collection("cagnotteMovements").doc(id);
+      const original = (await ref.get()).data()!;
+      await ref.set({ ...original, ...patch });
+      try { await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification"); }
+      finally { await ref.set(original); }
+    }
+  });
+  await test("H2 refuse les deltas incompatibles payment et made available", async () => {
+    const payment = await fixture();
+    await rejectMovementMutation(payment, "payment_confirmed", { availableDeltaCents: 1 });
+    const release = await fixture();
+    await rejectMovementMutation(release, "made_available", { availableDeltaCents: 499 });
+  });
+  await test("H2 refuse les mouvements reservation reserve consume et release falsifies", async () => {
+    const consumed = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await rejectMovementMutation(consumed, "credit_reserved", { payload: "{}" });
+    await rejectMovementMutation(consumed, "credit_consumed", { reservationVersion: "forged-reservation" });
+    const released = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000, ready: false });
+    await cancelReviewedUnpaid(released);
+    await rejectMovementMutation(released, "credit_released", { reservedDeltaCents: 0 });
+  });
+  await test("H2 refuse les mouvements refund et restitution falsifies", async () => {
+    const simple = await fixture();
+    await record(simple, 2500, "h2-refund-ledger");
+    await rejectMovementMutation(simple, "refund_confirmed", { payload: "{}" });
+    const mixed = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(mixed, 2500, "h2-refund-reservation");
+    await rejectMovementMutation(mixed, "credit_refunded_after_return", { origin: "client" });
+  });
+  await test("H2 refuse chaque famille de mouvement de correction falsifiee", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "h2-correction-original");
+    const target = await correctionTarget(f);
+    await recordCorrection(f, target, 0, 0, 0, "h2-correction");
+    await rejectMovementMutation(f, "refund_declaration_corrected", { currency: "USD" });
+    await rejectMovementMutation(f, "credit_refund_corrected", { payload: "{\"event\":\"credit_refund_corrected\",\"forged\":true}" });
+  });
+  await test("schema v1 sans horodatage garde l inspection disponible avec historique partiel sans ecriture", async () => {
+    const f = await fixture();
+    const beforeProjection = (await call({ action: "inspect", orderId: f.id })).result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    const omittedId = await rewriteOneMovementSchema(f, 1);
+    const before = await dump();
+    const response = await call({ action: "inspect", orderId: f.id });
+    equal(response.status, 200, JSON.stringify(response));
+    equal(response.stats.writes, 0);
+    eq(await dump(), before);
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    eq(result.movementHistory, { complete: false, omittedLegacyUndatedCount: 1 });
+    equal(result.movements.some((movement) => movement.id === omittedId), false);
+    ok(result.movements.length > 0, "les mouvements v3 horodates restent affiches");
+    eq(result.wallet, beforeProjection.wallet);
+    eq(result.accrual, beforeProjection.accrual);
+    eq(result.refund, beforeProjection.refund);
+    eq(result.effective, beforeProjection.effective);
+  });
+  await test("schema v2 sans horodatage est omis explicitement de la seule chronologie", async () => {
+    const f = await fixture();
+    const omittedId = await rewriteOneMovementSchema(f, 2);
+    const before = await dump();
+    const response = await call({ action: "inspect", orderId: f.id });
+    equal(response.status, 200, JSON.stringify(response));
+    equal(response.stats.writes, 0);
+    eq(await dump(), before);
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    eq(result.movementHistory, { complete: false, omittedLegacyUndatedCount: 1 });
+    equal(result.movements.some((movement) => movement.id === omittedId), false);
+  });
+  await test("schema v1 et v2 avec horodatage valide restent affiches", async () => {
+    for (const schemaVersion of [1, 2] as const) {
+      const f = await fixture();
+      const displayedId = await rewriteOneMovementSchema(f, schemaVersion, 1234 + schemaVersion);
+      const before = await dump();
+      const response = await call({ action: "inspect", orderId: f.id });
+      equal(response.status, 200, JSON.stringify(response));
+      equal(response.stats.writes, 0);
+      eq(await dump(), before);
+      const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+      eq(result.movementHistory, { complete: true, omittedLegacyUndatedCount: 0 });
+      equal(result.movements.find((movement) => movement.id === displayedId)?.recordedAtEpochMs, 1234 + schemaVersion);
+    }
+  });
+  await test("schema v1 et v2 avec horodatage present mais invalide restent refuses", async () => {
+    for (const schemaVersion of [1, 2] as const) for (const invalid of ["1234", -1, 1.5]) {
+      const f = await fixture();
+      await rewriteOneMovementSchema(f, schemaVersion, invalid);
+      await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+      await rewriteOneMovementSchema(f, schemaVersion, 2000);
+    }
+  });
+  await test("schema v3 exige un horodatage valide et affiche le mouvement", async () => {
+    const missing = await fixture();
+    await rewriteOneMovementSchema(missing, 3);
+    await refused({ action: "inspect", orderId: missing.id }, "refund_journal_requires_verification");
+    await rewriteOneMovementSchema(missing, 3, 2000);
+    for (const invalid of ["4321", -1, 1.5]) {
+      const malformed = await fixture();
+      await rewriteOneMovementSchema(malformed, 3, invalid);
+      await refused({ action: "inspect", orderId: malformed.id }, "refund_journal_requires_verification");
+      await rewriteOneMovementSchema(malformed, 3, 2000);
+    }
+    const valid = await fixture();
+    const displayedId = await rewriteOneMovementSchema(valid, 3, 4321);
+    const before = await dump();
+    const response = await call({ action: "inspect", orderId: valid.id });
+    equal(response.status, 200, JSON.stringify(response));
+    equal(response.stats.writes, 0);
+    eq(await dump(), before);
+    const result = response.result as unknown as import("../src/types/cagnotteAdmin.js").CagnotteAdminInspection;
+    eq(result.movementHistory, { complete: true, omittedLegacyUndatedCount: 0 });
+    equal(result.movements.find((movement) => movement.id === displayedId)?.recordedAtEpochMs, 4321);
+  });
+  await test("schema de mouvement inconnu reste refuse", async () => {
+    const f = await fixture();
+    const snapshot = await db.collection("cagnotteMovements").where("orderId", "==", f.id).get();
+    const document = snapshot.docs[0];
+    ok(document);
+    await document.ref.set({ ...document.data(), schemaVersion: 99 });
+    await refused({ action: "inspect", orderId: f.id }, "refund_journal_requires_verification");
+    await document.ref.set({ ...document.data(), schemaVersion: 3 });
+  });
+  await test("logs operationnels sont structures, idempotents et sans PII ni reference brute", async () => {
+    const f = await fixture(), body = selection(f), p = await preview(body), command = confirmation(body, p, "sensitive-business-reference");
+    const firstLogs: OrderRefundOperationalLog[] = []; const first = await call(command, { logs: firstLogs }); equal(first.status, 200);
+    equal(firstLogs.length, 1); equal(firstLogs[0].event, "cagnotte_refund_recorded"); equal(firstLogs[0].idempotent, false);
+    const replayLogs: OrderRefundOperationalLog[] = []; const replay = await call(command, { logs: replayLogs }); equal(replay.status, 200);
+    equal(replayLogs.length, 1); equal(replayLogs[0].idempotent, true); equal(replayLogs[0].eventId, firstLogs[0].eventId);
+    const target = await correctionTarget(f); const correctionBody = correctionSelection(f, target, 0, 1000, 1000);
+    const correctionPreview = await preview(correctionBody); const correctionLogs: OrderRefundOperationalLog[] = [];
+    const correction = await call({ ...correctionBody, action: "record_correction", correctionReference: "sensitive-correction-reference",
+      expectedPreviewVersion: correctionPreview.previewVersion }, { logs: correctionLogs }); equal(correction.status, 200);
+    equal(correctionLogs.length, 1); equal(correctionLogs[0].event, "cagnotte_refund_correction_recorded"); equal(correctionLogs[0].idempotent, false);
+    const serialized = JSON.stringify([...firstLogs, ...replayLogs, ...correctionLogs]);
+    for (const forbidden of [f.id, f.uid, actor.email!, "sensitive-business-reference", "sensitive-correction-reference", "synthetic@example.test"]) equal(serialized.includes(forbidden), false);
+    ok(/^[a-f0-9]{64}$/.test(firstLogs[0].orderHash)); ok(Object.keys(firstLogs[0].deltas).every((key) => key.endsWith("Cents")));
+  });
+  await test("correction a revoir emet uniquement le diagnostic structure", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "readiness-review-original"); const target = await correctionTarget(f);
+    const intent = createCagnotteReservationIntent({ orderId: `${f.id}-later`, beneficiaryId: f.uid, createdAtEpochMs: Date.parse("2000-01-04T00:00:00.000Z"),
+      calculation: { lines: [{ lineId: "later", initialCents: 1000 }], discounts: [], requestedCagnotteCents: 100, availableCagnotteCents: 1745, advantages: [] } }, program)!;
+    await applyCagnotteReservationOperation({ db, action: "reserve", intent, program, recordedAtEpochMs: Date.parse("2000-01-04T00:00:00.000Z") });
+    const logs: OrderRefundOperationalLog[] = [];
+    const response = await call(correctionSelection(f, target, 0, 0, 0), { logs }); equal(response.status, 200);
+    equal(response.result!.kind, "correction_requires_review"); equal(response.stats.writes, 0);
+    equal(logs.length, 1); equal(logs[0].event, "cagnotte_correction_requires_review"); equal(logs[0].idempotent, false);
+  });
+  await test("echec logger apres refund conserve succes et rejeu idempotent", async () => {
+    const f = await fixture(); const body = selection(f), p = await preview(body);
+    const command = confirmation(body, p, "logger-refund-sensitive-reference");
+    const first = await captureWarnings(() => call(command, { loggerThrows: true }));
+    equal(first.result.status, 200, JSON.stringify(first.result)); equal(first.result.result!.alreadyRecorded, false);
+    equal((await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).size, 1);
+    eq(await balance(f), [0, 375, 0]); equal(first.warnings.length, 1);
+    const fallback = JSON.parse(first.warnings[0]) as Record<string, unknown>;
+    eq(Object.keys(fallback).sort(), ["event", "orderHash", "originalEvent"]);
+    equal(fallback.event, "cagnotte_operational_log_failed"); equal(fallback.originalEvent, "cagnotte_refund_recorded");
+    equal(String(fallback.orderHash).length, 64); equal(first.warnings[0].includes(f.id), false);
+    equal(first.warnings[0].includes(f.uid), false); equal(first.warnings[0].includes("logger-refund-sensitive-reference"), false);
+    const beforeRetry = await dump();
+    const replay = await captureWarnings(() => call(command, { loggerThrows: true }));
+    equal(replay.result.status, 200); equal(replay.result.result!.alreadyRecorded, true); equal(replay.result.stats.writes, 0);
+    eq(await dump(), beforeRetry);
+  });
+  await test("echec logger apres correction conserve succes et rejeu idempotent", async () => {
+    const f = await fixture(); await record(f, 2500, "logger-correction-original"); const target = await correctionTarget(f);
+    const body = correctionSelection(f, target, 0, 0, 0); const p = await preview(body);
+    const command = { ...body, action: "record_correction", correctionReference: "logger-correction-sensitive-reference", expectedPreviewVersion: p.previewVersion };
+    const first = await captureWarnings(() => call(command, { loggerThrows: true }));
+    equal(first.result.status, 200, JSON.stringify(first.result)); equal(first.result.result!.alreadyRecorded, false);
+    const history = await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get();
+    equal(history.docs.filter((doc) => doc.data().kind === "refund_correction").length, 1); equal(first.warnings.length, 1);
+    equal(first.warnings[0].includes(f.id), false); equal(first.warnings[0].includes("logger-correction-sensitive-reference"), false);
+    const beforeRetry = await dump();
+    const replay = await captureWarnings(() => call(command, { loggerThrows: true }));
+    equal(replay.result.status, 200); equal(replay.result.result!.alreadyRecorded, true); equal(replay.result.stats.writes, 0);
+    eq(await dump(), beforeRetry);
+  });
+  await test("echec logger conserve correction_requires_review", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "logger-review-original"); const target = await correctionTarget(f);
+    const intent = createCagnotteReservationIntent({ orderId: `${f.id}-later`, beneficiaryId: f.uid, createdAtEpochMs: Date.parse("2000-01-04T00:00:00.000Z"),
+      calculation: { lines: [{ lineId: "later", initialCents: 1000 }], discounts: [], requestedCagnotteCents: 100, availableCagnotteCents: 1745, advantages: [] } }, program)!;
+    await applyCagnotteReservationOperation({ db, action: "reserve", intent, program, recordedAtEpochMs: Date.parse("2000-01-04T00:00:00.000Z") });
+    const before = await dump();
+    const response = await captureWarnings(() => call(correctionSelection(f, target, 0, 0, 0), { loggerThrows: true }));
+    equal(response.result.status, 200, JSON.stringify(response.result)); equal(response.result.result!.kind, "correction_requires_review");
+    equal(response.result.stats.writes, 0); eq(await dump(), before); equal(response.warnings.length, 1);
   });
   await test("concordance finale de tous les portefeuilles et journaux", async () => { for (const wallet of (await db.collection("cagnotteWallets").get()).docs) await assertWalletJournal(db, wallet.id); });
   console.log(`LOT 4C : ${tests} scenarios HTTP/emulateur reussis. Confirmation administrative seulement, aucune operation bancaire.`);

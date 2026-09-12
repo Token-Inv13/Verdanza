@@ -176,6 +176,7 @@ import {
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../../config/deliveryRules";
 import { BRAND_PRODUCT_PLACEHOLDER } from "../../lib/brandAssets";
+import { shouldMountCagnotteAdminTools } from "../../lib/cagnotteAdminEligibility";
 import {
   computeWeightedSupplierCosts,
   normalizeSupplierPurchaseInput,
@@ -6444,6 +6445,9 @@ function InvoicesPanel({
 
 type AdminOrderListItem = {
   id: string;
+  customerId?: string;
+  cagnotte?: AdminOrderRow["cagnotte"];
+  cagnotteReservationIntent?: AdminOrderRow["cagnotteReservationIntent"];
   orderType?: string;
   customer: string;
   customerEmail?: string;
@@ -6919,7 +6923,7 @@ function AdminOrders({
                   </button>
                 )}
               </div>
-              {AdminCagnotteTools && orderSource === "firestore" && (
+              {AdminCagnotteTools && shouldMountCagnotteAdminTools({ displayEnabled: CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED, orderSource, order }) && (
                 <Suspense fallback={<div className="mt-4 rounded-md border border-forest/10 p-4 text-sm">Chargement des outils administratifs…</div>}>
                   <div className="mt-4"><AdminCagnotteTools orderId={order.id} enabled={CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED} onOrderReload={() => onRefreshOrder?.(order.id)} /></div>
                 </Suspense>
@@ -7494,7 +7498,7 @@ function DesktopOrderCard({
         </section>
       </div>
 
-      {AdminCagnotteTools && orderSource === "firestore" && (
+      {AdminCagnotteTools && shouldMountCagnotteAdminTools({ displayEnabled: CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED, orderSource, order }) && (
         <Suspense fallback={<div className="mt-4 rounded-md border border-forest/10 p-4 text-sm">Chargement des outils administratifs…</div>}>
           <div className="mt-4">
             <AdminCagnotteTools orderId={order.id} enabled={CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED} onOrderReload={onRefresh} />

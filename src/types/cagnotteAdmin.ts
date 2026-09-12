@@ -15,6 +15,28 @@ export type RefundCumuls = {
   totalFinancialCents: number;
 };
 
+export type CagnotteAdminOperationalState = {
+  code:
+    | "enrolled_payment_pending"
+    | "accrual_not_enrolled"
+    | "payment_confirmed_pending"
+    | "delivered_available"
+    | "cancelled"
+    | "refund_recorded";
+  label: string;
+  detail: string;
+};
+
+export type CagnotteAdminMovement = {
+  id: string;
+  event: string;
+  pendingDeltaCents: number;
+  availableDeltaCents: number;
+  reservedDeltaCents: number;
+  regularizationDeltaCents: number;
+  recordedAtEpochMs: number;
+};
+
 export type CagnotteAdminInspection = {
   kind: "administrative_refund_inspection";
   order: {
@@ -33,7 +55,44 @@ export type CagnotteAdminInspection = {
     externalTotalCents: number;
     deliveryCents: number;
   };
+  operationalState: CagnotteAdminOperationalState;
+  enrollment: {
+    enrolled: boolean;
+    accrualEnrollment: "enrolled" | "not_enrolled";
+    beneficiaryId: string;
+    programVersion: string;
+    calculationVersion: string;
+    createdAtEpochMs: number;
+  };
+  accrual: {
+    present: boolean;
+    initialGainCents: number;
+    remainingGainCents: number;
+    paymentConfirmed: boolean;
+    deliveryConfirmed: boolean;
+    credited: boolean;
+    compartment: "none" | "pending" | "available";
+    cancelled: boolean;
+  };
   wallet: { pendingCents: number; availableCents: number; reservedCents: number; regularizationCents: number } | null;
+  reservation: {
+    applicable: boolean;
+    amountCents: number;
+    state: "reserved" | "consumed" | "released" | null;
+    requiresReview: boolean;
+    cumulativeRestitutedCents: number;
+  };
+  refund: {
+    history: Array<{ id: string; type: "initial_declaration" | "correction"; revision: number; recordedAt: string; effective: boolean }>;
+    latest: { id: string; type: "initial_declaration" | "correction"; revision: number; recordedAt: string } | null;
+    latestRevision: number;
+    requiresReview: boolean;
+  };
+  movements: CagnotteAdminMovement[];
+  movementHistory: {
+    complete: boolean;
+    omittedLegacyUndatedCount: number;
+  };
   lines: AdminRefundLine[];
   effective: RefundCumuls;
   history: Array<{
@@ -42,6 +101,8 @@ export type CagnotteAdminInspection = {
     revision: number;
     recordedAt: string;
     reference: string;
+    businessFingerprint: string;
+    source?: "admin" | "provider_reference";
     declaredFinancialCents: number;
     returnedProductNetCents: number;
     financialCents: number;

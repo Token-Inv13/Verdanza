@@ -379,6 +379,11 @@ function validateMovement(value: Record<string, unknown>, key: string, state: Ca
   }
 }
 
+/** Server-only canonical validation reused by read projections. */
+export function validateCagnotteLedgerMovementForRead(value: Record<string, unknown>, key: string, state: CagnotteAccrual) {
+  validateMovement(value, key, state);
+}
+
 function validateAccrual(state: CagnotteAccrual, order: CagnotteLedgerCommand["order"]) {
   canonical(state);
   if (state.schemaVersion !== 1 || state.currency !== "EUR" || state.calculationVersion !== CAGNOTTE_CALCULATION_VERSION ||
@@ -435,6 +440,11 @@ export async function readCagnotteRefundBasis({ db, transaction, order, allowMis
 
 function movementId(order: string, event: string, refund: string) {
   return createHash("sha256").update(JSON.stringify([order, event, refund])).digest("hex");
+}
+
+/** Server-only canonical key derivation reused by read projections. */
+export function cagnotteLedgerMovementId(order: string, event: string, refund = "") {
+  return movementId(order, event, refund);
 }
 
 function cents(value: unknown): asserts value is number {
