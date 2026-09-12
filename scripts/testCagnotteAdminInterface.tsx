@@ -8,8 +8,8 @@ import {
   CagnotteAdminToolsView,
   type CagnotteAdminViewModel,
 } from "../src/components/cagnotte/CagnotteAdminTools.js";
-import { cagnotteAdminDefinitiveRejectionState, cagnotteAdminFailureState, cagnotteAdminFormUpdatedState, cagnotteAdminFrozenOperationState, cagnotteAdminInspectionSuccessState, cagnotteAdminLoadingState } from "../src/lib/cagnotteAdminState.js";
-import { clearCagnotteAdminPendingOperation, createCagnotteAdminRefreshChannel, createCagnotteAdminResponseIdentity, eurosInputToCents, freezeCagnotteAdminCorrection, freezeCagnotteAdminRefund, refreshCagnotteAdminAfterWrite, retryCagnotteAdminFrozenOperation, runCagnotteAdminLocked } from "../src/lib/cagnotteAdminController.js";
+import { cagnotteAdminDefinitiveRejectionState, cagnotteAdminFailureState, cagnotteAdminFormUpdatedState, cagnotteAdminFrozenOperationState, cagnotteAdminInspectionSuccessState, cagnotteAdminLoadingState, cagnotteAdminStorageBlockedState } from "../src/lib/cagnotteAdminState.js";
+import { canRecoverCagnotteAdminPreSendStorageFailure, clearCagnotteAdminPendingOperation, createCagnotteAdminRefreshChannel, createCagnotteAdminResponseIdentity, eurosInputToCents, freezeCagnotteAdminCorrection, freezeCagnotteAdminRefund, refreshCagnotteAdminAfterWrite, retryCagnotteAdminFrozenOperation, runCagnotteAdminLocked } from "../src/lib/cagnotteAdminController.js";
 import { CagnotteAdminRequestError } from "../src/services/cagnotteAdminService.js";
 import { cagnotteRefundDateTimeLocalToIso, cagnotteRefundDateTimeLocalValue } from "../src/lib/cagnotteAdminDate.js";
 import { formatAdminDateTime } from "../src/lib/adminDatePresentation.js";
@@ -238,6 +238,29 @@ await test("rejet definitif du premier envoi invalide les apercus et rend une no
   equal(state.uncertain, false); equal(state.recoveryBlocked, false); match(state.notice, /périmée/i);
   const html = renderToStaticMarkup(<CagnotteAdminToolsView model={state} />);
   doesNotMatch(html, /Conséquences calculées par le serveur|Rejouer exactement l’opération précédente/);
+});
+await test("storage pre-send revenu vide debloque apres reinspection sans remount", () => {
+  const blocked = cagnotteAdminStorageBlockedState({ ...base, refundPreview: refund() }, "Stockage temporairement indisponible.", null);
+  equal(blocked.recoveryBlocked, true);
+  equal(blocked.uncertain, true);
+  const recovered = canRecoverCagnotteAdminPreSendStorageFailure({
+    recoveryBlocked: blocked.recoveryBlocked,
+    reconciliation: { status: "empty" },
+    currentOperation: null,
+    mutationInFlight: null,
+  });
+  equal(recovered, true);
+  let ready = cagnotteAdminInspectionSuccessState({ ...blocked, recoveryBlocked: !recovered }, inspection);
+  ready = cagnotteAdminFormUpdatedState(ready);
+  equal(ready.recoveryBlocked, false);
+  equal(ready.uncertain, false);
+  equal(ready.pendingOperation, null);
+  equal(ready.refundPreview, null);
+  equal(ready.correctionPreview, null);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={ready} />);
+  doesNotMatch(html, /<fieldset disabled=""/);
+  match(html, />Prévisualiser sur le serveur<\/button>/);
+  doesNotMatch(html, /Reprise locale bloquée|Rejouer exactement l’opération précédente/);
 });
 await test("acquisition non inscrite affiche zero gain mais conserve financement et reservation", () => {
   const notEnrolled: CagnotteAdminInspection = { ...inspection,

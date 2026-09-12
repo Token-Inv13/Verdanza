@@ -239,7 +239,7 @@ export function parseOrderRefundRequest(value: unknown): OrderRefundRequest {
     return {
       ...common,
       action: "record_correction",
-      correctionReference: identifier(typeof raw.correctionReference === "string" ? raw.correctionReference.trim().toLowerCase() : raw.correctionReference, 80),
+      correctionReference: normalizeBusinessReference(raw.correctionReference, "correction_reference_not_business_id"),
       expectedPreviewVersion: raw.expectedPreviewVersion,
     };
   }
@@ -256,8 +256,7 @@ export function parseOrderRefundRequest(value: unknown): OrderRefundRequest {
   if (!selection.additionalReturns.length && selection.deliveryRefundCents === 0) fail("refund_empty", 400);
   if (raw.action === "preview") return { action: "preview", ...selection };
   if (raw.source !== "admin" && raw.source !== "provider_reference") fail("refund_source_invalid", 400);
-  const reference = identifier(typeof raw.reference === "string" ? raw.reference.trim().toLowerCase() : raw.reference, 80);
-  if (/^\d{13,19}$/.test(reference) || /^[a-z]{2}\d{2}[a-z0-9]{11,30}$/.test(reference)) fail("refund_reference_not_business_id", 400);
+  const reference = normalizeBusinessReference(raw.reference, "refund_reference_not_business_id");
   if (!["product_return", "order_cancellation", "delivery_refund"].includes(String(raw.reason))) fail("refund_reason_invalid", 400);
   if (typeof raw.expectedPreviewVersion !== "string" || !/^[a-f0-9]{64}$/.test(raw.expectedPreviewVersion)) fail("refund_preview_version_required", 400);
   return {
@@ -1651,6 +1650,11 @@ function byLine(a: { lineId: string }, b: { lineId: string }) { return a.lineId 
 function identifier(value: unknown, max: number): string {
   if (typeof value !== "string" || value.length > max || !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(value)) fail("refund_identifier_invalid", 400);
   return value;
+}
+function normalizeBusinessReference(value: unknown, bankingReferenceCode: string): string {
+  const reference = identifier(typeof value === "string" ? value.trim().toLowerCase() : value, 80);
+  if (/^\d{13,19}$/.test(reference) || /^[a-z]{2}\d{2}[a-z0-9]{11,30}$/.test(reference)) fail(bankingReferenceCode, 400);
+  return reference;
 }
 function shaIdentifier(value: unknown, code: string): string {
   if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)) fail(code, 400);

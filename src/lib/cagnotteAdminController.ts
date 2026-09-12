@@ -25,6 +25,16 @@ export type CagnotteAdminStorageReconciliation =
   | { status: "recorded" }
   | { status: "blocked"; message: string };
 
+export function canRecoverCagnotteAdminPreSendStorageFailure(input: {
+  recoveryBlocked: boolean;
+  reconciliation: CagnotteAdminStorageReconciliation;
+  currentOperation: CagnotteAdminFrozenOperation | null;
+  mutationInFlight: CagnotteAdminFrozenOperation | null;
+}) {
+  return input.recoveryBlocked && input.reconciliation.status === "empty" &&
+    input.currentOperation === null && input.mutationInFlight === null;
+}
+
 export function reconcileCagnotteAdminFrozenOperationStorage(
   store: CagnotteAdminFrozenOperationStore,
   orderId: string,
@@ -148,7 +158,8 @@ export function resolveCagnotteAdminFrozenOperationFromInspection(
 function isSafeExactRetryTerminalRejection(error: unknown) {
   return error instanceof CagnotteAdminRequestError && !error.uncertain &&
     (error.code === "refund_preview_stale" || error.code === "correction_preview_stale" ||
-      error.code === "refund_event_conflict" || error.code === "correction_event_conflict");
+      error.code === "refund_event_conflict" || error.code === "correction_event_conflict" ||
+      error.code === "refund_delivery_exceeds_remaining");
 }
 
 export function eurosInputToCents(value: string) {

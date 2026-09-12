@@ -2,6 +2,7 @@ import { deepEqual, doesNotMatch, equal, match, ok, rejects, throws } from "node
 import { createHash } from "node:crypto";
 import {
   CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_REQUIRED_NOTICE,
+  canRecoverCagnotteAdminPreSendStorageFailure,
   freezeCagnotteAdminCorrection,
   freezeCagnotteAdminRefund,
   reconcileCagnotteAdminFrozenOperationStorage,
@@ -561,6 +562,58 @@ await test("35 retry exact perime est terminal et exige une nouvelle preview", a
     equal(await sendCagnotteAdminOperationWithDurableRecovery(store, next, async () => "accepted"), "accepted");
     store.clearAfterResolution(next);
   }
+});
+
+await test("H18 retry exact delivery exceeds non incertain cree la preuve terminale et libere", async () => {
+  const storage = new MemoryStorage();
+  const tabA = makeStore(storage);
+  const tabB = makeStore(storage);
+  const operation = refundOperation();
+  tabA.persistBeforeSend(operation);
+  tabA.updateState(operation, "uncertain");
+  const restored = tabB.load(operation.orderId);
+  ok(restored.status === "ready");
+  let cleared = 0;
+  await rejects(() => retryCagnotteAdminFrozenOperationDurably(tabA, operation, operation.orderId, {
+    refund: async () => { throw new CagnotteAdminRequestError("Livraison déjà intégralement remboursée.", "refund_delivery_exceeds_remaining", false); },
+    correction: async () => ({}),
+  }, () => { cleared += 1; }), (error: unknown) => error instanceof CagnotteAdminRequestError && error.code === "refund_delivery_exceeds_remaining" && !error.uncertain);
+  equal(cleared, 1);
+  equal(tabA.load(operation.orderId).status, "empty");
+  const resolution = tabA.loadResolution(operation);
+  equal(resolution.status === "ready" && resolution.resolution.outcome, "definitive_rejection");
+  equal(resolution.status === "ready" && resolution.resolution.operationFingerprint, cagnotteAdminFrozenOperationFingerprint(operation));
+  const current = restored.status === "ready" ? restored.record.operation : operation;
+  equal(reconcileCagnotteAdminFrozenOperationStorage(tabB, operation.orderId, current, null).status, "definitive_rejection");
+  const next = freezeCagnotteAdminRefund({ ...operation.payload, reference: "refund-h18-after-reinspection", expectedPreviewVersion: "e".repeat(64) });
+  equal(await sendCagnotteAdminOperationWithDurableRecovery(tabA, next, async () => "accepted"), "accepted");
+  tabA.clearAfterResolution(next);
+});
+
+await test("H18 delivery exceeds incertain reste durablement gele", async () => {
+  const storage = new MemoryStorage();
+  const store = makeStore(storage);
+  const operation = refundOperation();
+  store.persistBeforeSend(operation);
+  store.updateState(operation, "uncertain");
+  await rejects(() => retryCagnotteAdminFrozenOperationDurably(store, operation, operation.orderId, {
+    refund: async () => { throw new CagnotteAdminRequestError("Réponse non fiable.", "refund_delivery_exceeds_remaining", true); },
+    correction: async () => ({}),
+  }), (error: unknown) => error instanceof CagnotteAdminRequestError && error.code === "refund_delivery_exceeds_remaining" && error.uncertain);
+  const frozen = store.load(operation.orderId);
+  equal(frozen.status === "ready" && frozen.record.state, "uncertain");
+  equal(store.loadResolution(operation).status, "empty");
+});
+
+await test("H18 recovery pre-send exige storage vide lisible et aucune operation", () => {
+  const operation = refundOperation();
+  equal(canRecoverCagnotteAdminPreSendStorageFailure({ recoveryBlocked: true, reconciliation: { status: "empty" }, currentOperation: null, mutationInFlight: null }), true);
+  equal(canRecoverCagnotteAdminPreSendStorageFailure({ recoveryBlocked: false, reconciliation: { status: "empty" }, currentOperation: null, mutationInFlight: null }), false);
+  equal(canRecoverCagnotteAdminPreSendStorageFailure({ recoveryBlocked: true, reconciliation: { status: "blocked", message: "storage unavailable" }, currentOperation: null, mutationInFlight: null }), false);
+  equal(canRecoverCagnotteAdminPreSendStorageFailure({ recoveryBlocked: true, reconciliation: { status: "frozen", record: { schemaVersion: 1, state: "uncertain", persistedAtEpochMs: NOW, operation } }, currentOperation: null, mutationInFlight: null }), false);
+  equal(canRecoverCagnotteAdminPreSendStorageFailure({ recoveryBlocked: true, reconciliation: { status: "empty" }, currentOperation: operation, mutationInFlight: null }), false);
+  equal(canRecoverCagnotteAdminPreSendStorageFailure({ recoveryBlocked: true, reconciliation: { status: "empty" }, currentOperation: null, mutationInFlight: operation }), false);
+  equal(canRecoverCagnotteAdminPreSendStorageFailure({ recoveryBlocked: true, reconciliation: { status: "deferred" }, currentOperation: null, mutationInFlight: operation }), false);
 });
 
 await test("H10 retry exact en conflit d idempotence libere le frozen et reconcilie l autre onglet", async () => {

@@ -306,6 +306,108 @@ try {
     equal(p.kind, "refund_preview"); equal(p.totalFinancialCents, 2500); equal(p.correction.theoreticalCents, 125);
     equal(p.recordedAt, undefined);
   });
+  await test("references de correction bancaires sont refusees au parsing avant transaction", async () => {
+    const f = await fixture();
+    await record(f, 2500, "h18-correction-reference-source");
+    const target = await correctionTarget(f);
+    const body = correctionSelection(f, target, 0, 1000, 1000);
+    const p = await preview(body);
+    const sensitiveReferences = [
+      ["card-13", "4111111111111"],
+      ["card-16", "4111111111111111"],
+      ["card-19", "4111111111111111111"],
+      ["iban-lower", "fr7612345678901234567890123"],
+      ["iban-upper", "FR7612345678901234567890123"],
+    ] as const;
+    for (const [label, correctionReference] of sensitiveReferences) {
+      const before = await dump();
+      const response = await call({ ...body, action: "record_correction", correctionReference, expectedPreviewVersion: p.previewVersion });
+      equal(response.status, 400, label);
+      equal(response.code, "correction_reference_not_business_id", label);
+      equal(response.stats.transactions, 0, label);
+      equal(response.stats.writes, 0, label);
+      equal(response.stats.walletWrites, 0, label);
+      eq(await dump(), before, label);
+    }
+  });
+  await test("references metier normales restent normalisees et acceptes pour une correction", async () => {
+    const f = await fixture();
+    await record(f, 2500, "h18-normal-correction-source");
+    const target = await correctionTarget(f);
+    const correction = await recordCorrection(f, target, 0, 1000, 1000, " H18-CORRECTION-REF-001 ");
+    equal(correction.result.alreadyRecorded, false);
+    const events = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs.map((doc) => doc.data());
+    equal(events.some((event) => event.kind === "refund_correction" && event.correctionReference === "h18-correction-ref-001"), true);
+  });
+  await test("filtre refund card et iban reste identique et sans transaction", async () => {
+    const f = await fixture();
+    const body = selection(f);
+    const p = await preview(body);
+    for (const [label, reference] of [
+      ["card-13", "4111111111111"],
+      ["card-16", "4111111111111111"],
+      ["card-19", "4111111111111111111"],
+      ["iban-lower", "fr7612345678901234567890123"],
+      ["iban-upper", "FR7612345678901234567890123"],
+    ] as const) {
+      const response = await call(confirmation(body, p, reference));
+      equal(response.status, 400, label);
+      equal(response.code, "refund_reference_not_business_id", label);
+      equal(response.stats.transactions, 0, label);
+      equal(response.stats.writes, 0, label);
+    }
+  });
+  await test("retry refund exact precede le plafond livraison et conflit de fingerprint", async () => {
+    const f = await fixture({ delivery: 600 });
+    const first = await record(f, 0, "h18-delivery-retry", 500);
+    await record(f, 0, "h18-delivery-later", 100);
+    const before = await dump();
+    const exactRetry = await call(first.command);
+    equal(exactRetry.status, 200, JSON.stringify(exactRetry));
+    equal(exactRetry.result!.alreadyRecorded, true);
+    equal(exactRetry.stats.writes, 0);
+    eq(await dump(), before);
+    const conflict = await call({ ...first.command, reason: "delivery_refund" });
+    equal(conflict.status, 409);
+    equal(conflict.code, "refund_event_conflict");
+    equal(conflict.stats.writes, 0);
+    eq(await dump(), before);
+    const noPrior = await call({
+      ...selection(f, 0, 1), action: "record_confirmed", source: "admin", reference: "h18-delivery-new",
+      declaredFinancialCents: 1, reason: "delivery_refund", confirmedAt: confirmDate, expectedPreviewVersion: "f".repeat(64),
+    });
+    equal(noPrior.status, 400);
+    equal(noPrior.code, "refund_delivery_exceeds_remaining");
+    equal(noPrior.stats.writes, 0);
+    eq(await dump(), before);
+  });
+  await test("retry correction exact precede aussi le plafond livraison", async () => {
+    const f = await fixture({ delivery: 600 });
+    await record(f, 2500, "h18-correction-delivery-source");
+    const target = await correctionTarget(f);
+    const body = { ...correctionSelection(f, target, 0, 2500, 3000), deliveryRefundCents: 500 };
+    const p = await preview(body);
+    const command = { ...body, action: "record_correction", correctionReference: "h18-correction-delivery-retry", expectedPreviewVersion: p.previewVersion };
+    const recorded = await call(command);
+    equal(recorded.status, 200, JSON.stringify(recorded));
+    const before = await dump();
+    const exactRetry = await call(command);
+    equal(exactRetry.status, 200, JSON.stringify(exactRetry));
+    equal(exactRetry.result!.alreadyRecorded, true);
+    equal(exactRetry.stats.writes, 0);
+    eq(await dump(), before);
+    const conflict = await call({ ...command, deliveryRefundCents: 601, declaredFinancialCents: 3101 });
+    equal(conflict.status, 409);
+    equal(conflict.code, "correction_event_conflict");
+    equal(conflict.stats.writes, 0);
+    eq(await dump(), before);
+    const noPrior = await call({ ...command, correctionReference: "h18-correction-delivery-new", expectedRevision: 1,
+      deliveryRefundCents: 601, declaredFinancialCents: 3101, expectedPreviewVersion: "f".repeat(64) });
+    equal(noPrior.status, 400);
+    equal(noPrior.code, "refund_delivery_exceeds_remaining");
+    equal(noPrior.stats.writes, 0);
+    eq(await dump(), before);
+  });
   await test("100 EUR -> 25 -> 75 et reprises anciennes", async () => {
     const f = await fixture(); const original = await stored(f); const a = await record(f, 2500, "main-25");
     equal(a.result.kind, "administrative_refund_recorded"); equal(a.result.productFinancialCents, 2500); equal(a.result.correction.appliedCents, 125);

@@ -10,7 +10,7 @@ import {
 } from "../../services/cagnotteAdminService";
 import type { CagnotteAdminInspection, CorrectionPreview, RefundPreview } from "../../types/cagnotteAdmin";
 import { updateOrderAdminFields } from "../../services/ordersService";
-import { clearCagnotteAdminPendingOperation, createCagnotteAdminRefreshChannel, createCagnotteAdminResponseIdentity, eurosInputToCents, freezeCagnotteAdminCorrection, freezeCagnotteAdminRefund, reconcileCagnotteAdminFrozenOperationStorage, refreshCagnotteAdminAfterWrite, resolveCagnotteAdminFrozenOperationFromInspection, retryCagnotteAdminFrozenOperationDurably, runCagnotteAdminLocked, sendCagnotteAdminOperationWithDurableRecovery, type CagnotteAdminFrozenOperation } from "../../lib/cagnotteAdminController";
+import { canRecoverCagnotteAdminPreSendStorageFailure, clearCagnotteAdminPendingOperation, createCagnotteAdminRefreshChannel, createCagnotteAdminResponseIdentity, eurosInputToCents, freezeCagnotteAdminCorrection, freezeCagnotteAdminRefund, reconcileCagnotteAdminFrozenOperationStorage, refreshCagnotteAdminAfterWrite, resolveCagnotteAdminFrozenOperationFromInspection, retryCagnotteAdminFrozenOperationDurably, runCagnotteAdminLocked, sendCagnotteAdminOperationWithDurableRecovery, type CagnotteAdminFrozenOperation } from "../../lib/cagnotteAdminController";
 import { browserCagnotteAdminFrozenOperationStore, CagnotteAdminFrozenOperationStorageError, sameFrozenOperation, type CagnotteAdminFrozenOperationLoadResult, type CagnotteAdminFrozenOperationStore } from "../../lib/cagnotteAdminFrozenOperationStorage";
 import { cagnotteAdminDefinitiveRejectionState, cagnotteAdminFailureState, cagnotteAdminFormUpdatedState, cagnotteAdminFrozenOperationState, cagnotteAdminInspectionSuccessState, cagnotteAdminLoadingState, cagnotteAdminRestoredOperationState, cagnotteAdminStorageBlockedState, cagnotteAdminTerminalReinspectionState, createCagnotteAdminInitialState, type CagnotteAdminViewModel } from "../../lib/cagnotteAdminState";
 import { cagnotteRefundDateTimeLocalToIso } from "../../lib/cagnotteAdminDate";
@@ -137,6 +137,13 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
       recoveryBlocked.current = false;
       setForm(emptyForm());
       setModel((value) => cagnotteAdminTerminalReinspectionState(value, "Le rejet définitif a été confirmé dans un autre onglet. Réinspection serveur en cours."));
+    } else if (canRecoverCagnotteAdminPreSendStorageFailure({
+      recoveryBlocked: recoveryBlocked.current,
+      reconciliation,
+      currentOperation: frozenOperation.current,
+      mutationInFlight: mutationInFlightOperation.current,
+    })) {
+      recoveryBlocked.current = false;
     }
     await reload(successNotice);
   };
