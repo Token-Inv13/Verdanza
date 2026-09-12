@@ -10,6 +10,7 @@ export const CAGNOTTE_ADMIN_LEGACY_TERMINAL_RESOLUTION_KEY_PREFIX = "verdanza:ca
 export const CAGNOTTE_ADMIN_CLAIM_LOCK_PREFIX = "verdanza:cagnotte-admin:claim:v1:";
 export const CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE = "Impossible de sécuriser cette opération pour une reprise en cas de réponse interrompue. Aucun enregistrement n’a été envoyé.";
 export const CAGNOTTE_ADMIN_STORAGE_INVALID_NOTICE = "Les données locales de reprise de cette commande sont invalides. Aucune nouvelle opération n’est autorisée tant que leur résolution n’est pas établie.";
+export const CAGNOTTE_ADMIN_TERMINAL_FINGERPRINT_NOTICE = "Cette opération exacte possède déjà un résultat terminal. Réinspectez la commande puis préparez une nouvelle opération.";
 
 export type CagnotteAdminFrozenOperationState = "in_flight" | "uncertain" | "awaiting_confirmation";
 
@@ -70,7 +71,7 @@ export interface CagnotteAdminFrozenOperationStore {
 }
 
 export class CagnotteAdminFrozenOperationStorageError extends Error {
-  constructor(message: string, readonly reason: "conflict" | "invalid" | "unavailable") {
+  constructor(message: string, readonly reason: "conflict" | "invalid" | "unavailable" | "terminal") {
     super(message);
     this.name = "CagnotteAdminFrozenOperationStorageError";
   }
@@ -223,6 +224,9 @@ export function createCagnotteAdminFrozenOperationStore(options: {
     const resolution = loadResolution(validated);
     if (resolution.status === "blocked") {
       throw new CagnotteAdminFrozenOperationStorageError(resolution.message, resolution.reason);
+    }
+    if (resolution.status === "ready") {
+      throw new CagnotteAdminFrozenOperationStorageError(CAGNOTTE_ADMIN_TERMINAL_FINGERPRINT_NOTICE, "terminal");
     }
     const createdAtEpochMs = now();
     if (!Number.isSafeInteger(createdAtEpochMs) || createdAtEpochMs < 0) {

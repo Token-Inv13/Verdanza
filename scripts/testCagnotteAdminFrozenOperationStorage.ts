@@ -16,7 +16,9 @@ import {
   CAGNOTTE_ADMIN_LEGACY_TERMINAL_RESOLUTION_KEY_PREFIX,
   CAGNOTTE_ADMIN_TERMINAL_RESOLUTION_KEY_PREFIX,
   CAGNOTTE_ADMIN_STORAGE_INVALID_NOTICE,
+  CAGNOTTE_ADMIN_TERMINAL_FINGERPRINT_NOTICE,
   CAGNOTTE_ADMIN_STORAGE_UNAVAILABLE_NOTICE,
+  CagnotteAdminFrozenOperationStorageError,
   cagnotteAdminFrozenOperationFingerprint,
   createCagnotteAdminFrozenOperationStore,
   type CagnotteAdminExclusiveClaim,
@@ -1001,8 +1003,10 @@ await test("H15 frozen exact reste prioritaire sur sa preuve terminale", () => {
   const store = makeStore(storage);
   const operation = refundOperation();
   store.persistBeforeSend(operation);
-  store.clearAfterResolution(operation);
-  store.persistBeforeSend(operation);
+  storage.values.set(store.resolutionKey(operation), JSON.stringify({
+    schemaVersion: 2, orderId: ORDER_A, operationFingerprint: cagnotteAdminFrozenOperationFingerprint(operation),
+    outcome: "recorded", resolvedAtEpochMs: NOW,
+  }));
   equal(reconcileCagnotteAdminFrozenOperationStorage(store, ORDER_A, operation, null).status, "frozen");
 });
 
@@ -1040,6 +1044,34 @@ await test("H15 marker v1 order scoped n est jamais accepte comme preuve exacte"
   }));
   equal(store.loadResolution(operation).status, "empty");
   equal(reconcileCagnotteAdminFrozenOperationStorage(store, ORDER_A, operation, null).status, "blocked");
+});
+
+await test("H19 fingerprint definitive_rejection ou recorded est refuse avant persistance et envoi", async () => {
+  for (const outcome of ["definitive_rejection", "recorded"] as const) {
+    const storage = new MemoryStorage();
+    const store = makeStore(storage);
+    const operation = refundOperation();
+    store.persistBeforeSend(operation);
+    if (outcome === "definitive_rejection") store.clearAfterDefinitiveRejection(operation);
+    else store.clearAfterResolution(operation);
+    const proof = store.loadResolution(operation);
+    equal(proof.status, "ready");
+    let sends = 0, persisted = 0;
+    await rejects(() => sendCagnotteAdminOperationWithDurableRecovery(store, operation, async () => { sends += 1; }, () => { persisted += 1; }),
+      (error: unknown) => error instanceof CagnotteAdminFrozenOperationStorageError && error.reason === "terminal" && error.message === CAGNOTTE_ADMIN_TERMINAL_FINGERPRINT_NOTICE);
+    equal(sends, 0);
+    equal(persisted, 0);
+    equal(store.load(ORDER_A).status, "empty");
+    deepEqual(store.loadResolution(operation), proof);
+
+    const operationB = freezeCagnotteAdminRefund({ ...operation.payload, reference: `h19-new-${outcome}` });
+    let sendsB = 0;
+    await sendCagnotteAdminOperationWithDurableRecovery(store, operationB, async () => { sendsB += 1; return "ok"; });
+    equal(sendsB, 1);
+    store.clearAfterResolution(operationB);
+    deepEqual(store.loadResolution(operation), proof);
+    equal(reconcileCagnotteAdminFrozenOperationStorage(store, ORDER_A, operationB, null).status, "recorded");
+  }
 });
 
 await test("H10 readiness refuse claim absent tardif ou ancien persist seul", () => {

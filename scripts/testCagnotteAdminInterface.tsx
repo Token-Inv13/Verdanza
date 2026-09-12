@@ -8,7 +8,8 @@ import {
   CagnotteAdminToolsView,
   type CagnotteAdminViewModel,
 } from "../src/components/cagnotte/CagnotteAdminTools.js";
-import { cagnotteAdminDefinitiveRejectionState, cagnotteAdminFailureState, cagnotteAdminFormUpdatedState, cagnotteAdminFrozenOperationState, cagnotteAdminInspectionSuccessState, cagnotteAdminLoadingState, cagnotteAdminStorageBlockedState } from "../src/lib/cagnotteAdminState.js";
+import { cagnotteAdminCorrectionMaximumNetCents, cagnotteAdminMaximumLineInput } from "../src/lib/cagnotteAdminLineInput.js";
+import { cagnotteAdminDefinitiveRejectionState, cagnotteAdminFailureState, cagnotteAdminFormUpdatedState, cagnotteAdminFrozenOperationState, cagnotteAdminInspectionSuccessState, cagnotteAdminLoadingState, cagnotteAdminStorageBlockedState, cagnotteAdminTerminalReinspectionState } from "../src/lib/cagnotteAdminState.js";
 import { canRecoverCagnotteAdminPreSendStorageFailure, clearCagnotteAdminPendingOperation, createCagnotteAdminRefreshChannel, createCagnotteAdminResponseIdentity, eurosInputToCents, freezeCagnotteAdminCorrection, freezeCagnotteAdminRefund, refreshCagnotteAdminAfterWrite, retryCagnotteAdminFrozenOperation, runCagnotteAdminLocked } from "../src/lib/cagnotteAdminController.js";
 import { CagnotteAdminRequestError } from "../src/services/cagnotteAdminService.js";
 import { cagnotteRefundDateTimeLocalToIso, cagnotteRefundDateTimeLocalValue } from "../src/lib/cagnotteAdminDate.js";
@@ -147,12 +148,30 @@ await test("historique apres neutralisation conserve l original et rend la corre
       { id: "e".repeat(64), type: "correction", revision: 1, recordedAt: "2026-09-06T10:05:00.000Z", reference: "neutralisation-demo", businessFingerprint: "e".repeat(64),
         declaredFinancialCents: 0, returnedProductNetCents: 0, financialCents: 0, cagnotteRestitutionCents: 0,
         resultingAvailableCents: 1660, effective: true, targetEventId: inspection.history[0].id, targetReference: "demo" },
-    ], correctionTarget: { eventId: inspection.history[0].id, revision: 1, effective: zero } };
+    ], correctionTarget: { eventId: inspection.history[0].id, revision: 1, effective: zero,
+      lines: inspection.correctionTarget!.lines } };
   const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: corrected, mode: "correction" }} />);
   for (const text of ["Historique administratif", "Déclaration initiale", "Corrigée / inactive", "Correction · neutralisation",
     "Active / effective", "Retour net", "25,00", "Financier", "23,00", "Cagnotte restituée", "2,00",
     "Solde disponible résultant", "16,60", "Aucun flux bancaire n’est modifié"]) match(html, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   doesNotMatch(html, /Conséquences calculées par le serveur|Effet différentiel/);
+});
+await test("H19 correction utilise le plafond serveur de la cible et refund garde le restant global", () => {
+  const multipleRefunds: CagnotteAdminInspection = {
+    ...inspection,
+    lines: inspection.lines.map((line) => ({ ...line, returnedNetCents: 5000, remainingNetCents: 5000 })),
+    correctionTarget: { ...inspection.correctionTarget!, effective: { ...inspection.effective, returnedProductNetCents: 5000 },
+      lines: [{ lineId: "line-0", maxReplacementNetCents: 7000 }] },
+  };
+  const correctionHtml = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: multipleRefunds, mode: "correction" }} />);
+  match(correctionHtml, /70,00\s*€ admissibles/);
+  doesNotMatch(correctionHtml, /100,00\s*€ admissibles|50,00\s*€ admissibles/);
+  const maximum = cagnotteAdminCorrectionMaximumNetCents(multipleRefunds, "line-0");
+  equal(maximum, 7000);
+  equal(cagnotteAdminMaximumLineInput({}, "line-0", maximum)["line-0"], "70,00");
+  const refundHtml = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: multipleRefunds, mode: "refund" }} />);
+  match(refundHtml, /50,00\s*€ admissibles/);
+  doesNotMatch(refundHtml, /70,00\s*€ admissibles/);
 });
 await test("revue et date sont presentees sans codes internes", () => {
   const reviewed = { ...inspection,
@@ -261,6 +280,22 @@ await test("storage pre-send revenu vide debloque apres reinspection sans remoun
   doesNotMatch(html, /<fieldset disabled=""/);
   match(html, />Prévisualiser sur le serveur<\/button>/);
   doesNotMatch(html, /Reprise locale bloquée|Rejouer exactement l’opération précédente/);
+});
+await test("H19 preuve terminale abandonne le pending puis la reinspection rend une nouvelle operation possible", () => {
+  const operation = freezeCagnotteAdminRefund({ orderId: inspection.order.id,
+    additionalReturns: [{ lineId: "line-0", additionalNetCents: 2500 }], deliveryRefundCents: 0,
+    source: "admin", reference: "h19-terminal", declaredFinancialCents: 2300, reason: "product_return",
+    confirmedAt: "2026-09-06T10:00:00.000Z", expectedPreviewVersion: "d".repeat(64) });
+  const terminal = cagnotteAdminTerminalReinspectionState({ ...base, refundPreview: refund(), correctionPreview: correctionReview(),
+    uncertain: true, pendingOperation: operation, recoveryBlocked: true }, "Fingerprint terminal.");
+  equal(terminal.pendingOperation, null);
+  equal(terminal.recoveryBlocked, false);
+  equal(terminal.refundPreview, null);
+  equal(terminal.correctionPreview, null);
+  const ready = cagnotteAdminInspectionSuccessState(terminal, inspection, terminal.notice);
+  equal(ready.uncertain, false);
+  equal(ready.recoveryBlocked, false);
+  equal(ready.pendingOperation, null);
 });
 await test("acquisition non inscrite affiche zero gain mais conserve financement et reservation", () => {
   const notEnrolled: CagnotteAdminInspection = { ...inspection,
@@ -372,7 +407,8 @@ function fixture(): CagnotteAdminInspection {
     lines: [{ lineId: "line-0", label: "Produit fictif", initialNetCents: 10000, returnedNetCents: 2500, remainingNetCents: 7500 }], effective,
     history: [{ id: "a".repeat(64), type: "initial_declaration", revision: 0, recordedAt: "2026-09-06T10:00:00.000Z", reference: "demo", businessFingerprint: "a".repeat(64), source: "admin", declaredFinancialCents: 2300,
       returnedProductNetCents: 2500, financialCents: 2300, cagnotteRestitutionCents: 200, resultingAvailableCents: 1745, effective: true }],
-    correctionTarget: { eventId: "a".repeat(64), revision: 0, effective }, unpaid: { reservedAmountCents: 0, reservationState: "consumed", reservedAt: "2026-09-02T08:00:00.000Z", ageHours: 100, reviewRequired: true,
+    correctionTarget: { eventId: "a".repeat(64), revision: 0, effective,
+      lines: [{ lineId: "line-0", maxReplacementNetCents: 10000 }] }, unpaid: { reservedAmountCents: 0, reservationState: "consumed", reservedAt: "2026-09-02T08:00:00.000Z", ageHours: 100, reviewRequired: true,
       payment: { status: "payment_link_sent", uncertain: true, confirmedAt: null }, linkTransmission: { requestId: "demo", status: "unknown", transportStatus: "unknown", sendingActive: false, uncertain: true },
       stateVersion: "b".repeat(64), review: null } };
 }

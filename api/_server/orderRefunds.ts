@@ -617,6 +617,13 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
     });
     const { originals, corrections, effective } = reconstruction;
     const lastOriginal = lastItem(originals);
+    const latestCorrectionByTarget = new Map<string, { id: string; event: CorrectionEvent }>();
+    for (const correction of corrections) {
+      const previous = latestCorrectionByTarget.get(correction.event.targetEventId);
+      if (!previous || correction.event.revision > previous.event.revision) {
+        latestCorrectionByTarget.set(correction.event.targetEventId, correction);
+      }
+    }
     const inspectedMovements = validateAdminMovementJournal({
       order: internalOrder,
       deliveryCharged: eurosToCagnotteCents(order.deliveryFee),
@@ -649,7 +656,7 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
         financialCents: event.result.totalFinancialCents,
         cagnotteRestitutionCents: event.result.cagnotteRestitutionCents,
         resultingAvailableCents: event.result.restitution.availableAfterCents,
-        effective: corrections.every((entry) => entry.event.targetEventId !== id) })),
+        effective: !latestCorrectionByTarget.has(id) })),
       ...corrections.map(({ id, event }) => ({ id, type: "correction" as const, revision: event.revision, recordedAt: event.recordedAt,
         reference: event.correctionReference, businessFingerprint: event.fingerprint, targetEventId: event.targetEventId, declaredFinancialCents: event.content.declaredFinancialCents,
         targetReference: originals.find((entry) => entry.id === event.targetEventId)?.event.reference,
@@ -657,7 +664,7 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
         financialCents: event.result.effective.totalFinancialCents,
         cagnotteRestitutionCents: event.result.effective.cagnotteRestitutionCents,
         resultingAvailableCents: event.result.walletAfter.availableCents,
-        effective: event.targetEventId === lastOriginal?.id && event.revision === corrections.filter((entry) => entry.event.targetEventId === event.targetEventId).length })),
+        effective: latestCorrectionByTarget.get(event.targetEventId)?.id === id })),
     ].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt) || b.revision - a.revision ||
       Number(b.type === "correction") - Number(a.type === "correction"));
     const operationalState = adminOperationalState({ accrualEnrollment, accrual: accrualView, hasRefund: refundHistory.length > 0 });
@@ -724,6 +731,7 @@ async function inspectOrderRefunds(db: Firestore, orderId: string) {
         eventId: lastOriginal.id,
         revision: corrections.filter((entry) => entry.event.targetEventId === lastOriginal.id).length,
         effective,
+        lines: correctionTargetLines(enrollment.snapshot, normalizeResult(lastOriginal.event.result).before.lines),
       } : null,
       unpaid,
     };
@@ -756,6 +764,24 @@ function refundOrderItemsByLineId(order: Pick<Order, "items">, snapshot: Cagnott
   }
   if (itemsById.size !== snapshotById.size) fail("refund_order_lines_require_verification");
   return itemsById;
+}
+
+function correctionTargetLines(snapshot: CagnotteSnapshot, targetBefore: readonly CumulativeLineReturn[]) {
+  if (targetBefore.length !== snapshot.lines.length) fail("refund_journal_requires_verification");
+  const beforeByLineId = new Map<string, number>();
+  for (const line of targetBefore) {
+    if (beforeByLineId.has(line.lineId)) fail("refund_journal_requires_verification");
+    beforeByLineId.set(line.lineId, line.returnedNetCents);
+  }
+  return snapshot.lines.map((line) => {
+    const returnedBefore = beforeByLineId.get(line.lineId);
+    if (returnedBefore === undefined) fail("refund_journal_requires_verification");
+    const maxReplacementNetCents = line.netCents - returnedBefore;
+    if (!Number.isSafeInteger(maxReplacementNetCents) || maxReplacementNetCents < 0 || maxReplacementNetCents > line.netCents) {
+      fail("refund_journal_requires_verification");
+    }
+    return { lineId: line.lineId, maxReplacementNetCents };
+  }).sort(byLine);
 }
 
 function reconstructOrderRefundHistory(input: {

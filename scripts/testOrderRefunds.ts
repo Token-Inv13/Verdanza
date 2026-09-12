@@ -1199,6 +1199,74 @@ try {
     await originals[1].ref.update({ sequence: 99 });
     await refused(correction.command, "refund_history_requires_verification");
   });
+  await test("H19 plafond correction vient du cumul avant la cible et non du montant initial ou restant global", async () => {
+    const f = await fixture();
+    await record(f, 3000, "h19-repro-max-r1");
+    const afterR1 = await call({ action: "inspect", orderId: f.id });
+    equal(afterR1.status, 200, JSON.stringify(afterR1));
+    eq((afterR1.result as unknown as { correctionTarget: { lines: unknown } }).correctionTarget.lines,
+      [{ lineId: "line-0", maxReplacementNetCents: 10000 }]);
+    await record(f, 2000, "h19-repro-max-r2");
+    const inspected = await call({ action: "inspect", orderId: f.id });
+    equal(inspected.status, 200, JSON.stringify(inspected));
+    const result = inspected.result as unknown as {
+      lines: Array<{ lineId: string; initialNetCents: number; remainingNetCents: number }>;
+      effective: { returnedProductNetCents: number };
+      correctionTarget: { eventId: string; lines: Array<{ lineId: string; maxReplacementNetCents: number }> };
+    };
+    equal(result.lines[0].initialNetCents, 10000);
+    equal(result.lines[0].remainingNetCents, 5000);
+    equal(result.effective.returnedProductNetCents, 5000);
+    eq(result.correctionTarget.lines, [{ lineId: "line-0", maxReplacementNetCents: 7000 }]);
+    const accepted = await preview(correctionSelection(f, result.correctionTarget.eventId, 0, 7000, 7000));
+    equal(accepted.effective.returnedProductNetCents, 10000);
+    await refused(correctionSelection(f, result.correctionTarget.eventId, 0, 7100, 7100), "refund_validation_failed");
+  });
+  await test("H19 correction ancienne reste effective par cible apres remboursement ulterieur", async () => {
+    const f = await fixture();
+    await record(f, 3000, "h19-repro-effective-r1");
+    const targetR1 = await correctionTarget(f);
+    await recordCorrection(f, targetR1, 0, 2000, 2000, "h19-repro-effective-c1");
+    const afterC1 = await call({ action: "inspect", orderId: f.id });
+    equal(afterC1.status, 200, JSON.stringify(afterC1));
+    const afterC1Status = Object.fromEntries((afterC1.result as unknown as { history: Array<{ reference: string; effective: boolean }> })
+      .history.map((entry) => [entry.reference, entry.effective]));
+    eq([afterC1Status["h19-repro-effective-r1"], afterC1Status["h19-repro-effective-c1"]], [false, true]);
+    await record(f, 1000, "h19-repro-effective-r2");
+    const inspected = await call({ action: "inspect", orderId: f.id });
+    equal(inspected.status, 200, JSON.stringify(inspected));
+    const result = inspected.result as unknown as {
+      history: Array<{ reference: string; effective: boolean }>;
+      effective: { returnedProductNetCents: number };
+      correctionTarget: { eventId: string };
+    };
+    const status = Object.fromEntries(result.history.map((entry) => [entry.reference, entry.effective]));
+    eq([status["h19-repro-effective-r1"], status["h19-repro-effective-c1"], status["h19-repro-effective-r2"]], [false, true, true]);
+    equal(result.effective.returnedProductNetCents, 3000);
+    equal(result.correctionTarget.eventId, await correctionTarget(f));
+  });
+  await test("H19 seule la derniere correction de chaque cible contribue sans rouvrir l ancienne cible", async () => {
+    const f = await fixture();
+    await record(f, 3000, "h19-effective-r1");
+    const targetR1 = await correctionTarget(f);
+    await recordCorrection(f, targetR1, 0, 1000, 1000, "h19-effective-c1");
+    await recordCorrection(f, targetR1, 1, 2000, 2000, "h19-effective-c2");
+    await record(f, 1000, "h19-effective-r2");
+    const targetR2 = await correctionTarget(f);
+    const inspected = await call({ action: "inspect", orderId: f.id });
+    equal(inspected.status, 200, JSON.stringify(inspected));
+    const result = inspected.result as unknown as {
+      history: Array<{ reference: string; effective: boolean }>;
+      effective: { returnedProductNetCents: number };
+      correctionTarget: { eventId: string; revision: number; lines: Array<{ lineId: string; maxReplacementNetCents: number }> };
+    };
+    const status = Object.fromEntries(result.history.map((entry) => [entry.reference, entry.effective]));
+    eq([status["h19-effective-r1"], status["h19-effective-c1"], status["h19-effective-c2"], status["h19-effective-r2"]], [false, false, true, true]);
+    equal(result.effective.returnedProductNetCents, 3000);
+    equal(result.correctionTarget.eventId, targetR2);
+    equal(result.correctionTarget.revision, 0);
+    eq(result.correctionTarget.lines, [{ lineId: "line-0", maxReplacementNetCents: 8000 }]);
+  });
   await test("correction du compartiment en attente restaure exactement l etat precedent", async () => {
     const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000, ready: false });
     await change(f, paid); eq(await walletBalance(f), [460, 1200, 0, 0]);

@@ -14,6 +14,7 @@ import { canRecoverCagnotteAdminPreSendStorageFailure, clearCagnotteAdminPending
 import { browserCagnotteAdminFrozenOperationStore, CagnotteAdminFrozenOperationStorageError, sameFrozenOperation, type CagnotteAdminFrozenOperationLoadResult, type CagnotteAdminFrozenOperationStore } from "../../lib/cagnotteAdminFrozenOperationStorage";
 import { cagnotteAdminDefinitiveRejectionState, cagnotteAdminFailureState, cagnotteAdminFormUpdatedState, cagnotteAdminFrozenOperationState, cagnotteAdminInspectionSuccessState, cagnotteAdminLoadingState, cagnotteAdminRestoredOperationState, cagnotteAdminStorageBlockedState, cagnotteAdminTerminalReinspectionState, createCagnotteAdminInitialState, type CagnotteAdminViewModel } from "../../lib/cagnotteAdminState";
 import { cagnotteRefundDateTimeLocalToIso } from "../../lib/cagnotteAdminDate";
+import { cagnotteAdminCorrectionMaximumNetCents, cagnotteAdminMaximumLineInput } from "../../lib/cagnotteAdminLineInput";
 import { paymentStatusLabel } from "../../utils/orderStatus";
 
 type Mode = "refund" | "correction" | "unpaid";
@@ -165,6 +166,17 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
     await reconcileStorage();
   };
 
+  const reinspectAfterTerminalFingerprint = async (error: CagnotteAdminFrozenOperationStorageError) => {
+    identity.invalidate();
+    clearCagnotteAdminPendingOperation(pendingRefund);
+    clearCagnotteAdminPendingOperation(pendingCorrection);
+    clearCagnotteAdminPendingOperation(frozenOperation);
+    recoveryBlocked.current = false;
+    setForm(emptyForm());
+    setModel((value) => cagnotteAdminTerminalReinspectionState(value, error.message));
+    await reload(error.message);
+  };
+
   useEffect(() => {
     if (!enabled) return;
     setModel(createCagnotteAdminInitialState());
@@ -243,7 +255,10 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
           recoveryBlocked.current = false;
         });
     } catch (error) {
-      if (definitiveRejectionCleared && error instanceof CagnotteAdminRequestError && !error.uncertain) {
+      if (error instanceof CagnotteAdminFrozenOperationStorageError && error.reason === "terminal") {
+        await reinspectAfterTerminalFingerprint(error);
+        return;
+      } else if (definitiveRejectionCleared && error instanceof CagnotteAdminRequestError && !error.uncertain) {
         setModel((value) => cagnotteAdminDefinitiveRejectionState(value, error));
       } else {
         handleDurableFailure(error, operation, frozenOperationStore, frozenOperation, recoveryBlocked, setModel);
@@ -297,7 +312,10 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
           recoveryBlocked.current = false;
         });
     } catch (error) {
-      if (definitiveRejectionCleared && error instanceof CagnotteAdminRequestError && !error.uncertain) {
+      if (error instanceof CagnotteAdminFrozenOperationStorageError && error.reason === "terminal") {
+        await reinspectAfterTerminalFingerprint(error);
+        return;
+      } else if (definitiveRejectionCleared && error instanceof CagnotteAdminRequestError && !error.uncertain) {
         setModel((value) => cagnotteAdminDefinitiveRejectionState(value, error));
       } else {
         handleDurableFailure(error, operation, frozenOperationStore, frozenOperation, recoveryBlocked, setModel);
@@ -526,7 +544,8 @@ function RefundForm({ inspection, form, preview, busy, uncertain, onForm, onPrev
 function CorrectionForm({ inspection, form, preview, busy, uncertain, onForm, onPreview, onConfirm }: { inspection: CagnotteAdminInspection; form: Form; preview: CorrectionPreview | null; busy: boolean; uncertain: boolean; onForm: (patch: Partial<Form>) => void; onPreview: () => void; onConfirm: () => void }) {
   return <fieldset disabled={busy || uncertain} className="cagnotte-admin__box cagnotte-admin__fieldset" style={{ marginTop: "1rem" }}><h4>Corriger une déclaration</h4>
     <p>Seule la dernière déclaration effective peut être neutralisée ou remplacée. L’original reste dans l’historique.</p>
-    {!inspection.correctionTarget ? <p>Aucune déclaration corrigeable.</p> : <><LineInputs inspection={inspection} form={form} onForm={onForm} remainingMeansInitial />
+    {!inspection.correctionTarget ? <p>Aucune déclaration corrigeable.</p> : <><LineInputs inspection={inspection} form={form} onForm={onForm}
+      maximumNetCents={(lineId) => cagnotteAdminCorrectionMaximumNetCents(inspection, lineId)} />
       <div className="cagnotte-admin__grid"><Input label="Livraison corrigée (€)" value={form.delivery} onChange={(delivery) => onForm({ delivery })} />
         <Input label="Part financière corrigée (€)" value={form.declaredFinancial} onChange={(declaredFinancial) => onForm({ declaredFinancial })} />
         <Input label="Motif obligatoire" value={form.correctionReason} onChange={(correctionReason) => onForm({ correctionReason })} />
@@ -556,11 +575,12 @@ function UnpaidReview({ inspection, form, busy, uncertain, onForm, onReview, onC
   </fieldset>;
 }
 
-function LineInputs({ inspection, form, onForm, remainingMeansInitial = false }: { inspection: CagnotteAdminInspection; form: Form; onForm: (patch: Partial<Form>) => void; remainingMeansInitial?: boolean }) {
+function LineInputs({ inspection, form, onForm, maximumNetCents }: { inspection: CagnotteAdminInspection; form: Form; onForm: (patch: Partial<Form>) => void; maximumNetCents?: (lineId: string) => number }) {
   return <div className="cagnotte-admin__grid">{inspection.lines.map((line) => <div className="cagnotte-admin__box" key={line.lineId}>
-    <Input label={`${line.label} · ${formatCents(remainingMeansInitial ? line.initialNetCents : line.remainingNetCents)} admissibles`} value={form.lines[line.lineId] ?? ""}
+    <Input label={`${line.label} · ${formatCents(maximumNetCents ? maximumNetCents(line.lineId) : line.remainingNetCents)} admissibles`} value={form.lines[line.lineId] ?? ""}
       onChange={(value) => onForm({ lines: { ...form.lines, [line.lineId]: value } })} />
-    <button className="secondary" type="button" onClick={() => onForm({ lines: { ...form.lines, [line.lineId]: centsToInput(remainingMeansInitial ? line.initialNetCents : line.remainingNetCents) } })}>Tout le montant restant</button>
+    <button className="secondary" type="button" onClick={() => onForm({ lines: cagnotteAdminMaximumLineInput(form.lines, line.lineId,
+      maximumNetCents ? maximumNetCents(line.lineId) : line.remainingNetCents) })}>Tout le montant restant</button>
   </div>)}</div>;
 }
 
@@ -579,7 +599,6 @@ function MoneyRows({ rows }: { rows: Array<[string, number]> }) { return <dl cla
 function Input({ label, value, onChange, type = "text", step }: { label: string; value: string; onChange: (value: string) => void; type?: string; step?: number }) { return <label>{label}<input type={type} value={value} step={step} onChange={(event) => onChange(event.target.value)} /></label>; }
 
 function formReturns(lines: Record<string, string>) { return Object.entries(lines).map(([lineId, value]) => ({ lineId, additionalNetCents: eurosInputToCents(value) })).filter((line) => line.additionalNetCents > 0); }
-function centsToInput(value: number) { return (value / 100).toFixed(2).replace(".", ","); }
 function formatCents(value: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value / 100); }
 function cagnotteFinancingLabel(state: string | null) { return state === "reserved" ? "Cagnotte réservée" : state === "consumed" ? "Cagnotte consommée" : "Cagnotte mobilisée"; }
 function deliveryStatusLabel(status: string) { return status === "sent" ? "Envoyé" : status === "failed" ? "Échec confirmé" : status === "sending" || status === "pending" ? "En cours" : status === "not_sent" || status === "not_requested" ? "Non envoyé" : "Résultat à vérifier"; }

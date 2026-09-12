@@ -112,7 +112,12 @@ export type CagnotteAdminInspection = {
     targetEventId?: string;
     targetReference?: string;
   }>;
-  correctionTarget: { eventId: string; revision: number; effective: RefundCumuls } | null;
+  correctionTarget: {
+    eventId: string;
+    revision: number;
+    effective: RefundCumuls;
+    lines: Array<{ lineId: string; maxReplacementNetCents: number }>;
+  } | null;
   unpaid: {
     reservedAmountCents: number;
     reservationState: string | null;
