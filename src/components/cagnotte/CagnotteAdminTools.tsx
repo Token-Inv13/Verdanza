@@ -77,12 +77,14 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
 
   const applyInspection = (inspection: CagnotteAdminInspection, successNotice = "") => {
     const operation = frozenOperation.current;
+    let resolvedFrozenOperation = false;
     if (operation) {
       try {
         if (!resolveCagnotteAdminFrozenOperationFromInspection(frozenOperationStore, operation, inspection)) {
           setModel((value) => cagnotteAdminInspectionSuccessState({ ...value, pendingOperation: operation, recoveryBlocked: recoveryBlocked.current }, inspection, successNotice));
           return;
         }
+        resolvedFrozenOperation = true;
       } catch (error) {
         recoveryBlocked.current = true;
         setModel((value) => cagnotteAdminStorageBlockedState({ ...value, phase: "ready", inspection }, errorMessage(error), operation));
@@ -92,12 +94,19 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
       setModel((value) => cagnotteAdminInspectionSuccessState({ ...value, pendingOperation: null, recoveryBlocked: true }, inspection, successNotice));
       return;
     }
-    recoveryBlocked.current = false;
-    setForm(emptyForm(inspection));
-    clearCagnotteAdminPendingOperation(pendingRefund);
-    clearCagnotteAdminPendingOperation(pendingCorrection);
-    clearCagnotteAdminPendingOperation(frozenOperation);
-    setModel((value) => cagnotteAdminInspectionSuccessState({ ...value, pendingOperation: null, recoveryBlocked: false }, inspection, successNotice));
+    const resolveLocally = () => {
+      recoveryBlocked.current = false;
+      setForm(emptyForm(inspection));
+      clearCagnotteAdminPendingOperation(pendingRefund);
+      clearCagnotteAdminPendingOperation(pendingCorrection);
+      clearCagnotteAdminPendingOperation(frozenOperation);
+      setModel((value) => cagnotteAdminInspectionSuccessState({ ...value, pendingOperation: null, recoveryBlocked: false }, inspection, successNotice));
+    };
+    if (resolvedFrozenOperation) {
+      adminRefreshChannel.publishAfterLocalResolution(orderId, peerRefresh.current ?? undefined, resolveLocally);
+      return;
+    }
+    resolveLocally();
   };
 
   const reload = async (successNotice = "") => {

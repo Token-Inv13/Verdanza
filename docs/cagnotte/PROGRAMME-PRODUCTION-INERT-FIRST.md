@@ -108,3 +108,11 @@ Les 40 fils de revue existants ont été relus sans modification : 34 sont déj�
 Aucun défaut bloquant ne reste dans le candidat local après `npm run verify`. Aucune amélioration hors périmètre n'a été implémentée ni identifiée comme nécessaire à l'intégrité de ce lot.
 
 La PR distante #7 reste **NON PRÊTE pour revue de fusion** tant que ces changements locaux ne sont pas commités et poussés sous autorisation explicite, puis validés par la CI distante sur le nouveau SHA. Son état vert actuel prouve seulement le HEAD historique `d1780931a83f8163a68d1af3994a43e73c36de6b`. Le critère de sortie est : revue du diff local, commit et push autorisés, CI complète verte sur le nouveau HEAD, conservation des sept gardes fermés, puis décision humaine de fusion séparée.
+
+### Complément — résolution concluante par inspection
+
+Le signal P2 postérieur à la publication du candidat `7a524833c584674d5abea5365ad6fe13547e0792` a révélé qu'une inspection retrouvant l'opération enregistrée nettoyait seulement l'instance source. La suppression durable n'émettant aucun événement `storage` dans le même document, le panneau mobile ou bureau pair pouvait rester verrouillé.
+
+Après preuve serveur et persistance terminale réussie, `applyInspection` nettoie désormais l'état local puis utilise le canal partagé existant pour demander la réconciliation des autres instances de la même commande. Une inspection absente, non concordante, en échec ou dont la résolution ne peut pas être persistée ne publie rien et conserve les protections.
+
+Le test interactif intégré à `test:cagnotte-admin-ui`, lui-même appelé par `verify`, monte réellement les deux panneaux avec API et authentification simulées et réseau externe bloqué. Il couvre remboursement, correction, cas non concluants, échec de persistance, isolation d'une autre commande et stabilisation sans mutation ni boucle. Avant correction, il échouait parce que le panneau pair restait verrouillé ; il passe après correction.

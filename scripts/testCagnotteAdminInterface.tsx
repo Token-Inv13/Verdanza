@@ -1,7 +1,9 @@
 import React from "react";
-import { doesNotMatch, equal, match, ok, rejects, throws } from "node:assert/strict";
+import { deepEqual, doesNotMatch, equal, match, ok, rejects, throws } from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { build } from "esbuild";
+import { chromium } from "playwright";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   CagnotteAdminTools,
@@ -348,6 +350,9 @@ await test("un rejet definitif resout l instance source et synchronise le pannea
   channel.publishAfterLocalResolution("commande-a", desktop, () => { calls.push("local-resolution"); });
   equal(calls.join(","), "local-resolution,mobile");
 });
+await test("inspection concluante synchronise deux composants montes sans mutation ni boucle", async () => {
+  await exerciseMountedInspectionSynchronization();
+});
 await test("datetime-local Europe Paris conserve l instant local sans proposer le futur", () => {
   const previousTimezone = process.env.TZ;
   process.env.TZ = "Europe/Paris";
@@ -398,6 +403,232 @@ await test("aperçu genere autonome, statique et sans ressource distante", async
   equal(/<script\b|https?:\/\/|firebase|analytics|href\s*=|<form\b/i.test(html), false);
 });
 console.log(`FINALISATION 2 : ${tests} contrôles d’interface réussis, aperçu inerte.`);
+
+async function exerciseMountedInspectionSynchronization() {
+  const entry = `
+    import React from "react";
+    import { createRoot } from "react-dom/client";
+    import { CagnotteAdminTools } from "./src/components/cagnotte/CagnotteAdminTools.tsx";
+    import { freezeCagnotteAdminCorrection, freezeCagnotteAdminRefund } from "./src/lib/cagnotteAdminController.ts";
+    import { createCagnotteAdminFrozenOperationStore } from "./src/lib/cagnotteAdminFrozenOperationStorage.ts";
+    import { cagnotteAdminCorrectionBusinessFingerprint, cagnotteAdminRefundBusinessFingerprint } from "./src/lib/cagnotteAdminOperationIdentity.ts";
+
+    const scenario = globalThis.__scenario;
+    const mainOrderId = "commande-a";
+    const otherOrderId = "commande-b";
+    const entries = new Map();
+    const stats = { inspections: {}, mutations: 0 };
+    const modes = { [mainOrderId]: "absent", [otherOrderId]: "absent" };
+    const storage = {
+      getItem: (key) => entries.get(key) ?? null,
+      setItem: (key, value) => {
+        if (scenario.outcome === "persistence_error" && key.includes("frozen-resolution")) {
+          throw new Error("Persistance terminale simulée indisponible");
+        }
+        entries.set(key, value);
+      },
+      removeItem: (key) => { entries.delete(key); },
+    };
+    const store = createCagnotteAdminFrozenOperationStore({
+      storage,
+      now: () => 1_789_315_200_000,
+      exclusiveClaim: { request: async (_name, run) => run() },
+    });
+    const operationFor = (kind, orderId, suffix) => kind === "refund"
+      ? freezeCagnotteAdminRefund({
+          orderId,
+          additionalReturns: [{ lineId: "line-0", additionalNetCents: 2500 }],
+          deliveryRefundCents: 0,
+          source: "admin",
+          reference: "inspection-refund-" + suffix,
+          declaredFinancialCents: 2300,
+          reason: "product_return",
+          confirmedAt: "2026-09-06T10:00:00.000Z",
+          expectedPreviewVersion: "c".repeat(64),
+        })
+      : freezeCagnotteAdminCorrection({
+          orderId,
+          targetEventId: "a".repeat(64),
+          expectedRevision: 0,
+          replacementReturns: [{ lineId: "line-0", additionalNetCents: 2500 }],
+          deliveryRefundCents: 0,
+          declaredFinancialCents: 2300,
+          correctionReason: "Correction fictive " + suffix,
+          correctionReference: "inspection-correction-" + suffix,
+          expectedPreviewVersion: "d".repeat(64),
+        });
+    const mainOperation = operationFor(scenario.kind, mainOrderId, "a");
+    const otherOperation = operationFor("refund", otherOrderId, "b");
+    const operations = { [mainOrderId]: mainOperation, [otherOrderId]: otherOperation };
+    for (const operation of Object.values(operations)) {
+      store.persistBeforeSend(operation);
+      store.updateState(operation, "uncertain");
+    }
+    const baseInspection = ${JSON.stringify(fixture())};
+    const inspectionFor = (orderId, mode) => {
+      const operation = operations[orderId];
+      const fingerprint = operation.kind === "refund"
+        ? cagnotteAdminRefundBusinessFingerprint(operation.payload)
+        : cagnotteAdminCorrectionBusinessFingerprint(operation.payload);
+      const returnedFingerprint = mode === "mismatch"
+        ? (fingerprint[0] === "0" ? "1" : "0") + fingerprint.slice(1)
+        : fingerprint;
+      const history = mode === "recorded" || mode === "mismatch"
+        ? [{
+            id: "e".repeat(64),
+            type: operation.kind === "refund" ? "initial_declaration" : "correction",
+            revision: operation.kind === "refund" ? 0 : operation.payload.expectedRevision + 1,
+            recordedAt: "2026-09-06T10:05:00.000Z",
+            reference: operation.kind === "refund" ? operation.payload.reference : operation.payload.correctionReference,
+            businessFingerprint: returnedFingerprint,
+            source: "admin",
+            declaredFinancialCents: operation.payload.declaredFinancialCents,
+            returnedProductNetCents: 2500,
+            financialCents: 2300,
+            cagnotteRestitutionCents: 200,
+            resultingAvailableCents: 1745,
+            effective: true,
+          }]
+        : [];
+      return { ...baseInspection, order: { ...baseInspection.order, id: orderId }, history };
+    };
+    globalThis.__adminHarness = {
+      inspect: async (orderId) => {
+        stats.inspections[orderId] = (stats.inspections[orderId] ?? 0) + 1;
+        const mode = modes[orderId] ?? "absent";
+        if (mode === "request_error") throw new Error("Inspection simulée indisponible");
+        return inspectionFor(orderId, mode);
+      },
+      mutation: () => {
+        stats.mutations += 1;
+        throw new Error("Une mutation ne doit pas être appelée par ce test");
+      },
+    };
+    globalThis.__setInspectionMode = (orderId, mode) => { modes[orderId] = mode; };
+    globalThis.__adminStats = stats;
+    createRoot(document.getElementById("root")).render(
+      <main>
+        <div data-panel="desktop"><CagnotteAdminTools orderId={mainOrderId} enabled frozenOperationStore={store} /></div>
+        <div data-panel="mobile"><CagnotteAdminTools orderId={mainOrderId} enabled frozenOperationStore={store} /></div>
+        <div data-panel="other"><CagnotteAdminTools orderId={otherOrderId} enabled frozenOperationStore={store} /></div>
+      </main>,
+    );
+  `;
+  const bundle = await build({
+    stdin: { contents: entry, loader: "tsx", resolveDir: process.cwd(), sourcefile: "cagnotte-admin-dom-harness.tsx" },
+    bundle: true,
+    write: false,
+    platform: "browser",
+    format: "iife",
+    define: { "import.meta.env": "{}" },
+    logLevel: "silent",
+    plugins: [{
+      name: "cagnotte-admin-dom-services",
+      setup(buildApi) {
+        buildApi.onResolve({ filter: /cagnotteAdminService$/ }, () => ({ path: "admin-service", namespace: "cagnotte-admin-test" }));
+        buildApi.onResolve({ filter: /ordersService$/ }, () => ({ path: "orders-service", namespace: "cagnotte-admin-test" }));
+        buildApi.onLoad({ filter: /^admin-service$/, namespace: "cagnotte-admin-test" }, () => ({
+          loader: "ts",
+          contents: `
+            export class CagnotteAdminRequestError extends Error {
+              constructor(message, code, uncertain) { super(message); this.code = code; this.uncertain = uncertain; }
+            }
+            export const inspectCagnotteOrder = (orderId) => globalThis.__adminHarness.inspect(orderId);
+            const mutation = () => globalThis.__adminHarness.mutation();
+            export const previewOrderRefund = mutation;
+            export const previewRefundCorrection = mutation;
+            export const recordOrderRefund = mutation;
+            export const recordRefundCorrection = mutation;
+            export const recordUnpaidReview = mutation;
+          `,
+        }));
+        buildApi.onLoad({ filter: /^orders-service$/, namespace: "cagnotte-admin-test" }, () => ({
+          loader: "ts",
+          contents: "export const updateOrderAdminFields = () => globalThis.__adminHarness.mutation();",
+        }));
+      },
+    }],
+  });
+  const browser = await chromium.launch({ headless: true });
+  try {
+    for (const scenario of [
+      { kind: "refund", outcome: "recorded" },
+      { kind: "correction", outcome: "recorded" },
+      { kind: "refund", outcome: "absent" },
+      { kind: "refund", outcome: "mismatch" },
+      { kind: "refund", outcome: "request_error" },
+      { kind: "refund", outcome: "persistence_error" },
+    ]) {
+      const context = await browser.newContext();
+      let networkRequests = 0;
+      await context.route("**/*", (route) => {
+        networkRequests += 1;
+        return route.abort();
+      });
+      const page = await context.newPage();
+      const pageErrors: string[] = [];
+      page.on("pageerror", (error) => { pageErrors.push(error.message); });
+      await page.setContent("<!doctype html><html lang=\"fr\"><body><div id=\"root\"></div></body></html>");
+      await page.evaluate((value) => { (globalThis as unknown as { __scenario: unknown }).__scenario = value; }, scenario);
+      await page.addScriptTag({ content: bundle.outputFiles[0].text });
+      const buttonName = "Réinspecter avant toute nouvelle tentative";
+      const desktopButton = page.locator('[data-panel="desktop"]').getByRole("button", { name: buttonName });
+      const mobileButton = page.locator('[data-panel="mobile"]').getByRole("button", { name: buttonName });
+      const otherButton = page.locator('[data-panel="other"]').getByRole("button", { name: buttonName });
+      await Promise.all([
+        desktopButton.waitFor({ timeout: 2_000 }),
+        mobileButton.waitFor({ timeout: 2_000 }),
+        otherButton.waitFor({ timeout: 2_000 }),
+      ]);
+      const before = await readAdminHarnessStats(page);
+      equal(before.inspections["commande-a"], 2, `${scenario.kind}/${scenario.outcome} monte deux instances de la commande cible`);
+      equal(before.inspections["commande-b"], 1, `${scenario.kind}/${scenario.outcome} monte une commande isolée`);
+      await page.evaluate((outcome) => {
+        const scope = globalThis as unknown as { __setInspectionMode: (orderId: string, mode: string) => void };
+        scope.__setInspectionMode("commande-a", outcome === "persistence_error" ? "recorded" : outcome);
+      }, scenario.outcome);
+      await desktopButton.click();
+      if (scenario.outcome === "recorded") {
+        await desktopButton.waitFor({ state: "detached", timeout: 2_000 });
+        try {
+          await mobileButton.waitFor({ state: "detached", timeout: 1_000 });
+        } catch {
+          equal(await mobileButton.count(), 0, `${scenario.kind} : le panneau pair reste verrouillé après la preuve serveur`);
+        }
+        equal(await otherButton.count(), 1, `${scenario.kind} : une autre commande reste isolée`);
+      } else {
+        await page.waitForTimeout(100);
+        equal(await desktopButton.count(), 1, `${scenario.kind}/${scenario.outcome} conserve le verrou source`);
+        equal(await mobileButton.count(), 1, `${scenario.kind}/${scenario.outcome} conserve le verrou pair`);
+        equal(await otherButton.count(), 1, `${scenario.kind}/${scenario.outcome} conserve la commande isolée`);
+      }
+      await page.waitForTimeout(100);
+      const converged = await readAdminHarnessStats(page);
+      await page.waitForTimeout(100);
+      deepEqual(await readAdminHarnessStats(page), converged, `${scenario.kind}/${scenario.outcome} se stabilise sans boucle d inspection`);
+      if (scenario.outcome === "recorded") {
+        ok(converged.inspections["commande-a"] >= 4 && converged.inspections["commande-a"] <= 5,
+          `${scenario.kind} limite la convergence aux inspections automatiques des deux panneaux`);
+      } else {
+        equal(converged.inspections["commande-a"], 3, `${scenario.kind}/${scenario.outcome} ne notifie pas le panneau pair`);
+      }
+      equal(converged.mutations, 0, `${scenario.kind}/${scenario.outcome} n envoie aucune mutation`);
+      equal(converged.inspections["commande-b"], 1, `${scenario.kind}/${scenario.outcome} ne réinspecte pas l autre commande`);
+      equal(networkRequests, 0, `${scenario.kind}/${scenario.outcome} ne contacte aucune ressource externe`);
+      deepEqual(pageErrors, [], `${scenario.kind}/${scenario.outcome} ne produit aucune erreur navigateur non gérée`);
+      await context.close();
+    }
+  } finally {
+    await browser.close();
+  }
+}
+
+async function readAdminHarnessStats(page: import("playwright").Page) {
+  return page.evaluate(() => {
+    const stats = (globalThis as unknown as { __adminStats: { inspections: Record<string, number>; mutations: number } }).__adminStats;
+    return { inspections: { ...stats.inspections }, mutations: stats.mutations };
+  });
+}
 
 function fixture(): CagnotteAdminInspection {
   const effective = { lines: [{ lineId: "line-0", returnedNetCents: 2500 }], returnedProductNetCents: 2500, productFinancialCents: 2300,
