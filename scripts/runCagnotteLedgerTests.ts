@@ -36,6 +36,7 @@ const allowedOptions = new Set([
   "--orders-only",
   "--checkout-use-only",
   "--checkout-client-only",
+  "--v1-recipe-only",
   "--refunds-only",
   "--payment-links-only",
   "--server-security-only",
@@ -195,6 +196,7 @@ try {
   if (mode === "--orders-only") await run("scripts/testCagnotteOrders.ts");
   if (mode === "--checkout-use-only") await run("scripts/testCagnotteCheckoutIntegration.ts");
   if (mode === "--checkout-client-only") await run("scripts/testCagnotteCheckoutClientContract.ts");
+  if (mode === "--v1-recipe-only") await run("scripts/testCagnotteV1Recipe.tsx");
   if (mode === "--refunds-only") await run("scripts/testOrderRefunds.ts");
   if (mode === "--payment-links-only") {
     await run("scripts/testPaymentLinkReliability.ts");
