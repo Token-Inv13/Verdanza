@@ -162,6 +162,7 @@ function createHandler(accrualProgram: CagnotteTestProgram, reservationProgram: 
     reservationProgram,
     now: () => 10_000,
     verifyToken: async () => ({ uid: "customer-a", email: "customer@example.test", emailVerified: true }),
+    enforceRateLimit: async () => ({ allowed: true, code: "allowed", retryAfterSeconds: 0 }),
     processSideEffects: async () => ({
       client: { status: "skipped" as const, reason: "synthetic" },
       admin: { status: "skipped" as const, reason: "synthetic" },
