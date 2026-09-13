@@ -3,6 +3,7 @@
 .cagnotte-admin__warning{border-left:4px solid #b48a3c;background:#faf6eb;padding:.7rem .85rem}
 .cagnotte-admin__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin-top:1rem}
 .cagnotte-admin__box{min-width:0;border:1px solid rgba(14,55,38,.12);border-radius:.55rem;padding:.8rem;background:#fff}
+.cagnotte-admin__fieldset{margin-inline:0}.cagnotte-admin code{overflow-wrap:anywhere;font-size:.72rem}
 .cagnotte-admin__amounts{display:grid;grid-template-columns:minmax(0,1fr) max-content;gap:.3rem .8rem;margin:.6rem 0}
 .cagnotte-admin__amounts dt,.cagnotte-admin__amounts dd{margin:0}.cagnotte-admin__amounts dd{text-align:right;font-weight:700;color:#0e3726}
 .cagnotte-admin label{display:grid;gap:.3rem;font-size:.78rem;font-weight:700;color:#0e3726}

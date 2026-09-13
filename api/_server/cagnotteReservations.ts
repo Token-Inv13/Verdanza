@@ -310,8 +310,8 @@ export async function prepareCagnottePaymentComposition(input: {
   };
 }
 
-/** Read and validate the consumed reservation and its confirmed-refund projection. */
-export async function readCagnotteConsumedRefundBasis(input: {
+/** Read and validate an existing reservation using the canonical reservation journal. */
+export async function readCagnotteReservationBasis(input: {
   db: Firestore;
   transaction: Transaction;
   intent: CagnotteReservationIntent;
@@ -328,12 +328,29 @@ export async function readCagnotteConsumedRefundBasis(input: {
   const refundMovements = await readReservationRefundMovements(input.db, input.transaction, reservation);
   validateReservation(reservation, reservationSnapshot.id, { reserveMovement, consumeMovement, releaseMovement, refundMovements });
   assertReservationIntent(reservation, intent);
-  if (reservation.state !== "consumed") fail("CONFLICT", "Seule une réservation consommée peut être restituée.");
+  const validatedMovementIds = [
+    ...Object.values(reservation.events).map((event) => event.eventKey),
+    ...(reservation.refundProjection?.events.map((event) => event.eventKey) ?? []),
+    ...(reservation.refundProjection?.corrections?.flatMap((correction) => correction.eventKey ? [correction.eventKey] : []) ?? []),
+  ];
   return {
     reservation,
     cumulativeRestitutedCents: reservation.refundProjection?.cumulativeRestitutedCents ?? 0,
     movementIds: reservation.refundProjection?.events.map((event) => event.eventKey) ?? [],
+    validatedMovementIds,
   };
+}
+
+/** Read and validate the consumed reservation and its confirmed-refund projection. */
+export async function readCagnotteConsumedRefundBasis(input: {
+  db: Firestore;
+  transaction: Transaction;
+  intent: CagnotteReservationIntent;
+}) {
+  const basis = await readCagnotteReservationBasis(input);
+  const { reservation } = basis;
+  if (reservation.state !== "consumed") fail("CONFLICT", "Seule une réservation consommée peut être restituée.");
+  return basis;
 }
 
 /**
@@ -797,10 +814,14 @@ function validateReservationRefundCorrectionMovement(
     movement.regularizationDeltaCents !== -correction.compensationCents) {
     fail("CORRUPT_RESERVATION", "Mouvement de correction de restitution invalide.");
   }
-  const payload = JSON.parse(movement.payload) as Record<string, unknown>;
-  if (payload.event !== "credit_refund_corrected" || payload.correctionId !== correction.correctionId ||
-    payload.targetEventId !== correction.targetRefundId || payload.revision !== correction.revision ||
-    payload.restitutionDeltaCents !== correction.restitutionDeltaCents || payload.compensationCents !== correction.compensationCents) {
+  if (movement.payload !== canonical({
+    event: "credit_refund_corrected",
+    correctionId: correction.correctionId,
+    targetEventId: correction.targetRefundId,
+    revision: correction.revision,
+    restitutionDeltaCents: correction.restitutionDeltaCents,
+    compensationCents: correction.compensationCents,
+  })) {
     fail("CORRUPT_RESERVATION", "Contenu de correction de restitution invalide.");
   }
 }

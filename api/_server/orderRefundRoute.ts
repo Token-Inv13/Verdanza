@@ -7,7 +7,7 @@ import { CagnotteReservationError } from "./cagnotteReservations.js";
 
 type Service = Parameters<typeof executeOrderRefund>[0];
 export function createOrderRefundHandler(dependencies: {
-  enabled: boolean; getDb: () => Service["db"]; verifyToken: typeof verifyFirebaseIdToken; now?: () => string;
+  enabled: boolean; getDb: () => Service["db"]; verifyToken: typeof verifyFirebaseIdToken; now?: () => string; log?: Service["log"];
 }) {
   return async function handler(request: VercelRequestLike, response: VercelResponseLike) {
     if (assertMethod(request, response, "POST")) return;
@@ -22,7 +22,7 @@ export function createOrderRefundHandler(dependencies: {
       if (typeof token !== "string" || !token) return sendJson(response, { code: "admin_token_required", error: "Token admin requis." }, 401);
       const db = dependencies.getDb();
       const actor = await assertAdminUser(db, token, dependencies.verifyToken);
-      const result = await executeOrderRefund({ db, actor: { uid: actor.uid, email: actor.email }, request: parseOrderRefundRequest(raw), now: dependencies.now });
+      const result = await executeOrderRefund({ db, actor: { uid: actor.uid, email: actor.email }, request: parseOrderRefundRequest(raw), now: dependencies.now, log: dependencies.log });
       sendJson(response, { ok: true, result, bankingOperationExecuted: false, bankingTransferVerified: false });
     } catch (error) {
       const message = error instanceof Error ? error.message : "";

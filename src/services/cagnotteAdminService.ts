@@ -20,7 +20,7 @@ export async function previewOrderRefund(input: {
   return postRefund<RefundPreview>({ action: "preview", currency: "EUR", ...input });
 }
 
-export async function recordOrderRefund(input: {
+export type RecordOrderRefundInput = {
   orderId: string;
   additionalReturns: Array<{ lineId: string; additionalNetCents: number }>;
   deliveryRefundCents: number;
@@ -30,7 +30,9 @@ export async function recordOrderRefund(input: {
   reason: "product_return" | "order_cancellation" | "delivery_refund";
   confirmedAt: string;
   expectedPreviewVersion: string;
-}) {
+};
+
+export async function recordOrderRefund(input: RecordOrderRefundInput) {
   return postRefund<RefundPreview>({ action: "record_confirmed", currency: "EUR", ...input });
 }
 
@@ -46,7 +48,7 @@ export async function previewRefundCorrection(input: {
   return postRefund<CorrectionPreview>({ action: "preview_correction", currency: "EUR", externalVerificationConfirmed: true, ...input });
 }
 
-export async function recordRefundCorrection(input: {
+export type RecordRefundCorrectionInput = {
   orderId: string;
   targetEventId: string;
   expectedRevision: number;
@@ -56,7 +58,9 @@ export async function recordRefundCorrection(input: {
   correctionReason: string;
   correctionReference: string;
   expectedPreviewVersion: string;
-}) {
+};
+
+export async function recordRefundCorrection(input: RecordRefundCorrectionInput) {
   return postRefund<CorrectionPreview>({ action: "record_correction", currency: "EUR", externalVerificationConfirmed: true, ...input });
 }
 
@@ -94,9 +98,31 @@ async function postRefund<T>(body: Record<string, unknown>, signal?: AbortSignal
     if (signal?.aborted) throw error;
     throw new CagnotteAdminRequestError("Réponse absente : reprenez exactement la même opération.", "response_unknown", true);
   }
-  const payload = await response.json().catch(() => ({})) as { result?: T; code?: string; error?: string };
-  if (!response.ok || !payload.result) {
-    throw new CagnotteAdminRequestError(payload.error || "Opération refusée.", payload.code || "request_failed", response.status >= 500);
+  return readCagnotteAdminResponse<T>(response);
+}
+
+export async function readCagnotteAdminResponse<T>(response: Response): Promise<T> {
+  let value: unknown;
+  try {
+    value = await response.json();
+  } catch {
+    if (response.ok) {
+      throw new CagnotteAdminRequestError("Réponse 2xx invalide : reprenez exactement la même opération.", "response_invalid", true);
+    }
+    throw new CagnotteAdminRequestError("Opération refusée.", "request_failed", response.status >= 500);
   }
-  return payload.result;
+  const payload = value && typeof value === "object" && !Array.isArray(value)
+    ? value as { result?: unknown; code?: unknown; error?: unknown }
+    : {};
+  if (!response.ok) {
+    throw new CagnotteAdminRequestError(
+      typeof payload.error === "string" ? payload.error : "Opération refusée.",
+      typeof payload.code === "string" ? payload.code : "request_failed",
+      response.status >= 500,
+    );
+  }
+  if (!("result" in payload) || !payload.result || typeof payload.result !== "object" || Array.isArray(payload.result)) {
+    throw new CagnotteAdminRequestError("Réponse 2xx invalide : reprenez exactement la même opération.", "response_invalid", true);
+  }
+  return payload.result as T;
 }

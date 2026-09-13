@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { createHash } from "node:crypto";
 import { createWriteStream } from "node:fs";
@@ -13,6 +13,10 @@ import {
   createCagnotteTestEnvironment,
   validateCagnotteEmulatorTarget,
 } from "./cagnotteEmulator.js";
+import {
+  BoundedTextTail,
+  firestoreEmulatorStartupError,
+} from "./firestoreEmulatorProcessDiagnostics.js";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const localHome = resolve(root, "node_modules/.cache/cagnotte/home");
@@ -70,9 +74,18 @@ if (mode === "ledger" || mode === "--unit-only") {
 if (mode === "--unit-only") process.exit(0);
 
 const jar = resolve(root, "node_modules/.cache/cagnotte/cloud-firestore-emulator-v1.22.0.jar");
-const digest = createHash("sha256").update(await readFile(jar)).digest("hex");
+let jarBytes: Buffer;
+try {
+  jarBytes = await readFile(jar);
+} catch (error) {
+  if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    throw new Error("Prérequis local absent : émulateur Firestore 1.22.0 introuvable. Exécutez explicitement `npm run prepare:cagnotte-firestore-emulator` avant les vérifications.");
+  }
+  throw error;
+}
+const digest = createHash("sha256").update(jarBytes).digest("hex");
 if (digest !== "9b6498b7f62714d67f48f59b3818883cd682dbcd46b9f59511de81c97bb5166c") {
-  throw new Error("Émulateur 1.22.0 absent ou empreinte inattendue.");
+  throw new Error("Prérequis local invalide : empreinte inattendue pour l’émulateur Firestore 1.22.0. Exécutez explicitement `npm run prepare:cagnotte-firestore-emulator` avant les vérifications.");
 }
 const rulesPath = resolve(root, mode === "--security-only" || mode === "--server-security-only" ? "firestore.rules" : config.firestore.rules);
 const rules = await readFile(rulesPath);
@@ -81,9 +94,21 @@ if (mode === "--security-only" || mode === "--server-security-only") {
   console.log(`Règles candidates : ${rulesPath}\nSHA-256 : ${createHash("sha256").update(rules).digest("hex")}`);
 }
 
-const log = createWriteStream(resolve(localHome, "firestore.log"), { flags: "a" });
+const logPath = resolve(localHome, "firestore.log");
+const log = createWriteStream(logPath, { flags: "a" });
+const javaCommand = "java";
+const javaVersion = spawnSync(javaCommand, ["-version"], {
+  encoding: "utf8",
+  env,
+  windowsHide: true,
+});
+const javaRuntime = javaVersion.error
+  ? `${javaVersion.error.name}: ${javaVersion.error.message}`
+  : `${javaVersion.stdout || ""}${javaVersion.stderr || ""}`.trim() || `java -version exitCode=${javaVersion.status}`;
+const stdoutTail = new BoundedTextTail();
+const stderrTail = new BoundedTextTail();
 const emulator = spawn(
-  "java",
+  javaCommand,
   [
     `-Duser.home=${localHome}`,
     "-Duser.language=en",
@@ -105,13 +130,45 @@ const emulator = spawn(
   ],
   { cwd: localHome, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] },
 );
+emulator.stdout?.on("data", (chunk: Buffer) => stdoutTail.append(chunk));
+emulator.stderr?.on("data", (chunk: Buffer) => stderrTail.append(chunk));
 emulator.stdout.pipe(log, { end: false });
 emulator.stderr.pipe(log, { end: false });
-const exited = once(emulator, "exit");
+let spawnError: Error | null = null;
+const settled = new Promise<{ exitCode: number | null; signal: string | null }>((resolveSettled) => {
+  let done = false;
+  const settle = (exitCode: number | null, signal: string | null) => {
+    if (done) return;
+    done = true;
+    resolveSettled({ exitCode, signal });
+  };
+  emulator.once("error", (error) => {
+    spawnError = error;
+    settle(null, null);
+  });
+  emulator.once("close", (exitCode, signal) => settle(exitCode, signal));
+});
+const diagnosticContext = (exitCode = emulator.exitCode, signal = emulator.signalCode) => ({
+  exitCode,
+  signal,
+  javaCommand,
+  javaRuntime,
+  stdout: stdoutTail,
+  stderr: stderrTail,
+  logPath,
+  spawnError,
+});
 try {
   let ready = false;
   for (let attempt = 0; attempt < 60; attempt += 1) {
-    if (emulator.exitCode !== null) throw new Error("Émulateur arrêté avant disponibilité ; consulter le journal local.");
+    if (spawnError) {
+      const state = await settled;
+      throw firestoreEmulatorStartupError("spawn", diagnosticContext(state.exitCode, state.signal));
+    }
+    if (emulator.exitCode !== null || emulator.signalCode !== null) {
+      const state = await settled;
+      throw firestoreEmulatorStartupError("exit", diagnosticContext(state.exitCode, state.signal));
+    }
     try {
       await assertCagnotteEmulatorAvailable(CAGNOTTE_DEMO);
       ready = true;
@@ -120,7 +177,17 @@ try {
       await delay(250);
     }
   }
-  if (!ready) throw new Error("Émulateur inaccessible, aucun test Firestore exécuté.");
+  if (!ready) {
+    if (spawnError) {
+      const state = await settled;
+      throw firestoreEmulatorStartupError("spawn", diagnosticContext(state.exitCode, state.signal));
+    }
+    if (emulator.exitCode !== null || emulator.signalCode !== null) {
+      const state = await settled;
+      throw firestoreEmulatorStartupError("exit", diagnosticContext(state.exitCode, state.signal));
+    }
+    throw firestoreEmulatorStartupError("timeout", diagnosticContext());
+  }
   console.log(`Émulateur officiel 1.22.0 : ${target.projectId}, ${target.host}:${target.port}, PID ${emulator.pid}.`);
   if (mode === "ledger") await run("scripts/testCagnotteLedger.ts", ["--emulator"]);
   if (mode === "--reservations-only") await run("scripts/testCagnotteReservations.ts");
@@ -142,8 +209,11 @@ try {
   if (mode === "--read-only") await run("scripts/testCagnotteRead.ts");
 } finally {
   // Stop only the direct Java child created by this runner.
-  if (emulator.exitCode === null) emulator.kill();
-  await exited;
-  log.end();
+  if (!spawnError && emulator.exitCode === null && emulator.signalCode === null) emulator.kill();
+  await settled;
+  await new Promise<void>((resolveLog, rejectLog) => {
+    log.once("error", rejectLog);
+    log.end(resolveLog);
+  });
   console.log("Processus émulateur créé par ces tests arrêté.");
 }
