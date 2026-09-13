@@ -177,6 +177,17 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
     await reload(error.message);
   };
 
+  const synchronizeDefinitiveRejection = (markCurrentOperationCleared: () => void) => {
+    adminRefreshChannel.publishAfterLocalResolution(orderId, peerRefresh.current ?? undefined, () => {
+      markCurrentOperationCleared();
+      identity.invalidate();
+      clearCagnotteAdminPendingOperation(pendingRefund);
+      clearCagnotteAdminPendingOperation(pendingCorrection);
+      clearCagnotteAdminPendingOperation(frozenOperation);
+      recoveryBlocked.current = false;
+    });
+  };
+
   useEffect(() => {
     if (!enabled) return;
     setModel(createCagnotteAdminInitialState());
@@ -246,14 +257,7 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
           frozenOperation.current = durable;
           setModel((value) => cagnotteAdminFrozenOperationState(value, durable));
           adminRefreshChannel.publish(orderId, peerRefresh.current ?? undefined);
-        }, () => {
-          definitiveRejectionCleared = true;
-          identity.invalidate();
-          clearCagnotteAdminPendingOperation(pendingRefund);
-          clearCagnotteAdminPendingOperation(pendingCorrection);
-          clearCagnotteAdminPendingOperation(frozenOperation);
-          recoveryBlocked.current = false;
-        });
+        }, () => synchronizeDefinitiveRejection(() => { definitiveRejectionCleared = true; }));
     } catch (error) {
       if (error instanceof CagnotteAdminFrozenOperationStorageError && error.reason === "terminal") {
         await reinspectAfterTerminalFingerprint(error);
@@ -303,14 +307,7 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
           frozenOperation.current = durable;
           setModel((value) => cagnotteAdminFrozenOperationState(value, durable));
           adminRefreshChannel.publish(orderId, peerRefresh.current ?? undefined);
-        }, () => {
-          definitiveRejectionCleared = true;
-          identity.invalidate();
-          clearCagnotteAdminPendingOperation(pendingRefund);
-          clearCagnotteAdminPendingOperation(pendingCorrection);
-          clearCagnotteAdminPendingOperation(frozenOperation);
-          recoveryBlocked.current = false;
-        });
+        }, () => synchronizeDefinitiveRejection(() => { definitiveRejectionCleared = true; }));
     } catch (error) {
       if (error instanceof CagnotteAdminFrozenOperationStorageError && error.reason === "terminal") {
         await reinspectAfterTerminalFingerprint(error);
@@ -357,14 +354,7 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
       result = await retryCagnotteAdminFrozenOperationDurably(frozenOperationStore, operation, orderId, {
         refund: (payload) => sendTrackedMutation(operation, () => recordOrderRefund(payload)),
         correction: (payload) => sendTrackedMutation(operation, () => recordRefundCorrection(payload)),
-      }, () => {
-        definitiveRejectionCleared = true;
-        identity.invalidate();
-        clearCagnotteAdminPendingOperation(pendingRefund);
-        clearCagnotteAdminPendingOperation(pendingCorrection);
-        clearCagnotteAdminPendingOperation(frozenOperation);
-        recoveryBlocked.current = false;
-      });
+      }, () => synchronizeDefinitiveRejection(() => { definitiveRejectionCleared = true; }));
     } catch (error) {
       if (definitiveRejectionCleared && error instanceof CagnotteAdminRequestError && !error.uncertain) {
         setModel((value) => cagnotteAdminDefinitiveRejectionState(value, error));

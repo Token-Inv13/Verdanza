@@ -24,10 +24,10 @@ export function assertCagnotteAdminDurableSendOrdering(source: string) {
   return { claimIndex, persistedCallbackIndex, sendIndex };
 }
 
-export function assertOrderRefundScriptPreparesEmulator(command: unknown) {
-  const expected = "npm run prepare:cagnotte-firestore-emulator && node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only";
+export function assertOrderRefundScriptUsesPreparedEmulator(command: unknown) {
+  const expected = "node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only";
   if (command !== expected) {
-    throw new Error("test:order-refunds doit préparer l émulateur exact avant le runner refunds avec &&.");
+    throw new Error("test:order-refunds doit exécuter le runner avec un émulateur déjà préparé, sans téléchargement implicite.");
   }
 }
 

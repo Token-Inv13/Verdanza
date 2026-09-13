@@ -607,6 +607,39 @@ await test("H18 delivery exceeds incertain reste durablement gele", async () => 
   equal(store.loadResolution(operation).status, "empty");
 });
 
+await test("consolidation retry exact validation produit libere seulement apres rejet serveur certain", async () => {
+  for (const operation of [refundOperation(), correctionOperation()]) {
+    const storage = new MemoryStorage();
+    const store = makeStore(storage);
+    store.persistBeforeSend(operation);
+    store.updateState(operation, "uncertain");
+    let cleared = 0;
+    await rejects(() => retryCagnotteAdminFrozenOperationDurably(store, operation, operation.orderId, {
+      refund: async () => { throw new CagnotteAdminRequestError("Plafond produit définitivement refusé.", "refund_validation_failed", false); },
+      correction: async () => { throw new CagnotteAdminRequestError("Plafond produit définitivement refusé.", "refund_validation_failed", false); },
+    }, () => { cleared += 1; }), (error: unknown) => error instanceof CagnotteAdminRequestError && error.code === "refund_validation_failed" && !error.uncertain);
+    equal(cleared, 1, operation.kind);
+    equal(store.load(operation.orderId).status, "empty", operation.kind);
+    const resolution = store.loadResolution(operation);
+    equal(resolution.status === "ready" && resolution.resolution.outcome, "definitive_rejection", operation.kind);
+  }
+});
+
+await test("un autre 4xx de rejeu ne constitue pas automatiquement une preuve terminale", async () => {
+  const storage = new MemoryStorage();
+  const store = makeStore(storage);
+  const operation = refundOperation();
+  store.persistBeforeSend(operation);
+  store.updateState(operation, "uncertain");
+  await rejects(() => retryCagnotteAdminFrozenOperationDurably(store, operation, operation.orderId, {
+    refund: async () => { throw new CagnotteAdminRequestError("Date à vérifier.", "refund_confirmation_date_invalid", false); },
+    correction: async () => ({}),
+  }), (error: unknown) => error instanceof CagnotteAdminRequestError && error.code === "refund_confirmation_date_invalid");
+  const frozen = store.load(operation.orderId);
+  equal(frozen.status === "ready" && frozen.record.state, "uncertain");
+  equal(store.loadResolution(operation).status, "empty");
+});
+
 await test("H18 recovery pre-send exige storage vide lisible et aucune operation", () => {
   const operation = refundOperation();
   equal(canRecoverCagnotteAdminPreSendStorageFailure({ recoveryBlocked: true, reconciliation: { status: "empty" }, currentOperation: null, mutationInFlight: null }), true);

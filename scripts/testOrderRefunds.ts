@@ -372,10 +372,7 @@ try {
     equal(conflict.code, "refund_event_conflict");
     equal(conflict.stats.writes, 0);
     eq(await dump(), before);
-    const noPrior = await call({
-      ...selection(f, 0, 1), action: "record_confirmed", source: "admin", reference: "h18-delivery-new",
-      declaredFinancialCents: 1, reason: "delivery_refund", confirmedAt: confirmDate, expectedPreviewVersion: "f".repeat(64),
-    });
+    const noPrior = await call(selection(f, 0, 1));
     equal(noPrior.status, 400);
     equal(noPrior.code, "refund_delivery_exceeds_remaining");
     equal(noPrior.stats.writes, 0);
@@ -401,8 +398,7 @@ try {
     equal(conflict.code, "correction_event_conflict");
     equal(conflict.stats.writes, 0);
     eq(await dump(), before);
-    const noPrior = await call({ ...command, correctionReference: "h18-correction-delivery-new", expectedRevision: 1,
-      deliveryRefundCents: 601, declaredFinancialCents: 3101, expectedPreviewVersion: "f".repeat(64) });
+    const noPrior = await call({ ...body, expectedRevision: 1, deliveryRefundCents: 601, declaredFinancialCents: 3101 });
     equal(noPrior.status, 400);
     equal(noPrior.code, "refund_delivery_exceeds_remaining");
     equal(noPrior.stats.writes, 0);
@@ -614,8 +610,7 @@ try {
       const missing = await refused(body);
       ok(["refund_journal_requires_verification", "refund_ledger_requires_verification"].includes(missing.code!));
       await accrualRef.set({ ...canonical, cumulativeReturns: [{ lineId: "line-0", returnedNetCents: 1 }] });
-      const nonCanonical = await refused(body);
-      ok(["refund_journal_requires_verification", "refund_ledger_requires_verification"].includes(nonCanonical.code!));
+      await refused(body, "refund_right_requires_verification");
     } finally {
       await accrualRef.set(canonical);
     }
@@ -922,6 +917,20 @@ try {
     equal(events.some((event) => event.reference === "h8-stale-refund"), false);
     equal(events.filter((event) => event.reference === "h8-competing-refund").length, 1);
   });
+  await test("aperçu périmé précède le plafond produit après un remboursement concurrent", async () => {
+    const f = await fixture();
+    const body = selection(f, 8000);
+    const stale = confirmation(body, await preview(body), "consolidation-stale-product");
+    const response = await call(stale, { betweenAttempts: async () => {
+      await record(f, 3000, "consolidation-competing-product");
+    } });
+    equal(response.status, 409, JSON.stringify(response));
+    equal(response.code, "refund_preview_stale");
+    equal(response.stats.callbacks, 2);
+    const events = (await db.collection("cagnotteRefunds").where("orderId", "==", f.id).get()).docs.map((doc) => doc.data());
+    equal(events.some((event) => event.reference === "consolidation-stale-product"), false);
+    equal(events.filter((event) => event.reference === "consolidation-competing-product").length, 1);
+  });
   await test("retry exact stale ne peut pas apparaitre apres une correction concurrente", async () => {
     const f = await fixture();
     await record(f, 2500, "h8-correction-original");
@@ -1197,7 +1206,12 @@ try {
       .sort((left, right) => left.data().sequence - right.data().sequence);
     equal(originals.length, 2);
     await originals[1].ref.update({ sequence: 99 });
-    await refused(correction.command, "refund_history_requires_verification");
+    const beforeCorruptHistoryReplay = await dump();
+    const replayAfterCorruptHistory = await call(correction.command);
+    equal(replayAfterCorruptHistory.status, 200, JSON.stringify(replayAfterCorruptHistory));
+    equal(replayAfterCorruptHistory.result!.alreadyRecorded, true);
+    equal(replayAfterCorruptHistory.stats.writes, 0);
+    eq(await dump(), beforeCorruptHistoryReplay);
   });
   await test("H19 plafond correction vient du cumul avant la cible et non du montant initial ou restant global", async () => {
     const f = await fixture();
@@ -1290,6 +1304,61 @@ try {
     const before = await dump(); const replay = await call(first.command); equal(replay.status, 200); equal(replay.result!.alreadyRecorded, true); eq(await dump(), before);
     await refused({ ...first.command, correctionReason: "Contenu différent mais même clé de correction" }, "correction_event_conflict");
     await refused({ ...first.command, correctionReference: "final2-stale-correction" }, "correction_preview_stale");
+  });
+  await test("rejeu exact d une correction enregistrée précède les préconditions des nouvelles écritures", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "consolidation-idem-original");
+    const target = await correctionTarget(f);
+    const first = await recordCorrection(f, target, 0, 0, 0, "consolidation-idem-correction");
+    await db.collection("orders").doc(f.id).update({ paidAt: FieldValue.delete() });
+    const before = await dump();
+    const replay = await call(first.command);
+    equal(replay.status, 200, JSON.stringify(replay));
+    equal(replay.result!.alreadyRecorded, true);
+    equal(replay.stats.writes, 0);
+    eq(await dump(), before);
+  });
+  await test("correction applique les mêmes preuves de paiement que le remboursement initial", async () => {
+    const f = await fixture();
+    await record(f, 2500, "consolidation-payment-original");
+    const target = await correctionTarget(f);
+    await db.collection("orders").doc(f.id).update({ paymentConfirmedAt: FieldValue.delete() });
+    const response = await refused(correctionSelection(f, target, 0, 1000, 1000), "refund_prior_payment_requires_verification");
+    equal(response.stats.writes, 0);
+  });
+  await test("correction mixte vérifie le montant externe original", async () => {
+    const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });
+    await record(f, 2500, "consolidation-mixed-payment-original");
+    const target = await correctionTarget(f);
+    await db.collection("orders").doc(f.id).update({ paymentAmount: 99.99 });
+    const response = await refused(correctionSelection(f, target, 0, 1000, 920), "refund_original_amounts_require_verification");
+    equal(response.stats.writes, 0);
+  });
+  await test("correction attribuée refuse une annulation incohérente avec le journal", async () => {
+    const f = await fixture();
+    await record(f, 2500, "consolidation-cancel-original");
+    const target = await correctionTarget(f);
+    await db.collection("orders").doc(f.id).update({ orderStatus: "cancelled" });
+    const response = await refused(correctionSelection(f, target, 0, 1000, 1000), "refund_cancellation_requires_verification");
+    equal(response.stats.writes, 0);
+  });
+  await test("refund et correction refusent un mouvement historique non canonique avant toute nouvelle écriture", async () => {
+    const f = await fixture();
+    await record(f, 2500, "consolidation-journal-original");
+    const target = await correctionTarget(f);
+    const movements = await db.collection("cagnotteMovements").where("orderId", "==", f.id).get();
+    const refundMovement = movements.docs.find((doc) => doc.data().businessEvent === "refund_confirmed");
+    ok(refundMovement);
+    const original = refundMovement.data();
+    await refundMovement.ref.set({ ...original, currency: "USD" });
+    try {
+      const refund = await refused(selection(f, 100), "refund_journal_requires_verification");
+      equal(refund.stats.writes, 0);
+      const correction = await refused(correctionSelection(f, target, 0, 1000, 1000), "refund_journal_requires_verification");
+      equal(correction.stats.writes, 0);
+    } finally {
+      await refundMovement.ref.set(original);
+    }
   });
   await test("course Firestore meme cle correction : le perdant devient un conflit terminal sans ecriture tardive", async () => {
     const f = await fixture({ usedCagnotteCents: 800, initialWalletCents: 2000 });

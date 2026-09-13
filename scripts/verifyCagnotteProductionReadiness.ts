@@ -37,7 +37,7 @@ import {
   assertGitHubWorkflowPreparesCagnotteEmulator,
   assertGitHubWorkflowUsesPinnedJava,
   assertGitHubWorkflowUsesFullHistoryCheckout,
-  assertOrderRefundScriptPreparesEmulator,
+  assertOrderRefundScriptUsesPreparedEmulator,
 } from "./cagnotteProductionReadinessAssertions.js";
 
 const baseMain = "322f65895fb0a75479c92bc4a3054caa4073d2f8";
@@ -116,16 +116,18 @@ await check("checkout complet disponible dans CI et CI Full", () => {
     "wrong preparation fixture", "Verify", "verify"), /npm run prepare:cagnotte-firestore-emulator/);
 });
 
-await check("préparation CI déterministe de l émulateur Firestore", () => {
+await check("préparation réseau explicite en CI et vérification locale sans téléchargement implicite", () => {
   const packageJson = JSON.parse(read("package.json"));
   assert.equal(packageJson.scripts["prepare:cagnotte-firestore-emulator"], "node scripts/prepareCagnotteFirestoreEmulator.mjs");
-  assert.doesNotThrow(() => assertOrderRefundScriptPreparesEmulator(packageJson.scripts["test:order-refunds"]));
+  assert.doesNotThrow(() => assertOrderRefundScriptUsesPreparedEmulator(packageJson.scripts["test:order-refunds"]));
   for (const invalid of [
-    "node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
+    "npm run prepare:cagnotte-firestore-emulator && node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
     "node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only && npm run prepare:cagnotte-firestore-emulator",
-    "npm run prepare:cagnotte-firestore-emulator ; node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
     "npm run prepare:other-firestore-emulator && node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
-  ]) assert.throws(() => assertOrderRefundScriptPreparesEmulator(invalid), /préparer l émulateur exact/);
+  ]) assert.throws(() => assertOrderRefundScriptUsesPreparedEmulator(invalid), /sans téléchargement implicite/);
+  const runner = read("scripts/runCagnotteLedgerTests.ts");
+  assert.match(runner, /npm run prepare:cagnotte-firestore-emulator/);
+  assert.match(runner, /prérequis local/i);
   const preparation = read("scripts/prepareCagnotteFirestoreEmulator.mjs");
   assert.match(preparation, /cloud-firestore-emulator-v\$\{version\}\.jar/);
   assert.match(preparation, /const version = "1\.22\.0"/);

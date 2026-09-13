@@ -65,15 +65,15 @@ expectScript(
   "test:cagnotte-emulator-diagnostics",
   "node --import tsx scripts/testFirestoreEmulatorProcessDiagnostics.ts",
 );
-expectOrderRefundEmulatorPreparation(scripts["test:order-refunds"]);
+expectOrderRefundPreparedEmulator(scripts["test:order-refunds"]);
 requireValue(
   [
-    "node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
+    "npm run prepare:cagnotte-firestore-emulator && node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
     "node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only && npm run prepare:cagnotte-firestore-emulator",
     "npm run prepare:cagnotte-firestore-emulator ; node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
     "npm run prepare:other-firestore-emulator && node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
-  ].every((command) => !isExactOrderRefundEmulatorCommand(command)),
-  "test:order-refunds refuse les chaînes sans préparation exacte, tardives ou sans fail-fast",
+  ].every((command) => !isExactOrderRefundPreparedEmulatorCommand(command)),
+  "test:order-refunds refuse les chaînes avec préparation réseau implicite, tardive ou incorrecte",
   "la garde test:order-refunds accepte une chaîne invalide",
 );
 expectScript("test:core", chain(coreTests));
@@ -258,16 +258,16 @@ function expectScript(name, expected) {
   );
 }
 
-function expectOrderRefundEmulatorPreparation(command) {
+function expectOrderRefundPreparedEmulator(command) {
   requireValue(
-    isExactOrderRefundEmulatorCommand(command),
-    "test:order-refunds prépare et vérifie l émulateur exact avant le runner avec fail-fast",
-    "test:order-refunds doit préparer l émulateur exact avant le runner refunds avec &&",
+    isExactOrderRefundPreparedEmulatorCommand(command),
+    "test:order-refunds utilise l émulateur préparé sans téléchargement implicite",
+    "test:order-refunds doit exécuter directement le runner refunds avec un émulateur déjà préparé",
   );
 }
 
-function isExactOrderRefundEmulatorCommand(command) {
-  return command === "npm run prepare:cagnotte-firestore-emulator && node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only";
+function isExactOrderRefundPreparedEmulatorCommand(command) {
+  return command === "node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only";
 }
 
 function requireValue(condition, success, failure) {

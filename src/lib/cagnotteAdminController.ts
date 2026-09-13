@@ -159,7 +159,7 @@ function isSafeExactRetryTerminalRejection(error: unknown) {
   return error instanceof CagnotteAdminRequestError && !error.uncertain &&
     (error.code === "refund_preview_stale" || error.code === "correction_preview_stale" ||
       error.code === "refund_event_conflict" || error.code === "correction_event_conflict" ||
-      error.code === "refund_delivery_exceeds_remaining");
+      error.code === "refund_delivery_exceeds_remaining" || error.code === "refund_validation_failed");
 }
 
 export function eurosInputToCents(value: string) {
@@ -194,6 +194,11 @@ export async function refreshCagnotteAdminAfterWrite(
 
 export function createCagnotteAdminRefreshChannel() {
   const listeners = new Map<string, Set<() => void>>();
+  const publish = (orderId: string, source?: () => void) => {
+    for (const listener of listeners.get(orderId) ?? []) {
+      if (listener !== source) listener();
+    }
+  };
   return {
     subscribe(orderId: string, listener: () => void) {
       const orderListeners = listeners.get(orderId) ?? new Set<() => void>();
@@ -204,10 +209,10 @@ export function createCagnotteAdminRefreshChannel() {
         if (!orderListeners.size) listeners.delete(orderId);
       };
     },
-    publish(orderId: string, source?: () => void) {
-      for (const listener of listeners.get(orderId) ?? []) {
-        if (listener !== source) listener();
-      }
+    publish,
+    publishAfterLocalResolution(orderId: string, source: (() => void) | undefined, resolveLocal: () => void) {
+      resolveLocal();
+      publish(orderId, source);
     },
   };
 }

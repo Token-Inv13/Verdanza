@@ -338,6 +338,16 @@ await test("deux rendus de la meme commande invalident seulement leur inspection
   channel.publish("commande-a");
   equal(calls.join(","), "mobile");
 });
+await test("un rejet definitif resout l instance source et synchronise le panneau pair de la meme page", () => {
+  const channel = createCagnotteAdminRefreshChannel();
+  const calls: string[] = [];
+  const desktop = () => { calls.push("desktop"); };
+  const mobile = () => { calls.push("mobile"); };
+  channel.subscribe("commande-a", desktop);
+  channel.subscribe("commande-a", mobile);
+  channel.publishAfterLocalResolution("commande-a", desktop, () => { calls.push("local-resolution"); });
+  equal(calls.join(","), "local-resolution,mobile");
+});
 await test("datetime-local Europe Paris conserve l instant local sans proposer le futur", () => {
   const previousTimezone = process.env.TZ;
   process.env.TZ = "Europe/Paris";

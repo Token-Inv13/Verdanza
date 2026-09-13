@@ -66,3 +66,45 @@ En cas d'incident, fermer d'abord l'interface administrateur puis l'API de rembo
 Avant la lecture client, un gate séparé devra encore créer `CAGNOTTE_READ_CURSOR_SECRET` dans les scopes autorisés. Les ouvertures API refund, interface admin, lecture, acquisition et réservation restent des décisions distinctes.
 
 Ce document ne constitue ni une activation, ni une décision de lancement, ni une configuration Vercel ou Firebase.
+
+## Suivi unique de consolidation de la PR #7
+
+### État actuel au 13 septembre 2026
+
+La référence distante annoncée pour la reprise était `d1780931a83f8163a68d1af3994a43e73c36de6b`. Après `git fetch origin`, elle correspond toujours au HEAD de `origin/codex/cagnotte-refund-admin-readiness-v1`. La base `origin/main` est `9074fbb162b7d3e2afac87e5e63f7debeba21aa4`. La PR #7 est ouverte, non brouillon, sans auto-merge, `MERGEABLE/CLEAN`, avec ses trois checks distants verts sur ce HEAD historique.
+
+Le worktree examiné est `C:\Users\token\Documents\DEV\verdanza-fidelite-integration`, sur `codex/cagnotte-refund-admin-readiness-v1`. Il était propre et aligné à `0/0` avec la branche distante avant cette consolidation. Les changements ci-dessous sont uniquement locaux et non commités. Ils concernent le service remboursement/correction, le contrôleur et le panneau administrateur, les tests associés, les assertions de readiness/sécurité et l'exécution explicite de l'émulateur. Aucun autre chantier local n'a été incorporé.
+
+Les sections précédentes de ce document décrivent l'architecture inert-first livrée historiquement. La présente section constitue l'état de suivi actuel de la consolidation ; les anciens commentaires GitHub non marqués résolus ne remplacent pas cette vérification du code courant.
+
+### Familles closes dans le candidat local
+
+| Famille | Cause racine observée | Correction locale | Preuve actuelle |
+|---|---|---|---|
+| A — parité métier et idempotence | Le chemin correction n'appliquait pas toutes les preuves de paiement, d'acquisition, d'annulation, de paiement mixte et de journal utilisées par le remboursement ; le rejeu exact passait trop tard. | Validations communes réutilisées par les deux chemins, journal canonique contrôlé avant toute nouvelle écriture et retour idempotent d'une correction exacte avant les préconditions réservées aux nouvelles écritures. | Rejets sans écriture sur paiement, montant mixte, annulation et mouvement historique incohérents ; rejeu exact déjà enregistré conservé sans écriture malgré une précondition devenue invalide. |
+| B — reprise incertaine | Un plafond produit pouvait masquer une preview périmée et `refund_validation_failed` n'était pas classé à partir d'une preuve serveur suffisante. | Versions de preview contrôlées avant les plafonds ; résolution terminale limitée au rejeu exact et aux réponses non incertaines explicitement sûres. Les erreurs réseau, réponses mal formées et autres 4xx restent gelées sans preuve. | Course de plafond produit renvoie `refund_preview_stale` sans second événement ; reprise remboursement/correction libérée après rejet certain ; un autre 4xx reste incertain. |
+| C — synchronisation UI | Certains rejets définitifs ne résolvaient que l'instance source et l'événement `storage` ne synchronise pas deux panneaux de la même page. | Canal partagé avec résolution locale puis notification des pairs ; même chemin pour remboursement, correction et reprise. Le mécanisme `storage` inter-onglets reste en place. | Test mobile/desktop de même page et suites existantes multi-onglets/rechargement passent. |
+| D — reproductibilité | `npm run verify` téléchargeait implicitement l'émulateur via `test:order-refunds`, et une seconde assertion de sécurité imposait encore cet ancien contrat. | `test:order-refunds` utilise uniquement le JAR préparé et vérifie son empreinte ; absence ou empreinte invalide donne la commande explicite `npm run prepare:cagnotte-firestore-emulator`. Les workflows CI conservent une étape de préparation réseau distincte avant `verify`. | Échec test-first de l'assertion résiduelle observé, assertion corrigée, puis vérification complète sans téléchargement implicite. |
+
+Les reproductions ont d'abord échoué sur : l'absence de notification locale partagée, la reprise certaine de `refund_validation_failed`, l'ancien contrat de préparation implicite et la course preview/plafond produit. Elles passent après correction.
+
+### Validation locale actuelle
+
+`npm run verify` a été exécuté intégralement le 13 septembre 2026 et a réussi. Il couvre notamment :
+
+- sécurité locale, lint et typechecks application/API ;
+- 67 contrôles stockage/contrôleur administrateur ;
+- 37 contrôles d'interface administrateur ;
+- 5 contrôles de diagnostic du processus émulateur ;
+- 157 scénarios HTTP/Firestore de remboursement et correction sur l'émulateur officiel `1.22.0` lié uniquement à `127.0.0.1:18085`, ensuite arrêté ;
+- readiness production, sept gardes fermés, tests cœur, build local, 83 fichiers prerender et audits locaux.
+
+Aucun test demandé n'est bloqué. `npm run verify:full` n'a pas été exécuté : le critère demandé pour cette consolidation est `npm run verify`, et les suites étendues étrangères au lot n'ont pas été ajoutées au périmètre. Aucun test n'a utilisé Firebase Production et aucune opération bancaire n'a été effectuée.
+
+### Signalements et critère de sortie
+
+Les 40 fils de revue existants ont été relus sans modification : 34 sont déjà couverts sur le HEAD distant par le code et les tests antérieurs, 5 correspondent aux causes racines corrigées dans le candidat local (journal avant mutation, préparation explicite, plafond produit/preview, parité correction, synchronisation même page) et 1 ancien signalement demandant un téléchargement automatique est désormais non applicable car le contrat validé exige une préparation réseau explicite. Aucun fil n'a été marqué résolu et aucune revue automatique n'a été relancée.
+
+Aucun défaut bloquant ne reste dans le candidat local après `npm run verify`. Aucune amélioration hors périmètre n'a été implémentée ni identifiée comme nécessaire à l'intégrité de ce lot.
+
+La PR distante #7 reste **NON PRÊTE pour revue de fusion** tant que ces changements locaux ne sont pas commités et poussés sous autorisation explicite, puis validés par la CI distante sur le nouveau SHA. Son état vert actuel prouve seulement le HEAD historique `d1780931a83f8163a68d1af3994a43e73c36de6b`. Le critère de sortie est : revue du diff local, commit et push autorisés, CI complète verte sur le nouveau HEAD, conservation des sept gardes fermés, puis décision humaine de fusion séparée.

@@ -310,27 +310,14 @@ export async function executeOrderRefund(input: {
     if (!orderDoc.exists) fail("refund_order_missing", 404);
     const order = orderFromSnapshot(orderDoc);
     if (!hasCagnotteEnrollment(order)) fail("refund_historical_order_not_supported");
-    let enrollment;
-    try { enrollment = validateOrderCagnotteEnrollment(order); } catch { fail("refund_enrollment_invalid"); }
-    if (!enrollment.beneficiaryId || !enrollment.programVersion || !Number.isSafeInteger(enrollment.createdAtEpochMs) || enrollment.createdAtEpochMs < 0) fail("refund_enrollment_invalid");
-    let paidAt: string;
-    try {
-      paidAt = instant(order.paidAt);
-      if (paidAt !== instant(order.paymentConfirmedAt) || !hasOwn(order, "paymentConfirmedBy") ||
-        (order.paymentConfirmedBy !== null && typeof order.paymentConfirmedBy !== "string") ||
-        !["card_payment_link", "cash_on_delivery", "bank_transfer", "other"].includes(order.finalPaymentMethod ?? "")) throw new Error();
-    } catch { fail("refund_prior_payment_requires_verification"); }
-    if (paidAt > recordedAt) fail("refund_prior_payment_requires_verification");
-    if (confirmed && (confirmed.confirmedAt < paidAt || confirmed.confirmedAt > recordedAt)) fail("refund_confirmation_date_invalid", 400);
-
-    const mixed = enrollment.snapshot.appliedCagnotteCents > 0;
+    const enrollment = refundEnrollment(order);
+    const { paidAt, deliveryCharged, mixed } = validateRefundOrderFinancialBasis({
+      order,
+      snapshot: enrollment.snapshot,
+      recordedAt,
+      confirmedAt: confirmed?.confirmedAt,
+    });
     const recordVersion = mixed ? ORDER_MIXED_REFUND_VERSION : ORDER_REFUND_VERSION;
-    const deliveryCharged = eurosToCagnotteCents(order.deliveryFee);
-    if (sum(enrollment.snapshot.eligibleCents, deliveryCharged) !== eurosToCagnotteCents(order.total)) fail("refund_original_amounts_require_verification");
-    try {
-      const paymentCents = orderPaymentCents(order);
-      if (mixed && (!hasOwn(order, "paymentAmount") || paymentCents !== sum(enrollment.snapshot.productsPaidCents, deliveryCharged))) throw new Error();
-    } catch { fail("refund_original_amounts_require_verification"); }
     const internalOrder = {
       orderId: order.id,
       beneficiaryId: enrollment.beneficiaryId,
@@ -346,13 +333,7 @@ export async function executeOrderRefund(input: {
       allowMissingAccrual: decision === "not_attributed",
     });
     const cancelled = isOrderCancelled(order);
-    if (decision === "attributed") {
-      if (!basis.state?.paymentConfirmed) fail("refund_right_requires_verification");
-      if (basis.state.cancelled !== cancelled) fail("refund_cancellation_requires_verification");
-    } else if (!isValidNotAttributedAccrualBasis(basis.state, cancelled)) {
-      if (basis.state) fail("refund_right_requires_verification");
-      fail("refund_cancellation_requires_verification");
-    }
+    validateRefundAccrualBasis(decision, basis.state, cancelled);
     const reservationBasis = mixed
       ? await readConsumedReservation(order.cagnotteReservationIntent, input.db, tx)
       : null;
@@ -377,14 +358,16 @@ export async function executeOrderRefund(input: {
     const correctionEvents = reconstruction.corrections.map((entry) => entry.event);
     const reconstructed = reconstruction.effective;
 
-    const nextLines = addReturns(reconstructed.lines, request.additionalReturns);
-    const simulation = simulateCagnotteRefund(enrollment.snapshot, reconstructed.lines, nextLines);
-    const nextDelivery = sum(reconstructed.deliveryFinancialCents, request.deliveryRefundCents);
-    if (nextDelivery > deliveryCharged) fail("refund_delivery_exceeds_remaining", 400);
-    const returnedProductNetCents = simulation.delta.returnedNetCents;
-    const productFinancialCents = simulation.delta.financialRefundCents;
-    const cagnotteRestitutionCents = simulation.delta.cagnotteRestitutionCents;
-    const totalFinancialCents = sum(productFinancialCents, request.deliveryRefundCents);
+    validateAdminMovementJournal({
+      order: internalOrder,
+      deliveryCharged,
+      accrual: basis.state,
+      reservationBasis,
+      originals: reconstruction.originals,
+      corrections: reconstruction.corrections,
+      movementDocs: refundMovements.docs,
+      allowUnrelatedMovements: true,
+    });
     const version = hash({
       version: recordVersion,
       order: internalOrder,
@@ -395,6 +378,15 @@ export async function executeOrderRefund(input: {
       loyaltyAccrualDecision: decision,
     });
     if (confirmed?.expectedPreviewVersion !== undefined && confirmed.expectedPreviewVersion !== version) fail("refund_preview_stale");
+
+    const nextLines = addReturns(reconstructed.lines, request.additionalReturns);
+    const simulation = simulateCagnotteRefund(enrollment.snapshot, reconstructed.lines, nextLines);
+    const nextDelivery = sum(reconstructed.deliveryFinancialCents, request.deliveryRefundCents);
+    if (nextDelivery > deliveryCharged) fail("refund_delivery_exceeds_remaining", 400);
+    const returnedProductNetCents = simulation.delta.returnedNetCents;
+    const productFinancialCents = simulation.delta.financialRefundCents;
+    const cagnotteRestitutionCents = simulation.delta.cagnotteRestitutionCents;
+    const totalFinancialCents = sum(productFinancialCents, request.deliveryRefundCents);
     if (confirmed && confirmed.declaredFinancialCents !== totalFinancialCents) fail("refund_declared_amount_requires_verification");
 
     const refundId = key ?? hash(["preview", order.id, version, request.additionalReturns, request.deliveryRefundCents]);
@@ -943,6 +935,7 @@ function validateAdminMovementJournal(input: {
   originals: readonly { id: string; event: Event }[];
   corrections: readonly { id: string; event: CorrectionEvent }[];
   movementDocs: readonly QueryDocumentSnapshot[];
+  allowUnrelatedMovements?: boolean;
 }): InspectedMovementProjection[] {
   try {
     const movementById = new Map(input.movementDocs.map((doc) => [doc.id, doc.data()]));
@@ -1073,10 +1066,12 @@ function validateAdminMovementJournal(input: {
         validateCagnotteLedgerMovementForRead(value, id, input.accrual);
       }
     }
-    if (movementById.size !== expectedFamilies.size || [...movementById.keys()].some((id) => !expectedFamilies.has(id))) {
+    if (!input.allowUnrelatedMovements &&
+      (movementById.size !== expectedFamilies.size || [...movementById.keys()].some((id) => !expectedFamilies.has(id)))) {
       throw new Error("movement_unexpected");
     }
-    return input.movementDocs.map((doc) => projectValidatedMovement(doc.id, doc.data()));
+    return input.movementDocs.filter((doc) => expectedFamilies.has(doc.id))
+      .map((doc) => projectValidatedMovement(doc.id, doc.data()));
   } catch {
     fail("refund_journal_requires_verification");
   }
@@ -1133,6 +1128,74 @@ function isValidNotAttributedAccrualBasis(accrual: CagnotteAccrual | null, cance
   return cancelled ? Boolean(accrual && isZeroCreditCancellationTombstone(accrual)) : accrual === null;
 }
 
+function refundEnrollment(order: Order) {
+  let enrollment: ReturnType<typeof validateOrderCagnotteEnrollment>;
+  try {
+    enrollment = validateOrderCagnotteEnrollment(order);
+  } catch {
+    fail("refund_enrollment_invalid");
+  }
+  if (!enrollment.beneficiaryId || !enrollment.programVersion ||
+    !Number.isSafeInteger(enrollment.createdAtEpochMs) || enrollment.createdAtEpochMs < 0) {
+    fail("refund_enrollment_invalid");
+  }
+  return enrollment;
+}
+
+function validateRefundOrderFinancialBasis(input: {
+  order: Order;
+  snapshot: CagnotteSnapshot;
+  recordedAt: string;
+  confirmedAt?: string;
+}) {
+  let paidAt: string;
+  try {
+    paidAt = instant(input.order.paidAt);
+    if (paidAt !== instant(input.order.paymentConfirmedAt) || !hasOwn(input.order, "paymentConfirmedBy") ||
+      (input.order.paymentConfirmedBy !== null && typeof input.order.paymentConfirmedBy !== "string") ||
+      !["card_payment_link", "cash_on_delivery", "bank_transfer", "other"].includes(input.order.finalPaymentMethod ?? "")) {
+      throw new Error();
+    }
+  } catch {
+    fail("refund_prior_payment_requires_verification");
+  }
+  if (paidAt > input.recordedAt) fail("refund_prior_payment_requires_verification");
+  if (input.confirmedAt && (input.confirmedAt < paidAt || input.confirmedAt > input.recordedAt)) {
+    fail("refund_confirmation_date_invalid", 400);
+  }
+  const mixed = input.snapshot.appliedCagnotteCents > 0;
+  const deliveryCharged = eurosToCagnotteCents(input.order.deliveryFee);
+  if (sum(input.snapshot.eligibleCents, deliveryCharged) !== eurosToCagnotteCents(input.order.total)) {
+    fail("refund_original_amounts_require_verification");
+  }
+  try {
+    const paymentCents = orderPaymentCents(input.order);
+    if (mixed && (!hasOwn(input.order, "paymentAmount") ||
+      paymentCents !== sum(input.snapshot.productsPaidCents, deliveryCharged))) {
+      throw new Error();
+    }
+  } catch {
+    fail("refund_original_amounts_require_verification");
+  }
+  return { paidAt, deliveryCharged, mixed };
+}
+
+function validateRefundAccrualBasis(
+  decision: "attributed" | "not_attributed",
+  accrual: CagnotteAccrual | null,
+  cancelled: boolean,
+) {
+  if (decision === "attributed") {
+    if (!accrual?.paymentConfirmed) fail("refund_right_requires_verification");
+    if (accrual.cancelled !== cancelled) fail("refund_cancellation_requires_verification");
+    return;
+  }
+  if (!isValidNotAttributedAccrualBasis(accrual, cancelled)) {
+    if (accrual) fail("refund_right_requires_verification");
+    fail("refund_cancellation_requires_verification");
+  }
+}
+
 function orderRequiresAccrualJournal(order: Order) {
   return order.paymentStatus === "paid" || order.orderStatus === "delivered" ||
     order.orderStatus === "cancelled" || order.paymentStatus === "cancelled" || Boolean(order.cancelledAt);
@@ -1160,24 +1223,32 @@ async function executeOrderRefundCorrection(input: {
       correctionRef ? tx.get(correctionRef) : Promise.resolve(null),
     ]);
     const content = confirmed ? correctionBusinessContent(confirmed) : null;
+    if (priorCorrection?.exists) {
+      const prior = priorCorrection.data() as CorrectionEvent;
+      validateStoredCorrectionEvent(prior, priorCorrection.id);
+      if (!content || prior.orderId !== request.orderId || prior.fingerprint !== cagnotteAdminCorrectionBusinessFingerprint(content) || stable(prior.content) !== stable(content)) {
+        fail("correction_event_conflict");
+      }
+      return publicCorrectionResult(prior.result, true);
+    }
     if (!orderDoc.exists) fail("refund_order_missing", 404);
     if (history.size > historyLimit) fail("refund_history_requires_verification");
     const order = orderFromSnapshot(orderDoc);
     if (!hasCagnotteEnrollment(order)) fail("refund_historical_order_not_supported");
     if (!targetDoc.exists || targetDoc.data()?.kind === "refund_correction") fail("correction_target_missing", 404);
-    const enrollment = validateOrderCagnotteEnrollment(order);
-    const deliveryCharged = eurosToCagnotteCents(order.deliveryFee);
+    const enrollment = refundEnrollment(order);
     const internalOrder = { orderId: order.id, beneficiaryId: enrollment.beneficiaryId, programVersion: enrollment.programVersion,
       createdAtEpochMs: enrollment.createdAtEpochMs, snapshot: enrollment.snapshot };
-    const mixed = enrollment.snapshot.appliedCagnotteCents > 0;
+    const { paidAt, deliveryCharged, mixed } = validateRefundOrderFinancialBasis({
+      order,
+      snapshot: enrollment.snapshot,
+      recordedAt,
+    });
     const recordVersion = mixed ? ORDER_MIXED_REFUND_VERSION : ORDER_REFUND_VERSION;
-    const paidAt = instant(order.paidAt);
     const decision = mixed ? validatePaymentEvidence(order.cagnottePaymentEvidence, paidAt) : "attributed";
     const basis = await readCagnotteRefundBasis({ db: input.db, transaction: tx, order: internalOrder, allowMissingAccrual: decision === "not_attributed" });
     const cancelled = isOrderCancelled(order);
-    if (decision === "not_attributed" && !isValidNotAttributedAccrualBasis(basis.state, cancelled)) {
-      fail("refund_journal_requires_verification");
-    }
+    validateRefundAccrualBasis(decision, basis.state, cancelled);
     const reservationBasis = mixed ? await readConsumedReservation(order.cagnotteReservationIntent, input.db, tx) : null;
     const walletMutation = await prepareCagnotteWalletMutation({ db: input.db, transaction: tx,
       beneficiaryId: enrollment.beneficiaryId, allowMissing: false, missingCode: "CONFLICT" });
@@ -1195,6 +1266,17 @@ async function executeOrderRefundCorrection(input: {
       movementDocs: beneficiaryMovements.docs.filter((doc) => doc.data().orderId === order.id),
       movementFailureCode: "refund_history_requires_verification",
     });
+    const orderMovementDocs = beneficiaryMovements.docs.filter((doc) => doc.data().orderId === order.id);
+    validateAdminMovementJournal({
+      order: internalOrder,
+      deliveryCharged,
+      accrual: basis.state,
+      reservationBasis,
+      originals: reconstruction.originals,
+      corrections: reconstruction.corrections,
+      movementDocs: orderMovementDocs,
+      allowUnrelatedMovements: true,
+    });
     const targetEntry = reconstruction.originals.find((entry) => entry.id === targetDoc.id);
     if (!targetEntry) fail("correction_target_conflict");
     const target = targetEntry.event;
@@ -1203,16 +1285,12 @@ async function executeOrderRefundCorrection(input: {
       .sort((a, b) => a.event.revision - b.event.revision)
       .map((entry) => entry.event);
     const previousEffective = reconstruction.effective;
-    if (priorCorrection?.exists) {
-      const prior = priorCorrection.data() as CorrectionEvent;
-      validateStoredCorrectionEvent(prior, priorCorrection.id);
-      if (!content || prior.orderId !== request.orderId || prior.fingerprint !== cagnotteAdminCorrectionBusinessFingerprint(content) || stable(prior.content) !== stable(content)) {
-        fail("correction_event_conflict");
-      }
-      return publicCorrectionResult(prior.result, true);
-    }
     if (lastItem(reconstruction.originals)?.id !== targetDoc.id) fail("correction_target_not_latest_effective");
     if (request.expectedRevision !== corrections.length) fail("correction_preview_stale");
+    const previewVersion = hash({ version: ORDER_REFUND_CORRECTION_VERSION, order: internalOrder, target: target.fingerprint,
+      corrections: corrections.map((event) => event.fingerprint), previousEffective, wallet: walletMutation.original,
+      accrual: basis.state, reservation: reservationBasis?.reservation.refundProjection ?? null });
+    if (confirmed && confirmed.expectedPreviewVersion !== previewVersion) fail("correction_preview_stale");
     const replacementLines = addReturns(target.result.before.lines, request.replacementReturns);
     const simulation = simulateCagnotteRefund(enrollment.snapshot, target.result.before.lines, replacementLines);
     const correctedDelivery = sum(target.result.before.deliveryFinancialCents, request.deliveryRefundCents);
@@ -1221,11 +1299,6 @@ async function executeOrderRefundCorrection(input: {
     const correctedDeclaredFinancial = sum(simulation.delta.financialRefundCents, request.deliveryRefundCents);
     if (request.declaredFinancialCents !== correctedDeclaredFinancial) fail("refund_declared_amount_requires_verification");
     const revision = corrections.length + 1;
-    const previewVersion = hash({ version: ORDER_REFUND_CORRECTION_VERSION, order: internalOrder, target: target.fingerprint,
-      corrections: corrections.map((event) => event.fingerprint), previousEffective, wallet: walletMutation.original,
-      accrual: basis.state, reservation: reservationBasis?.reservation.refundProjection ?? null });
-    if (confirmed && confirmed.expectedPreviewVersion !== previewVersion) fail("correction_preview_stale");
-
     const desiredRemaining = decision === "attributed" && !cancelled ? simulation.next.theoreticalLoyaltyCents : 0;
     const currentRemaining = basis.state?.remainingGainCents ?? 0;
     const loyaltyDelta = desiredRemaining - currentRemaining;

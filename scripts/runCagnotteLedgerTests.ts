@@ -74,9 +74,18 @@ if (mode === "ledger" || mode === "--unit-only") {
 if (mode === "--unit-only") process.exit(0);
 
 const jar = resolve(root, "node_modules/.cache/cagnotte/cloud-firestore-emulator-v1.22.0.jar");
-const digest = createHash("sha256").update(await readFile(jar)).digest("hex");
+let jarBytes: Buffer;
+try {
+  jarBytes = await readFile(jar);
+} catch (error) {
+  if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    throw new Error("Prérequis local absent : émulateur Firestore 1.22.0 introuvable. Exécutez explicitement `npm run prepare:cagnotte-firestore-emulator` avant les vérifications.");
+  }
+  throw error;
+}
+const digest = createHash("sha256").update(jarBytes).digest("hex");
 if (digest !== "9b6498b7f62714d67f48f59b3818883cd682dbcd46b9f59511de81c97bb5166c") {
-  throw new Error("Émulateur 1.22.0 absent ou empreinte inattendue.");
+  throw new Error("Prérequis local invalide : empreinte inattendue pour l’émulateur Firestore 1.22.0. Exécutez explicitement `npm run prepare:cagnotte-firestore-emulator` avant les vérifications.");
 }
 const rulesPath = resolve(root, mode === "--security-only" || mode === "--server-security-only" ? "firestore.rules" : config.firestore.rules);
 const rules = await readFile(rulesPath);
