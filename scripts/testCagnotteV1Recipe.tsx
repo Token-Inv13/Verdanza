@@ -22,7 +22,7 @@ import { ORDER_REFUNDS_ENABLED } from "../api/_server/orderRefunds.js";
 import type { VerifiedFirebaseUser } from "../api/_server/adminAuth.js";
 import type { VercelRequestLike, VercelResponseLike } from "../api/_server/http.js";
 import { CagnotteView } from "../src/components/cagnotte/CagnottePanel.js";
-import { CagnotteCheckoutView, CheckoutCreationSummary } from "../src/components/cagnotte/CagnotteCheckoutPanel.js";
+import { CagnotteCheckoutView } from "../src/components/cagnotte/CagnotteCheckoutPanel.js";
 import {
   CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED,
   CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED,
@@ -174,6 +174,7 @@ try {
   assert.deepEqual(walletTuple(aDelivered), [0, 500, 0, 0]);
   assert.deepEqual(accrualTuple(aDelivered), [500, 500, "available", true, true]);
   assertMovementJournal(aDelivered, expectedJournal);
+  stages.push(aDelivered);
   const beforeReplayA = await financialStateDigest();
   const beforeReplayAOrder = record((await db.collection("orders").doc(orderAId).get()).data());
   const beforeReplayAHistoryLength = Array.isArray(beforeReplayAOrder.statusHistory) ? beforeReplayAOrder.statusHistory.length : 0;
@@ -187,7 +188,7 @@ try {
   const aReplay = await observeStage("A — rejeu paiement/livraison", orderAId);
   assertMovementJournal(aReplay, expectedJournal);
   assert.deepEqual(aReplay.movementEvents, aDelivered.movementEvents, "les rejeux A doivent conserver le journal complet");
-  stages.push(aDelivered);
+  stages.push(aReplay);
 
   const quotedB = await quoteOrder(500, baseTime + 4_000);
   assert.equal(quotedB.status, 200, JSON.stringify(quotedB.body));
@@ -322,9 +323,8 @@ try {
   });
   const finalHtml = await renderRecipePage({
     title: "Après remboursement intégral de la commande B",
-    note: "Le solde et l’historique proviennent de la lecture du portefeuille après enregistrement idempotent.",
+    note: "Déclaration synthétique d’un remboursement externe déjà confirmé : 95,00 € hors cagnotte, 5,00 € restitués et 4,75 € de gain annulé. Aucun prestataire bancaire n’est contacté.",
     wallet: bRefunded.clientRead,
-    creation: creationB,
   });
   const beforeBHtmlPath = resolve(artifactRoot, "01-commande-b-proposition.html");
   const finalHtmlPath = resolve(artifactRoot, "02-remboursement-final.html");
@@ -852,7 +852,6 @@ async function renderRecipePage(input: {
   note: string;
   wallet: CagnotteReadResponse;
   checkout?: CagnotteCheckoutState;
-  creation?: CheckoutOrderResult;
 }) {
   const styles = await Promise.all([
     readFile(resolve("src/styles/cagnotte.css"), "utf8"),
@@ -883,7 +882,6 @@ async function renderRecipePage(input: {
       onContinueWithout={() => undefined}
       onAcceptWithout={() => undefined}
     />}
-    {input.creation && <CheckoutCreationSummary result={input.creation} demonstration />}
   </>);
   return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
     *{box-sizing:border-box}body{margin:0;background:#f4f0e7;color:#111;font-family:Inter,Arial,sans-serif}main{display:grid;gap:24px;width:min(1120px,calc(100% - 32px));margin:32px auto 64px}.recipe-heading{display:grid;gap:8px}.recipe-heading p{margin:0;color:#6f5527;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.recipe-heading h1{margin:0;color:#0e3726;font:700 clamp(2rem,5vw,3.5rem)/1.05 Georgia,serif}.recipe-heading span{max-width:70ch;color:#38443d;line-height:1.5}${styles.join("\n")}

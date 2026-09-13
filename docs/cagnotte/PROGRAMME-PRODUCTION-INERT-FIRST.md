@@ -142,7 +142,7 @@ L'authentification est simulée et les actions externes sont neutralisées. Aucu
 | Liens de paiement et revues | `npm run test:cagnotte-payment-links`, `npm run test:cagnotte-admin-reviews` | 51 scénarios et 27 envois simulés, plus 8 scénarios de revue administrateur. |
 | Remboursements et outils administratifs | `npm run test:order-refunds`, `npm run test:cagnotte-admin-storage`, `npm run test:cagnotte-admin-ui` | 157 scénarios remboursement/correction, 67 contrôles de stockage/contrôleur et 38 contrôles UI. |
 | Présentation client et commande | `npm run test:cagnotte-presentation`, `npm run test:cagnotte-checkout-ui`, `npm run test:cagnotte-order-presentation` | Composants réels rendus avec données locales, états de session, chargement et erreur. |
-| Parcours continu V1 | `npm run test:cagnotte-v1-recipe` | Même wallet et mêmes commandes de la création au remboursement ; journal exact `0 → 1 → 3 → 4 → 6 → 8 → 10 → 10`, clés canoniques, rattachements, deltas et somme des compartiments vérifiés, puis captures bureau/mobile sans réseau. |
+| Parcours continu V1 | `npm run test:cagnotte-v1-recipe` | Même wallet et mêmes commandes de la création au remboursement ; journal exact `0 → 1 → 3 → 3 → 4 → 6 → 8 → 10 → 10`, avec le rejeu A exporté comme étape distincte, clés canoniques, rattachements, deltas et somme des compartiments vérifiés, puis captures bureau/mobile sans réseau. |
 | Porte globale | `npm run verify` | Sécurité locale, lint, typechecks, suites critiques, readiness, build local, prerender et audits locaux réussis. `verify:full` n'est pas requis ni exécuté. |
 
 ### Parcours continu sur un même wallet
@@ -171,7 +171,7 @@ Les rejeux paiement/livraison de A et le rejeu du remboursement conservent le jo
 
 ### Preuves d'interface et limites
 
-Le parcours continu alimente les vrais composants `CagnotteView`, `CagnotteCheckoutView` et `CheckoutCreationSummary` avec les résultats des services et handlers exécutés sur l'émulateur. Les artefacts locaux se trouvent dans `node_modules/.cache/verdanza-cagnotte-recette-v1/` : valeurs JSON, deux pages HTML et quatre captures bureau/mobile. Pendant les captures, toutes les requêtes de page sont interceptées et refusées, et le compteur réseau vérifié reste à zéro.
+Le parcours continu alimente les vrais composants `CagnotteView` et `CagnotteCheckoutView` avec les résultats des services et handlers exécutés sur l'émulateur. L'aperçu final retire le récapitulatif de création devenu obsolète et distingue explicitement la déclaration synthétique des 95,00 € remboursés hors cagnotte, la restitution de 5,00 € et l'annulation du gain de 4,75 €. Les artefacts locaux se trouvent dans `node_modules/.cache/verdanza-cagnotte-recette-v1/` : valeurs JSON, deux pages HTML et quatre captures bureau/mobile. Le même lancement vérifie l'ordre du JSON, les libellés et montants finaux, les styles réellement calculés par Chromium, régénère les quatre captures puis lie HTML, JSON et PNG par SHA-256. Toutes les requêtes de page sont interceptées et refusées, et le compteur réseau vérifié reste à zéro sur les formats bureau et mobile.
 
 Il s'agit d'un adaptateur de recette SSR et de captures statiques, pas d'un parcours complet de l'application dans un navigateur. La navigation, Firebase Auth réelle, les API déployées et les services distants ne sont donc pas qualifiés par ces images.
 
