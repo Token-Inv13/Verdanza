@@ -142,7 +142,7 @@ L'authentification est simulée et les actions externes sont neutralisées. Aucu
 | Liens de paiement et revues | `npm run test:cagnotte-payment-links`, `npm run test:cagnotte-admin-reviews` | 51 scénarios et 27 envois simulés, plus 8 scénarios de revue administrateur. |
 | Remboursements et outils administratifs | `npm run test:order-refunds`, `npm run test:cagnotte-admin-storage`, `npm run test:cagnotte-admin-ui` | 157 scénarios remboursement/correction, 67 contrôles de stockage/contrôleur et 38 contrôles UI. |
 | Présentation client et commande | `npm run test:cagnotte-presentation`, `npm run test:cagnotte-checkout-ui`, `npm run test:cagnotte-order-presentation` | Composants réels rendus avec données locales, états de session, chargement et erreur. |
-| Parcours continu V1 | `npm run test:cagnotte-v1-recipe` | Même wallet et mêmes commandes de la création au remboursement, puis captures bureau/mobile sans réseau. |
+| Parcours continu V1 | `npm run test:cagnotte-v1-recipe` | Même wallet et mêmes commandes de la création au remboursement ; journal exact `0 → 1 → 3 → 4 → 6 → 8 → 10 → 10`, clés canoniques, rattachements, deltas et somme des compartiments vérifiés, puis captures bureau/mobile sans réseau. |
 | Porte globale | `npm run verify` | Sécurité locale, lint, typechecks, suites critiques, readiness, build local, prerender et audits locaux réussis. `verify:full` n'est pas requis ni exécuté. |
 
 ### Parcours continu sur un même wallet
@@ -160,7 +160,7 @@ Tous les montants ci-dessous sont vérifiés en centimes. À chaque étape, la c
 | Remboursement externe confirmé intégral de B | 9 500 | `0 / 500 / 0 / 0` | Restitution : 500 ; correction du gain B : 475 ; accrual B restant : 0 ; 10 mouvements. |
 | Rejeu exact | 9 500 | `0 / 500 / 0 / 0` | Résultat idempotent ; aucun mouvement, remboursement ou delta supplémentaire. |
 
-Les rejeux paiement/livraison de A conservent aussi le journal, le stock et l'historique de statut sans double effet financier. Le remboursement de B est une déclaration synthétique d'un remboursement externe déjà confirmé ; aucun prestataire n'est contacté.
+Les rejeux paiement/livraison de A et le rejeu du remboursement conservent le journal complet, le stock et l'historique de statut sans double effet financier. La même assertion de journal rejette cinq copies en mémoire volontairement corrompues : mouvement manquant, doublon, type métier incorrect, delta altéré et mauvais rattachement commande/client. Le remboursement de B est une déclaration synthétique d'un remboursement externe déjà confirmé ; aucun prestataire n'est contacté.
 
 ### Variantes déjà couvertes
 
