@@ -59,6 +59,14 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" }
 > = {
+  "reception-commande-cbd-verifications": {
+    label: "Réception d'une commande CBD",
+    sources: [
+      "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
+      "/Fiche produit/Golden static/goldenstatic.webp",
+      "/Fiche produit/Mango%20Haze/MangoHaze.webp",
+    ],
+  },
   "pourcentage-mg-g-ppm-analyse-cbd": {
     label: "Unités d'analyse CBD",
     kind: "analysis",

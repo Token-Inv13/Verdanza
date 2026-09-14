@@ -268,7 +268,7 @@ Les preuves courantes sont indexées par `node_modules/.cache/verdanza-cagnotte-
 
 La validation obligatoire inclut désormais le typecheck dédié, les contrôles statiques d'isolation, le parcours interactif et un contrôle du build normal qui refuse tout marqueur ou module de recette. La CI prépare séparément Chromium et les émulateurs avant `npm run verify`, sans téléchargement implicite pendant cette commande. Les sept gardes normales restent :
 
-L'exécution intégrale de `npm run verify` a réussi après raccordement : recette interactive bureau et mobile, 157 scénarios remboursements, recette V1, readiness, tests cœur, build Vite, 83 fichiers HTML prerender, contrôle de 391 fichiers du build normal sans trace de recette, puis audits locaux essentiels. Chaque passe interactive a arrêté tous ses processus.
+L'exécution intégrale de `npm run verify` a réussi après raccordement : recette interactive bureau et mobile, 157 scénarios remboursements, recette V1, readiness, tests cœur, build Vite, prerender, contrôle du build normal sans trace de recette, puis audits locaux essentiels. Chaque passe interactive a arrêté tous ses processus. Les nombres de pages et de fichiers générés suivent le contenu éditorial présent dans le `main` testé et ne constituent pas un invariant de sécurité.
 
 - `CAGNOTTE_SERVER_PROGRAM = null` ;
 - `CAGNOTTE_RESERVATION_PROGRAM = null` ;
