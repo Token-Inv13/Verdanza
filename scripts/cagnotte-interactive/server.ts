@@ -24,7 +24,9 @@ import { closeRecipeFirestore, getRecipeFirestore } from "./firestore.js";
 import { verifyLocalAuthEmulatorToken } from "./authVerifier.js";
 import {
   API_DIAGNOSTICS_PATH,
+  API_SHUTDOWN_PATH,
   createDiagnosticJournal,
+  createDiagnosticRequestLifecycle,
   createJournaledRequestListener,
   diagnosticErrorCode,
 } from "./diagnosticJournal.js";
@@ -43,6 +45,7 @@ const diagnosticJournal = createDiagnosticJournal({
     );
   },
 });
+const requestLifecycle = createDiagnosticRequestLifecycle({ journal: diagnosticJournal });
 const db = getRecipeFirestore();
 const localProgram = Object.freeze({
   mode: "local_test" as const,
@@ -113,11 +116,13 @@ await assertEmulatorsReady();
 
 const server = createServer(createJournaledRequestListener({
   journal: diagnosticJournal,
+  lifecycle: requestLifecycle,
   resolveRoute: (request) => new URL(request.url || "/", localUrl(RECIPE_PORTS.api)).pathname,
   handle: async ({ request, response, route, setStatus }) => {
     const apiResponse = decorateResponse(response, setStatus);
-    if (route === API_DIAGNOSTICS_PATH) {
-      const diagnostics = await diagnosticJournal.sealAndSynchronize();
+    if (route === API_DIAGNOSTICS_PATH || route === API_SHUTDOWN_PATH) {
+      const diagnostics = await requestLifecycle.finalize();
+      if (route === API_SHUTDOWN_PATH) response.once("finish", requestShutdown);
       apiResponse.status(diagnostics.complete ? 200 : 503).json(diagnostics);
       return;
     }
@@ -154,6 +159,13 @@ const server = createServer(createJournaledRequestListener({
       error: "Service extérieur neutralisé dans la recette locale.",
     });
   },
+  handleRejected: ({ response, setStatus }) => {
+    if (!response.headersSent) response.setHeader("connection", "close");
+    decorateResponse(response, setStatus).status(503).json({
+      code: "local_api_shutting_down",
+      error: "La recette locale est en cours d’arrêt.",
+    });
+  },
   handleError: ({ error, response, setStatus }) => {
     setStatus(500);
     if (!response.headersSent) {
@@ -166,7 +178,8 @@ const server = createServer(createJournaledRequestListener({
     }
     console.error("local API handler failed closed", error);
   },
-  shouldRecord: (route) => route !== API_DIAGNOSTICS_PATH,
+  isControlRoute: (route) => route === API_DIAGNOSTICS_PATH || route === API_SHUTDOWN_PATH,
+  shouldRecord: (route) => route !== API_DIAGNOSTICS_PATH && route !== API_SHUTDOWN_PATH,
   reportListenerFailure: (failure) => {
     console.error(`[diagnostic-listener] échec interne contenu code=${failure.code}`);
   },
@@ -180,11 +193,15 @@ server.listen(RECIPE_PORTS.api, RECIPE_HOST, () => {
   console.log(`RECETTE_API_READY ${localUrl(RECIPE_PORTS.api, "/__recette/health")}`);
 });
 
-for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.once(signal, () => {
-    server.close(() => {
-      void (async () => {
-        const diagnostics = await diagnosticJournal.sealAndSynchronize();
+const shutdownSignals = ["SIGINT", "SIGTERM"] as const;
+let shutdownPromise: Promise<void> | undefined;
+function requestShutdown() {
+  requestLifecycle.closeAdmission();
+  if (!shutdownPromise) {
+    shutdownPromise = (async () => {
+      const failures: Array<{ phase: string; error: unknown }> = [];
+      try {
+        const diagnostics = await requestLifecycle.finalize();
         if (!diagnostics.complete) {
           process.exitCode = 1;
           console.error(
@@ -193,15 +210,32 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
             `pending=${diagnostics.writes.pending}`,
           );
         }
+      } catch (error) {
+        failures.push({ phase: "diagnostics", error });
+      }
+      try {
+        await closeHttpServer(server);
+      } catch (error) {
+        failures.push({ phase: "http", error });
+      }
+      try {
         await closeRecipeFirestore();
-        process.exit(typeof process.exitCode === "number" ? process.exitCode : 0);
-      })().catch((error) => {
-        console.error(`[recette-shutdown] échec contenu code=${diagnosticErrorCode(error)}`);
-        process.exit(1);
-      });
-    });
-  });
+      } catch (error) {
+        failures.push({ phase: "firestore", error });
+      }
+      for (const signal of shutdownSignals) process.off(signal, requestShutdown);
+      if (failures.length > 0) {
+        process.exitCode = 1;
+        for (const failure of failures) {
+          console.error(
+            `[recette-shutdown:${failure.phase}] échec contenu code=${diagnosticErrorCode(failure.error)}`,
+          );
+        }
+      }
+    })();
+  }
 }
+for (const signal of shutdownSignals) process.on(signal, requestShutdown);
 
 async function decorateRequest(request: IncomingMessage): Promise<VercelRequestLike> {
   const target = request as VercelRequestLike;
@@ -255,4 +289,27 @@ function sanitizeDetails(value: unknown): unknown {
   return Object.fromEntries(Object.entries(value as Record<string, unknown>)
     .filter(([key]) => !/token|password|authorization/i.test(key))
     .map(([key, entry]) => [key, typeof entry === "string" && entry.length > 200 ? `${entry.slice(0, 200)}…` : entry]));
+}
+
+async function closeHttpServer(target: typeof server) {
+  if (!target.listening) return;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      new Promise<void>((resolvePromise, reject) => {
+        target.close((error) => {
+          if (error) reject(error);
+          else resolvePromise();
+        });
+      }),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          target.closeAllConnections();
+          reject(new Error("Arrêt HTTP local hors délai."));
+        }, 2_000);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }

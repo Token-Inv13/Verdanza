@@ -293,6 +293,7 @@ async function runViewport(
     },
     onCleanupIssue: (step) => logCleanupIssue(viewport.label, step),
   }, async ({ harness, clientMonitor, adminMonitor, clientPage, adminPage }) => {
+    await assertInitialOwnedProcessInventory(harness);
     const fixtures = JSON.parse(await readFile(resolve(harness.runDirectory, "fixtures.json"), "utf8")) as {
       projectId: string;
       productId: string;
@@ -670,6 +671,36 @@ async function runViewport(
   }).finally(() => {
     if (!stoppedForFailClosed) console.log(`${viewport.label}: arrêt de sécurité appliqué avant la fin du scénario.`);
   });
+}
+
+async function assertInitialOwnedProcessInventory(harness: RecipeHarness) {
+  const expected = [
+    ["firebase-emulators", "service"],
+    ["seed", "one-shot"],
+    ["warm-firestore-listen", "one-shot"],
+    ["local-api", "service"],
+    ["vite-app", "service"],
+  ];
+  assert.deepEqual(
+    harness.processes.map((entry) => [entry.name, entry.kind]),
+    expected,
+    "chaque service et one-shot initial doit être enregistré comme processus possédé",
+  );
+  assert.equal(
+    new Set(harness.processes.map((entry) => entry.child.pid)).size,
+    expected.length,
+    "chaque processus possédé doit avoir une identité distincte",
+  );
+  const manifest = JSON.parse(await readFile(resolve(harness.runDirectory, "processes.json"), "utf8")) as {
+    ports?: Record<string, number>;
+    processes?: Array<{ name?: string; kind?: string; pid?: number }>;
+  };
+  assert.deepEqual(Object.values(manifest.ports ?? {}).sort((a, b) => a - b), Object.values(RECIPE_PORTS).sort((a, b) => a - b));
+  assert.deepEqual(
+    manifest.processes?.map((entry) => [entry.name, entry.kind, entry.pid]),
+    harness.processes.map((entry) => [entry.name, entry.kind, entry.child.pid]),
+    "le manifeste doit correspondre aux processus réellement possédés",
+  );
 }
 
 async function monitoredContext(

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import {
   assertDiagnosticJournalComplete,
   createDiagnosticJournal,
+  createDiagnosticRequestLifecycle,
   createJournaledRequestListener,
   type DiagnosticJournalSnapshot,
 } from "./diagnosticJournal.js";
@@ -84,6 +85,36 @@ async function runTests() {
     assert.throws(() => assertDiagnosticJournalComplete(snapshot), /DIAGNOSTICS INCOMPLETS/);
   });
 
+  await check("finalisation HTTP draine le handler admis, ses callbacks et leurs écritures", async () => {
+    await testHttpFinalizationDrain();
+  });
+
+  await check("dépassement du drain reste définitivement incomplet après activité tardive", async () => {
+    const journal = createDiagnosticJournal({ appendLine: async () => undefined });
+    const lifecycle = createDiagnosticRequestLifecycle({
+      journal,
+      drainTimeoutMs: 0,
+      journalTimeoutMs: 0,
+    });
+    const admission = lifecycle.admit("held-handler");
+    assert.ok(admission);
+    const timedOut = await lifecycle.finalize();
+    assert.equal(timedOut.complete, false);
+    assert.equal(timedOut.sealed, true);
+    assert.equal(timedOut.failureSamples[0]?.reason, "control_failure");
+    assert.equal(timedOut.failureSamples[0]?.code, "ACTIVE_PRODUCERS_TIMEOUT_1");
+    assert.equal(lifecycle.snapshot().timedOut, 1);
+
+    await journal.record({ kind: "late-handler-diagnostic" });
+    admission.complete();
+    const lateState = journal.snapshot();
+    assert.equal(lateState.writes.afterSeal, 1, "l’écriture tardive doit être consommée et signalée");
+    const repeated = await lifecycle.finalize();
+    assert.equal(repeated.complete, false, "une activité tardive réussie ne doit jamais effacer le délai");
+    assert.equal(repeated.writes.afterSeal, 1, "le résultat terminal doit intégrer l’activité tardive consommée");
+    assert.equal(lifecycle.snapshot().terminal, true, "le snapshot ne devient terminal qu’après la fin des producteurs");
+  });
+
   await check("serveur HTTP réel strict préserve réponses et erreur métier", async () => {
     const result = await runStrictHttpParent();
     assert.equal(result.exitCode, 0, result.stderr);
@@ -104,6 +135,142 @@ async function runTests() {
     return;
   }
   console.log("Journalisation de diagnostic vérifiée : rejets contenus, état explicite et arrêt borné.");
+}
+
+async function testHttpFinalizationDrain() {
+  const releaseHandler = deferred<void>();
+  const releaseWrites = deferred<void>();
+  const controlsEntered = deferred<void>();
+  const writesEntered = deferred<void>();
+  const recordedLines: string[] = [];
+  let controlCalls = 0;
+  let writeCalls = 0;
+  const businessCalls = { held: 0, refused: 0 };
+  const journal = createDiagnosticJournal({
+    appendLine: async (line) => {
+      recordedLines.push(line);
+      writeCalls += 1;
+      if (writeCalls === 2) writesEntered.resolve();
+      await releaseWrites.promise;
+    },
+  });
+  const lifecycle = createDiagnosticRequestLifecycle({
+    journal,
+    drainTimeoutMs: 2_000,
+    journalTimeoutMs: 2_000,
+  });
+  const server = createServer(createJournaledRequestListener({
+    journal,
+    lifecycle,
+    resolveRoute: (request) => new URL(request.url || "/", "http://127.0.0.1").pathname,
+    isControlRoute: (route) => route === "/finalize",
+    shouldRecord: (route) => route !== "/finalize",
+    handle: async ({ response, route, setStatus }) => {
+      if (route === "/held") {
+        businessCalls.held += 1;
+        setStatus(204);
+        response.statusCode = 204;
+        response.end();
+        await releaseHandler.promise;
+        void journal.record({ kind: "held-callback" });
+        return;
+      }
+      if (route === "/refused") businessCalls.refused += 1;
+      if (route === "/finalize") {
+        controlCalls += 1;
+        if (controlCalls === 2) controlsEntered.resolve();
+        const snapshot = await lifecycle.finalize();
+        setStatus(snapshot.complete ? 200 : 503);
+        response.statusCode = snapshot.complete ? 200 : 503;
+        response.setHeader("content-type", "application/json");
+        response.end(JSON.stringify(snapshot));
+        return;
+      }
+      setStatus(200);
+      response.statusCode = 200;
+      response.end();
+    },
+    handleRejected: ({ response, setStatus }) => {
+      setStatus(503);
+      response.statusCode = 503;
+      response.end("closing");
+    },
+    handleError: ({ error, response }) => {
+      response.statusCode = 500;
+      response.end(safeError(error));
+    },
+  }));
+  await new Promise<void>((resolvePromise) => server.listen(0, "127.0.0.1", resolvePromise));
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const origin = `http://127.0.0.1:${address.port}`;
+    const heldResponse = await fetch(`${origin}/held`);
+    assert.equal(heldResponse.status, 204, "la réponse peut finir avant le handler");
+
+    let finalizationSettled = false;
+    const firstFinalize = fetch(`${origin}/finalize`).then(async (response) => ({
+      status: response.status,
+      snapshot: await response.json() as DiagnosticJournalSnapshot,
+    }));
+    const secondFinalize = fetch(`${origin}/finalize`).then(async (response) => ({
+      status: response.status,
+      snapshot: await response.json() as DiagnosticJournalSnapshot,
+    }));
+    void Promise.all([firstFinalize, secondFinalize]).then(() => { finalizationSettled = true; });
+    await controlsEntered.promise;
+    assert.equal(lifecycle.snapshot().admission, "CLOSED");
+    assert.equal(lifecycle.snapshot().active, 1, "le handler reste actif après la fin de sa réponse");
+    assert.equal(finalizationSettled, false, "la finalisation ne doit pas répondre pendant le handler");
+
+    const refusedResponse = await fetch(`${origin}/refused`);
+    assert.equal(refusedResponse.status, 503);
+    assert.equal(await refusedResponse.text(), "closing");
+    assert.equal(businessCalls.refused, 0, "une requête refusée ne doit pas atteindre le handler métier");
+    assert.equal(lifecycle.snapshot().refused, 1);
+
+    releaseHandler.resolve();
+    await writesEntered.promise;
+    assert.equal(lifecycle.snapshot().active, 0);
+    assert.equal(finalizationSettled, false, "la finalisation doit aussi attendre les écritures inscrites");
+    releaseWrites.resolve();
+
+    const [first, second] = await Promise.all([firstFinalize, secondFinalize]);
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 200);
+    assert.deepEqual(second.snapshot, first.snapshot, "les finalisations concurrentes partagent un résultat");
+    assert.equal(first.snapshot.complete, true);
+    assert.equal(first.snapshot.sealed, true);
+    assert.equal(first.snapshot.writes.attempted, recordedLines.length);
+    assert.equal(first.snapshot.writes.succeeded, recordedLines.length);
+    assert.equal(first.snapshot.writes.pending, 0);
+    assert.equal(first.snapshot.writes.afterSeal, 0);
+    assert.equal(businessCalls.held, 1);
+    assert.equal(recordedLines.some((line) => line.includes("held-callback")), true);
+    assert.equal(recordedLines.some((line) => line.includes('"pathname":"/held"')), true);
+
+    const repeatedResponse = await fetch(`${origin}/finalize`);
+    const repeated = await repeatedResponse.json() as DiagnosticJournalSnapshot;
+    assert.equal(repeatedResponse.status, 200);
+    assert.deepEqual(repeated, first.snapshot);
+    assert.equal(journal.snapshot().writes.attempted, recordedLines.length);
+  } finally {
+    releaseHandler.resolve();
+    releaseWrites.resolve();
+    await new Promise<void>((resolvePromise, reject) => {
+      server.close((error) => error ? reject(error) : resolvePromise());
+    });
+  }
+}
+
+function deferred<Value>() {
+  let resolvePromise: (value: Value | PromiseLike<Value>) => void = () => undefined;
+  let rejectPromise: (reason?: unknown) => void = () => undefined;
+  const promise = new Promise<Value>((resolve, reject) => {
+    resolvePromise = resolve;
+    rejectPromise = reject;
+  });
+  return { promise, resolve: resolvePromise, reject: rejectPromise };
 }
 
 type StrictHttpResult = {
