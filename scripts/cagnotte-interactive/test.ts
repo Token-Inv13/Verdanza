@@ -22,6 +22,7 @@ import {
   RECIPE_PROJECT_ID,
 } from "./constants.js";
 import {
+  ownedProcessReliabilitySnapshot,
   runRecipeScript,
   startRecipeHarness,
   type RecipeHarness,
@@ -285,7 +286,10 @@ async function runViewport(
       await Promise.all([
         writeFile(
           resolve(resources.harness.runDirectory, "cleanup.json"),
-          `${JSON.stringify(report, null, 2)}\n`,
+          `${JSON.stringify({
+            ...report,
+            ownedProcesses: resources.harness.processes.map(ownedProcessReliabilitySnapshot),
+          }, null, 2)}\n`,
           "utf8",
         ),
         persistSanitizedHarnessDiagnostics(resources.harness),
@@ -1516,6 +1520,7 @@ function sanitizedConsoleText(value: string) {
 async function persistSanitizedHarnessDiagnostics(harness: RecipeHarness) {
   const emulatorLog = harness.processes.find((entry) => entry.name === "firebase-emulators")?.logPath;
   let entries: string[] = [];
+  let sourceReadErrorCode: string | undefined;
   if (emulatorLog) {
     try {
       const ansiSequence = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
@@ -1526,12 +1531,21 @@ async function persistSanitizedHarnessDiagnostics(harness: RecipeHarness) {
         .map((line) => sanitizedConsoleText(line).slice(0, 500))
         .slice(-100);
     } catch (error) {
-      if (record(error).code !== "ENOENT") throw error;
+      sourceReadErrorCode = String(record(error).code ?? "UNKNOWN")
+        .toUpperCase()
+        .replace(/[^A-Z0-9_-]/g, "_")
+        .slice(0, 64);
+      console.error(`[emulator-diagnostics] log auxiliaire indisponible code=${sourceReadErrorCode}`);
     }
   }
   await writeFile(
     resolve(harness.runDirectory, "emulator-diagnostics.json"),
-    `${JSON.stringify({ source: "firebase-emulators.log", entries }, null, 2)}\n`,
+    `${JSON.stringify({
+      source: "firebase-emulators.log",
+      entries,
+      ...(sourceReadErrorCode ? { sourceReadErrorCode } : {}),
+      ownedProcesses: harness.processes.map(ownedProcessReliabilitySnapshot),
+    }, null, 2)}\n`,
     "utf8",
   );
 }

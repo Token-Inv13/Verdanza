@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import net from "node:net";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+import { Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import {
   RECIPE_HOST,
@@ -11,11 +14,15 @@ import {
 import {
   coordinateRecipeStartup,
   isRecipeStartupCancelled,
+  ownedProcessReliabilitySnapshot,
   RecipeStartupCancelledError,
+  spawnOwned,
   startRecipeHarness,
   stopOwnedProcess,
+  waitForOwnedProcessLog,
   type OwnedProcess,
   type RecipeHarness,
+  type SpawnOwnedOptions,
   type RecipeStartupDriver,
 } from "./harness.js";
 import { runRecipeCommand } from "./run.js";
@@ -40,7 +47,179 @@ const failures: Array<{ name: string; error: string }> = [];
 
 if (process.argv.includes("--signal-child")) {
   await runSignalChild();
+} else if (process.argv.includes("--owned-tree-parent")) {
+  await runOwnedTreeParent();
 } else {
+
+await check("spawnOwned contient un EACCES d'ouverture du log", async () => {
+  const diagnostics: string[] = [];
+  const fixture = await spawnReliabilityProcess(
+    "log-open-eacces",
+    ["-e", "setTimeout(() => process.stdout.write('done'), 25)"],
+    "one-shot",
+    {
+      createLogStream: () => {
+        const stream = passthroughLogStream();
+        process.nextTick(() => stream.emit("error", codedError("EACCES")));
+        return stream;
+      },
+      diagnosticWrite: (value) => diagnostics.push(value),
+    },
+  );
+  try {
+    assert.equal(await waitForChildExit(fixture.owned.child, 5_000), 0);
+    await waitForOwnedProcessLog(fixture.owned);
+    const outcome = await stopOwnedProcess(fixture.owned);
+    assert.deepEqual(outcome.log.issues, [{ phase: "open", code: "EACCES", auxiliary: true }]);
+    assert.equal(outcome.log.status, "incomplete");
+    assert.equal(outcome.log.finalized, true);
+    assert.equal(ownedProcessReliabilitySnapshot(fixture.owned).log.status, "incomplete");
+    assert.equal(diagnostics.length, 1, "le secours expurgé ne doit être écrit qu'une fois");
+    assert.equal(diagnostics[0]?.includes("injected"), false, "le secours ne doit pas recopier le message brut");
+  } finally {
+    await cleanupReliabilityProcess(fixture);
+  }
+});
+
+await check("spawnOwned coupe les écritures après ENOSPC tout en drainant l'enfant vivant", async () => {
+  const failureObserved = deferred<void>();
+  let writes = 0;
+  const fixture = await spawnReliabilityProcess(
+    "log-write-enospc",
+    ["-e", "process.stdout.write('ready\\n');setInterval(() => process.stdout.write('tail\\n'), 2)"],
+    "service",
+    {
+      createLogStream: () => {
+        const stream = new Writable({
+          write(_chunk, _encoding, callback) {
+            writes += 1;
+            callback();
+            if (writes === 1) {
+              process.nextTick(() => {
+                stream.emit("error", codedError("ENOSPC"));
+                failureObserved.resolve();
+              });
+            }
+          },
+        });
+        process.nextTick(() => stream.emit("open", 1));
+        return stream;
+      },
+      stopGracePeriodMs: 100,
+      stopForcePeriodMs: 2_000,
+    },
+  );
+  try {
+    await failureObserved.promise;
+    assert.equal(fixture.owned.child.exitCode, null, "l'enfant doit être vivant lors de l'ENOSPC");
+    const writesAfterFailure = writes;
+    await delay(50);
+    assert.equal(writes, writesAfterFailure, "aucun chunk suivant ne doit être accumulé dans le log défaillant");
+    const outcome = await stopOwnedProcess(fixture.owned);
+    assert.equal(outcome.log.issues.some((issue) => issue.phase === "write" && issue.code === "ENOSPC"), true);
+    assert.equal(outcome.childStopped, true);
+  } finally {
+    await cleanupReliabilityProcess(fixture);
+  }
+});
+
+await check("spawnOwned borne et signale une erreur de fermeture du log", async () => {
+  const fixture = await spawnReliabilityProcess(
+    "log-close-failure",
+    ["-e", "process.stdout.write('complete')"],
+    "one-shot",
+    {
+      createLogStream: () => {
+        const stream = new Writable({
+          write(_chunk, _encoding, callback) { callback(); },
+          final(callback) { callback(codedError("ECLOSE")); },
+        });
+        process.nextTick(() => stream.emit("open", 1));
+        return stream;
+      },
+      logCloseTimeoutMs: 100,
+    },
+  );
+  try {
+    assert.equal(await waitForChildExit(fixture.owned.child, 5_000), 0);
+    await waitForOwnedProcessLog(fixture.owned);
+    const report = fixture.owned.logReport;
+    assert.equal(report?.finalized, true);
+    assert.equal(report?.issues.some((issue) => issue.phase === "close" && issue.code === "ECLOSE"), true);
+    await stopOwnedProcess(fixture.owned);
+  } finally {
+    await cleanupReliabilityProcess(fixture);
+  }
+});
+
+await check("spawnOwned conserve les dernières sorties entre exit et close", async () => {
+  const chunks: string[] = [];
+  const fixture = await spawnReliabilityProcess(
+    "log-after-exit",
+    ["-e", "setTimeout(() => process.stdout.write('FINAL_AFTER_EXIT'), 120)"],
+    "one-shot",
+    { createLogStream: () => collectingLogStream(chunks) },
+  );
+  try {
+    fixture.owned.child.emit("exit", 0, null);
+    assert.equal(fixture.owned.logReport?.finalized, false, "exit seul ne doit pas fermer le log");
+    assert.equal(await waitForChildExit(fixture.owned.child, 5_000), 0);
+    await waitForOwnedProcessLog(fixture.owned);
+    assert.match(chunks.join(""), /FINAL_AFTER_EXIT/);
+    assert.equal(fixture.owned.childClosed, true);
+    await stopOwnedProcess(fixture.owned);
+  } finally {
+    await cleanupReliabilityProcess(fixture);
+  }
+});
+
+await check("spawnOwned conserve l'échec de démarrage et finalise son log", async () => {
+  const chunks: string[] = [];
+  const fixture = await spawnReliabilityProcess(
+    "spawn-error",
+    [],
+    "one-shot",
+    {
+      command: resolve(tmpdir(), `verdanza-missing-command-${process.pid}`),
+      createLogStream: () => collectingLogStream(chunks),
+    },
+  );
+  try {
+    await waitForCondition(() => fixture.owned.spawnError !== undefined, "erreur spawn ENOENT");
+    await waitForOwnedProcessLog(fixture.owned);
+    assert.equal((fixture.owned.spawnError as NodeJS.ErrnoException | undefined)?.code, "ENOENT");
+    assert.match(chunks.join(""), /\[spawn-error\] code=ENOENT/);
+    const outcome = await stopOwnedProcess(fixture.owned);
+    assert.equal(outcome.log.finalized, true);
+  } finally {
+    await cleanupReliabilityProcess(fixture);
+  }
+});
+
+await check("une écriture parent défaillante reste un diagnostic auxiliaire borné", async () => {
+  const chunks: string[] = [];
+  const diagnostics: string[] = [];
+  const fixture = await spawnReliabilityProcess(
+    "parent-output-failure",
+    ["-e", "process.stdout.write('kept-in-log')"],
+    "one-shot",
+    {
+      createLogStream: () => collectingLogStream(chunks),
+      parentStdoutWrite: () => { throw codedError("EPIPE"); },
+      diagnosticWrite: (value) => diagnostics.push(value),
+    },
+  );
+  try {
+    assert.equal(await waitForChildExit(fixture.owned.child, 5_000), 0);
+    await waitForOwnedProcessLog(fixture.owned);
+    assert.match(chunks.join(""), /kept-in-log/);
+    assert.deepEqual(fixture.owned.logReport?.issues, [{ phase: "parent-output", code: "EPIPE", auxiliary: true }]);
+    assert.equal(diagnostics.length, 1);
+    await stopOwnedProcess(fixture.owned);
+  } finally {
+    await cleanupReliabilityProcess(fixture);
+  }
+});
 
 await check("les signaux sont inscrits avant le démarrage et le nettoyage reste unique", async () => {
   const signals = new EventEmitter();
@@ -208,6 +387,7 @@ if (process.platform === "win32") {
   await check("Windows distingue l’annulation logique d’un vrai Ctrl+C", async () => {
     assert.equal(process.platform, "win32");
     console.log("[INFO] Aucun process.kill(SIGINT) n’est présenté comme preuve Ctrl+C sous Windows.");
+    console.log("[INFO] Tests d'arbre de processus Unix NON EXÉCUTÉS localement sous Windows ; ils restent obligatoires dans verify sous Linux.");
   });
 } else {
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
@@ -215,6 +395,88 @@ if (process.platform === "win32") {
       await assertRealStartupSignal(signal);
     });
   }
+  await check("le repli forcé arrête le groupe possédé et épargne le témoin", async () => {
+    const witness = spawn(process.execPath, [
+      "-e",
+      "process.on('SIGINT',()=>{});process.stdout.write('WITNESS_READY');setInterval(()=>{},1000)",
+    ], {
+      detached: true,
+      shell: false,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    let witnessOutput = "";
+    witness.stdout?.on("data", (chunk) => { witnessOutput += String(chunk); });
+    const fixture = await spawnOwnedTreeProcess("owned-tree-forced");
+    try {
+      await waitForOutput(witness, () => witnessOutput.includes("WITNESS_READY"), 5_000);
+      const firstStop = stopOwnedProcess(fixture.owned);
+      const secondStop = stopOwnedProcess(fixture.owned);
+      assert.equal(firstStop, secondStop, "le second arrêt doit réutiliser la même opération");
+      const outcome = await firstStop;
+      assert.equal(outcome.mode, "forced");
+      assert.equal(outcome.forced, true);
+      assert.match(outcome.fallbackReason ?? "", /SIGINT/);
+      await assertPidGone(fixture.parentPid, "parent possédé");
+      await assertPidGone(fixture.descendantPid, "descendant possédé");
+      assert.equal(isPidAlive(witness.pid), true, "le témoin étranger ne doit pas recevoir le signal du groupe possédé");
+      assert.equal(outcome.ownedTreeStopped, true);
+    } finally {
+      await cleanupOwnedTreeProcess(fixture);
+      await stopWitness(witness);
+    }
+  });
+
+  await check("un descendant est arrêté même si son parent possédé est déjà mort", async () => {
+    const fixture = await spawnOwnedTreeProcess("owned-tree-parent-gone", { exitParentAfterReady: true });
+    try {
+      assert.equal(await waitForChildExit(fixture.owned.child, 5_000), 0);
+      assert.equal(isPidAlive(fixture.descendantPid), true, "le descendant synthétique doit persister avant le nettoyage");
+      const firstStop = stopOwnedProcess(fixture.owned);
+      const secondStop = stopOwnedProcess(fixture.owned);
+      assert.equal(firstStop, secondStop);
+      await assert.rejects(firstStop, /s’est arrêté avant la demande d’arrêt/);
+      await assert.rejects(secondStop, /s’est arrêté avant la demande d’arrêt/);
+      assert.equal(fixture.owned.stopOutcome?.mode, "forced");
+      assert.equal(fixture.owned.stopOutcome?.ownedTreeStopped, true);
+      await assertPidGone(fixture.parentPid, "parent déjà terminé");
+      await assertPidGone(fixture.descendantPid, "descendant orphelin possédé");
+    } finally {
+      await cleanupOwnedTreeProcess(fixture);
+    }
+  });
+
+  await check("un ENOSPC auxiliaire ne bloque pas l'arrêt forcé de l'arbre possédé", async () => {
+    const logFailure = deferred<void>();
+    const diagnostics: string[] = [];
+    const fixture = await spawnOwnedTreeProcess("owned-tree-log-failure", {
+      createLogStream: () => {
+        const stream = new Writable({
+          write(_chunk, _encoding, callback) {
+            callback();
+            process.nextTick(() => {
+              stream.emit("error", codedError("ENOSPC"));
+              logFailure.resolve();
+            });
+          },
+        });
+        process.nextTick(() => stream.emit("open", 1));
+        return stream;
+      },
+      diagnosticWrite: (value) => diagnostics.push(value),
+    });
+    try {
+      await logFailure.promise;
+      const outcome = await stopOwnedProcess(fixture.owned);
+      assert.equal(outcome.mode, "forced");
+      assert.equal(outcome.log.status, "incomplete");
+      assert.equal(outcome.log.issues.some((issue) => issue.phase === "write" && issue.code === "ENOSPC"), true);
+      assert.equal(diagnostics.length, 1, "le défaut du log doit produire un seul secours");
+      await assertPidGone(fixture.parentPid, "parent du cas combiné");
+      await assertPidGone(fixture.descendantPid, "descendant du cas combiné");
+    } finally {
+      await cleanupOwnedTreeProcess(fixture);
+    }
+  });
 }
 
 await check("échec de création du premier contexte", async () => {
@@ -622,6 +884,151 @@ async function canBind(port: number) {
   });
 }
 
+type ReliabilityProcessFixture = {
+  owned: OwnedProcess;
+  runDirectory: string;
+};
+
+type OwnedTreeFixture = ReliabilityProcessFixture & {
+  parentPid: number;
+  descendantPid: number;
+};
+
+async function spawnReliabilityProcess(
+  name: string,
+  args: string[],
+  kind: OwnedProcess["kind"],
+  options: SpawnOwnedOptions = {},
+): Promise<ReliabilityProcessFixture> {
+  const runDirectory = await mkdtemp(resolve(tmpdir(), "verdanza-owned-process-"));
+  try {
+    const owned = spawnOwned(name, args, process.env, runDirectory, kind, {
+      parentStdoutWrite: () => undefined,
+      parentStderrWrite: () => undefined,
+      childStdioCloseTimeoutMs: 500,
+      logCloseTimeoutMs: 250,
+      ...options,
+    });
+    return { owned, runDirectory };
+  } catch (error) {
+    await rm(runDirectory, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+async function cleanupReliabilityProcess(fixture: ReliabilityProcessFixture) {
+  await stopOwnedProcess(fixture.owned).catch(() => undefined);
+  await waitForOwnedProcessLog(fixture.owned).catch(() => undefined);
+  await rm(fixture.runDirectory, { recursive: true, force: true });
+}
+
+async function spawnOwnedTreeProcess(
+  name: string,
+  options: SpawnOwnedOptions & { exitParentAfterReady?: boolean } = {},
+): Promise<OwnedTreeFixture> {
+  const { exitParentAfterReady = false, ...spawnOptions } = options;
+  const fixture = await spawnReliabilityProcess(
+    name,
+    [
+      "--import", "tsx",
+      fileURLToPath(import.meta.url),
+      "--owned-tree-parent",
+      ...(exitParentAfterReady ? ["--exit-parent-after-ready"] : []),
+    ],
+    "service",
+    {
+      stopGracePeriodMs: 100,
+      stopForcePeriodMs: 3_000,
+      ...spawnOptions,
+    },
+  );
+  let stdout = "";
+  fixture.owned.child.stdout?.on("data", (chunk) => { stdout += String(chunk); });
+  try {
+    await waitForOutput(
+      fixture.owned.child,
+      () => /OWNED_TREE_READY parent=\d+ descendant=\d+/.test(stdout),
+      5_000,
+    );
+    const match = stdout.match(/OWNED_TREE_READY parent=(\d+) descendant=(\d+)/);
+    assert.ok(match, "les PID parent et descendant doivent être annoncés explicitement");
+    return {
+      ...fixture,
+      parentPid: Number(match[1]),
+      descendantPid: Number(match[2]),
+    };
+  } catch (error) {
+    await cleanupReliabilityProcess(fixture);
+    throw error;
+  }
+}
+
+async function cleanupOwnedTreeProcess(fixture: OwnedTreeFixture) {
+  await stopOwnedProcess(fixture.owned).catch(() => undefined);
+  for (const pid of [fixture.parentPid, fixture.descendantPid]) {
+    try {
+      if (isPidAlive(pid)) process.kill(pid, "SIGKILL");
+    } catch {
+      // Le processus a pu disparaître entre la sonde et le signal de secours du test.
+    }
+  }
+  await waitForOwnedProcessLog(fixture.owned).catch(() => undefined);
+  await rm(fixture.runDirectory, { recursive: true, force: true });
+}
+
+async function stopWitness(witness: ChildProcess) {
+  if (!isPidAlive(witness.pid)) return;
+  witness.kill("SIGKILL");
+  await waitForChildExit(witness, 5_000).catch(() => undefined);
+}
+
+function passthroughLogStream() {
+  return new Writable({ write(_chunk, _encoding, callback) { callback(); } });
+}
+
+function collectingLogStream(chunks: string[]) {
+  const stream = new Writable({
+    write(chunk, _encoding, callback) {
+      chunks.push(String(chunk));
+      callback();
+    },
+  });
+  process.nextTick(() => stream.emit("open", 1));
+  return stream;
+}
+
+function codedError(code: string) {
+  return Object.assign(new Error(`injected-${code.toLowerCase()}`), { code });
+}
+
+async function waitForCondition(predicate: () => boolean, label: string, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await delay(10);
+  }
+  throw new Error(`Condition non atteinte : ${label}.`);
+}
+
+function isPidAlive(pid: number | undefined) {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return Boolean(error) && typeof error === "object" && (error as { code?: unknown }).code !== "ESRCH";
+  }
+}
+
+async function assertPidGone(pid: number, label: string) {
+  await waitForCondition(() => !isPidAlive(pid), `${label} encore actif`, 5_000);
+  assert.equal(isPidAlive(pid), false, `${label} doit avoir disparu`);
+}
+
+function delay(timeoutMs: number) {
+  return new Promise<void>((resolvePromise) => setTimeout(resolvePromise, timeoutMs));
+}
+
 type ControlledStartupBlock =
   | "never"
   | "emulator-readiness"
@@ -714,6 +1121,33 @@ async function runSignalChild() {
   console.log(`SIGNAL_CHILD_RESULT ${result}`);
 }
 
+async function runOwnedTreeParent() {
+  process.on("SIGINT", () => undefined);
+  process.on("SIGTERM", () => undefined);
+  const descendantScript = [
+    "process.on('SIGINT',()=>{});",
+    "process.on('SIGTERM',()=>{});",
+    "if (process.send) process.send('READY');",
+    "setInterval(()=>{},1000);",
+  ].join("");
+  const descendant = spawn(process.execPath, ["-e", descendantScript], {
+    shell: false,
+    stdio: ["ignore", "ignore", "ignore", "ipc"],
+  });
+  await new Promise<void>((resolvePromise, reject) => {
+    descendant.once("error", reject);
+    descendant.once("message", (message) => {
+      if (message === "READY") resolvePromise();
+    });
+  });
+  console.log(`OWNED_TREE_READY parent=${process.pid} descendant=${descendant.pid}`);
+  if (process.argv.includes("--exit-parent-after-ready")) {
+    descendant.disconnect();
+    process.exit(0);
+  }
+  await new Promise<void>(() => undefined);
+}
+
 function waitUntilCancelled(signal: AbortSignal) {
   if (signal.aborted) return Promise.reject(new RecipeStartupCancelledError());
   return new Promise<never>((_resolve, reject) => {
@@ -722,7 +1156,7 @@ function waitUntilCancelled(signal: AbortSignal) {
 }
 
 function waitForOutput(
-  child: ReturnType<typeof spawn>,
+  child: ChildProcess,
   predicate: () => boolean,
   timeoutMs: number,
 ) {
@@ -745,7 +1179,7 @@ function waitForOutput(
   });
 }
 
-function waitForChildExit(child: ReturnType<typeof spawn>, timeoutMs: number) {
+function waitForChildExit(child: ChildProcess, timeoutMs: number) {
   if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(child.exitCode);
   return new Promise<number | null>((resolvePromise, reject) => {
     const timeout = setTimeout(() => {

@@ -3,6 +3,7 @@ import { createWriteStream } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import net from "node:net";
 import { resolve } from "node:path";
+import type { Writable } from "node:stream";
 import {
   localUrl,
   RECIPE_ACCOUNTS,
@@ -30,12 +31,49 @@ export type OwnedProcess = {
   child: ChildProcess;
   logPath: string;
   stopRequested: boolean;
-  stopPromise?: Promise<void>;
+  stopPromise?: Promise<OwnedProcessStopOutcome>;
+  stopOutcome?: OwnedProcessStopOutcome;
   spawnError?: Error;
   gracefulStop?: () => Promise<void>;
+  unixProcessGroupId?: number;
+  ownsUnixProcessGroup?: boolean;
+  logReport?: OwnedProcessLogReport;
+  logFinalization?: Promise<void>;
+  finalizeLog?: () => Promise<void>;
+  childClosed?: boolean;
+  stopGracePeriodMs?: number;
+  stopForcePeriodMs?: number;
+};
+
+export type OwnedProcessLogIssue = {
+  phase: "open" | "write" | "close" | "parent-output";
+  code: string;
+  auxiliary: true;
+};
+
+export type OwnedProcessLogReport = {
+  auxiliary: true;
+  status: "active" | "complete" | "incomplete";
+  finalized: boolean;
+  issues: OwnedProcessLogIssue[];
+};
+
+export type OwnedProcessStopOutcome = {
+  mode: "already-stopped" | "graceful" | "forced";
+  forced: boolean;
+  fallbackReason?: string;
+  childStopped: boolean;
+  ownedTreeStopped: boolean;
+  log: OwnedProcessLogReport;
 };
 const AUTH_EMULATOR_READY_TIMEOUT_MS = 120_000;
 const ONE_SHOT_TIMEOUT_MS = 60_000;
+const CHILD_STDIO_CLOSE_TIMEOUT_MS = 2_000;
+const LOG_CLOSE_TIMEOUT_MS = 2_000;
+const PROCESS_GRACEFUL_ACTION_TIMEOUT_MS = 6_500;
+const PROCESS_GRACE_PERIOD_MS = 2_500;
+const PROCESS_FORCE_PERIOD_MS = 5_000;
+const MAX_LOG_ISSUES = 8;
 
 export type RecipeHarnessLifecycleEvent =
   | { type: "process-acquired"; name: string; kind: OwnedProcess["kind"]; pid: number | undefined }
@@ -250,13 +288,7 @@ export async function startRecipeHarness(
           projectId: RECIPE_PROJECT_ID,
           origin: localUrl(RECIPE_PORTS.app),
           ports: RECIPE_PORTS,
-          processes: processes.map(({ name, kind, child, logPath }) => ({
-            name,
-            kind,
-            pid: child.pid,
-            exitCode: child.exitCode,
-            logPath,
-          })),
+          processes: processes.map(ownedProcessReliabilitySnapshot),
         }, null, 2)}\n`, "utf8");
       },
     });
@@ -293,11 +325,7 @@ export async function startRecipeHarness(
           durationMs: Date.now() - cleanupStartedAt,
           ...(cleanupError === undefined ? {} : { error: safeError(cleanupError) }),
         }],
-        ownedProcesses: processes.map(({ name, child }) => ({
-          name,
-          pid: child.pid,
-          exitCode: child.exitCode,
-        })),
+        ownedProcesses: processes.map(ownedProcessReliabilitySnapshot),
       }, null, 2)}\n`, "utf8");
       await writePartialStartDiagnostics(runDirectory, processes);
     } catch (evidenceError) {
@@ -384,31 +412,207 @@ async function canBind(port: number, signal?: AbortSignal) {
   });
 }
 
-function spawnOwned(
+export type SpawnOwnedOptions = {
+  createLogStream?: (logPath: string) => Writable;
+  command?: string;
+  parentStdoutWrite?: (value: string) => void;
+  parentStderrWrite?: (value: string) => void;
+  diagnosticWrite?: (value: string) => void;
+  childStdioCloseTimeoutMs?: number;
+  logCloseTimeoutMs?: number;
+  stopGracePeriodMs?: number;
+  stopForcePeriodMs?: number;
+};
+
+export function spawnOwned(
   name: string,
   args: string[],
   environment: NodeJS.ProcessEnv,
   runDirectory: string,
   kind: OwnedProcess["kind"],
-) {
+  options: SpawnOwnedOptions = {},
+): OwnedProcess {
   const logPath = resolve(runDirectory, `${name}.log`);
-  const log = createWriteStream(logPath, { flags: "a" });
-  const child = spawn(process.execPath, args, {
-    cwd: RECIPE_ROOT,
-    env: environment,
-    shell: false,
-    windowsHide: true,
-    stdio: ["ignore", "pipe", "pipe"],
+  const logReport: OwnedProcessLogReport = {
+    auxiliary: true,
+    status: "active",
+    finalized: false,
+    issues: [],
+  };
+  const reportedIssues = new Set<string>();
+  let log: Writable | undefined;
+  let logOpened = false;
+  let logFailed = false;
+  let logFinalizationStarted = false;
+  let logFinalizationPromise: Promise<void> | undefined;
+  let resolveLogCompletion: () => void = () => undefined;
+  const logCompletion = new Promise<void>((resolvePromise) => {
+    resolveLogCompletion = () => resolvePromise();
   });
-  const owned: OwnedProcess = { name, kind, child, logPath, stopRequested: false };
-  child.stdout?.on("data", (chunk) => { process.stdout.write(`[${name}] ${chunk}`); log.write(chunk); });
-  child.stderr?.on("data", (chunk) => { process.stderr.write(`[${name}] ${chunk}`); log.write(chunk); });
+  const diagnosticWrite = options.diagnosticWrite ?? ((value: string) => {
+    try {
+      console.error(value);
+    } catch {
+      // Le secours de dernier niveau ne doit jamais concurrencer le nettoyage.
+    }
+  });
+  const recordLogIssue = (phase: OwnedProcessLogIssue["phase"], error: unknown) => {
+    const code = safeDiagnosticCode(error);
+    const key = `${phase}:${code}`;
+    logReport.status = "incomplete";
+    if (!reportedIssues.has(key) && logReport.issues.length < MAX_LOG_ISSUES) {
+      reportedIssues.add(key);
+      logReport.issues.push({ phase, code, auxiliary: true });
+      try {
+        diagnosticWrite(`[owned-process:${safeProcessName(name)}] diagnostic auxiliaire incomplet phase=${phase} code=${code}`);
+      } catch {
+        // Le chemin de secours est distinct du fichier défaillant et reste non récursif.
+      }
+    }
+  };
+  const handleLogError = (error: unknown) => {
+    const phase: OwnedProcessLogIssue["phase"] = logFinalizationStarted
+      ? "close"
+      : logOpened ? "write" : "open";
+    logFailed = true;
+    recordLogIssue(phase, error);
+    try {
+      if (log && !log.destroyed) log.destroy();
+    } catch (destroyError) {
+      recordLogIssue("close", destroyError);
+    }
+  };
+  try {
+    log = options.createLogStream?.(logPath) ?? createWriteStream(logPath, { flags: "a" });
+    log.once("open", () => { logOpened = true; });
+    log.once("ready", () => { logOpened = true; });
+    log.on("error", handleLogError);
+  } catch (error) {
+    logFailed = true;
+    recordLogIssue("open", error);
+  }
+  const writeLog = (value: string | Buffer) => {
+    if (!log || logFailed || logFinalizationStarted) return;
+    try {
+      log.write(value);
+    } catch (error) {
+      handleLogError(error);
+    }
+  };
+  const safeParentWrite = (
+    writer: ((value: string) => void) | undefined,
+    value: string,
+  ) => {
+    try {
+      writer?.(value);
+    } catch (error) {
+      recordLogIssue("parent-output", error);
+    }
+  };
+  const finalizeLog = () => {
+    if (logFinalizationPromise) return logFinalizationPromise;
+    logFinalizationStarted = true;
+    logFinalizationPromise = (async () => {
+      if (!log || log.destroyed) return;
+      await new Promise<void>((resolvePromise) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          log?.off("close", onClose);
+          resolvePromise();
+        };
+        const onClose = () => finish();
+        const timer = setTimeout(() => {
+          recordLogIssue("close", { code: "LOG_CLOSE_TIMEOUT" });
+          try {
+            if (log && !log.destroyed) log.destroy();
+          } catch (error) {
+            recordLogIssue("close", error);
+          }
+          finish();
+        }, options.logCloseTimeoutMs ?? LOG_CLOSE_TIMEOUT_MS);
+        log.once("close", onClose);
+        try {
+          log.end();
+          if (log.destroyed) queueMicrotask(finish);
+        } catch (error) {
+          handleLogError(error);
+          finish();
+        }
+      });
+    })().finally(() => {
+      logReport.finalized = true;
+      if (logReport.issues.length === 0) logReport.status = "complete";
+      resolveLogCompletion();
+    });
+    return logFinalizationPromise;
+  };
+  const detached = process.platform !== "win32";
+  let child: ChildProcess;
+  try {
+    child = spawn(options.command ?? process.execPath, args, {
+      cwd: RECIPE_ROOT,
+      env: environment,
+      shell: false,
+      detached,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    void finalizeLog();
+    throw error;
+  }
+  const owned: OwnedProcess = {
+    name,
+    kind,
+    child,
+    logPath,
+    stopRequested: false,
+    ...(detached && child.pid
+      ? { unixProcessGroupId: child.pid, ownsUnixProcessGroup: true }
+      : {}),
+    logReport,
+    logFinalization: logCompletion,
+    finalizeLog,
+    childClosed: false,
+    stopGracePeriodMs: options.stopGracePeriodMs,
+    stopForcePeriodMs: options.stopForcePeriodMs,
+  };
+  let stdioCloseTimer: ReturnType<typeof setTimeout> | undefined;
+  const scheduleBoundedLogFinalization = () => {
+    if (stdioCloseTimer || owned.childClosed) return;
+    stdioCloseTimer = setTimeout(() => {
+      recordLogIssue("close", { code: "CHILD_STDIO_CLOSE_TIMEOUT" });
+      void finalizeLog();
+    }, options.childStdioCloseTimeoutMs ?? CHILD_STDIO_CLOSE_TIMEOUT_MS);
+  };
+  child.stdout?.on("data", (chunk) => {
+    safeParentWrite(
+      options.parentStdoutWrite ?? ((value) => { process.stdout.write(value); }),
+      `[${name}] ${String(chunk)}`,
+    );
+    writeLog(chunk as Buffer);
+  });
+  child.stderr?.on("data", (chunk) => {
+    safeParentWrite(
+      options.parentStderrWrite ?? ((value) => { process.stderr.write(value); }),
+      `[${name}] ${String(chunk)}`,
+    );
+    writeLog(chunk as Buffer);
+  });
   child.once("error", (error) => {
     owned.spawnError = error;
-    log.write(`[spawn-error] ${safeError(error)}\n`);
-    log.end();
+    writeLog(`[spawn-error] code=${safeDiagnosticCode(error)}\n`);
+    scheduleBoundedLogFinalization();
   });
-  child.once("exit", () => log.end());
+  child.once("exit", scheduleBoundedLogFinalization);
+  child.once("close", () => {
+    owned.childClosed = true;
+    if (stdioCloseTimer) clearTimeout(stdioCloseTimer);
+    void finalizeLog();
+  });
   return owned;
 }
 
@@ -445,6 +649,7 @@ async function runOneShot(
   throwIfStartupCancelled(signal);
   try {
     const code = await waitForOneShotBounded(owned.child, name, signal);
+    await waitForOwnedProcessLog(owned);
     throwIfStartupCancelled(signal);
     if (code !== 0) throw new Error(`${name} a échoué avec le code ${code}. Voir ${owned.logPath}`);
   } catch (error) {
@@ -569,75 +774,252 @@ async function stopAllWithDiagnostics(
   throwCollectedFailures(failures, "Arrêt incomplet du harness de recette.");
 }
 
-export function stopOwnedProcess(processRef: OwnedProcess) {
+export function stopOwnedProcess(processRef: OwnedProcess): Promise<OwnedProcessStopOutcome> {
   if (processRef.stopPromise) return processRef.stopPromise;
   processRef.stopPromise = (async () => {
-    if (!processRef.child.pid) return;
-    if (hasSettled(processRef.child)) {
-      if (processRef.kind === "service" && !processRef.stopRequested) {
-        throw new Error(
-          `${processRef.name} s’est arrêté avant la demande d’arrêt ` +
-          `(code ${processRef.child.exitCode}, signal ${processRef.child.signalCode ?? "aucun"}).`,
-        );
-      }
-      return;
+    const pid = processRef.child.pid;
+    let preservedFailure: unknown;
+    if (hasSettled(processRef.child) && processRef.kind === "service" && !processRef.stopRequested) {
+      preservedFailure = new Error(
+        `${processRef.name} s’est arrêté avant la demande d’arrêt ` +
+        `(code ${processRef.child.exitCode}, signal ${processRef.child.signalCode ?? "aucun"}).`,
+      );
     }
     processRef.stopRequested = true;
+    const complete = async (
+      mode: OwnedProcessStopOutcome["mode"],
+      fallbackReason?: string,
+      cleanupFailure?: unknown,
+    ) => {
+      if (!ownedProcessTreeStopped(processRef)) await processRef.finalizeLog?.();
+      await waitForOwnedProcessLog(processRef);
+      const outcome: OwnedProcessStopOutcome = {
+        mode,
+        forced: mode === "forced",
+        ...(fallbackReason ? { fallbackReason } : {}),
+        childStopped: hasSettled(processRef.child),
+        ownedTreeStopped: ownedProcessTreeStopped(processRef),
+        log: ownedProcessLogSnapshot(processRef),
+      };
+      processRef.stopOutcome = outcome;
+      if (preservedFailure !== undefined) {
+        attachSecondaryStopFailure(preservedFailure, cleanupFailure);
+        throw preservedFailure;
+      }
+      if (cleanupFailure !== undefined) throw cleanupFailure;
+      return outcome;
+    };
+    if (!pid) return complete("already-stopped");
+    if (ownedProcessTreeStopped(processRef)) return complete("already-stopped");
+
     let gracefulFailure: unknown;
-    if (processRef.gracefulStop) {
+    if (processRef.gracefulStop && !hasSettled(processRef.child)) {
       try {
-        await processRef.gracefulStop();
-        if (await settledWithin(processRef.child, 5_000)) {
+        await promiseWithin(
+          processRef.gracefulStop(),
+          PROCESS_GRACEFUL_ACTION_TIMEOUT_MS,
+          `demande d’arrêt gracieux hors délai pour le PID ${pid}.`,
+        );
+        if (await ownedProcessTreeStoppedWithin(
+          processRef,
+          processRef.stopGracePeriodMs ?? PROCESS_FORCE_PERIOD_MS,
+        )) {
           if (processRef.child.exitCode !== 0 || processRef.child.signalCode !== null) {
-            throw new Error(
+            preservedFailure = new Error(
               `${processRef.name} a signalé un arrêt en échec ` +
               `(code ${processRef.child.exitCode}, signal ${processRef.child.signalCode ?? "aucun"}).`,
             );
           }
-          return;
+          return complete("graceful");
         }
-        gracefulFailure = new Error(`arrêt gracieux hors délai pour le PID ${processRef.child.pid}.`);
+        gracefulFailure = new Error(`arrêt gracieux hors délai pour le PID ${pid}.`);
       } catch (error) {
         gracefulFailure = error;
       }
     }
-    if (hasSettled(processRef.child)) {
-      if (gracefulFailure !== undefined) throw gracefulFailure;
-      return;
+    if (ownedProcessTreeStopped(processRef)) {
+      if (gracefulFailure !== undefined) preservedFailure ??= gracefulFailure;
+      return complete("graceful");
     }
+
+    let fallbackReason: string | undefined;
+    let cleanupFailure: unknown;
     if (process.platform === "win32") {
-      const killer = spawn("taskkill", ["/PID", String(processRef.child.pid), "/T", "/F"], {
-        shell: false,
-        windowsHide: true,
-        stdio: "ignore",
-      });
-      if (!(await settledWithin(killer, 5_000))) {
-        killer.kill();
-        throw new Error(`taskkill n’a pas terminé dans le délai pour le PID ${processRef.child.pid}.`);
+      fallbackReason = gracefulFailure === undefined
+        ? "arrêt arborescent Windows /T /F requis"
+        : safeDiagnosticReason(gracefulFailure);
+      try {
+        await forceWindowsProcessTree(pid, processRef.stopForcePeriodMs ?? PROCESS_FORCE_PERIOD_MS);
+      } catch (error) {
+        cleanupFailure = error;
       }
     } else {
-      processRef.child.kill("SIGINT");
-      if (!(await settledWithin(processRef.child, 2_500))) processRef.child.kill("SIGKILL");
+      let interruptFailure: unknown;
+      try {
+        signalOwnedUnixProcessTree(processRef, "SIGINT");
+      } catch (error) {
+        interruptFailure = error;
+      }
+      if (interruptFailure === undefined && await ownedProcessTreeStoppedWithin(
+        processRef,
+        processRef.stopGracePeriodMs ?? PROCESS_GRACE_PERIOD_MS,
+      )) {
+        if (gracefulFailure !== undefined) preservedFailure ??= gracefulFailure;
+        return complete("graceful");
+      }
+      const interruptReason = interruptFailure ?? new Error(`arrêt SIGINT hors délai pour le groupe possédé ${processRef.unixProcessGroupId ?? pid}.`);
+      fallbackReason = [gracefulFailure, interruptReason]
+        .filter((entry) => entry !== undefined)
+        .map(safeDiagnosticReason)
+        .join(" | ");
+      try {
+        signalOwnedUnixProcessTree(processRef, "SIGKILL");
+      } catch (error) {
+        cleanupFailure = error;
+      }
     }
-    if (!(await settledWithin(processRef.child, 5_000))) {
-      throw new Error(`le PID ${processRef.child.pid} ne s’est pas arrêté dans le délai.`);
+
+    if (cleanupFailure === undefined && !(await ownedProcessTreeStoppedWithin(
+      processRef,
+      processRef.stopForcePeriodMs ?? PROCESS_FORCE_PERIOD_MS,
+    ))) {
+      cleanupFailure = new Error(
+        `l’arbre possédé du PID ${pid} ne s’est pas arrêté dans le délai.`,
+      );
     }
-    if (gracefulFailure !== undefined) throw gracefulFailure;
+    if (gracefulFailure !== undefined) preservedFailure ??= gracefulFailure;
+    return complete("forced", fallbackReason, cleanupFailure);
   })();
   return processRef.stopPromise;
 }
 
-function waitForExit(child: ChildProcess) {
-  if (hasSettled(child)) return Promise.resolve(child.exitCode);
-  return new Promise<number | null>((resolvePromise) => child.once("exit", (code) => resolvePromise(code)));
+export async function waitForOwnedProcessLog(processRef: OwnedProcess) {
+  if (processRef.logFinalization) await processRef.logFinalization;
 }
 
-async function settledWithin(child: ChildProcess, timeoutMs: number) {
-  if (hasSettled(child)) return true;
-  return Promise.race([
-    waitForExit(child).then(() => true),
-    new Promise<false>((resolvePromise) => setTimeout(() => resolvePromise(false), timeoutMs)),
-  ]);
+export function ownedProcessReliabilitySnapshot(processRef: OwnedProcess) {
+  return {
+    name: processRef.name,
+    kind: processRef.kind,
+    pid: processRef.child.pid,
+    exitCode: processRef.child.exitCode,
+    signalCode: processRef.child.signalCode,
+    logPath: processRef.logPath,
+    unixProcessGroupId: processRef.unixProcessGroupId ?? null,
+    ownsUnixProcessGroup: processRef.ownsUnixProcessGroup === true,
+    log: ownedProcessLogSnapshot(processRef),
+    stop: processRef.stopOutcome ?? null,
+  };
+}
+
+function ownedProcessLogSnapshot(processRef: OwnedProcess): OwnedProcessLogReport {
+  return processRef.logReport
+    ? { ...processRef.logReport, issues: processRef.logReport.issues.map((issue) => ({ ...issue })) }
+    : { auxiliary: true, status: "complete", finalized: true, issues: [] };
+}
+
+function ownedProcessTreeStopped(processRef: OwnedProcess) {
+  const childStopped = hasSettled(processRef.child);
+  if (!processRef.ownsUnixProcessGroup || !processRef.unixProcessGroupId) return childStopped;
+  return childStopped && !unixProcessGroupAlive(processRef.unixProcessGroupId);
+}
+
+async function ownedProcessTreeStoppedWithin(processRef: OwnedProcess, timeoutMs: number) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (ownedProcessTreeStopped(processRef)) return true;
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 25));
+  }
+  return ownedProcessTreeStopped(processRef);
+}
+
+function unixProcessGroupAlive(processGroupId: number) {
+  try {
+    process.kill(-processGroupId, 0);
+    return true;
+  } catch (error) {
+    return !isProcessNotFound(error);
+  }
+}
+
+function signalOwnedUnixProcessTree(processRef: OwnedProcess, signal: NodeJS.Signals) {
+  const processGroupId = processRef.unixProcessGroupId;
+  if (processRef.ownsUnixProcessGroup && processGroupId) {
+    if (processGroupId <= 0 || processGroupId === process.pid) {
+      throw new Error("Refus de signaler un groupe Unix qui n’est pas isolé du harness.");
+    }
+    try {
+      process.kill(-processGroupId, signal);
+      return;
+    } catch (error) {
+      if (isProcessNotFound(error)) return;
+      throw error;
+    }
+  }
+  if (!hasSettled(processRef.child)) processRef.child.kill(signal);
+}
+
+async function forceWindowsProcessTree(pid: number, timeoutMs: number) {
+  const killer = spawn("taskkill", ["/PID", String(pid), "/T", "/F"], {
+    shell: false,
+    windowsHide: true,
+    stdio: "ignore",
+  });
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      new Promise<void>((resolvePromise, reject) => {
+        killer.once("error", reject);
+        killer.once("exit", () => resolvePromise());
+      }),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error(`taskkill n’a pas terminé dans le délai pour le PID ${pid}.`)),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } catch (error) {
+    try {
+      if (!hasSettled(killer)) killer.kill();
+    } catch {
+      // Le premier échec taskkill reste prioritaire.
+    }
+    throw error;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+function attachSecondaryStopFailure(primaryFailure: unknown, secondaryFailure: unknown) {
+  if (!(primaryFailure instanceof Error) || secondaryFailure === undefined) return;
+  try {
+    Object.defineProperty(primaryFailure, "cleanupError", {
+      configurable: true,
+      enumerable: false,
+      value: safeDiagnosticReason(secondaryFailure),
+    });
+  } catch {
+    // L’erreur antérieure reste l’erreur rendue au lanceur.
+  }
+}
+
+async function promiseWithin<Value>(promise: Promise<Value>, timeoutMs: number, timeoutMessage: string) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+function isProcessNotFound(error: unknown) {
+  return Boolean(error) && typeof error === "object" && (error as { code?: unknown }).code === "ESRCH";
 }
 
 function waitForOneShot(child: ChildProcess) {
@@ -695,6 +1077,27 @@ function throwIfStartupCancelled(signal?: AbortSignal) {
 
 function safeError(error: unknown) {
   return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+}
+
+function safeDiagnosticCode(error: unknown) {
+  const candidate = Boolean(error) && typeof error === "object"
+    ? (error as { code?: unknown }).code
+    : undefined;
+  const raw = String(candidate ?? (error instanceof Error ? error.name : "UNKNOWN"));
+  const sanitized = raw.toUpperCase().replace(/[^A-Z0-9_-]/g, "_").slice(0, 64);
+  return sanitized || "UNKNOWN";
+}
+
+function safeDiagnosticReason(error: unknown) {
+  return safeError(error)
+    .replace(/Bearer\s+[A-Za-z0-9._~+/-]+/gi, "Bearer [redacted]")
+    .replace(/eyJ[A-Za-z0-9._~-]+/g, "[jwt-redacted]")
+    .replace(/(https?:\/\/[^\s?]+)\?[^\s'"]+/g, "$1?[redacted]")
+    .slice(0, 500);
+}
+
+function safeProcessName(name: string) {
+  return name.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80) || "unknown";
 }
 
 async function captureApiDiagnostics(processes: OwnedProcess[], runDirectory: string) {
@@ -755,21 +1158,36 @@ function throwCollectedFailures(failures: unknown[], message: string) {
 async function writePartialStartDiagnostics(runDirectory: string, processes: OwnedProcess[]) {
   const emulatorLog = processes.find((entry) => entry.name === "firebase-emulators")?.logPath;
   let entries: string[] = [];
+  let sourceReadErrorCode: string | undefined;
   if (emulatorLog) {
-    const ansiSequence = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
-    entries = (await readFile(emulatorLog, "utf8"))
-      .replace(ansiSequence, "")
-      .split(/\r?\n/)
-      .filter((line) => /emulator|firestore|auth|shutdown|sigint|error|warn|exception/i.test(line))
-      .map((line) => line
-        .replace(/(https?:\/\/[^\s?]+)\?[^\s'"]+/g, "$1?[redacted]")
-        .replace(/Bearer\s+[A-Za-z0-9._~+/-]+/gi, "Bearer [redacted]")
-        .slice(0, 500))
-      .slice(-100);
+    try {
+      const ansiSequence = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+      entries = (await readFile(emulatorLog, "utf8"))
+        .replace(ansiSequence, "")
+        .split(/\r?\n/)
+        .filter((line) => /emulator|firestore|auth|shutdown|sigint|error|warn|exception/i.test(line))
+        .map((line) => line
+          .replace(/(https?:\/\/[^\s?]+)\?[^\s'"]+/g, "$1?[redacted]")
+          .replace(/Bearer\s+[A-Za-z0-9._~+/-]+/gi, "Bearer [redacted]")
+          .slice(0, 500))
+        .slice(-100);
+    } catch (error) {
+      sourceReadErrorCode = safeDiagnosticCode(error);
+      try {
+        console.error(`[harness-diagnostics] log auxiliaire indisponible code=${sourceReadErrorCode}`);
+      } catch {
+        // La preuve structurée ci-dessous conserve déjà ce défaut auxiliaire.
+      }
+    }
   }
   await writeFile(
     resolve(runDirectory, "emulator-diagnostics.json"),
-    `${JSON.stringify({ source: "firebase-emulators.log", entries }, null, 2)}\n`,
+    `${JSON.stringify({
+      source: "firebase-emulators.log",
+      entries,
+      ...(sourceReadErrorCode ? { sourceReadErrorCode } : {}),
+      ownedProcesses: processes.map(ownedProcessReliabilitySnapshot),
+    }, null, 2)}\n`,
     "utf8",
   );
 }
