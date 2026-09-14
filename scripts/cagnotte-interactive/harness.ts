@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import net from "node:net";
 import { resolve } from "node:path";
 import {
@@ -16,6 +16,8 @@ import { buildRecipeEnvironment } from "./environment.js";
 import { assertInteractivePrerequisites } from "./prerequisites.js";
 
 type OwnedProcess = { name: string; child: ChildProcess; logPath: string };
+const AUTH_EMULATOR_READY_TIMEOUT_MS = 120_000;
+const ONE_SHOT_TIMEOUT_MS = 60_000;
 
 export type RecipeHarness = {
   runDirectory: string;
@@ -26,6 +28,7 @@ export type RecipeHarness = {
 };
 
 export async function startRecipeHarness(label: string): Promise<RecipeHarness> {
+  const startedAt = new Date().toISOString();
   assertInteractivePrerequisites();
   const runDirectory = resolve(
     RECIPE_CACHE_ROOT,
@@ -58,12 +61,15 @@ export async function startRecipeHarness(label: string): Promise<RecipeHarness> 
     await waitForHttp(
       localUrl(RECIPE_PORTS.auth, `/emulator/v1/projects/${RECIPE_PROJECT_ID}/accounts`),
       processes[0],
-      30_000,
+      AUTH_EMULATOR_READY_TIMEOUT_MS,
     );
-
     await runOneShot("seed", [
       "--import", "tsx",
       resolve(RECIPE_ROOT, "scripts/cagnotte-interactive/seed.ts"),
+    ], environment, runDirectory);
+    await runOneShot("warm-firestore-listen", [
+      "--import", "tsx",
+      resolve(RECIPE_ROOT, "scripts/cagnotte-interactive/warmFirestoreListen.ts"),
     ], environment, runDirectory);
 
     processes.push(spawnOwned("local-api", [
@@ -71,7 +77,6 @@ export async function startRecipeHarness(label: string): Promise<RecipeHarness> 
       resolve(RECIPE_ROOT, "scripts/cagnotte-interactive/server.ts"),
     ], environment, runDirectory));
     await waitForHttp(localUrl(RECIPE_PORTS.api, "/__recette/health"), processes.at(-1)!, 30_000);
-
     processes.push(spawnOwned("vite-app", [
       resolve(RECIPE_ROOT, "node_modules/vite/bin/vite.js"),
       "--config", resolve(RECIPE_ROOT, "vite.cagnotte-interactive.config.ts"),
@@ -80,7 +85,6 @@ export async function startRecipeHarness(label: string): Promise<RecipeHarness> 
       "--strictPort",
     ], environment, runDirectory));
     await waitForHttp(localUrl(RECIPE_PORTS.app, "/connexion"), processes.at(-1)!, 30_000);
-
     await writeFile(resolve(runDirectory, "processes.json"), `${JSON.stringify({
       projectId: RECIPE_PROJECT_ID,
       origin: localUrl(RECIPE_PORTS.app),
@@ -89,7 +93,54 @@ export async function startRecipeHarness(label: string): Promise<RecipeHarness> 
     }, null, 2)}\n`, "utf8");
     return harness;
   } catch (error) {
-    await harness.stop();
+    const cleanupStartedAt = Date.now();
+    let cleanupError: unknown;
+    try {
+      await harness.stop();
+    } catch (caughtCleanupError) {
+      cleanupError = caughtCleanupError;
+      console.error(`[harness-cleanup] ${safeError(caughtCleanupError)}`);
+      if (error instanceof Error) {
+        Object.defineProperty(error, "cleanupError", {
+          configurable: true,
+          enumerable: false,
+          value: safeError(caughtCleanupError),
+        });
+      }
+    }
+    try {
+      await writeFile(resolve(runDirectory, "cleanup.json"), `${JSON.stringify({
+        label,
+        startedAt,
+        completedAt: new Date().toISOString(),
+        primaryError: safeError(error),
+        steps: [{
+          name: "stop-partially-started-harness",
+          status: cleanupError === undefined ? "completed" : "failed",
+          durationMs: Date.now() - cleanupStartedAt,
+          ...(cleanupError === undefined ? {} : { error: safeError(cleanupError) }),
+        }],
+        ownedProcesses: processes.map(({ name, child }) => ({
+          name,
+          pid: child.pid,
+          exitCode: child.exitCode,
+        })),
+      }, null, 2)}\n`, "utf8");
+      await writePartialStartDiagnostics(runDirectory, processes);
+    } catch (evidenceError) {
+      console.error(`[harness-cleanup-evidence] ${safeError(evidenceError)}`);
+    }
+    if (error instanceof Error) {
+      try {
+        Object.defineProperty(error, "runDirectory", {
+          configurable: true,
+          enumerable: false,
+          value: runDirectory,
+        });
+      } catch {
+        // L'identité de l'erreur de démarrage reste prioritaire.
+      }
+    }
     throw error;
   }
 }
@@ -131,8 +182,19 @@ async function assertPortsAvailable() {
 async function canBind(port: number) {
   return new Promise<boolean>((resolvePromise) => {
     const server = net.createServer();
-    server.once("error", () => resolvePromise(false));
-    server.listen(port, RECIPE_HOST, () => server.close(() => resolvePromise(true)));
+    let settled = false;
+    const finish = (value: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolvePromise(value);
+    };
+    const timer = setTimeout(() => {
+      server.close();
+      finish(false);
+    }, 2_000);
+    server.once("error", () => finish(false));
+    server.listen(port, RECIPE_HOST, () => server.close(() => finish(true)));
   });
 }
 
@@ -154,16 +216,50 @@ function spawnOwned(name: string, args: string[], environment: NodeJS.ProcessEnv
 
 async function runOneShot(name: string, args: string[], environment: NodeJS.ProcessEnv, runDirectory: string) {
   const owned = spawnOwned(name, args, environment, runDirectory);
-  const code = await waitForExit(owned.child);
-  if (code !== 0) throw new Error(`${name} a échoué avec le code ${code}. Voir ${owned.logPath}`);
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const code = await Promise.race([
+      waitForOneShot(owned.child),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error(`${name} n’a pas terminé dans le délai de ${ONE_SHOT_TIMEOUT_MS} ms.`)),
+          ONE_SHOT_TIMEOUT_MS,
+        );
+      }),
+    ]);
+    if (code !== 0) throw new Error(`${name} a échoué avec le code ${code}. Voir ${owned.logPath}`);
+  } catch (error) {
+    try {
+      await stopOwned(owned);
+    } catch (cleanupError) {
+      console.error(`[one-shot-cleanup:${name}] ${safeError(cleanupError)}`);
+      if (error instanceof Error) {
+        try {
+          Object.defineProperty(error, "cleanupError", {
+            configurable: true,
+            enumerable: false,
+            value: safeError(cleanupError),
+          });
+        } catch {
+          // L’erreur initiale du sous-processus reste prioritaire.
+        }
+      }
+    }
+    throw error;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 async function waitForHttp(url: string, processRef: OwnedProcess, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs;
   let lastError = "";
   while (Date.now() < deadline) {
-    if (processRef.child.exitCode !== null) {
-      throw new Error(`${processRef.name} s’est arrêté avant disponibilité (code ${processRef.child.exitCode}).`);
+    if (hasSettled(processRef.child)) {
+      throw new Error(
+        `${processRef.name} s’est arrêté avant disponibilité ` +
+        `(code ${processRef.child.exitCode}, signal ${processRef.child.signalCode ?? "aucun"}).`,
+      );
     }
     try {
       const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
@@ -178,39 +274,98 @@ async function waitForHttp(url: string, processRef: OwnedProcess, timeoutMs: num
 }
 
 async function stopAll(processes: OwnedProcess[]) {
-  for (const processRef of [...processes].reverse()) await stopOwned(processRef);
+  const failures: Error[] = [];
+  for (const processRef of [...processes].reverse()) {
+    try {
+      await stopOwned(processRef);
+    } catch (error) {
+      failures.push(new Error(`${processRef.name}: ${safeError(error)}`));
+    }
+  }
   const stillOpen: number[] = [];
   for (const port of Object.values(RECIPE_PORTS)) {
     if (!(await canBind(port))) stillOpen.push(port);
   }
-  if (stillOpen.length) throw new Error(`Processus local encore à l’écoute sur : ${stillOpen.join(", ")}.`);
+  if (stillOpen.length) failures.push(new Error(`Processus local encore à l’écoute sur : ${stillOpen.join(", ")}.`));
+  if (failures.length) throw new AggregateError(failures, "Arrêt incomplet du harness de recette.");
 }
 
 async function stopOwned(processRef: OwnedProcess) {
-  if (!processRef.child.pid || processRef.child.exitCode !== null) return;
+  if (!processRef.child.pid || hasSettled(processRef.child)) return;
   if (process.platform === "win32") {
     const killer = spawn("taskkill", ["/PID", String(processRef.child.pid), "/T", "/F"], {
       shell: false,
       windowsHide: true,
       stdio: "ignore",
     });
-    await waitForExit(killer);
+    if (!(await settledWithin(killer, 5_000))) {
+      killer.kill();
+      throw new Error(`taskkill n’a pas terminé dans le délai pour le PID ${processRef.child.pid}.`);
+    }
   } else {
     processRef.child.kill("SIGINT");
     if (!(await settledWithin(processRef.child, 2_500))) processRef.child.kill("SIGKILL");
   }
-  await settledWithin(processRef.child, 5_000);
+  if (!(await settledWithin(processRef.child, 5_000))) {
+    throw new Error(`le PID ${processRef.child.pid} ne s’est pas arrêté dans le délai.`);
+  }
 }
 
 function waitForExit(child: ChildProcess) {
-  if (child.exitCode !== null) return Promise.resolve(child.exitCode);
+  if (hasSettled(child)) return Promise.resolve(child.exitCode);
   return new Promise<number | null>((resolvePromise) => child.once("exit", (code) => resolvePromise(code)));
 }
 
 async function settledWithin(child: ChildProcess, timeoutMs: number) {
-  if (child.exitCode !== null) return true;
+  if (hasSettled(child)) return true;
   return Promise.race([
     waitForExit(child).then(() => true),
     new Promise<false>((resolvePromise) => setTimeout(() => resolvePromise(false), timeoutMs)),
   ]);
+}
+
+function waitForOneShot(child: ChildProcess) {
+  if (hasSettled(child)) return Promise.resolve(child.exitCode);
+  return new Promise<number | null>((resolvePromise, reject) => {
+    const onExit = (code: number | null) => {
+      child.off("error", onError);
+      resolvePromise(code);
+    };
+    const onError = (error: Error) => {
+      child.off("exit", onExit);
+      reject(error);
+    };
+    child.once("exit", onExit);
+    child.once("error", onError);
+  });
+}
+
+function hasSettled(child: ChildProcess) {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
+function safeError(error: unknown) {
+  return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+}
+
+async function writePartialStartDiagnostics(runDirectory: string, processes: OwnedProcess[]) {
+  const emulatorLog = processes.find((entry) => entry.name === "firebase-emulators")?.logPath;
+  let entries: string[] = [];
+  if (emulatorLog) {
+    const ansiSequence = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+    entries = (await readFile(emulatorLog, "utf8"))
+      .replace(ansiSequence, "")
+      .split(/\r?\n/)
+      .filter((line) => /emulator|firestore|auth|shutdown|sigint|error|warn|exception/i.test(line))
+      .map((line) => line
+        .replace(/(https?:\/\/[^\s?]+)\?[^\s'"]+/g, "$1?[redacted]")
+        .replace(/Bearer\s+[A-Za-z0-9._~+/-]+/gi, "Bearer [redacted]")
+        .slice(0, 500))
+      .slice(-100);
+  }
+  await writeFile(
+    resolve(runDirectory, "emulator-diagnostics.json"),
+    `${JSON.stringify({ source: "firebase-emulators.log", entries }, null, 2)}\n`,
+    "utf8",
+  );
 }

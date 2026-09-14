@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   chromium,
@@ -25,6 +26,21 @@ import {
   startRecipeHarness,
   type RecipeHarness,
 } from "./harness.js";
+import {
+  configureOwnedResource,
+  runWithViewportResources,
+  type CleanupStepResult,
+} from "./resourceLifecycle.js";
+import {
+  assertExpectedFailClosedApiUnavailable,
+  assertNoUnexpectedRuntimeFailures,
+  isFirestoreListen400Response,
+  type ConsoleEvidence,
+  type FirestoreListenProbeEvidence,
+  type NetworkEvidence,
+  type RequestShape,
+  type ResponseSignature,
+} from "./runtimeDiagnostics.js";
 
 type RecipeState = {
   projectId: string;
@@ -91,30 +107,20 @@ type ViewportDefinition = {
   height: number;
 };
 
-type NetworkEvidence = {
-  phase: string;
-  direction: "request" | "response" | "websocket";
-  method?: string;
-  origin: string;
-  pathname: string;
-  resourceType?: string;
-  status?: number;
-  blocked?: boolean;
-};
-
-type ConsoleEvidence = {
-  phase: string;
-  source: "console" | "pageerror";
-  type: string;
-  text: string;
-};
-
 type MonitoredContext = {
   context: BrowserContext;
+  contextId: string;
   network: NetworkEvidence[];
   console: ConsoleEvidence[];
   setPhase: (phase: string) => void;
+  currentPhase: () => string;
+  pageId: (page: Page) => string;
+  flushEvidence: () => Promise<void>;
   lastCagnotteAuthorization: () => string;
+};
+
+type EvidenceClock = {
+  next: () => { sequence: number; occurredAtEpochMs: number };
 };
 
 const viewportDefinitions: ViewportDefinition[] = [
@@ -122,20 +128,60 @@ const viewportDefinitions: ViewportDefinition[] = [
   { label: "mobile", width: 390, height: 844 },
 ];
 const allowedPorts = new Set<number>(RECIPE_ALLOWED_PORTS);
-const browser = await chromium.launch({ headless: true });
-const executions: Array<Record<string, unknown>> = [];
-
-try {
-  for (const viewport of viewportDefinitions) {
-    executions.push(await runViewport(browser, viewport));
-  }
-} finally {
-  await browser.close();
-}
-
 await mkdir(RECIPE_CACHE_ROOT, { recursive: true });
 const latestEvidence = resolve(RECIPE_CACHE_ROOT, "latest-result.json");
+const latestFailureEvidence = resolve(RECIPE_CACHE_ROOT, "latest-failure.json");
+await Promise.all([
+  rm(latestEvidence, { force: true }),
+  rm(latestFailureEvidence, { force: true }),
+]);
+const executions: Array<Record<string, unknown>> = [];
+let activeRunDirectory: string | undefined;
+let browser: Browser | undefined;
+let executionError: unknown;
+
+try {
+  browser = await chromium.launch({ headless: true });
+  for (const viewport of viewportDefinitions) {
+    executions.push(await runViewport(browser, viewport, (runDirectory) => {
+      activeRunDirectory = runDirectory;
+    }));
+  }
+} catch (error) {
+  executionError = error;
+  const failedRunDirectory = record(error).runDirectory;
+  if (typeof failedRunDirectory === "string") activeRunDirectory = failedRunDirectory;
+}
+
+if (browser) {
+  try {
+    await closeBrowserBounded(browser);
+  } catch (error) {
+    console.error(`[cleanup:browser] ${safeError(error)}`);
+    if (executionError === undefined) executionError = error;
+  }
+}
+
+if (executionError !== undefined) {
+  try {
+    await writeFile(latestFailureEvidence, `${JSON.stringify({
+      status: "FAIL",
+      generatedAt: new Date().toISOString(),
+      projectId: RECIPE_PROJECT_ID,
+      origin: localUrl(RECIPE_PORTS.app),
+      error: safeError(executionError),
+      activeRunDirectory,
+      completedExecutions: executions,
+    }, null, 2)}\n`, "utf8");
+    console.error(`Preuve interactive d’échec : ${latestFailureEvidence}`);
+  } catch (evidenceError) {
+    console.error(`[failure-evidence] ${safeError(evidenceError)}`);
+  }
+  throw executionError;
+}
+
 await writeFile(latestEvidence, `${JSON.stringify({
+  status: "PASS",
   generatedAt: new Date().toISOString(),
   projectId: RECIPE_PROJECT_ID,
   origin: localUrl(RECIPE_PORTS.app),
@@ -144,17 +190,107 @@ await writeFile(latestEvidence, `${JSON.stringify({
 console.log(`Preuve interactive consolidée : ${latestEvidence}`);
 console.log("Recette interactive locale réussie sur desktop et viewport mobile ; tous les processus sont arrêtés.");
 
-async function runViewport(browserInstance: Browser, viewport: ViewportDefinition) {
-  const harness = await startRecipeHarness(viewport.label);
+async function runViewport(
+  browserInstance: Browser,
+  viewport: ViewportDefinition,
+  onHarnessStarted: (runDirectory: string) => void,
+) {
+  let stoppedForFailClosed = false;
+  let evidenceSequence = 0;
+  let executionStatus: "running" | "pass" = "running";
   const screenshots: string[] = [];
   const stages: Array<{ label: string; state: RecipeState }> = [];
-  const clientMonitor = await monitoredContext(browserInstance, viewport, "client");
-  const adminMonitor = await monitoredContext(browserInstance, viewport, "admin");
-  const clientPage = await clientMonitor.context.newPage();
-  const adminPage = await adminMonitor.context.newPage();
-  let stoppedForFailClosed = false;
-
-  try {
+  const firestoreProbeEvidence: FirestoreListenProbeEvidence[] = [];
+  const firestoreProbeId = `${viewport.label}-${process.pid}-${Date.now()}`;
+  const evidenceClock: EvidenceClock = {
+    next: () => ({ sequence: ++evidenceSequence, occurredAtEpochMs: Date.now() }),
+  };
+  return runWithViewportResources({
+    label: viewport.label,
+    startHarness: async () => {
+      const harness = await startRecipeHarness(viewport.label);
+      onHarnessStarted(harness.runDirectory);
+      return harness;
+    },
+    createMonitor: (role) => monitoredContext(browserInstance, viewport, role, evidenceClock),
+    createPage: (monitor) => monitor.context.newPage(),
+    persistEvidence: async (resources) => {
+      if (!resources.harness) return;
+      const evidenceFailures: unknown[] = [];
+      if (resources.clientPage && resources.clientMonitor) {
+        try {
+          await collectFirestoreProbeEvidence(
+            resources.clientPage,
+            resources.clientMonitor,
+            evidenceClock,
+            firestoreProbeEvidence,
+          );
+        } catch (error) {
+          evidenceFailures.push(error);
+        }
+      }
+      const evidenceWrites = await Promise.allSettled([
+        persistBrowserEvidence(
+          resources.harness,
+          ...[resources.clientMonitor, resources.adminMonitor].filter(
+            (monitor): monitor is MonitoredContext => Boolean(monitor),
+          ),
+        ),
+        writeFile(
+          resolve(resources.harness.runDirectory, "firestore-listen-probe.json"),
+          `${JSON.stringify(firestoreProbeEvidence, null, 2)}\n`,
+          "utf8",
+        ),
+        writeFile(
+          resolve(resources.harness.runDirectory, "execution-summary.json"),
+          `${JSON.stringify({
+          status: executionStatus === "pass" ? "PASS" : "INTERRUPTED",
+          viewport,
+          runDirectory: resources.harness.runDirectory,
+          currentPhases: {
+            client: resources.clientMonitor?.currentPhase(),
+            admin: resources.adminMonitor?.currentPhase(),
+          },
+          completedStages: stages.map(({ label, state }) => ({
+            label,
+            wallet: state.wallet,
+            movements: state.movements.length,
+          })),
+          screenshots,
+          listen400Incidents: [
+            ...(resources.clientMonitor?.network ?? []),
+            ...(resources.adminMonitor?.network ?? []),
+          ].filter(isFirestoreListen400Response),
+          }, null, 2)}\n`,
+          "utf8",
+        ),
+      ]);
+      evidenceFailures.push(...evidenceWrites
+        .filter((entry): entry is PromiseRejectedResult => entry.status === "rejected")
+        .map((entry) => entry.reason));
+      if (evidenceFailures.length > 0) {
+        throw new AggregateError(
+          evidenceFailures,
+          "Une ou plusieurs preuves interactives n’ont pas pu être enregistrées.",
+        );
+      }
+    },
+    closePage: (page) => page.close(),
+    closeMonitor: (monitor) => monitor.context.close(),
+    stopHarness: (harness) => harness.stop(),
+    writeCleanupReport: async (report, resources) => {
+      if (!resources.harness) return;
+      await Promise.all([
+        writeFile(
+          resolve(resources.harness.runDirectory, "cleanup.json"),
+          `${JSON.stringify(report, null, 2)}\n`,
+          "utf8",
+        ),
+        persistSanitizedHarnessDiagnostics(resources.harness),
+      ]);
+    },
+    onCleanupIssue: (step) => logCleanupIssue(viewport.label, step),
+  }, async ({ harness, clientMonitor, adminMonitor, clientPage, adminPage }) => {
     const fixtures = JSON.parse(await readFile(resolve(harness.runDirectory, "fixtures.json"), "utf8")) as {
       projectId: string;
       productId: string;
@@ -177,7 +313,18 @@ async function runViewport(browserInstance: Browser, viewport: ViewportDefinitio
     assert.equal(initial.rateLimits.length, 0);
 
     clientMonitor.setPhase("client1-auth");
-    await signIn(clientPage, RECIPE_ACCOUNTS.client1);
+    await signIn(clientPage, RECIPE_ACCOUNTS.client1, async () => {
+      await clientPage.evaluate(
+        async ({ documentId, probeId }) => window.__VERDANZA_RECETTE__?.startFirestoreListenProbe(documentId, probeId),
+        { documentId: RECIPE_PRODUCT.id, probeId: firestoreProbeId },
+      );
+    });
+    await collectFirestoreProbeEvidence(
+      clientPage,
+      clientMonitor,
+      evidenceClock,
+      firestoreProbeEvidence,
+    );
     await openAdvantages(clientPage, RECIPE_ACCOUNTS.client1.email);
     await waitForMainText(clientPage, (text) => text.includes("Portefeuille non créé"), "portefeuille initial absent");
     await assertRecipeBanner(clientPage);
@@ -398,19 +545,54 @@ async function runViewport(browserInstance: Browser, viewport: ViewportDefinitio
     await signIn(clientPage, RECIPE_ACCOUNTS.client1);
     await openAdvantages(clientPage, RECIPE_ACCOUNTS.client1.email);
     await waitForBalance(clientPage, "Disponible", "5,00 €");
+    clientMonitor.setPhase("firestore-listen-recovery");
+    const recoveryGeneration = `recovery-${viewport.label}-${Date.now()}`;
+    await runRecipeScript(
+      harness,
+      `${viewport.label}-touch-listen-probe`,
+      "scripts/cagnotte-interactive/touchListenProbe.ts",
+      [recoveryGeneration],
+    );
+    let recoveryWaitError: unknown;
+    try {
+      await clientPage.waitForFunction(
+        (generation) => window.__VERDANZA_RECETTE__?.readFirestoreListenProbe()
+          .some((entry) => entry.generation === generation && entry.fromCache === false && entry.hasPendingWrites === false),
+        recoveryGeneration,
+      );
+    } catch (error) {
+      recoveryWaitError = error;
+    }
+    try {
+      await collectFirestoreProbeEvidence(
+        clientPage,
+        clientMonitor,
+        evidenceClock,
+        firestoreProbeEvidence,
+      );
+    } catch (evidenceError) {
+      if (recoveryWaitError === undefined) throw evidenceError;
+      console.error(`[firestore-probe-evidence] ${safeError(evidenceError)}`);
+    }
+    if (recoveryWaitError !== undefined) throw recoveryWaitError;
+    clientMonitor.setPhase("client-final-reload");
     await clientPage.reload({ waitUntil: "domcontentloaded" });
     await clientPage.getByRole("heading", { name: "Mes avantages" }).waitFor();
     await waitForBalance(clientPage, "Disponible", "5,00 €");
     assert.match(await mainText(clientPage), new RegExp(escapeRegex(RECIPE_ACCOUNTS.client1.email)));
 
+    await Promise.all([clientMonitor.flushEvidence(), adminMonitor.flushEvidence()]);
     const runtimeIsolation = assertNoUnexpectedRuntimeFailures(
       [...clientMonitor.network, ...adminMonitor.network],
       [...clientMonitor.console, ...adminMonitor.console],
+      firestoreProbeEvidence,
     );
     assert.deepEqual(await clientPage.evaluate(() => window.__VERDANZA_RECETTE_NETWORK__ ?? []), []);
     assert.deepEqual(await adminPage.evaluate(() => window.__VERDANZA_RECETTE_NETWORK__ ?? []), []);
 
     clientMonitor.setPhase("fail-closed-api-unavailable");
+    const failClosedNetworkStart = clientMonitor.network.length;
+    const failClosedConsoleStart = clientMonitor.console.length;
     await harness.stopService("local-api");
     stoppedForFailClosed = true;
     await clientPage.getByRole("button", { name: "Actualiser" }).click();
@@ -421,6 +603,12 @@ async function runViewport(browserInstance: Browser, viewport: ViewportDefinitio
     );
     await capture(clientPage, harness, viewport, "08-api-indisponible-fail-closed", screenshots);
     assert.deepEqual(await clientPage.evaluate(() => window.__VERDANZA_RECETTE_NETWORK__ ?? []), []);
+    await clientMonitor.flushEvidence();
+    const failClosedEvidence = assertExpectedFailClosedApiUnavailable(
+      clientMonitor.network.slice(failClosedNetworkStart),
+      clientMonitor.console.slice(failClosedConsoleStart),
+      { contextId: clientMonitor.contextId, pageId: clientMonitor.pageId(clientPage) },
+    );
 
     await persistBrowserEvidence(harness, clientMonitor, adminMonitor);
     const apiRequests = await readJsonLines(resolve(harness.runDirectory, "api-requests.jsonl"));
@@ -454,6 +642,7 @@ async function runViewport(browserInstance: Browser, viewport: ViewportDefinitio
         directFirestore: directFirestoreDenial.code,
       },
       failClosedApiUnavailable: true,
+      failClosedEvidence,
       blockedBrowserDestinations: runtimeIsolation.blockedBrowserDestinations,
       firestoreTransportRecoveries: runtimeIsolation.firestoreTransportRecoveries,
       screenshots,
@@ -468,103 +657,231 @@ async function runViewport(browserInstance: Browser, viewport: ViewportDefinitio
       })),
     };
     await writeFile(resolve(harness.runDirectory, "result.json"), `${JSON.stringify(result, null, 2)}\n`, "utf8");
+    executionStatus = "pass";
     return result;
-  } finally {
-    await persistBrowserEvidence(harness, clientMonitor, adminMonitor).catch(() => undefined);
-    await Promise.allSettled([clientMonitor.context.close(), adminMonitor.context.close()]);
-    await harness.stop();
-    if (!stoppedForFailClosed) {
-      console.log(`${viewport.label}: arrêt de sécurité appliqué avant la fin du scénario.`);
-    }
-  }
+  }).finally(() => {
+    if (!stoppedForFailClosed) console.log(`${viewport.label}: arrêt de sécurité appliqué avant la fin du scénario.`);
+  });
 }
 
 async function monitoredContext(
   browserInstance: Browser,
   viewport: ViewportDefinition,
   role: string,
+  evidenceClock: EvidenceClock,
 ): Promise<MonitoredContext> {
-  const context = await browserInstance.newContext({
-    viewport: { width: viewport.width, height: viewport.height },
-    locale: "fr-FR",
-  });
   const network: NetworkEvidence[] = [];
   const console: ConsoleEvidence[] = [];
+  const contextId = `${viewport.label}:${role}`;
+  const pageIds = new WeakMap<Page, string>();
+  const requestIds = new WeakMap<Request, string>();
+  const pendingEvidence = new Set<Promise<void>>();
+  let pageCount = 0;
+  let requestCount = 0;
   let phase = `${role}-boot`;
   let lastCagnotteAuthorization = "";
-
-  await context.route("**/*", async (route) => {
-    const request = route.request();
-    const parsed = safeUrl(request.url());
-    if (!parsed || isNonNetworkProtocol(parsed)) return route.continue();
-    if (!isAllowedLocalUrl(parsed)) {
-      network.push(networkEntry(phase, "request", parsed, request, undefined, true));
-      await route.abort("blockedbyclient");
-      return;
+  const pageId = (page: Page) => {
+    const existing = pageIds.get(page);
+    if (existing) return existing;
+    const created = `${contextId}:page-${++pageCount}`;
+    pageIds.set(page, created);
+    return created;
+  };
+  const requestId = (request: Request) => {
+    const existing = requestIds.get(request);
+    if (existing) return existing;
+    const created = `${contextId}:request-${++requestCount}`;
+    requestIds.set(request, created);
+    return created;
+  };
+  const requestPageId = (request: Request) => {
+    try {
+      return pageId(request.frame().page());
+    } catch {
+      return undefined;
     }
-    await route.continue();
-  });
-  context.on("request", (request) => {
-    const parsed = safeUrl(request.url());
-    if (!parsed || isNonNetworkProtocol(parsed)) return;
-    if (parsed.pathname === "/api/cagnotte") {
-      const authorization = request.headers().authorization || "";
-      if (authorization.startsWith("Bearer ")) lastCagnotteAuthorization = authorization;
-    }
-    if (isAllowedLocalUrl(parsed)) network.push(networkEntry(phase, "request", parsed, request));
-  });
-  context.on("response", (response) => {
-    const parsed = safeUrl(response.url());
-    if (!parsed || isNonNetworkProtocol(parsed)) return;
-    network.push(networkEntry(phase, "response", parsed, response.request(), response.status()));
-  });
-  context.on("page", (page) => {
-    page.on("console", (message) => console.push(consoleEntry(phase, message)));
-    page.on("pageerror", (error) => console.push({
-      phase,
-      source: "pageerror",
-      type: "error",
-      text: sanitizedConsoleText(error.message),
-    }));
-    page.on("websocket", (socket) => {
-      const parsed = safeUrl(socket.url());
-      if (parsed) network.push({
-        phase,
-        direction: "websocket",
-        origin: parsed.origin,
-        pathname: parsed.pathname,
-        blocked: !isAllowedLocalUrl(parsed, true),
+  };
+  const context = await configureOwnedResource({
+    label: `${contextId}-context`,
+    create: () => browserInstance.newContext({
+      viewport: { width: viewport.width, height: viewport.height },
+      locale: "fr-FR",
+    }),
+    configure: async (ownedContext) => {
+      await ownedContext.route("**/*", async (route) => {
+        const request = route.request();
+        const parsed = safeUrl(request.url());
+        if (!parsed || isNonNetworkProtocol(parsed)) return route.continue();
+        if (!isAllowedLocalUrl(parsed)) {
+          network.push(networkEntry({
+            phase,
+            contextId,
+            pageId: requestPageId(request),
+            clock: evidenceClock,
+            requestId: requestId(request),
+            direction: "request",
+            url: parsed,
+            request,
+            blocked: true,
+          }));
+          await route.abort("blockedbyclient");
+          return;
+        }
+        await route.continue();
       });
-    });
+      ownedContext.on("request", (request) => {
+        const parsed = safeUrl(request.url());
+        if (!parsed || isNonNetworkProtocol(parsed)) return;
+        if (parsed.pathname === "/api/cagnotte") {
+          const authorization = request.headers().authorization || "";
+          if (authorization.startsWith("Bearer ")) lastCagnotteAuthorization = authorization;
+        }
+        if (isAllowedLocalUrl(parsed)) network.push(networkEntry({
+          phase,
+          contextId,
+          pageId: requestPageId(request),
+          clock: evidenceClock,
+          requestId: requestId(request),
+          direction: "request",
+          url: parsed,
+          request,
+        }));
+      });
+      ownedContext.on("response", (response) => {
+        const parsed = safeUrl(response.url());
+        if (!parsed || isNonNetworkProtocol(parsed)) return;
+        const request = response.request();
+        const evidence = networkEntry({
+          phase,
+          contextId,
+          pageId: requestPageId(request),
+          clock: evidenceClock,
+          requestId: requestId(request),
+          direction: "response",
+          url: parsed,
+          request,
+          status: response.status(),
+        });
+        network.push(evidence);
+        if (isFirestoreListen400Response(evidence)) {
+          const task = captureResponseSignature(response)
+            .then((signature) => { evidence.responseSignature = signature; })
+            .finally(() => { pendingEvidence.delete(task); });
+          pendingEvidence.add(task);
+        }
+      });
+      ownedContext.on("page", (page) => {
+        const ownedPageId = pageId(page);
+        page.on("console", (message) => console.push(consoleEntry({
+          phase,
+          contextId,
+          pageId: ownedPageId,
+          clock: evidenceClock,
+          message,
+        })));
+        page.on("pageerror", (error) => console.push({
+          phase,
+          contextId,
+          pageId: ownedPageId,
+          ...evidenceClock.next(),
+          source: "pageerror",
+          type: "error",
+          text: sanitizedConsoleText(error.message),
+        }));
+        page.on("websocket", (socket) => {
+          const parsed = safeUrl(socket.url());
+          if (parsed) network.push({
+            phase,
+            contextId,
+            pageId: ownedPageId,
+            ...evidenceClock.next(),
+            requestId: `${contextId}:websocket-${++requestCount}`,
+            direction: "websocket",
+            origin: parsed.origin,
+            pathname: parsed.pathname,
+            blocked: !isAllowedLocalUrl(parsed, true),
+          });
+        });
+      });
+    },
+    close: (ownedContext) => ownedContext.close(),
+    onCleanupIssue: (step) => logCleanupIssue(viewport.label, step),
   });
   return {
     context,
+    contextId,
     network,
     console,
     setPhase(value) { phase = value; },
+    currentPhase() { return phase; },
+    pageId,
+    async flushEvidence() {
+      while (pendingEvidence.size > 0) await Promise.allSettled([...pendingEvidence]);
+    },
     lastCagnotteAuthorization() { return lastCagnotteAuthorization; },
   };
 }
 
 async function persistBrowserEvidence(
   harness: RecipeHarness,
-  clientMonitor: MonitoredContext,
-  adminMonitor: MonitoredContext,
+  ...monitors: MonitoredContext[]
 ) {
+  await Promise.all(monitors.map((monitor) => monitor.flushEvidence()));
   await Promise.all([
-    writeFile(resolve(harness.runDirectory, "browser-network.json"), `${JSON.stringify([
-      ...clientMonitor.network,
-      ...adminMonitor.network,
-    ], null, 2)}\n`, "utf8"),
-    writeFile(resolve(harness.runDirectory, "browser-console.json"), `${JSON.stringify([
-      ...clientMonitor.console,
-      ...adminMonitor.console,
-    ], null, 2)}\n`, "utf8"),
+    writeFile(resolve(harness.runDirectory, "browser-network.json"), `${JSON.stringify(
+      monitors.flatMap((monitor) => monitor.network),
+      null,
+      2,
+    )}\n`, "utf8"),
+    writeFile(resolve(harness.runDirectory, "browser-console.json"), `${JSON.stringify(
+      monitors.flatMap((monitor) => monitor.console),
+      null,
+      2,
+    )}\n`, "utf8"),
   ]);
 }
 
-async function signIn(page: Page, account: { email: string; password: string }) {
+async function collectFirestoreProbeEvidence(
+  page: Page,
+  monitor: MonitoredContext,
+  clock: EvidenceClock,
+  target: FirestoreListenProbeEvidence[],
+) {
+  const browserEvidence = await page.evaluate(
+    () => window.__VERDANZA_RECETTE__?.readFirestoreListenProbe() ?? [],
+  );
+  const ownedPageId = monitor.pageId(page);
+  for (const entry of browserEvidence) {
+    const duplicate = target.some((existing) => (
+      existing.probeId === entry.probeId &&
+      existing.generation === entry.generation &&
+      existing.occurredAtEpochMs === entry.receivedAtEpochMs &&
+      existing.terminalErrorCode === entry.terminalErrorCode
+    ));
+    if (duplicate) continue;
+    const order = clock.next();
+    target.push({
+      phase: monitor.currentPhase(),
+      contextId: monitor.contextId,
+      pageId: ownedPageId,
+      sequence: order.sequence,
+      occurredAtEpochMs: entry.receivedAtEpochMs,
+      probeId: entry.probeId,
+      generation: entry.generation,
+      fromCache: entry.fromCache,
+      hasPendingWrites: entry.hasPendingWrites,
+      ...(entry.terminalErrorCode ? { terminalErrorCode: entry.terminalErrorCode } : {}),
+    });
+  }
+}
+
+async function signIn(
+  page: Page,
+  account: { email: string; password: string },
+  afterNavigation?: () => Promise<void>,
+) {
   await goto(page, "/connexion");
+  await afterNavigation?.();
   const ageConfirmed = await page.evaluate(() => (
     window.localStorage.getItem("verdanza-age-confirmed") === "true"
   ));
@@ -624,6 +941,17 @@ async function createOrderThroughUi(
   await goto(page, "/boutique");
   await page.getByRole("heading", { name: "Boutique CBD" }).waitFor();
   await page.getByRole("button", { name: "Ajouter 1 g — 100,00 €" }).click();
+  await page.waitForFunction((productId) => {
+    try {
+      const items = JSON.parse(window.localStorage.getItem("verdanza-cart") || "[]") as Array<{
+        productId?: string;
+        quantity?: number;
+      }>;
+      return items.some((item) => item.productId === productId && Number(item.quantity) >= 1);
+    } catch {
+      return false;
+    }
+  }, RECIPE_PRODUCT.id, { timeout: 10_000 });
   await goto(page, "/panier");
   await page.getByRole("heading", { name: "Panier" }).waitFor();
   await waitForMainText(page, (text) => text.includes(RECIPE_PRODUCT.name) && text.includes("100,00 EUR"), "panier fictif à 100 euros");
@@ -893,6 +1221,17 @@ async function goto(page: Page, pathname: string) {
       page.waitForURL((url) => url.pathname === pathname, { timeout: 15_000 }),
       applicationLink.evaluate((element) => (element as HTMLAnchorElement).click()),
     ]);
+  } else if (pathname.startsWith("/admin/")) {
+    const response = await page.goto(target, { waitUntil: "domcontentloaded" });
+    assert.equal(response?.status(), 200, `${pathname} doit être servi localement`);
+  } else if (page.url().startsWith(localUrl(RECIPE_PORTS.app))) {
+    await Promise.all([
+      page.waitForURL((url) => url.pathname === pathname, { timeout: 15_000 }),
+      page.evaluate((nextPathname) => {
+        window.history.pushState(null, "", nextPathname);
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      }, pathname),
+    ]);
   } else {
     const response = await page.goto(target, { waitUntil: "domcontentloaded" });
     assert.equal(response?.status(), 200, `${pathname} doit être servi localement`);
@@ -985,72 +1324,6 @@ function normalizeText(value: string) {
   return value.replace(/[\u00a0\u202f]/g, " ").replace(/\r/g, "");
 }
 
-function assertNoUnexpectedRuntimeFailures(network: NetworkEvidence[], console: ConsoleEvidence[]) {
-  const external = network.filter((entry) => entry.blocked === true);
-  assert.deepEqual(external, [], `aucune tentative navigateur externe attendue : ${JSON.stringify(external)}`);
-  const badHttp = network.filter((entry) => entry.direction === "response" && (entry.status ?? 0) >= 500 && !(
-    entry.status === 503 && ["/api/public-promo-banners", "/api/admin-payment-links", "/api/invoices"].includes(entry.pathname)
-  ));
-  assert.deepEqual(badHttp, [], `réponse HTTP locale inattendue : ${JSON.stringify(badHttp)}`);
-  const unexpectedConsole = console.filter((entry) => {
-    if (entry.source === "pageerror") return true;
-    if (entry.type !== "error") return false;
-    if (/Failed to load resource.*503/i.test(entry.text)) return false;
-    if (entry.phase === "negative-auth-checks" && /Failed to load resource.*403/i.test(entry.text)) return false;
-    if (isFirebaseClearDotCspBlock(entry)) return false;
-    if (isRecoveredLocalFirestoreTransport(entry)) return false;
-    return true;
-  });
-  const firestoreTransportRecoveries = console.filter(isRecoveredLocalFirestoreTransport);
-  assert.ok(
-    firestoreTransportRecoveries.length <= 1,
-    `au plus une reconnexion initiale Firestore locale est tolérée : ${JSON.stringify(firestoreTransportRecoveries)}`,
-  );
-  if (firestoreTransportRecoveries.length) {
-    assert.ok(
-      network.filter((entry) => (
-        entry.origin === localUrl(RECIPE_PORTS.firestore).replace(/\/$/, "") &&
-        entry.direction === "response" &&
-        entry.status === 200
-      )).length >= 10,
-      "la reconnexion Firestore locale doit être suivie d'échanges émulateur 200 concluants",
-    );
-  }
-  assert.deepEqual(unexpectedConsole, [], `console navigateur inattendue : ${JSON.stringify({
-    console: unexpectedConsole,
-    http4xx: network.filter((entry) => entry.direction === "response" && (entry.status ?? 0) >= 400),
-  })}`);
-  return {
-    blockedBrowserDestinations: console
-      .filter(isFirebaseClearDotCspBlock)
-      .map((entry) => ({
-        phase: entry.phase,
-        origin: "https://www.google.com",
-        pathname: "/images/cleardot.gif",
-        blockedBy: "content-security-policy",
-      })),
-    firestoreTransportRecoveries: firestoreTransportRecoveries.map((entry) => ({
-      phase: entry.phase,
-      emulator: localUrl(RECIPE_PORTS.firestore),
-      recovered: true,
-    })),
-  };
-}
-
-function isFirebaseClearDotCspBlock(entry: ConsoleEvidence) {
-  return entry.source === "console" &&
-    entry.type === "error" &&
-    /Loading the image 'https:\/\/www\.google\.com\/images\/cleardot\.gif\?zx=[^']+' violates the following Content Security Policy directive/.test(entry.text) &&
-    /The action has been blocked\.$/.test(entry.text);
-}
-
-function isRecoveredLocalFirestoreTransport(entry: ConsoleEvidence) {
-  return entry.source === "console" &&
-    entry.type === "error" &&
-    /@firebase\/firestore: Firestore \([^)]*\): Could not reach Cloud Firestore backend\. Connection failed 1 times\./.test(entry.text) &&
-    /FirebaseError: \[code=unavailable\]/.test(entry.text);
-}
-
 function assertApiRequestLog(entries: Array<Record<string, unknown>>) {
   assert.ok(entries.some((entry) => entry.pathname === "/api/create-order" && entry.status === 200));
   assert.ok(entries.some((entry) => entry.pathname === "/api/order-refunds" && entry.status === 200));
@@ -1091,40 +1364,141 @@ async function readJsonLines(path: string, missingIsEmpty = false) {
   return contents.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
-function networkEntry(
-  phase: string,
-  direction: "request" | "response",
-  url: URL,
-  request: Request,
-  status?: number,
-  blocked?: boolean,
-): NetworkEvidence {
+function networkEntry(options: {
+  phase: string;
+  contextId: string;
+  pageId?: string;
+  clock: EvidenceClock;
+  requestId: string;
+  direction: "request" | "response";
+  url: URL;
+  request: Request;
+  status?: number;
+  blocked?: boolean;
+}): NetworkEvidence {
+  const requestShape = firestoreRequestShape(options.url);
   return {
-    phase,
-    direction,
-    method: request.method(),
-    origin: url.origin,
-    pathname: url.pathname,
-    resourceType: request.resourceType(),
-    ...(status === undefined ? {} : { status }),
-    ...(blocked === undefined ? {} : { blocked }),
+    phase: options.phase,
+    contextId: options.contextId,
+    ...(options.pageId ? { pageId: options.pageId } : {}),
+    ...options.clock.next(),
+    requestId: options.requestId,
+    direction: options.direction,
+    method: options.request.method(),
+    origin: options.url.origin,
+    pathname: options.url.pathname,
+    resourceType: options.request.resourceType(),
+    ...(options.status === undefined ? {} : { status: options.status }),
+    ...(options.blocked === undefined ? {} : { blocked: options.blocked }),
+    ...(requestShape ? { requestShape } : {}),
   };
 }
 
-function consoleEntry(phase: string, message: ConsoleMessage): ConsoleEvidence {
+function consoleEntry(options: {
+  phase: string;
+  contextId: string;
+  pageId: string;
+  clock: EvidenceClock;
+  message: ConsoleMessage;
+}): ConsoleEvidence {
   return {
-    phase,
+    phase: options.phase,
+    contextId: options.contextId,
+    pageId: options.pageId,
+    ...options.clock.next(),
     source: "console",
-    type: message.type(),
-    text: sanitizedConsoleText(message.text()),
+    type: options.message.type(),
+    text: sanitizedConsoleText(options.message.text()),
   };
+}
+
+function firestoreRequestShape(url: URL): RequestShape | undefined {
+  if (
+    url.origin !== localUrl(RECIPE_PORTS.firestore).replace(/\/$/, "") ||
+    url.pathname !== "/google.firestore.v1.Firestore/Listen/channel"
+  ) return undefined;
+  const requestId = url.searchParams.get("RID");
+  const transportType = url.searchParams.get("TYPE");
+  const version = url.searchParams.get("VER");
+  return {
+    queryParameterNames: [...new Set(url.searchParams.keys())].sort(),
+    hasSessionId: url.searchParams.has("SID"),
+    requestIdKind: requestId === null
+      ? "absent"
+      : requestId === "rpc"
+        ? "rpc"
+        : /^\d+$/.test(requestId)
+          ? "numeric"
+          : "other",
+    transportType: transportType === null ? "absent" : transportType === "xmlhttp" ? "xmlhttp" : "other",
+    protocolVersion: version === null ? "absent" : version === "8" ? "8" : "other",
+  };
+}
+
+async function captureResponseSignature(response: PlaywrightResponse): Promise<ResponseSignature> {
+  try {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const body = await Promise.race([
+      response.body(),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error("lecture de signature au-delà de 2 000 ms")), 2_000);
+      }),
+    ]).finally(() => {
+      if (timer) clearTimeout(timer);
+    });
+    const prefix = body.subarray(0, 256).toString("utf8");
+    return {
+      byteLength: body.byteLength,
+      sha256: createHash("sha256").update(body).digest("hex"),
+      contentType: response.headers()["content-type"] ?? null,
+      bodyPrefix: sanitizedConsoleText(prefix),
+      truncated: body.byteLength > 256,
+    };
+  } catch (error) {
+    return {
+      byteLength: -1,
+      sha256: "",
+      contentType: response.headers()["content-type"] ?? null,
+      bodyPrefix: "",
+      truncated: false,
+      captureError: sanitizedConsoleText(error instanceof Error ? error.message : String(error)),
+    };
+  }
 }
 
 function sanitizedConsoleText(value: string) {
   return value
     .replace(/Bearer\s+[A-Za-z0-9._~+/-]+/gi, "Bearer [redacted]")
     .replace(/eyJ[A-Za-z0-9._~-]+/g, "[jwt-redacted]")
+    .replace(/(https?:\/\/[^\s?]+)\?[^\s'"]+/g, "$1?[redacted]")
     .slice(0, 1_000);
+}
+
+async function persistSanitizedHarnessDiagnostics(harness: RecipeHarness) {
+  const emulatorLog = harness.processes.find((entry) => entry.name === "firebase-emulators")?.logPath;
+  let entries: string[] = [];
+  if (emulatorLog) {
+    try {
+      const ansiSequence = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+      entries = (await readFile(emulatorLog, "utf8"))
+        .replace(ansiSequence, "")
+        .split(/\r?\n/)
+        .filter((line) => /emulator|firestore|auth|shutdown|sigint|error|warn|exception/i.test(line))
+        .map((line) => sanitizedConsoleText(line).slice(0, 500))
+        .slice(-100);
+    } catch (error) {
+      if (record(error).code !== "ENOENT") throw error;
+    }
+  }
+  await writeFile(
+    resolve(harness.runDirectory, "emulator-diagnostics.json"),
+    `${JSON.stringify({ source: "firebase-emulators.log", entries }, null, 2)}\n`,
+    "utf8",
+  );
+}
+
+function logCleanupIssue(label: string, step: CleanupStepResult) {
+  console.error(`[cleanup:${label}] ${step.name}: ${step.error ?? "échec sans détail"}`);
 }
 
 function isAllowedLocalUrl(url: URL, websocket = false) {
@@ -1166,4 +1540,22 @@ function safeName(value: string) {
 
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function closeBrowserBounded(browserInstance: Browser) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      browserInstance.close(),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error("fermeture du navigateur au-delà de 10 000 ms")), 10_000);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function safeError(error: unknown) {
+  return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 }

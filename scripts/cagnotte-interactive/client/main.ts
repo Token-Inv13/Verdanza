@@ -7,12 +7,31 @@ declare global {
       mode: string;
       origin: string;
       readWalletDocument: (uid: string) => Promise<{ exists: boolean }>;
+      startFirestoreListenProbe: (documentId: string, probeId: string) => Promise<void>;
+      readFirestoreListenProbe: () => Array<{
+        probeId: string;
+        generation: string;
+        fromCache: boolean;
+        hasPendingWrites: boolean;
+        receivedAtEpochMs: number;
+        terminalErrorCode?: string;
+      }>;
+      stopFirestoreListenProbe: () => void;
     };
   }
 }
 
 const allowedPorts = new Set<number>(RECIPE_ALLOWED_PORTS);
 const networkEvidence: Array<Record<string, unknown>> = [];
+let stopFirestoreListenProbe: (() => void) | undefined;
+let firestoreListenProbeEvents: Array<{
+  probeId: string;
+  generation: string;
+  fromCache: boolean;
+  hasPendingWrites: boolean;
+  receivedAtEpochMs: number;
+  terminalErrorCode?: string;
+}> = [];
 window.__VERDANZA_RECETTE_NETWORK__ = networkEvidence;
 window.__VERDANZA_RECETTE__ = {
   mode: "local-interactive",
@@ -24,6 +43,53 @@ window.__VERDANZA_RECETTE__ = {
     ]);
     const snapshot = await getDoc(doc(db, "cagnotteWallets", uid));
     return { exists: snapshot.exists() };
+  },
+  async startFirestoreListenProbe(documentId: string, probeId: string) {
+    stopFirestoreListenProbe?.();
+    firestoreListenProbeEvents = [];
+    const [{ doc, onSnapshot }, { db }] = await Promise.all([
+      import("firebase/firestore"),
+      import("./firebase"),
+    ]);
+    await new Promise<void>((resolve, reject) => {
+      let initialFreshSnapshotObserved = false;
+      stopFirestoreListenProbe = onSnapshot(
+        doc(db, "products", documentId),
+        { includeMetadataChanges: true },
+        (snapshot) => {
+          const generation = snapshot.data()?.__recetteListenGeneration;
+          firestoreListenProbeEvents.push({
+            probeId,
+            generation: typeof generation === "string" ? generation : "",
+            fromCache: snapshot.metadata.fromCache,
+            hasPendingWrites: snapshot.metadata.hasPendingWrites,
+            receivedAtEpochMs: Date.now(),
+          });
+          if (!snapshot.metadata.fromCache && !initialFreshSnapshotObserved) {
+            initialFreshSnapshotObserved = true;
+            resolve();
+          }
+        },
+        (error) => {
+          firestoreListenProbeEvents.push({
+            probeId,
+            generation: "",
+            fromCache: false,
+            hasPendingWrites: false,
+            receivedAtEpochMs: Date.now(),
+            terminalErrorCode: error.code || "unknown",
+          });
+          reject(error);
+        },
+      );
+    });
+  },
+  readFirestoreListenProbe() {
+    return firestoreListenProbeEvents.map((entry) => ({ ...entry }));
+  },
+  stopFirestoreListenProbe() {
+    stopFirestoreListenProbe?.();
+    stopFirestoreListenProbe = undefined;
   },
 };
 

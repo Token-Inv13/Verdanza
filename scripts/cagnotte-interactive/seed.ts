@@ -26,6 +26,7 @@ try {
   const batch = db.batch();
   batch.set(db.collection("products").doc(RECIPE_PRODUCT.id), {
     ...RECIPE_PRODUCT,
+    __recetteListenGeneration: "seed",
     createdAt,
     updatedAt: createdAt,
   });

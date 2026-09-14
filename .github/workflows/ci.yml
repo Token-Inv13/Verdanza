@@ -59,3 +59,26 @@ jobs:
 
       - name: Verify
         run: npm run verify
+
+      - name: Upload sanitized interactive diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cagnotte-interactive-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 7
+          path: |
+            node_modules/.cache/verdanza-cagnotte-interactive/latest-result.json
+            node_modules/.cache/verdanza-cagnotte-interactive/latest-failure.json
+            node_modules/.cache/verdanza-cagnotte-interactive/runs/*/execution-summary.json
+            node_modules/.cache/verdanza-cagnotte-interactive/runs/*/browser-network.json
+            node_modules/.cache/verdanza-cagnotte-interactive/runs/*/browser-console.json
+            node_modules/.cache/verdanza-cagnotte-interactive/runs/*/firestore-listen-probe.json
+            node_modules/.cache/verdanza-cagnotte-interactive/runs/*/cleanup.json
+            node_modules/.cache/verdanza-cagnotte-interactive/runs/*/emulator-diagnostics.json
+            node_modules/.cache/verdanza-cagnotte-interactive/runs/*/01-portefeuille-vide-*.png
+            node_modules/.cache/verdanza-cagnotte-interactive/runs/*/04-devis-b-95-euros-*.png
+            node_modules/.cache/verdanza-cagnotte-interactive/runs/*/06-remboursement-b-admin-*.png
+            node_modules/.cache/verdanza-cagnotte-interactive/runs/*/07-solde-final-5-euros-*.png
+            node_modules/.cache/verdanza-cagnotte-interactive/runs/*/08-api-indisponible-fail-closed-*.png
