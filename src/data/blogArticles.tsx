@@ -6,6 +6,275 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "reception-commande-cbd-verifications",
+    title: "Réception d'une commande CBD : les vérifications utiles",
+    seoTitle: "Réception d'une commande CBD : vérifications | Verdanza",
+    description:
+      "Colis, emballage, étiquette, lot et aspect : une méthode factuelle pour vérifier une commande CBD à sa réception et documenter un éventuel écart.",
+    excerpt:
+      "À la réception d'une commande CBD, quelques contrôles simples permettent de rapprocher le colis, les produits et les informations annoncées.",
+    category: "Guide pratique",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-09-14T09:30:00+02:00",
+    dateModified: "2026-09-14T09:30:00+02:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/reception-commande-cbd-verifications-1x1.webp",
+      landscape: "/images/blog/reception-commande-cbd-verifications-4x3.webp",
+      wide: "/images/blog/reception-commande-cbd-verifications-16x9.webp",
+    },
+    relatedSlugs: [
+      "etiquette-numero-lot-cbd-tracabilite",
+      "signes-alteration-fleurs-resines-cbd",
+      "conserver-fleurs-resines-cbd",
+    ],
+    links: [
+      { to: "/livraison", label: "Modes de livraison Verdanza" },
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+        label: "Vérifier l'étiquette et le lot",
+      },
+      {
+        to: "/blog/signes-alteration-fleurs-resines-cbd",
+        label: "Repérer les signes d'altération",
+      },
+      {
+        to: "/blog/conserver-fleurs-resines-cbd",
+        label: "Conserver fleurs et résines CBD",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La réception d'une commande est le bon moment pour rapprocher les
+            produits livrés des informations annoncées. Il ne s'agit pas de
+            tirer une conclusion à partir d'un seul détail, mais de vérifier
+            méthodiquement le colis, l'emballage, l'étiquette, le numéro de lot
+            et la présentation générale.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Conservez l'emballage d'expédition et les contenants jusqu'à la fin
+            des vérifications. Ils réunissent les références utiles si un écart
+            doit être signalé au vendeur ou au transporteur.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "avant-ouverture",
+        text: "Commencer par l'état extérieur du colis",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Avant d'ouvrir, observez les faces du colis et sa fermeture. Une
+            marque légère liée au transport n'a pas la même portée qu'une
+            déchirure ouverte, une zone fortement écrasée ou une trace
+            d'humidité. Vérifiez aussi que le colis correspond bien au
+            destinataire et à l'expédition attendue.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "photographier le colis fermé si un dommage est visible ;",
+          "noter l'emplacement précis d'une déchirure ou d'une zone humide ;",
+          "conserver l'étiquette de transport sans la publier en ligne ;",
+          "ouvrir proprement afin de ne pas créer de dommage supplémentaire ;",
+          "garder les protections intérieures pendant le contrôle du contenu.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "rapprocher-commande",
+        text: "Rapprocher le contenu de la commande",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Comparez les dénominations, les formats et le nombre de produits
+            avec le récapitulatif de commande. Cette étape doit rester séparée
+            de l'appréciation visuelle : elle répond d'abord à une question
+            simple, celle de savoir si les références reçues sont celles qui
+            étaient prévues.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Contrôles utiles lors de la réception d'une commande CBD.",
+          headers: ["Point contrôlé", "Ce qu'il faut relever", "Limite de l'observation"],
+          rows: [
+            [
+              "Colis extérieur",
+              "Fermeture, déchirure, écrasement ou humidité visible.",
+              "L'état extérieur ne décrit pas toujours celui des contenants internes.",
+            ],
+            [
+              "Contenant",
+              "Fermeture intacte, absence de fuite et étiquette lisible.",
+              "Un emballage propre ne prouve pas à lui seul la composition du produit.",
+            ],
+            [
+              "Référence",
+              "Nom et format correspondant au récapitulatif de commande.",
+              "Deux produits proches peuvent avoir des lots différents.",
+            ],
+            [
+              "Numéro de lot",
+              "Code présent sur le contenant et les documents associés.",
+              "Le code doit être relié au bon bulletin pour être utile.",
+            ],
+            [
+              "Aspect général",
+              "Présentation cohérente, absence de condensation ou d'anomalie évidente.",
+              "Une photo ou un contrôle visuel ne remplace pas une analyse.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "emballage-etiquette",
+        text: "Vérifier le contenant et l'étiquette",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le contenant doit pouvoir être refermé comme prévu et son étiquette
+            doit rester lisible. Relevez le nom du produit, le format, le numéro
+            de lot et les informations de l'opérateur lorsqu'elles figurent sur
+            l'emballage. Le guide sur l'{" "}
+            <Link to="/blog/etiquette-numero-lot-cbd-tracabilite">
+              étiquette et la traçabilité d'un lot CBD
+            </Link>{" "}
+            explique comment relier ces éléments sans les confondre.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Si un document d'analyse est fourni ou accessible, vérifiez qu'il
+            mentionne la même référence de lot. Une analyse portant sur un autre
+            lot reste un document différent, même si le nom commercial du
+            produit est identique.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "observation-visuelle",
+        text: "Observer le produit sans surinterpréter son apparence",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Regardez l'ensemble sous une lumière neutre, sans filtre photo. Pour
+            des fleurs ou des résines, la forme, la couleur et la répartition
+            peuvent varier naturellement dans un lot. En revanche, une
+            condensation inhabituelle, une odeur nettement anormale ou une zone
+            dont l'aspect évoque une altération justifient de suspendre le
+            rangement avec les autres produits et de demander une vérification.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            N'essayez pas d'identifier une altération à partir de la seule
+            couleur d'une photographie. Le cadrage, l'éclairage et l'écran
+            modifient le rendu ; plusieurs observations concordantes sont plus
+            utiles qu'un détail isolé.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "documenter-ecart",
+        text: "Comment documenter un écart de façon factuelle",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Commencez par une vue générale du colis et de son contenu, puis
+            photographiez le détail concerné. Ajoutez un repère d'échelle si la
+            taille est importante et gardez le numéro de lot lisible sur une
+            image séparée. Évitez les filtres, les retouches et les conclusions
+            définitives dans le premier signalement.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "indiquer le numéro de commande sans le publier publiquement ;",
+          "nommer précisément la référence et le format concernés ;",
+          "joindre une vue d'ensemble et un gros plan net ;",
+          "décrire ce qui est observé sans supposer son origine ;",
+          "conserver le produit, son contenant et son lot pendant l'échange.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "apres-verification",
+        text: "Après le contrôle, refermer et ranger correctement",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Lorsque les vérifications sont terminées, refermez chaque contenant
+            et suivez les indications de conservation associées. Protégez les
+            produits de la lumière, de l'humidité et des variations de
+            température, et évitez les ouvertures répétées. Le guide consacré à
+            la {" "}
+            <Link to="/blog/conserver-fleurs-resines-cbd">
+              conservation des fleurs et résines CBD
+            </Link>{" "}
+            détaille ces repères.
+          </>
+        ),
+      },
+      {
+        type: "links",
+        title: "Compléter les vérifications",
+        links: [
+          {
+            to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+            label: "Contrôler l'étiquette et le numéro de lot",
+          },
+          {
+            to: "/blog/signes-alteration-fleurs-resines-cbd",
+            label: "Reconnaître les signes qui demandent une vérification",
+          },
+          {
+            to: "/livraison",
+            label: "Consulter les modes de livraison Verdanza",
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "pourcentage-mg-g-ppm-analyse-cbd",
     title: "Analyse CBD : comprendre %, mg/g et ppm sans se tromper",
     seoTitle: "Analyse CBD : comprendre %, mg/g et ppm | Verdanza",
