@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   chromium,
   type Browser,
@@ -43,6 +44,13 @@ import {
   type ResponseSignature,
 } from "./runtimeDiagnostics.js";
 import { assertDiagnosticJournalComplete } from "./diagnosticJournal.js";
+import {
+  installRecipeSignalCancellation,
+  isRecipeSignalCancellation,
+  type RecipeSignal,
+  type RecipeSignalCancellation,
+  type RecipeSignalSource,
+} from "./run.js";
 
 type RecipeState = {
   projectId: string;
@@ -109,6 +117,12 @@ type ViewportDefinition = {
   height: number;
 };
 
+type RunnerSignalProbe = "after-resources" | "during-active-wait";
+
+export type AutomatedRecipeResult =
+  | { status: "PASS"; exitCode: 0 }
+  | { status: "CANCELLED"; signal: RecipeSignal; exitCode: 1 | 130 | 143 };
+
 type MonitoredContext = {
   context: BrowserContext;
   contextId: string;
@@ -130,74 +144,285 @@ const viewportDefinitions: ViewportDefinition[] = [
   { label: "mobile", width: 390, height: 844 },
 ];
 const allowedPorts = new Set<number>(RECIPE_ALLOWED_PORTS);
-await mkdir(RECIPE_CACHE_ROOT, { recursive: true });
-const latestEvidence = resolve(RECIPE_CACHE_ROOT, "latest-result.json");
-const latestFailureEvidence = resolve(RECIPE_CACHE_ROOT, "latest-failure.json");
-await Promise.all([
-  rm(latestEvidence, { force: true }),
-  rm(latestFailureEvidence, { force: true }),
-]);
-const executions: Array<Record<string, unknown>> = [];
-let activeRunDirectory: string | undefined;
-let browser: Browser | undefined;
-let executionError: unknown;
+const pageCancellations = new WeakMap<Page, RecipeSignalCancellation>();
 
-try {
-  browser = await chromium.launch({ headless: true });
-  for (const viewport of viewportDefinitions) {
-    executions.push(await runViewport(browser, viewport, (runDirectory) => {
-      activeRunDirectory = runDirectory;
-    }));
+export async function runViewportSequence<Item, Result>(options: {
+  items: readonly Item[];
+  cancellation: RecipeSignalCancellation;
+  run: (item: Item) => Promise<Result>;
+  onCompleted: (result: Result) => void;
+}) {
+  for (const item of options.items) {
+    options.cancellation.throwIfRequested();
+    const result = await options.run(item);
+    options.onCompleted(result);
+    options.cancellation.throwIfRequested();
   }
-} catch (error) {
-  executionError = error;
-  const failedRunDirectory = record(error).runDirectory;
-  if (typeof failedRunDirectory === "string") activeRunDirectory = failedRunDirectory;
 }
 
-if (browser) {
+export async function publishCurrentPassEvidence(options: {
+  path: string;
+  contents: string;
+  cancellation: RecipeSignalCancellation;
+  afterWrite?: () => void | Promise<void>;
+}) {
+  await writeFile(options.path, options.contents, "utf8");
+  await options.afterWrite?.();
   try {
-    await closeBrowserBounded(browser);
+    options.cancellation.throwIfRequested();
   } catch (error) {
-    console.error(`[cleanup:browser] ${safeError(error)}`);
-    if (executionError === undefined) executionError = error;
+    try {
+      await rm(options.path, { force: true });
+    } catch (cleanupError) {
+      attachRunnerCleanupIssue(error, "remove-current-pass", cleanupError);
+    }
+    throw error;
   }
 }
 
-if (executionError !== undefined) {
+export async function runAutomatedRecipe(options: {
+  signalSource?: RecipeSignalSource;
+  signalProbe?: RunnerSignalProbe;
+} = {}): Promise<AutomatedRecipeResult> {
+  const cancellation = installRecipeSignalCancellation(options.signalSource ?? process);
+  const latestEvidence = resolve(RECIPE_CACHE_ROOT, "latest-result.json");
+  const latestFailureEvidence = resolve(RECIPE_CACHE_ROOT, "latest-failure.json");
+  const executions: Array<Record<string, unknown>> = [];
+  let activeRunDirectory: string | undefined;
+  let browser: Browser | undefined;
+  let browserClosePromise: Promise<void> | undefined;
+  let browserCloseError: unknown;
+  let executionError: unknown;
+  let interruptionError: unknown;
+  const closeBrowser = () => {
+    if (!browser) return Promise.resolve();
+    if (!browserClosePromise) browserClosePromise = closeBrowserBounded(browser);
+    return browserClosePromise;
+  };
+  const interruptBrowser = () => {
+    void closeBrowser().catch((error) => {
+      browserCloseError ??= error;
+    });
+  };
+  cancellation.signal.addEventListener("abort", interruptBrowser);
+
   try {
-    await writeFile(latestFailureEvidence, `${JSON.stringify({
-      status: "FAIL",
+    try {
+      await mkdir(RECIPE_CACHE_ROOT, { recursive: true });
+      cancellation.throwIfRequested();
+      await Promise.all([
+        rm(latestEvidence, { force: true }),
+        rm(latestFailureEvidence, { force: true }),
+      ]);
+      cancellation.throwIfRequested();
+      browser = await chromium.launch({ headless: true });
+      cancellation.throwIfRequested();
+      await runViewportSequence({
+        items: viewportDefinitions,
+        cancellation,
+        run: async (viewport) => {
+          if (options.signalProbe) console.log(`RUNNER_VIEWPORT_START ${viewport.label}`);
+          return runViewport(
+            browser as Browser,
+            viewport,
+            cancellation,
+            options.signalProbe,
+            (runDirectory) => { activeRunDirectory = runDirectory; },
+            (error) => { executionError ??= error; },
+          );
+        },
+        onCompleted: (result) => executions.push(result),
+      });
+    } catch (error) {
+      const failedRunDirectory = record(error).runDirectory;
+      if (typeof failedRunDirectory === "string") activeRunDirectory = failedRunDirectory;
+      if (executionError === undefined && !cancellation.signal.aborted) executionError = error;
+      else interruptionError ??= error;
+    }
+
+    try {
+      await closeBrowser();
+    } catch (error) {
+      browserCloseError ??= error;
+    }
+    if (browserCloseError !== undefined) {
+      console.error(`[cleanup:browser] ${safeError(browserCloseError)}`);
+      if (executionError === undefined && !cancellation.signal.aborted) executionError = browserCloseError;
+    }
+
+    if (executionError !== undefined) {
+      await writeFailureEvidence(latestFailureEvidence, {
+        status: "FAIL",
+        error: safeError(executionError),
+        activeRunDirectory,
+        completedExecutions: executions,
+        ...(cancellation.requestedSignal() ? { interruptedBy: cancellation.requestedSignal() } : {}),
+        cleanupIssues: cancellationCleanupIssues(interruptionError, browserCloseError),
+      });
+      console.error(`Preuve interactive d’échec : ${latestFailureEvidence}`);
+      throw executionError;
+    }
+
+    if (cancellation.signal.aborted) {
+      return await writeCancellationResult({
+        cancellation,
+        latestEvidence,
+        latestFailureEvidence,
+        activeRunDirectory,
+        executions,
+        interruptionError,
+        browserCloseError,
+      });
+    }
+
+    try {
+      await publishCurrentPassEvidence({
+        path: latestEvidence,
+        cancellation,
+        contents: `${JSON.stringify({
+          status: "PASS",
+          generatedAt: new Date().toISOString(),
+          projectId: RECIPE_PROJECT_ID,
+          origin: localUrl(RECIPE_PORTS.app),
+          executions,
+        }, null, 2)}\n`,
+      });
+      console.log(`Preuve interactive consolidée : ${latestEvidence}`);
+      console.log("Recette interactive locale réussie sur desktop et viewport mobile ; tous les processus sont arrêtés.");
+      cancellation.throwIfRequested();
+      return { status: "PASS", exitCode: 0 };
+    } catch (error) {
+      if (!cancellation.signal.aborted || !isRecipeSignalCancellation(error)) throw error;
+      return await writeCancellationResult({
+        cancellation,
+        latestEvidence,
+        latestFailureEvidence,
+        activeRunDirectory,
+        executions,
+        interruptionError: error,
+        browserCloseError,
+      });
+    }
+  } finally {
+    cancellation.signal.removeEventListener("abort", interruptBrowser);
+    cancellation.dispose();
+  }
+}
+
+async function writeFailureEvidence(
+  path: string,
+  details: Record<string, unknown>,
+) {
+  try {
+    await writeFile(path, `${JSON.stringify({
       generatedAt: new Date().toISOString(),
       projectId: RECIPE_PROJECT_ID,
       origin: localUrl(RECIPE_PORTS.app),
-      error: safeError(executionError),
-      activeRunDirectory,
-      completedExecutions: executions,
+      ...details,
     }, null, 2)}\n`, "utf8");
-    console.error(`Preuve interactive d’échec : ${latestFailureEvidence}`);
   } catch (evidenceError) {
     console.error(`[failure-evidence] ${safeError(evidenceError)}`);
+    return evidenceError;
   }
-  throw executionError;
 }
 
-await writeFile(latestEvidence, `${JSON.stringify({
-  status: "PASS",
-  generatedAt: new Date().toISOString(),
-  projectId: RECIPE_PROJECT_ID,
-  origin: localUrl(RECIPE_PORTS.app),
-  executions,
-}, null, 2)}\n`, "utf8");
-console.log(`Preuve interactive consolidée : ${latestEvidence}`);
-console.log("Recette interactive locale réussie sur desktop et viewport mobile ; tous les processus sont arrêtés.");
+async function writeCancellationResult(options: {
+  cancellation: RecipeSignalCancellation;
+  latestEvidence: string;
+  latestFailureEvidence: string;
+  activeRunDirectory?: string;
+  executions: Array<Record<string, unknown>>;
+  interruptionError?: unknown;
+  browserCloseError?: unknown;
+}): Promise<AutomatedRecipeResult> {
+  const signal = options.cancellation.requestedSignal();
+  if (!signal) throw new Error("Annulation sans signal mémorisé.");
+  const cleanupIssues = cancellationCleanupIssues(options.interruptionError, options.browserCloseError);
+  try {
+    await rm(options.latestEvidence, { force: true });
+  } catch (error) {
+    cleanupIssues.push(`remove-current-pass: ${safeError(error)}`);
+  }
+  let exitCode: 1 | 130 | 143 = cleanupIssues.length > 0
+    ? 1
+    : options.cancellation.exitCode() ?? 1;
+  const evidenceError = await writeFailureEvidence(options.latestFailureEvidence, {
+    status: "CANCELLED",
+    signal,
+    exitCode,
+    error: isRecipeSignalCancellation(options.interruptionError)
+      ? safeError(options.interruptionError)
+      : undefined,
+    activeRunDirectory: options.activeRunDirectory,
+    completedExecutions: options.executions,
+    cleanupIssues,
+  });
+  if (evidenceError !== undefined) exitCode = 1;
+  console.error(
+    `Recette interactive ANNULÉE par ${signal}; aucun PASS global publié ` +
+    `(code de sortie ${exitCode}).`,
+  );
+  return { status: "CANCELLED", signal, exitCode };
+}
+
+function cancellationCleanupIssues(...errors: unknown[]) {
+  const issues: string[] = [];
+  for (const error of errors) {
+    if (error === undefined) continue;
+    const cleanupFailures = record(error).cleanupFailures;
+    if (Array.isArray(cleanupFailures)) {
+      for (const failure of cleanupFailures) issues.push(safeCleanupIssue(failure));
+      continue;
+    }
+    if (isRecipeSignalCancellation(error)) continue;
+    issues.push(safeError(error));
+  }
+  return [...new Set(issues)];
+}
+
+function attachRunnerCleanupIssue(primaryError: unknown, name: string, cleanupError: unknown) {
+  if (!(primaryError instanceof Error)) return;
+  try {
+    Object.defineProperty(primaryError, "cleanupFailures", {
+      configurable: true,
+      enumerable: false,
+      value: [{ name, status: "failed", durationMs: 0, error: safeError(cleanupError) }],
+    });
+  } catch {
+    // L'annulation initiale reste prioritaire si l'erreur n'est pas extensible.
+  }
+}
+
+function safeCleanupIssue(value: unknown) {
+  const issue = record(value);
+  const name = typeof issue.name === "string" ? issue.name : "cleanup";
+  const error = typeof issue.error === "string" ? issue.error : safeError(value);
+  return `${name}: ${error}`;
+}
+
+function selectedSignalProbe(): RunnerSignalProbe | undefined {
+  const prefix = "--runner-signal-probe=";
+  const value = process.argv.find((argument) => argument.startsWith(prefix))?.slice(prefix.length);
+  if (value === undefined) return undefined;
+  if (value === "after-resources" || value === "during-active-wait") return value;
+  throw new Error(`Point de synchronisation runner inconnu : ${value}.`);
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const result = await runAutomatedRecipe({ signalProbe: selectedSignalProbe() });
+  if (result.status === "CANCELLED") process.exitCode = result.exitCode;
+}
 
 async function runViewport(
   browserInstance: Browser,
   viewport: ViewportDefinition,
+  cancellation: RecipeSignalCancellation,
+  signalProbe: RunnerSignalProbe | undefined,
   onHarnessStarted: (runDirectory: string) => void,
+  onPrimaryError: (error: unknown) => void,
 ) {
   let stoppedForFailClosed = false;
+  let cleanupProbeReported = false;
   let evidenceSequence = 0;
   let executionStatus: "running" | "pass" = "running";
   const screenshots: string[] = [];
@@ -210,14 +435,22 @@ async function runViewport(
   return runWithViewportResources({
     label: viewport.label,
     startHarness: async () => {
-      const harness = await startRecipeHarness(viewport.label);
+      const harness = await startRecipeHarness(viewport.label, { signal: cancellation.signal });
       onHarnessStarted(harness.runDirectory);
       return harness;
     },
     createMonitor: (role) => monitoredContext(browserInstance, viewport, role, evidenceClock),
-    createPage: (monitor) => monitor.context.newPage(),
+    createPage: async (monitor) => {
+      const page = await monitor.context.newPage();
+      pageCancellations.set(page, cancellation);
+      return page;
+    },
     persistEvidence: async (resources) => {
       if (!resources.harness) return;
+      if (signalProbe && !cleanupProbeReported) {
+        cleanupProbeReported = true;
+        console.log(`RUNNER_SIGNAL_PROBE CLEANUP_START ${viewport.label} ${resources.harness.runDirectory}`);
+      }
       const evidenceFailures: unknown[] = [];
       if (resources.clientPage && resources.clientMonitor) {
         try {
@@ -228,7 +461,7 @@ async function runViewport(
             firestoreProbeEvidence,
           );
         } catch (error) {
-          evidenceFailures.push(error);
+          if (!cancellation.signal.aborted) evidenceFailures.push(error);
         }
       }
       const evidenceWrites = await Promise.allSettled([
@@ -246,7 +479,10 @@ async function runViewport(
         writeFile(
           resolve(resources.harness.runDirectory, "execution-summary.json"),
           `${JSON.stringify({
-          status: executionStatus === "pass" ? "PASS" : "INTERRUPTED",
+          status: executionStatus === "pass" && !cancellation.signal.aborted ? "PASS" : "INTERRUPTED",
+          interruption: cancellation.requestedSignal()
+            ? { status: "CANCELLED", signal: cancellation.requestedSignal() }
+            : null,
           viewport,
           runDirectory: resources.harness.runDirectory,
           currentPhases: {
@@ -295,8 +531,31 @@ async function runViewport(
         persistSanitizedHarnessDiagnostics(resources.harness),
       ]);
     },
+    cancellation,
+    onPrimaryError,
     onCleanupIssue: (step) => logCleanupIssue(viewport.label, step),
   }, async ({ harness, clientMonitor, adminMonitor, clientPage, adminPage }) => {
+    cancellation.throwIfRequested();
+    if (signalProbe === "after-resources") {
+      console.log(
+        `RUNNER_SIGNAL_PROBE READY after-resources ${viewport.label} ${harness.runDirectory}`,
+      );
+      await cancellation.waitForRequest();
+      cancellation.throwIfRequested();
+    }
+    if (signalProbe === "during-active-wait") {
+      clientMonitor.setPhase("signal-probe-active-wait");
+      await goto(clientPage, "/connexion");
+      cancellation.throwIfRequested();
+      const activeWait = clientPage.waitForFunction(() => false, undefined, { timeout: 60_000 });
+      console.log(
+        `RUNNER_SIGNAL_PROBE READY during-active-wait ${viewport.label} ${harness.runDirectory}`,
+      );
+      await activeWait;
+      throw new Error("Le point d’attente du signal s’est terminé sans interruption.");
+    }
+
+    cancellation.throwIfRequested();
     await assertInitialOwnedProcessInventory(harness);
     const fixtures = JSON.parse(await readFile(resolve(harness.runDirectory, "fixtures.json"), "utf8")) as {
       projectId: string;
@@ -312,13 +571,19 @@ async function runViewport(
     assert.equal(fixtures.productId, RECIPE_PRODUCT.id);
     assert.equal(fixtures.walletDocumentsInitiallyPresent, 0);
 
-    const initial = await inspectState(harness, `${viewport.label}-00-initial`, fixtures.identities.client1.uid);
+    const initial = await inspectState(
+      harness,
+      `${viewport.label}-00-initial`,
+      fixtures.identities.client1.uid,
+      cancellation.signal,
+    );
     stages.push({ label: "initial", state: initial });
     assert.equal(initial.wallet, null, "aucun portefeuille ne doit être précrédité");
     assert.equal(initial.orders.length, 0);
     assert.equal(initial.movements.length, 0);
     assert.equal(initial.rateLimits.length, 0);
 
+    cancellation.throwIfRequested();
     clientMonitor.setPhase("client1-auth");
     await signIn(clientPage, RECIPE_ACCOUNTS.client1, async () => {
       await clientPage.evaluate(
@@ -337,6 +602,7 @@ async function runViewport(
     await assertRecipeBanner(clientPage);
     await capture(clientPage, harness, viewport, "01-portefeuille-vide", screenshots);
 
+    cancellation.throwIfRequested();
     const orderAResponse = await createOrderThroughUi(clientPage, false, viewport.label);
     const orderAId = orderAResponse.orderId;
     assert.deepEqual({
@@ -353,7 +619,12 @@ async function runViewport(
       cagnotteUse: null,
     });
 
-    const aCreated = await inspectState(harness, `${viewport.label}-01-a-created`, fixtures.identities.client1.uid);
+    const aCreated = await inspectState(
+      harness,
+      `${viewport.label}-01-a-created`,
+      fixtures.identities.client1.uid,
+      cancellation.signal,
+    );
     stages.push({ label: "A créée", state: aCreated });
     assert.equal(aCreated.wallet, null);
     assertOrder(aCreated, orderAId, {
@@ -366,12 +637,14 @@ async function runViewport(
     });
     assertRateLimiter(aCreated, 1);
 
+    cancellation.throwIfRequested();
     adminMonitor.setPhase("admin-auth");
     await signIn(adminPage, RECIPE_ACCOUNTS.admin);
     await openAdminOrders(adminPage, "Toutes");
     await assertRecipeBanner(adminPage);
     assert.equal(await clientPage.url().includes("127.0.0.1"), true, "le contexte client doit rester indépendant");
 
+    cancellation.throwIfRequested();
     adminMonitor.setPhase("admin-a-payment");
     await updateOrder(adminPage, orderAId, "payment", "paid");
     clientMonitor.setPhase("client-a-pending");
@@ -380,12 +653,18 @@ async function runViewport(
     await waitForBalance(clientPage, "En attente", "5,00 €");
     await waitForBalance(clientPage, "Disponible", "0,00 €");
     await capture(clientPage, harness, viewport, "02-gain-a-en-attente", screenshots);
-    const aPaid = await inspectState(harness, `${viewport.label}-02-a-paid`, fixtures.identities.client1.uid);
+    const aPaid = await inspectState(
+      harness,
+      `${viewport.label}-02-a-paid`,
+      fixtures.identities.client1.uid,
+      cancellation.signal,
+    );
     stages.push({ label: "A payée", state: aPaid });
     assertWallet(aPaid, [500, 0, 0, 0]);
     assertAccrual(aPaid, orderAId, [500, 500, "pending", true, false]);
     assert.equal(aPaid.movements.length, 1);
 
+    cancellation.throwIfRequested();
     adminMonitor.setPhase("admin-a-delivery");
     await updateOrder(adminPage, orderAId, "order", "delivered");
     clientMonitor.setPhase("client-a-available");
@@ -394,7 +673,12 @@ async function runViewport(
     await waitForBalance(clientPage, "En attente", "0,00 €");
     await waitForBalance(clientPage, "Disponible", "5,00 €");
     await capture(clientPage, harness, viewport, "03-gain-a-disponible", screenshots);
-    const aDelivered = await inspectState(harness, `${viewport.label}-03-a-delivered`, fixtures.identities.client1.uid);
+    const aDelivered = await inspectState(
+      harness,
+      `${viewport.label}-03-a-delivered`,
+      fixtures.identities.client1.uid,
+      cancellation.signal,
+    );
     stages.push({ label: "A livrée", state: aDelivered });
     assertWallet(aDelivered, [0, 500, 0, 0]);
     assertAccrual(aDelivered, orderAId, [500, 500, "available", true, true]);
@@ -409,6 +693,7 @@ async function runViewport(
       "livraison et mise à disposition doivent partager l'horodatage atomique",
     );
 
+    cancellation.throwIfRequested();
     clientMonitor.setPhase("client-b-checkout");
     const orderBResponse = await createOrderThroughUi(clientPage, true, viewport.label, async () => {
       await capture(clientPage, harness, viewport, "04-devis-b-95-euros", screenshots);
@@ -431,7 +716,12 @@ async function runViewport(
     await waitForBalance(clientPage, "Disponible", "0,00 €");
     await waitForBalance(clientPage, "Réservé", "5,00 €");
     await capture(clientPage, harness, viewport, "05-reservation-b", screenshots);
-    const bReserved = await inspectState(harness, `${viewport.label}-04-b-reserved`, fixtures.identities.client1.uid);
+    const bReserved = await inspectState(
+      harness,
+      `${viewport.label}-04-b-reserved`,
+      fixtures.identities.client1.uid,
+      cancellation.signal,
+    );
     stages.push({ label: "B réservée", state: bReserved });
     assertWallet(bReserved, [0, 0, 500, 0]);
     assertOrder(bReserved, orderBId, {
@@ -446,6 +736,7 @@ async function runViewport(
     assert.equal(bReserved.movements.length, 4);
     assertRateLimiter(bReserved, 2);
 
+    cancellation.throwIfRequested();
     adminMonitor.setPhase("admin-b-payment");
     await openAdminOrders(adminPage, "Toutes");
     await updateOrder(adminPage, orderBId, "payment", "paid");
@@ -454,25 +745,37 @@ async function runViewport(
     await refreshAdvantages(clientPage);
     await waitForBalance(clientPage, "En attente", "4,75 €");
     await waitForBalance(clientPage, "Réservé", "0,00 €");
-    const bPaid = await inspectState(harness, `${viewport.label}-05-b-paid`, fixtures.identities.client1.uid);
+    const bPaid = await inspectState(
+      harness,
+      `${viewport.label}-05-b-paid`,
+      fixtures.identities.client1.uid,
+      cancellation.signal,
+    );
     stages.push({ label: "B payée", state: bPaid });
     assertWallet(bPaid, [475, 0, 0, 0]);
     assertAccrual(bPaid, orderBId, [475, 475, "pending", true, false]);
     assertReservation(bPaid, orderBId, [500, "consumed", 0]);
     assert.equal(bPaid.movements.length, 6);
 
+    cancellation.throwIfRequested();
     adminMonitor.setPhase("admin-b-delivery");
     await updateOrder(adminPage, orderBId, "order", "delivered");
     clientMonitor.setPhase("client-b-available");
     await openAdvantages(clientPage, RECIPE_ACCOUNTS.client1.email);
     await refreshAdvantages(clientPage);
     await waitForBalance(clientPage, "Disponible", "4,75 €");
-    const bDelivered = await inspectState(harness, `${viewport.label}-06-b-delivered`, fixtures.identities.client1.uid);
+    const bDelivered = await inspectState(
+      harness,
+      `${viewport.label}-06-b-delivered`,
+      fixtures.identities.client1.uid,
+      cancellation.signal,
+    );
     stages.push({ label: "B livrée", state: bDelivered });
     assertWallet(bDelivered, [0, 475, 0, 0]);
     assertAccrual(bDelivered, orderBId, [475, 475, "available", true, true]);
     assert.equal(bDelivered.movements.length, 8);
 
+    cancellation.throwIfRequested();
     adminMonitor.setPhase("admin-b-refund");
     await openAdminOrders(adminPage, "Livrées");
     await recordFullRefund(adminPage, orderBId, viewport.label);
@@ -485,7 +788,12 @@ async function runViewport(
     await waitForBalance(clientPage, "Réservé", "0,00 €");
     await waitForMainText(clientPage, (text) => text.includes("Cagnotte restituée après retour"), "restitution visible dans l’historique");
     await capture(clientPage, harness, viewport, "07-solde-final-5-euros", screenshots);
-    const refunded = await inspectState(harness, `${viewport.label}-07-b-refunded`, fixtures.identities.client1.uid);
+    const refunded = await inspectState(
+      harness,
+      `${viewport.label}-07-b-refunded`,
+      fixtures.identities.client1.uid,
+      cancellation.signal,
+    );
     stages.push({ label: "B remboursée", state: refunded });
     assertWallet(refunded, [0, 500, 0, 0]);
     assertAccrual(refunded, orderBId, [475, 0, "available", true, true]);
@@ -499,6 +807,7 @@ async function runViewport(
       cancelledGainCents: 475,
     });
 
+    cancellation.throwIfRequested();
     clientMonitor.setPhase("client-account-switch");
     await signOut(clientPage);
     await signIn(clientPage, RECIPE_ACCOUNTS.client2);
@@ -507,6 +816,7 @@ async function runViewport(
     const client2Text = await mainText(clientPage);
     assert.equal(client2Text.includes(RECIPE_ACCOUNTS.client1.email), false, "le premier compte ne doit pas rester affiché");
 
+    cancellation.throwIfRequested();
     clientMonitor.setPhase("negative-auth-checks");
     const authorization = clientMonitor.lastCagnotteAuthorization();
     assert.match(authorization, /^Bearer\s+\S+$/, "un jeton Auth Emulator doit avoir accompagné la lecture client 2");
@@ -534,6 +844,7 @@ async function runViewport(
     assert.equal(record(negativeResponses.foreignAdmin.body).code, "admin_required");
     assert.equal(negativeResponses.adminMutation.status, 403);
 
+    cancellation.throwIfRequested();
     const directFirestoreDenial = await clientPage.evaluate(async (targetUid) => {
       try {
         const result = await window.__VERDANZA_RECETTE__?.readWalletDocument(targetUid);
@@ -545,9 +856,15 @@ async function runViewport(
     }, fixtures.identities.client1.uid);
     assert.equal(directFirestoreDenial.denied, true, "les règles Firestore doivent refuser le portefeuille étranger");
     assert.match(String(directFirestoreDenial.code), /permission-denied/);
-    const afterNegative = await inspectState(harness, `${viewport.label}-08-negative-denials`, fixtures.identities.client1.uid);
+    const afterNegative = await inspectState(
+      harness,
+      `${viewport.label}-08-negative-denials`,
+      fixtures.identities.client1.uid,
+      cancellation.signal,
+    );
     assert.deepEqual(afterNegative, refunded, "les refus client/non-admin ne doivent modifier aucune donnée métier");
 
+    cancellation.throwIfRequested();
     await signOut(clientPage);
     await signIn(clientPage, RECIPE_ACCOUNTS.client1);
     await openAdvantages(clientPage, RECIPE_ACCOUNTS.client1.email);
@@ -559,6 +876,7 @@ async function runViewport(
       `${viewport.label}-touch-listen-probe`,
       "scripts/cagnotte-interactive/touchListenProbe.ts",
       [recoveryGeneration],
+      cancellation.signal,
     );
     let recoveryWaitError: unknown;
     try {
@@ -582,13 +900,16 @@ async function runViewport(
       console.error(`[firestore-probe-evidence] ${safeError(evidenceError)}`);
     }
     if (recoveryWaitError !== undefined) throw recoveryWaitError;
+    cancellation.throwIfRequested();
     clientMonitor.setPhase("client-final-reload");
     await clientPage.reload({ waitUntil: "domcontentloaded" });
     await clientPage.getByRole("heading", { name: "Mes avantages" }).waitFor();
     await waitForBalance(clientPage, "Disponible", "5,00 €");
     assert.match(await mainText(clientPage), new RegExp(escapeRegex(RECIPE_ACCOUNTS.client1.email)));
 
+    cancellation.throwIfRequested();
     await Promise.all([clientMonitor.flushEvidence(), adminMonitor.flushEvidence()]);
+    cancellation.throwIfRequested();
     const runtimeIsolation = assertNoUnexpectedRuntimeFailures(
       [...clientMonitor.network, ...adminMonitor.network],
       [...clientMonitor.console, ...adminMonitor.console],
@@ -597,6 +918,7 @@ async function runViewport(
     assert.deepEqual(await clientPage.evaluate(() => window.__VERDANZA_RECETTE_NETWORK__ ?? []), []);
     assert.deepEqual(await adminPage.evaluate(() => window.__VERDANZA_RECETTE_NETWORK__ ?? []), []);
 
+    cancellation.throwIfRequested();
     clientMonitor.setPhase("fail-closed-api-unavailable");
     const failClosedNetworkStart = clientMonitor.network.length;
     const failClosedConsoleStart = clientMonitor.console.length;
@@ -604,6 +926,7 @@ async function runViewport(
     assertDiagnosticJournalComplete(apiDiagnostics);
     await harness.stopService("local-api");
     stoppedForFailClosed = true;
+    cancellation.throwIfRequested();
     await clientPage.getByRole("button", { name: "Actualiser" }).click();
     await waitForMainText(
       clientPage,
@@ -611,6 +934,7 @@ async function runViewport(
       "erreur explicite sans solde inventé quand l’API locale est arrêtée",
     );
     await capture(clientPage, harness, viewport, "08-api-indisponible-fail-closed", screenshots);
+    cancellation.throwIfRequested();
     assert.deepEqual(await clientPage.evaluate(() => window.__VERDANZA_RECETTE_NETWORK__ ?? []), []);
     await clientMonitor.flushEvidence();
     const failClosedEvidence = assertExpectedFailClosedApiUnavailable(
@@ -619,6 +943,7 @@ async function runViewport(
       { contextId: clientMonitor.contextId, pageId: clientMonitor.pageId(clientPage) },
     );
 
+    cancellation.throwIfRequested();
     await persistBrowserEvidence(harness, clientMonitor, adminMonitor);
     const apiRequests = await readJsonLines(resolve(harness.runDirectory, "api-requests.jsonl"));
     assertApiRequestLog(apiRequests);
@@ -670,6 +995,7 @@ async function runViewport(
       })),
     };
     await writeFile(resolve(harness.runDirectory, "result.json"), `${JSON.stringify(result, null, 2)}\n`, "utf8");
+    cancellation.throwIfRequested();
     executionStatus = "pass";
     return result;
   }).finally(() => {
@@ -890,6 +1216,7 @@ async function collectFirestoreProbeEvidence(
   clock: EvidenceClock,
   target: FirestoreListenProbeEvidence[],
 ) {
+  assertPageActive(page);
   const browserEvidence = await page.evaluate(
     () => window.__VERDANZA_RECETTE__?.readFirestoreListenProbe() ?? [],
   );
@@ -923,25 +1250,36 @@ async function signIn(
   account: { email: string; password: string },
   afterNavigation?: () => Promise<void>,
 ) {
+  assertPageActive(page);
   await goto(page, "/connexion");
   await afterNavigation?.();
+  assertPageActive(page);
   const ageConfirmed = await page.evaluate(() => (
     window.localStorage.getItem("verdanza-age-confirmed") === "true"
   ));
   const ageButton = page.getByRole("button", { name: "J'ai 18 ans ou plus", exact: true });
   if (!ageConfirmed) {
+    assertPageActive(page);
     await ageButton.waitFor({ state: "visible", timeout: 15_000 });
+    assertPageActive(page);
     await ageButton.click();
+    assertPageActive(page);
     await ageButton.waitFor({ state: "detached", timeout: 5_000 });
   }
   const rejectCookies = page.getByRole("button", { name: "Tout refuser" });
+  assertPageActive(page);
   if (await rejectCookies.waitFor({ state: "visible", timeout: 2_000 }).then(() => true).catch(() => false)) {
+    assertPageActive(page);
     await rejectCookies.click();
   }
+  assertPageActive(page);
   await page.getByLabel("Email", { exact: true }).fill(account.email);
+  assertPageActive(page);
   await page.locator('input[type="password"]').fill(account.password);
+  assertPageActive(page);
   await page.getByRole("button", { name: "Se connecter" }).click();
   try {
+    assertPageActive(page);
     await page.waitForURL((url) => url.pathname === "/compte" || url.pathname.startsWith("/compte/"), { timeout: 20_000 });
   } catch (error) {
     console.error(`Échec du formulaire Auth Emulator (${page.url()}) : ${(await mainText(page)).slice(0, 1_500)}`);
@@ -950,8 +1288,11 @@ async function signIn(
 }
 
 async function signOut(page: Page) {
+  assertPageActive(page);
   await goto(page, "/compte/avantages");
+  assertPageActive(page);
   await page.getByRole("heading", { name: "Mes avantages" }).waitFor();
+  assertPageActive(page);
   await Promise.all([
     page.waitForURL((url) => url.pathname === "/connexion", { timeout: 15_000 }),
     page.getByRole("button", { name: "Deconnexion" }).click(),
@@ -959,12 +1300,15 @@ async function signOut(page: Page) {
 }
 
 async function openAdvantages(page: Page, email: string) {
+  assertPageActive(page);
   await goto(page, "/compte/avantages");
+  assertPageActive(page);
   await page.getByRole("heading", { name: "Mes avantages" }).waitFor({ timeout: 15_000 });
   await waitForMainText(page, (text) => text.includes(email), `session visible pour ${email}`);
 }
 
 async function refreshAdvantages(page: Page) {
+  assertPageActive(page);
   const [response] = await Promise.all([
     page.waitForResponse((candidate) => {
       const url = safeUrl(candidate.url());
@@ -981,9 +1325,13 @@ async function createOrderThroughUi(
   label: string,
   beforeSubmit?: () => Promise<void>,
 ) {
+  assertPageActive(page);
   await goto(page, "/boutique");
+  assertPageActive(page);
   await page.getByRole("heading", { name: "Boutique CBD" }).waitFor();
+  assertPageActive(page);
   await page.getByRole("button", { name: "Ajouter 1 g — 100,00 €" }).click();
+  assertPageActive(page);
   await page.waitForFunction((productId) => {
     try {
       const items = JSON.parse(window.localStorage.getItem("verdanza-cart") || "[]") as Array<{
@@ -995,23 +1343,36 @@ async function createOrderThroughUi(
       return false;
     }
   }, RECIPE_PRODUCT.id, { timeout: 10_000 });
+  assertPageActive(page);
   await goto(page, "/panier");
+  assertPageActive(page);
   await page.getByRole("heading", { name: "Panier" }).waitFor();
   await waitForMainText(page, (text) => text.includes(RECIPE_PRODUCT.name) && text.includes("100,00 EUR"), "panier fictif à 100 euros");
   if (useCagnotte) await waitForBalance(page, "Disponible", "5,00 €");
+  assertPageActive(page);
   await page.getByRole("link", { name: "Continuer" }).click();
+  assertPageActive(page);
   await page.waitForURL((url) => url.pathname === "/checkout");
+  assertPageActive(page);
   await page.getByRole("heading", { name: "Finaliser ma commande" }).waitFor();
+  assertPageActive(page);
   await page.getByLabel("Prénom", { exact: true }).fill("Client");
+  assertPageActive(page);
   await page.getByLabel("Nom", { exact: true }).fill("Fictif");
+  assertPageActive(page);
   await page.getByLabel("Téléphone", { exact: true }).fill(label === "desktop" ? "0600000101" : "0600000202");
+  assertPageActive(page);
   await page.getByLabel("Adresse", { exact: true }).fill("1 rue Fictive");
+  assertPageActive(page);
   await page.getByLabel("Code postal", { exact: true }).fill("13100");
+  assertPageActive(page);
   await page.getByLabel("Ville", { exact: true }).fill("Aix-en-Provence");
+  assertPageActive(page);
   await page.getByLabel("Pays", { exact: true }).fill("France");
 
   if (useCagnotte) {
     await waitForBalance(page, "Disponible", "5,00 €");
+    assertPageActive(page);
     const [quoteResponse] = await Promise.all([
       page.waitForResponse((candidate) => safeUrl(candidate.url())?.pathname === "/api/quote-order" && candidate.request().method() === "POST"),
       page.getByRole("checkbox", { name: "Utiliser ma cagnotte" }).check(),
@@ -1022,13 +1383,18 @@ async function createOrderThroughUi(
       text.includes("À régler hors cagnotte") &&
       text.includes("95,00 €") &&
       text.includes("Gain estimé après paiement et livraison : 4,75 €"), "devis B 5/95/4,75");
+    assertPageActive(page);
     await page.getByRole("button", { name: /Accepter.*95,00/ }).click();
+    assertPageActive(page);
     await page.getByRole("button", { name: /Montant accepté.*95,00/ }).waitFor();
   }
 
+  assertPageActive(page);
   await page.getByRole("checkbox", { name: /Je confirme être majeur/ }).check();
   await beforeSubmit?.();
+  assertPageActive(page);
   await page.waitForTimeout(950);
+  assertPageActive(page);
   const [response] = await Promise.all([
     page.waitForResponse((candidate) => safeUrl(candidate.url())?.pathname === "/api/create-order" && candidate.request().method() === "POST", { timeout: 20_000 }),
     page.getByRole("button", { name: /Valider (?:ma commande|la commande)/ }).click(),
@@ -1043,7 +1409,9 @@ async function createOrderThroughUi(
   };
   assert.equal(response.status(), 200, JSON.stringify(body));
   assert.match(body.orderId, /^[A-Za-z0-9_-]{8,}$/);
+  assertPageActive(page);
   await page.waitForURL((url) => url.pathname === "/checkout/success", { timeout: 20_000 });
+  assertPageActive(page);
   await page.getByRole("heading", { name: "Commande enregistrée" }).waitFor({ timeout: 15_000 });
   if (useCagnotte) {
     await waitForMainText(page, (text) =>
@@ -1054,17 +1422,24 @@ async function createOrderThroughUi(
 }
 
 async function openAdminOrders(page: Page, filter: "Toutes" | "Livrées") {
+  assertPageActive(page);
   const wasAlreadyOpen = safeUrl(page.url())?.pathname === "/admin/commandes";
   await goto(page, "/admin/commandes");
+  assertPageActive(page);
   await page.getByRole("heading", { name: "Commandes" }).waitFor({ timeout: 20_000 });
   const loading = page.getByText("Chargement des donnees...", { exact: true });
   if (wasAlreadyOpen) {
+    assertPageActive(page);
     await page.getByRole("button", { name: "Rafraichir", exact: true }).click();
+    assertPageActive(page);
     await loading.waitFor({ state: "visible", timeout: 5_000 });
   }
+  assertPageActive(page);
   await loading.waitFor({ state: "hidden", timeout: 20_000 });
   const filterButton = page.getByRole("button", { name: filter, exact: true });
+  assertPageActive(page);
   await filterButton.waitFor({ state: "visible", timeout: 20_000 });
+  assertPageActive(page);
   await filterButton.click();
 }
 
@@ -1074,32 +1449,42 @@ async function updateOrder(
   kind: "payment" | "order",
   value: "paid" | "delivered",
 ) {
+  assertPageActive(page);
   const card = await visibleOrderCard(page, orderId);
   const selector = kind === "payment"
     ? card.locator('select:has(option[value="paid"])')
     : card.locator('select:has(option[value="delivered"])');
   page.once("dialog", (dialog) => void dialog.accept(kind === "payment" ? "card_payment_link" : "Recette locale fictive"));
+  assertPageActive(page);
   const [response] = await Promise.all([
     page.waitForResponse((candidate) => safeUrl(candidate.url())?.pathname === "/api/update-order-status" && candidate.request().method() === "POST", { timeout: 20_000 }),
     selector.selectOption(value),
   ]);
   const body = await response.text();
   assert.equal(response.status(), 200, `${kind} ${orderId}: ${body}`);
+  assertPageActive(page);
   await page.waitForTimeout(350);
 }
 
 async function recordFullRefund(page: Page, orderId: string, viewport: string) {
+  assertPageActive(page);
   const card = await visibleOrderCard(page, orderId);
   const tools = card.locator('section[aria-label="Outils administratifs de cagnotte"]');
+  assertPageActive(page);
   await tools.waitFor({ state: "visible", timeout: 20_000 });
+  assertPageActive(page);
   await tools.getByRole("heading", { name: "Enregistrer un remboursement déjà confirmé" }).waitFor();
+  assertPageActive(page);
   await tools.getByRole("button", { name: "Tout le montant restant" }).click();
+  assertPageActive(page);
   await tools.getByLabel("Montant financier déclaré (€)", { exact: true }).fill("95,00");
+  assertPageActive(page);
   await tools.getByLabel("Référence métier", { exact: true }).fill(`recette-interactive-${viewport}`);
   await setDateTimeLocal(
     tools.getByLabel("Date de confirmation", { exact: true }),
     recentLocalDateTime(),
   );
+  assertPageActive(page);
   const [preview] = await Promise.all([
     page.waitForResponse((candidate) => isJsonAction(candidate, "/api/order-refunds", "preview")),
     tools.getByRole("button", { name: "Prévisualiser sur le serveur" }).click(),
@@ -1112,18 +1497,23 @@ async function recordFullRefund(page: Page, orderId: string, viewport: string) {
     previewBody.cagnotteRestitutionCents,
     record(previewBody.correction).theoreticalCents,
   ], [9_500, 500, 475]);
+  assertPageActive(page);
   await tools.getByText("Conséquences calculées par le serveur", { exact: true }).waitFor();
+  assertPageActive(page);
   await tools.getByText("Prévisualisation serveur prête.", { exact: true }).waitFor();
   const confirmButton = tools.getByRole("button", { name: "Confirmer l’enregistrement" });
   await waitForButtonEnabled(confirmButton);
+  assertPageActive(page);
   await page.waitForTimeout(100);
   let confirmed: PlaywrightResponse;
   try {
+    assertPageActive(page);
     [confirmed] = await Promise.all([
       page.waitForResponse((candidate) => isJsonAction(candidate, "/api/order-refunds", "record_confirmed")),
       confirmButton.click(),
     ]);
   } catch (error) {
+    assertPageActive(page);
     throw new Error(
       `La confirmation admin n'a émis aucune déclaration. disabled=${await confirmButton.isDisabled().catch(() => true)}; ` +
       `texte=${(await tools.innerText().catch(() => "indisponible")).slice(0, 2_000)}`,
@@ -1146,17 +1536,23 @@ async function recordFullRefund(page: Page, orderId: string, viewport: string) {
 }
 
 async function visibleOrderCard(page: Page, orderId: string) {
+  assertPageActive(page);
   const card = page.locator("article.rounded-lg:visible").filter({ hasText: orderId }).first();
   await card.waitFor({ state: "visible", timeout: 20_000 });
   return card;
 }
 
-async function inspectState(harness: RecipeHarness, label: string, uid: string): Promise<RecipeState> {
+async function inspectState(
+  harness: RecipeHarness,
+  label: string,
+  uid: string,
+  signal: AbortSignal,
+): Promise<RecipeState> {
   const output = resolve(harness.runDirectory, `state-${safeName(label)}.json`);
   await runRecipeScript(harness, `state-${safeName(label)}`, "scripts/cagnotte-interactive/state.ts", [
     `--uid=${uid}`,
     `--output=${output}`,
-  ]);
+  ], signal);
   const state = JSON.parse(await readFile(output, "utf8")) as RecipeState;
   assert.equal(state.projectId, RECIPE_PROJECT_ID);
   assert.equal(state.uid, uid);
@@ -1247,12 +1643,15 @@ function pickRefund(value: RecipeState["refunds"][number]) {
 }
 
 async function assertRecipeBanner(page: Page) {
+  assertPageActive(page);
   const banner = page.locator('[data-verdanza-recette="local-interactive"]');
   await banner.waitFor({ state: "visible" });
+  assertPageActive(page);
   assert.equal(await banner.textContent(), "RECETTE LOCALE — DONNÉES FICTIVES");
 }
 
 async function goto(page: Page, pathname: string) {
+  assertPageActive(page);
   const target = localUrl(RECIPE_PORTS.app, pathname);
   if (safeUrl(page.url())?.pathname === pathname) {
     await assertRecipeBanner(page);
@@ -1260,14 +1659,17 @@ async function goto(page: Page, pathname: string) {
   }
   const applicationLink = page.locator(`a[href="${pathname}"]`).first();
   if (page.url().startsWith(localUrl(RECIPE_PORTS.app)) && await applicationLink.count()) {
+    assertPageActive(page);
     await Promise.all([
       page.waitForURL((url) => url.pathname === pathname, { timeout: 15_000 }),
       applicationLink.evaluate((element) => (element as HTMLAnchorElement).click()),
     ]);
   } else if (pathname.startsWith("/admin/")) {
+    assertPageActive(page);
     const response = await page.goto(target, { waitUntil: "domcontentloaded" });
     assert.equal(response?.status(), 200, `${pathname} doit être servi localement`);
   } else if (page.url().startsWith(localUrl(RECIPE_PORTS.app))) {
+    assertPageActive(page);
     await Promise.all([
       page.waitForURL((url) => url.pathname === pathname, { timeout: 15_000 }),
       page.evaluate((nextPathname) => {
@@ -1276,6 +1678,7 @@ async function goto(page: Page, pathname: string) {
       }, pathname),
     ]);
   } else {
+    assertPageActive(page);
     const response = await page.goto(target, { waitUntil: "domcontentloaded" });
     assert.equal(response?.status(), 200, `${pathname} doit être servi localement`);
   }
@@ -1289,6 +1692,7 @@ async function capture(
   name: string,
   screenshots: string[],
 ) {
+  assertPageActive(page);
   const target = resolve(harness.runDirectory, `${name}-${viewport.label}.png`);
   await page.screenshot({ path: target, fullPage: true });
   screenshots.push(target);
@@ -1324,8 +1728,10 @@ async function waitForMainText(
   const deadline = Date.now() + timeoutMs;
   let observed = "";
   while (Date.now() < deadline) {
+    assertPageActive(page);
     observed = await mainText(page).catch(() => "");
     if (predicate(observed)) return observed;
+    assertPageActive(page);
     await page.waitForTimeout(100);
   }
   throw new Error(`${description} non observé. Texte final : ${observed.slice(0, 2_000)}`);
@@ -1334,13 +1740,16 @@ async function waitForMainText(
 async function waitForButtonEnabled(button: ReturnType<Page["getByRole"]>, timeoutMs = 5_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    assertPageActive(button.page());
     if (await button.isEnabled().catch(() => false)) return;
+    assertPageActive(button.page());
     await button.page().waitForTimeout(25);
   }
   throw new Error("Le bouton attendu n'est pas devenu actif.");
 }
 
 async function setDateTimeLocal(input: ReturnType<Page["getByLabel"]>, value: string) {
+  assertPageActive(input.page());
   await input.evaluate((element, nextValue) => {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     if (!setter) throw new Error("Setter natif datetime-local indisponible.");
@@ -1360,7 +1769,12 @@ function recentLocalDateTime() {
 }
 
 async function mainText(page: Page) {
+  assertPageActive(page);
   return normalizeText(await page.locator("main").innerText());
+}
+
+function assertPageActive(page: Page) {
+  pageCancellations.get(page)?.throwIfRequested();
 }
 
 function normalizeText(value: string) {

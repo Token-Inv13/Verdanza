@@ -27,6 +27,11 @@ export type CleanupReport = {
   steps: CleanupStepResult[];
 };
 
+export type ResourceCancellationControl = {
+  signal: AbortSignal;
+  throwIfRequested: () => void;
+};
+
 export type ViewportResourceDependencies<Harness, Monitor, Page> = {
   label: string;
   startHarness: () => Promise<Harness>;
@@ -42,6 +47,8 @@ export type ViewportResourceDependencies<Harness, Monitor, Page> = {
     report: CleanupReport,
     resources: PartialViewportResources<Harness, Monitor, Page>,
   ) => Promise<void>;
+  cancellation?: ResourceCancellationControl;
+  onPrimaryError?: (error: unknown) => void;
   onCleanupIssue?: (step: CleanupStepResult) => void;
   cleanupTimeoutMs?: number;
 };
@@ -53,15 +60,31 @@ export async function runWithViewportResources<Harness, Monitor, Page, Result>(
   const resources: PartialViewportResources<Harness, Monitor, Page> = {};
   let result: Result | undefined;
   let primaryError: unknown;
+  let primaryErrorPrecededCancellation = false;
   try {
+    dependencies.cancellation?.throwIfRequested();
     resources.harness = await dependencies.startHarness();
+    dependencies.cancellation?.throwIfRequested();
     resources.clientMonitor = await dependencies.createMonitor("client", resources.harness);
+    dependencies.cancellation?.throwIfRequested();
     resources.adminMonitor = await dependencies.createMonitor("admin", resources.harness);
+    dependencies.cancellation?.throwIfRequested();
     resources.clientPage = await dependencies.createPage(resources.clientMonitor, "client");
+    dependencies.cancellation?.throwIfRequested();
     resources.adminPage = await dependencies.createPage(resources.adminMonitor, "admin");
+    dependencies.cancellation?.throwIfRequested();
     result = await operation(resources as ViewportResources<Harness, Monitor, Page>);
+    dependencies.cancellation?.throwIfRequested();
   } catch (error) {
     primaryError = error;
+    primaryErrorPrecededCancellation = !dependencies.cancellation?.signal.aborted;
+    if (primaryErrorPrecededCancellation) {
+      try {
+        dependencies.onPrimaryError?.(error);
+      } catch {
+        // L'erreur initiale reste prioritaire face au suivi du runner.
+      }
+    }
   }
 
   const timeoutMs = dependencies.cleanupTimeoutMs ?? 10_000;
@@ -83,6 +106,15 @@ export async function runWithViewportResources<Harness, Monitor, Page, Result>(
   await cleanupStep(steps, "stop-harness", Boolean(resources.harness), timeoutMs, () => (
     dependencies.stopHarness(resources.harness as Harness)
   ));
+
+  if (dependencies.cancellation?.signal.aborted && !primaryErrorPrecededCancellation) {
+    try {
+      dependencies.cancellation.throwIfRequested();
+    } catch (cancellationError) {
+      attachCancellationContext(cancellationError, primaryError);
+      primaryError = cancellationError;
+    }
+  }
 
   const report: CleanupReport = {
     label: dependencies.label,
@@ -202,6 +234,21 @@ function attachCleanupFailures(primaryError: unknown, failures: CleanupStepResul
     });
   } catch {
     // Certaines erreurs peuvent être non extensibles ; leur identité reste prioritaire.
+  }
+}
+
+function attachCancellationContext(cancellationError: unknown, interruptedError: unknown) {
+  if (!(cancellationError instanceof Error) || !interruptedError || typeof interruptedError !== "object") return;
+  const runDirectory = (interruptedError as { runDirectory?: unknown }).runDirectory;
+  if (typeof runDirectory !== "string") return;
+  try {
+    Object.defineProperty(cancellationError, "runDirectory", {
+      configurable: true,
+      enumerable: false,
+      value: runDirectory,
+    });
+  } catch {
+    // L'annulation reste exploitable même sans propriété de contexte supplémentaire.
   }
 }
 

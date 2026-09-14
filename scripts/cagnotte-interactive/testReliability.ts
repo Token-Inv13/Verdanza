@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -9,6 +9,7 @@ import { Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import {
   RECIPE_HOST,
+  RECIPE_CACHE_ROOT,
   RECIPE_PORTS,
 } from "./constants.js";
 import {
@@ -25,7 +26,11 @@ import {
   type SpawnOwnedOptions,
   type RecipeStartupDriver,
 } from "./harness.js";
-import { runRecipeCommand } from "./run.js";
+import {
+  installRecipeSignalCancellation,
+  isRecipeSignalCancellation,
+  runRecipeCommand,
+} from "./run.js";
 import {
   configureOwnedResource,
   runWithViewportResources,
@@ -38,6 +43,10 @@ import {
   type FirestoreListenProbeEvidence,
   type NetworkEvidence,
 } from "./runtimeDiagnostics.js";
+import {
+  publishCurrentPassEvidence,
+  runViewportSequence,
+} from "./test.js";
 
 type FakeHarness = { stopCalls: number };
 type FakeMonitor = { role: "client" | "admin"; closeCalls: number };
@@ -279,6 +288,146 @@ await check("un second signal pendant l’arrêt ne concurrence pas la finalisat
   assert.equal(signals.listenerCount("SIGTERM"), 0);
 });
 
+await check("une ressource acquise pendant l’annulation reste recensée puis fermée", async () => {
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const fixture = fakeDependencies({ failAt: "cleanup" });
+  const acquisitionStarted = deferred<void>();
+  const releaseAcquisition = deferred<void>();
+  let adminAcquisitions = 0;
+  fixture.dependencies.cancellation = cancellation;
+  fixture.dependencies.createMonitor = async (role) => {
+    if (role === "client") {
+      acquisitionStarted.resolve();
+      await releaseAcquisition.promise;
+      return fixture.clientMonitor;
+    }
+    adminAcquisitions += 1;
+    return fixture.adminMonitor;
+  };
+  try {
+    const execution = runWithViewportResources(fixture.dependencies, async () => {
+      assert.fail("le parcours ne doit pas commencer après l’annulation");
+    });
+    await acquisitionStarted.promise;
+    signals.emit("SIGINT");
+    releaseAcquisition.resolve();
+    await assert.rejects(execution, isRecipeSignalCancellation);
+    assert.equal(adminAcquisitions, 0, "aucune acquisition suivante ne doit commencer");
+    assert.equal(fixture.clientMonitor.closeCalls, 1, "le contexte acquis tardivement doit être fermé");
+    assert.equal(fixture.harness.stopCalls, 1, "le harness déjà acquis doit être arrêté");
+  } finally {
+    cancellation.dispose();
+  }
+});
+
+await check("l’annulation d’un parcours rejoint un nettoyage unique malgré un second signal", async () => {
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const fixture = fakeDependencies({ failAt: "cleanup" });
+  const operationStarted = deferred<void>();
+  const cleanupStarted = deferred<void>();
+  const releaseCleanup = deferred<void>();
+  fixture.dependencies.cancellation = cancellation;
+  fixture.dependencies.persistEvidence = async () => {
+    cleanupStarted.resolve();
+    await releaseCleanup.promise;
+  };
+  try {
+    const execution = runWithViewportResources(fixture.dependencies, async () => {
+      operationStarted.resolve();
+      await waitUntilCancelled(cancellation.signal);
+    });
+    await operationStarted.promise;
+    signals.emit("SIGTERM");
+    await cleanupStarted.promise;
+    signals.emit("SIGINT");
+    assert.equal(signals.listenerCount("SIGINT"), 1, "les handlers restent actifs pendant le nettoyage");
+    assert.equal(signals.listenerCount("SIGTERM"), 1, "les handlers restent actifs pendant le nettoyage");
+    releaseCleanup.resolve();
+    await assert.rejects(execution, (error) => (
+      isRecipeSignalCancellation(error) && error.signal === "SIGTERM"
+    ));
+    assert.equal(fixture.clientPage.closeCalls, 1);
+    assert.equal(fixture.adminPage.closeCalls, 1);
+    assert.equal(fixture.clientMonitor.closeCalls, 1);
+    assert.equal(fixture.adminMonitor.closeCalls, 1);
+    assert.equal(fixture.harness.stopCalls, 1);
+  } finally {
+    cancellation.dispose();
+  }
+  assert.equal(signals.listenerCount("SIGINT"), 0);
+  assert.equal(signals.listenerCount("SIGTERM"), 0);
+});
+
+await check("une erreur de parcours observée avant le signal reste prioritaire", async () => {
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const fixture = fakeDependencies({ failAt: "cleanup" });
+  fixture.dependencies.cancellation = cancellation;
+  fixture.dependencies.onPrimaryError = () => { signals.emit("SIGTERM"); };
+  try {
+    await assert.rejects(
+      runWithViewportResources(fixture.dependencies, async () => {
+        throw new Error("injected-primary-before-signal");
+      }),
+      /injected-primary-before-signal/,
+    );
+    assert.equal(cancellation.requestedSignal(), "SIGTERM");
+    assert.equal(fixture.harness.stopCalls, 1);
+  } finally {
+    cancellation.dispose();
+  }
+});
+
+await check("une interruption entre desktop et mobile interdit le viewport suivant", async () => {
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const started: string[] = [];
+  const completed: string[] = [];
+  try {
+    await assert.rejects(
+      runViewportSequence({
+        items: ["desktop", "mobile"],
+        cancellation,
+        run: async (viewport) => {
+          started.push(viewport);
+          if (viewport === "desktop") signals.emit("SIGTERM");
+          return viewport;
+        },
+        onCompleted: (viewport) => completed.push(viewport),
+      }),
+      isRecipeSignalCancellation,
+    );
+    assert.deepEqual(started, ["desktop"]);
+    assert.deepEqual(completed, ["desktop"], "le résultat terminé reste une preuve partielle");
+  } finally {
+    cancellation.dispose();
+  }
+});
+
+await check("une interruption avant le bilan final retire tout PASS courant", async () => {
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const directory = await mkdtemp(resolve(tmpdir(), "verdanza-runner-pass-"));
+  const passPath = resolve(directory, "latest-result.json");
+  try {
+    await assert.rejects(
+      publishCurrentPassEvidence({
+        path: passPath,
+        contents: '{"status":"PASS"}\n',
+        cancellation,
+        afterWrite: () => { signals.emit("SIGINT"); },
+      }),
+      isRecipeSignalCancellation,
+    );
+    await assert.rejects(access(passPath), /ENOENT/, "aucun PASS écrit avant l’interruption ne doit rester courant");
+  } finally {
+    cancellation.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 await check("annulation avant le premier processus", async () => {
   const controller = new AbortController();
   controller.abort();
@@ -387,9 +536,24 @@ if (process.platform === "win32") {
   await check("Windows distingue l’annulation logique d’un vrai Ctrl+C", async () => {
     assert.equal(process.platform, "win32");
     console.log("[INFO] Aucun process.kill(SIGINT) n’est présenté comme preuve Ctrl+C sous Windows.");
+    console.log("[INFO] Signaux réels du runner test.ts NON EXÉCUTÉS localement sous Windows ; ils restent obligatoires dans verify sous Linux.");
     console.log("[INFO] Tests d'arbre de processus Unix NON EXÉCUTÉS localement sous Windows ; ils restent obligatoires dans verify sous Linux.");
   });
 } else {
+  await check("le vrai runner reçoit SIGINT après acquisition et nettoie sans faux PASS", async () => {
+    await assertRealAutomatedRunnerSignal({
+      signal: "SIGINT",
+      probe: "after-resources",
+      sendSecondSignalDuringCleanup: false,
+    });
+  });
+  await check("le vrai runner reçoit SIGTERM pendant une attente et rejoint le même nettoyage", async () => {
+    await assertRealAutomatedRunnerSignal({
+      signal: "SIGTERM",
+      probe: "during-active-wait",
+      sendSecondSignalDuringCleanup: true,
+    });
+  });
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     await check(`signal ${signal} réel reçu pendant le démarrage`, async () => {
       await assertRealStartupSignal(signal);
@@ -1098,6 +1262,159 @@ async function assertRealStartupSignal(signal: "SIGINT" | "SIGTERM") {
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
   }
+}
+
+async function assertRealAutomatedRunnerSignal(options: {
+  signal: "SIGINT" | "SIGTERM";
+  probe: "after-resources" | "during-active-wait";
+  sendSecondSignalDuringCleanup: boolean;
+}) {
+  assert.notEqual(process.platform, "win32", "ce contrôle de signal réel est réservé à la CI Unix");
+  const witness = spawn(process.execPath, [
+    "-e",
+    "process.on('SIGINT',()=>{});process.on('SIGTERM',()=>{});process.stdout.write('RUNNER_WITNESS_READY');setInterval(()=>{},1000)",
+  ], {
+    detached: true,
+    shell: false,
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  let witnessOutput = "";
+  witness.stdout?.on("data", (chunk) => { witnessOutput += String(chunk); });
+  const runner = spawn(process.execPath, [
+    "--import", "tsx",
+    resolve(process.cwd(), "scripts/cagnotte-interactive/test.ts"),
+    `--runner-signal-probe=${options.probe}`,
+  ], {
+    cwd: process.cwd(),
+    env: process.env,
+    shell: false,
+    windowsHide: true,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+  let descendants: number[] = [];
+  runner.stdout?.on("data", (chunk) => { stdout += String(chunk); });
+  runner.stderr?.on("data", (chunk) => { stderr += String(chunk); });
+  try {
+    await waitForOutput(witness, () => witnessOutput.includes("RUNNER_WITNESS_READY"), 5_000);
+    await waitForOutput(
+      runner,
+      () => stdout.includes(`RUNNER_SIGNAL_PROBE READY ${options.probe} desktop`),
+      120_000,
+    );
+    descendants = await linuxDescendantPids(runner.pid as number);
+    assert.ok(descendants.length > 0, "le runner réel doit posséder Chromium et les services de recette");
+    assert.equal(runner.kill(options.signal), true, `${options.signal} doit viser directement le runner Node test.ts`);
+    if (options.sendSecondSignalDuringCleanup) {
+      await waitForOutput(
+        runner,
+        () => stdout.includes("RUNNER_SIGNAL_PROBE CLEANUP_START desktop"),
+        30_000,
+      );
+      const secondSignal = options.signal === "SIGINT" ? "SIGTERM" : "SIGINT";
+      assert.equal(runner.kill(secondSignal), true, "le second signal doit rejoindre le nettoyage en cours");
+    }
+    const exitCode = await waitForChildExit(runner, 120_000);
+    const expectedExitCode = options.signal === "SIGINT" ? 130 : 143;
+    assert.equal(exitCode, expectedExitCode, stderr || stdout);
+    assert.doesNotMatch(stdout, /RUNNER_VIEWPORT_START mobile/);
+    assert.doesNotMatch(stdout, /Recette interactive locale réussie/);
+    assert.match(stderr, new RegExp(`ANNULÉE par ${options.signal}`));
+
+    const latestResultPath = resolve(RECIPE_CACHE_ROOT, "latest-result.json");
+    await assert.rejects(access(latestResultPath), /ENOENT/, "aucun latest-result PASS ne doit survivre");
+    const cancellation = JSON.parse(
+      await readFile(resolve(RECIPE_CACHE_ROOT, "latest-failure.json"), "utf8"),
+    ) as {
+      status?: string;
+      signal?: string;
+      exitCode?: number;
+      activeRunDirectory?: string;
+      completedExecutions?: unknown[];
+      cleanupIssues?: unknown[];
+    };
+    assert.equal(cancellation.status, "CANCELLED");
+    assert.equal(cancellation.signal, options.signal);
+    assert.equal(cancellation.exitCode, expectedExitCode);
+    assert.deepEqual(cancellation.completedExecutions, []);
+    assert.deepEqual(cancellation.cleanupIssues, []);
+    assert.ok(cancellation.activeRunDirectory, "le dossier du viewport interrompu doit rester traçable");
+
+    const executionSummary = JSON.parse(
+      await readFile(resolve(cancellation.activeRunDirectory, "execution-summary.json"), "utf8"),
+    ) as { status?: string; interruption?: { status?: string; signal?: string } };
+    assert.equal(executionSummary.status, "INTERRUPTED");
+    assert.deepEqual(executionSummary.interruption, { status: "CANCELLED", signal: options.signal });
+    const cleanup = JSON.parse(
+      await readFile(resolve(cancellation.activeRunDirectory, "cleanup.json"), "utf8"),
+    ) as {
+      steps?: Array<{ name?: string; status?: string }>;
+      ownedProcesses?: Array<{
+        pid?: number;
+        stop?: { childStopped?: boolean; ownedTreeStopped?: boolean };
+      }>;
+    };
+    assert.equal(
+      cleanup.steps?.find((step) => step.name === "stop-harness")?.status,
+      "completed",
+      "le propriétaire du harness doit terminer son nettoyage",
+    );
+    assert.ok((cleanup.ownedProcesses?.length ?? 0) >= 5);
+    assert.equal(
+      cleanup.ownedProcesses?.every((entry) => (
+        entry.stop?.childStopped === true && entry.stop?.ownedTreeStopped === true
+      )),
+      true,
+      "chaque processus possédé doit être arrêté avec son arbre",
+    );
+    assert.deepEqual(await occupiedRecipePorts(), [], "les sept ports doivent être libres après le signal");
+    for (const pid of descendants) await assertPidGone(pid, `descendant ${pid} du runner`);
+    assert.equal(isPidAlive(witness.pid), true, "le témoin extérieur ne doit recevoir aucun signal");
+  } finally {
+    await cleanupRunnerProcess(runner, descendants);
+    await stopWitness(witness);
+  }
+}
+
+async function linuxDescendantPids(rootPid: number) {
+  const parentByPid = new Map<number, number>();
+  for (const entry of await readdir("/proc", { withFileTypes: true })) {
+    if (!entry.isDirectory() || !/^\d+$/.test(entry.name)) continue;
+    const pid = Number(entry.name);
+    try {
+      const stat = await readFile(`/proc/${pid}/stat`, "utf8");
+      const match = stat.match(/^\d+ \(.*\) \S (\d+) /);
+      if (match) parentByPid.set(pid, Number(match[1]));
+    } catch {
+      // Un processus peut disparaître pendant l'inventaire.
+    }
+  }
+  const descendants: number[] = [];
+  const pending = [rootPid];
+  while (pending.length > 0) {
+    const parent = pending.shift() as number;
+    for (const [pid, ppid] of parentByPid) {
+      if (ppid !== parent || descendants.includes(pid)) continue;
+      descendants.push(pid);
+      pending.push(pid);
+    }
+  }
+  return descendants;
+}
+
+async function cleanupRunnerProcess(runner: ChildProcess, knownDescendants: number[]) {
+  const currentDescendants = runner.pid && isPidAlive(runner.pid)
+    ? await linuxDescendantPids(runner.pid)
+    : [];
+  for (const pid of [...new Set([...currentDescendants, ...knownDescendants])].reverse()) {
+    try {
+      if (isPidAlive(pid)) process.kill(pid, "SIGKILL");
+    } catch {
+      // Le processus peut disparaître entre le contrôle et le signal de secours.
+    }
+  }
+  if (runner.pid && isPidAlive(runner.pid)) runner.kill("SIGKILL");
 }
 
 async function runSignalChild() {

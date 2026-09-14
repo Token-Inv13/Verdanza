@@ -362,12 +362,13 @@ export async function runRecipeScript(
   name: string,
   script: string,
   args: string[] = [],
+  signal?: AbortSignal,
 ) {
   await runOneShot(name, [
     "--import", "tsx",
     resolve(RECIPE_ROOT, script),
     ...args,
-  ], harness.environment, harness.runDirectory, harness.processes);
+  ], harness.environment, harness.runDirectory, harness.processes, signal);
 }
 
 async function assertPortsAvailable(signal?: AbortSignal) {
