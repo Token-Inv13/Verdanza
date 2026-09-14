@@ -41,6 +41,7 @@ import {
   type RequestShape,
   type ResponseSignature,
 } from "./runtimeDiagnostics.js";
+import { assertDiagnosticJournalComplete } from "./diagnosticJournal.js";
 
 type RecipeState = {
   projectId: string;
@@ -256,6 +257,7 @@ async function runViewport(
             wallet: state.wallet,
             movements: state.movements.length,
           })),
+          apiDiagnostics: resources.harness.diagnosticsSnapshot() ?? null,
           screenshots,
           listen400Incidents: [
             ...(resources.clientMonitor?.network ?? []),
@@ -593,6 +595,8 @@ async function runViewport(
     clientMonitor.setPhase("fail-closed-api-unavailable");
     const failClosedNetworkStart = clientMonitor.network.length;
     const failClosedConsoleStart = clientMonitor.console.length;
+    const apiDiagnostics = await harness.finalizeDiagnostics();
+    assertDiagnosticJournalComplete(apiDiagnostics);
     await harness.stopService("local-api");
     stoppedForFailClosed = true;
     await clientPage.getByRole("button", { name: "Actualiser" }).click();
@@ -643,6 +647,10 @@ async function runViewport(
       },
       failClosedApiUnavailable: true,
       failClosedEvidence,
+      diagnostics: {
+        business: "PASS",
+        journal: apiDiagnostics,
+      },
       blockedBrowserDestinations: runtimeIsolation.blockedBrowserDestinations,
       firestoreTransportRecoveries: runtimeIsolation.firestoreTransportRecoveries,
       screenshots,

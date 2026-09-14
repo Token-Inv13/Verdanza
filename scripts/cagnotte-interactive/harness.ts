@@ -14,6 +14,14 @@ import {
 } from "./constants.js";
 import { buildRecipeEnvironment } from "./environment.js";
 import { assertInteractivePrerequisites } from "./prerequisites.js";
+import {
+  API_DIAGNOSTICS_PATH,
+  assertDiagnosticJournalComplete,
+  diagnosticErrorCode,
+  incompleteDiagnosticJournalSnapshot,
+  isDiagnosticJournalSnapshot,
+  type DiagnosticJournalSnapshot,
+} from "./diagnosticJournal.js";
 
 type OwnedProcess = { name: string; child: ChildProcess; logPath: string };
 const AUTH_EMULATOR_READY_TIMEOUT_MS = 120_000;
@@ -25,6 +33,8 @@ export type RecipeHarness = {
   processes: OwnedProcess[];
   stop: () => Promise<void>;
   stopService: (name: string) => Promise<void>;
+  finalizeDiagnostics: () => Promise<DiagnosticJournalSnapshot>;
+  diagnosticsSnapshot: () => DiagnosticJournalSnapshot | undefined;
 };
 
 export async function startRecipeHarness(label: string): Promise<RecipeHarness> {
@@ -39,15 +49,43 @@ export async function startRecipeHarness(label: string): Promise<RecipeHarness> 
   await assertPortsAvailable();
   const environment = buildRecipeEnvironment(runDirectory);
   const processes: OwnedProcess[] = [];
+  let finalizedDiagnostics: DiagnosticJournalSnapshot | undefined;
+  let finalizationPromise: Promise<DiagnosticJournalSnapshot> | undefined;
+  const finalizeDiagnostics = () => {
+    if (finalizedDiagnostics) return Promise.resolve(finalizedDiagnostics);
+    if (!finalizationPromise) {
+      finalizationPromise = captureApiDiagnostics(processes, runDirectory).then((snapshot) => {
+        finalizedDiagnostics = snapshot;
+        return snapshot;
+      });
+    }
+    return finalizationPromise;
+  };
   const harness: RecipeHarness = {
     runDirectory,
     environment,
     processes,
-    stop: async () => stopAll(processes),
+    stop: async () => stopAllWithDiagnostics(processes, finalizeDiagnostics),
     stopService: async (name) => {
       const target = processes.find((entry) => entry.name === name);
-      if (target) await stopOwned(target);
+      if (!target) return;
+      const failures: unknown[] = [];
+      if (name === "local-api") {
+        try {
+          assertDiagnosticJournalComplete(await finalizeDiagnostics());
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+      try {
+        await stopOwned(target);
+      } catch (error) {
+        failures.push(error);
+      }
+      throwCollectedFailures(failures, `Arrêt incomplet du service ${name}.`);
     },
+    finalizeDiagnostics,
+    diagnosticsSnapshot: () => finalizedDiagnostics,
   };
   try {
     processes.push(spawnOwned("firebase-emulators", [
@@ -290,6 +328,26 @@ async function stopAll(processes: OwnedProcess[]) {
   if (failures.length) throw new AggregateError(failures, "Arrêt incomplet du harness de recette.");
 }
 
+async function stopAllWithDiagnostics(
+  processes: OwnedProcess[],
+  finalizeDiagnostics: () => Promise<DiagnosticJournalSnapshot>,
+) {
+  const failures: unknown[] = [];
+  if (processes.some((entry) => entry.name === "local-api")) {
+    try {
+      assertDiagnosticJournalComplete(await finalizeDiagnostics());
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  try {
+    await stopAll(processes);
+  } catch (error) {
+    failures.push(error);
+  }
+  throwCollectedFailures(failures, "Arrêt incomplet du harness de recette.");
+}
+
 async function stopOwned(processRef: OwnedProcess) {
   if (!processRef.child.pid || hasSettled(processRef.child)) return;
   if (process.platform === "win32") {
@@ -346,6 +404,47 @@ function hasSettled(child: ChildProcess) {
 
 function safeError(error: unknown) {
   return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+}
+
+async function captureApiDiagnostics(processes: OwnedProcess[], runDirectory: string) {
+  const api = processes.find((entry) => entry.name === "local-api");
+  let snapshot: DiagnosticJournalSnapshot;
+  if (!api || hasSettled(api.child)) {
+    snapshot = incompleteDiagnosticJournalSnapshot("API_DIAGNOSTICS_UNAVAILABLE");
+  } else {
+    try {
+      const response = await fetch(localUrl(RECIPE_PORTS.api, API_DIAGNOSTICS_PATH), {
+        signal: AbortSignal.timeout(3_000),
+      });
+      const payload: unknown = await response.json();
+      snapshot = isDiagnosticJournalSnapshot(payload)
+        ? payload
+        : incompleteDiagnosticJournalSnapshot("API_DIAGNOSTICS_INVALID");
+      if ((response.status === 200) !== snapshot.complete) {
+        snapshot = incompleteDiagnosticJournalSnapshot("API_DIAGNOSTICS_STATUS");
+      }
+    } catch (error) {
+      console.error(`[api-diagnostics] contrôle local indisponible code=${diagnosticErrorCode(error)}`);
+      snapshot = incompleteDiagnosticJournalSnapshot("API_DIAGNOSTICS_UNAVAILABLE");
+    }
+  }
+
+  try {
+    await writeFile(
+      resolve(runDirectory, "api-diagnostics.json"),
+      `${JSON.stringify(snapshot, null, 2)}\n`,
+      "utf8",
+    );
+  } catch (error) {
+    console.error(`[api-diagnostics] preuve de contrôle indisponible code=${diagnosticErrorCode(error)}`);
+    return incompleteDiagnosticJournalSnapshot("API_DIAGNOSTICS_EVIDENCE");
+  }
+  return snapshot;
+}
+
+function throwCollectedFailures(failures: unknown[], message: string) {
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) throw new AggregateError(failures, message);
 }
 
 async function writePartialStartDiagnostics(runDirectory: string, processes: OwnedProcess[]) {

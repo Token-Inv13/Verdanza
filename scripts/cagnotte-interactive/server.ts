@@ -22,12 +22,27 @@ import {
 import { validateCurrentRecipeProcess } from "./environment.js";
 import { closeRecipeFirestore, getRecipeFirestore } from "./firestore.js";
 import { verifyLocalAuthEmulatorToken } from "./authVerifier.js";
+import {
+  API_DIAGNOSTICS_PATH,
+  createDiagnosticJournal,
+  createJournaledRequestListener,
+  diagnosticErrorCode,
+} from "./diagnosticJournal.js";
 
 validateCurrentRecipeProcess();
 const runDirectory = process.env.VERDANZA_RECETTE_RUN_DIR;
 if (!runDirectory) throw new Error("ISOLATION: dossier d’exécution absent.");
 await mkdir(runDirectory, { recursive: true });
 const requestLogPath = resolve(runDirectory, "api-requests.jsonl");
+const diagnosticJournal = createDiagnosticJournal({
+  appendLine: (line) => appendFile(requestLogPath, line, "utf8"),
+  reportFailure: (failure) => {
+    console.error(
+      `[diagnostic-journal] écriture impossible kind=${failure.kind} ` +
+      `code=${failure.code} sequence=${failure.sequence}`,
+    );
+  },
+});
 const db = getRecipeFirestore();
 const localProgram = Object.freeze({
   mode: "local_test" as const,
@@ -90,19 +105,22 @@ const orderRefund = createOrderRefundHandler({
   getDb: () => db,
   verifyToken: verifyLocalAuthEmulatorToken,
   log: (entry) => {
-    void appendEvidence({ kind: "refund-audit", details: sanitizeDetails(entry) });
+    void diagnosticJournal.record({ kind: "refund-audit", details: sanitizeDetails(entry) });
   },
 });
 
 await assertEmulatorsReady();
 
-const server = createServer(async (request, response) => {
-  const startedAt = Date.now();
-  const url = new URL(request.url || "/", localUrl(RECIPE_PORTS.api));
-  const route = url.pathname;
-  let status = 500;
-  try {
-    const apiResponse = decorateResponse(response, (nextStatus) => { status = nextStatus; });
+const server = createServer(createJournaledRequestListener({
+  journal: diagnosticJournal,
+  resolveRoute: (request) => new URL(request.url || "/", localUrl(RECIPE_PORTS.api)).pathname,
+  handle: async ({ request, response, route, setStatus }) => {
+    const apiResponse = decorateResponse(response, setStatus);
+    if (route === API_DIAGNOSTICS_PATH) {
+      const diagnostics = await diagnosticJournal.sealAndSynchronize();
+      apiResponse.status(diagnostics.complete ? 200 : 503).json(diagnostics);
+      return;
+    }
     if (route === "/__recette/health" || route === "/api/__recette/health") {
       return apiResponse.status(200).json({
         ok: true,
@@ -114,7 +132,6 @@ const server = createServer(async (request, response) => {
       });
     }
     if (route === "/api/public-promo-banners") {
-      status = 503;
       apiResponse.status(503).json({
         code: "local_external_service_disabled",
         error: "Service extérieur neutralisé dans la recette locale.",
@@ -132,13 +149,13 @@ const server = createServer(async (request, response) => {
       await handler(await decorateRequest(request), apiResponse);
       return;
     }
-    status = 503;
     apiResponse.status(503).json({
       code: "local_external_service_disabled",
       error: "Service extérieur neutralisé dans la recette locale.",
     });
-  } catch (error) {
-    status = 500;
+  },
+  handleError: ({ error, response, setStatus }) => {
+    setStatus(500);
     if (!response.headersSent) {
       decorateResponse(response, () => undefined).status(500).json({
         code: "local_handler_failed_closed",
@@ -148,16 +165,12 @@ const server = createServer(async (request, response) => {
       response.end();
     }
     console.error("local API handler failed closed", error);
-  } finally {
-    await appendEvidence({
-      kind: "api-request",
-      method: request.method || "",
-      pathname: route,
-      status,
-      durationMs: Date.now() - startedAt,
-    });
-  }
-});
+  },
+  shouldRecord: (route) => route !== API_DIAGNOSTICS_PATH,
+  reportListenerFailure: (failure) => {
+    console.error(`[diagnostic-listener] échec interne contenu code=${failure.code}`);
+  },
+}));
 
 server.on("error", (error) => {
   console.error("RECETTE LOCALE API indisponible", error);
@@ -170,7 +183,22 @@ server.listen(RECIPE_PORTS.api, RECIPE_HOST, () => {
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
     server.close(() => {
-      void closeRecipeFirestore().finally(() => process.exit(0));
+      void (async () => {
+        const diagnostics = await diagnosticJournal.sealAndSynchronize();
+        if (!diagnostics.complete) {
+          process.exitCode = 1;
+          console.error(
+            "[diagnostic-journal] arrêt avec preuves incomplètes " +
+            `failed=${diagnostics.writes.failed} timedOut=${diagnostics.writes.timedOut} ` +
+            `pending=${diagnostics.writes.pending}`,
+          );
+        }
+        await closeRecipeFirestore();
+        process.exit(typeof process.exitCode === "number" ? process.exitCode : 0);
+      })().catch((error) => {
+        console.error(`[recette-shutdown] échec contenu code=${diagnosticErrorCode(error)}`);
+        process.exit(1);
+      });
     });
   });
 }
@@ -220,10 +248,6 @@ async function assertEmulatorsReady() {
     throw new Error(`ISOLATION: Auth Emulator indisponible (HTTP ${auth.status}).`);
   }
   await db.listCollections();
-}
-
-async function appendEvidence(entry: Record<string, unknown>) {
-  await appendFile(requestLogPath, `${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`, "utf8");
 }
 
 function sanitizeDetails(value: unknown): unknown {

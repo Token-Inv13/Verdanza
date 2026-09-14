@@ -76,6 +76,7 @@ jobs:
             node_modules/.cache/verdanza-cagnotte-interactive/runs/*/browser-console.json
             node_modules/.cache/verdanza-cagnotte-interactive/runs/*/firestore-listen-probe.json
             node_modules/.cache/verdanza-cagnotte-interactive/runs/*/cleanup.json
+            node_modules/.cache/verdanza-cagnotte-interactive/runs/*/api-diagnostics.json
             node_modules/.cache/verdanza-cagnotte-interactive/runs/*/emulator-diagnostics.json
             node_modules/.cache/verdanza-cagnotte-interactive/runs/*/01-portefeuille-vide-*.png
             node_modules/.cache/verdanza-cagnotte-interactive/runs/*/04-devis-b-95-euros-*.png
