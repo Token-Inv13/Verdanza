@@ -90,6 +90,14 @@ await check("checkout complet disponible dans CI et CI Full", () => {
   assert.throws(() => assertGitHubWorkflowUsesFullHistoryCheckout(
     fixture("          persist-credentials: false\n", "      - name: Other\n        run: echo safe\n        fetch-depth: 0\n"),
     "other step fixture"), /fetch-depth: 0/);
+  const twoCheckouts = valid.replace(
+    "jobs:\n",
+    "jobs:\n  windows:\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v7\n        with:\n          persist-credentials: false\n          fetch-depth: 0\n",
+  );
+  assert.doesNotThrow(() => assertGitHubWorkflowUsesFullHistoryCheckout(twoCheckouts, "two checkout fixture"));
+  assert.throws(() => assertGitHubWorkflowUsesFullHistoryCheckout(
+    twoCheckouts.replace("          fetch-depth: 0\n  verify:", "          fetch-depth: 1\n  verify:"),
+    "second shallow checkout fixture"), /Checkout #1.*fetch-depth: 0/);
 
   const workflowFixture = (steps: string) => `jobs:\n  verify:\n    steps:\n${steps}`;
   const prepareStep = "      - name: Prepare cagnotte Firestore emulator\n        run: npm run prepare:cagnotte-firestore-emulator\n";

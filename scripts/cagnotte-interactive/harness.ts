@@ -37,6 +37,11 @@ export type OwnedProcess = {
   gracefulStop?: () => Promise<void>;
   unixProcessGroupId?: number;
   ownsUnixProcessGroup?: boolean;
+  ownsWindowsJobObject?: boolean;
+  windowsPrimaryProcessId?: number;
+  windowsJobReady?: boolean;
+  windowsJobTreeStopped?: boolean;
+  windowsJobSetupFailed?: boolean;
   logReport?: OwnedProcessLogReport;
   logFinalization?: Promise<void>;
   finalizeLog?: () => Promise<void>;
@@ -74,6 +79,7 @@ const PROCESS_GRACEFUL_ACTION_TIMEOUT_MS = 6_500;
 const PROCESS_GRACE_PERIOD_MS = 2_500;
 const PROCESS_FORCE_PERIOD_MS = 5_000;
 const MAX_LOG_ISSUES = 8;
+const WINDOWS_JOB_RUNNER = resolve(RECIPE_ROOT, "scripts/cagnotte-interactive/windowsJobRunner.ps1");
 
 export type RecipeHarnessLifecycleEvent =
   | { type: "process-acquired"; name: string; kind: OwnedProcess["kind"]; pid: number | undefined }
@@ -423,6 +429,7 @@ export type SpawnOwnedOptions = {
   logCloseTimeoutMs?: number;
   stopGracePeriodMs?: number;
   stopForcePeriodMs?: number;
+  simulateWindowsJobSetupFailure?: boolean;
 };
 
 export function spawnOwned(
@@ -551,15 +558,35 @@ export function spawnOwned(
     return logFinalizationPromise;
   };
   const detached = process.platform !== "win32";
+  const targetCommand = options.command ?? process.execPath;
+  const windowsJobObject = process.platform === "win32";
+  const launchCommand = windowsJobObject
+    ? windowsPowerShellExecutable(environment)
+    : targetCommand;
+  const launchArgs = windowsJobObject
+    ? [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy", "Bypass",
+        "-File", WINDOWS_JOB_RUNNER,
+        "-Payload", Buffer.from(JSON.stringify({
+          command: targetCommand,
+          arguments: args,
+          currentDirectory: RECIPE_ROOT,
+          simulateSetupFailure: options.simulateWindowsJobSetupFailure === true,
+        }), "utf8").toString("base64"),
+      ]
+    : args;
   let child: ChildProcess;
   try {
-    child = spawn(options.command ?? process.execPath, args, {
+    child = spawn(launchCommand, launchArgs, {
       cwd: RECIPE_ROOT,
       env: environment,
       shell: false,
       detached,
       windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: [windowsJobObject ? "pipe" : "ignore", "pipe", "pipe"],
     });
   } catch (error) {
     void finalizeLog();
@@ -574,6 +601,12 @@ export function spawnOwned(
     ...(detached && child.pid
       ? { unixProcessGroupId: child.pid, ownsUnixProcessGroup: true }
       : {}),
+    ...(windowsJobObject ? {
+      ownsWindowsJobObject: true,
+      windowsJobReady: false,
+      windowsJobTreeStopped: false,
+      windowsJobSetupFailed: false,
+    } : {}),
     logReport,
     logFinalization: logCompletion,
     finalizeLog,
@@ -582,6 +615,22 @@ export function spawnOwned(
     stopForcePeriodMs: options.stopForcePeriodMs,
   };
   let stdioCloseTimer: ReturnType<typeof setTimeout> | undefined;
+  let windowsProtocolOutput = "";
+  const observeWindowsJobProtocol = (chunk: unknown) => {
+    if (!owned.ownsWindowsJobObject) return;
+    windowsProtocolOutput = `${windowsProtocolOutput}${String(chunk)}`.slice(-4_096);
+    const primaryMatch = windowsProtocolOutput.match(/VERDANZA_WINDOWS_JOB_READY primary=(\d+)/);
+    if (primaryMatch) {
+      owned.windowsJobReady = true;
+      owned.windowsPrimaryProcessId = Number(primaryMatch[1]);
+    }
+    if (windowsProtocolOutput.includes("VERDANZA_WINDOWS_JOB_TREE_STOPPED")) {
+      owned.windowsJobTreeStopped = true;
+    }
+    if (windowsProtocolOutput.includes("VERDANZA_WINDOWS_JOB_ERROR")) {
+      owned.windowsJobSetupFailed = true;
+    }
+  };
   const scheduleBoundedLogFinalization = () => {
     if (stdioCloseTimer || owned.childClosed) return;
     stdioCloseTimer = setTimeout(() => {
@@ -590,6 +639,7 @@ export function spawnOwned(
     }, options.childStdioCloseTimeoutMs ?? CHILD_STDIO_CLOSE_TIMEOUT_MS);
   };
   child.stdout?.on("data", (chunk) => {
+    observeWindowsJobProtocol(chunk);
     safeParentWrite(
       options.parentStdoutWrite ?? ((value) => { process.stdout.write(value); }),
       `[${name}] ${String(chunk)}`,
@@ -597,6 +647,7 @@ export function spawnOwned(
     writeLog(chunk as Buffer);
   });
   child.stderr?.on("data", (chunk) => {
+    observeWindowsJobProtocol(chunk);
     safeParentWrite(
       options.parentStderrWrite ?? ((value) => { process.stderr.write(value); }),
       `[${name}] ${String(chunk)}`,
@@ -811,7 +862,27 @@ export function stopOwnedProcess(processRef: OwnedProcess): Promise<OwnedProcess
       return outcome;
     };
     if (!pid) return complete("already-stopped");
+    if (process.platform === "win32" && !processRef.ownsWindowsJobObject) {
+      return complete(
+        "already-stopped",
+        undefined,
+        new Error(`arrêt de l’arbre Windows non prouvé pour ${processRef.name} : Job Object absent.`),
+      );
+    }
     if (ownedProcessTreeStopped(processRef)) return complete("already-stopped");
+    if (process.platform === "win32" && hasSettled(processRef.child)) {
+      if (await ownedProcessTreeStoppedWithin(
+        processRef,
+        processRef.stopForcePeriodMs ?? PROCESS_FORCE_PERIOD_MS,
+      )) {
+        return complete("already-stopped");
+      }
+      return complete(
+        "already-stopped",
+        undefined,
+        new Error(`fermeture du Job Object Windows non prouvée pour ${processRef.name}.`),
+      );
+    }
 
     let gracefulFailure: unknown;
     if (processRef.gracefulStop && !hasSettled(processRef.child)) {
@@ -847,10 +918,22 @@ export function stopOwnedProcess(processRef: OwnedProcess): Promise<OwnedProcess
     let cleanupFailure: unknown;
     if (process.platform === "win32") {
       fallbackReason = gracefulFailure === undefined
-        ? "arrêt arborescent Windows /T /F requis"
+        ? "arrêt du Job Object Windows requis"
         : safeDiagnosticReason(gracefulFailure);
       try {
-        await forceWindowsProcessTree(pid, processRef.stopForcePeriodMs ?? PROCESS_FORCE_PERIOD_MS);
+        await requestWindowsJobStop(processRef);
+        if (!(await ownedProcessTreeStoppedWithin(
+          processRef,
+          processRef.stopGracePeriodMs ?? PROCESS_GRACE_PERIOD_MS,
+        ))) {
+          if (hasSettled(processRef.child)) {
+            throw new Error(`superviseur Windows terminé sans fermeture prouvée du Job Object ${processRef.name}.`);
+          }
+          fallbackReason = `${fallbackReason} | superviseur Windows hors délai, fermeture par handle`;
+          if (!processRef.child.kill("SIGKILL")) {
+            throw new Error(`impossible d’arrêter le superviseur Windows possédé ${processRef.name}.`);
+          }
+        }
       } catch (error) {
         cleanupFailure = error;
       }
@@ -908,6 +991,11 @@ export function ownedProcessReliabilitySnapshot(processRef: OwnedProcess) {
     logPath: processRef.logPath,
     unixProcessGroupId: processRef.unixProcessGroupId ?? null,
     ownsUnixProcessGroup: processRef.ownsUnixProcessGroup === true,
+    ownsWindowsJobObject: processRef.ownsWindowsJobObject === true,
+    windowsPrimaryProcessId: processRef.windowsPrimaryProcessId ?? null,
+    windowsJobReady: processRef.windowsJobReady === true,
+    windowsJobTreeStopped: processRef.windowsJobTreeStopped === true,
+    windowsJobSetupFailed: processRef.windowsJobSetupFailed === true,
     log: ownedProcessLogSnapshot(processRef),
     stop: processRef.stopOutcome ?? null,
   };
@@ -921,6 +1009,11 @@ function ownedProcessLogSnapshot(processRef: OwnedProcess): OwnedProcessLogRepor
 
 function ownedProcessTreeStopped(processRef: OwnedProcess) {
   const childStopped = hasSettled(processRef.child);
+  if (process.platform === "win32") {
+    return processRef.ownsWindowsJobObject === true
+      && processRef.windowsJobReady === true
+      && processRef.childClosed === true;
+  }
   if (!processRef.ownsUnixProcessGroup || !processRef.unixProcessGroupId) return childStopped;
   return childStopped && !unixProcessGroupAlive(processRef.unixProcessGroupId);
 }
@@ -960,36 +1053,28 @@ function signalOwnedUnixProcessTree(processRef: OwnedProcess, signal: NodeJS.Sig
   if (!hasSettled(processRef.child)) processRef.child.kill(signal);
 }
 
-async function forceWindowsProcessTree(pid: number, timeoutMs: number) {
-  const killer = spawn("taskkill", ["/PID", String(pid), "/T", "/F"], {
-    shell: false,
-    windowsHide: true,
-    stdio: "ignore",
-  });
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  try {
-    await Promise.race([
-      new Promise<void>((resolvePromise, reject) => {
-        killer.once("error", reject);
-        killer.once("exit", () => resolvePromise());
-      }),
-      new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(
-          () => reject(new Error(`taskkill n’a pas terminé dans le délai pour le PID ${pid}.`)),
-          timeoutMs,
-        );
-      }),
-    ]);
-  } catch (error) {
-    try {
-      if (!hasSettled(killer)) killer.kill();
-    } catch {
-      // Le premier échec taskkill reste prioritaire.
-    }
-    throw error;
-  } finally {
-    if (timeout) clearTimeout(timeout);
+function windowsPowerShellExecutable(environment: NodeJS.ProcessEnv) {
+  const windowsRoot = environment.SystemRoot ?? process.env.SystemRoot;
+  if (!windowsRoot) {
+    throw new Error("SystemRoot absent : impossible d’établir le Job Object Windows.");
   }
+  return resolve(windowsRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+}
+
+async function requestWindowsJobStop(processRef: OwnedProcess) {
+  if (!processRef.ownsWindowsJobObject) {
+    throw new Error(`Appartenance Job Object Windows absente pour ${processRef.name}.`);
+  }
+  const input = processRef.child.stdin;
+  if (!input || input.destroyed || !input.writable) {
+    throw new Error(`Canal de contrôle du Job Object Windows indisponible pour ${processRef.name}.`);
+  }
+  await new Promise<void>((resolvePromise, reject) => {
+    input.end("STOP\n", (error?: Error | null) => {
+      if (error) reject(error);
+      else resolvePromise();
+    });
+  });
 }
 
 function attachSecondaryStopFailure(primaryFailure: unknown, secondaryFailure: unknown) {

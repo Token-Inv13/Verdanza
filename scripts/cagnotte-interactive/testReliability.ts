@@ -5,7 +5,7 @@ import { access, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { Writable } from "node:stream";
+import { PassThrough, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import {
   RECIPE_HOST,
@@ -58,6 +58,9 @@ if (process.argv.includes("--signal-child")) {
   await runSignalChild();
 } else if (process.argv.includes("--owned-tree-parent")) {
   await runOwnedTreeParent();
+} else if (process.argv.includes("--windows-job-only")) {
+  await runWindowsOwnedProcessChecks();
+  reportReliabilityResult(" Job Object Windows");
 } else {
 
 await check("spawnOwned contient un EACCES d'ouverture du log", async () => {
@@ -170,6 +173,9 @@ await check("spawnOwned conserve les dernières sorties entre exit et close", as
     { createLogStream: () => collectingLogStream(chunks) },
   );
   try {
+    if (process.platform === "win32") {
+      await waitForCondition(() => fixture.owned.windowsJobReady === true, "Job Object prêt avant exit synthétique");
+    }
     fixture.owned.child.emit("exit", 0, null);
     assert.equal(fixture.owned.logReport?.finalized, false, "exit seul ne doit pas fermer le log");
     assert.equal(await waitForChildExit(fixture.owned.child, 5_000), 0);
@@ -180,6 +186,38 @@ await check("spawnOwned conserve les dernières sorties entre exit et close", as
   } finally {
     await cleanupReliabilityProcess(fixture);
   }
+});
+
+await check("la preuve du runner attend exit puis close et conserve la sortie tardive", async () => {
+  const child = syntheticChildProcess();
+  const output = trackChildOutput(child);
+  child.emit("exit", 130, null);
+  assert.equal(output.complete, false, "exit seul ne doit pas clore la preuve de sortie");
+  assert.equal(output.stderr, "");
+  (child.stderr as PassThrough).write("ANNULÉE par SIGINT\n");
+  (child.stdout as PassThrough).end();
+  (child.stderr as PassThrough).end();
+  child.emit("close", 130, null);
+  const completed = await output.waitForCompletion(1_000);
+  assert.equal(completed.exitCode, 130);
+  assert.match(completed.stderr, /ANNULÉE par SIGINT/);
+  assert.equal(child.listenerCount("exit"), 0);
+  assert.equal(child.listenerCount("close"), 0);
+  assert.equal(child.stdout?.listenerCount("data"), 0);
+  assert.equal(child.stderr?.listenerCount("data"), 0);
+});
+
+await check("la preuve du runner attend close avant de restituer une erreur de flux", async () => {
+  const child = syntheticChildProcess();
+  const output = trackChildOutput(child);
+  child.stderr?.emit("error", codedError("EPIPE"));
+  child.emit("exit", 1, null);
+  assert.equal(output.complete, false, "une erreur de flux ne doit pas court-circuiter la fermeture");
+  (child.stdout as PassThrough).end();
+  (child.stderr as PassThrough).end();
+  child.emit("close", 1, null);
+  await assert.rejects(output.waitForCompletion(1_000), /stderr.*EPIPE/i);
+  assert.equal(child.stderr?.listenerCount("error"), 0);
 });
 
 await check("spawnOwned conserve l'échec de démarrage et finalise son log", async () => {
@@ -194,12 +232,21 @@ await check("spawnOwned conserve l'échec de démarrage et finalise son log", as
     },
   );
   try {
-    await waitForCondition(() => fixture.owned.spawnError !== undefined, "erreur spawn ENOENT");
-    await waitForOwnedProcessLog(fixture.owned);
-    assert.equal((fixture.owned.spawnError as NodeJS.ErrnoException | undefined)?.code, "ENOENT");
-    assert.match(chunks.join(""), /\[spawn-error\] code=ENOENT/);
-    const outcome = await stopOwnedProcess(fixture.owned);
-    assert.equal(outcome.log.finalized, true);
+    if (process.platform === "win32") {
+      assert.equal(await waitForChildExit(fixture.owned.child, 10_000), 86);
+      await waitForCondition(() => fixture.owned.childClosed === true, "fermeture du superviseur Windows");
+      await waitForOwnedProcessLog(fixture.owned);
+      assert.equal(fixture.owned.windowsJobSetupFailed, true);
+      assert.equal(fixture.owned.windowsJobReady, false);
+      await assert.rejects(stopOwnedProcess(fixture.owned), /fermeture du Job Object Windows non prouvée/);
+    } else {
+      await waitForCondition(() => fixture.owned.spawnError !== undefined, "erreur spawn ENOENT");
+      await waitForOwnedProcessLog(fixture.owned);
+      assert.equal((fixture.owned.spawnError as NodeJS.ErrnoException | undefined)?.code, "ENOENT");
+      assert.match(chunks.join(""), /\[spawn-error\] code=ENOENT/);
+      const outcome = await stopOwnedProcess(fixture.owned);
+      assert.equal(outcome.log.finalized, true);
+    }
   } finally {
     await cleanupReliabilityProcess(fixture);
   }
@@ -473,35 +520,37 @@ await check("acquisition API achevée pendant l’annulation est arrêtée avant
   assert.equal(fixture.events.includes("acquire:vite-app"), false);
 });
 
-await check("un code de sortie API non nul invalide le résultat d’arrêt", async () => {
-  const child = spawn(process.execPath, [
-    "-e",
-    'process.stdin.once("data",()=>{process.exitCode=1;process.stdin.pause()});console.log("OWNED_API_READY")',
-  ], {
-    shell: false,
-    windowsHide: true,
-    stdio: ["pipe", "pipe", "pipe"],
+if (process.platform !== "win32") {
+  await check("un code de sortie API non nul invalide le résultat d’arrêt", async () => {
+    const child = spawn(process.execPath, [
+      "-e",
+      'process.stdin.once("data",()=>{process.exitCode=1;process.stdin.pause()});console.log("OWNED_API_READY")',
+    ], {
+      shell: false,
+      windowsHide: true,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stdout = "";
+    child.stdout?.on("data", (chunk) => { stdout += String(chunk); });
+    await waitForOutput(child, () => stdout.includes("OWNED_API_READY"), 5_000);
+    let gracefulCalls = 0;
+    const owned: OwnedProcess = {
+      name: "local-api",
+      kind: "service",
+      child,
+      logPath: "synthetic-owned-api.log",
+      stopRequested: false,
+      gracefulStop: async () => {
+        gracefulCalls += 1;
+        child.stdin?.end("stop\n");
+      },
+    };
+    await assert.rejects(stopOwnedProcess(owned), /arrêt en échec/);
+    await assert.rejects(stopOwnedProcess(owned), /arrêt en échec/);
+    assert.equal(gracefulCalls, 1, "le même arrêt en échec ne doit pas être rejoué");
+    assert.equal(child.exitCode, 1);
   });
-  let stdout = "";
-  child.stdout?.on("data", (chunk) => { stdout += String(chunk); });
-  await waitForOutput(child, () => stdout.includes("OWNED_API_READY"), 5_000);
-  let gracefulCalls = 0;
-  const owned: OwnedProcess = {
-    name: "local-api",
-    kind: "service",
-    child,
-    logPath: "synthetic-owned-api.log",
-    stopRequested: false,
-    gracefulStop: async () => {
-      gracefulCalls += 1;
-      child.stdin?.end("stop\n");
-    },
-  };
-  await assert.rejects(stopOwnedProcess(owned), /arrêt en échec/);
-  await assert.rejects(stopOwnedProcess(owned), /arrêt en échec/);
-  assert.equal(gracefulCalls, 1, "le même arrêt en échec ne doit pas être rejoué");
-  assert.equal(child.exitCode, 1);
-});
+}
 
 await check("vrai harness annule et nettoie le premier processus possédé", async () => {
   const controller = new AbortController();
@@ -539,6 +588,7 @@ if (process.platform === "win32") {
     console.log("[INFO] Signaux réels du runner test.ts NON EXÉCUTÉS localement sous Windows ; ils restent obligatoires dans verify sous Linux.");
     console.log("[INFO] Tests d'arbre de processus Unix NON EXÉCUTÉS localement sous Windows ; ils restent obligatoires dans verify sous Linux.");
   });
+  await runWindowsOwnedProcessChecks();
 } else {
   await check("le vrai runner reçoit SIGINT après acquisition et nettoie sans faux PASS", async () => {
     await assertRealAutomatedRunnerSignal({
@@ -888,16 +938,10 @@ if (process.argv.includes("--real-harness")) {
   });
 }
 
-if (failures.length > 0) {
-  console.error(`Fiabilité interactive en échec : ${failures.length} cas.`);
-  for (const failure of failures) console.error(`- ${failure.name}: ${failure.error}`);
-  process.exitCode = 1;
-} else {
-  const realHarnessSuffix = process.argv.includes("--real-harness")
-    ? " et nettoyage du harness réel"
-    : "";
-  console.log(`Fiabilité interactive vérifiée : acquisitions partielles, erreurs primaires${realHarnessSuffix}.`);
-}
+const realHarnessSuffix = process.argv.includes("--real-harness")
+  ? " et nettoyage du harness réel"
+  : "";
+reportReliabilityResult(` acquisitions partielles, erreurs primaires${realHarnessSuffix}`);
 
 }
 
@@ -909,6 +953,16 @@ async function check(name: string, test: () => Promise<void>) {
     failures.push({ name, error: safeError(error) });
     console.error(`[ECHEC] ${name}: ${safeError(error)}`);
   }
+}
+
+function reportReliabilityResult(scope: string) {
+  if (failures.length > 0) {
+    console.error(`Fiabilité interactive en échec : ${failures.length} cas.`);
+    for (const failure of failures) console.error(`- ${failure.name}: ${failure.error}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`Fiabilité interactive vérifiée :${scope}.`);
 }
 
 function fakeDependencies(options: {
@@ -1086,6 +1140,157 @@ async function cleanupReliabilityProcess(fixture: ReliabilityProcessFixture) {
   await rm(fixture.runDirectory, { recursive: true, force: true });
 }
 
+async function runWindowsOwnedProcessChecks() {
+  await check("Windows exige un environnement Job Object réel", async () => {
+    assert.equal(process.platform, "win32", "ce lot ciblé doit s’exécuter sur un runner Windows");
+  });
+  if (process.platform !== "win32") return;
+
+  await check("Windows arrête le parent actif et son descendant sans toucher au témoin", async () => {
+    const witness = spawn(process.execPath, [
+      "-e",
+      "process.stdout.write('WINDOWS_WITNESS_READY');setInterval(()=>{},1000)",
+    ], {
+      shell: false,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    let witnessOutput = "";
+    witness.stdout?.on("data", (chunk) => { witnessOutput += String(chunk); });
+    const fixture = await spawnOwnedTreeProcess("windows-owned-tree-active");
+    try {
+      await waitForOutput(witness, () => witnessOutput.includes("WINDOWS_WITNESS_READY"), 5_000);
+      assert.equal(fixture.owned.windowsJobReady, true, "l’appartenance doit être prouvée avant le démarrage cible");
+      assert.equal(fixture.owned.windowsPrimaryProcessId, fixture.parentPid);
+      const firstStop = stopOwnedProcess(fixture.owned);
+      const secondStop = stopOwnedProcess(fixture.owned);
+      assert.equal(firstStop, secondStop, "un second arrêt doit rejoindre la même opération");
+      const outcome = await firstStop;
+      assert.equal(outcome.mode, "forced");
+      assert.equal(outcome.forced, true);
+      assert.match(outcome.fallbackReason ?? "", /Job Object Windows/);
+      assert.equal(fixture.owned.windowsJobTreeStopped, true);
+      assert.equal(outcome.ownedTreeStopped, true);
+      await assertPidGone(fixture.parentPid, "parent Windows possédé");
+      await assertPidGone(fixture.descendantPid, "descendant Windows possédé");
+      assert.equal(isPidAlive(witness.pid), true, "le témoin extérieur doit rester actif");
+    } finally {
+      await cleanupOwnedTreeProcess(fixture);
+      await stopWitness(witness);
+    }
+  });
+
+  await check("Windows ferme les descendants quand le parent cible sort le premier", async () => {
+    const witness = spawn(process.execPath, [
+      "-e",
+      "process.stdout.write('WINDOWS_PARENT_GONE_WITNESS_READY');setInterval(()=>{},1000)",
+    ], {
+      shell: false,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    let witnessOutput = "";
+    witness.stdout?.on("data", (chunk) => { witnessOutput += String(chunk); });
+    const fixture = await spawnOwnedTreeProcess("windows-owned-tree-parent-gone", {
+      exitParentAfterReady: true,
+    });
+    try {
+      await waitForOutput(witness, () => witnessOutput.includes("WINDOWS_PARENT_GONE_WITNESS_READY"), 5_000);
+      assert.equal(await waitForChildExit(fixture.owned.child, 10_000), 0);
+      await waitForCondition(() => fixture.owned.childClosed === true, "fermeture du superviseur Windows");
+      assert.equal(fixture.owned.windowsJobReady, true);
+      assert.equal(fixture.owned.windowsJobTreeStopped, true);
+      await assertPidGone(fixture.parentPid, "parent Windows déjà terminé");
+      await assertPidGone(fixture.descendantPid, "descendant Windows après sortie du parent");
+      assert.equal(isPidAlive(witness.pid), true, "le témoin extérieur doit survivre à la fermeture du Job Object");
+      const firstStop = stopOwnedProcess(fixture.owned);
+      const secondStop = stopOwnedProcess(fixture.owned);
+      assert.equal(firstStop, secondStop);
+      await assert.rejects(firstStop, /s’est arrêté avant la demande d’arrêt/);
+      assert.equal(fixture.owned.stopOutcome?.mode, "already-stopped");
+      assert.equal(fixture.owned.stopOutcome?.ownedTreeStopped, true);
+    } finally {
+      await cleanupOwnedTreeProcess(fixture);
+      await stopWitness(witness);
+    }
+  });
+
+  await check("Windows refuse de lancer la cible si la preuve Job Object échoue", async () => {
+    const runDirectory = await mkdtemp(resolve(tmpdir(), "verdanza-windows-job-failure-"));
+    const markerPath = resolve(runDirectory, "target-started.txt");
+    const owned = spawnOwned(
+      "windows-job-setup-failure",
+      ["-e", "require('node:fs').writeFileSync(process.argv[1], 'started')", markerPath],
+      process.env,
+      runDirectory,
+      "one-shot",
+      {
+        parentStdoutWrite: () => undefined,
+        parentStderrWrite: () => undefined,
+        simulateWindowsJobSetupFailure: true,
+        stopForcePeriodMs: 100,
+      },
+    );
+    try {
+      assert.equal(await waitForChildExit(owned.child, 10_000), 86);
+      await waitForCondition(() => owned.childClosed === true, "fermeture après échec Job Object");
+      await waitForOwnedProcessLog(owned);
+      assert.equal(owned.windowsJobSetupFailed, true);
+      assert.equal(owned.windowsJobReady, false);
+      await assert.rejects(access(markerPath), /ENOENT/, "la cible ne doit jamais démarrer");
+      await assert.rejects(stopOwnedProcess(owned), /fermeture du Job Object Windows non prouvée/);
+      assert.equal(owned.stopOutcome?.ownedTreeStopped, false);
+    } finally {
+      await stopOwnedProcess(owned).catch(() => undefined);
+      await waitForOwnedProcessLog(owned).catch(() => undefined);
+      await rm(runDirectory, { recursive: true, force: true });
+    }
+  });
+
+  await check("Windows reproduit le parent terminé et refuse l’arrêt non prouvé du descendant", async () => {
+    const child = spawn(process.execPath, [
+      "--import", "tsx",
+      fileURLToPath(import.meta.url),
+      "--owned-tree-parent",
+      "--exit-parent-after-ready",
+      "--detach-descendant",
+    ], {
+      shell: false,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    child.stdout?.on("data", (chunk) => { stdout += String(chunk); });
+    let descendantPid: number | undefined;
+    try {
+      await waitForOutput(child, () => /OWNED_TREE_READY parent=\d+ descendant=\d+/.test(stdout), 5_000);
+      const match = stdout.match(/OWNED_TREE_READY parent=(\d+) descendant=(\d+)/);
+      assert.ok(match);
+      descendantPid = Number(match[2]);
+      assert.equal(await waitForChildExit(child, 5_000), 0);
+      assert.equal(isPidAlive(descendantPid), true, "le défaut initial exige un descendant encore actif après exit du parent");
+      const owned: OwnedProcess = {
+        name: "windows-parent-gone-without-ownership",
+        kind: "service",
+        child,
+        logPath: "synthetic-unowned-windows.log",
+        stopRequested: false,
+      };
+      await assert.rejects(stopOwnedProcess(owned), /s’est arrêté avant la demande d’arrêt/);
+      assert.equal(owned.stopOutcome?.childStopped, true);
+      assert.equal(owned.stopOutcome?.ownedTreeStopped, false);
+      assert.equal(isPidAlive(descendantPid), true, "le refus de preuve ne doit pas être présenté comme un arrêt");
+    } finally {
+      if (isPidAlive(descendantPid)) {
+        process.kill(descendantPid as number, "SIGKILL");
+        console.error(`[test-fallback:unowned-windows] descendant=${descendantPid}`);
+      }
+      if (isPidAlive(child.pid)) child.kill("SIGKILL");
+      await waitForChildExit(child, 5_000).catch(() => undefined);
+    }
+  });
+}
+
 async function spawnOwnedTreeProcess(
   name: string,
   options: SpawnOwnedOptions & { exitParentAfterReady?: boolean } = {},
@@ -1112,7 +1317,7 @@ async function spawnOwnedTreeProcess(
     await waitForOutput(
       fixture.owned.child,
       () => /OWNED_TREE_READY parent=\d+ descendant=\d+/.test(stdout),
-      5_000,
+      process.platform === "win32" ? 15_000 : 5_000,
     );
     const match = stdout.match(/OWNED_TREE_READY parent=(\d+) descendant=(\d+)/);
     assert.ok(match, "les PID parent et descendant doivent être annoncés explicitement");
@@ -1129,12 +1334,19 @@ async function spawnOwnedTreeProcess(
 
 async function cleanupOwnedTreeProcess(fixture: OwnedTreeFixture) {
   await stopOwnedProcess(fixture.owned).catch(() => undefined);
+  const fallbackPids: number[] = [];
   for (const pid of [fixture.parentPid, fixture.descendantPid]) {
     try {
-      if (isPidAlive(pid)) process.kill(pid, "SIGKILL");
+      if (isPidAlive(pid)) {
+        process.kill(pid, "SIGKILL");
+        fallbackPids.push(pid);
+      }
     } catch {
       // Le processus a pu disparaître entre la sonde et le signal de secours du test.
     }
+  }
+  if (fallbackPids.length > 0) {
+    console.error(`[test-fallback:owned-tree] pids=${fallbackPids.join(",")}`);
   }
   await waitForOwnedProcessLog(fixture.owned).catch(() => undefined);
   await rm(fixture.runDirectory, { recursive: true, force: true });
@@ -1247,19 +1459,17 @@ async function assertRealStartupSignal(signal: "SIGINT" | "SIGTERM") {
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
   });
-  let stdout = "";
-  let stderr = "";
-  child.stdout?.on("data", (chunk) => { stdout += String(chunk); });
-  child.stderr?.on("data", (chunk) => { stderr += String(chunk); });
+  const output = trackChildOutput(child);
   try {
-    await waitForOutput(child, () => stdout.includes("SIGNAL_CHILD_READY"), 5_000);
+    await waitForOutput(child, () => output.stdout.includes("SIGNAL_CHILD_READY"), 5_000);
     assert.equal(child.kill(signal), true, `${signal} doit être envoyé au sous-processus contrôlé`);
-    const code = await waitForChildExit(child, 5_000);
-    assert.equal(code, 0, stderr || stdout);
-    assert.match(stdout, /SIGNAL_CHILD_CLEANUP 1/);
-    assert.match(stdout, /SIGNAL_CHILD_RESULT STARTUP_CANCELLED/);
-    assert.match(stdout, /ANNULÉE pendant le démarrage/);
+    const completed = await output.waitForCompletion(5_000);
+    assert.equal(completed.exitCode, 0, completed.stderr || completed.stdout);
+    assert.match(completed.stdout, /SIGNAL_CHILD_CLEANUP 1/);
+    assert.match(completed.stdout, /SIGNAL_CHILD_RESULT STARTUP_CANCELLED/);
+    assert.match(completed.stdout, /ANNULÉE pendant le démarrage/);
   } finally {
+    output.dispose();
     if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
   }
 }
@@ -1291,16 +1501,13 @@ async function assertRealAutomatedRunnerSignal(options: {
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
   });
-  let stdout = "";
-  let stderr = "";
+  const output = trackChildOutput(runner);
   let descendants: number[] = [];
-  runner.stdout?.on("data", (chunk) => { stdout += String(chunk); });
-  runner.stderr?.on("data", (chunk) => { stderr += String(chunk); });
   try {
     await waitForOutput(witness, () => witnessOutput.includes("RUNNER_WITNESS_READY"), 5_000);
     await waitForOutput(
       runner,
-      () => stdout.includes(`RUNNER_SIGNAL_PROBE READY ${options.probe} desktop`),
+      () => output.stdout.includes(`RUNNER_SIGNAL_PROBE READY ${options.probe} desktop`),
       120_000,
     );
     descendants = await linuxDescendantPids(runner.pid as number);
@@ -1309,70 +1516,118 @@ async function assertRealAutomatedRunnerSignal(options: {
     if (options.sendSecondSignalDuringCleanup) {
       await waitForOutput(
         runner,
-        () => stdout.includes("RUNNER_SIGNAL_PROBE CLEANUP_START desktop"),
+        () => output.stdout.includes("RUNNER_SIGNAL_PROBE CLEANUP_START desktop"),
         30_000,
       );
       const secondSignal = options.signal === "SIGINT" ? "SIGTERM" : "SIGINT";
       assert.equal(runner.kill(secondSignal), true, "le second signal doit rejoindre le nettoyage en cours");
     }
-    const exitCode = await waitForChildExit(runner, 120_000);
     const expectedExitCode = options.signal === "SIGINT" ? 130 : 143;
-    assert.equal(exitCode, expectedExitCode, stderr || stdout);
-    assert.doesNotMatch(stdout, /RUNNER_VIEWPORT_START mobile/);
-    assert.doesNotMatch(stdout, /Recette interactive locale réussie/);
-    assert.match(stderr, new RegExp(`ANNULÉE par ${options.signal}`));
+    const verificationFailures: Error[] = [];
+    let completed: Awaited<ReturnType<typeof output.waitForCompletion>> | undefined;
+    try {
+      completed = await output.waitForCompletion(120_000);
+    } catch (error) {
+      verificationFailures.push(new Error(`fermeture et capture des sorties : ${safeError(error)}`));
+    }
+    const stdout = completed?.stdout ?? output.stdout;
+    const stderr = completed?.stderr ?? output.stderr;
+    const exitCode = completed?.exitCode ?? runner.exitCode;
+    const record = async (label: string, assertion: () => void | Promise<void>) => {
+      try {
+        await assertion();
+      } catch (error) {
+        verificationFailures.push(new Error(`${label} : ${safeError(error)}`));
+      }
+    };
 
-    const latestResultPath = resolve(RECIPE_CACHE_ROOT, "latest-result.json");
-    await assert.rejects(access(latestResultPath), /ENOENT/, "aucun latest-result PASS ne doit survivre");
-    const cancellation = JSON.parse(
-      await readFile(resolve(RECIPE_CACHE_ROOT, "latest-failure.json"), "utf8"),
-    ) as {
+    await record("code de sortie du signal", () => {
+      assert.equal(exitCode, expectedExitCode, stderr || stdout);
+    });
+    await record("aucun viewport mobile après annulation", () => {
+      assert.doesNotMatch(stdout, /RUNNER_VIEWPORT_START mobile/);
+    });
+    await record("aucun faux succès du runner", () => {
+      assert.doesNotMatch(stdout, /Recette interactive locale réussie/);
+    });
+    await record("message d’annulation complet", () => {
+      assert.match(stderr, new RegExp(`ANNULÉE par ${options.signal}`));
+    });
+    await record("absence de latest-result PASS", async () => {
+      const latestResultPath = resolve(RECIPE_CACHE_ROOT, "latest-result.json");
+      await assert.rejects(access(latestResultPath), /ENOENT/, "aucun latest-result PASS ne doit survivre");
+    });
+
+    let cancellation: {
       status?: string;
       signal?: string;
       exitCode?: number;
       activeRunDirectory?: string;
       completedExecutions?: unknown[];
       cleanupIssues?: unknown[];
-    };
-    assert.equal(cancellation.status, "CANCELLED");
-    assert.equal(cancellation.signal, options.signal);
-    assert.equal(cancellation.exitCode, expectedExitCode);
-    assert.deepEqual(cancellation.completedExecutions, []);
-    assert.deepEqual(cancellation.cleanupIssues, []);
-    assert.ok(cancellation.activeRunDirectory, "le dossier du viewport interrompu doit rester traçable");
-
-    const executionSummary = JSON.parse(
-      await readFile(resolve(cancellation.activeRunDirectory, "execution-summary.json"), "utf8"),
-    ) as { status?: string; interruption?: { status?: string; signal?: string } };
-    assert.equal(executionSummary.status, "INTERRUPTED");
-    assert.deepEqual(executionSummary.interruption, { status: "CANCELLED", signal: options.signal });
-    const cleanup = JSON.parse(
-      await readFile(resolve(cancellation.activeRunDirectory, "cleanup.json"), "utf8"),
-    ) as {
-      steps?: Array<{ name?: string; status?: string }>;
-      ownedProcesses?: Array<{
-        pid?: number;
-        stop?: { childStopped?: boolean; ownedTreeStopped?: boolean };
-      }>;
-    };
-    assert.equal(
-      cleanup.steps?.find((step) => step.name === "stop-harness")?.status,
-      "completed",
-      "le propriétaire du harness doit terminer son nettoyage",
-    );
-    assert.ok((cleanup.ownedProcesses?.length ?? 0) >= 5);
-    assert.equal(
-      cleanup.ownedProcesses?.every((entry) => (
-        entry.stop?.childStopped === true && entry.stop?.ownedTreeStopped === true
-      )),
-      true,
-      "chaque processus possédé doit être arrêté avec son arbre",
-    );
-    assert.deepEqual(await occupiedRecipePorts(), [], "les sept ports doivent être libres après le signal");
-    for (const pid of descendants) await assertPidGone(pid, `descendant ${pid} du runner`);
-    assert.equal(isPidAlive(witness.pid), true, "le témoin extérieur ne doit recevoir aucun signal");
+    } | undefined;
+    await record("preuve structurée d’annulation", async () => {
+      cancellation = JSON.parse(
+        await readFile(resolve(RECIPE_CACHE_ROOT, "latest-failure.json"), "utf8"),
+      ) as typeof cancellation;
+      assert.equal(cancellation?.status, "CANCELLED");
+      assert.equal(cancellation?.signal, options.signal);
+      assert.equal(cancellation?.exitCode, expectedExitCode);
+      assert.deepEqual(cancellation?.completedExecutions, []);
+      assert.deepEqual(cancellation?.cleanupIssues, []);
+      assert.ok(cancellation?.activeRunDirectory, "le dossier du viewport interrompu doit rester traçable");
+    });
+    await record("résumé d’exécution interrompu", async () => {
+      assert.ok(cancellation?.activeRunDirectory, "dossier actif absent");
+      const executionSummary = JSON.parse(
+        await readFile(resolve(cancellation.activeRunDirectory, "execution-summary.json"), "utf8"),
+      ) as { status?: string; interruption?: { status?: string; signal?: string } };
+      assert.equal(executionSummary.status, "INTERRUPTED");
+      assert.deepEqual(executionSummary.interruption, { status: "CANCELLED", signal: options.signal });
+    });
+    await record("nettoyage propre du harness", async () => {
+      assert.ok(cancellation?.activeRunDirectory, "dossier actif absent");
+      const cleanup = JSON.parse(
+        await readFile(resolve(cancellation.activeRunDirectory, "cleanup.json"), "utf8"),
+      ) as {
+        steps?: Array<{ name?: string; status?: string }>;
+        ownedProcesses?: Array<{
+          pid?: number;
+          stop?: { childStopped?: boolean; ownedTreeStopped?: boolean };
+        }>;
+      };
+      assert.equal(
+        cleanup.steps?.find((step) => step.name === "stop-harness")?.status,
+        "completed",
+        "le propriétaire du harness doit terminer son nettoyage",
+      );
+      assert.ok((cleanup.ownedProcesses?.length ?? 0) >= 5);
+      assert.equal(
+        cleanup.ownedProcesses?.every((entry) => (
+          entry.stop?.childStopped === true && entry.stop?.ownedTreeStopped === true
+        )),
+        true,
+        "chaque processus possédé doit être arrêté avec son arbre",
+      );
+    });
+    await record("ports de recette libérés", async () => {
+      assert.deepEqual(await occupiedRecipePorts(), [], "les sept ports doivent être libres après le signal");
+    });
+    await record("descendants du runner arrêtés", async () => {
+      for (const pid of descendants) await assertPidGone(pid, `descendant ${pid} du runner`);
+    });
+    await record("témoin extérieur préservé", () => {
+      assert.equal(isPidAlive(witness.pid), true, "le témoin extérieur ne doit recevoir aucun signal");
+    });
+    if (verificationFailures.length > 0) {
+      throw new AggregateError(verificationFailures, verificationFailures.map((error) => error.message).join(" | "));
+    }
   } finally {
-    await cleanupRunnerProcess(runner, descendants);
+    output.dispose();
+    const fallback = await cleanupRunnerProcess(runner, descendants);
+    if (fallback.length > 0) {
+      console.error(`[test-fallback:runner] ${fallback.join(",")}`);
+    }
     await stopWitness(witness);
   }
 }
@@ -1407,14 +1662,22 @@ async function cleanupRunnerProcess(runner: ChildProcess, knownDescendants: numb
   const currentDescendants = runner.pid && isPidAlive(runner.pid)
     ? await linuxDescendantPids(runner.pid)
     : [];
+  const fallback: string[] = [];
   for (const pid of [...new Set([...currentDescendants, ...knownDescendants])].reverse()) {
     try {
-      if (isPidAlive(pid)) process.kill(pid, "SIGKILL");
+      if (isPidAlive(pid)) {
+        process.kill(pid, "SIGKILL");
+        fallback.push(`descendant=${pid}`);
+      }
     } catch {
       // Le processus peut disparaître entre le contrôle et le signal de secours.
     }
   }
-  if (runner.pid && isPidAlive(runner.pid)) runner.kill("SIGKILL");
+  if (runner.pid && isPidAlive(runner.pid)) {
+    runner.kill("SIGKILL");
+    fallback.push(`runner=${runner.pid}`);
+  }
+  return fallback;
 }
 
 async function runSignalChild() {
@@ -1447,7 +1710,9 @@ async function runOwnedTreeParent() {
     "if (process.send) process.send('READY');",
     "setInterval(()=>{},1000);",
   ].join("");
+  const detachDescendant = process.argv.includes("--detach-descendant");
   const descendant = spawn(process.execPath, ["-e", descendantScript], {
+    detached: detachDescendant,
     shell: false,
     stdio: ["ignore", "ignore", "ignore", "ipc"],
   });
@@ -1460,6 +1725,7 @@ async function runOwnedTreeParent() {
   console.log(`OWNED_TREE_READY parent=${process.pid} descendant=${descendant.pid}`);
   if (process.argv.includes("--exit-parent-after-ready")) {
     descendant.disconnect();
+    if (detachDescendant) descendant.unref();
     process.exit(0);
   }
   await new Promise<void>(() => undefined);
@@ -1512,6 +1778,109 @@ function waitForChildExit(child: ChildProcess, timeoutMs: number) {
       reject(error);
     });
   });
+}
+
+function syntheticChildProcess() {
+  return Object.assign(new EventEmitter(), {
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    stdin: null,
+    exitCode: null,
+    signalCode: null,
+    killed: false,
+    kill: () => true,
+  }) as unknown as ChildProcess;
+}
+
+function trackChildOutput(child: ChildProcess) {
+  let stdout = "";
+  let stderr = "";
+  let exitCode = child.exitCode;
+  let signalCode = child.signalCode;
+  let terminationObserved = exitCode !== null || signalCode !== null;
+  let closeObserved = false;
+  let complete = false;
+  let disposed = false;
+  const errors: Array<{ source: string; error: unknown }> = [];
+  const completion = deferred<void>();
+
+  const onStdoutData = (chunk: unknown) => { stdout += String(chunk); };
+  const onStderrData = (chunk: unknown) => { stderr += String(chunk); };
+  const onStdoutError = (error: unknown) => { errors.push({ source: "stdout", error }); };
+  const onStderrError = (error: unknown) => { errors.push({ source: "stderr", error }); };
+  const onProcessError = (error: unknown) => {
+    errors.push({ source: "process", error });
+    terminationObserved = true;
+    maybeComplete();
+  };
+  const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+    exitCode = code;
+    signalCode = signal;
+    terminationObserved = true;
+    maybeComplete();
+  };
+  const onClose = (code: number | null, signal: NodeJS.Signals | null) => {
+    exitCode ??= code;
+    signalCode ??= signal;
+    closeObserved = true;
+    maybeComplete();
+  };
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    child.stdout?.off("data", onStdoutData);
+    child.stderr?.off("data", onStderrData);
+    child.stdout?.off("error", onStdoutError);
+    child.stderr?.off("error", onStderrError);
+    child.off("error", onProcessError);
+    child.off("exit", onExit);
+    child.off("close", onClose);
+  };
+  function maybeComplete() {
+    if (complete || !terminationObserved || !closeObserved) return;
+    complete = true;
+    dispose();
+    completion.resolve();
+  }
+
+  child.stdout?.on("data", onStdoutData);
+  child.stderr?.on("data", onStderrData);
+  child.stdout?.on("error", onStdoutError);
+  child.stderr?.on("error", onStderrError);
+  child.on("error", onProcessError);
+  child.on("exit", onExit);
+  child.on("close", onClose);
+
+  return {
+    get stdout() { return stdout; },
+    get stderr() { return stderr; },
+    get complete() { return complete; },
+    async waitForCompletion(timeoutMs: number) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          completion.promise,
+          new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => {
+              dispose();
+              reject(new Error(`Fermeture complète du sous-processus non observée après ${timeoutMs} ms.`));
+            }, timeoutMs);
+          }),
+        ]);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+      if (errors.length > 0) {
+        const details = errors.map((entry) => `${entry.source}: ${safeError(entry.error)}`).join(" | ");
+        throw new AggregateError(
+          errors.map((entry) => entry.error),
+          `Capture de sortie du sous-processus en échec après fermeture (${details}).`,
+        );
+      }
+      return { exitCode, signalCode, stdout, stderr };
+    },
+    dispose,
+  };
 }
 
 function deferred<Value>() {
