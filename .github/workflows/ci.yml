@@ -54,5 +54,8 @@ jobs:
       - name: Install Chromium
         run: npx --no-install playwright install --with-deps chromium
 
+      - name: Prepare interactive cagnotte prerequisites
+        run: npm run prepare:cagnotte-interactive
+
       - name: Verify
         run: npm run verify

@@ -206,3 +206,76 @@ La dépendance de sécurité reste **API remboursements → interface administra
 | Parcours interactif complet | Rendu SSR des composants réels et quatre captures locales sans réseau. | SSR ne prouve ni navigation complète, ni session Firebase Auth réelle, ni appels API déployés. | Recette locale uniquement. | Exécuter une recette navigateur Preview avec comptes et données exclusivement fictifs, services externes neutralisés et preuves réseau/runtime. | Compte, avantages, panier, checkout et admin cohérents sur mobile/bureau, aucune écriture ou dépendance Production. |
 | Documents, factures, avoirs, comptabilité et Analytics | Présentations et snapshots techniques couverts par les tests et fixtures. | Libellés finaux, qualification comptable, rapprochement, exports et indicateurs non validés par les responsables concernés. | Technique locale partielle ; validation externe absente. | Faire valider les cas achat mixte, remboursement et correction sans changer les règles commerciales dans ce lot. | Totaux en centimes concordants sur écran et documents ; règles d'avoir, écritures et événements approuvées, sans double comptage. |
 | Drain et exploitation | Achèvement des opérations déjà engagées testé en mode `drain`. | Runbook, alertes, responsabilités et exercice opérationnel non préparés. | Local prouvé ; exploitation Production à préparer. | Documenter puis exercer le passage en `drain` avant toute activation. | Aucune nouvelle inscription/réservation et rapprochement de toutes les opérations engagées avant `off`. |
+
+## Recette interactive locale
+
+Cette recette part du commit `6f0c35c8f3e92d2a63fb5fc7cb24ddcefa10dff8`, qui contient les fusions des PR #7 et #8, sur la branche locale `codex/cagnotte-interactive-local-v1`. Elle lance la véritable application React/Vite et ses routes, les handlers API existants, Firebase Authentication Emulator et Firestore Emulator avec les règles versionnées. Les programmes cagnotte injectés dans les handlers restent réservés à l'environnement `local_test` ; l'entrée normale et ses sept gardes ne sont pas modifiées.
+
+### Préparer, lancer et arrêter
+
+Depuis `C:\Users\token\Documents\DEV\verdanza-fidelite-integration` :
+
+```powershell
+npm run prepare:cagnotte-interactive
+npm run dev:cagnotte-interactive
+```
+
+La préparation réseau, à exécuter explicitement, contrôle `firebase-tools@15.28.1` provenant du registre npm officiel, le JAR officiel Firestore Emulator `1.22.0` d'empreinte SHA-256 `9b6498b7f62714d67f48f59b3818883cd682dbcd46b9f59511de81c97bb5166c`, Java 21 ou supérieur et Chromium Playwright. Le démarrage n'effectue aucun téléchargement. Il refuse un port occupé ou une configuration incohérente, attend les services avec un délai borné, crée seulement les fixtures fictives et affiche les accès.
+
+L'application est accessible à `http://127.0.0.1:14173/`. La commande reste au premier plan ; `Ctrl+C` arrête uniquement les processus qu'elle a créés et libère les ports. Les comptes créés à chaque lancement dans Auth Emulator sont :
+
+| rôle | identifiant | mot de passe fictif |
+|---|---|---|
+| Client 1 | `client.un@recette.verdanza.test` | `Recette!Client1-2026` |
+| Client 2 | `client.deux@recette.verdanza.test` | `Recette!Client2-2026` |
+| Administrateur | `admin@recette.verdanza.test` | `Recette!Admin-2026` |
+
+Le produit unique est « Fleur fictive recette — 100 € », avec une illustration SVG locale. Un bandeau visible « RECETTE LOCALE — DONNÉES FICTIVES » distingue cette exécution.
+
+### Architecture et isolation observées
+
+Tous les services écoutent uniquement sur `127.0.0.1` : application `14173`, API `14174`, Firestore `18086`, Auth `19099`, hub Firebase `4400`, journal Firebase `4500` et websocket Firestore `9150`. Le projet est fixé à `demo-verdanza-cagnotte` côté navigateur, serveur et émulateurs. Le lancement utilise un environnement nettoyé, ne charge aucun `.env` ou credential réel et refuse le fallback `verdanza-1f621`. Les jetons émis par Auth Emulator sont validés puis confirmés auprès de cet émulateur ; le rôle administrateur continue de provenir de `adminUsers` dans Firestore émulé.
+
+Les requêtes du navigateur atteignent les vrais handlers locaux de devis, création de commande, lecture cagnotte, transition de statut et remboursement. Les calculs, réservations, journaux et contrôles d'accès sont les services métier existants. Les paiements, e-mails, SMS, Analytics, IndexNow et autres effets sortants sont neutralisés. Le limiteur de checkout utilise réellement la collection Firestore locale `securityRateLimits` et un secret HMAC fictif ; le secret de curseur est également fictif.
+
+Un garde réseau est installé côté navigateur et côté serveur. Le trafic effectivement accepté reste limité aux ports locaux déclarés. Deux tentatives par parcours vers `https://www.google.com/images/cleardot.gif`, émises par le transport Firestore client, ont été bloquées par la CSP avant tout échange distant. `firebase-tools` tente aussi sa notification facultative d'éditeur sur `localhost:40001` ; elle est bloquée par le garde serveur car seul l'hôte littéral `127.0.0.1` est autorisé. Ces entrées prouvent des tentatives bloquées, pas une absence de tentative. Le premier rattachement Firestore peut produire une indisponibilité transitoire unique, observée sur la passe bureau la plus récente, puis se rétablit ; le test borne cette tolérance et exige au moins dix réponses Firestore Emulator réussies.
+
+### Parcours exécuté
+
+La commande autonome ci-dessous possède tout son environnement, utilise un jeu de données distinct par format et arrête tous ses processus, même en cas d'échec :
+
+```powershell
+npm run test:cagnotte-interactive
+```
+
+Le parcours a réussi sur Chromium bureau et sur un viewport `390 × 844`. Il passe par les vrais formulaires de connexion, conserve la session après rechargement, vérifie la déconnexion/reconnexion et exerce les interfaces client et administrateur.
+
+| étape | attendu | observé |
+|---|---:|---:|
+| Commande A | panier 100,00 €, paiement externe 100,00 €, gain 5,00 € | `10 000 / 10 000 / 500` centimes |
+| A payée | gain en attente 5,00 € | wallet `500 / 0 / 0 / 0` |
+| A livrée | 5,00 € disponibles | wallet `0 / 500 / 0 / 0` |
+| Commande B | panier 100,00 €, cagnotte 5,00 €, externe 95,00 €, gain 4,75 € | `10 000 / 500 / 9 500 / 475` centimes |
+| B payée puis livrée | réservation consommée, 4,75 € disponibles | wallet final avant retour `0 / 475 / 0 / 0` |
+| Remboursement intégral B déclaré par l'admin | externe 95,00 €, restitution 5,00 €, gain annulé 4,75 € | `9 500 / 500 / 475` centimes |
+| Solde final | 5,00 € disponibles | wallet `0 / 500 / 0 / 0`, 10 mouvements |
+
+Les contrôles négatifs obtiennent `403` pour la lecture du wallet d'un autre client, la lecture administrateur étrangère et la mutation administrateur par un non-admin. Une lecture Firestore directe étrangère reçoit `permission-denied`. Huit documents de rate-limit sont persistés pour les deux créations. Après l'arrêt volontaire de l'API, l'interface affiche une erreur explicite et ne tente aucun fallback distant.
+
+Les preuves courantes sont indexées par `node_modules/.cache/verdanza-cagnotte-interactive/latest-result.json`. Chaque sous-dossier de `node_modules/.cache/verdanza-cagnotte-interactive/runs/` contient huit captures, le relevé réseau navigateur nettoyé, la console, les requêtes API et les états Firestore du parcours. Les captures contrôlées couvrent notamment le devis B à 95,00 €, le formulaire administrateur de remboursement et le solde final de 5,00 € sur bureau et mobile.
+
+### Validation et portée
+
+La validation obligatoire inclut désormais le typecheck dédié, les contrôles statiques d'isolation, le parcours interactif et un contrôle du build normal qui refuse tout marqueur ou module de recette. La CI prépare séparément Chromium et les émulateurs avant `npm run verify`, sans téléchargement implicite pendant cette commande. Les sept gardes normales restent :
+
+L'exécution intégrale de `npm run verify` a réussi après raccordement : recette interactive bureau et mobile, 157 scénarios remboursements, recette V1, readiness, tests cœur, build Vite, 83 fichiers HTML prerender, contrôle de 391 fichiers du build normal sans trace de recette, puis audits locaux essentiels. Chaque passe interactive a arrêté tous ses processus.
+
+- `CAGNOTTE_SERVER_PROGRAM = null` ;
+- `CAGNOTTE_RESERVATION_PROGRAM = null` ;
+- `CAGNOTTE_READ_SERVER_ENABLED = false` ;
+- `CAGNOTTE_READ_DISPLAY_ENABLED = false` ;
+- `CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED = false` ;
+- `CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED = false` ;
+- `ORDER_REFUNDS_ENABLED = false`.
+
+Cette recette qualifie l'application, les handlers et les règles en local, avec Auth et Firestore émulés. Elle ne qualifie ni Firebase Production, ni les permissions cloud, ni Vercel, ni l'authentification cloud, ni un parcours sur téléphone physique. Elle ne constitue pas une activation commerciale. Aucun projet, secret, règle, index, donnée distante ou checkout parallèle n'est modifié.
