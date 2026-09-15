@@ -16,6 +16,7 @@ export type CleanupStepResult = {
   name: string;
   status: "completed" | "failed" | "skipped";
   durationMs: number;
+  closedBy?: string;
   error?: string;
 };
 
@@ -48,107 +49,215 @@ export type ViewportResourceDependencies<Harness, Monitor, Page> = {
     resources: PartialViewportResources<Harness, Monitor, Page>,
   ) => Promise<void>;
   cancellation?: ResourceCancellationControl;
+  closeCancellationFallback?: (failure: {
+    role: ViewportResourceRole;
+    error: unknown;
+  }) => Promise<void>;
   onPrimaryError?: (error: unknown) => void;
   onCleanupIssue?: (step: CleanupStepResult) => void;
   cleanupTimeoutMs?: number;
 };
+
+export type SharedResourceClosure<Result = void> = {
+  close: () => Promise<Result>;
+  started: () => boolean;
+};
+
+export function createSharedResourceClosure<Result = void>(
+  action: () => Promise<Result>,
+): SharedResourceClosure<Result> {
+  let closure: Promise<Result> | undefined;
+  return {
+    close: () => {
+      if (!closure) closure = Promise.resolve().then(action);
+      return closure;
+    },
+    started: () => closure !== undefined,
+  };
+}
 
 export async function runWithViewportResources<Harness, Monitor, Page, Result>(
   dependencies: ViewportResourceDependencies<Harness, Monitor, Page>,
   operation: (resources: ViewportResources<Harness, Monitor, Page>) => Promise<Result>,
 ): Promise<Result> {
   const resources: PartialViewportResources<Harness, Monitor, Page> = {};
-  let result: Result | undefined;
-  let primaryError: unknown;
-  let primaryErrorPrecededCancellation = false;
-  try {
-    dependencies.cancellation?.throwIfRequested();
-    resources.harness = await dependencies.startHarness();
-    dependencies.cancellation?.throwIfRequested();
-    resources.clientMonitor = await dependencies.createMonitor("client", resources.harness);
-    dependencies.cancellation?.throwIfRequested();
-    resources.adminMonitor = await dependencies.createMonitor("admin", resources.harness);
-    dependencies.cancellation?.throwIfRequested();
-    resources.clientPage = await dependencies.createPage(resources.clientMonitor, "client");
-    dependencies.cancellation?.throwIfRequested();
-    resources.adminPage = await dependencies.createPage(resources.adminMonitor, "admin");
-    dependencies.cancellation?.throwIfRequested();
-    result = await operation(resources as ViewportResources<Harness, Monitor, Page>);
-    dependencies.cancellation?.throwIfRequested();
-  } catch (error) {
-    primaryError = error;
-    primaryErrorPrecededCancellation = !dependencies.cancellation?.signal.aborted;
-    if (primaryErrorPrecededCancellation) {
+  const timeoutMs = dependencies.cleanupTimeoutMs ?? 10_000;
+  const pageClosures: Partial<Record<ViewportResourceRole, SharedResourceClosure<{ closedBy?: string } | void>>> = {};
+  const monitorClosures: Partial<Record<ViewportResourceRole, SharedResourceClosure>> = {};
+  let harnessClosure: SharedResourceClosure | undefined;
+  let fallbackClosure: SharedResourceClosure | undefined;
+  let cancellationRequested = dependencies.cancellation?.signal.aborted ?? false;
+
+  const startCancellationFallback = (role: ViewportResourceRole, error: unknown) => {
+    if (!dependencies.closeCancellationFallback) return;
+    if (!fallbackClosure) {
+      fallbackClosure = createSharedResourceClosure(() => (
+        dependencies.closeCancellationFallback!({ role, error })
+      ));
+    }
+    const fallback = fallbackClosure.close();
+    // Le rejet reste porté par la promesse partagée et sera relu par l'étape de nettoyage.
+    void fallback.then(undefined, () => undefined);
+  };
+
+  const createMonitorClosure = (monitor: Monitor, role: ViewportResourceRole) => (
+    createSharedResourceClosure(async () => {
+      let timeoutError: Error | undefined;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      if (cancellationRequested && dependencies.closeCancellationFallback) {
+        timer = setTimeout(() => {
+          timeoutError = new Error(`close-${role}-context a dépassé ${timeoutMs} ms.`);
+          startCancellationFallback(role, timeoutError);
+        }, timeoutMs);
+      }
       try {
-        dependencies.onPrimaryError?.(error);
-      } catch {
-        // L'erreur initiale reste prioritaire face au suivi du runner.
+        await dependencies.closeMonitor(monitor, role);
+      } catch (error) {
+        if (cancellationRequested) startCancellationFallback(role, error);
+        throw error;
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+      if (timeoutError) throw timeoutError;
+    })
+  );
+
+  const startMonitorClosure = (role: ViewportResourceRole) => {
+    const closure = monitorClosures[role];
+    if (!closure) return Promise.resolve();
+    const closing = closure.close();
+    // Une fermeture lancée par le signal sera rejointe et vérifiée par le nettoyage normal.
+    void closing.then(undefined, () => undefined);
+    return closing;
+  };
+
+  const registerHarness = (harness: Harness) => {
+    resources.harness = harness;
+    harnessClosure = createSharedResourceClosure(() => dependencies.stopHarness(harness));
+  };
+  const registerMonitor = (monitor: Monitor, role: ViewportResourceRole) => {
+    if (role === "client") resources.clientMonitor = monitor;
+    else resources.adminMonitor = monitor;
+    monitorClosures[role] = createMonitorClosure(monitor, role);
+    if (cancellationRequested) void startMonitorClosure(role);
+  };
+  const registerPage = (page: Page, role: ViewportResourceRole) => {
+    if (role === "client") resources.clientPage = page;
+    else resources.adminPage = page;
+    pageClosures[role] = createSharedResourceClosure(async () => {
+      if (cancellationRequested && monitorClosures[role]) {
+        await startMonitorClosure(role);
+        return { closedBy: `close-${role}-context` };
+      }
+      await dependencies.closePage(page, role);
+    });
+  };
+  const requestCancellationClosure = () => {
+    cancellationRequested = true;
+    void startMonitorClosure("admin");
+    void startMonitorClosure("client");
+  };
+
+  dependencies.cancellation?.signal.addEventListener("abort", requestCancellationClosure);
+  if (dependencies.cancellation?.signal.aborted) requestCancellationClosure();
+
+  try {
+    let result: Result | undefined;
+    let primaryError: unknown;
+    let primaryErrorPrecededCancellation = false;
+    try {
+      dependencies.cancellation?.throwIfRequested();
+      registerHarness(await dependencies.startHarness());
+      dependencies.cancellation?.throwIfRequested();
+      registerMonitor(await dependencies.createMonitor("client", resources.harness as Harness), "client");
+      dependencies.cancellation?.throwIfRequested();
+      registerMonitor(await dependencies.createMonitor("admin", resources.harness as Harness), "admin");
+      dependencies.cancellation?.throwIfRequested();
+      registerPage(await dependencies.createPage(resources.clientMonitor as Monitor, "client"), "client");
+      dependencies.cancellation?.throwIfRequested();
+      registerPage(await dependencies.createPage(resources.adminMonitor as Monitor, "admin"), "admin");
+      dependencies.cancellation?.throwIfRequested();
+      result = await operation(resources as ViewportResources<Harness, Monitor, Page>);
+      dependencies.cancellation?.throwIfRequested();
+    } catch (error) {
+      primaryError = error;
+      primaryErrorPrecededCancellation = !dependencies.cancellation?.signal.aborted;
+      if (primaryErrorPrecededCancellation) {
+        try {
+          dependencies.onPrimaryError?.(error);
+        } catch {
+          // L'erreur initiale reste prioritaire face au suivi du runner.
+        }
       }
     }
-  }
 
-  const timeoutMs = dependencies.cleanupTimeoutMs ?? 10_000;
-  const startedAt = new Date().toISOString();
-  const steps: CleanupStepResult[] = [];
-  await cleanupStep(steps, "persist-evidence", true, timeoutMs, () => dependencies.persistEvidence(resources));
-  await cleanupStep(steps, "close-admin-page", Boolean(resources.adminPage), timeoutMs, () => (
-    dependencies.closePage(resources.adminPage as Page, "admin")
-  ));
-  await cleanupStep(steps, "close-client-page", Boolean(resources.clientPage), timeoutMs, () => (
-    dependencies.closePage(resources.clientPage as Page, "client")
-  ));
-  await cleanupStep(steps, "close-admin-context", Boolean(resources.adminMonitor), timeoutMs, () => (
-    dependencies.closeMonitor(resources.adminMonitor as Monitor, "admin")
-  ));
-  await cleanupStep(steps, "close-client-context", Boolean(resources.clientMonitor), timeoutMs, () => (
-    dependencies.closeMonitor(resources.clientMonitor as Monitor, "client")
-  ));
-  await cleanupStep(steps, "stop-harness", Boolean(resources.harness), timeoutMs, () => (
-    dependencies.stopHarness(resources.harness as Harness)
-  ));
-
-  if (dependencies.cancellation?.signal.aborted && !primaryErrorPrecededCancellation) {
-    try {
-      dependencies.cancellation.throwIfRequested();
-    } catch (cancellationError) {
-      attachCancellationContext(cancellationError, primaryError);
-      primaryError = cancellationError;
-    }
-  }
-
-  const report: CleanupReport = {
-    label: dependencies.label,
-    startedAt,
-    completedAt: new Date().toISOString(),
-    ...(primaryError === undefined ? {} : { primaryError: safeError(primaryError) }),
-    steps,
-  };
-  if (dependencies.writeCleanupReport) {
-    await cleanupStep(steps, "write-cleanup-report", true, timeoutMs, () => (
-      dependencies.writeCleanupReport!(report, resources)
+    const startedAt = new Date().toISOString();
+    const steps: CleanupStepResult[] = [];
+    await cleanupStep(steps, "persist-evidence", true, timeoutMs, () => dependencies.persistEvidence(resources));
+    await cleanupStep(steps, "close-admin-page", Boolean(resources.adminPage), timeoutMs, () => (
+      pageClosures.admin!.close()
     ));
-    report.completedAt = new Date().toISOString();
-  }
-
-  const cleanupFailures = steps.filter((step) => step.status === "failed");
-  for (const failure of cleanupFailures) {
-    try {
-      dependencies.onCleanupIssue?.(failure);
-    } catch {
-      // Le rapport de nettoyage doit rester secondaire face à l'erreur initiale.
+    await cleanupStep(steps, "close-client-page", Boolean(resources.clientPage), timeoutMs, () => (
+      pageClosures.client!.close()
+    ));
+    await cleanupStep(steps, "close-admin-context", Boolean(resources.adminMonitor), timeoutMs, () => (
+      startMonitorClosure("admin")
+    ));
+    await cleanupStep(steps, "close-client-context", Boolean(resources.clientMonitor), timeoutMs, () => (
+      startMonitorClosure("client")
+    ));
+    if (fallbackClosure?.started()) {
+      await cleanupStep(steps, "close-cancellation-fallback", true, timeoutMs, () => fallbackClosure!.close());
     }
+    await cleanupStep(steps, "stop-harness", Boolean(resources.harness), timeoutMs, () => (
+      harnessClosure!.close()
+    ));
+
+    if (dependencies.cancellation?.signal.aborted && !primaryErrorPrecededCancellation) {
+      try {
+        dependencies.cancellation.throwIfRequested();
+      } catch (cancellationError) {
+        attachCancellationContext(cancellationError, primaryError);
+        primaryError = cancellationError;
+      }
+    }
+
+    const report: CleanupReport = {
+      label: dependencies.label,
+      startedAt,
+      completedAt: new Date().toISOString(),
+      ...(primaryError === undefined ? {} : { primaryError: safeError(primaryError) }),
+      steps,
+    };
+    if (dependencies.writeCleanupReport) {
+      await cleanupStep(steps, "write-cleanup-report", true, timeoutMs, () => (
+        dependencies.writeCleanupReport!(report, resources)
+      ));
+      report.completedAt = new Date().toISOString();
+    }
+
+    const cleanupFailures = steps.filter((step) => step.status === "failed");
+    for (const failure of cleanupFailures) {
+      try {
+        dependencies.onCleanupIssue?.(failure);
+      } catch {
+        // Le rapport de nettoyage doit rester secondaire face à l'erreur initiale.
+      }
+    }
+    if (primaryError !== undefined) {
+      attachCleanupFailures(primaryError, cleanupFailures);
+      throw primaryError;
+    }
+    if (cleanupFailures.length > 0) {
+      throw new AggregateError(
+        cleanupFailures.map((failure) => new Error(`${failure.name}: ${failure.error}`)),
+        `Nettoyage incomplet pour ${dependencies.label}.`,
+      );
+    }
+    return result as Result;
+  } finally {
+    dependencies.cancellation?.signal.removeEventListener("abort", requestCancellationClosure);
   }
-  if (primaryError !== undefined) {
-    attachCleanupFailures(primaryError, cleanupFailures);
-    throw primaryError;
-  }
-  if (cleanupFailures.length > 0) {
-    throw new AggregateError(
-      cleanupFailures.map((failure) => new Error(`${failure.name}: ${failure.error}`)),
-      `Nettoyage incomplet pour ${dependencies.label}.`,
-    );
-  }
-  return result as Result;
 }
 
 export async function configureOwnedResource<Resource>(options: {
@@ -190,7 +299,7 @@ async function cleanupStep(
   name: string,
   applicable: boolean,
   timeoutMs: number,
-  action: () => Promise<void>,
+  action: () => Promise<{ closedBy?: string } | void>,
 ) {
   const started = Date.now();
   if (!applicable) {
@@ -198,8 +307,13 @@ async function cleanupStep(
     return;
   }
   try {
-    await bounded(action, timeoutMs, name);
-    results.push({ name, status: "completed", durationMs: Date.now() - started });
+    const completion = await bounded(action, timeoutMs, name);
+    results.push({
+      name,
+      status: "completed",
+      durationMs: Date.now() - started,
+      ...(completion?.closedBy ? { closedBy: completion.closedBy } : {}),
+    });
   } catch (error) {
     results.push({
       name,
@@ -210,10 +324,10 @@ async function cleanupStep(
   }
 }
 
-async function bounded(action: () => Promise<void>, timeoutMs: number, name: string) {
+async function bounded<Result>(action: () => Promise<Result>, timeoutMs: number, name: string) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    await Promise.race([
+    return await Promise.race([
       Promise.resolve().then(action),
       new Promise<never>((_resolve, reject) => {
         timer = setTimeout(() => reject(new Error(`${name} a dépassé ${timeoutMs} ms.`)), timeoutMs);

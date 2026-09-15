@@ -33,6 +33,7 @@ import {
 } from "./run.js";
 import {
   configureOwnedResource,
+  createSharedResourceClosure,
   runWithViewportResources,
   type CleanupReport,
   type ViewportResourceDependencies,
@@ -335,6 +336,30 @@ await check("un second signal pendant l’arrêt ne concurrence pas la finalisat
   assert.equal(signals.listenerCount("SIGTERM"), 0);
 });
 
+await check("deux chemins rejoignent la même fermeture, y compris après sa réussite", async () => {
+  const closureStarted = deferred<void>();
+  const releaseClosure = deferred<void>();
+  let closeCalls = 0;
+  const closure = createSharedResourceClosure(async () => {
+    closeCalls += 1;
+    closureStarted.resolve();
+    await releaseClosure.promise;
+  });
+
+  const cancellationClose = closure.close();
+  await closureStarted.promise;
+  const cleanupClose = closure.close();
+  assert.equal(cleanupClose, cancellationClose, "les deux chemins doivent recevoir la même promesse");
+  assert.equal(closeCalls, 1);
+
+  releaseClosure.resolve();
+  await Promise.all([cancellationClose, cleanupClose]);
+  const completedClose = closure.close();
+  assert.equal(completedClose, cancellationClose, "une fermeture achevée doit rester la fermeture de référence");
+  await completedClose;
+  assert.equal(closeCalls, 1, "aucune fermeture supplémentaire ne doit être lancée");
+});
+
 await check("une ressource acquise pendant l’annulation reste recensée puis fermée", async () => {
   const signals = new EventEmitter();
   const cancellation = installRecipeSignalCancellation(signals);
@@ -368,17 +393,37 @@ await check("une ressource acquise pendant l’annulation reste recensée puis f
   }
 });
 
-await check("l’annulation d’un parcours rejoint un nettoyage unique malgré un second signal", async () => {
+await check("l’annulation et le nettoyage rejoignent les mêmes fermetures de contextes", async () => {
   const signals = new EventEmitter();
   const cancellation = installRecipeSignalCancellation(signals);
   const fixture = fakeDependencies({ failAt: "cleanup" });
   const operationStarted = deferred<void>();
   const cleanupStarted = deferred<void>();
-  const releaseCleanup = deferred<void>();
+  const contextClosuresStarted = deferred<void>();
+  const releaseContextClosures = deferred<void>();
+  const events: string[] = [];
+  let fallbackCalls = 0;
   fixture.dependencies.cancellation = cancellation;
   fixture.dependencies.persistEvidence = async () => {
+    events.push("persist-evidence");
     cleanupStarted.resolve();
-    await releaseCleanup.promise;
+  };
+  fixture.dependencies.closePage = async (page) => {
+    page.closeCalls += 1;
+    events.push(`page-${page.role}`);
+  };
+  fixture.dependencies.closeMonitor = async (monitor) => {
+    monitor.closeCalls += 1;
+    events.push(`context-${monitor.role}-start`);
+    if (fixture.clientMonitor.closeCalls + fixture.adminMonitor.closeCalls === 2) {
+      contextClosuresStarted.resolve();
+    }
+    await releaseContextClosures.promise;
+    events.push(`context-${monitor.role}-end`);
+  };
+  fixture.dependencies.closeCancellationFallback = async () => {
+    fallbackCalls += 1;
+    events.push("browser-fallback");
   };
   try {
     const execution = runWithViewportResources(fixture.dependencies, async () => {
@@ -387,24 +432,148 @@ await check("l’annulation d’un parcours rejoint un nettoyage unique malgré 
     });
     await operationStarted.promise;
     signals.emit("SIGTERM");
+    await contextClosuresStarted.promise;
     await cleanupStarted.promise;
     signals.emit("SIGINT");
     assert.equal(signals.listenerCount("SIGINT"), 1, "les handlers restent actifs pendant le nettoyage");
     assert.equal(signals.listenerCount("SIGTERM"), 1, "les handlers restent actifs pendant le nettoyage");
-    releaseCleanup.resolve();
+    assert.equal(fixture.clientMonitor.closeCalls, 1);
+    assert.equal(fixture.adminMonitor.closeCalls, 1);
+    assert.equal(fixture.clientPage.closeCalls, 0, "le contexte client possède la fermeture de sa page");
+    assert.equal(fixture.adminPage.closeCalls, 0, "le contexte admin possède la fermeture de sa page");
+    assert.equal(fallbackCalls, 0, "le navigateur ne doit pas fermer avant des contextes sains");
+    releaseContextClosures.resolve();
     await assert.rejects(execution, (error) => (
       isRecipeSignalCancellation(error) && error.signal === "SIGTERM"
     ));
-    assert.equal(fixture.clientPage.closeCalls, 1);
-    assert.equal(fixture.adminPage.closeCalls, 1);
     assert.equal(fixture.clientMonitor.closeCalls, 1);
     assert.equal(fixture.adminMonitor.closeCalls, 1);
     assert.equal(fixture.harness.stopCalls, 1);
+    const pageSteps = fixture.reports[0]?.steps.filter((step) => step.name.endsWith("-page")) ?? [];
+    assert.deepEqual(
+      pageSteps.map((step) => [step.name, step.status, step.closedBy]),
+      [
+        ["close-admin-page", "completed", "close-admin-context"],
+        ["close-client-page", "completed", "close-client-context"],
+      ],
+    );
+    assert.equal(events.includes("browser-fallback"), false);
   } finally {
     cancellation.dispose();
   }
   assert.equal(signals.listenerCount("SIGINT"), 0);
   assert.equal(signals.listenerCount("SIGTERM"), 0);
+});
+
+await check("un échec réel de contexte déclenche un seul repli et reste bloquant", async () => {
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const fixture = fakeDependencies({ failAt: "cleanup" });
+  const operationStarted = deferred<void>();
+  const events: string[] = [];
+  let fallbackCalls = 0;
+  fixture.dependencies.cancellation = cancellation;
+  fixture.dependencies.closeMonitor = async (monitor) => {
+    monitor.closeCalls += 1;
+    events.push(`context-${monitor.role}`);
+    if (monitor.role === "admin") throw new Error("injected-admin-context-close-failure");
+  };
+  fixture.dependencies.closeCancellationFallback = async ({ role, error }) => {
+    fallbackCalls += 1;
+    events.push("browser-fallback");
+    assert.equal(role, "admin");
+    assert.match(safeError(error), /injected-admin-context-close-failure/);
+  };
+  try {
+    const execution = runWithViewportResources(fixture.dependencies, async () => {
+      operationStarted.resolve();
+      await waitUntilCancelled(cancellation.signal);
+    });
+    await operationStarted.promise;
+    signals.emit("SIGINT");
+    await assert.rejects(execution, (error) => {
+      if (!isRecipeSignalCancellation(error)) return false;
+      const cleanupFailures = (error as Error & { cleanupFailures?: CleanupReport["steps"] }).cleanupFailures ?? [];
+      return cleanupFailures.some((failure) => (
+        failure.name === "close-admin-context" && /injected-admin-context-close-failure/.test(failure.error ?? "")
+      ));
+    });
+    assert.equal(fallbackCalls, 1, "les deux chemins doivent rejoindre le même repli navigateur");
+    assert.ok(events.indexOf("context-admin") < events.indexOf("browser-fallback"));
+    assert.equal(fixture.adminMonitor.closeCalls, 1);
+    assert.equal(fixture.clientMonitor.closeCalls, 1);
+    assert.equal(fixture.harness.stopCalls, 1, "le harness doit être nettoyé malgré l’échec du contexte");
+  } finally {
+    cancellation.dispose();
+  }
+});
+
+await check("un timeout de contexte déclenche le repli mais reste un échec explicite", async () => {
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const fixture = fakeDependencies({ failAt: "cleanup" });
+  const operationStarted = deferred<void>();
+  const fallbackStarted = deferred<void>();
+  const releaseAdminContext = deferred<void>();
+  let fallbackCalls = 0;
+  fixture.dependencies.cleanupTimeoutMs = 40;
+  fixture.dependencies.cancellation = cancellation;
+  fixture.dependencies.closeMonitor = async (monitor) => {
+    monitor.closeCalls += 1;
+    if (monitor.role === "admin") await releaseAdminContext.promise;
+  };
+  fixture.dependencies.closeCancellationFallback = async ({ role, error }) => {
+    fallbackCalls += 1;
+    assert.equal(role, "admin");
+    assert.match(safeError(error), /close-admin-context a dépassé 40 ms/);
+    fallbackStarted.resolve();
+    releaseAdminContext.resolve();
+  };
+  try {
+    const execution = runWithViewportResources(fixture.dependencies, async () => {
+      operationStarted.resolve();
+      await waitUntilCancelled(cancellation.signal);
+    });
+    await operationStarted.promise;
+    signals.emit("SIGTERM");
+    await fallbackStarted.promise;
+    await assert.rejects(execution, (error) => {
+      if (!isRecipeSignalCancellation(error)) return false;
+      const cleanupFailures = (error as Error & { cleanupFailures?: CleanupReport["steps"] }).cleanupFailures ?? [];
+      return cleanupFailures.some((failure) => /a dépassé 40 ms/.test(failure.error ?? ""));
+    });
+    assert.equal(fallbackCalls, 1);
+    assert.equal(fixture.adminMonitor.closeCalls, 1);
+    assert.equal(fixture.harness.stopCalls, 1);
+  } finally {
+    releaseAdminContext.resolve();
+    cancellation.dispose();
+  }
+});
+
+await check("une fermeture Playwright inattendue sans signal reste une erreur", async () => {
+  const fixture = fakeDependencies({ failAt: "cleanup" });
+  let fallbackCalls = 0;
+  fixture.dependencies.closeMonitor = async (monitor) => {
+    monitor.closeCalls += 1;
+    if (monitor.role === "admin") {
+      throw new Error("Target page, context or browser has been closed");
+    }
+  };
+  fixture.dependencies.closeCancellationFallback = async () => { fallbackCalls += 1; };
+  await assert.rejects(
+    runWithViewportResources(fixture.dependencies, async () => undefined),
+    /Nettoyage incomplet/,
+  );
+  assert.equal(fallbackCalls, 0, "aucun repli d’annulation ne doit masquer une fermeture inattendue");
+  assert.equal(
+    fixture.reports[0]?.steps.some((step) => (
+      step.name === "close-admin-context" &&
+      step.status === "failed" &&
+      /Target page, context or browser has been closed/.test(step.error ?? "")
+    )),
+    true,
+  );
 });
 
 await check("une erreur de parcours observée avant le signal reste prioritaire", async () => {

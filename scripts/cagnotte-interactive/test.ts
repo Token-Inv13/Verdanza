@@ -30,8 +30,10 @@ import {
 } from "./harness.js";
 import {
   configureOwnedResource,
+  createSharedResourceClosure,
   runWithViewportResources,
   type CleanupStepResult,
+  type SharedResourceClosure,
 } from "./resourceLifecycle.js";
 import {
   assertExpectedFailClosedApiUnavailable,
@@ -188,21 +190,11 @@ export async function runAutomatedRecipe(options: {
   const executions: Array<Record<string, unknown>> = [];
   let activeRunDirectory: string | undefined;
   let browser: Browser | undefined;
-  let browserClosePromise: Promise<void> | undefined;
+  let browserClosure: SharedResourceClosure | undefined;
   let browserCloseError: unknown;
   let executionError: unknown;
   let interruptionError: unknown;
-  const closeBrowser = () => {
-    if (!browser) return Promise.resolve();
-    if (!browserClosePromise) browserClosePromise = closeBrowserBounded(browser);
-    return browserClosePromise;
-  };
-  const interruptBrowser = () => {
-    void closeBrowser().catch((error) => {
-      browserCloseError ??= error;
-    });
-  };
-  cancellation.signal.addEventListener("abort", interruptBrowser);
+  const closeBrowser = () => browserClosure?.close() ?? Promise.resolve();
 
   try {
     try {
@@ -214,11 +206,13 @@ export async function runAutomatedRecipe(options: {
       ]);
       cancellation.throwIfRequested();
       // Le runner ferme lui-même Chromium et ses services avant de choisir le code de sortie.
-      browser = await chromium.launch({
+      const launchedBrowser = await chromium.launch({
         headless: true,
         handleSIGINT: false,
         handleSIGTERM: false,
       });
+      browser = launchedBrowser;
+      browserClosure = createSharedResourceClosure(() => closeBrowserBounded(launchedBrowser));
       cancellation.throwIfRequested();
       await runViewportSequence({
         items: viewportDefinitions,
@@ -232,6 +226,7 @@ export async function runAutomatedRecipe(options: {
             options.signalProbe,
             (runDirectory) => { activeRunDirectory = runDirectory; },
             (error) => { executionError ??= error; },
+            closeBrowser,
           );
         },
         onCompleted: (result) => executions.push(result),
@@ -307,7 +302,6 @@ export async function runAutomatedRecipe(options: {
       });
     }
   } finally {
-    cancellation.signal.removeEventListener("abort", interruptBrowser);
     cancellation.dispose();
   }
 }
@@ -423,6 +417,7 @@ async function runViewport(
   signalProbe: RunnerSignalProbe | undefined,
   onHarnessStarted: (runDirectory: string) => void,
   onPrimaryError: (error: unknown) => void,
+  closeBrowserAfterContextFailure: () => Promise<void>,
 ) {
   let stoppedForFailClosed = false;
   let cleanupProbeReported = false;
@@ -519,6 +514,7 @@ async function runViewport(
     },
     closePage: (page) => page.close(),
     closeMonitor: (monitor) => monitor.context.close(),
+    closeCancellationFallback: () => closeBrowserAfterContextFailure(),
     stopHarness: (harness) => harness.stop(),
     writeCleanupReport: async (report, resources) => {
       if (!resources.harness) return;
