@@ -11,6 +11,13 @@ import {
   RECIPE_ROOT,
 } from "./constants.js";
 
+export function formatNodeRequireOption(modulePath: string) {
+  if (!modulePath || /[\0\r\n"]/.test(modulePath)) {
+    throw new Error("ISOLATION: chemin de garde réseau incompatible avec NODE_OPTIONS.");
+  }
+  return `--require="${modulePath.replaceAll("\\", "\\\\")}"`;
+}
+
 export function buildRecipeEnvironment(runDirectory: string): NodeJS.ProcessEnv {
   const localHome = resolve(runDirectory, "home");
   const localTemp = resolve(runDirectory, "tmp");
@@ -59,7 +66,7 @@ export function buildRecipeEnvironment(runDirectory: string): NodeJS.ProcessEnv 
     VERDANZA_RECETTE_EMPTY_ENV_DIR: emptyEnvDir,
     VERDANZA_RECETTE_ALLOWED_PORTS: RECIPE_ALLOWED_PORTS.join(","),
     VERDANZA_RECETTE_NETWORK_LOG: resolve(runDirectory, "server-network-blocks.jsonl"),
-    NODE_OPTIONS: `--require=${guard}`,
+    NODE_OPTIONS: formatNodeRequireOption(guard),
     NO_PROXY: "127.0.0.1",
     no_proxy: "127.0.0.1",
     HTTP_PROXY: "http://127.0.0.1:1",

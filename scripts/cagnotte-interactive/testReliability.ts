@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -11,7 +11,9 @@ import {
   RECIPE_HOST,
   RECIPE_CACHE_ROOT,
   RECIPE_PORTS,
+  RECIPE_ROOT,
 } from "./constants.js";
+import { buildRecipeEnvironment, formatNodeRequireOption } from "./environment.js";
 import {
   coordinateRecipeStartup,
   isRecipeStartupCancelled,
@@ -42,6 +44,7 @@ import {
   assertNoUnexpectedRuntimeFailures,
   type ConsoleEvidence,
   type FirestoreListenProbeEvidence,
+  type FirestoreListenRecoveryExpectation,
   type NetworkEvidence,
 } from "./runtimeDiagnostics.js";
 import {
@@ -67,9 +70,12 @@ if (process.argv.includes("--signal-child")) {
 } else if (process.argv.includes("--closed-parent-output-child")) {
   await runClosedParentOutputChild();
 } else if (process.argv.includes("--windows-job-only")) {
+  await runNodeRequireGuardChecks();
   await runWindowsOwnedProcessChecks();
   reportReliabilityResult(" Job Object Windows");
 } else {
+
+await runNodeRequireGuardChecks();
 
 await check("spawnOwned contient un EACCES d'ouverture du log", async () => {
   const diagnostics: string[] = [];
@@ -1065,9 +1071,27 @@ await check("nettoyage borné sans abandonner l’arrêt du harness", async () =
 
 await check("incident Listen qualifié une seule fois avec reprise fraîche du même contexte", async () => {
   const fixture = recoveredListenFixture();
-  const result = assertNoUnexpectedRuntimeFailures(fixture.network, fixture.console, fixture.probe);
+  const result = assertNoUnexpectedRuntimeFailures(
+    fixture.network,
+    fixture.console,
+    fixture.probe,
+    fixture.expectations,
+  );
   assert.equal(result.firestoreTransportRecoveries.length, 1, "console et réponse décrivent un seul incident");
   assert.equal(result.firestoreTransportRecoveries[0]?.requestId, "mobile:client:request-7");
+});
+
+await check("incident Listen administrateur qualifié par sa propre sonde préexistante", async () => {
+  const fixture = recoveredListenFixture("admin");
+  const result = assertNoUnexpectedRuntimeFailures(
+    fixture.network,
+    fixture.console,
+    fixture.probe,
+    fixture.expectations,
+  );
+  assert.equal(result.firestoreTransportRecoveries.length, 1);
+  assert.equal(result.firestoreTransportRecoveries[0]?.requestId, "mobile:admin:request-7");
+  assert.equal(result.firestoreTransportRecoveries[0]?.probeId, "mobile-admin-probe");
 });
 
 await check("400 métier ou signature Listen inconnue restent bloquants", async () => {
@@ -1080,7 +1104,7 @@ await check("400 métier ou signature Listen inconnue restent bloquants", async 
     responseSignature: undefined,
   };
   assert.throws(
-    () => assertNoUnexpectedRuntimeFailures(business.network, business.console, business.probe),
+    () => assertNoUnexpectedRuntimeFailures(business.network, business.console, business.probe, business.expectations),
     /réponse HTTP locale inattendue/,
   );
   const unknown = recoveredListenFixture();
@@ -1089,22 +1113,103 @@ await check("400 métier ou signature Listen inconnue restent bloquants", async 
     responseSignature: { ...unknown.network[0]!.responseSignature!, byteLength: 7, sha256: "unknown" },
   };
   assert.throws(
-    () => assertNoUnexpectedRuntimeFailures(unknown.network, unknown.console, unknown.probe),
+    () => assertNoUnexpectedRuntimeFailures(unknown.network, unknown.console, unknown.probe, unknown.expectations),
     /signature Listen 400 inconnue/,
   );
 });
 
 await check("incident Listen sans reprise ou avec reprise d’un autre contexte reste bloquant", async () => {
-  const missing = recoveredListenFixture();
+  const missing = recoveredListenFixture("admin");
   assert.throws(
-    () => assertNoUnexpectedRuntimeFailures(missing.network, missing.console, []),
-    /aucune donnée Firestore fraîche/,
+    () => assertNoUnexpectedRuntimeFailures(missing.network, missing.console, [], missing.expectations),
+    /génération Firestore fraîche non observée/,
   );
-  const otherContext = recoveredListenFixture();
-  otherContext.probe[0] = { ...otherContext.probe[0]!, contextId: "mobile:admin", pageId: "mobile:admin:page-1" };
+  const otherContext = recoveredListenFixture("admin");
+  otherContext.probe = otherContext.probe.map((entry) => ({
+    ...entry,
+    contextId: "mobile:client",
+    pageId: "mobile:client:page-1",
+  }));
   assert.throws(
-    () => assertNoUnexpectedRuntimeFailures(otherContext.network, otherContext.console, otherContext.probe),
-    /aucune donnée Firestore fraîche/,
+    () => assertNoUnexpectedRuntimeFailures(
+      otherContext.network,
+      otherContext.console,
+      otherContext.probe,
+      otherContext.expectations,
+    ),
+    /génération Firestore fraîche non observée/,
+  );
+});
+
+await check("snapshot en cache, génération différente et écriture en attente ne prouvent pas la reprise", async () => {
+  for (const mutate of [
+    (entry: FirestoreListenProbeEvidence) => ({ ...entry, fromCache: true }),
+    (entry: FirestoreListenProbeEvidence) => ({ ...entry, generation: "recovery-mobile-client-other" }),
+    (entry: FirestoreListenProbeEvidence) => ({ ...entry, hasPendingWrites: true }),
+  ]) {
+    const fixture = recoveredListenFixture();
+    fixture.probe[1] = mutate(fixture.probe[1]!);
+    assert.throws(
+      () => assertNoUnexpectedRuntimeFailures(
+        fixture.network,
+        fixture.console,
+        fixture.probe,
+        fixture.expectations,
+      ),
+      /génération Firestore fraîche non observée/,
+    );
+  }
+});
+
+await check("une reprise issue d'une autre instance de sonde ne qualifie pas l'incident", async () => {
+  const fixture = recoveredListenFixture("admin");
+  fixture.probe[1] = {
+    ...fixture.probe[1]!,
+    probeInstanceId: "mobile-admin-probe-instance-other",
+  };
+  assert.throws(
+    () => assertNoUnexpectedRuntimeFailures(
+      fixture.network,
+      fixture.console,
+      fixture.probe,
+      fixture.expectations,
+    ),
+    /sonde Firestore non établie sans ambiguïté/,
+  );
+});
+
+await check("erreur de capture et erreur terminale Firestore restent bloquantes", async () => {
+  const captureFailure = recoveredListenFixture("admin");
+  captureFailure.network[0]!.responseSignature = {
+    ...captureFailure.network[0]!.responseSignature!,
+    captureError: "injected-response-capture-failure",
+  };
+  assert.throws(
+    () => assertNoUnexpectedRuntimeFailures(
+      captureFailure.network,
+      captureFailure.console,
+      captureFailure.probe,
+      captureFailure.expectations,
+    ),
+    /signature Listen 400 inconnue/,
+  );
+
+  const terminal = recoveredListenFixture("admin");
+  terminal.probe.push({
+    ...terminal.probe[1]!,
+    sequence: 5,
+    occurredAtEpochMs: 1_350,
+    generation: "",
+    terminalErrorCode: "unavailable",
+  });
+  assert.throws(
+    () => assertNoUnexpectedRuntimeFailures(
+      terminal.network,
+      terminal.console,
+      terminal.probe,
+      terminal.expectations,
+    ),
+    /erreur terminale sur la sonde Firestore attendue/,
   );
 });
 
@@ -1119,8 +1224,13 @@ await check("une réponse 200 antérieure ne prouve pas la reprise Listen", asyn
     responseSignature: undefined,
   };
   assert.throws(
-    () => assertNoUnexpectedRuntimeFailures([priorOk, ...fixture.network], fixture.console, []),
-    /aucune donnée Firestore fraîche/,
+    () => assertNoUnexpectedRuntimeFailures(
+      [priorOk, ...fixture.network],
+      fixture.console,
+      fixture.probe.map((entry, index) => ({ ...entry, occurredAtEpochMs: index === 0 ? 900 : 950 })),
+      fixture.expectations,
+    ),
+    /aucune donnée Firestore fraîche reçue après/,
   );
 });
 
@@ -1133,7 +1243,12 @@ await check("incidents Listen persistants ou au-delà de la borne restent bloqua
     occurredAtEpochMs: 1_400,
   };
   assert.throws(
-    () => assertNoUnexpectedRuntimeFailures([...fixture.network, second], fixture.console, fixture.probe),
+    () => assertNoUnexpectedRuntimeFailures(
+      [...fixture.network, second],
+      fixture.console,
+      fixture.probe,
+      fixture.expectations,
+    ),
     /au plus 1 incident Listen local/,
   );
 });
@@ -1151,7 +1266,12 @@ await check("pageerror et fuite réseau restent bloquants", async () => {
     text: "injected-pageerror",
   });
   assert.throws(
-    () => assertNoUnexpectedRuntimeFailures(pageError.network, pageError.console, pageError.probe),
+    () => assertNoUnexpectedRuntimeFailures(
+      pageError.network,
+      pageError.console,
+      pageError.probe,
+      pageError.expectations,
+    ),
     /console navigateur inattendue/,
   );
   const leak = recoveredListenFixture();
@@ -1170,7 +1290,7 @@ await check("pageerror et fuite réseau restent bloquants", async () => {
     blocked: true,
   });
   assert.throws(
-    () => assertNoUnexpectedRuntimeFailures(leak.network, leak.console, leak.probe),
+    () => assertNoUnexpectedRuntimeFailures(leak.network, leak.console, leak.probe, leak.expectations),
     /aucune tentative navigateur externe attendue/,
   );
 });
@@ -1288,19 +1408,170 @@ function fakeDependencies(options: {
   };
 }
 
-function recoveredListenFixture(): {
+async function runNodeRequireGuardChecks() {
+  await check("NODE_OPTIONS précharge le garde réel avec ou sans espaces et dans l'enfant", async () => {
+    const proofRoot = await mkdtemp(resolve(tmpdir(), "verdanza-node-options-"));
+    const runDirectory = resolve(proofRoot, "run");
+    const plainDirectory = resolve(proofRoot, "plain");
+    const spacedDirectory = resolve(proofRoot, "guard path with spaces");
+    const plainGuard = resolve(plainDirectory, "serverNetworkGuard.cjs");
+    const spacedGuard = resolve(spacedDirectory, "serverNetworkGuard.cjs");
+    const missingGuard = resolve(spacedDirectory, "missing-guard.cjs");
+    const sourceGuard = resolve(RECIPE_ROOT, "scripts/cagnotte-interactive/serverNetworkGuard.cjs");
+    const witness = net.createServer((socket) => {
+      witnessConnections += 1;
+      socket.destroy();
+    });
+    let witnessConnections = 0;
+    try {
+      await Promise.all([
+        mkdir(plainDirectory, { recursive: true }),
+        mkdir(spacedDirectory, { recursive: true }),
+      ]);
+      await Promise.all([
+        copyFile(sourceGuard, plainGuard),
+        copyFile(sourceGuard, spacedGuard),
+      ]);
+      await new Promise<void>((resolvePromise, reject) => {
+        witness.once("error", reject);
+        witness.listen(0, RECIPE_HOST, () => {
+          witness.off("error", reject);
+          resolvePromise();
+        });
+      });
+      const address = witness.address();
+      assert.ok(address && typeof address === "object");
+      const environment = buildRecipeEnvironment(runDirectory);
+      environment.VERDANZA_GUARD_PROBE_URL = `http://${RECIPE_HOST}:${address.port}/guard-proof`;
+      const targetSource = nodeRequireGuardTargetSource();
+
+      const legacy = await runNodeRequireProbe(targetSource, {
+        ...environment,
+        NODE_OPTIONS: `--require=${spacedGuard}`,
+      });
+      assert.notEqual(legacy.exitCode, 0, "l'ancienne valeur non citée doit refuser le lancement depuis un chemin avec espaces");
+      assert.doesNotMatch(legacy.stdout, /TARGET_STARTED/, "le programme cible ne doit pas démarrer sans garde préchargé");
+
+      for (const guard of [plainGuard, spacedGuard]) {
+        const guarded = await runNodeRequireProbe(targetSource, {
+          ...environment,
+          NODE_OPTIONS: formatNodeRequireOption(guard),
+        });
+        assert.equal(
+          guarded.exitCode,
+          0,
+          `le garde doit être préchargé depuis ${guard} : ${guarded.stderr}`,
+        );
+        assert.match(guarded.stdout, /TARGET_GUARD_BLOCKED/);
+        assert.match(guarded.stdout, /CHILD_GUARD_BLOCKED/);
+      }
+
+      const missing = await runNodeRequireProbe(targetSource, {
+        ...environment,
+        NODE_OPTIONS: formatNodeRequireOption(missingGuard),
+      });
+      assert.notEqual(missing.exitCode, 0, "un garde introuvable doit refuser le démarrage");
+      assert.doesNotMatch(missing.stdout, /TARGET_STARTED/, "aucun repli sans garde n'est admis");
+      assert.equal(witnessConnections, 0, "aucune requête interdite ne doit atteindre le témoin local");
+
+      const blocks = (await readFile(environment.VERDANZA_RECETTE_NETWORK_LOG!, "utf8"))
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as { host?: string; port?: number; blocked?: boolean });
+      assert.equal(blocks.length, 4, "parent et enfant doivent chacun prouver le blocage pour les deux chemins valides");
+      assert.equal(
+        blocks.every((entry) => (
+          entry.host === RECIPE_HOST && entry.port === address.port && entry.blocked === true
+        )),
+        true,
+      );
+    } finally {
+      if (witness.listening) {
+        await new Promise<void>((resolvePromise) => witness.close(() => resolvePromise()));
+      }
+      await rm(proofRoot, { recursive: true, force: true });
+    }
+  });
+}
+
+function nodeRequireGuardTargetSource() {
+  const childSource = [
+    "console.log('CHILD_STARTED');",
+    "fetch(process.env.VERDANZA_GUARD_PROBE_URL)",
+    "  .then(() => { process.exitCode = 51 })",
+    "  .catch((error) => {",
+    "    if (error && error.code === 'ISOLATION_NETWORK_BLOCKED') console.log('CHILD_GUARD_BLOCKED')",
+    "    else { console.error(error); process.exitCode = 52 }",
+    "  });",
+  ].join("\n");
+  return [
+    "const { spawnSync } = require('node:child_process');",
+    "console.log('TARGET_STARTED');",
+    "fetch(process.env.VERDANZA_GUARD_PROBE_URL)",
+    "  .then(() => { process.exitCode = 41 })",
+    "  .catch((error) => {",
+    "    if (!error || error.code !== 'ISOLATION_NETWORK_BLOCKED') { console.error(error); process.exitCode = 42; return }",
+    "    console.log('TARGET_GUARD_BLOCKED')",
+    `    const child = spawnSync(process.execPath, ['-e', ${JSON.stringify(childSource)}], { encoding: 'utf8', env: process.env, shell: false, windowsHide: true })`,
+    "    process.stdout.write(child.stdout || '')",
+    "    process.stderr.write(child.stderr || '')",
+    "    if (child.status !== 0) process.exitCode = 43",
+    "  });",
+  ].join("\n");
+}
+
+async function runNodeRequireProbe(source: string, environment: NodeJS.ProcessEnv) {
+  return new Promise<{ exitCode: number | null; stdout: string; stderr: string }>((resolvePromise, reject) => {
+    const child = spawn(process.execPath, ["-e", source], {
+      cwd: RECIPE_ROOT,
+      env: environment,
+      shell: false,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    child.stdout?.on("data", (chunk) => { stdout += String(chunk); });
+    child.stderr?.on("data", (chunk) => { stderr += String(chunk); });
+    child.once("error", reject);
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill();
+    }, 10_000);
+    child.once("close", (exitCode) => {
+      clearTimeout(timer);
+      if (timedOut) {
+        reject(new Error("preuve NODE_OPTIONS au-delà de 10 000 ms"));
+        return;
+      }
+      resolvePromise({ exitCode, stdout, stderr });
+    });
+  });
+}
+
+function recoveredListenFixture(role: "client" | "admin" = "client"): {
   network: NetworkEvidence[];
   console: ConsoleEvidence[];
   probe: FirestoreListenProbeEvidence[];
+  expectations: FirestoreListenRecoveryExpectation[];
 } {
+  const phase = role === "client" ? "client1-auth" : "admin-auth";
+  const contextId = `mobile:${role}`;
+  const pageId = `${contextId}:page-1`;
+  const probeId = `mobile-${role}-probe`;
+  const probeInstanceId = `${probeId}-instance-1`;
+  const generation = `recovery-mobile-${role}-12345678`;
+  const databaseId = "demo-verdanza-cagnotte";
+  const documentPath = "products/recette-fleur-fictive-100";
   return {
     network: [{
-      phase: "client1-auth",
-      contextId: "mobile:client",
-      pageId: "mobile:client:page-1",
+      phase,
+      contextId,
+      pageId,
       sequence: 2,
       occurredAtEpochMs: 1_000,
-      requestId: "mobile:client:request-7",
+      requestId: `${contextId}:request-7`,
       direction: "response",
       method: "GET",
       origin: "http://127.0.0.1:18086",
@@ -1320,12 +1591,17 @@ function recoveredListenFixture(): {
         contentType: null,
         bodyPrefix: "",
         truncated: false,
+        captureSource: "browser-fetch",
+        probeId,
+        probeInstanceId,
+        databaseId,
+        documentPath,
       },
     }],
     console: [{
-      phase: "client1-auth",
-      contextId: "mobile:client",
-      pageId: "mobile:client:page-1",
+      phase,
+      contextId,
+      pageId,
       sequence: 3,
       occurredAtEpochMs: 1_010,
       source: "console",
@@ -1333,15 +1609,40 @@ function recoveredListenFixture(): {
       text: "Failed to load resource: the server responded with a status of 400 (Bad Request)",
     }],
     probe: [{
-      phase: "firestore-listen-recovery",
-      contextId: "mobile:client",
-      pageId: "mobile:client:page-1",
-      sequence: 4,
-      occurredAtEpochMs: 1_300,
-      probeId: "mobile-probe",
-      generation: "recovery-mobile-12345678",
+      phase,
+      contextId,
+      pageId,
+      sequence: 1,
+      occurredAtEpochMs: 900,
+      probeId,
+      probeInstanceId,
+      databaseId,
+      documentPath,
+      generation: "seed",
       fromCache: false,
       hasPendingWrites: false,
+    }, {
+      phase: `${role}-firestore-listen-recovery`,
+      contextId,
+      pageId,
+      sequence: 4,
+      occurredAtEpochMs: 1_300,
+      probeId,
+      probeInstanceId,
+      databaseId,
+      documentPath,
+      generation,
+      fromCache: false,
+      hasPendingWrites: false,
+    }],
+    expectations: [{
+      incidentPhase: phase,
+      contextId,
+      pageId,
+      probeId,
+      databaseId,
+      documentPath,
+      generations: [generation],
     }],
   };
 }

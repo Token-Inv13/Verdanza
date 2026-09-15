@@ -41,6 +41,7 @@ import {
   isFirestoreListen400Response,
   type ConsoleEvidence,
   type FirestoreListenProbeEvidence,
+  type FirestoreListenRecoveryExpectation,
   type NetworkEvidence,
   type RequestShape,
   type ResponseSignature,
@@ -115,6 +116,16 @@ type ViewportDefinition = {
   label: "desktop" | "mobile";
   width: number;
   height: number;
+};
+
+type BrowserFirestoreListenResponse = {
+  method: string;
+  origin: string;
+  pathname: string;
+  status: number;
+  occurredAtEpochMs: number;
+  requestShape: RequestShape;
+  responseSignature: ResponseSignature;
 };
 
 type RunnerSignalProbe = "after-resources" | "during-active-wait";
@@ -426,7 +437,14 @@ async function runViewport(
   const screenshots: string[] = [];
   const stages: Array<{ label: string; state: RecipeState }> = [];
   const firestoreProbeEvidence: FirestoreListenProbeEvidence[] = [];
-  const firestoreProbeId = `${viewport.label}-${process.pid}-${Date.now()}`;
+  const firestoreProbeIds = {
+    client: `${viewport.label}-client-${process.pid}-${Date.now()}`,
+    admin: `${viewport.label}-admin-${process.pid}-${Date.now()}`,
+  };
+  const firestoreRecoveryGenerations = {
+    clientAndAdminRoute: `recovery-${viewport.label}-route-${Date.now()}`,
+    adminAuth: `recovery-${viewport.label}-admin-auth-${Date.now()}`,
+  };
   const evidenceClock: EvidenceClock = {
     next: () => ({ sequence: ++evidenceSequence, occurredAtEpochMs: Date.now() }),
   };
@@ -441,6 +459,15 @@ async function runViewport(
     createPage: async (monitor) => {
       const page = await monitor.context.newPage();
       pageCancellations.set(page, cancellation);
+      const probeId = monitor.contextId.endsWith(":admin")
+        ? firestoreProbeIds.admin
+        : firestoreProbeIds.client;
+      await page.addInitScript(({ documentId, configuredProbeId }) => {
+        window.sessionStorage.setItem("verdanza-recette-firestore-probe", JSON.stringify({
+          documentId,
+          probeId: configuredProbeId,
+        }));
+      }, { documentId: RECIPE_PRODUCT.id, configuredProbeId: probeId });
       return page;
     },
     persistEvidence: async (resources) => {
@@ -450,14 +477,13 @@ async function runViewport(
         console.log(`RUNNER_SIGNAL_PROBE CLEANUP_START ${viewport.label} ${resources.harness.runDirectory}`);
       }
       const evidenceFailures: unknown[] = [];
-      if (resources.clientPage && resources.clientMonitor) {
+      for (const [page, monitor] of [
+        [resources.clientPage, resources.clientMonitor],
+        [resources.adminPage, resources.adminMonitor],
+      ] as const) {
+        if (!page || !monitor) continue;
         try {
-          await collectFirestoreProbeEvidence(
-            resources.clientPage,
-            resources.clientMonitor,
-            evidenceClock,
-            firestoreProbeEvidence,
-          );
+          await collectFirestoreProbeEvidence(page, monitor, evidenceClock, firestoreProbeEvidence);
         } catch (error) {
           if (!cancellation.signal.aborted) evidenceFailures.push(error);
         }
@@ -584,12 +610,7 @@ async function runViewport(
 
     cancellation.throwIfRequested();
     clientMonitor.setPhase("client1-auth");
-    await signIn(clientPage, RECIPE_ACCOUNTS.client1, async () => {
-      await clientPage.evaluate(
-        async ({ documentId, probeId }) => window.__VERDANZA_RECETTE__?.startFirestoreListenProbe(documentId, probeId),
-        { documentId: RECIPE_PRODUCT.id, probeId: firestoreProbeId },
-      );
-    });
+    await signIn(clientPage, RECIPE_ACCOUNTS.client1);
     await collectFirestoreProbeEvidence(
       clientPage,
       clientMonitor,
@@ -639,6 +660,26 @@ async function runViewport(
     cancellation.throwIfRequested();
     adminMonitor.setPhase("admin-auth");
     await signIn(adminPage, RECIPE_ACCOUNTS.admin);
+    await collectFirestoreProbeEvidence(
+      adminPage,
+      adminMonitor,
+      evidenceClock,
+      firestoreProbeEvidence,
+    );
+    adminMonitor.setPhase("admin-firestore-auth-recovery");
+    await writeAndObserveFirestoreProbeGeneration({
+      harness,
+      viewport,
+      page: adminPage,
+      monitor: adminMonitor,
+      probeId: firestoreProbeIds.admin,
+      generation: firestoreRecoveryGenerations.adminAuth,
+      evidenceClock,
+      firestoreProbeEvidence,
+      signal: cancellation.signal,
+    });
+    await adminMonitor.flushEvidence();
+    adminMonitor.setPhase("admin-auth");
     await openAdminOrders(adminPage, "Toutes");
     await assertRecipeBanner(adminPage);
     assert.equal(await clientPage.url().includes("127.0.0.1"), true, "le contexte client doit rester indépendant");
@@ -868,8 +909,9 @@ async function runViewport(
     await signIn(clientPage, RECIPE_ACCOUNTS.client1);
     await openAdvantages(clientPage, RECIPE_ACCOUNTS.client1.email);
     await waitForBalance(clientPage, "Disponible", "5,00 €");
-    clientMonitor.setPhase("firestore-listen-recovery");
-    const recoveryGeneration = `recovery-${viewport.label}-${Date.now()}`;
+    clientMonitor.setPhase("client-firestore-listen-recovery");
+    adminMonitor.setPhase("admin-firestore-listen-recovery");
+    const recoveryGeneration = firestoreRecoveryGenerations.clientAndAdminRoute;
     await runRecipeScript(
       harness,
       `${viewport.label}-touch-listen-probe`,
@@ -877,29 +919,31 @@ async function runViewport(
       [recoveryGeneration],
       cancellation.signal,
     );
-    let recoveryWaitError: unknown;
-    try {
-      await clientPage.waitForFunction(
-        (generation) => window.__VERDANZA_RECETTE__?.readFirestoreListenProbe()
-          .some((entry) => entry.generation === generation && entry.fromCache === false && entry.hasPendingWrites === false),
-        recoveryGeneration,
+    const probeTargets = [
+      { page: clientPage, monitor: clientMonitor, probeId: firestoreProbeIds.client },
+      { page: adminPage, monitor: adminMonitor, probeId: firestoreProbeIds.admin },
+    ];
+    const recoveryWaits = await Promise.allSettled(probeTargets.map(async ({ page, monitor, probeId }) => {
+      await page.waitForFunction(
+        ({ generation, expectedProbeId }) => window.__VERDANZA_RECETTE__?.readFirestoreListenProbe()
+          .some((entry) => (
+            entry.probeId === expectedProbeId &&
+            entry.generation === generation &&
+            entry.fromCache === false &&
+            entry.hasPendingWrites === false
+          )),
+        { generation: recoveryGeneration, expectedProbeId: probeId },
       );
-    } catch (error) {
-      recoveryWaitError = error;
+      await collectFirestoreProbeEvidence(page, monitor, evidenceClock, firestoreProbeEvidence);
+    }));
+    const recoveryFailures = recoveryWaits
+      .filter((entry): entry is PromiseRejectedResult => entry.status === "rejected")
+      .map((entry) => entry.reason);
+    if (recoveryFailures.length > 0) {
+      throw new AggregateError(recoveryFailures, "Une ou plusieurs sondes Firestore n'ont pas prouvé leur reprise.");
     }
-    try {
-      await collectFirestoreProbeEvidence(
-        clientPage,
-        clientMonitor,
-        evidenceClock,
-        firestoreProbeEvidence,
-      );
-    } catch (evidenceError) {
-      if (recoveryWaitError === undefined) throw evidenceError;
-      console.error(`[firestore-probe-evidence] ${safeError(evidenceError)}`);
-    }
-    if (recoveryWaitError !== undefined) throw recoveryWaitError;
     cancellation.throwIfRequested();
+    await clientMonitor.flushEvidence();
     clientMonitor.setPhase("client-final-reload");
     await clientPage.reload({ waitUntil: "domcontentloaded" });
     await clientPage.getByRole("heading", { name: "Mes avantages" }).waitFor();
@@ -909,10 +953,31 @@ async function runViewport(
     cancellation.throwIfRequested();
     await Promise.all([clientMonitor.flushEvidence(), adminMonitor.flushEvidence()]);
     cancellation.throwIfRequested();
+    const firestoreRecoveryExpectations: FirestoreListenRecoveryExpectation[] = [
+      {
+        incidentPhase: "client1-auth",
+        contextId: clientMonitor.contextId,
+        pageId: clientMonitor.pageId(clientPage),
+        probeId: firestoreProbeIds.client,
+        databaseId: RECIPE_PROJECT_ID,
+        documentPath: `products/${RECIPE_PRODUCT.id}`,
+        generations: [recoveryGeneration],
+      },
+      {
+        incidentPhase: "admin-auth",
+        contextId: adminMonitor.contextId,
+        pageId: adminMonitor.pageId(adminPage),
+        probeId: firestoreProbeIds.admin,
+        databaseId: RECIPE_PROJECT_ID,
+        documentPath: `products/${RECIPE_PRODUCT.id}`,
+        generations: [firestoreRecoveryGenerations.adminAuth, recoveryGeneration],
+      },
+    ];
     const runtimeIsolation = assertNoUnexpectedRuntimeFailures(
       [...clientMonitor.network, ...adminMonitor.network],
       [...clientMonitor.console, ...adminMonitor.console],
       firestoreProbeEvidence,
+      firestoreRecoveryExpectations,
     );
     assert.deepEqual(await clientPage.evaluate(() => window.__VERDANZA_RECETTE_NETWORK__ ?? []), []);
     assert.deepEqual(await adminPage.evaluate(() => window.__VERDANZA_RECETTE_NETWORK__ ?? []), []);
@@ -1043,6 +1108,7 @@ async function monitoredContext(
   const console: ConsoleEvidence[] = [];
   const contextId = `${viewport.label}:${role}`;
   const pageIds = new WeakMap<Page, string>();
+  const pages = new Set<Page>();
   const requestIds = new WeakMap<Request, string>();
   const pendingEvidence = new Set<Promise<void>>();
   let pageCount = 0;
@@ -1140,6 +1206,7 @@ async function monitoredContext(
         }
       });
       ownedContext.on("page", (page) => {
+        pages.add(page);
         const ownedPageId = pageId(page);
         page.on("console", (message) => console.push(consoleEntry({
           phase,
@@ -1186,8 +1253,74 @@ async function monitoredContext(
     pageId,
     async flushEvidence() {
       while (pendingEvidence.size > 0) await Promise.allSettled([...pendingEvidence]);
+      for (const page of pages) {
+        if (!page.isClosed()) await mergeBrowserFirestoreResponseEvidence(page, pageId(page), network);
+      }
     },
     lastCagnotteAuthorization() { return lastCagnotteAuthorization; },
+  };
+}
+
+async function mergeBrowserFirestoreResponseEvidence(
+  page: Page,
+  ownedPageId: string,
+  network: NetworkEvidence[],
+) {
+  const browserEvidence = await page.evaluate(
+    async () => window.__VERDANZA_RECETTE__?.readFirestoreListenResponses() ?? [],
+  ) as BrowserFirestoreListenResponse[];
+  const claimedIncidents = new Set<NetworkEvidence>();
+  for (const entry of browserEvidence) {
+    const matches = network.filter((candidate) => (
+      !claimedIncidents.has(candidate) &&
+      isFirestoreListen400Response(candidate) &&
+      candidate.pageId === ownedPageId &&
+      candidate.method === entry.method &&
+      candidate.origin === entry.origin &&
+      candidate.pathname === entry.pathname &&
+      candidate.status === entry.status &&
+      Math.abs(candidate.occurredAtEpochMs - entry.occurredAtEpochMs) <= 2_000 &&
+      sameRequestShape(candidate.requestShape, entry.requestShape)
+    ));
+    assert.equal(
+      matches.length,
+      1,
+      `capture navigateur Listen 400 sans réponse Playwright unique : ${JSON.stringify(entry)}`,
+    );
+    const incident = matches[0]!;
+    claimedIncidents.add(incident);
+    const current = incident.responseSignature;
+    if (!entry.responseSignature.captureError) {
+      if (current && !current.captureError) {
+        assert.deepEqual(
+          responseSignaturePayload(current),
+          responseSignaturePayload(entry.responseSignature),
+          `signatures Playwright et navigateur divergentes : ${JSON.stringify({ current, browser: entry.responseSignature })}`,
+        );
+      }
+      incident.responseSignature = { ...entry.responseSignature };
+    } else if (!current || current.captureError) {
+      incident.responseSignature = { ...entry.responseSignature };
+    }
+  }
+}
+
+function sameRequestShape(left: RequestShape | undefined, right: RequestShape) {
+  return Boolean(left) &&
+    left!.hasSessionId === right.hasSessionId &&
+    left!.requestIdKind === right.requestIdKind &&
+    left!.transportType === right.transportType &&
+    left!.protocolVersion === right.protocolVersion &&
+    JSON.stringify(left!.queryParameterNames) === JSON.stringify(right.queryParameterNames);
+}
+
+function responseSignaturePayload(signature: ResponseSignature) {
+  return {
+    byteLength: signature.byteLength,
+    sha256: signature.sha256,
+    contentType: signature.contentType,
+    bodyPrefix: signature.bodyPrefix,
+    truncated: signature.truncated,
   };
 }
 
@@ -1224,6 +1357,7 @@ async function collectFirestoreProbeEvidence(
   for (const entry of browserEvidence) {
     const duplicate = target.some((existing) => (
       existing.probeId === entry.probeId &&
+      existing.probeInstanceId === entry.probeInstanceId &&
       existing.generation === entry.generation &&
       existing.occurredAtEpochMs === entry.receivedAtEpochMs &&
       existing.terminalErrorCode === entry.terminalErrorCode
@@ -1237,12 +1371,52 @@ async function collectFirestoreProbeEvidence(
       sequence: order.sequence,
       occurredAtEpochMs: entry.receivedAtEpochMs,
       probeId: entry.probeId,
+      probeInstanceId: entry.probeInstanceId,
+      databaseId: entry.databaseId,
+      documentPath: entry.documentPath,
       generation: entry.generation,
       fromCache: entry.fromCache,
       hasPendingWrites: entry.hasPendingWrites,
       ...(entry.terminalErrorCode ? { terminalErrorCode: entry.terminalErrorCode } : {}),
     });
   }
+}
+
+async function writeAndObserveFirestoreProbeGeneration(options: {
+  harness: RecipeHarness;
+  viewport: ViewportDefinition;
+  page: Page;
+  monitor: MonitoredContext;
+  probeId: string;
+  generation: string;
+  evidenceClock: EvidenceClock;
+  firestoreProbeEvidence: FirestoreListenProbeEvidence[];
+  signal: AbortSignal;
+}) {
+  await runRecipeScript(
+    options.harness,
+    `${options.viewport.label}-touch-listen-probe-${options.generation}`,
+    "scripts/cagnotte-interactive/touchListenProbe.ts",
+    [options.generation],
+    options.signal,
+  );
+  await options.page.waitForFunction(
+    ({ generation, expectedProbeId }) => window.__VERDANZA_RECETTE__?.readFirestoreListenProbe()
+      .some((entry) => (
+        entry.probeId === expectedProbeId &&
+        entry.generation === generation &&
+        entry.fromCache === false &&
+        entry.hasPendingWrites === false &&
+        !entry.terminalErrorCode
+      )),
+    { generation: options.generation, expectedProbeId: options.probeId },
+  );
+  await collectFirestoreProbeEvidence(
+    options.page,
+    options.monitor,
+    options.evidenceClock,
+    options.firestoreProbeEvidence,
+  );
 }
 
 async function signIn(
@@ -1901,6 +2075,7 @@ async function captureResponseSignature(response: PlaywrightResponse): Promise<R
       contentType: response.headers()["content-type"] ?? null,
       bodyPrefix: sanitizedConsoleText(prefix),
       truncated: body.byteLength > 256,
+      captureSource: "playwright",
     };
   } catch (error) {
     return {
@@ -1909,6 +2084,7 @@ async function captureResponseSignature(response: PlaywrightResponse): Promise<R
       contentType: response.headers()["content-type"] ?? null,
       bodyPrefix: "",
       truncated: false,
+      captureSource: "playwright",
       captureError: sanitizedConsoleText(error instanceof Error ? error.message : String(error)),
     };
   }

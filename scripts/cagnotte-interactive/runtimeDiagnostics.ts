@@ -23,6 +23,11 @@ export type ResponseSignature = {
   contentType: string | null;
   bodyPrefix: string;
   truncated: boolean;
+  captureSource?: "playwright" | "browser-fetch" | "browser-xhr";
+  probeId?: string;
+  probeInstanceId?: string;
+  databaseId?: string;
+  documentPath?: string;
   captureError?: string;
 };
 
@@ -47,10 +52,23 @@ export type ConsoleEvidence = EvidenceBase & {
 
 export type FirestoreListenProbeEvidence = EvidenceBase & {
   probeId: string;
+  probeInstanceId: string;
+  databaseId: string;
+  documentPath: string;
   generation: string;
   fromCache: boolean;
   hasPendingWrites: boolean;
   terminalErrorCode?: string;
+};
+
+export type FirestoreListenRecoveryExpectation = {
+  incidentPhase: "client1-auth" | "admin-auth";
+  contextId: string;
+  pageId: string;
+  probeId: string;
+  databaseId: string;
+  documentPath: string;
+  generations: string[];
 };
 
 export type FirestoreTransportRecovery = {
@@ -60,6 +78,11 @@ export type FirestoreTransportRecovery = {
   pageId: string;
   incidentSequence: number;
   recoverySequence: number;
+  probeId: string;
+  probeInstanceId: string;
+  databaseId: string;
+  documentPath: string;
+  generation: string;
   responseSignature: ResponseSignature;
   requestShape: RequestShape;
   recovered: true;
@@ -74,6 +97,7 @@ export function assertNoUnexpectedRuntimeFailures(
   network: NetworkEvidence[],
   consoleEvidence: ConsoleEvidence[],
   probeEvidence: FirestoreListenProbeEvidence[],
+  recoveryExpectations: FirestoreListenRecoveryExpectation[],
 ) {
   const external = network.filter((entry) => entry.blocked === true);
   assert.deepEqual(external, [], `aucune tentative navigateur externe attendue : ${JSON.stringify(external)}`);
@@ -87,9 +111,97 @@ export function assertNoUnexpectedRuntimeFailures(
   const recoveries: FirestoreTransportRecovery[] = [];
   const associatedConsoleSequences = new Set<number>();
   const acceptedIncidentSequences = new Set<number>();
+  const expectationKeys = recoveryExpectations.map((entry) => (
+    `${entry.incidentPhase}:${entry.contextId}:${entry.pageId}:${entry.probeId}`
+  ));
+  assert.equal(
+    new Set(expectationKeys).size,
+    recoveryExpectations.length,
+    "chaque contexte doit posséder une attente de reprise Firestore distincte",
+  );
+  const validatedProbes = new Map<FirestoreListenRecoveryExpectation, Array<{
+    initial: FirestoreListenProbeEvidence;
+    recovery: FirestoreListenProbeEvidence;
+  }>>();
+  for (const expectation of recoveryExpectations) {
+    assert.ok(expectation.generations.length >= 1, "au moins une génération de reprise Firestore est attendue");
+    assert.equal(
+      new Set(expectation.generations).size,
+      expectation.generations.length,
+      `les générations de reprise Firestore doivent être distinctes : ${JSON.stringify(expectation)}`,
+    );
+    for (const generation of expectation.generations) {
+      assert.match(generation, /^recovery-[a-z0-9-]{8,80}$/);
+    }
+    const sameProbe = probeEvidence.filter((entry) => (
+      entry.contextId === expectation.contextId &&
+      entry.pageId === expectation.pageId &&
+      entry.probeId === expectation.probeId &&
+      entry.databaseId === expectation.databaseId &&
+      entry.documentPath === expectation.documentPath
+    ));
+    assert.equal(
+      sameProbe.some((entry) => Boolean(entry.terminalErrorCode)),
+      false,
+      `erreur terminale sur la sonde Firestore attendue : ${JSON.stringify(expectation)}`,
+    );
+    const proofs = expectation.generations.map((generation) => {
+      const recoveries = sameProbe.filter((entry) => (
+        entry.generation === generation &&
+        entry.fromCache === false &&
+        entry.hasPendingWrites === false &&
+        !entry.terminalErrorCode
+      ));
+      assert.ok(
+        recoveries.length >= 1,
+        `génération Firestore fraîche non observée sur la sonde attendue : ${JSON.stringify({ ...expectation, generation })}`,
+      );
+      const provenInstances = [...new Set(recoveries.flatMap((recovery) => (
+        sameProbe.some((entry) => (
+          entry.probeInstanceId === recovery.probeInstanceId &&
+          entry.generation !== generation &&
+          entry.occurredAtEpochMs < recovery.occurredAtEpochMs &&
+          entry.fromCache === false &&
+          entry.hasPendingWrites === false &&
+          !entry.terminalErrorCode
+        ))
+          ? [recovery.probeInstanceId]
+          : []
+      )))];
+      assert.equal(
+        provenInstances.length,
+        1,
+        `sonde Firestore non établie sans ambiguïté avant sa génération de reprise : ${JSON.stringify({ ...expectation, generation })}`,
+      );
+      const probeInstanceId = provenInstances[0]!;
+      const recovery = recoveries
+        .filter((entry) => entry.probeInstanceId === probeInstanceId)
+        .sort((left, right) => left.occurredAtEpochMs - right.occurredAtEpochMs)[0]!;
+      const initial = sameProbe
+        .filter((entry) => (
+          entry.probeInstanceId === probeInstanceId &&
+          entry.generation !== generation &&
+          entry.occurredAtEpochMs < recovery.occurredAtEpochMs &&
+          entry.fromCache === false &&
+          entry.hasPendingWrites === false &&
+          !entry.terminalErrorCode
+        ))
+        .sort((left, right) => right.occurredAtEpochMs - left.occurredAtEpochMs)[0]!;
+      return { initial, recovery };
+    });
+    validatedProbes.set(expectation, proofs);
+  }
   for (const incident of listen400Responses) {
-    assert.equal(incident.phase, "client1-auth", `phase Listen 400 non qualifiée : ${JSON.stringify(incident)}`);
-    assert.ok(incident.contextId.endsWith(":client"), `contexte Listen 400 non client : ${JSON.stringify(incident)}`);
+    const expectedRole = incident.phase === "client1-auth"
+      ? "client"
+      : incident.phase === "admin-auth"
+        ? "admin"
+        : undefined;
+    assert.ok(expectedRole, `phase Listen 400 non qualifiée : ${JSON.stringify(incident)}`);
+    assert.ok(
+      incident.contextId.endsWith(`:${expectedRole}`),
+      `contexte Listen 400 incohérent avec sa phase : ${JSON.stringify(incident)}`,
+    );
     assert.ok(incident.pageId, `page Listen 400 absente : ${JSON.stringify(incident)}`);
     assert.ok(isRejectedWebChannelSessionSignature(incident), `signature Listen 400 inconnue : ${JSON.stringify(incident)}`);
 
@@ -108,22 +220,42 @@ export function assertNoUnexpectedRuntimeFailures(
     assert.ok(relatedConsole.length >= 1, `message console du Listen 400 non corrélé : ${JSON.stringify(incident)}`);
     for (const entry of relatedConsole) associatedConsoleSequences.add(entry.sequence);
 
-    const recovery = probeEvidence.find((entry) => (
+    const responseSignature = incident.responseSignature!;
+    const matchingExpectations = recoveryExpectations.filter((entry) => (
+      entry.incidentPhase === incident.phase &&
       entry.contextId === incident.contextId &&
       entry.pageId === incident.pageId &&
-      entry.sequence > incident.sequence &&
-      entry.occurredAtEpochMs > incident.occurredAtEpochMs &&
-      entry.generation.startsWith("recovery-") &&
-      entry.fromCache === false &&
-      entry.hasPendingWrites === false &&
-      !entry.terminalErrorCode
+      entry.probeId === responseSignature.probeId &&
+      entry.databaseId === responseSignature.databaseId &&
+      entry.documentPath === responseSignature.documentPath
     ));
-    assert.ok(recovery, `aucune donnée Firestore fraîche reçue après le Listen 400 : ${JSON.stringify(incident)}`);
+    assert.equal(
+      matchingExpectations.length,
+      1,
+      `sonde Firestore dédiée absente ou ambiguë pour le Listen 400 : ${JSON.stringify(incident)}`,
+    );
+    const expectation = matchingExpectations[0]!;
+    const matchingProofs = validatedProbes.get(expectation)!
+      .filter((proof) => (
+        proof.initial.probeInstanceId === responseSignature.probeInstanceId &&
+        proof.recovery.probeInstanceId === responseSignature.probeInstanceId &&
+        proof.initial.occurredAtEpochMs < incident.occurredAtEpochMs &&
+        proof.recovery.sequence > incident.sequence &&
+        proof.recovery.occurredAtEpochMs > incident.occurredAtEpochMs
+      ))
+      .sort((left, right) => left.recovery.occurredAtEpochMs - right.recovery.occurredAtEpochMs);
+    assert.ok(
+      matchingProofs.length >= 1,
+      `aucune donnée Firestore fraîche reçue après le Listen 400 : ${JSON.stringify(incident)}`,
+    );
+    const proof = matchingProofs[0]!;
     assert.equal(
       probeEvidence.some((entry) => (
         entry.contextId === incident.contextId &&
         entry.pageId === incident.pageId &&
-        entry.sequence > incident.sequence &&
+        entry.probeId === expectation.probeId &&
+        entry.probeInstanceId === responseSignature.probeInstanceId &&
+        entry.occurredAtEpochMs > incident.occurredAtEpochMs &&
         Boolean(entry.terminalErrorCode)
       )),
       false,
@@ -136,8 +268,13 @@ export function assertNoUnexpectedRuntimeFailures(
       contextId: incident.contextId,
       pageId: incident.pageId,
       incidentSequence: incident.sequence,
-      recoverySequence: recovery.sequence,
-      responseSignature: incident.responseSignature!,
+      recoverySequence: proof.recovery.sequence,
+      probeId: expectation.probeId,
+      probeInstanceId: proof.recovery.probeInstanceId,
+      databaseId: expectation.databaseId,
+      documentPath: expectation.documentPath,
+      generation: proof.recovery.generation,
+      responseSignature,
       requestShape: incident.requestShape!,
       recovered: true,
     });
@@ -239,7 +376,13 @@ function isRejectedWebChannelSessionSignature(entry: NetworkEvidence) {
   const request = entry.requestShape;
   const response = entry.responseSignature;
   if (!request || !response) return false;
-  return request.hasSessionId === true &&
+  return !response.captureError &&
+    (response.captureSource === "browser-fetch" || response.captureSource === "browser-xhr") &&
+    typeof response.probeId === "string" && response.probeId.length > 0 &&
+    typeof response.probeInstanceId === "string" && response.probeInstanceId.length > 0 &&
+    typeof response.databaseId === "string" && response.databaseId.length > 0 &&
+    typeof response.documentPath === "string" && response.documentPath.length > 0 &&
+    request.hasSessionId === true &&
     request.requestIdKind === "rpc" &&
     request.transportType === "xmlhttp" &&
     request.protocolVersion === "8" &&
