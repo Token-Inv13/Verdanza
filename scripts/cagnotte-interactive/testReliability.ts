@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { access, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -54,11 +54,18 @@ type FakeMonitor = { role: "client" | "admin"; closeCalls: number };
 type FakePage = { role: "client" | "admin"; closeCalls: number };
 
 const failures: Array<{ name: string; error: string }> = [];
+const WINDOWS_OWNED_PROCESS_DIAGNOSTICS_PATH = resolve(
+  RECIPE_CACHE_ROOT,
+  "windows-owned-process-latest.json",
+);
+const windowsOwnedTreeDiagnostics: WindowsOwnedTreeDiagnostic[] = [];
 
 if (process.argv.includes("--signal-child")) {
   await runSignalChild();
 } else if (process.argv.includes("--owned-tree-parent")) {
   await runOwnedTreeParent();
+} else if (process.argv.includes("--closed-parent-output-child")) {
+  await runClosedParentOutputChild();
 } else if (process.argv.includes("--windows-job-only")) {
   await runWindowsOwnedProcessChecks();
   reportReliabilityResult(" Job Object Windows");
@@ -256,25 +263,121 @@ await check("spawnOwned conserve l'échec de démarrage et finalise son log", as
 await check("une écriture parent défaillante reste un diagnostic auxiliaire borné", async () => {
   const chunks: string[] = [];
   const diagnostics: string[] = [];
+  let parentWrites = 0;
   const fixture = await spawnReliabilityProcess(
     "parent-output-failure",
-    ["-e", "process.stdout.write('kept-in-log')"],
+    ["-e", "process.stdout.write('kept-in-log');setTimeout(()=>process.stdout.write('tail-in-log'),25)"],
     "one-shot",
     {
       createLogStream: () => collectingLogStream(chunks),
-      parentStdoutWrite: () => { throw codedError("EPIPE"); },
+      parentStdoutWrite: () => {
+        parentWrites += 1;
+        throw codedError("EPIPE");
+      },
       diagnosticWrite: (value) => diagnostics.push(value),
     },
   );
   try {
     assert.equal(await waitForChildExit(fixture.owned.child, 5_000), 0);
     await waitForOwnedProcessLog(fixture.owned);
-    assert.match(chunks.join(""), /kept-in-log/);
+    assert.match(chunks.join(""), /kept-in-log.*tail-in-log/s);
+    assert.equal(parentWrites, 1, "le writer synchrone cassé ne doit plus recevoir de chunk");
     assert.deepEqual(fixture.owned.logReport?.issues, [{ phase: "parent-output", code: "EPIPE", auxiliary: true }]);
     assert.equal(diagnostics.length, 1);
     await stopOwnedProcess(fixture.owned);
   } finally {
     await cleanupReliabilityProcess(fixture);
+  }
+});
+
+await check("spawnOwned contient les EPIPE asynchrones de stdout et stderr sans interrompre le drainage", async () => {
+  for (const failingSide of ["stdout", "stderr"] as const) {
+    const logChunks: string[] = [];
+    const otherOutput: string[] = [];
+    const failedOutput: string[] = [];
+    const diagnostics: string[] = [];
+    const failureObserved = deferred<void>();
+    const failingOutput = asynchronousFailureStream(failedOutput, failureObserved, "EPIPE");
+    const workingOutput = collectingParentOutputStream(otherOutput);
+    const initialErrorListeners = failingOutput.listenerCount("error");
+    const fixture = await spawnReliabilityProcess(
+      `parent-${failingSide}-async-epipe`,
+      [
+        "-e",
+        [
+          "process.stdout.write('STDOUT_FIRST\\n');",
+          "process.stderr.write('STDERR_FIRST\\n');",
+          "setTimeout(()=>{process.stdout.write('STDOUT_TAIL\\n');process.stderr.write('STDERR_TAIL\\n');},25);",
+          "setTimeout(()=>process.exit(7),75);",
+        ].join(""),
+      ],
+      "service",
+      {
+        createLogStream: () => collectingLogStream(logChunks),
+        parentStdoutStream: failingSide === "stdout" ? failingOutput : workingOutput,
+        parentStderrStream: failingSide === "stderr" ? failingOutput : workingOutput,
+        diagnosticWrite: (value) => diagnostics.push(value),
+      },
+    );
+    try {
+      await failureObserved.promise;
+      assert.equal(await waitForChildExit(fixture.owned.child, 10_000), 7);
+      await waitForOwnedProcessLog(fixture.owned);
+      assert.match(logChunks.join(""), /STDOUT_TAIL/);
+      assert.match(logChunks.join(""), /STDERR_TAIL/);
+      assert.match(
+        otherOutput.join(""),
+        failingSide === "stdout" ? /STDERR_TAIL/ : /STDOUT_TAIL/,
+        "la destination intacte doit continuer à recevoir les sorties",
+      );
+      assert.equal(failingOutput.writeCount(), 1, "la destination cassée ne doit plus recevoir de chunk");
+      assert.deepEqual(
+        fixture.owned.logReport?.issues,
+        [{ phase: "parent-output", code: "EPIPE", auxiliary: true }],
+        "le callback et l'événement error d'une même écriture doivent être dédupliqués",
+      );
+      assert.equal(diagnostics.length, 1, "le diagnostic auxiliaire doit rester non récursif et borné");
+      await assert.rejects(
+        stopOwnedProcess(fixture.owned),
+        /s’est arrêté avant la demande d’arrêt.*code 7/s,
+        "l'échec antérieur du service doit rester l'erreur principale",
+      );
+    } finally {
+      await cleanupReliabilityProcess(fixture);
+    }
+    await waitForCondition(
+      () => failingOutput.listenerCount("error") === initialErrorListeners,
+      `retrait du listener ${failingSide} installé par spawnOwned`,
+    );
+  }
+});
+
+await check("spawnOwned survit à un vrai pipe parent fermé sans gestionnaire global", async () => {
+  const child = spawn(process.execPath, [
+    "--import", "tsx",
+    fileURLToPath(import.meta.url),
+    "--closed-parent-output-child",
+  ], {
+    shell: false,
+    windowsHide: true,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  let stderr = "";
+  child.stderr?.on("data", (chunk) => { stderr = `${stderr}${String(chunk)}`.slice(-8_192); });
+  try {
+    await waitForCondition(() => stderr.includes("CLOSED_PIPE_ARMED"), "armement du sous-processus EPIPE", 10_000);
+    assert.ok(child.stdout);
+    await new Promise<void>((resolvePromise) => {
+      child.stdout?.once("close", resolvePromise);
+      child.stdout?.destroy();
+    });
+    child.stdin?.end("GO\n");
+    assert.equal(await waitForChildExit(child, 15_000), 0, stderr);
+    assert.match(stderr, /CLOSED_PIPE_RESULT code=EPIPE drained=true stopped=true/);
+    assert.doesNotMatch(stderr, /uncaughtException|unhandledRejection/);
+  } finally {
+    if (isPidAlive(child.pid)) child.kill("SIGKILL");
+    await waitForChildExit(child, 5_000).catch(() => undefined);
   }
 });
 
@@ -1281,6 +1384,46 @@ type OwnedTreeFixture = ReliabilityProcessFixture & {
   descendantPid: number;
 };
 
+type OwnedTreePreparationOptions = SpawnOwnedOptions & {
+  exitParentAfterReady?: boolean;
+  suppressReady?: boolean;
+  readinessTimeoutMs?: number;
+};
+
+type WindowsOwnedTreeCleanupDiagnostic = {
+  normalStop: "complete" | "failed";
+  normalStopMode?: string;
+  normalStopError?: string;
+  ownedTreeStopped: boolean;
+  childStopped: boolean;
+  fallbackPids: number[];
+  logFinalized: boolean;
+  directoryRemoved: boolean;
+  errorCodes: string[];
+};
+
+type WindowsOwnedTreeDiagnostic = {
+  name: string;
+  status: "ready" | "failed";
+  elapsedMs: number;
+  lastStage: string;
+  stages: Array<{ name: string; elapsedMs: number | null }>;
+  supervisor: {
+    pid: number | null;
+    exitCode: number | null;
+    signalCode: string | null;
+    closed: boolean;
+    jobReady: boolean;
+    jobTreeStopped: boolean;
+    jobSetupFailed: boolean;
+  };
+  target: { parentPid: number | null; descendantPid: number | null };
+  stdout: string;
+  stderr: string;
+  preparationErrorCode?: string;
+  cleanup?: WindowsOwnedTreeCleanupDiagnostic;
+};
+
 async function spawnReliabilityProcess(
   name: string,
   args: string[],
@@ -1314,6 +1457,7 @@ async function runWindowsOwnedProcessChecks() {
     assert.equal(process.platform, "win32", "ce lot ciblé doit s’exécuter sur un runner Windows");
   });
   if (process.platform !== "win32") return;
+  await initializeWindowsOwnedTreeDiagnostics();
 
   await check("Windows arrête le parent actif et son descendant sans toucher au témoin", async () => {
     const witness = spawn(process.execPath, [
@@ -1326,9 +1470,13 @@ async function runWindowsOwnedProcessChecks() {
     });
     let witnessOutput = "";
     witness.stdout?.on("data", (chunk) => { witnessOutput += String(chunk); });
-    const fixture = await spawnOwnedTreeProcess("windows-owned-tree-active");
-    try {
-      await waitForOutput(witness, () => witnessOutput.includes("WINDOWS_WITNESS_READY"), 5_000);
+    await runWindowsOwnedTreeScenario(
+      witness,
+      async () => {
+        await waitForOutput(witness, () => witnessOutput.includes("WINDOWS_WITNESS_READY"), 5_000);
+        return spawnOwnedTreeProcess("windows-owned-tree-active");
+      },
+      async (fixture) => {
       assert.equal(fixture.owned.windowsJobReady, true, "l’appartenance doit être prouvée avant le démarrage cible");
       assert.equal(fixture.owned.windowsPrimaryProcessId, fixture.parentPid);
       const firstStop = stopOwnedProcess(fixture.owned);
@@ -1343,10 +1491,8 @@ async function runWindowsOwnedProcessChecks() {
       await assertPidGone(fixture.parentPid, "parent Windows possédé");
       await assertPidGone(fixture.descendantPid, "descendant Windows possédé");
       assert.equal(isPidAlive(witness.pid), true, "le témoin extérieur doit rester actif");
-    } finally {
-      await cleanupOwnedTreeProcess(fixture);
-      await stopWitness(witness);
-    }
+      },
+    );
   });
 
   await check("Windows ferme les descendants quand le parent cible sort le premier", async () => {
@@ -1360,11 +1506,15 @@ async function runWindowsOwnedProcessChecks() {
     });
     let witnessOutput = "";
     witness.stdout?.on("data", (chunk) => { witnessOutput += String(chunk); });
-    const fixture = await spawnOwnedTreeProcess("windows-owned-tree-parent-gone", {
-      exitParentAfterReady: true,
-    });
-    try {
-      await waitForOutput(witness, () => witnessOutput.includes("WINDOWS_PARENT_GONE_WITNESS_READY"), 5_000);
+    await runWindowsOwnedTreeScenario(
+      witness,
+      async () => {
+        await waitForOutput(witness, () => witnessOutput.includes("WINDOWS_PARENT_GONE_WITNESS_READY"), 5_000);
+        return spawnOwnedTreeProcess("windows-owned-tree-parent-gone", {
+          exitParentAfterReady: true,
+        });
+      },
+      async (fixture) => {
       assert.equal(await waitForChildExit(fixture.owned.child, 10_000), 0);
       await waitForCondition(() => fixture.owned.childClosed === true, "fermeture du superviseur Windows");
       assert.equal(fixture.owned.windowsJobReady, true);
@@ -1378,10 +1528,52 @@ async function runWindowsOwnedProcessChecks() {
       await assert.rejects(firstStop, /s’est arrêté avant la demande d’arrêt/);
       assert.equal(fixture.owned.stopOutcome?.mode, "already-stopped");
       assert.equal(fixture.owned.stopOutcome?.ownedTreeStopped, true);
-    } finally {
-      await cleanupOwnedTreeProcess(fixture);
-      await stopWitness(witness);
-    }
+      },
+    );
+  });
+
+  await check("Windows nettoie une préparation interrompue après création du témoin", async () => {
+    const witness = spawn(process.execPath, [
+      "-e",
+      "process.stdout.write('WINDOWS_PARTIAL_WITNESS_READY');setInterval(()=>{},1000)",
+    ], {
+      shell: false,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const witnessPid = witness.pid;
+    let witnessOutput = "";
+    let diagnostic: WindowsOwnedTreeDiagnostic | undefined;
+    witness.stdout?.on("data", (chunk) => { witnessOutput += String(chunk); });
+    await assert.rejects(
+      runWindowsOwnedTreeScenario(
+        witness,
+        async () => {
+          await waitForOutput(witness, () => witnessOutput.includes("WINDOWS_PARTIAL_WITNESS_READY"), 5_000);
+          return spawnOwnedTreeProcess("windows-owned-tree-partial-preparation", {
+            suppressReady: true,
+            readinessTimeoutMs: 5_000,
+          });
+        },
+        async () => assert.fail("la préparation interrompue ne doit pas retourner de fixture complète"),
+      ),
+      (error: unknown) => {
+        diagnostic = (error as { preparationDiagnostics?: WindowsOwnedTreeDiagnostic }).preparationDiagnostics;
+        assert.match(safeError((error as { cause?: unknown }).cause), /Point de synchronisation/);
+        return true;
+      },
+    );
+    assert.ok(witnessPid);
+    await assertPidGone(witnessPid, "témoin de la préparation interrompue");
+    assert.equal(diagnostic?.status, "failed");
+    assert.equal(diagnostic?.lastStage, "ready-suppressed");
+    assert.equal(diagnostic?.cleanup?.normalStop, "complete");
+    assert.equal(diagnostic?.cleanup?.ownedTreeStopped, true);
+    assert.equal(diagnostic?.cleanup?.fallbackPids.length, 0, "le secours ne doit pas servir de preuve de réussite");
+    assert.ok(diagnostic?.target.parentPid);
+    assert.ok(diagnostic?.target.descendantPid);
+    await assertPidGone(diagnostic.target.parentPid, "parent de la préparation interrompue");
+    await assertPidGone(diagnostic.target.descendantPid, "descendant de la préparation interrompue");
   });
 
   await check("Windows refuse de lancer la cible si la preuve Job Object échoue", async () => {
@@ -1460,11 +1652,50 @@ async function runWindowsOwnedProcessChecks() {
   });
 }
 
+async function runWindowsOwnedTreeScenario(
+  witness: ChildProcess,
+  prepare: () => Promise<OwnedTreeFixture>,
+  test: (fixture: OwnedTreeFixture) => Promise<void>,
+) {
+  let fixture: OwnedTreeFixture | undefined;
+  let primaryFailure: unknown;
+  try {
+    fixture = await prepare();
+    await test(fixture);
+  } catch (error) {
+    primaryFailure = error;
+  }
+  const cleanupResults = await Promise.allSettled([
+    fixture ? cleanupOwnedTreeProcess(fixture) : Promise.resolve(),
+    stopWitness(witness),
+  ]);
+  const cleanupFailures = cleanupResults.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
+  if (primaryFailure !== undefined) {
+    if (cleanupFailures.length > 0) {
+      throw new AggregateError(
+        [primaryFailure, ...cleanupFailures],
+        "Le scénario Windows a échoué et son nettoyage est incomplet.",
+        { cause: primaryFailure },
+      );
+    }
+    throw primaryFailure;
+  }
+  if (cleanupFailures.length > 0) {
+    throw new AggregateError(cleanupFailures, "Nettoyage incomplet du scénario Windows.");
+  }
+}
+
 async function spawnOwnedTreeProcess(
   name: string,
-  options: SpawnOwnedOptions & { exitParentAfterReady?: boolean } = {},
+  options: OwnedTreePreparationOptions = {},
 ): Promise<OwnedTreeFixture> {
-  const { exitParentAfterReady = false, ...spawnOptions } = options;
+  const startedAt = Date.now();
+  const {
+    exitParentAfterReady = false,
+    suppressReady = false,
+    readinessTimeoutMs = process.platform === "win32" ? 15_000 : 5_000,
+    ...spawnOptions
+  } = options;
   const fixture = await spawnReliabilityProcess(
     name,
     [
@@ -1472,6 +1703,7 @@ async function spawnOwnedTreeProcess(
       fileURLToPath(import.meta.url),
       "--owned-tree-parent",
       ...(exitParentAfterReady ? ["--exit-parent-after-ready"] : []),
+      ...(suppressReady ? ["--suppress-owned-tree-ready"] : []),
     ],
     "service",
     {
@@ -1480,25 +1712,208 @@ async function spawnOwnedTreeProcess(
       ...spawnOptions,
     },
   );
-  let stdout = "";
-  fixture.owned.child.stdout?.on("data", (chunk) => { stdout += String(chunk); });
+  let stdout = fixture.owned.recentStdout ?? "";
+  let stderr = fixture.owned.recentStderr ?? "";
+  const onStdout = (chunk: unknown) => { stdout = `${stdout}${String(chunk)}`.slice(-16_384); };
+  const onStderr = (chunk: unknown) => { stderr = `${stderr}${String(chunk)}`.slice(-16_384); };
+  fixture.owned.child.stdout?.on("data", onStdout);
+  fixture.owned.child.stderr?.on("data", onStderr);
   try {
     await waitForOutput(
       fixture.owned.child,
       () => /OWNED_TREE_READY parent=\d+ descendant=\d+/.test(stdout),
-      process.platform === "win32" ? 15_000 : 5_000,
+      readinessTimeoutMs,
     );
     const match = stdout.match(/OWNED_TREE_READY parent=(\d+) descendant=(\d+)/);
     assert.ok(match, "les PID parent et descendant doivent être annoncés explicitement");
-    return {
+    const completedFixture = {
       ...fixture,
       parentPid: Number(match[1]),
       descendantPid: Number(match[2]),
     };
+    if (process.platform === "win32") {
+      await persistWindowsOwnedTreeDiagnostic(createWindowsOwnedTreeDiagnostic(
+        name,
+        "ready",
+        startedAt,
+        fixture,
+        stdout,
+        stderr,
+      ));
+    }
+    return completedFixture;
   } catch (error) {
-    await cleanupReliabilityProcess(fixture);
-    throw error;
+    const diagnostic = createWindowsOwnedTreeDiagnostic(
+      name,
+      "failed",
+      startedAt,
+      fixture,
+      stdout,
+      stderr,
+    );
+    diagnostic.preparationErrorCode = diagnosticCode(error);
+    diagnostic.cleanup = await cleanupPartialOwnedTreePreparation(fixture, diagnostic.target);
+    if (process.platform === "win32") {
+      await persistWindowsOwnedTreeDiagnostic(diagnostic).catch((persistenceError) => {
+        diagnostic.cleanup?.errorCodes.push(`DIAGNOSTIC_${diagnosticCode(persistenceError)}`);
+      });
+    }
+    try {
+      await rm(fixture.runDirectory, { recursive: true, force: true });
+      diagnostic.cleanup.directoryRemoved = true;
+    } catch (removeError) {
+      diagnostic.cleanup.errorCodes.push(`REMOVE_${diagnosticCode(removeError)}`);
+    }
+    if (process.platform === "win32") {
+      await persistWindowsOwnedTreeDiagnostic(diagnostic).catch(() => undefined);
+    }
+    const failure = new Error(
+      `Préparation de ${name} interrompue après ${diagnostic.elapsedMs} ms ` +
+      `(dernière étape ${diagnostic.lastStage}, nettoyage ${diagnostic.cleanup.normalStop}).`,
+      { cause: error },
+    ) as Error & { preparationDiagnostics: WindowsOwnedTreeDiagnostic };
+    failure.preparationDiagnostics = diagnostic;
+    throw failure;
+  } finally {
+    fixture.owned.child.stdout?.off("data", onStdout);
+    fixture.owned.child.stderr?.off("data", onStderr);
   }
+}
+
+async function cleanupPartialOwnedTreePreparation(
+  fixture: ReliabilityProcessFixture,
+  target: WindowsOwnedTreeDiagnostic["target"],
+): Promise<WindowsOwnedTreeCleanupDiagnostic> {
+  const diagnostic: WindowsOwnedTreeCleanupDiagnostic = {
+    normalStop: "complete",
+    ownedTreeStopped: false,
+    childStopped: false,
+    fallbackPids: [],
+    logFinalized: false,
+    directoryRemoved: false,
+    errorCodes: [],
+  };
+  try {
+    const outcome = await stopOwnedProcess(fixture.owned);
+    diagnostic.normalStopMode = outcome.mode;
+    diagnostic.ownedTreeStopped = outcome.ownedTreeStopped;
+    diagnostic.childStopped = outcome.childStopped;
+  } catch (error) {
+    diagnostic.normalStop = "failed";
+    diagnostic.normalStopError = safeError(error).replace(/[^a-z0-9_= ().,:;|/-]/gi, "_").slice(0, 512);
+    diagnostic.errorCodes.push(`STOP_${diagnosticCode(error)}`);
+    diagnostic.ownedTreeStopped = fixture.owned.stopOutcome?.ownedTreeStopped === true;
+    diagnostic.childStopped = fixture.owned.stopOutcome?.childStopped === true;
+  }
+  try {
+    await waitForOwnedProcessLog(fixture.owned);
+    diagnostic.logFinalized = fixture.owned.logReport?.finalized === true;
+  } catch (error) {
+    diagnostic.errorCodes.push(`LOG_${diagnosticCode(error)}`);
+  }
+  const knownPids = [target.parentPid, target.descendantPid].filter((pid): pid is number => Boolean(pid));
+  for (const pid of knownPids) {
+    if (!isPidAlive(pid)) continue;
+    try {
+      process.kill(pid, "SIGKILL");
+      diagnostic.fallbackPids.push(pid);
+      await assertPidGone(pid, `processus possédé ${pid} après préparation interrompue`);
+    } catch (error) {
+      diagnostic.errorCodes.push(`FALLBACK_${diagnosticCode(error)}`);
+    }
+  }
+  if (isPidAlive(fixture.owned.child.pid)) {
+    try {
+      fixture.owned.child.kill("SIGKILL");
+      if (fixture.owned.child.pid) diagnostic.fallbackPids.push(fixture.owned.child.pid);
+      await waitForChildExit(fixture.owned.child, 5_000);
+    } catch (error) {
+      diagnostic.errorCodes.push(`SUPERVISOR_${diagnosticCode(error)}`);
+    }
+  }
+  diagnostic.childStopped = !isPidAlive(fixture.owned.child.pid);
+  return diagnostic;
+}
+
+function createWindowsOwnedTreeDiagnostic(
+  name: string,
+  status: WindowsOwnedTreeDiagnostic["status"],
+  startedAt: number,
+  fixture: ReliabilityProcessFixture,
+  stdout: string,
+  stderr: string,
+): WindowsOwnedTreeDiagnostic {
+  const protocolOutput = `${stdout}\n${stderr}`;
+  const stages: WindowsOwnedTreeDiagnostic["stages"] = [];
+  for (const line of protocolOutput.split(/\r?\n/)) {
+    const stage = line.match(/^(?:VERDANZA_WINDOWS_JOB_STAGE|OWNED_TREE_STAGE) name=([a-z-]+)(?: elapsed_ms=(\d+))?/);
+    if (stage) stages.push({ name: stage[1], elapsedMs: stage[2] ? Number(stage[2]) : null });
+    else if (/^VERDANZA_WINDOWS_JOB_READY\b/.test(line)) stages.push({ name: "job-ready", elapsedMs: null });
+    else if (/^OWNED_TREE_READY\b/.test(line)) stages.push({ name: "owned-tree-ready", elapsedMs: null });
+    else if (/^VERDANZA_WINDOWS_JOB_ERROR\b/.test(line)) stages.push({ name: "job-error", elapsedMs: null });
+  }
+  const parentMatches = [...protocolOutput.matchAll(/\bparent=(\d+)/g)];
+  const descendantMatches = [...protocolOutput.matchAll(/\bdescendant=(\d+)/g)];
+  return {
+    name: name.replace(/[^a-z0-9_-]/gi, "_").slice(0, 80),
+    status,
+    elapsedMs: Date.now() - startedAt,
+    lastStage: stages.at(-1)?.name ?? "supervisor-not-observed",
+    stages,
+    supervisor: {
+      pid: fixture.owned.child.pid ?? null,
+      exitCode: fixture.owned.child.exitCode,
+      signalCode: fixture.owned.child.signalCode,
+      closed: fixture.owned.childClosed === true,
+      jobReady: fixture.owned.windowsJobReady === true,
+      jobTreeStopped: fixture.owned.windowsJobTreeStopped === true,
+      jobSetupFailed: fixture.owned.windowsJobSetupFailed === true,
+    },
+    target: {
+      parentPid: parentMatches.length > 0 ? Number(parentMatches.at(-1)?.[1]) : null,
+      descendantPid: descendantMatches.length > 0 ? Number(descendantMatches.at(-1)?.[1]) : null,
+    },
+    stdout: sanitizedProtocolExcerpt(stdout),
+    stderr: sanitizedProtocolExcerpt(stderr),
+  };
+}
+
+function sanitizedProtocolExcerpt(output: string) {
+  return output
+    .split(/\r?\n/)
+    .filter((line) => /^(?:VERDANZA_WINDOWS_JOB_|OWNED_TREE_)/.test(line))
+    .map((line) => line.replace(/[^a-z0-9_= .:/-]/gi, "_").slice(0, 256))
+    .join("\n")
+    .slice(-4_096);
+}
+
+function diagnosticCode(error: unknown) {
+  const raw = Boolean(error) && typeof error === "object"
+    ? String((error as { code?: unknown }).code ?? (error as { name?: unknown }).name ?? "UNKNOWN")
+    : "UNKNOWN";
+  return raw.toUpperCase().replace(/[^A-Z0-9_-]/g, "_").slice(0, 64) || "UNKNOWN";
+}
+
+async function initializeWindowsOwnedTreeDiagnostics() {
+  windowsOwnedTreeDiagnostics.length = 0;
+  await mkdir(RECIPE_CACHE_ROOT, { recursive: true });
+  await writeFile(
+    WINDOWS_OWNED_PROCESS_DIAGNOSTICS_PATH,
+    `${JSON.stringify({ schemaVersion: 1, records: [] }, null, 2)}\n`,
+    "utf8",
+  );
+}
+
+async function persistWindowsOwnedTreeDiagnostic(diagnostic: WindowsOwnedTreeDiagnostic) {
+  const existing = windowsOwnedTreeDiagnostics.findIndex((entry) => entry.name === diagnostic.name);
+  if (existing >= 0) windowsOwnedTreeDiagnostics[existing] = diagnostic;
+  else windowsOwnedTreeDiagnostics.push(diagnostic);
+  await mkdir(RECIPE_CACHE_ROOT, { recursive: true });
+  await writeFile(
+    WINDOWS_OWNED_PROCESS_DIAGNOSTICS_PATH,
+    `${JSON.stringify({ schemaVersion: 1, records: windowsOwnedTreeDiagnostics.slice(-12) }, null, 2)}\n`,
+    "utf8",
+  );
 }
 
 async function cleanupOwnedTreeProcess(fixture: OwnedTreeFixture) {
@@ -1540,6 +1955,38 @@ function collectingLogStream(chunks: string[]) {
   });
   process.nextTick(() => stream.emit("open", 1));
   return stream;
+}
+
+function collectingParentOutputStream(chunks: string[]) {
+  return new Writable({
+    write(chunk, _encoding, callback) {
+      chunks.push(String(chunk));
+      callback();
+    },
+  });
+}
+
+function asynchronousFailureStream(
+  chunks: string[],
+  failureObserved: ReturnType<typeof deferred<void>>,
+  code: string,
+) {
+  let writes = 0;
+  const stream = new Writable({
+    write(chunk, _encoding, callback) {
+      writes += 1;
+      chunks.push(String(chunk));
+      if (writes !== 1) {
+        callback();
+        return;
+      }
+      process.nextTick(() => {
+        callback(codedError(code));
+        failureObserved.resolve();
+      });
+    },
+  });
+  return Object.assign(stream, { writeCount: () => writes });
 }
 
 function codedError(code: string) {
@@ -1871,8 +2318,15 @@ async function runSignalChild() {
 }
 
 async function runOwnedTreeParent() {
+  const startedAt = Date.now();
+  const writeStage = (name: string, details = "") => {
+    console.log(
+      `OWNED_TREE_STAGE name=${name} elapsed_ms=${Date.now() - startedAt}${details ? ` ${details}` : ""}`,
+    );
+  };
   process.on("SIGINT", () => undefined);
   process.on("SIGTERM", () => undefined);
+  writeStage("parent-started", `parent=${process.pid}`);
   const descendantScript = [
     "process.on('SIGINT',()=>{});",
     "process.on('SIGTERM',()=>{});",
@@ -1885,12 +2339,20 @@ async function runOwnedTreeParent() {
     shell: false,
     stdio: ["ignore", "ignore", "ignore", "ipc"],
   });
+  writeStage("descendant-launched", `parent=${process.pid} descendant=${descendant.pid ?? 0}`);
   await new Promise<void>((resolvePromise, reject) => {
     descendant.once("error", reject);
     descendant.once("message", (message) => {
-      if (message === "READY") resolvePromise();
+      if (message === "READY") {
+        writeStage("descendant-ready", `parent=${process.pid} descendant=${descendant.pid ?? 0}`);
+        resolvePromise();
+      }
     });
   });
+  if (process.argv.includes("--suppress-owned-tree-ready")) {
+    writeStage("ready-suppressed", `parent=${process.pid} descendant=${descendant.pid ?? 0}`);
+    await new Promise<void>(() => undefined);
+  }
   console.log(`OWNED_TREE_READY parent=${process.pid} descendant=${descendant.pid}`);
   if (process.argv.includes("--exit-parent-after-ready")) {
     descendant.disconnect();
@@ -1898,6 +2360,69 @@ async function runOwnedTreeParent() {
     process.exit(0);
   }
   await new Promise<void>(() => undefined);
+}
+
+async function runClosedParentOutputChild() {
+  process.stderr.write("CLOSED_PIPE_ARMED\n");
+  await new Promise<void>((resolvePromise) => {
+    process.stdin.once("data", () => resolvePromise());
+  });
+  const initialStdoutErrorListeners = process.stdout.listenerCount("error");
+  const diagnostics: string[] = [];
+  const fixture = await spawnReliabilityProcess(
+    "closed-parent-output",
+    [
+      "-e",
+      [
+        "process.stdout.write('PIPE_FIRST\\n'+'x'.repeat(262144)+'\\nPIPE_TAIL\\n');",
+        "process.stderr.write('PIPE_OTHER_DESTINATION\\n');",
+        "setInterval(()=>{},1000);",
+      ].join(""),
+    ],
+    "service",
+    {
+      parentStdoutStream: process.stdout,
+      parentStderrStream: process.stderr,
+      diagnosticWrite: (value) => {
+        diagnostics.push(value);
+        process.stderr.write(`CLOSED_PIPE_DIAGNOSTIC ${value}\n`);
+      },
+      stopGracePeriodMs: 100,
+      stopForcePeriodMs: 3_000,
+    },
+  );
+  try {
+    await waitForCondition(
+      () => fixture.owned.logReport?.issues.some(
+        (issue) => issue.phase === "parent-output" && issue.code === "EPIPE",
+      ) === true,
+      "EPIPE réel du pipe stdout fermé",
+      5_000,
+    );
+    await waitForCondition(
+      () => fixture.owned.recentStdout?.includes("PIPE_TAIL") === true
+        && fixture.owned.recentStderr?.includes("PIPE_OTHER_DESTINATION") === true,
+      "drainage des deux pipes enfant après EPIPE",
+      5_000,
+    );
+    const outcome = await stopOwnedProcess(fixture.owned);
+    await waitForOwnedProcessLog(fixture.owned);
+    const log = await readFile(fixture.owned.logPath, "utf8");
+    assert.match(log, /PIPE_FIRST/);
+    assert.match(log, /PIPE_TAIL/);
+    assert.match(log, /PIPE_OTHER_DESTINATION/);
+    assert.equal(diagnostics.length, 1);
+    assert.equal(outcome.childStopped, true);
+    await waitForCondition(
+      () => process.stdout.listenerCount("error") === initialStdoutErrorListeners,
+      "retrait du listener du pipe stdout fermé",
+    );
+    process.stderr.write(
+      `CLOSED_PIPE_RESULT code=EPIPE drained=${log.includes("PIPE_TAIL")} stopped=${outcome.childStopped}\n`,
+    );
+  } finally {
+    await cleanupReliabilityProcess(fixture);
+  }
 }
 
 function waitUntilCancelled(signal: AbortSignal) {

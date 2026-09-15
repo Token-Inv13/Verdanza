@@ -41,6 +41,15 @@ jobs:
       - name: Verify Windows owned descendants
         run: node --import tsx scripts/cagnotte-interactive/testReliability.ts --windows-job-only
 
+      - name: Upload sanitized Windows owned-process diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-owned-process-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 7
+          path: node_modules/.cache/verdanza-cagnotte-interactive/windows-owned-process-latest.json
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20

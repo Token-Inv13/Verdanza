@@ -203,6 +203,7 @@ public static class VerdanzaRecipeWindowsJob
 
     public static int Run(string command, string[] arguments, string currentDirectory, bool simulateSetupFailure)
     {
+        DateTime startedAt = DateTime.UtcNow;
         IntPtr job = IntPtr.Zero;
         IntPtr primaryProcess = IntPtr.Zero;
         IntPtr primaryThread = IntPtr.Zero;
@@ -225,6 +226,7 @@ public static class VerdanzaRecipeWindowsJob
                 ref limits,
                 (uint)Marshal.SizeOf(typeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION))))
                 ThrowWin32("configure-job");
+            WriteStage("job-established", startedAt, null);
 
             standardInput = OpenInheritedNullInput();
             standardOutput = DuplicateInheritedStandardHandle(-11, "duplicate-stdout");
@@ -251,14 +253,17 @@ public static class VerdanzaRecipeWindowsJob
                 ThrowWin32("create-process");
             primaryProcess = process.hProcess;
             primaryThread = process.hThread;
+            WriteStage("target-launched", startedAt, "primary=" + process.dwProcessId);
 
             if (!AssignProcessToJobObject(job, primaryProcess))
                 ThrowWin32("assign-process");
+            WriteStage("job-assigned", startedAt, "primary=" + process.dwProcessId);
             Console.Out.WriteLine("VERDANZA_WINDOWS_JOB_READY primary=" + process.dwProcessId);
             Console.Out.Flush();
             if (ResumeThread(primaryThread) == UInt32.MaxValue)
                 ThrowWin32("resume-process");
             primaryResumed = true;
+            WriteStage("target-resumed", startedAt, "primary=" + process.dwProcessId);
             CloseOwnedHandle(ref primaryThread);
 
             ManualResetEvent stopRequested = new ManualResetEvent(false);
@@ -432,6 +437,16 @@ public static class VerdanzaRecipeWindowsJob
         return "stage=" + error.Message + " code=" + ERROR_SUCCESS;
     }
 
+    private static void WriteStage(string name, DateTime startedAt, string details)
+    {
+        long elapsedMilliseconds = (long)(DateTime.UtcNow - startedAt).TotalMilliseconds;
+        Console.Out.WriteLine(
+            "VERDANZA_WINDOWS_JOB_STAGE name=" + name +
+            " elapsed_ms=" + elapsedMilliseconds +
+            (String.IsNullOrEmpty(details) ? String.Empty : " " + details));
+        Console.Out.Flush();
+    }
+
     private static void EnsureHandle(IntPtr handle, string stage)
     {
         if (handle == IntPtr.Zero || handle == new IntPtr(-1)) ThrowWin32(stage);
@@ -455,6 +470,8 @@ try {
   if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
     throw "Windows Job Object runner invoked outside Windows."
   }
+  [Console]::Out.WriteLine("VERDANZA_WINDOWS_JOB_STAGE name=supervisor-launched elapsed_ms=0")
+  [Console]::Out.Flush()
   Add-Type -TypeDefinition $source -Language CSharp
   $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Payload)) | ConvertFrom-Json
   $arguments = [string[]]@($decoded.arguments | ForEach-Object { [string]$_ })

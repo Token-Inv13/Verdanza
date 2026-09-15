@@ -48,6 +48,8 @@ export type OwnedProcess = {
   childClosed?: boolean;
   stopGracePeriodMs?: number;
   stopForcePeriodMs?: number;
+  recentStdout?: string;
+  recentStderr?: string;
 };
 
 export type OwnedProcessLogIssue = {
@@ -79,7 +81,97 @@ const PROCESS_GRACEFUL_ACTION_TIMEOUT_MS = 6_500;
 const PROCESS_GRACE_PERIOD_MS = 2_500;
 const PROCESS_FORCE_PERIOD_MS = 5_000;
 const MAX_LOG_ISSUES = 8;
+const MAX_RECENT_PROCESS_OUTPUT = 16_384;
 const WINDOWS_JOB_RUNNER = resolve(RECIPE_ROOT, "scripts/cagnotte-interactive/windowsJobRunner.ps1");
+
+type ParentOutputReporter = (error: unknown) => void;
+
+type SharedParentOutputState = {
+  destination: Writable;
+  failed: boolean;
+  failure?: unknown;
+  reporters: Set<ParentOutputReporter>;
+  handleError: (error: unknown) => void;
+};
+
+const sharedParentOutputs = new WeakMap<Writable, SharedParentOutputState>();
+
+function acquireSharedParentOutput(
+  destination: Writable,
+  reportFailure: ParentOutputReporter,
+) {
+  let state = sharedParentOutputs.get(destination);
+  if (!state) {
+    const reporters = new Set<ParentOutputReporter>();
+    state = {
+      destination,
+      failed: false,
+      reporters,
+      handleError: () => undefined,
+    };
+    state.handleError = (error: unknown) => {
+      if (!state || state.failed) return;
+      state.failed = true;
+      state.failure = error;
+      for (const reporter of [...state.reporters]) {
+        try {
+          reporter(error);
+        } catch {
+          // Un reporter auxiliaire ne doit jamais interrompre le drainage des pipes enfant.
+        }
+      }
+    };
+    destination.on("error", state.handleError);
+    sharedParentOutputs.set(destination, state);
+  }
+
+  state.reporters.add(reportFailure);
+  if (state.failed) reportFailure(state.failure);
+
+  let pendingWrites = 0;
+  let releaseRequested = false;
+  let released = false;
+  let releaseImmediate: ReturnType<typeof setImmediate> | undefined;
+  const releaseNow = () => {
+    releaseImmediate = undefined;
+    if (released || !releaseRequested || pendingWrites > 0) return;
+    released = true;
+    state?.reporters.delete(reportFailure);
+    if (state && state.reporters.size === 0) {
+      destination.off("error", state.handleError);
+      sharedParentOutputs.delete(destination);
+    }
+  };
+  const scheduleRelease = () => {
+    if (released || !releaseRequested || pendingWrites > 0 || releaseImmediate) return;
+    releaseImmediate = setImmediate(releaseNow);
+  };
+
+  return {
+    write(value: string) {
+      if (released || state?.failed) return;
+      pendingWrites += 1;
+      let completed = false;
+      const complete = (error?: Error | null) => {
+        if (completed) return;
+        completed = true;
+        if (error) state?.handleError(error);
+        pendingWrites -= 1;
+        scheduleRelease();
+      };
+      try {
+        destination.write(value, complete);
+      } catch (error) {
+        complete(error instanceof Error ? error : new Error(String(error)));
+      }
+    },
+    release() {
+      if (releaseRequested) return;
+      releaseRequested = true;
+      scheduleRelease();
+    },
+  };
+}
 
 export type RecipeHarnessLifecycleEvent =
   | { type: "process-acquired"; name: string; kind: OwnedProcess["kind"]; pid: number | undefined }
@@ -422,6 +514,8 @@ async function canBind(port: number, signal?: AbortSignal) {
 export type SpawnOwnedOptions = {
   createLogStream?: (logPath: string) => Writable;
   command?: string;
+  parentStdoutStream?: Writable;
+  parentStderrStream?: Writable;
   parentStdoutWrite?: (value: string) => void;
   parentStderrWrite?: (value: string) => void;
   diagnosticWrite?: (value: string) => void;
@@ -464,17 +558,23 @@ export function spawnOwned(
       // Le secours de dernier niveau ne doit jamais concurrencer le nettoyage.
     }
   });
-  const recordLogIssue = (phase: OwnedProcessLogIssue["phase"], error: unknown) => {
+  const recordLogIssue = (
+    phase: OwnedProcessLogIssue["phase"],
+    error: unknown,
+    emitDiagnostic = true,
+  ) => {
     const code = safeDiagnosticCode(error);
     const key = `${phase}:${code}`;
     logReport.status = "incomplete";
     if (!reportedIssues.has(key) && logReport.issues.length < MAX_LOG_ISSUES) {
       reportedIssues.add(key);
       logReport.issues.push({ phase, code, auxiliary: true });
-      try {
-        diagnosticWrite(`[owned-process:${safeProcessName(name)}] diagnostic auxiliaire incomplet phase=${phase} code=${code}`);
-      } catch {
-        // Le chemin de secours est distinct du fichier défaillant et reste non récursif.
+      if (emitDiagnostic) {
+        try {
+          diagnosticWrite(`[owned-process:${safeProcessName(name)}] diagnostic auxiliaire incomplet phase=${phase} code=${code}`);
+        } catch {
+          // Le chemin de secours est distinct du fichier défaillant et reste non récursif.
+        }
       }
     }
   };
@@ -513,9 +613,42 @@ export function spawnOwned(
   ) => {
     try {
       writer?.(value);
+      return true;
     } catch (error) {
       recordLogIssue("parent-output", error);
+      return false;
     }
+  };
+  const parentStdoutStream = options.parentStdoutStream
+    ?? (options.parentStdoutWrite ? undefined : process.stdout);
+  const parentStderrStream = options.parentStderrStream
+    ?? (options.parentStderrWrite ? undefined : process.stderr);
+  const stdoutLease = parentStdoutStream
+    ? acquireSharedParentOutput(parentStdoutStream, (error) => {
+        recordLogIssue(
+          "parent-output",
+          error,
+          options.diagnosticWrite !== undefined || parentStdoutStream !== process.stderr,
+        );
+      })
+    : undefined;
+  const stderrLease = parentStderrStream
+    ? acquireSharedParentOutput(parentStderrStream, (error) => {
+        recordLogIssue(
+          "parent-output",
+          error,
+          options.diagnosticWrite !== undefined || parentStderrStream !== process.stderr,
+        );
+      })
+    : undefined;
+  let parentOutputsReleased = false;
+  let parentStdoutWriterFailed = false;
+  let parentStderrWriterFailed = false;
+  const releaseParentOutputs = () => {
+    if (parentOutputsReleased) return;
+    parentOutputsReleased = true;
+    stdoutLease?.release();
+    stderrLease?.release();
   };
   const finalizeLog = () => {
     if (logFinalizationPromise) return logFinalizationPromise;
@@ -589,6 +722,7 @@ export function spawnOwned(
       stdio: [windowsJobObject ? "pipe" : "ignore", "pipe", "pipe"],
     });
   } catch (error) {
+    releaseParentOutputs();
     void finalizeLog();
     throw error;
   }
@@ -613,6 +747,8 @@ export function spawnOwned(
     childClosed: false,
     stopGracePeriodMs: options.stopGracePeriodMs,
     stopForcePeriodMs: options.stopForcePeriodMs,
+    recentStdout: "",
+    recentStderr: "",
   };
   let stdioCloseTimer: ReturnType<typeof setTimeout> | undefined;
   let windowsProtocolOutput = "";
@@ -639,19 +775,23 @@ export function spawnOwned(
     }, options.childStdioCloseTimeoutMs ?? CHILD_STDIO_CLOSE_TIMEOUT_MS);
   };
   child.stdout?.on("data", (chunk) => {
+    owned.recentStdout = `${owned.recentStdout ?? ""}${String(chunk)}`.slice(-MAX_RECENT_PROCESS_OUTPUT);
     observeWindowsJobProtocol(chunk);
-    safeParentWrite(
-      options.parentStdoutWrite ?? ((value) => { process.stdout.write(value); }),
-      `[${name}] ${String(chunk)}`,
-    );
+    const value = `[${name}] ${String(chunk)}`;
+    if (stdoutLease) stdoutLease.write(value);
+    else if (!parentStdoutWriterFailed) {
+      parentStdoutWriterFailed = !safeParentWrite(options.parentStdoutWrite, value);
+    }
     writeLog(chunk as Buffer);
   });
   child.stderr?.on("data", (chunk) => {
+    owned.recentStderr = `${owned.recentStderr ?? ""}${String(chunk)}`.slice(-MAX_RECENT_PROCESS_OUTPUT);
     observeWindowsJobProtocol(chunk);
-    safeParentWrite(
-      options.parentStderrWrite ?? ((value) => { process.stderr.write(value); }),
-      `[${name}] ${String(chunk)}`,
-    );
+    const value = `[${name}] ${String(chunk)}`;
+    if (stderrLease) stderrLease.write(value);
+    else if (!parentStderrWriterFailed) {
+      parentStderrWriterFailed = !safeParentWrite(options.parentStderrWrite, value);
+    }
     writeLog(chunk as Buffer);
   });
   child.once("error", (error) => {
@@ -663,6 +803,7 @@ export function spawnOwned(
   child.once("close", () => {
     owned.childClosed = true;
     if (stdioCloseTimer) clearTimeout(stdioCloseTimer);
+    releaseParentOutputs();
     void finalizeLog();
   });
   return owned;
