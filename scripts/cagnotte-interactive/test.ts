@@ -45,6 +45,10 @@ import {
 } from "./runtimeDiagnostics.js";
 import { assertDiagnosticJournalComplete } from "./diagnosticJournal.js";
 import {
+  assertCreateOrderRateLimitEvidence,
+  type RateLimitEvidence,
+} from "./rateLimitEvidence.js";
+import {
   installRecipeSignalCancellation,
   isRecipeSignalCancellation,
   type RecipeSignal,
@@ -102,13 +106,7 @@ type RecipeState = {
     cagnotteRestitutionCents: number;
     cancelledGainCents: number;
   }>;
-  rateLimits: Array<{
-    kind: string;
-    route: string;
-    signalType: string;
-    windowId: string;
-    count: number;
-  }>;
+  rateLimits: RateLimitEvidence[];
 };
 
 type ViewportDefinition = {
@@ -215,7 +213,12 @@ export async function runAutomatedRecipe(options: {
         rm(latestFailureEvidence, { force: true }),
       ]);
       cancellation.throwIfRequested();
-      browser = await chromium.launch({ headless: true });
+      // Le runner ferme lui-même Chromium et ses services avant de choisir le code de sortie.
+      browser = await chromium.launch({
+        headless: true,
+        handleSIGINT: false,
+        handleSIGTERM: false,
+      });
       cancellation.throwIfRequested();
       await runViewportSequence({
         items: viewportDefinitions,
@@ -950,6 +953,7 @@ async function runViewport(
     const serverBlocks = await readJsonLines(resolve(harness.runDirectory, "server-network-blocks.jsonl"), true);
     assertServerNetworkIsolation(serverBlocks);
 
+    const rateLimit = assertRateLimiter(refunded, 2);
     const result = {
       viewport,
       runDirectory: harness.runDirectory,
@@ -967,7 +971,7 @@ async function runViewport(
         refundB: { externalFinancialCents: 9_500, restoredCagnotteCents: 500, cancelledGainCents: 475 },
         finalWallet: refunded.wallet,
         movements: refunded.movements.length,
-        rateLimitDocuments: refunded.rateLimits.length,
+        rateLimit,
       },
       denials: {
         foreignSelf: negativeResponses.foreignSelf.status,
@@ -1621,16 +1625,7 @@ function assertReservation(
 }
 
 function assertRateLimiter(state: RecipeState, attempts: number) {
-  const documents = state.rateLimits.filter((entry) => entry.route === "/api/create-order");
-  assert.equal(documents.filter((entry) => entry.kind === "attempt").length, attempts);
-  const counters = documents.filter((entry) => entry.kind === "counter");
-  assert.equal(counters.filter((entry) => entry.signalType === "network").length, 2);
-  assert.equal(counters.filter((entry) => entry.signalType === "email").length, 2);
-  assert.equal(counters.filter((entry) => entry.signalType === "anonymous").length, 2);
-  assert.ok(
-    counters.every((entry) => entry.count === attempts),
-    "les fenêtres du vrai limiteur doivent cumuler exactement chaque tentative",
-  );
+  return assertCreateOrderRateLimitEvidence(state.rateLimits, attempts);
 }
 
 function pickRefund(value: RecipeState["refunds"][number]) {

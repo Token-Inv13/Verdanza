@@ -3,6 +3,10 @@ import { resolve } from "node:path";
 import { RECIPE_PROJECT_ID } from "./constants.js";
 import { validateCurrentRecipeProcess } from "./environment.js";
 import { closeRecipeFirestore, getRecipeFirestore } from "./firestore.js";
+import {
+  compareRateLimitEvidence,
+  projectRateLimitEvidence,
+} from "./rateLimitEvidence.js";
 
 validateCurrentRecipeProcess();
 
@@ -38,8 +42,9 @@ try {
       .filter((document) => orderIds.has(String(document.data().orderId || "")))
       .map((document) => refundEvidence(document.id, record(document.data())))
       .sort((left, right) => left.id.localeCompare(right.id)),
-    rateLimits: rateLimitsSnapshot.docs.map((document) => rateLimitEvidence(record(document.data())))
-      .sort((left, right) => `${left.kind}:${left.signalType}:${left.windowId}`.localeCompare(`${right.kind}:${right.signalType}:${right.windowId}`)),
+    rateLimits: rateLimitsSnapshot.docs
+      .map((document) => projectRateLimitEvidence(document.id, record(document.data())))
+      .sort(compareRateLimitEvidence),
   };
   await writeFile(output, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
   console.log(`État de recette écrit : ${output}`);
@@ -128,16 +133,6 @@ function refundEvidence(id: string, value: Record<string, unknown>) {
     totalFinancialCents: number(result.totalFinancialCents),
     cagnotteRestitutionCents: number(result.cagnotteRestitutionCents ?? restitution.grossCents),
     cancelledGainCents: number(correction.appliedCents),
-  };
-}
-
-function rateLimitEvidence(value: Record<string, unknown>) {
-  return {
-    kind: string(value.kind),
-    route: string(value.route),
-    signalType: string(value.signalType),
-    windowId: string(value.windowId),
-    count: number(value.count),
   };
 }
 

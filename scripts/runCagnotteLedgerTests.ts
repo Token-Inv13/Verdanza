@@ -43,6 +43,7 @@ const allowedOptions = new Set([
   "--admin-reviews-only",
   "--security-only",
   "--read-only",
+  "--rate-limit-windows-only",
 ]);
 const options = process.argv.slice(2);
 if (options.length > 1 || options.some((option) => !allowedOptions.has(option))) {
@@ -209,6 +210,9 @@ try {
     await run("scripts/testCagnotteSecurity.ts");
   }
   if (mode === "--read-only") await run("scripts/testCagnotteRead.ts");
+  if (mode === "--rate-limit-windows-only") {
+    await run("scripts/cagnotte-interactive/testRateLimitWindows.ts");
+  }
 } finally {
   // Stop only the direct Java child created by this runner.
   if (!spawnError && emulator.exitCode === null && emulator.signalCode === null) emulator.kill();
