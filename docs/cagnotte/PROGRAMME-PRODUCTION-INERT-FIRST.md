@@ -1,8 +1,8 @@
 # Programme cagnotte Production — socle inert-first
 
-## État courant — clôture technique de la PR #9
+## État courant — finalisation Windows et EPIPE de la PR #9
 
-Le candidat de clôture part du HEAD publié `954337a315681f44249bd100c70c830a8859920c` de `codex/cagnotte-interactive-local-v1`, sur la base `main` `3a7ab99a7837cf902c187b525195bc8fe1f67416`. Le travail reste limité à la recette locale et à ses preuves : aucune garde, règle métier, dépendance, configuration Firebase/Vercel ou donnée distante n'est modifiée.
+Le candidat de clôture part du HEAD publié `e944078917e20f69c71eace3637a2dac7f01d22b` de `codex/cagnotte-interactive-local-v1`, sur la base `main` `3a7ab99a7837cf902c187b525195bc8fe1f67416`. Le travail reste limité au cycle de vie du runner de recette locale, à son superviseur Windows et à leurs preuves : aucune garde, règle métier, dépendance, configuration Firebase/Vercel ou donnée distante n'est modifiée.
 
 La collecte navigateur active et la sauvegarde Node sont séparées. Les lectures `page.evaluate` nécessaires aux réponses Firestore Listen sont lancées et contrôlées pendant le parcours. Le nettoyage attend seulement les lectures déjà engagées, sauvegarde les tableaux disponibles et marque une collecte comme non effectuée ou interrompue lorsqu'une annulation coordonnée ferme son propre contexte. Une erreur identique sans cette fermeture coordonnée, un échec antérieur ou l'impossibilité d'écrire une preuve obligatoire reste bloquant. Une annulation propre conserve les sorties `130` (`SIGINT`) et `143` (`SIGTERM`), ne démarre aucun viewport suivant et ne peut produire `PASS`.
 
@@ -17,7 +17,11 @@ npm run verify
 
 `npm run prepare:cagnotte-interactive` reste la préparation explicite des prérequis lorsque ceux-ci manquent ; elle n'est pas une étape implicite du runner. `npm run verify:full` ne fait pas partie de la clôture de la PR #9. Les sorties sûres et régénérables restent sous `node_modules/.cache/verdanza-cagnotte-interactive/` et hors Git.
 
-Sur Windows, les tests ciblés et `npm run verify` passent sur ce contenu, y compris le parcours réel bureau/mobile, 5,00 € disponibles, 10 mouvements et la libération des processus. Les vrais signaux adressés au PID Node et les descendants Unix restent une preuve CI Linux obligatoire sur le SHA publié ; un résultat Windows ne leur est pas substitué.
+Sur Windows, le superviseur Job Object borne sa propre preuve de fermeture à 5 000 ms ; le runner lui laisse 5 500 ms avant le recours à la fermeture du handle. Un retour `false` de `child.kill("SIGKILL")` reste ambigu : le runner observe ensuite, dans la borne de force explicite, la fermeture du superviseur et la preuve `VERDANZA_WINDOWS_JOB_TREE_STOPPED`. Il n'accepte le résultat que si ces deux états terminaux sont établis. Les contre-exemples déterministes couvrent la sortie concurrente acceptée et le superviseur bloqué ou non prouvé refusé ; le scénario réel vérifie aussi la disparition du parent et du descendant en conservant le témoin extérieur.
+
+Les points d'entrée réels `run.ts` et `test.ts` installent une seule protection des sorties terminales pour toute la durée du processus. Les reporters attachés aux enfants sont libérés après leurs dernières écritures, tandis que la protection légère de `process.stdout` et `process.stderr` reste présente pour les messages finaux. Une erreur synchrone, de callback ou d'événement marque uniquement la destination concernée comme défaillante et bloque ses écritures suivantes, sans masquer un échec métier antérieur ni transformer l'absence d'une preuve obligatoire en succès. Deux vrais sous-processus ferment respectivement stdout et stderr après la libération du dernier enfant, provoquent l'EPIPE asynchrone sur l'écriture finale et vérifient l'absence d'exception non prise en charge.
+
+Les tests ciblés et `npm run verify` passent sur ce contenu sous Windows, y compris le parcours réel bureau/mobile, 5,00 € disponibles, 10 mouvements et la libération des processus. Les vrais signaux adressés au PID Node et les descendants Unix restent une preuve CI Linux obligatoire sur le SHA publié ; un résultat Windows ne leur est pas substitué.
 
 Les sections datées et celles dont le titre commence par « Historique » conservent les preuves de candidats antérieurs. Leurs SHA, états de PR, déploiements et nombres de contrôles ne décrivent pas automatiquement le HEAD courant. Les contrats d'architecture, les commandes de recette et les prérequis d'ouverture restent les références techniques tant qu'un lot ultérieur ne les remplace pas explicitement.
 

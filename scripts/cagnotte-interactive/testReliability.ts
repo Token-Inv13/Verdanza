@@ -16,6 +16,7 @@ import {
 import { buildRecipeEnvironment, formatNodeRequireOption } from "./environment.js";
 import {
   coordinateRecipeStartup,
+  installRecipeTerminalOutputProtection,
   isRecipeStartupCancelled,
   ownedProcessReliabilitySnapshot,
   RecipeStartupCancelledError,
@@ -360,33 +361,12 @@ await check("spawnOwned contient les EPIPE asynchrones de stdout et stderr sans 
   }
 });
 
-await check("spawnOwned survit à un vrai pipe parent fermé sans gestionnaire global", async () => {
-  const child = spawn(process.execPath, [
-    "--import", "tsx",
-    fileURLToPath(import.meta.url),
-    "--closed-parent-output-child",
-  ], {
-    shell: false,
-    windowsHide: true,
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-  let stderr = "";
-  child.stderr?.on("data", (chunk) => { stderr = `${stderr}${String(chunk)}`.slice(-8_192); });
-  try {
-    await waitForCondition(() => stderr.includes("CLOSED_PIPE_ARMED"), "armement du sous-processus EPIPE", 10_000);
-    assert.ok(child.stdout);
-    await new Promise<void>((resolvePromise) => {
-      child.stdout?.once("close", resolvePromise);
-      child.stdout?.destroy();
-    });
-    child.stdin?.end("GO\n");
-    assert.equal(await waitForChildExit(child, 15_000), 0, stderr);
-    assert.match(stderr, /CLOSED_PIPE_RESULT code=EPIPE drained=true stopped=true/);
-    assert.doesNotMatch(stderr, /uncaughtException|unhandledRejection/);
-  } finally {
-    if (isPidAlive(child.pid)) child.kill("SIGKILL");
-    await waitForChildExit(child, 5_000).catch(() => undefined);
-  }
+await check("le runner protège stdout jusqu’à l’écriture finale après le dernier enfant", async () => {
+  await assertClosedParentOutputAfterLastChild("stdout", false);
+});
+
+await check("le runner protège stderr sans masquer un échec métier antérieur", async () => {
+  await assertClosedParentOutputAfterLastChild("stderr", true);
 });
 
 await check("les signaux sont inscrits avant le démarrage et le nettoyage reste unique", async () => {
@@ -1811,6 +1791,7 @@ type ReliabilityProcessFixture = {
 };
 
 type OwnedTreeFixture = ReliabilityProcessFixture & {
+  startedAt: number;
   parentPid: number;
   descendantPid: number;
 };
@@ -1835,7 +1816,7 @@ type WindowsOwnedTreeCleanupDiagnostic = {
 
 type WindowsOwnedTreeDiagnostic = {
   name: string;
-  status: "ready" | "failed";
+  status: "ready" | "stopped" | "failed";
   elapsedMs: number;
   lastStage: string;
   stages: Array<{ name: string; elapsedMs: number | null }>;
@@ -1890,6 +1871,42 @@ async function runWindowsOwnedProcessChecks() {
   if (process.platform !== "win32") return;
   await initializeWindowsOwnedTreeDiagnostics();
 
+  await check("Windows reconnaît une sortie concurrente après un retour kill ambigu", async () => {
+    const supervisor = syntheticWindowsSupervisor(() => {
+      supervisor.settle(0);
+      owned.childClosed = true;
+      owned.windowsJobTreeStopped = true;
+      return false;
+    });
+    const owned = syntheticWindowsOwnedProcess("windows-concurrent-exit", supervisor.child, {
+      stopGracePeriodMs: 1,
+      stopForcePeriodMs: 100,
+    });
+    const firstStop = stopOwnedProcess(owned);
+    assert.equal(firstStop, stopOwnedProcess(owned), "l’observation terminale doit rester idempotente");
+    const outcome = await firstStop;
+    assert.equal(supervisor.killCalls(), 1);
+    assert.equal(supervisor.stopCommands(), "STOP\n");
+    assert.equal(outcome.ownedTreeStopped, true);
+    assert.equal(outcome.childStopped, true);
+    assert.equal(owned.windowsJobTreeStopped, true);
+  });
+
+  await check("Windows refuse un superviseur réellement bloqué après la borne terminale", async () => {
+    const supervisor = syntheticWindowsSupervisor(() => false);
+    const owned = syntheticWindowsOwnedProcess("windows-blocked-supervisor", supervisor.child, {
+      stopGracePeriodMs: 1,
+      stopForcePeriodMs: 75,
+    });
+    const firstStop = stopOwnedProcess(owned);
+    assert.equal(firstStop, stopOwnedProcess(owned), "le refus terminal doit rester idempotent");
+    await assert.rejects(firstStop, /retour d’arrêt ambigu et fermeture non prouvée/);
+    assert.equal(supervisor.killCalls(), 1);
+    assert.equal(supervisor.stopCommands(), "STOP\n");
+    assert.equal(owned.stopOutcome?.ownedTreeStopped, false);
+    assert.equal(owned.stopOutcome?.childStopped, false);
+  });
+
   await check("Windows arrête le parent actif et son descendant sans toucher au témoin", async () => {
     const witness = spawn(process.execPath, [
       "-e",
@@ -1922,6 +1939,14 @@ async function runWindowsOwnedProcessChecks() {
       await assertPidGone(fixture.parentPid, "parent Windows possédé");
       await assertPidGone(fixture.descendantPid, "descendant Windows possédé");
       assert.equal(isPidAlive(witness.pid), true, "le témoin extérieur doit rester actif");
+      await persistWindowsOwnedTreeDiagnostic(createWindowsOwnedTreeDiagnostic(
+        fixture.owned.name,
+        "stopped",
+        fixture.startedAt,
+        fixture,
+        fixture.owned.recentStdout ?? "",
+        fixture.owned.recentStderr ?? "",
+      ));
       },
     );
   });
@@ -1959,6 +1984,14 @@ async function runWindowsOwnedProcessChecks() {
       await assert.rejects(firstStop, /s’est arrêté avant la demande d’arrêt/);
       assert.equal(fixture.owned.stopOutcome?.mode, "already-stopped");
       assert.equal(fixture.owned.stopOutcome?.ownedTreeStopped, true);
+      await persistWindowsOwnedTreeDiagnostic(createWindowsOwnedTreeDiagnostic(
+        fixture.owned.name,
+        "stopped",
+        fixture.startedAt,
+        fixture,
+        fixture.owned.recentStdout ?? "",
+        fixture.owned.recentStderr ?? "",
+      ));
       },
     );
   });
@@ -2138,7 +2171,8 @@ async function spawnOwnedTreeProcess(
     ],
     "service",
     {
-      stopGracePeriodMs: 100,
+      // Le superviseur borne sa preuve Job Object à 5 000 ms.
+      stopGracePeriodMs: 5_500,
       stopForcePeriodMs: 3_000,
       ...spawnOptions,
     },
@@ -2159,6 +2193,7 @@ async function spawnOwnedTreeProcess(
     assert.ok(match, "les PID parent et descendant doivent être annoncés explicitement");
     const completedFixture = {
       ...fixture,
+      startedAt,
       parentPid: Number(match[1]),
       descendantPid: Number(match[2]),
     };
@@ -2793,63 +2828,152 @@ async function runOwnedTreeParent() {
   await new Promise<void>(() => undefined);
 }
 
-async function runClosedParentOutputChild() {
-  process.stderr.write("CLOSED_PIPE_ARMED\n");
-  await new Promise<void>((resolvePromise) => {
-    process.stdin.once("data", () => resolvePromise());
+type ParentOutputSide = "stdout" | "stderr";
+
+async function assertClosedParentOutputAfterLastChild(
+  failingSide: ParentOutputSide,
+  preserveBusinessFailure: boolean,
+) {
+  const child = spawn(process.execPath, [
+    "--import", "tsx",
+    fileURLToPath(import.meta.url),
+    "--closed-parent-output-child",
+    `--closed-parent-output-side=${failingSide}`,
+    ...(preserveBusinessFailure ? ["--closed-parent-output-business-failure"] : []),
+  ], {
+    shell: false,
+    windowsHide: true,
+    stdio: ["pipe", "pipe", "pipe"],
   });
-  const initialStdoutErrorListeners = process.stdout.listenerCount("error");
-  const diagnostics: string[] = [];
+  const output = trackChildOutput(child);
+  const controlOutput = () => failingSide === "stdout" ? output.stderr : output.stdout;
+  const failingStream = failingSide === "stdout" ? child.stdout : child.stderr;
+  try {
+    await waitForCondition(
+      () => controlOutput().includes(`CLOSED_PIPE_ARMED side=${failingSide}`),
+      `armement du sous-processus EPIPE ${failingSide}`,
+      15_000,
+    );
+    await waitForCondition(
+      () => controlOutput().includes(`CLOSED_PIPE_CHILD_RELEASED side=${failingSide}`),
+      `libération du dernier enfant avant fermeture ${failingSide}`,
+      15_000,
+    );
+    assert.ok(failingStream, `pipe ${failingSide} absent`);
+    await new Promise<void>((resolvePromise) => {
+      failingStream.once("close", resolvePromise);
+      failingStream.destroy();
+    });
+    child.stdin?.end("CLOSE_CONFIRMED\n");
+    const completed = await output.waitForCompletion(15_000);
+    const control = failingSide === "stdout" ? completed.stderr : completed.stdout;
+    assert.equal(completed.exitCode, 0, control);
+    assert.match(
+      control,
+      new RegExp(
+        `CLOSED_PIPE_RESULT side=${failingSide} epipe=true finalSuppressed=true ` +
+        `reporters=0 businessFailure=${preserveBusinessFailure}`,
+      ),
+    );
+    assert.doesNotMatch(control, /uncaughtException|unhandledRejection/);
+  } finally {
+    output.dispose();
+    if (isPidAlive(child.pid)) child.kill("SIGKILL");
+    await waitForChildExit(child, 5_000).catch(() => undefined);
+  }
+}
+
+async function runClosedParentOutputChild() {
+  const sideArgument = process.argv.find((argument) => argument.startsWith("--closed-parent-output-side="));
+  const failingSide = sideArgument?.slice("--closed-parent-output-side=".length);
+  assert.ok(failingSide === "stdout" || failingSide === "stderr", "destination EPIPE invalide");
+  const preserveBusinessFailure = process.argv.includes("--closed-parent-output-business-failure");
+  const terminal = installRecipeTerminalOutputProtection();
+  const writeControlLine = failingSide === "stdout"
+    ? terminal.writeStderrLine
+    : terminal.writeStdoutLine;
+  const failingStream = failingSide === "stdout" ? process.stdout : process.stderr;
+  const initialErrorListeners = failingStream.listenerCount("error");
+  writeControlLine(`CLOSED_PIPE_ARMED side=${failingSide}`);
+
+  const childScript = [
+    "process.stdout.write('PIPE_FIRST\\nPIPE_TAIL\\n');",
+    "process.stderr.write('PIPE_OTHER_DESTINATION\\n');",
+    preserveBusinessFailure ? "setTimeout(()=>process.exit(7),20);" : "setInterval(()=>{},1000);",
+  ].join("");
   const fixture = await spawnReliabilityProcess(
-    "closed-parent-output",
-    [
-      "-e",
-      [
-        "process.stdout.write('PIPE_FIRST\\n'+'x'.repeat(262144)+'\\nPIPE_TAIL\\n');",
-        "process.stderr.write('PIPE_OTHER_DESTINATION\\n');",
-        "setInterval(()=>{},1000);",
-      ].join(""),
-    ],
+    `closed-parent-output-${failingSide}`,
+    ["-e", childScript],
     "service",
     {
       parentStdoutStream: process.stdout,
       parentStderrStream: process.stderr,
-      diagnosticWrite: (value) => {
-        diagnostics.push(value);
-        process.stderr.write(`CLOSED_PIPE_DIAGNOSTIC ${value}\n`);
-      },
+      diagnosticWrite: (value) => writeControlLine(`CLOSED_PIPE_DIAGNOSTIC ${value}`),
       stopGracePeriodMs: 100,
       stopForcePeriodMs: 3_000,
     },
   );
+  let preservedBusinessError: unknown;
   try {
-    await waitForCondition(
-      () => fixture.owned.logReport?.issues.some(
-        (issue) => issue.phase === "parent-output" && issue.code === "EPIPE",
-      ) === true,
-      "EPIPE réel du pipe stdout fermé",
-      5_000,
-    );
     await waitForCondition(
       () => fixture.owned.recentStdout?.includes("PIPE_TAIL") === true
         && fixture.owned.recentStderr?.includes("PIPE_OTHER_DESTINATION") === true,
-      "drainage des deux pipes enfant après EPIPE",
+      "drainage des deux pipes enfant avant fermeture du parent",
       5_000,
     );
-    const outcome = await stopOwnedProcess(fixture.owned);
+    if (preserveBusinessFailure) {
+      assert.equal(await waitForChildExit(fixture.owned.child, 10_000), 7);
+      try {
+        await stopOwnedProcess(fixture.owned);
+        assert.fail("l’échec métier antérieur doit rester visible");
+      } catch (error) {
+        preservedBusinessError = error;
+        assert.match(safeError(error), /s’est arrêté avant la demande d’arrêt.*code 7/s);
+      }
+    } else {
+      const outcome = await stopOwnedProcess(fixture.owned);
+      assert.equal(outcome.childStopped, true);
+      assert.equal(outcome.ownedTreeStopped, true);
+    }
     await waitForOwnedProcessLog(fixture.owned);
     const log = await readFile(fixture.owned.logPath, "utf8");
     assert.match(log, /PIPE_FIRST/);
     assert.match(log, /PIPE_TAIL/);
     assert.match(log, /PIPE_OTHER_DESTINATION/);
-    assert.equal(diagnostics.length, 1);
-    assert.equal(outcome.childStopped, true);
-    await waitForCondition(
-      () => process.stdout.listenerCount("error") === initialStdoutErrorListeners,
-      "retrait du listener du pipe stdout fermé",
+    const reporterCount = failingSide === "stdout"
+      ? terminal.stdoutReporterCount()
+      : terminal.stderrReporterCount();
+    assert.equal(reporterCount, 0, "les abonnements du dernier enfant doivent être libérés");
+    assert.equal(
+      failingStream.listenerCount("error"),
+      initialErrorListeners,
+      "la protection de durée de vie doit rester installée une seule fois",
     );
-    process.stderr.write(
-      `CLOSED_PIPE_RESULT code=EPIPE drained=${log.includes("PIPE_TAIL")} stopped=${outcome.childStopped}\n`,
+    const closeConfirmed = new Promise<void>((resolvePromise) => {
+      process.stdin.once("data", () => resolvePromise());
+    });
+    writeControlLine(`CLOSED_PIPE_CHILD_RELEASED side=${failingSide}`);
+    await closeConfirmed;
+
+    const firstFinalWriteAccepted = failingSide === "stdout"
+      ? terminal.writeStdoutLine(`CLOSED_PIPE_FINAL ${"x".repeat(262_144)}`)
+      : terminal.writeStderrLine(`CLOSED_PIPE_FINAL ${"x".repeat(262_144)}`);
+    assert.equal(firstFinalWriteAccepted, true, "la rupture doit être observée de manière asynchrone");
+    await waitForCondition(
+      () => failingSide === "stdout" ? terminal.stdoutFailed() : terminal.stderrFailed(),
+      `EPIPE asynchrone de l’écriture finale ${failingSide}`,
+      5_000,
+    );
+    const secondFinalWriteAccepted = failingSide === "stdout"
+      ? terminal.writeStdoutLine("CLOSED_PIPE_FINAL_SUPPRESSED")
+      : terminal.writeStderrLine("CLOSED_PIPE_FINAL_SUPPRESSED");
+    assert.equal(secondFinalWriteAccepted, false, "les écritures suivantes vers la destination cassée doivent cesser");
+    if (preserveBusinessFailure) {
+      assert.match(safeError(preservedBusinessError), /code 7/, "EPIPE ne doit pas masquer l’échec métier antérieur");
+    }
+    writeControlLine(
+      `CLOSED_PIPE_RESULT side=${failingSide} epipe=true finalSuppressed=true ` +
+      `reporters=${reporterCount} businessFailure=${preserveBusinessFailure}`,
     );
   } finally {
     await cleanupReliabilityProcess(fixture);
@@ -2915,6 +3039,73 @@ function syntheticChildProcess() {
     killed: false,
     kill: () => true,
   }) as unknown as ChildProcess;
+}
+
+function syntheticWindowsSupervisor(onKill: () => boolean) {
+  let exitCode: number | null = null;
+  let signalCode: NodeJS.Signals | null = null;
+  let killCalls = 0;
+  let stopCommands = "";
+  const child = new EventEmitter() as EventEmitter & Record<string, unknown>;
+  const stdin = new Writable({
+    write(chunk, _encoding, callback) {
+      stopCommands += String(chunk);
+      callback();
+    },
+  });
+  Object.assign(child, {
+    pid: 424_242,
+    stdin,
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    killed: false,
+    kill: () => {
+      killCalls += 1;
+      return onKill();
+    },
+  });
+  Object.defineProperties(child, {
+    exitCode: { get: () => exitCode },
+    signalCode: { get: () => signalCode },
+  });
+  return {
+    child: child as unknown as ChildProcess,
+    settle(code: number | null, signal: NodeJS.Signals | null = null) {
+      exitCode = code;
+      signalCode = signal;
+      child.emit("exit", code, signal);
+      child.emit("close", code, signal);
+    },
+    killCalls: () => killCalls,
+    stopCommands: () => stopCommands,
+  };
+}
+
+function syntheticWindowsOwnedProcess(
+  name: string,
+  child: ChildProcess,
+  timings: Pick<OwnedProcess, "stopGracePeriodMs" | "stopForcePeriodMs">,
+): OwnedProcess {
+  return {
+    name,
+    kind: "service",
+    child,
+    logPath: `${name}.log`,
+    stopRequested: false,
+    ownsWindowsJobObject: true,
+    windowsJobReady: true,
+    windowsJobTreeStopped: false,
+    windowsJobSetupFailed: false,
+    childClosed: false,
+    logReport: {
+      auxiliary: true,
+      status: "complete",
+      finalized: true,
+      issues: [],
+    },
+    logFinalization: Promise.resolve(),
+    ...timings,
+  };
 }
 
 function trackChildOutput(child: ChildProcess) {

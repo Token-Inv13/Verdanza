@@ -1,10 +1,12 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  installRecipeTerminalOutputProtection,
   isRecipeStartupCancelled,
   printRecipeAccess,
   startRecipeHarness,
   type RecipeHarness,
+  writeRecipeStdoutLine,
 } from "./harness.js";
 
 export type RecipeSignal = "SIGINT" | "SIGTERM";
@@ -127,10 +129,11 @@ async function runManualRecipe() {
     signalSource: process,
     startHarness: (signal) => startRecipeHarness("manual", { signal }),
     printAccess: printRecipeAccess,
-    writeLine: (message) => console.log(message),
+    writeLine: writeRecipeStdoutLine,
   });
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  installRecipeTerminalOutputProtection();
   await runManualRecipe();
 }

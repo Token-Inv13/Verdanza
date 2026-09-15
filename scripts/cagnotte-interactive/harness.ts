@@ -80,6 +80,7 @@ const LOG_CLOSE_TIMEOUT_MS = 2_000;
 const PROCESS_GRACEFUL_ACTION_TIMEOUT_MS = 6_500;
 const PROCESS_GRACE_PERIOD_MS = 2_500;
 const PROCESS_FORCE_PERIOD_MS = 5_000;
+const WINDOWS_JOB_STOP_PROOF_TIMEOUT_MS = 5_500;
 const MAX_LOG_ISSUES = 8;
 const MAX_RECENT_PROCESS_OUTPUT = 16_384;
 const WINDOWS_JOB_RUNNER = resolve(RECIPE_ROOT, "scripts/cagnotte-interactive/windowsJobRunner.ps1");
@@ -90,40 +91,125 @@ type SharedParentOutputState = {
   destination: Writable;
   failed: boolean;
   failure?: unknown;
+  errorEventObserved: boolean;
+  processLifetimeProtected: boolean;
   reporters: Set<ParentOutputReporter>;
   handleError: (error: unknown) => void;
 };
 
 const sharedParentOutputs = new WeakMap<Writable, SharedParentOutputState>();
 
+function releaseUnusedSharedParentOutput(state: SharedParentOutputState) {
+  if (state.reporters.size > 0 || state.processLifetimeProtected) return;
+  // Une erreur reçue par callback peut encore être suivie de son événement `error`.
+  if (state.failed && !state.errorEventObserved) return;
+  state.destination.off("error", state.handleError);
+  sharedParentOutputs.delete(state.destination);
+}
+
+function recordSharedParentOutputFailure(
+  state: SharedParentOutputState,
+  error: unknown,
+  errorEventObserved: boolean,
+) {
+  if (errorEventObserved) state.errorEventObserved = true;
+  if (!state.failed) {
+    state.failed = true;
+    state.failure = error;
+    for (const reporter of [...state.reporters]) {
+      try {
+        reporter(error);
+      } catch {
+        // Un reporter auxiliaire ne doit jamais interrompre le drainage des pipes enfant.
+      }
+    }
+  }
+  releaseUnusedSharedParentOutput(state);
+}
+
+function getSharedParentOutput(destination: Writable) {
+  const state = sharedParentOutputs.get(destination);
+  if (state) return state;
+  const created: SharedParentOutputState = {
+    destination,
+    failed: false,
+    errorEventObserved: false,
+    processLifetimeProtected: false,
+    reporters: new Set<ParentOutputReporter>(),
+    handleError: () => undefined,
+  };
+  created.handleError = (error: unknown) => {
+    recordSharedParentOutputFailure(created, error, true);
+  };
+  destination.on("error", created.handleError);
+  sharedParentOutputs.set(destination, created);
+  return created;
+}
+
+function writeSharedParentOutput(state: SharedParentOutputState, value: string) {
+  if (state.failed) return false;
+  try {
+    state.destination.write(value, (error?: Error | null) => {
+      if (error) recordSharedParentOutputFailure(state, error, false);
+    });
+    return true;
+  } catch (error) {
+    recordSharedParentOutputFailure(state, error, false);
+    return false;
+  }
+}
+
+export type RecipeTerminalOutputProtection = {
+  writeStdoutLine: (message: string) => boolean;
+  writeStderrLine: (message: string) => boolean;
+  stdoutFailed: () => boolean;
+  stderrFailed: () => boolean;
+  stdoutReporterCount: () => number;
+  stderrReporterCount: () => number;
+};
+
+export function installRecipeTerminalOutputProtection(): RecipeTerminalOutputProtection {
+  const stdout = getSharedParentOutput(process.stdout);
+  const stderr = getSharedParentOutput(process.stderr);
+  stdout.processLifetimeProtected = true;
+  stderr.processLifetimeProtected = true;
+  return {
+    writeStdoutLine: (message) => writeSharedParentOutput(stdout, `${message}\n`),
+    writeStderrLine: (message) => writeSharedParentOutput(stderr, `${message}\n`),
+    stdoutFailed: () => stdout.failed,
+    stderrFailed: () => stderr.failed,
+    stdoutReporterCount: () => stdout.reporters.size,
+    stderrReporterCount: () => stderr.reporters.size,
+  };
+}
+
+export function writeRecipeStdoutLine(message: string) {
+  const state = sharedParentOutputs.get(process.stdout);
+  if (state?.processLifetimeProtected) return writeSharedParentOutput(state, `${message}\n`);
+  try {
+    console.log(message);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function writeRecipeStderrLine(message: string) {
+  const state = sharedParentOutputs.get(process.stderr);
+  if (state?.processLifetimeProtected) return writeSharedParentOutput(state, `${message}\n`);
+  try {
+    console.error(message);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function acquireSharedParentOutput(
   destination: Writable,
   reportFailure: ParentOutputReporter,
 ) {
-  let state = sharedParentOutputs.get(destination);
-  if (!state) {
-    const reporters = new Set<ParentOutputReporter>();
-    state = {
-      destination,
-      failed: false,
-      reporters,
-      handleError: () => undefined,
-    };
-    state.handleError = (error: unknown) => {
-      if (!state || state.failed) return;
-      state.failed = true;
-      state.failure = error;
-      for (const reporter of [...state.reporters]) {
-        try {
-          reporter(error);
-        } catch {
-          // Un reporter auxiliaire ne doit jamais interrompre le drainage des pipes enfant.
-        }
-      }
-    };
-    destination.on("error", state.handleError);
-    sharedParentOutputs.set(destination, state);
-  }
+  const state = getSharedParentOutput(destination);
 
   state.reporters.add(reportFailure);
   if (state.failed) reportFailure(state.failure);
@@ -131,20 +217,11 @@ function acquireSharedParentOutput(
   let pendingWrites = 0;
   let releaseRequested = false;
   let released = false;
-  let releaseImmediate: ReturnType<typeof setImmediate> | undefined;
   const releaseNow = () => {
-    releaseImmediate = undefined;
     if (released || !releaseRequested || pendingWrites > 0) return;
     released = true;
-    state?.reporters.delete(reportFailure);
-    if (state && state.reporters.size === 0) {
-      destination.off("error", state.handleError);
-      sharedParentOutputs.delete(destination);
-    }
-  };
-  const scheduleRelease = () => {
-    if (released || !releaseRequested || pendingWrites > 0 || releaseImmediate) return;
-    releaseImmediate = setImmediate(releaseNow);
+    state.reporters.delete(reportFailure);
+    releaseUnusedSharedParentOutput(state);
   };
 
   return {
@@ -155,9 +232,9 @@ function acquireSharedParentOutput(
       const complete = (error?: Error | null) => {
         if (completed) return;
         completed = true;
-        if (error) state?.handleError(error);
+        if (error) recordSharedParentOutputFailure(state, error, false);
         pendingWrites -= 1;
-        scheduleRelease();
+        releaseNow();
       };
       try {
         destination.write(value, complete);
@@ -168,7 +245,7 @@ function acquireSharedParentOutput(
     release() {
       if (releaseRequested) return;
       releaseRequested = true;
-      scheduleRelease();
+      releaseNow();
     },
   };
 }
@@ -401,7 +478,7 @@ export async function startRecipeHarness(
       await harness.stop();
     } catch (caughtCleanupError) {
       cleanupError = caughtCleanupError;
-      console.error(`[harness-cleanup] ${safeError(caughtCleanupError)}`);
+      writeRecipeStderrLine(`[harness-cleanup] ${safeError(caughtCleanupError)}`);
       if (error instanceof Error) {
         Object.defineProperty(error, "cleanupError", {
           configurable: true,
@@ -427,7 +504,7 @@ export async function startRecipeHarness(
       }, null, 2)}\n`, "utf8");
       await writePartialStartDiagnostics(runDirectory, processes);
     } catch (evidenceError) {
-      console.error(`[harness-cleanup-evidence] ${safeError(evidenceError)}`);
+      writeRecipeStderrLine(`[harness-cleanup-evidence] ${safeError(evidenceError)}`);
     }
     if (error instanceof Error) {
       try {
@@ -445,14 +522,14 @@ export async function startRecipeHarness(
 }
 
 export function printRecipeAccess(harness: RecipeHarness) {
-  console.log("\nRECETTE LOCALE — DONNÉES FICTIVES");
-  console.log(`URL : ${localUrl(RECIPE_PORTS.app, "/connexion")}`);
+  writeRecipeStdoutLine("\nRECETTE LOCALE — DONNÉES FICTIVES");
+  writeRecipeStdoutLine(`URL : ${localUrl(RECIPE_PORTS.app, "/connexion")}`);
   for (const [role, account] of Object.entries(RECIPE_ACCOUNTS)) {
-    console.log(`${role}: ${account.email} / ${account.password}`);
+    writeRecipeStdoutLine(`${role}: ${account.email} / ${account.password}`);
   }
-  console.log(`Processus : ${harness.processes.map((entry) => `${entry.name}=${entry.child.pid}`).join(", ")}`);
-  console.log(`Preuves : ${harness.runDirectory}`);
-  console.log("Arrêt : Ctrl+C dans ce terminal\n");
+  writeRecipeStdoutLine(`Processus : ${harness.processes.map((entry) => `${entry.name}=${entry.child.pid}`).join(", ")}`);
+  writeRecipeStdoutLine(`Preuves : ${harness.runDirectory}`);
+  writeRecipeStdoutLine("Arrêt : Ctrl+C dans ce terminal\n");
 }
 
 export async function runRecipeScript(
@@ -553,7 +630,7 @@ export function spawnOwned(
   });
   const diagnosticWrite = options.diagnosticWrite ?? ((value: string) => {
     try {
-      console.error(value);
+      writeRecipeStderrLine(value);
     } catch {
       // Le secours de dernier niveau ne doit jamais concurrencer le nettoyage.
     }
@@ -849,7 +926,7 @@ async function runOneShot(
     try {
       await stopOwnedProcess(owned);
     } catch (cleanupError) {
-      console.error(`[one-shot-cleanup:${name}] ${safeError(cleanupError)}`);
+      writeRecipeStderrLine(`[one-shot-cleanup:${name}] ${safeError(cleanupError)}`);
       if (error instanceof Error) {
         try {
           Object.defineProperty(error, "cleanupError", {
@@ -1065,14 +1142,24 @@ export function stopOwnedProcess(processRef: OwnedProcess): Promise<OwnedProcess
         await requestWindowsJobStop(processRef);
         if (!(await ownedProcessTreeStoppedWithin(
           processRef,
-          processRef.stopGracePeriodMs ?? PROCESS_GRACE_PERIOD_MS,
+          processRef.stopGracePeriodMs ?? WINDOWS_JOB_STOP_PROOF_TIMEOUT_MS,
         ))) {
           if (hasSettled(processRef.child)) {
             throw new Error(`superviseur Windows terminé sans fermeture prouvée du Job Object ${processRef.name}.`);
           }
           fallbackReason = `${fallbackReason} | superviseur Windows hors délai, fermeture par handle`;
-          if (!processRef.child.kill("SIGKILL")) {
-            throw new Error(`impossible d’arrêter le superviseur Windows possédé ${processRef.name}.`);
+          const terminationRequested = processRef.child.kill("SIGKILL");
+          if (!terminationRequested) {
+            fallbackReason = `${fallbackReason} | retour d’arrêt ambigu, état terminal vérifié`;
+            if (!(await ownedProcessTreeStoppedWithin(
+              processRef,
+              processRef.stopForcePeriodMs ?? PROCESS_FORCE_PERIOD_MS,
+            ))) {
+              throw new Error(
+                `impossible d’arrêter le superviseur Windows possédé ${processRef.name} : ` +
+                "retour d’arrêt ambigu et fermeture non prouvée.",
+              );
+            }
           }
         }
       } catch (error) {
@@ -1345,7 +1432,7 @@ async function captureApiDiagnostics(processes: OwnedProcess[], runDirectory: st
         snapshot = incompleteDiagnosticJournalSnapshot("API_DIAGNOSTICS_STATUS");
       }
     } catch (error) {
-      console.error(`[api-diagnostics] contrôle local indisponible code=${diagnosticErrorCode(error)}`);
+      writeRecipeStderrLine(`[api-diagnostics] contrôle local indisponible code=${diagnosticErrorCode(error)}`);
       snapshot = incompleteDiagnosticJournalSnapshot("API_DIAGNOSTICS_UNAVAILABLE");
     }
   }
@@ -1357,7 +1444,7 @@ async function captureApiDiagnostics(processes: OwnedProcess[], runDirectory: st
       "utf8",
     );
   } catch (error) {
-    console.error(`[api-diagnostics] preuve de contrôle indisponible code=${diagnosticErrorCode(error)}`);
+    writeRecipeStderrLine(`[api-diagnostics] preuve de contrôle indisponible code=${diagnosticErrorCode(error)}`);
     return incompleteDiagnosticJournalSnapshot("API_DIAGNOSTICS_EVIDENCE");
   }
   return snapshot;
@@ -1401,7 +1488,7 @@ async function writePartialStartDiagnostics(runDirectory: string, processes: Own
     } catch (error) {
       sourceReadErrorCode = safeDiagnosticCode(error);
       try {
-        console.error(`[harness-diagnostics] log auxiliaire indisponible code=${sourceReadErrorCode}`);
+        writeRecipeStderrLine(`[harness-diagnostics] log auxiliaire indisponible code=${sourceReadErrorCode}`);
       } catch {
         // La preuve structurée ci-dessous conserve déjà ce défaut auxiliaire.
       }

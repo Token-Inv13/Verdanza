@@ -23,10 +23,13 @@ import {
   RECIPE_PROJECT_ID,
 } from "./constants.js";
 import {
+  installRecipeTerminalOutputProtection,
   ownedProcessReliabilitySnapshot,
   runRecipeScript,
   startRecipeHarness,
   type RecipeHarness,
+  writeRecipeStderrLine,
+  writeRecipeStdoutLine,
 } from "./harness.js";
 import {
   configureOwnedResource,
@@ -334,7 +337,7 @@ export async function runAutomatedRecipe(options: {
         items: viewportDefinitions,
         cancellation,
         run: async (viewport) => {
-          if (options.signalProbe) console.log(`RUNNER_VIEWPORT_START ${viewport.label}`);
+          if (options.signalProbe) writeRecipeStdoutLine(`RUNNER_VIEWPORT_START ${viewport.label}`);
           return runViewport(
             browser as Browser,
             viewport,
@@ -360,7 +363,7 @@ export async function runAutomatedRecipe(options: {
       browserCloseError ??= error;
     }
     if (browserCloseError !== undefined) {
-      console.error(`[cleanup:browser] ${safeError(browserCloseError)}`);
+      writeRecipeStderrLine(`[cleanup:browser] ${safeError(browserCloseError)}`);
       if (executionError === undefined && !cancellation.signal.aborted) executionError = browserCloseError;
     }
 
@@ -373,7 +376,7 @@ export async function runAutomatedRecipe(options: {
         ...(cancellation.requestedSignal() ? { interruptedBy: cancellation.requestedSignal() } : {}),
         cleanupIssues: cancellationCleanupIssues(interruptionError, browserCloseError),
       });
-      console.error(`Preuve interactive d’échec : ${latestFailureEvidence}`);
+      writeRecipeStderrLine(`Preuve interactive d’échec : ${latestFailureEvidence}`);
       throw executionError;
     }
 
@@ -401,8 +404,8 @@ export async function runAutomatedRecipe(options: {
           executions,
         }, null, 2)}\n`,
       });
-      console.log(`Preuve interactive consolidée : ${latestEvidence}`);
-      console.log("Recette interactive locale réussie sur desktop et viewport mobile ; tous les processus sont arrêtés.");
+      writeRecipeStdoutLine(`Preuve interactive consolidée : ${latestEvidence}`);
+      writeRecipeStdoutLine("Recette interactive locale réussie sur desktop et viewport mobile ; tous les processus sont arrêtés.");
       cancellation.throwIfRequested();
       return { status: "PASS", exitCode: 0 };
     } catch (error) {
@@ -434,7 +437,7 @@ async function writeFailureEvidence(
       ...details,
     }, null, 2)}\n`, "utf8");
   } catch (evidenceError) {
-    console.error(`[failure-evidence] ${safeError(evidenceError)}`);
+    writeRecipeStderrLine(`[failure-evidence] ${safeError(evidenceError)}`);
     return evidenceError;
   }
 }
@@ -471,7 +474,7 @@ async function writeCancellationResult(options: {
     cleanupIssues,
   });
   if (evidenceError !== undefined) exitCode = 1;
-  console.error(
+  writeRecipeStderrLine(
     `Recette interactive ANNULÉE par ${signal}; aucun PASS global publié ` +
     `(code de sortie ${exitCode}).`,
   );
@@ -522,6 +525,7 @@ function selectedSignalProbe(): RunnerSignalProbe | undefined {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  installRecipeTerminalOutputProtection();
   const result = await runAutomatedRecipe({ signalProbe: selectedSignalProbe() });
   if (result.status === "CANCELLED") process.exitCode = result.exitCode;
 }
@@ -579,7 +583,7 @@ async function runViewport(
       if (!resources.harness) return;
       if (signalProbe && !cleanupProbeReported) {
         cleanupProbeReported = true;
-        console.log(`RUNNER_SIGNAL_PROBE CLEANUP_START ${viewport.label} ${resources.harness.runDirectory}`);
+        writeRecipeStdoutLine(`RUNNER_SIGNAL_PROBE CLEANUP_START ${viewport.label} ${resources.harness.runDirectory}`);
       }
       const evidenceFailures: unknown[] = [];
       const monitors = [resources.clientMonitor, resources.adminMonitor].filter(
@@ -679,7 +683,7 @@ async function runViewport(
   }, async ({ harness, clientMonitor, adminMonitor, clientPage, adminPage }) => {
     cancellation.throwIfRequested();
     if (signalProbe === "after-resources") {
-      console.log(
+      writeRecipeStdoutLine(
         `RUNNER_SIGNAL_PROBE READY after-resources ${viewport.label} ${harness.runDirectory}`,
       );
       await cancellation.waitForRequest();
@@ -690,7 +694,7 @@ async function runViewport(
       await goto(clientPage, "/connexion");
       cancellation.throwIfRequested();
       const activeWait = clientPage.waitForFunction(() => false, undefined, { timeout: 60_000 });
-      console.log(
+      writeRecipeStdoutLine(
         `RUNNER_SIGNAL_PROBE READY during-active-wait ${viewport.label} ${harness.runDirectory}`,
       );
       await activeWait;
@@ -1184,7 +1188,7 @@ async function runViewport(
     executionStatus = "pass";
     return result;
   }).finally(() => {
-    if (!stoppedForFailClosed) console.log(`${viewport.label}: arrêt de sécurité appliqué avant la fin du scénario.`);
+    if (!stoppedForFailClosed) writeRecipeStdoutLine(`${viewport.label}: arrêt de sécurité appliqué avant la fin du scénario.`);
   });
 }
 
@@ -1655,7 +1659,7 @@ async function signIn(
     assertPageActive(page);
     await page.waitForURL((url) => url.pathname === "/compte" || url.pathname.startsWith("/compte/"), { timeout: 20_000 });
   } catch (error) {
-    console.error(`Échec du formulaire Auth Emulator (${page.url()}) : ${(await mainText(page)).slice(0, 1_500)}`);
+    writeRecipeStderrLine(`Échec du formulaire Auth Emulator (${page.url()}) : ${(await mainText(page)).slice(0, 1_500)}`);
     throw error;
   }
 }
@@ -2315,7 +2319,7 @@ async function persistSanitizedHarnessDiagnostics(harness: RecipeHarness) {
         .toUpperCase()
         .replace(/[^A-Z0-9_-]/g, "_")
         .slice(0, 64);
-      console.error(`[emulator-diagnostics] log auxiliaire indisponible code=${sourceReadErrorCode}`);
+      writeRecipeStderrLine(`[emulator-diagnostics] log auxiliaire indisponible code=${sourceReadErrorCode}`);
     }
   }
   await writeFile(
@@ -2331,7 +2335,7 @@ async function persistSanitizedHarnessDiagnostics(harness: RecipeHarness) {
 }
 
 function logCleanupIssue(label: string, step: CleanupStepResult) {
-  console.error(`[cleanup:${label}] ${step.name}: ${step.error ?? "échec sans détail"}`);
+  writeRecipeStderrLine(`[cleanup:${label}] ${step.name}: ${step.error ?? "échec sans détail"}`);
 }
 
 function isAllowedLocalUrl(url: URL, websocket = false) {
