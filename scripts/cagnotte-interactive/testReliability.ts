@@ -48,6 +48,8 @@ import {
   type NetworkEvidence,
 } from "./runtimeDiagnostics.js";
 import {
+  createBrowserEvidenceCollection,
+  persistBrowserEvidence,
   publishCurrentPassEvidence,
   runViewportSequence,
 } from "./test.js";
@@ -467,6 +469,117 @@ await check("deux chemins rejoignent la même fermeture, y compris après sa ré
   assert.equal(completedClose, cancellationClose, "une fermeture achevée doit rester la fermeture de référence");
   await completedClose;
   assert.equal(closeCalls, 1, "aucune fermeture supplémentaire ne doit être lancée");
+});
+
+await check("une annulation avant collecte n'ouvre aucune lecture navigateur", async () => {
+  let collectionCalls = 0;
+  const collection = createBrowserEvidenceCollection({
+    collect: async () => { collectionCalls += 1; },
+    isCoordinatedClosureError: () => false,
+  });
+  collection.stopForCoordinatedCancellation();
+  await collection.collect();
+  await collection.settle();
+  assert.equal(collectionCalls, 0);
+  assert.deepEqual(collection.snapshot(), {
+    status: "not-collected",
+    completedCollections: 0,
+    interruptedCollections: 0,
+    cancellationClosureRequested: true,
+  });
+});
+
+await check("une lecture navigateur engagée est interrompue par la fermeture coordonnée", async () => {
+  const started = deferred<void>();
+  let rejectCollection: (error: Error) => void = () => undefined;
+  const collection = createBrowserEvidenceCollection({
+    collect: async () => {
+      started.resolve();
+      await new Promise<void>((_resolvePromise, rejectPromise) => {
+        rejectCollection = rejectPromise;
+      });
+    },
+    isCoordinatedClosureError: (error) => /Target page, context or browser has been closed/.test(safeError(error)),
+  });
+  const activeCollection = collection.collect();
+  await started.promise;
+  collection.stopForCoordinatedCancellation();
+  rejectCollection(new Error("Target page, context or browser has been closed"));
+  await activeCollection;
+  await collection.settle();
+  assert.deepEqual(collection.snapshot(), {
+    status: "interrupted",
+    completedCollections: 0,
+    interruptedCollections: 1,
+    cancellationClosureRequested: true,
+  });
+});
+
+await check("la même fermeture navigateur sans annulation reste refusée", async () => {
+  const collection = createBrowserEvidenceCollection({
+    collect: async () => { throw new Error("Target page, context or browser has been closed"); },
+    isCoordinatedClosureError: (error) => /Target page, context or browser has been closed/.test(safeError(error)),
+  });
+  await assert.rejects(collection.collect(), /Target page, context or browser has been closed/);
+  await assert.rejects(collection.settle(), /collectes navigateur ont échoué/);
+  assert.equal(collection.snapshot().status, "failed");
+});
+
+await check("les preuves déjà collectées restent enregistrables après fermeture", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "verdanza-browser-evidence-"));
+  const network: NetworkEvidence[] = [];
+  const browserConsole: ConsoleEvidence[] = [];
+  let contextClosed = false;
+  let collectionCalls = 0;
+  const collection = createBrowserEvidenceCollection({
+    collect: async () => {
+      assert.equal(contextClosed, false, "la lecture active exige encore le contexte");
+      collectionCalls += 1;
+      network.push({
+        phase: "test",
+        contextId: "test:client",
+        pageId: "test:client:page-1",
+        sequence: 1,
+        occurredAtEpochMs: 1,
+        requestId: "test:request-1",
+        direction: "response",
+        origin: "http://127.0.0.1:18086",
+        pathname: "/google.firestore.v1.Firestore/Listen/channel",
+        status: 200,
+      });
+      browserConsole.push({
+        phase: "test",
+        contextId: "test:client",
+        pageId: "test:client:page-1",
+        sequence: 2,
+        occurredAtEpochMs: 2,
+        source: "console",
+        type: "log",
+        text: "preuve expurgée",
+      });
+    },
+    isCoordinatedClosureError: () => false,
+  });
+  try {
+    await collection.collect();
+    contextClosed = true;
+    collection.stopForCoordinatedCancellation();
+    await persistBrowserEvidence(
+      { runDirectory: directory },
+      { network, console: browserConsole, settleBrowserEvidence: collection.settle },
+    );
+    assert.equal(collectionCalls, 1, "la persistance ne doit lancer aucune seconde lecture");
+    assert.deepEqual(
+      JSON.parse(await readFile(resolve(directory, "browser-network.json"), "utf8")),
+      network,
+    );
+    assert.deepEqual(
+      JSON.parse(await readFile(resolve(directory, "browser-console.json"), "utf8")),
+      browserConsole,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 await check("une ressource acquise pendant l’annulation reste recensée puis fermée", async () => {
@@ -1026,6 +1139,23 @@ await check("échec de configuration d’un contexte déjà créé", async () =>
   assert.equal(resource.closeCalls, 1, "le contexte créé doit être fermé si sa configuration échoue");
 });
 
+await check("un échec d’écriture du bilan obligatoire reste bloquant", async () => {
+  const fixture = fakeDependencies({ failAt: "cleanup", failEvidence: true });
+  await assert.rejects(
+    runWithViewportResources(fixture.dependencies, async () => undefined),
+    /Nettoyage incomplet/,
+  );
+  assert.equal(
+    fixture.reports[0]?.steps.some((step) => (
+      step.name === "persist-evidence" &&
+      step.status === "failed" &&
+      /injected-execution-summary-write-failure/.test(step.error ?? "")
+    )),
+    true,
+  );
+  assert.equal(fixture.harness.stopCalls, 1, "le harness reste nettoyé après l’échec du bilan");
+});
+
 await check("erreur initiale préservée malgré les erreurs de preuve et de fermeture", async () => {
   const fixture = fakeDependencies({
     failAt: "cleanup",
@@ -1381,7 +1511,7 @@ function fakeDependencies(options: {
       return role === "client" ? clientPage : adminPage;
     },
     persistEvidence: async () => {
-      if (options.failEvidence) throw new Error("injected-evidence-failure");
+      if (options.failEvidence) throw new Error("injected-execution-summary-write-failure");
     },
     closePage: async (page) => { page.closeCalls += 1; },
     closeMonitor: async (monitor) => {

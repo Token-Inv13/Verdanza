@@ -1,5 +1,26 @@
 # Programme cagnotte Production — socle inert-first
 
+## État courant — clôture technique de la PR #9
+
+Le candidat de clôture part du HEAD publié `954337a315681f44249bd100c70c830a8859920c` de `codex/cagnotte-interactive-local-v1`, sur la base `main` `3a7ab99a7837cf902c187b525195bc8fe1f67416`. Le travail reste limité à la recette locale et à ses preuves : aucune garde, règle métier, dépendance, configuration Firebase/Vercel ou donnée distante n'est modifiée.
+
+La collecte navigateur active et la sauvegarde Node sont séparées. Les lectures `page.evaluate` nécessaires aux réponses Firestore Listen sont lancées et contrôlées pendant le parcours. Le nettoyage attend seulement les lectures déjà engagées, sauvegarde les tableaux disponibles et marque une collecte comme non effectuée ou interrompue lorsqu'une annulation coordonnée ferme son propre contexte. Une erreur identique sans cette fermeture coordonnée, un échec antérieur ou l'impossibilité d'écrire une preuve obligatoire reste bloquant. Une annulation propre conserve les sorties `130` (`SIGINT`) et `143` (`SIGTERM`), ne démarre aucun viewport suivant et ne peut produire `PASS`.
+
+Commandes utiles depuis `C:\Users\token\Documents\DEV\verdanza-fidelite-integration` :
+
+```powershell
+npm run typecheck:cagnotte-interactive
+npm run test:cagnotte-interactive-reliability
+npm run test:cagnotte-interactive
+npm run verify
+```
+
+`npm run prepare:cagnotte-interactive` reste la préparation explicite des prérequis lorsque ceux-ci manquent ; elle n'est pas une étape implicite du runner. `npm run verify:full` ne fait pas partie de la clôture de la PR #9. Les sorties sûres et régénérables restent sous `node_modules/.cache/verdanza-cagnotte-interactive/` et hors Git.
+
+Sur Windows, les tests ciblés et `npm run verify` passent sur ce contenu, y compris le parcours réel bureau/mobile, 5,00 € disponibles, 10 mouvements et la libération des processus. Les vrais signaux adressés au PID Node et les descendants Unix restent une preuve CI Linux obligatoire sur le SHA publié ; un résultat Windows ne leur est pas substitué.
+
+Les sections datées et celles dont le titre commence par « Historique » conservent les preuves de candidats antérieurs. Leurs SHA, états de PR, déploiements et nombres de contrôles ne décrivent pas automatiquement le HEAD courant. Les contrats d'architecture, les commandes de recette et les prérequis d'ouverture restent les références techniques tant qu'un lot ultérieur ne les remplace pas explicitement.
+
 Ce socle ajoute les contrats nécessaires à un futur programme Production sans l'activer. Les entrées normales `CAGNOTTE_SERVER_PROGRAM` et `CAGNOTTE_RESERVATION_PROGRAM` restent littéralement à `null`. Aucun résolveur n'est connecté à `process.env` et aucune date de lancement n'est définie.
 
 ## Acquisition
@@ -117,7 +138,7 @@ Après preuve serveur et persistance terminale réussie, `applyInspection` netto
 
 Le test interactif intégré à `test:cagnotte-admin-ui`, lui-même appelé par `verify`, monte réellement les deux panneaux avec API et authentification simulées et réseau externe bloqué. Il couvre remboursement, correction, cas non concluants, échec de persistance, isolation d'une autre commande et stabilisation sans mutation ni boucle. Avant correction, il échouait parce que le panneau pair restait verrouillé ; il passe après correction.
 
-## État courant — recette locale V1 et préparation de l'ouverture
+## Historique — recette locale V1 et préparation de l'ouverture
 
 La PR #7 a été fusionnée par squash dans `main` au commit `71c6d7a3f8dd8b87ae81c3350779aae7c4e59963`. La présente recette part exactement de ce commit dans le worktree `C:\Users\token\Documents\DEV\verdanza-fidelite-integration`, sur la branche locale `codex/cagnotte-recette-v1`. La branche historique `codex/cagnotte-refund-admin-readiness-v1` et les autres worktrees sont conservés.
 
@@ -207,9 +228,9 @@ La dépendance de sécurité reste **API remboursements → interface administra
 | Documents, factures, avoirs, comptabilité et Analytics | Présentations et snapshots techniques couverts par les tests et fixtures. | Libellés finaux, qualification comptable, rapprochement, exports et indicateurs non validés par les responsables concernés. | Technique locale partielle ; validation externe absente. | Faire valider les cas achat mixte, remboursement et correction sans changer les règles commerciales dans ce lot. | Totaux en centimes concordants sur écran et documents ; règles d'avoir, écritures et événements approuvées, sans double comptage. |
 | Drain et exploitation | Achèvement des opérations déjà engagées testé en mode `drain`. | Runbook, alertes, responsabilités et exercice opérationnel non préparés. | Local prouvé ; exploitation Production à préparer. | Documenter puis exercer le passage en `drain` avant toute activation. | Aucune nouvelle inscription/réservation et rapprochement de toutes les opérations engagées avant `off`. |
 
-## Recette interactive locale
+## Outil courant — recette interactive locale
 
-Cette recette part du commit `6f0c35c8f3e92d2a63fb5fc7cb24ddcefa10dff8`, qui contient les fusions des PR #7 et #8, sur la branche locale `codex/cagnotte-interactive-local-v1`. Elle lance la véritable application React/Vite et ses routes, les handlers API existants, Firebase Authentication Emulator et Firestore Emulator avec les règles versionnées. Les programmes cagnotte injectés dans les handlers restent réservés à l'environnement `local_test` ; l'entrée normale et ses sept gardes ne sont pas modifiées.
+L'outil a été introduit à partir du commit historique `6f0c35c8f3e92d2a63fb5fc7cb24ddcefa10dff8`, qui contient les fusions des PR #7 et #8, sur la branche `codex/cagnotte-interactive-local-v1`. Il lance la véritable application React/Vite et ses routes, les handlers API existants, Firebase Authentication Emulator et Firestore Emulator avec les règles versionnées. Les programmes cagnotte injectés dans les handlers restent réservés à l'environnement `local_test` ; l'entrée normale et ses sept gardes ne sont pas modifiées.
 
 ### Préparer, lancer et arrêter
 
@@ -238,7 +259,7 @@ Tous les services écoutent uniquement sur `127.0.0.1` : application `14173`, AP
 
 Les requêtes du navigateur atteignent les vrais handlers locaux de devis, création de commande, lecture cagnotte, transition de statut et remboursement. Les calculs, réservations, journaux et contrôles d'accès sont les services métier existants. Les paiements, e-mails, SMS, Analytics, IndexNow et autres effets sortants sont neutralisés. Le limiteur de checkout utilise réellement la collection Firestore locale `securityRateLimits` et un secret HMAC fictif ; le secret de curseur est également fictif.
 
-Un garde réseau est installé côté navigateur et côté serveur. Le trafic effectivement accepté reste limité aux ports locaux déclarés. Deux tentatives par parcours vers `https://www.google.com/images/cleardot.gif`, émises par le transport Firestore client, ont été bloquées par la CSP avant tout échange distant. `firebase-tools` tente aussi sa notification facultative d'éditeur sur `localhost:40001` ; elle est bloquée par le garde serveur car seul l'hôte littéral `127.0.0.1` est autorisé. Ces entrées prouvent des tentatives bloquées, pas une absence de tentative. Un `400` du canal `Firestore/Listen` reste bloquant sauf s'il correspond exactement au polling WebChannel local de la phase `client1-auth`, avec session déjà établie, réponse vide expurgée, message console corrélé et au plus un incident. Sa reprise doit alors être prouvée dans la même page et le même contexte par une mise à jour synthétique postérieure reçue depuis l'émulateur avec `fromCache=false` et sans écriture en attente. Une réponse `200` antérieure, un autre contexte ou une simple poursuite du parcours ne suffisent plus.
+Un garde réseau est installé côté navigateur et côté serveur. Le trafic effectivement accepté reste limité aux ports locaux déclarés. Deux tentatives par parcours vers `https://www.google.com/images/cleardot.gif`, émises par le transport Firestore client, ont été bloquées par la CSP avant tout échange distant. `firebase-tools` tente aussi sa notification facultative d'éditeur sur `localhost:40001` ; elle est bloquée par le garde serveur car seul l'hôte littéral `127.0.0.1` est autorisé. Ces entrées prouvent des tentatives bloquées, pas une absence de tentative. Un `400` du canal `Firestore/Listen` reste bloquant sauf s'il correspond exactement au polling WebChannel local des phases `client1-auth` ou `admin-auth`, avec session déjà établie, forme de requête reconnue, réponse capturée et expurgée, puis message console corrélé. Sa reprise doit être prouvée dans la même page, le même contexte et la même instance de sonde par une génération synthétique postérieure reçue depuis l'émulateur avec `fromCache=false` et sans écriture en attente. Une réponse `200` antérieure, une autre instance, un autre contexte ou une simple poursuite du parcours ne suffisent pas.
 
 ### Parcours exécuté
 

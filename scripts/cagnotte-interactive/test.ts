@@ -128,6 +128,106 @@ type BrowserFirestoreListenResponse = {
   responseSignature: ResponseSignature;
 };
 
+export type BrowserEvidenceCollectionSnapshot = {
+  status: "not-collected" | "collecting" | "collected" | "interrupted" | "failed";
+  completedCollections: number;
+  interruptedCollections: number;
+  cancellationClosureRequested: boolean;
+};
+
+type BrowserEvidenceCollection = {
+  collect: () => Promise<void>;
+  stopForCoordinatedCancellation: () => void;
+  settle: () => Promise<void>;
+  snapshot: () => BrowserEvidenceCollectionSnapshot;
+};
+
+export function createBrowserEvidenceCollection(options: {
+  collect: () => Promise<void>;
+  isCoordinatedClosureError: (error: unknown) => boolean;
+}): BrowserEvidenceCollection {
+  type ActiveCollection = {
+    interruptedByCoordinatedClosure: boolean;
+    release: () => void;
+    settled: Promise<void>;
+  };
+  const active = new Set<ActiveCollection>();
+  const failures: unknown[] = [];
+  let acceptingCollections = true;
+  let completedCollections = 0;
+  let interruptedCollections = 0;
+
+  const collect = async () => {
+    if (!acceptingCollections) return;
+    let release: () => void = () => undefined;
+    const interrupted = new Promise<void>((resolvePromise) => { release = resolvePromise; });
+    const current = {
+      interruptedByCoordinatedClosure: false,
+      release,
+      settled: Promise.resolve(),
+    } satisfies ActiveCollection;
+    current.settled = Promise.resolve()
+      .then(options.collect)
+      .then(() => { completedCollections += 1; })
+      .catch((error) => {
+        if (
+          current.interruptedByCoordinatedClosure &&
+          options.isCoordinatedClosureError(error)
+        ) {
+          interruptedCollections += 1;
+          return;
+        }
+        failures.push(error);
+        throw error;
+      })
+      .finally(() => { active.delete(current); });
+    active.add(current);
+    // Si l'appelant est libéré par l'annulation, le rejet tardif reste mémorisé et sera relu par settle().
+    void current.settled.then(undefined, () => undefined);
+    await Promise.race([current.settled, interrupted]);
+  };
+
+  return {
+    collect,
+    stopForCoordinatedCancellation() {
+      if (!acceptingCollections) return;
+      acceptingCollections = false;
+      for (const current of active) {
+        current.interruptedByCoordinatedClosure = true;
+        current.release();
+      }
+    },
+    async settle() {
+      while (active.size > 0) await Promise.allSettled([...active].map((entry) => entry.settled));
+      if (failures.length > 0) {
+        throw new AggregateError(
+          [...failures],
+          "Une ou plusieurs collectes navigateur ont échoué hors fermeture coordonnée.",
+        );
+      }
+    },
+    snapshot() {
+      const interrupted = interruptedCollections > 0 || [...active].some(
+        (entry) => entry.interruptedByCoordinatedClosure,
+      );
+      return {
+        status: failures.length > 0
+          ? "failed"
+          : interrupted
+            ? "interrupted"
+            : active.size > 0
+              ? "collecting"
+              : completedCollections > 0
+                ? "collected"
+                : "not-collected",
+        completedCollections,
+        interruptedCollections,
+        cancellationClosureRequested: !acceptingCollections,
+      };
+    },
+  };
+}
+
 type RunnerSignalProbe = "after-resources" | "during-active-wait";
 
 export type AutomatedRecipeResult =
@@ -142,7 +242,12 @@ type MonitoredContext = {
   setPhase: (phase: string) => void;
   currentPhase: () => string;
   pageId: (page: Page) => string;
-  flushEvidence: () => Promise<void>;
+  collectBrowserEvidence: () => Promise<void>;
+  stopBrowserEvidenceForCancellation: () => void;
+  settleBrowserEvidence: () => Promise<void>;
+  browserEvidenceCollection: () => BrowserEvidenceCollectionSnapshot & {
+    interruptedPendingReads: number;
+  };
   lastCagnotteAuthorization: () => string;
 };
 
@@ -455,7 +560,7 @@ async function runViewport(
       onHarnessStarted(harness.runDirectory);
       return harness;
     },
-    createMonitor: (role) => monitoredContext(browserInstance, viewport, role, evidenceClock),
+    createMonitor: (role) => monitoredContext(browserInstance, viewport, role, evidenceClock, cancellation),
     createPage: async (monitor) => {
       const page = await monitor.context.newPage();
       pageCancellations.set(page, cancellation);
@@ -477,24 +582,18 @@ async function runViewport(
         console.log(`RUNNER_SIGNAL_PROBE CLEANUP_START ${viewport.label} ${resources.harness.runDirectory}`);
       }
       const evidenceFailures: unknown[] = [];
-      for (const [page, monitor] of [
-        [resources.clientPage, resources.clientMonitor],
-        [resources.adminPage, resources.adminMonitor],
-      ] as const) {
-        if (!page || !monitor) continue;
-        try {
-          await collectFirestoreProbeEvidence(page, monitor, evidenceClock, firestoreProbeEvidence);
-        } catch (error) {
-          if (!cancellation.signal.aborted) evidenceFailures.push(error);
-        }
-      }
-      const evidenceWrites = await Promise.allSettled([
+      const monitors = [resources.clientMonitor, resources.adminMonitor].filter(
+        (monitor): monitor is MonitoredContext => Boolean(monitor),
+      );
+      const browserEvidenceWrite = await Promise.allSettled([
         persistBrowserEvidence(
           resources.harness,
-          ...[resources.clientMonitor, resources.adminMonitor].filter(
-            (monitor): monitor is MonitoredContext => Boolean(monitor),
-          ),
+          ...monitors,
         ),
+      ]);
+      const evidenceWrites = [
+        ...browserEvidenceWrite,
+        ...await Promise.allSettled([
         writeFile(
           resolve(resources.harness.runDirectory, "firestore-listen-probe.json"),
           `${JSON.stringify(firestoreProbeEvidence, null, 2)}\n`,
@@ -520,6 +619,20 @@ async function runViewport(
           })),
           apiDiagnostics: resources.harness.diagnosticsSnapshot() ?? null,
           screenshots,
+          evidenceCollection: {
+            browser: monitors.map((monitor) => ({
+              contextId: monitor.contextId,
+              ...monitor.browserEvidenceCollection(),
+            })),
+            firestoreProbe: {
+              status: executionStatus === "pass"
+                ? "collected"
+                : firestoreProbeEvidence.length > 0
+                  ? "partial"
+                  : "not-collected",
+              observations: firestoreProbeEvidence.length,
+            },
+          },
           listen400Incidents: [
             ...(resources.clientMonitor?.network ?? []),
             ...(resources.adminMonitor?.network ?? []),
@@ -527,7 +640,8 @@ async function runViewport(
           }, null, 2)}\n`,
           "utf8",
         ),
-      ]);
+        ]),
+      ];
       evidenceFailures.push(...evidenceWrites
         .filter((entry): entry is PromiseRejectedResult => entry.status === "rejected")
         .map((entry) => entry.reason));
@@ -539,7 +653,10 @@ async function runViewport(
       }
     },
     closePage: (page) => page.close(),
-    closeMonitor: (monitor) => monitor.context.close(),
+    closeMonitor: async (monitor) => {
+      if (cancellation.signal.aborted) monitor.stopBrowserEvidenceForCancellation();
+      await monitor.context.close();
+    },
     closeCancellationFallback: () => closeBrowserAfterContextFailure(),
     stopHarness: (harness) => harness.stop(),
     writeCleanupReport: async (report, resources) => {
@@ -678,7 +795,7 @@ async function runViewport(
       firestoreProbeEvidence,
       signal: cancellation.signal,
     });
-    await adminMonitor.flushEvidence();
+    await adminMonitor.collectBrowserEvidence();
     adminMonitor.setPhase("admin-auth");
     await openAdminOrders(adminPage, "Toutes");
     await assertRecipeBanner(adminPage);
@@ -943,7 +1060,7 @@ async function runViewport(
       throw new AggregateError(recoveryFailures, "Une ou plusieurs sondes Firestore n'ont pas prouvé leur reprise.");
     }
     cancellation.throwIfRequested();
-    await clientMonitor.flushEvidence();
+    await clientMonitor.collectBrowserEvidence();
     clientMonitor.setPhase("client-final-reload");
     await clientPage.reload({ waitUntil: "domcontentloaded" });
     await clientPage.getByRole("heading", { name: "Mes avantages" }).waitFor();
@@ -951,7 +1068,10 @@ async function runViewport(
     assert.match(await mainText(clientPage), new RegExp(escapeRegex(RECIPE_ACCOUNTS.client1.email)));
 
     cancellation.throwIfRequested();
-    await Promise.all([clientMonitor.flushEvidence(), adminMonitor.flushEvidence()]);
+    await Promise.all([
+      clientMonitor.collectBrowserEvidence(),
+      adminMonitor.collectBrowserEvidence(),
+    ]);
     cancellation.throwIfRequested();
     const firestoreRecoveryExpectations: FirestoreListenRecoveryExpectation[] = [
       {
@@ -1000,7 +1120,7 @@ async function runViewport(
     await capture(clientPage, harness, viewport, "08-api-indisponible-fail-closed", screenshots);
     cancellation.throwIfRequested();
     assert.deepEqual(await clientPage.evaluate(() => window.__VERDANZA_RECETTE_NETWORK__ ?? []), []);
-    await clientMonitor.flushEvidence();
+    await clientMonitor.collectBrowserEvidence();
     const failClosedEvidence = assertExpectedFailClosedApiUnavailable(
       clientMonitor.network.slice(failClosedNetworkStart),
       clientMonitor.console.slice(failClosedConsoleStart),
@@ -1103,6 +1223,7 @@ async function monitoredContext(
   viewport: ViewportDefinition,
   role: string,
   evidenceClock: EvidenceClock,
+  cancellation: RecipeSignalCancellation,
 ): Promise<MonitoredContext> {
   const network: NetworkEvidence[] = [];
   const console: ConsoleEvidence[] = [];
@@ -1111,6 +1232,9 @@ async function monitoredContext(
   const pages = new Set<Page>();
   const requestIds = new WeakMap<Request, string>();
   const pendingEvidence = new Set<Promise<void>>();
+  const pendingEvidenceFailures: unknown[] = [];
+  let coordinatedCancellationClosureRequested = false;
+  let interruptedPendingReads = 0;
   let pageCount = 0;
   let requestCount = 0;
   let phase = `${role}-boot`;
@@ -1134,6 +1258,17 @@ async function monitoredContext(
       return pageId(request.frame().page());
     } catch {
       return undefined;
+    }
+  };
+  const settlePendingEvidence = async () => {
+    while (pendingEvidence.size > 0) {
+      await Promise.allSettled([...pendingEvidence]);
+    }
+    if (pendingEvidenceFailures.length > 0) {
+      throw new AggregateError(
+        [...pendingEvidenceFailures],
+        "La capture Playwright des réponses Listen a échoué.",
+      );
     }
   };
   const context = await configureOwnedResource({
@@ -1198,11 +1333,23 @@ async function monitoredContext(
           status: response.status(),
         });
         network.push(evidence);
-        if (isFirestoreListen400Response(evidence)) {
+        if (isFirestoreListen400Response(evidence) && !cancellation.signal.aborted) {
           const task = captureResponseSignature(response)
             .then((signature) => { evidence.responseSignature = signature; })
+            .catch((error) => {
+              if (
+                coordinatedCancellationClosureRequested &&
+                isPlaywrightTargetClosedError(error)
+              ) {
+                interruptedPendingReads += 1;
+                return;
+              }
+              pendingEvidenceFailures.push(error);
+              throw error;
+            })
             .finally(() => { pendingEvidence.delete(task); });
           pendingEvidence.add(task);
+          void task.then(undefined, () => undefined);
         }
       });
       ownedContext.on("page", (page) => {
@@ -1243,6 +1390,19 @@ async function monitoredContext(
     close: (ownedContext) => ownedContext.close(),
     onCleanupIssue: (step) => logCleanupIssue(viewport.label, step),
   });
+  const browserEvidenceCollection = createBrowserEvidenceCollection({
+    collect: async () => {
+      await settlePendingEvidence();
+      for (const page of pages) {
+        await mergeBrowserFirestoreResponseEvidence(page, pageId(page), network);
+      }
+    },
+    isCoordinatedClosureError: isPlaywrightTargetClosedError,
+  });
+  const stopBrowserEvidenceForCancellation = () => {
+    coordinatedCancellationClosureRequested = true;
+    browserEvidenceCollection.stopForCoordinatedCancellation();
+  };
   return {
     context,
     contextId,
@@ -1251,14 +1411,48 @@ async function monitoredContext(
     setPhase(value) { phase = value; },
     currentPhase() { return phase; },
     pageId,
-    async flushEvidence() {
-      while (pendingEvidence.size > 0) await Promise.allSettled([...pendingEvidence]);
-      for (const page of pages) {
-        if (!page.isClosed()) await mergeBrowserFirestoreResponseEvidence(page, pageId(page), network);
+    async collectBrowserEvidence() {
+      if (cancellation.signal.aborted) {
+        stopBrowserEvidenceForCancellation();
+        cancellation.throwIfRequested();
       }
+      await browserEvidenceCollection.collect();
+      cancellation.throwIfRequested();
+    },
+    stopBrowserEvidenceForCancellation,
+    async settleBrowserEvidence() {
+      const pendingResult = settlePendingEvidence();
+      const collectionResult = browserEvidenceCollection.settle();
+      const results = await Promise.allSettled([pendingResult, collectionResult]);
+      const failures = results
+        .filter((entry): entry is PromiseRejectedResult => entry.status === "rejected")
+        .map((entry) => entry.reason);
+      if (failures.length > 0) {
+        throw new AggregateError(failures, "La capture navigateur engagée n'a pas pu être finalisée.");
+      }
+    },
+    browserEvidenceCollection() {
+      const snapshot = browserEvidenceCollection.snapshot();
+      return {
+        ...snapshot,
+        status: pendingEvidenceFailures.length > 0
+          ? "failed"
+          : interruptedPendingReads > 0
+            ? "interrupted"
+            : snapshot.status,
+        interruptedPendingReads,
+      };
     },
     lastCagnotteAuthorization() { return lastCagnotteAuthorization; },
   };
+}
+
+function isPlaywrightTargetClosedError(error: unknown) {
+  if (error instanceof AggregateError) {
+    return error.errors.length > 0 && error.errors.every(isPlaywrightTargetClosedError);
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return /Target page, context or browser has been closed|Target closed/i.test(message);
 }
 
 async function mergeBrowserFirestoreResponseEvidence(
@@ -1324,11 +1518,16 @@ function responseSignaturePayload(signature: ResponseSignature) {
   };
 }
 
-async function persistBrowserEvidence(
-  harness: RecipeHarness,
-  ...monitors: MonitoredContext[]
+export type BrowserEvidencePersistenceMonitor = Pick<
+  MonitoredContext,
+  "network" | "console" | "settleBrowserEvidence"
+>;
+
+export async function persistBrowserEvidence(
+  harness: Pick<RecipeHarness, "runDirectory">,
+  ...monitors: BrowserEvidencePersistenceMonitor[]
 ) {
-  await Promise.all(monitors.map((monitor) => monitor.flushEvidence()));
+  await Promise.all(monitors.map((monitor) => monitor.settleBrowserEvidence()));
   await Promise.all([
     writeFile(resolve(harness.runDirectory, "browser-network.json"), `${JSON.stringify(
       monitors.flatMap((monitor) => monitor.network),
