@@ -33,31 +33,33 @@ export function assertOrderRefundScriptUsesPreparedEmulator(command: unknown) {
 
 export function assertGitHubWorkflowUsesFullHistoryCheckout(source: string, workflowName: string) {
   const checkoutMatches = [...source.matchAll(/^( *)- name: Checkout\s*$/gm)];
-  if (checkoutMatches.length !== 1) throw new Error(`${workflowName}: un unique bloc Checkout est requis.`);
-  const checkoutMatch = checkoutMatches[0];
-  const stepIndent = checkoutMatch[1].length;
-  const blockStart = checkoutMatch.index ?? 0;
-  const remaining = source.slice(blockStart).split(/\r?\n/);
-  let blockEnd = remaining.length;
-  for (let index = 1; index < remaining.length; index += 1) {
-    if (new RegExp(`^ {${stepIndent}}- name:`).test(remaining[index])) {
-      blockEnd = index;
-      break;
+  if (checkoutMatches.length === 0) throw new Error(`${workflowName}: au moins un bloc Checkout est requis.`);
+  for (const [checkoutIndex, checkoutMatch] of checkoutMatches.entries()) {
+    const stepIndent = checkoutMatch[1].length;
+    const blockStart = checkoutMatch.index ?? 0;
+    const remaining = source.slice(blockStart).split(/\r?\n/);
+    let blockEnd = remaining.length;
+    for (let index = 1; index < remaining.length; index += 1) {
+      if (new RegExp(`^ {${stepIndent}}- name:`).test(remaining[index])) {
+        blockEnd = index;
+        break;
+      }
     }
-  }
-  const checkoutBlock = remaining.slice(0, blockEnd).join("\n");
-  const usesIndex = checkoutBlock.search(indentedLine(stepIndent + 2, "uses: actions/checkout@v7"));
-  const withIndex = checkoutBlock.search(indentedLine(stepIndent + 2, "with:"));
-  const credentialsIndex = checkoutBlock.search(indentedLine(stepIndent + 4, "persist-credentials: false"));
-  const depthIndex = checkoutBlock.search(indentedLine(stepIndent + 4, "fetch-depth: 0"));
+    const checkoutBlock = remaining.slice(0, blockEnd).join("\n");
+    const usesIndex = checkoutBlock.search(indentedLine(stepIndent + 2, "uses: actions/checkout@v7"));
+    const withIndex = checkoutBlock.search(indentedLine(stepIndent + 2, "with:"));
+    const credentialsIndex = checkoutBlock.search(indentedLine(stepIndent + 4, "persist-credentials: false"));
+    const depthIndex = checkoutBlock.search(indentedLine(stepIndent + 4, "fetch-depth: 0"));
+    const label = checkoutMatches.length === 1 ? "Checkout" : `Checkout #${checkoutIndex + 1}`;
 
-  if (usesIndex === -1) throw new Error(`${workflowName}: Checkout doit utiliser actions/checkout@v7.`);
-  if (withIndex === -1) throw new Error(`${workflowName}: bloc with du Checkout introuvable.`);
-  if (credentialsIndex === -1 || credentialsIndex < withIndex) {
-    throw new Error(`${workflowName}: Checkout doit conserver persist-credentials: false.`);
-  }
-  if (depthIndex === -1 || depthIndex < withIndex) {
-    throw new Error(`${workflowName}: Checkout doit conserver fetch-depth: 0.`);
+    if (usesIndex === -1) throw new Error(`${workflowName}: ${label} doit utiliser actions/checkout@v7.`);
+    if (withIndex === -1) throw new Error(`${workflowName}: bloc with du ${label} introuvable.`);
+    if (credentialsIndex === -1 || credentialsIndex < withIndex) {
+      throw new Error(`${workflowName}: ${label} doit conserver persist-credentials: false.`);
+    }
+    if (depthIndex === -1 || depthIndex < withIndex) {
+      throw new Error(`${workflowName}: ${label} doit conserver fetch-depth: 0.`);
+    }
   }
 }
 

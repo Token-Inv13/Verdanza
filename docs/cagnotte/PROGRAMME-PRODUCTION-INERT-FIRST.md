@@ -1,5 +1,30 @@
 # Programme cagnotte Production — socle inert-first
 
+## État courant — finalisation Windows et EPIPE de la PR #9
+
+Le candidat de clôture part du HEAD publié `e944078917e20f69c71eace3637a2dac7f01d22b` de `codex/cagnotte-interactive-local-v1`, sur la base `main` `3a7ab99a7837cf902c187b525195bc8fe1f67416`. Le travail reste limité au cycle de vie du runner de recette locale, à son superviseur Windows et à leurs preuves : aucune garde, règle métier, dépendance, configuration Firebase/Vercel ou donnée distante n'est modifiée.
+
+La collecte navigateur active et la sauvegarde Node sont séparées. Les lectures `page.evaluate` nécessaires aux réponses Firestore Listen sont lancées et contrôlées pendant le parcours. Le nettoyage attend seulement les lectures déjà engagées, sauvegarde les tableaux disponibles et marque une collecte comme non effectuée ou interrompue lorsqu'une annulation coordonnée ferme son propre contexte. Une erreur identique sans cette fermeture coordonnée, un échec antérieur ou l'impossibilité d'écrire une preuve obligatoire reste bloquant. Une annulation propre conserve les sorties `130` (`SIGINT`) et `143` (`SIGTERM`), ne démarre aucun viewport suivant et ne peut produire `PASS`.
+
+Commandes utiles depuis `C:\Users\token\Documents\DEV\verdanza-fidelite-integration` :
+
+```powershell
+npm run typecheck:cagnotte-interactive
+npm run test:cagnotte-interactive-reliability
+npm run test:cagnotte-interactive
+npm run verify
+```
+
+`npm run prepare:cagnotte-interactive` reste la préparation explicite des prérequis lorsque ceux-ci manquent ; elle n'est pas une étape implicite du runner. `npm run verify:full` ne fait pas partie de la clôture de la PR #9. Les sorties sûres et régénérables restent sous `node_modules/.cache/verdanza-cagnotte-interactive/` et hors Git.
+
+Sur Windows, le superviseur Job Object borne sa propre preuve de fermeture à 5 000 ms ; le runner lui laisse 5 500 ms avant le recours à la fermeture du handle. Un retour `false` de `child.kill("SIGKILL")` reste ambigu : le runner observe ensuite, dans la borne de force explicite, la fermeture du superviseur et la preuve `VERDANZA_WINDOWS_JOB_TREE_STOPPED`. Il n'accepte le résultat que si ces deux états terminaux sont établis. Les contre-exemples déterministes couvrent la sortie concurrente acceptée et le superviseur bloqué ou non prouvé refusé ; le scénario réel vérifie aussi la disparition du parent et du descendant en conservant le témoin extérieur.
+
+Les points d'entrée réels `run.ts` et `test.ts` installent une seule protection des sorties terminales pour toute la durée du processus. Les reporters attachés aux enfants sont libérés après leurs dernières écritures, tandis que la protection légère de `process.stdout` et `process.stderr` reste présente pour les messages finaux. Une erreur synchrone, de callback ou d'événement marque uniquement la destination concernée comme défaillante et bloque ses écritures suivantes, sans masquer un échec métier antérieur ni transformer l'absence d'une preuve obligatoire en succès. Deux vrais sous-processus ferment respectivement stdout et stderr après la libération du dernier enfant, provoquent l'EPIPE asynchrone sur l'écriture finale et vérifient l'absence d'exception non prise en charge.
+
+Les tests ciblés et `npm run verify` passent sur ce contenu sous Windows, y compris le parcours réel bureau/mobile, 5,00 € disponibles, 10 mouvements et la libération des processus. Les vrais signaux adressés au PID Node et les descendants Unix restent une preuve CI Linux obligatoire sur le SHA publié ; un résultat Windows ne leur est pas substitué.
+
+Les sections datées et celles dont le titre commence par « Historique » conservent les preuves de candidats antérieurs. Leurs SHA, états de PR, déploiements et nombres de contrôles ne décrivent pas automatiquement le HEAD courant. Les contrats d'architecture, les commandes de recette et les prérequis d'ouverture restent les références techniques tant qu'un lot ultérieur ne les remplace pas explicitement.
+
 Ce socle ajoute les contrats nécessaires à un futur programme Production sans l'activer. Les entrées normales `CAGNOTTE_SERVER_PROGRAM` et `CAGNOTTE_RESERVATION_PROGRAM` restent littéralement à `null`. Aucun résolveur n'est connecté à `process.env` et aucune date de lancement n'est définie.
 
 ## Acquisition
@@ -117,7 +142,7 @@ Après preuve serveur et persistance terminale réussie, `applyInspection` netto
 
 Le test interactif intégré à `test:cagnotte-admin-ui`, lui-même appelé par `verify`, monte réellement les deux panneaux avec API et authentification simulées et réseau externe bloqué. Il couvre remboursement, correction, cas non concluants, échec de persistance, isolation d'une autre commande et stabilisation sans mutation ni boucle. Avant correction, il échouait parce que le panneau pair restait verrouillé ; il passe après correction.
 
-## État courant — recette locale V1 et préparation de l'ouverture
+## Historique — recette locale V1 et préparation de l'ouverture
 
 La PR #7 a été fusionnée par squash dans `main` au commit `71c6d7a3f8dd8b87ae81c3350779aae7c4e59963`. La présente recette part exactement de ce commit dans le worktree `C:\Users\token\Documents\DEV\verdanza-fidelite-integration`, sur la branche locale `codex/cagnotte-recette-v1`. La branche historique `codex/cagnotte-refund-admin-readiness-v1` et les autres worktrees sont conservés.
 
@@ -206,3 +231,78 @@ La dépendance de sécurité reste **API remboursements → interface administra
 | Parcours interactif complet | Rendu SSR des composants réels et quatre captures locales sans réseau. | SSR ne prouve ni navigation complète, ni session Firebase Auth réelle, ni appels API déployés. | Recette locale uniquement. | Exécuter une recette navigateur Preview avec comptes et données exclusivement fictifs, services externes neutralisés et preuves réseau/runtime. | Compte, avantages, panier, checkout et admin cohérents sur mobile/bureau, aucune écriture ou dépendance Production. |
 | Documents, factures, avoirs, comptabilité et Analytics | Présentations et snapshots techniques couverts par les tests et fixtures. | Libellés finaux, qualification comptable, rapprochement, exports et indicateurs non validés par les responsables concernés. | Technique locale partielle ; validation externe absente. | Faire valider les cas achat mixte, remboursement et correction sans changer les règles commerciales dans ce lot. | Totaux en centimes concordants sur écran et documents ; règles d'avoir, écritures et événements approuvées, sans double comptage. |
 | Drain et exploitation | Achèvement des opérations déjà engagées testé en mode `drain`. | Runbook, alertes, responsabilités et exercice opérationnel non préparés. | Local prouvé ; exploitation Production à préparer. | Documenter puis exercer le passage en `drain` avant toute activation. | Aucune nouvelle inscription/réservation et rapprochement de toutes les opérations engagées avant `off`. |
+
+## Outil courant — recette interactive locale
+
+L'outil a été introduit à partir du commit historique `6f0c35c8f3e92d2a63fb5fc7cb24ddcefa10dff8`, qui contient les fusions des PR #7 et #8, sur la branche `codex/cagnotte-interactive-local-v1`. Il lance la véritable application React/Vite et ses routes, les handlers API existants, Firebase Authentication Emulator et Firestore Emulator avec les règles versionnées. Les programmes cagnotte injectés dans les handlers restent réservés à l'environnement `local_test` ; l'entrée normale et ses sept gardes ne sont pas modifiées.
+
+### Préparer, lancer et arrêter
+
+Depuis `C:\Users\token\Documents\DEV\verdanza-fidelite-integration` :
+
+```powershell
+npm run prepare:cagnotte-interactive
+npm run dev:cagnotte-interactive
+```
+
+La préparation réseau, à exécuter explicitement, contrôle `firebase-tools@15.28.1` provenant du registre npm officiel, le JAR officiel Firestore Emulator `1.22.0` d'empreinte SHA-256 `9b6498b7f62714d67f48f59b3818883cd682dbcd46b9f59511de81c97bb5166c`, Java 21 ou supérieur et Chromium Playwright. Le démarrage n'effectue aucun téléchargement. Il refuse un port occupé ou une configuration incohérente, attend les services avec un délai borné, crée seulement les fixtures fictives et affiche les accès. `SIGINT` et `SIGTERM` sont pris en compte avant cette première acquisition : l'annulation interrompt les attentes, empêche le démarrage des étapes suivantes et nettoie une seule fois les processus déjà possédés.
+
+L'application est accessible à `http://127.0.0.1:14173/`. La commande reste au premier plan ; `Ctrl+C` arrête uniquement les processus qu'elle a créés et libère les ports. Une interruption pendant le démarrage est annoncée comme `ANNULÉE`, sans message `READY` ni appel à une API qui n'aurait pas atteint sa disponibilité. Les gestionnaires de signaux restent installés jusqu'à la fin du nettoyage. Les comptes créés à chaque lancement dans Auth Emulator sont :
+
+| rôle | identifiant | mot de passe fictif |
+|---|---|---|
+| Client 1 | `client.un@recette.verdanza.test` | `Recette!Client1-2026` |
+| Client 2 | `client.deux@recette.verdanza.test` | `Recette!Client2-2026` |
+| Administrateur | `admin@recette.verdanza.test` | `Recette!Admin-2026` |
+
+Le produit unique est « Fleur fictive recette — 100 € », avec une illustration SVG locale. Un bandeau visible « RECETTE LOCALE — DONNÉES FICTIVES » distingue cette exécution.
+
+### Architecture et isolation observées
+
+Tous les services écoutent uniquement sur `127.0.0.1` : application `14173`, API `14174`, Firestore `18086`, Auth `19099`, hub Firebase `4400`, journal Firebase `4500` et websocket Firestore `9150`. Le projet est fixé à `demo-verdanza-cagnotte` côté navigateur, serveur et émulateurs. Le lancement utilise un environnement nettoyé, ne charge aucun `.env` ou credential réel et refuse le fallback `verdanza-1f621`. Les jetons émis par Auth Emulator sont validés puis confirmés auprès de cet émulateur ; le rôle administrateur continue de provenir de `adminUsers` dans Firestore émulé.
+
+Les requêtes du navigateur atteignent les vrais handlers locaux de devis, création de commande, lecture cagnotte, transition de statut et remboursement. Les calculs, réservations, journaux et contrôles d'accès sont les services métier existants. Les paiements, e-mails, SMS, Analytics, IndexNow et autres effets sortants sont neutralisés. Le limiteur de checkout utilise réellement la collection Firestore locale `securityRateLimits` et un secret HMAC fictif ; le secret de curseur est également fictif.
+
+Un garde réseau est installé côté navigateur et côté serveur. Le trafic effectivement accepté reste limité aux ports locaux déclarés. Deux tentatives par parcours vers `https://www.google.com/images/cleardot.gif`, émises par le transport Firestore client, ont été bloquées par la CSP avant tout échange distant. `firebase-tools` tente aussi sa notification facultative d'éditeur sur `localhost:40001` ; elle est bloquée par le garde serveur car seul l'hôte littéral `127.0.0.1` est autorisé. Ces entrées prouvent des tentatives bloquées, pas une absence de tentative. Un `400` du canal `Firestore/Listen` reste bloquant sauf s'il correspond exactement au polling WebChannel local des phases `client1-auth` ou `admin-auth`, avec session déjà établie, forme de requête reconnue, réponse capturée et expurgée, puis message console corrélé. Sa reprise doit être prouvée dans la même page, le même contexte et la même instance de sonde par une génération synthétique postérieure reçue depuis l'émulateur avec `fromCache=false` et sans écriture en attente. Une réponse `200` antérieure, une autre instance, un autre contexte ou une simple poursuite du parcours ne suffisent pas.
+
+### Parcours exécuté
+
+La commande autonome ci-dessous possède tout son environnement, utilise un jeu de données distinct par format et arrête tous ses processus, même en cas d'échec :
+
+```powershell
+npm run test:cagnotte-interactive
+```
+
+Le parcours a réussi sur Chromium bureau et sur un viewport `390 × 844`. Il passe par les vrais formulaires de connexion, conserve la session après rechargement, vérifie la déconnexion/reconnexion et exerce les interfaces client et administrateur.
+
+| étape | attendu | observé |
+|---|---:|---:|
+| Commande A | panier 100,00 €, paiement externe 100,00 €, gain 5,00 € | `10 000 / 10 000 / 500` centimes |
+| A payée | gain en attente 5,00 € | wallet `500 / 0 / 0 / 0` |
+| A livrée | 5,00 € disponibles | wallet `0 / 500 / 0 / 0` |
+| Commande B | panier 100,00 €, cagnotte 5,00 €, externe 95,00 €, gain 4,75 € | `10 000 / 500 / 9 500 / 475` centimes |
+| B payée puis livrée | réservation consommée, 4,75 € disponibles | wallet final avant retour `0 / 475 / 0 / 0` |
+| Remboursement intégral B déclaré par l'admin | externe 95,00 €, restitution 5,00 €, gain annulé 4,75 € | `9 500 / 500 / 475` centimes |
+| Solde final | 5,00 € disponibles | wallet `0 / 500 / 0 / 0`, 10 mouvements |
+
+Les contrôles négatifs obtiennent `403` pour la lecture du wallet d'un autre client, la lecture administrateur étrangère et la mutation administrateur par un non-admin. Une lecture Firestore directe étrangère reçoit `permission-denied`. Pour les deux créations, le rate-limit conserve exactement deux documents `attempt`. Chacun des six groupes `network/10m`, `network/24h`, `email/30m`, `email/24h`, `anonymous/30m` et `anonymous/24h` peut contenir un ou plusieurs intervalles fixes selon les frontières traversées ; les compteurs positifs de chaque groupe totalisent exactement deux tentatives. Après l'arrêt volontaire de l'API, l'interface affiche une erreur explicite et ne tente aucun fallback distant.
+
+Les preuves courantes sont indexées par `node_modules/.cache/verdanza-cagnotte-interactive/latest-result.json`. Ce fichier est supprimé au début de chaque nouvelle exécution et n'est recréé qu'après une réussite complète ; un échec écrit `latest-failure.json`. Une interruption `SIGINT` ou `SIGTERM` du runner automatise le même contrat d'annulation que le lanceur manuel : elle ferme le navigateur pour interrompre les gestes et attentes Playwright, transmet l'annulation au démarrage et aux scripts ponctuels, interdit le viewport suivant, puis attend le nettoyage des pages, contextes, harness et groupes enfants. Le résultat courant est `CANCELLED`, jamais `PASS`, avec un code 130 pour `SIGINT` ou 143 pour `SIGTERM` lorsque le signal est l'unique cause ; un défaut de nettoyage conserve un code non nul générique et reste joint au bilan. Le lancement Chromium désactive uniquement les gestionnaires Playwright de `SIGINT` et `SIGTERM` afin que ce coordinateur reste seul responsable de la fermeture et du code de sortie ; le contrat `SIGHUP` de Playwright reste inchangé. Le test qui inspecte la console suit les flux dès la création du runner et attend à la fois sa terminaison et l'événement `close`, avec délai, gestion des erreurs et retrait de ses listeners. Une sortie reçue après `exit` reste ainsi incluse dans la preuve. Les assertions structurées, le nettoyage, les descendants, les ports et le témoin sont tous collectés même si le libellé console manque ; un éventuel `SIGKILL` ultérieur du test est signalé comme secours et ne valide jamais le nettoyage du runner. Chaque sous-dossier de `node_modules/.cache/verdanza-cagnotte-interactive/runs/` contient les captures, le relevé réseau navigateur expurgé, la console, la sonde Listen, un résumé même interrompu, le résultat du nettoyage, les requêtes API, l'état borné de leur journalisation et les états Firestore du parcours. La finalisation ferme d'abord l'admission des requêtes applicatives, refuse les nouvelles requêtes avec `local_api_shutting_down`, draine les handlers déjà admis jusqu'à leur véritable fin, attend les écritures inscrites, puis scelle le journal. Les appels de contrôle concurrents partagent la même opération et ne s'attendent pas eux-mêmes. Une réponse HTTP déjà terminée n'est donc plus confondue avec la fin du handler. Une erreur ou un dépassement de délai reste mémorisé même si une écriture ultérieure réussit et produit un échec explicite `DIAGNOSTICS INCOMPLETS` après le nettoyage, sans modifier le résultat métier déjà envoyé. La CI conserve seulement une liste explicite de ces diagnostics sûrs et de cinq captures utiles ; elle n'archive ni profil navigateur, cache complet, Auth brut, cookie, corps de requête ni secret.
+
+### Validation et portée
+
+La validation obligatoire inclut désormais le typecheck dédié, les contrôles statiques d'isolation, les tests d'échec injecté du cycle de vie, de classification et de journalisation, les fenêtres réelles du rate-limit sur émulateur, le parcours interactif et un contrôle du build normal qui refuse tout marqueur ou module de recette. Les tests du rate-limit injectent des instants dans une même fenêtre, aux frontières de 10 minutes, de 30 minutes et de minuit UTC, puis rejouent exactement une tentative après une frontière. Ils appliquent au parcours interactif les mêmes invariants de groupes, bornes, intervalles distincts et sommes par groupe, et refusent les preuves avec compteur manquant, intervalle dupliqué, mauvaise borne ou total incorrect. Les tests de journalisation injectent `ENOSPC` et `EACCES`, couvrent le chemin HTTP après réponse, l'audit remboursement lancé sans attente, la conservation d'une erreur métier, le rejet tardif, la reprise d'écriture, le drain concurrent et le refus d'une preuve incomplète. Une sonde utilise un vrai listener HTTP local et une autre lance le listener dans un sous-processus Node strict, sans gestionnaire global de rejet. Les tests de démarrage pilotent les frontières par promesses contrôlées et annulent un vrai harness après sa première acquisition. La CI Linux lance aussi le véritable point d'entrée `scripts/cagnotte-interactive/test.ts` : elle adresse directement son PID Node avec `SIGINT` après acquisition du harness et des ressources navigateur, puis avec `SIGTERM` pendant une attente Playwright active ; le second cas reçoit un second signal pendant le nettoyage. Ces preuves ne visent ni le parent `npm`, ni un groupe de terminal. Elles vérifient l'absence de viewport mobile et de faux `PASS`, la disparition de Chromium et de tous les descendants recensés, les sept ports libres et la survie d'un témoin extérieur. Un job Windows distinct exécute les scénarios synthétiques du véritable Job Object : parent actif, sortie du parent avant l'arrêt, second arrêt, échec d'établissement et processus sans preuve d'appartenance. Aucun `process.kill(SIGINT)` n'y est présenté comme un vrai `Ctrl+C`. Un `SIGKILL` extérieur au runner et l'arrêt brutal du système restent hors du contrat gracieux. Services persistants, `seed`, préchauffage et scripts ponctuels sont enregistrés dès leur acquisition. Chaque nettoyage est borné, tente les autres fermetures après un échec, conserve l'erreur initiale et accepte un second arrêt sans tuer de processus par nom ou par port. Le manifeste vérifie les cinq processus initiaux et l'arrêt contrôle les sept ports. La CI prépare séparément Chromium et les émulateurs avant `npm run verify`, sans téléchargement implicite pendant cette commande. Les sept gardes normales restent :
+
+Les fichiers de sortie des processus sont des diagnostics auxiliaires : une erreur d'ouverture, d'écriture ou de fermeture y est bornée, expurgée et ajoutée au bilan du processus sans masquer le résultat métier. Le flux reste consommé après la perte du fichier et sa finalisation attend `close`, avec un délai maximal. Sous Unix, chaque processus lancé par le harness possède un groupe dédié ; l'arrêt tente d'abord `SIGINT`, puis signale par `SIGKILL` ce seul groupe si le délai expire. La CI Linux vérifie avec de vrais PID que le parent et son descendant disparaissent, y compris lorsque le parent est déjà mort, tandis qu'un processus témoin extérieur survit. Sous Windows, un auxiliaire PowerShell versionné crée un Job Object avec `KILL_ON_JOB_CLOSE`, crée la cible suspendue, l'assigne au Job Object puis seulement la reprend. La cible ne dispose donc d'aucune fenêtre pour créer un descendant non possédé. Une demande `STOP` ferme tout le Job Object ; si la cible principale sort d'abord, le superviseur ferme immédiatement le groupe et ses descendants, comportement équivalent explicitement vérifié. Le repli ferme uniquement le superviseur détenu par son handle, sans signaler un PID cible potentiellement réutilisé. Une création ou une preuve d'appartenance manquante échoue sans lancement silencieux et ne produit jamais `ownedTreeStopped=true`.
+
+L'exécution intégrale de `npm run verify` couvre la recette interactive bureau et mobile, les scénarios remboursements, la recette V1, le readiness, les tests cœur, le build Vite, le prerender, le contrôle du build normal sans trace de recette, puis les audits locaux essentiels. Chaque passe interactive doit arrêter tous ses processus. Les nombres de pages et de fichiers générés suivent le contenu éditorial présent dans le `main` testé et ne constituent pas un invariant de sécurité.
+
+- `CAGNOTTE_SERVER_PROGRAM = null` ;
+- `CAGNOTTE_RESERVATION_PROGRAM = null` ;
+- `CAGNOTTE_READ_SERVER_ENABLED = false` ;
+- `CAGNOTTE_READ_DISPLAY_ENABLED = false` ;
+- `CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED = false` ;
+- `CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED = false` ;
+- `ORDER_REFUNDS_ENABLED = false`.
+
+Cette recette qualifie l'application, les handlers et les règles en local, avec Auth et Firestore émulés. Elle ne qualifie ni Firebase Production, ni les permissions cloud, ni Vercel, ni l'authentification cloud, ni un parcours sur téléphone physique. Elle ne constitue pas une activation commerciale. Aucun projet, secret, règle, index, donnée distante ou checkout parallèle n'est modifié.

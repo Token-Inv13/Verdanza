@@ -51,7 +51,7 @@ const fullAudits = [
 
 expectScript(
   "verify",
-  "npm run verify:local-safety && npm run lint && npm run typecheck && npm run typecheck:api && npm run test:cagnotte-admin-storage && npm run test:cagnotte-admin-ui && npm run test:cagnotte-emulator-diagnostics && npm run test:order-refunds && npm run test:cagnotte-v1-recipe && npm run verify:cagnotte-production-readiness && npm run test:core && npm run build:local && npm run audit:local-essential",
+  "npm run verify:local-safety && npm run lint && npm run typecheck && npm run typecheck:cagnotte-interactive && npm run typecheck:api && npm run verify:cagnotte-interactive-isolation && npm run test:cagnotte-interactive-reliability && npm run test:cagnotte-interactive-diagnostics && npm run test:cagnotte-rate-limit-windows && npm run test:cagnotte-interactive && npm run test:cagnotte-admin-storage && npm run test:cagnotte-admin-ui && npm run test:cagnotte-emulator-diagnostics && npm run test:order-refunds && npm run test:cagnotte-v1-recipe && npm run verify:cagnotte-production-readiness && npm run test:core && npm run build:local && npm run audit:local-essential",
 );
 expectScript(
   "verify:full",
@@ -64,6 +64,18 @@ expectScript(
 expectScript(
   "test:cagnotte-emulator-diagnostics",
   "node --import tsx scripts/testFirestoreEmulatorProcessDiagnostics.ts",
+);
+expectScript(
+  "test:cagnotte-interactive-reliability",
+  "node --import tsx scripts/cagnotte-interactive/testReliability.ts",
+);
+expectScript(
+  "test:cagnotte-interactive-diagnostics",
+  "node --import tsx scripts/cagnotte-interactive/testDiagnosticJournal.ts",
+);
+expectScript(
+  "test:cagnotte-rate-limit-windows",
+  "node --import tsx scripts/runCagnotteLedgerTests.ts --rate-limit-windows-only",
 );
 expectScript(
   "test:cagnotte-v1-recipe",
@@ -90,7 +102,7 @@ expectScript(
 );
 expectScript(
   "build:local",
-  "npm run sitemap:check && tsc -b && vite build && npm run prerender",
+  "npm run sitemap:check && tsc -b && vite build && npm run prerender && npm run verify:cagnotte-normal-build",
 );
 expectScript("postdeploy:check", "node scripts/postdeployCheck.mjs");
 
