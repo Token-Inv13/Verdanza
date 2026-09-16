@@ -66,6 +66,36 @@ const expectedEndpoints = [
   "update-order-status.ts",
 ];
 
+const allowedRootEnvironmentTemplate = ".env.example";
+const sensitiveVersionedPathPattern = /(?:^|\/)\.env(?:\.|$)|credentials?.*\.json$|service[-_]?account.*\.json$|private.*\.(?:pem|key)$|\.p12$/i;
+const secretSignatures = [
+  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
+  /\bAIza[0-9A-Za-z_-]{30,}\b/,
+  /\bre_[0-9A-Za-z_-]{20,}\b/,
+  /\b(?:vercel_|vcp_)[0-9A-Za-z_-]{20,}\b/i,
+  /\bgh[opusr]_[0-9A-Za-z]{30,}\b/,
+  /\bsk_live_[0-9A-Za-z]{20,}\b/,
+  /\bGOCSPX-[0-9A-Za-z_-]{20,}\b/,
+  /Bearer\s+[0-9A-Za-z._-]{32,}/,
+];
+const sensitiveEnvironmentTemplateKeys = new Set([
+  "RESEND_API_KEY",
+  "TWILIO_ACCOUNT_SID",
+  "TWILIO_AUTH_TOKEN",
+  "FIREBASE_CLIENT_EMAIL",
+  "FIREBASE_PRIVATE_KEY",
+  "FIREBASE_SERVICE_ACCOUNT_BASE64",
+  "CAGNOTTE_READ_CURSOR_SECRET",
+  "BOOTSTRAP_ADMIN_EMAIL",
+  "BOOTSTRAP_ADMIN_UID",
+  "BOOTSTRAP_ADMIN_TEMP_PASSWORD",
+  "GA4_API_SECRET",
+  "GOOGLE_CLIENT_EMAIL",
+  "GOOGLE_PRIVATE_KEY",
+  "GOOGLE_SERVICE_ACCOUNT_JSON",
+  "GOOGLE_SERVICE_ACCOUNT_BASE64",
+]);
+
 await check("checkout complet disponible dans CI et CI Full", () => {
   const pinnedJavaVersions: string[] = [];
   for (const [workflow, verifyStep, verifyScript] of [
@@ -536,6 +566,58 @@ await check("rules-unit-testing 4.0.1 reste une devDependency locale", () => {
   assert.equal(lock.packages?.["node_modules/@firebase/rules-unit-testing"]?.dev, true);
 });
 
+await check("régressions du contrôle strict du modèle .env.example", () => {
+  const healthyTemplate = read(allowedRootEnvironmentTemplate);
+
+  assert.deepEqual(
+    [allowedRootEnvironmentTemplate].filter((file) => sensitiveVersionedPathPattern.test(file)),
+    [allowedRootEnvironmentTemplate],
+    "l'ancien contrôle par nom doit bien rejeter le modèle racine sain",
+  );
+  assert.deepEqual(findForbiddenSensitivePathNames([allowedRootEnvironmentTemplate]), []);
+  assert.deepEqual(findVersionedSecretContentFindings([
+    { file: allowedRootEnvironmentTemplate, source: healthyTemplate },
+  ]), []);
+
+  for (const forbidden of [
+    ".env",
+    ".env.local",
+    ".env.production",
+    ".env.example.bak",
+    ".env.production.example",
+    "config/.env.example",
+    "credentials.json",
+    "service-account.json",
+    "private.pem",
+    "private.key",
+    "certificate.p12",
+  ]) {
+    assert.deepEqual(findForbiddenSensitivePathNames([forbidden]), [forbidden]);
+  }
+
+  const syntheticSignature = ["AI", "za", "A".repeat(32)].join("");
+  assert.deepEqual(findVersionedSecretContentFindings([
+    { file: allowedRootEnvironmentTemplate, source: `VITE_APP_NAME="${syntheticSignature}"` },
+  ]), [`${allowedRootEnvironmentTemplate}:secret-signature`]);
+  assert.deepEqual(findVersionedSecretContentFindings([
+    { file: allowedRootEnvironmentTemplate, source: `# commentaire ${syntheticSignature}` },
+  ]), [`${allowedRootEnvironmentTemplate}:secret-signature`]);
+  assert.deepEqual(findVersionedSecretContentFindings([
+    { file: allowedRootEnvironmentTemplate, source: "RESEND_API_KEY=\"synthetic-non-empty-value\"" },
+  ]), [`${allowedRootEnvironmentTemplate}:non-empty-sensitive-field:RESEND_API_KEY`]);
+  assert.deepEqual(findVersionedSecretContentFindings([
+    {
+      file: allowedRootEnvironmentTemplate,
+      source: [
+        "VITE_GTM_ID=\"GTM-W76PFW2X\"",
+        "VITE_GA4_MEASUREMENT_ID=\"G-E9XNP7BJ2Y\"",
+        "# CAGNOTTE_RUNTIME_ENVIRONMENT=\"production\"",
+        "# CAGNOTTE_READ_CURSOR_SECRET=\"\"",
+      ].join("\n"),
+    },
+  ]), []);
+});
+
 await check("aucun secret manifeste dans le delta versionné", () => {
   const delta = git(["diff", "--name-only", `${baseMain}..HEAD`]).split(/\r?\n/).filter(Boolean);
   const candidates = new Set([
@@ -544,27 +626,15 @@ await check("aucun secret manifeste dans le delta versionné", () => {
     "docs/cagnotte/PREPRODUCTION-FINALE-V1.md",
     "package.json",
   ]);
-  const suspiciousNames = [...candidates].filter((file) =>
-    /(?:^|\/)\.env(?:\.|$)|credentials?.*\.json$|service[-_]?account.*\.json$|private.*\.(?:pem|key)$|\.p12$/i.test(file),
-  );
+  const suspiciousNames = findForbiddenSensitivePathNames(candidates);
   assert.deepEqual(suspiciousNames, []);
 
-  const signatures = [
-    /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
-    /\bAIza[0-9A-Za-z_-]{30,}\b/,
-    /\bre_[0-9A-Za-z_-]{20,}\b/,
-    /\b(?:vercel_|vcp_)[0-9A-Za-z_-]{20,}\b/i,
-    /\bgh[opusr]_[0-9A-Za-z]{30,}\b/,
-    /\bsk_live_[0-9A-Za-z]{20,}\b/,
-    /\bGOCSPX-[0-9A-Za-z_-]{20,}\b/,
-    /Bearer\s+[0-9A-Za-z._-]{32,}/,
-  ];
-  const findings: string[] = [];
+  const versionedSources: Array<{ file: string; source: string }> = [];
   for (const file of candidates) {
     if (!existsSync(resolve(file)) || statSync(resolve(file)).size > 2_000_000) continue;
-    const source = read(file);
-    if (signatures.some((signature) => signature.test(source))) findings.push(file);
+    versionedSources.push({ file, source: read(file) });
   }
+  const findings = findVersionedSecretContentFindings(versionedSources);
   assert.deepEqual(findings, []);
 });
 
@@ -582,6 +652,42 @@ console.log("Readiness cagnotte : contrôles locaux réussis, aucune activation 
 async function check(name: string, action: () => void | Promise<void>) {
   await action();
   console.log(`[OK] ${name}`);
+}
+
+function findForbiddenSensitivePathNames(files: Iterable<string>) {
+  return [...files].filter((file) => (
+    file !== allowedRootEnvironmentTemplate && sensitiveVersionedPathPattern.test(file)
+  ));
+}
+
+function findVersionedSecretContentFindings(files: Iterable<{ file: string; source: string }>) {
+  const findings: string[] = [];
+  for (const { file, source } of files) {
+    if (secretSignatures.some((signature) => signature.test(source))) {
+      findings.push(`${file}:secret-signature`);
+    }
+    if (file !== allowedRootEnvironmentTemplate) continue;
+    for (const key of findNonEmptySensitiveEnvironmentTemplateKeys(source)) {
+      findings.push(`${file}:non-empty-sensitive-field:${key}`);
+    }
+  }
+  return findings;
+}
+
+function findNonEmptySensitiveEnvironmentTemplateKeys(source: string) {
+  const findings: string[] = [];
+  for (const line of source.split(/\r?\n/)) {
+    const match = /^\s*(?:#\s*)?([A-Z][A-Z0-9_]*)\s*=\s*(.*?)\s*$/.exec(line);
+    if (!match || !sensitiveEnvironmentTemplateKeys.has(match[1]!)) continue;
+    const rawValue = match[2]!.trim();
+    const isQuoted = rawValue.length >= 2 && (
+      (rawValue.startsWith('"') && rawValue.endsWith('"')) ||
+      (rawValue.startsWith("'") && rawValue.endsWith("'"))
+    );
+    const value = (isQuoted ? rawValue.slice(1, -1) : rawValue).trim();
+    if (value !== "") findings.push(match[1]!);
+  }
+  return findings;
 }
 
 function read(file: string) {

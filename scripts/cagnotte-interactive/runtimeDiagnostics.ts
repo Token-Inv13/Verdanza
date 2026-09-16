@@ -145,7 +145,7 @@ export function assertNoUnexpectedRuntimeFailures(
       false,
       `erreur terminale sur la sonde Firestore attendue : ${JSON.stringify(expectation)}`,
     );
-    const proofs = expectation.generations.map((generation) => {
+    const proofs = expectation.generations.flatMap((generation) => {
       const recoveries = sameProbe.filter((entry) => (
         entry.generation === generation &&
         entry.fromCache === false &&
@@ -177,7 +177,7 @@ export function assertNoUnexpectedRuntimeFailures(
       const recovery = recoveries
         .filter((entry) => entry.probeInstanceId === probeInstanceId)
         .sort((left, right) => left.occurredAtEpochMs - right.occurredAtEpochMs)[0]!;
-      const initial = sameProbe
+      const initials = sameProbe
         .filter((entry) => (
           entry.probeInstanceId === probeInstanceId &&
           entry.generation !== generation &&
@@ -186,8 +186,10 @@ export function assertNoUnexpectedRuntimeFailures(
           entry.hasPendingWrites === false &&
           !entry.terminalErrorCode
         ))
-        .sort((left, right) => right.occurredAtEpochMs - left.occurredAtEpochMs)[0]!;
-      return { initial, recovery };
+        .sort((left, right) => right.occurredAtEpochMs - left.occurredAtEpochMs);
+      // Keep admissible candidates until each incident supplies its time boundary.
+      // A later generation must not hide an observation received before that incident.
+      return initials.map((initial) => ({ initial, recovery }));
     });
     validatedProbes.set(expectation, proofs);
   }
