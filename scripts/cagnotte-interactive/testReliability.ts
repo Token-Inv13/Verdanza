@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
+import { chromium } from "playwright";
 import {
   RECIPE_HOST,
   RECIPE_CACHE_ROOT,
@@ -52,6 +53,7 @@ import {
   createBrowserEvidenceCollection,
   persistBrowserEvidence,
   publishCurrentPassEvidence,
+  publishViewportTerminalEvidence,
   runAutomatedRecipe,
   runViewportSequence,
 } from "./test.js";
@@ -458,7 +460,7 @@ await check("une annulation avant collecte n'ouvre aucune lecture navigateur", a
     collect: async () => { collectionCalls += 1; },
     isCoordinatedClosureError: () => false,
   });
-  collection.stopForCoordinatedCancellation();
+  collection.stopForCoordinatedCancellation("test-cancellation-before-collection");
   await collection.collect();
   await collection.settle();
   assert.equal(collectionCalls, 0);
@@ -472,6 +474,7 @@ await check("une annulation avant collecte n'ouvre aucune lecture navigateur", a
 
 await check("une lecture navigateur engagée est interrompue par la fermeture coordonnée", async () => {
   const started = deferred<void>();
+  const reason = "test-coordinated-browser-evidence-close";
   let rejectCollection: (error: Error) => void = () => undefined;
   const collection = createBrowserEvidenceCollection({
     collect: async () => {
@@ -480,12 +483,12 @@ await check("une lecture navigateur engagée est interrompue par la fermeture co
         rejectCollection = rejectPromise;
       });
     },
-    isCoordinatedClosureError: (error) => /Target page, context or browser has been closed/.test(safeError(error)),
+    isCoordinatedClosureError: (error, expectedReason) => safeError(error).includes(expectedReason),
   });
   const activeCollection = collection.collect();
   await started.promise;
-  collection.stopForCoordinatedCancellation();
-  rejectCollection(new Error("Target page, context or browser has been closed"));
+  collection.stopForCoordinatedCancellation(reason);
+  rejectCollection(new Error(`page.evaluate: ${reason}`));
   await activeCollection;
   await collection.settle();
   assert.deepEqual(collection.snapshot(), {
@@ -494,6 +497,27 @@ await check("une lecture navigateur engagée est interrompue par la fermeture co
     interruptedCollections: 1,
     cancellationClosureRequested: true,
   });
+});
+
+await check("un Target closed sans la raison du contexte reste une erreur après annulation", async () => {
+  const started = deferred<void>();
+  let rejectCollection: (error: Error) => void = () => undefined;
+  const collection = createBrowserEvidenceCollection({
+    collect: async () => {
+      started.resolve();
+      await new Promise<void>((_resolvePromise, rejectPromise) => {
+        rejectCollection = rejectPromise;
+      });
+    },
+    isCoordinatedClosureError: (error, expectedReason) => safeError(error).includes(expectedReason),
+  });
+  const activeCollection = collection.collect();
+  await started.promise;
+  collection.stopForCoordinatedCancellation("expected-context-specific-reason");
+  rejectCollection(new Error("Target page, context or browser has been closed"));
+  await activeCollection;
+  await assert.rejects(collection.settle(), /collectes navigateur ont échoué/);
+  assert.equal(collection.snapshot().status, "failed");
 });
 
 await check("la même fermeture navigateur sans annulation reste refusée", async () => {
@@ -544,7 +568,7 @@ await check("les preuves déjà collectées restent enregistrables après fermet
   try {
     await collection.collect();
     contextClosed = true;
-    collection.stopForCoordinatedCancellation();
+    collection.stopForCoordinatedCancellation("test-close-after-collected-evidence");
     await persistBrowserEvidence(
       { runDirectory: directory },
       { network, console: browserConsole, settleBrowserEvidence: collection.settle },
@@ -785,7 +809,7 @@ await check("une erreur rejetée juste avant SIGINT reste prioritaire au retour 
   const fixture = fakeDependencies({ failAt: "cleanup" });
   const operationStarted = deferred<void>();
   const controlledOperation = deferred<void>();
-  const primaryError = Object.assign(new Error("injected-operation-race"), {
+  const primaryError = Object.assign(new Error("Target page, context or browser has been closed"), {
     code: "INJECTED_OPERATION_RACE",
   });
   let observedPrimary: unknown;
@@ -848,14 +872,14 @@ await check("une fermeture de contexte provoquée par le coordinateur reste CANC
   const fixture = fakeDependencies({ failAt: "cleanup" });
   const operationStarted = deferred<void>();
   const interruptedOperation = deferred<void>();
-  const closureError = new Error("Target page, context or browser has been closed");
   let primaryCalls = 0;
   fixture.dependencies.cancellation = cancellation;
-  fixture.dependencies.isCoordinatedCancellationInterruption = (error) => error === closureError;
   fixture.dependencies.onPrimaryError = () => { primaryCalls += 1; };
-  fixture.dependencies.closeMonitor = async (monitor) => {
+  fixture.dependencies.closeMonitor = async (monitor, _role, options) => {
     monitor.closeCalls += 1;
-    if (monitor.role === "admin") interruptedOperation.reject(closureError);
+    if (monitor.role === "admin" && options?.reason) {
+      interruptedOperation.reject(new Error(`page.waitForFunction: ${options.reason}`));
+    }
   };
   try {
     const execution = runWithViewportResources(fixture.dependencies, async () => {
@@ -876,13 +900,111 @@ await check("une fermeture de contexte provoquée par le coordinateur reste CANC
   }
 });
 
+await check("une raison de fermeture d’une autre exécution ne reclassifie aucune erreur", async () => {
+  let previousReason = "";
+  const firstSignals = new EventEmitter();
+  const firstCancellation = installRecipeSignalCancellation(firstSignals);
+  const firstFixture = fakeDependencies({ failAt: "cleanup" });
+  const firstStarted = deferred<void>();
+  const firstInterrupted = deferred<void>();
+  firstFixture.dependencies.cancellation = firstCancellation;
+  firstFixture.dependencies.closeMonitor = async (monitor, _role, options) => {
+    monitor.closeCalls += 1;
+    if (monitor.role === "admin" && options?.reason) {
+      previousReason = options.reason;
+      firstInterrupted.reject(new Error(`page.waitForFunction: ${options.reason}`));
+    }
+  };
+  try {
+    const firstExecution = runWithViewportResources(firstFixture.dependencies, async () => {
+      firstStarted.resolve();
+      await firstInterrupted.promise;
+    });
+    await firstStarted.promise;
+    firstSignals.emit("SIGTERM");
+    await assert.rejects(firstExecution, isRecipeSignalCancellation);
+    assert.match(previousReason, /^verdanza-recipe-cancellation:/);
+  } finally {
+    firstCancellation.dispose();
+  }
+
+  const secondSignals = new EventEmitter();
+  const secondCancellation = installRecipeSignalCancellation(secondSignals);
+  const secondFixture = fakeDependencies({ failAt: "cleanup" });
+  const secondStarted = deferred<void>();
+  const secondInterrupted = deferred<void>();
+  const foreignError = new Error(`page.waitForFunction: ${previousReason}`);
+  const currentReasons: string[] = [];
+  secondFixture.dependencies.cancellation = secondCancellation;
+  secondFixture.dependencies.closeMonitor = async (monitor, _role, options) => {
+    monitor.closeCalls += 1;
+    if (options?.reason) currentReasons.push(options.reason);
+    if (monitor.role === "admin") secondInterrupted.reject(foreignError);
+  };
+  try {
+    const secondExecution = runWithViewportResources(secondFixture.dependencies, async () => {
+      secondStarted.resolve();
+      await secondInterrupted.promise;
+    });
+    await secondStarted.promise;
+    secondSignals.emit("SIGINT");
+    await assert.rejects(secondExecution, (error) => error === foreignError);
+    assert.equal(currentReasons.includes(previousReason), false);
+  } finally {
+    secondCancellation.dispose();
+  }
+});
+
+await check("Playwright propage la raison du contexte réellement fermé par le coordinateur", async () => {
+  const browser = await chromium.launch({ headless: true });
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const operationStarted = deferred<void>();
+  const observedReasons = new Map<string, string>();
+  type RealMonitor = { role: "client" | "admin"; context: Awaited<ReturnType<typeof browser.newContext>> };
+  try {
+    const execution = runWithViewportResources({
+      label: "real-playwright-cancellation-reason",
+      startHarness: async () => ({ stopCalls: 0 }),
+      createMonitor: async (role): Promise<RealMonitor> => ({ role, context: await browser.newContext() }),
+      createPage: (monitor) => monitor.context.newPage(),
+      persistEvidence: async () => undefined,
+      closePage: (page) => page.close(),
+      closeMonitor: async (monitor, role, options) => {
+        assert.ok(options?.reason, `raison de fermeture absente pour ${role}`);
+        observedReasons.set(role, options.reason);
+        await monitor.context.close({ reason: options.reason });
+      },
+      stopHarness: async (harness) => { harness.stopCalls += 1; },
+      cancellation,
+    }, async ({ clientPage }) => {
+      await clientPage.setContent("<main>ready</main>");
+      operationStarted.resolve();
+      await clientPage.waitForFunction(() => false, undefined, { timeout: 60_000 });
+    });
+    await operationStarted.promise;
+    signals.emit("SIGTERM");
+    await assert.rejects(execution, (error) => (
+      isRecipeSignalCancellation(error) && error.signal === "SIGTERM"
+    ));
+    assert.equal(observedReasons.size, 2);
+    assert.notEqual(observedReasons.get("client"), observedReasons.get("admin"));
+  } finally {
+    cancellation.dispose();
+    await browser.close();
+  }
+});
+
 await check("le runner publie FAIL et conserve SIGINT comme information secondaire", async () => {
   const signals = new EventEmitter();
   const latestResult = resolve(RECIPE_CACHE_ROOT, "latest-result.json");
   const latestFailure = resolve(RECIPE_CACHE_ROOT, "latest-failure.json");
-  const primaryError = Object.assign(new Error("injected-runner-operation-race"), {
+  const primaryError = Object.assign(
+    new Error("Target page, context or browser has been closed (injected-runner-operation-race)"),
+    {
     code: "INJECTED_RUNNER_OPERATION_RACE",
-  });
+    },
+  );
   await mkdir(RECIPE_CACHE_ROOT, { recursive: true });
   await Promise.all([rm(latestResult, { force: true }), rm(latestFailure, { force: true })]);
   try {
@@ -962,6 +1084,175 @@ await check("une interruption avant le bilan final retire tout PASS courant", as
       isRecipeSignalCancellation,
     );
     await assert.rejects(access(passPath), /ENOENT/, "aucun PASS écrit avant l’interruption ne doit rester courant");
+  } finally {
+    cancellation.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+await check("une annulation pendant le nettoyage conserve les faits partiels et publie CANCELLED", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "verdanza-viewport-cleanup-cancel-"));
+  const partialPath = resolve(directory, "partial-facts.json");
+  const summaryPath = resolve(directory, "execution-summary.json");
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const fixture = fakeDependencies({ failAt: "cleanup" });
+  let signalSent = false;
+  fixture.dependencies.cancellation = cancellation;
+  fixture.dependencies.persistEvidence = async () => {
+    await writeFile(partialPath, '{"businessScenario":"completed"}\n', "utf8");
+  };
+  fixture.dependencies.closePage = async (page) => {
+    page.closeCalls += 1;
+    if (!signalSent) {
+      signalSent = true;
+      signals.emit("SIGTERM");
+    }
+  };
+  try {
+    await assert.rejects(
+      runWithViewportResources(
+        fixture.dependencies,
+        async () => ({ viewport: "mobile" }),
+        async (outcome) => publishViewportTerminalEvidence({
+          path: summaryPath,
+          contents: `${JSON.stringify({ status: outcome.status })}\n`,
+          cancellation,
+          requireUninterrupted: outcome.status === "PASS",
+        }),
+      ),
+      (error) => isRecipeSignalCancellation(error) && error.signal === "SIGTERM",
+    );
+    assert.deepEqual(JSON.parse(await readFile(partialPath, "utf8")), { businessScenario: "completed" });
+    assert.deepEqual(JSON.parse(await readFile(summaryPath, "utf8")), { status: "CANCELLED" });
+  } finally {
+    cancellation.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+await check("un signal pendant la publication terminale ne laisse aucun PASS périmé", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "verdanza-viewport-finalize-cancel-"));
+  const summaryPath = resolve(directory, "execution-summary.json");
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const fixture = fakeDependencies({ failAt: "cleanup" });
+  const attemptedStatuses: string[] = [];
+  fixture.dependencies.cancellation = cancellation;
+  try {
+    await assert.rejects(
+      runWithViewportResources(
+        fixture.dependencies,
+        async () => ({ viewport: "desktop" }),
+        async (outcome) => {
+          attemptedStatuses.push(outcome.status);
+          await publishViewportTerminalEvidence({
+            path: summaryPath,
+            contents: `${JSON.stringify({ status: outcome.status })}\n`,
+            cancellation,
+            requireUninterrupted: outcome.status === "PASS",
+            beforeCommit: outcome.status === "PASS" ? () => { signals.emit("SIGINT"); } : undefined,
+          });
+        },
+      ),
+      (error) => isRecipeSignalCancellation(error) && error.signal === "SIGINT",
+    );
+    assert.deepEqual(attemptedStatuses, ["PASS", "CANCELLED"]);
+    assert.deepEqual(JSON.parse(await readFile(summaryPath, "utf8")), { status: "CANCELLED" });
+  } finally {
+    cancellation.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+await check("une erreur de nettoyage produit FAIL après les preuves partielles", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "verdanza-viewport-cleanup-fail-"));
+  const summaryPath = resolve(directory, "execution-summary.json");
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const fixture = fakeDependencies({ failAt: "cleanup", failClientClose: true });
+  fixture.dependencies.cancellation = cancellation;
+  try {
+    await assert.rejects(
+      runWithViewportResources(
+        fixture.dependencies,
+        async () => ({ viewport: "desktop" }),
+        async (outcome) => publishViewportTerminalEvidence({
+          path: summaryPath,
+          contents: `${JSON.stringify({ status: outcome.status })}\n`,
+          cancellation,
+          requireUninterrupted: outcome.status === "PASS",
+        }),
+      ),
+      /Nettoyage incomplet/,
+    );
+    assert.deepEqual(JSON.parse(await readFile(summaryPath, "utf8")), { status: "FAIL" });
+  } finally {
+    cancellation.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+await check("un échec de publication du verdict interdit tout succès", async () => {
+  const fixture = fakeDependencies({ failAt: "cleanup" });
+  const finalizationError = new Error("injected-final-outcome-write-failure");
+  await assert.rejects(
+    runWithViewportResources(
+      fixture.dependencies,
+      async () => ({ viewport: "desktop" }),
+      async () => { throw finalizationError; },
+    ),
+    (error) => error === finalizationError,
+  );
+});
+
+await check("desktop terminé reste PASS quand mobile est ensuite annulé", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "verdanza-viewport-partial-pass-"));
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const completed: string[] = [];
+  try {
+    await assert.rejects(
+      runViewportSequence({
+        items: ["desktop", "mobile"],
+        cancellation,
+        run: async (viewport) => {
+          const fixture = fakeDependencies({ failAt: "cleanup" });
+          let signalSent = false;
+          fixture.dependencies.cancellation = cancellation;
+          if (viewport === "mobile") {
+            fixture.dependencies.closePage = async (page) => {
+              page.closeCalls += 1;
+              if (!signalSent) {
+                signalSent = true;
+                signals.emit("SIGTERM");
+              }
+            };
+          }
+          return runWithViewportResources(
+            fixture.dependencies,
+            async () => ({ viewport }),
+            async (outcome) => publishViewportTerminalEvidence({
+              path: resolve(directory, `${viewport}.json`),
+              contents: `${JSON.stringify({ status: outcome.status, viewport })}\n`,
+              cancellation,
+              requireUninterrupted: outcome.status === "PASS",
+            }),
+          );
+        },
+        onCompleted: (result) => completed.push(result.viewport),
+      }),
+      (error) => isRecipeSignalCancellation(error) && error.signal === "SIGTERM",
+    );
+    assert.deepEqual(completed, ["desktop"]);
+    assert.deepEqual(JSON.parse(await readFile(resolve(directory, "desktop.json"), "utf8")), {
+      status: "PASS",
+      viewport: "desktop",
+    });
+    assert.deepEqual(JSON.parse(await readFile(resolve(directory, "mobile.json"), "utf8")), {
+      status: "CANCELLED",
+      viewport: "mobile",
+    });
   } finally {
     cancellation.dispose();
     await rm(directory, { recursive: true, force: true });
@@ -1241,7 +1532,7 @@ await check("échec de configuration d’un contexte déjà créé", async () =>
   assert.equal(resource.closeCalls, 1, "le contexte créé doit être fermé si sa configuration échoue");
 });
 
-await check("un échec d’écriture du bilan obligatoire reste bloquant", async () => {
+await check("un échec d’écriture des preuves partielles reste bloquant", async () => {
   const fixture = fakeDependencies({ failAt: "cleanup", failEvidence: true });
   await assert.rejects(
     runWithViewportResources(fixture.dependencies, async () => undefined),
@@ -1251,7 +1542,7 @@ await check("un échec d’écriture du bilan obligatoire reste bloquant", async
     fixture.reports[0]?.steps.some((step) => (
       step.name === "persist-evidence" &&
       step.status === "failed" &&
-      /injected-execution-summary-write-failure/.test(step.error ?? "")
+      /injected-partial-evidence-write-failure/.test(step.error ?? "")
     )),
     true,
   );
@@ -1276,7 +1567,7 @@ await check("erreur initiale préservée malgré les erreurs de preuve et de fer
         error as Error & { cleanupFailures?: CleanupReport["steps"] }
       ).cleanupFailures ?? [];
       return [
-        "injected-execution-summary-write-failure",
+        "injected-partial-evidence-write-failure",
         "injected-client-close-failure",
         "injected-harness-stop-failure",
       ].every((message) => cleanupFailures.some((failure) => failure.error?.includes(message)));
@@ -1624,7 +1915,7 @@ function fakeDependencies(options: {
       return role === "client" ? clientPage : adminPage;
     },
     persistEvidence: async () => {
-      if (options.failEvidence) throw new Error("injected-execution-summary-write-failure");
+      if (options.failEvidence) throw new Error("injected-partial-evidence-write-failure");
     },
     closePage: async (page) => { page.closeCalls += 1; },
     closeMonitor: async (monitor) => {
@@ -2797,7 +3088,7 @@ async function assertRealAutomatedRunnerSignal(options: {
       const executionSummary = JSON.parse(
         await readFile(resolve(cancellation.activeRunDirectory, "execution-summary.json"), "utf8"),
       ) as { status?: string; interruption?: { status?: string; signal?: string } };
-      assert.equal(executionSummary.status, "INTERRUPTED");
+      assert.equal(executionSummary.status, "CANCELLED");
       assert.deepEqual(executionSummary.interruption, { status: "CANCELLED", signal: options.signal });
     });
     await record("nettoyage propre du harness", async () => {

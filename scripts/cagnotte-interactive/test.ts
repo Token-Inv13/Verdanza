@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -37,6 +37,7 @@ import {
   runWithViewportResources,
   type CleanupStepResult,
   type SharedResourceClosure,
+  type ViewportTerminalOutcome,
 } from "./resourceLifecycle.js";
 import {
   assertExpectedFailClosedApiUnavailable,
@@ -140,17 +141,17 @@ export type BrowserEvidenceCollectionSnapshot = {
 
 type BrowserEvidenceCollection = {
   collect: () => Promise<void>;
-  stopForCoordinatedCancellation: () => void;
+  stopForCoordinatedCancellation: (reason: string) => void;
   settle: () => Promise<void>;
   snapshot: () => BrowserEvidenceCollectionSnapshot;
 };
 
 export function createBrowserEvidenceCollection(options: {
   collect: () => Promise<void>;
-  isCoordinatedClosureError: (error: unknown) => boolean;
+  isCoordinatedClosureError: (error: unknown, reason: string) => boolean;
 }): BrowserEvidenceCollection {
   type ActiveCollection = {
-    interruptedByCoordinatedClosure: boolean;
+    cancellationReason?: string;
     release: () => void;
     settled: Promise<void>;
   };
@@ -165,7 +166,7 @@ export function createBrowserEvidenceCollection(options: {
     let release: () => void = () => undefined;
     const interrupted = new Promise<void>((resolvePromise) => { release = resolvePromise; });
     const current = {
-      interruptedByCoordinatedClosure: false,
+      cancellationReason: undefined,
       release,
       settled: Promise.resolve(),
     } satisfies ActiveCollection;
@@ -174,8 +175,8 @@ export function createBrowserEvidenceCollection(options: {
       .then(() => { completedCollections += 1; })
       .catch((error) => {
         if (
-          current.interruptedByCoordinatedClosure &&
-          options.isCoordinatedClosureError(error)
+          current.cancellationReason &&
+          options.isCoordinatedClosureError(error, current.cancellationReason)
         ) {
           interruptedCollections += 1;
           return;
@@ -192,11 +193,11 @@ export function createBrowserEvidenceCollection(options: {
 
   return {
     collect,
-    stopForCoordinatedCancellation() {
+    stopForCoordinatedCancellation(reason) {
       if (!acceptingCollections) return;
       acceptingCollections = false;
       for (const current of active) {
-        current.interruptedByCoordinatedClosure = true;
+        current.cancellationReason = reason;
         current.release();
       }
     },
@@ -211,7 +212,7 @@ export function createBrowserEvidenceCollection(options: {
     },
     snapshot() {
       const interrupted = interruptedCollections > 0 || [...active].some(
-        (entry) => entry.interruptedByCoordinatedClosure,
+        (entry) => Boolean(entry.cancellationReason),
       );
       return {
         status: failures.length > 0
@@ -246,7 +247,7 @@ type MonitoredContext = {
   currentPhase: () => string;
   pageId: (page: Page) => string;
   collectBrowserEvidence: () => Promise<void>;
-  stopBrowserEvidenceForCancellation: () => void;
+  stopBrowserEvidenceForCancellation: (reason: string) => void;
   settleBrowserEvidence: () => Promise<void>;
   browserEvidenceCollection: () => BrowserEvidenceCollectionSnapshot & {
     interruptedPendingReads: number;
@@ -296,6 +297,24 @@ export async function publishCurrentPassEvidence(options: {
       attachRunnerCleanupIssue(error, "remove-current-pass", cleanupError);
     }
     throw error;
+  }
+}
+
+export async function publishViewportTerminalEvidence(options: {
+  path: string;
+  contents: string;
+  cancellation: RecipeSignalCancellation;
+  requireUninterrupted: boolean;
+  beforeCommit?: () => void | Promise<void>;
+}) {
+  const temporaryPath = `${options.path}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryPath, options.contents, "utf8");
+    await options.beforeCommit?.();
+    if (options.requireUninterrupted) options.cancellation.throwIfRequested();
+    await rename(temporaryPath, options.path);
+  } finally {
+    await rm(temporaryPath, { force: true });
   }
 }
 
@@ -552,14 +571,12 @@ async function runViewport(
   onHarnessStarted: (runDirectory: string) => void,
   onPrimaryError: (error: unknown) => void,
   closeBrowserAfterContextFailure: () => Promise<void>,
-) {
+): Promise<Record<string, unknown>> {
   let stoppedForFailClosed = false;
   let cleanupProbeReported = false;
   let evidenceSequence = 0;
-  let executionStatus: "running" | "pass" = "running";
-  let primaryOperationError: unknown;
+  let businessScenarioCompleted = false;
   const recordPrimaryOperationError = (error: unknown) => {
-    primaryOperationError ??= error;
     onPrimaryError(error);
   };
   const screenshots: string[] = [];
@@ -622,52 +639,6 @@ async function runViewport(
           `${JSON.stringify(firestoreProbeEvidence, null, 2)}\n`,
           "utf8",
         ),
-        writeFile(
-          resolve(resources.harness.runDirectory, "execution-summary.json"),
-          `${JSON.stringify({
-          status: primaryOperationError !== undefined
-            ? "FAIL"
-            : executionStatus === "pass" && !cancellation.signal.aborted
-              ? "PASS"
-              : "INTERRUPTED",
-          error: primaryOperationError === undefined ? null : safeError(primaryOperationError),
-          interruption: cancellation.requestedSignal()
-            ? { status: "CANCELLED", signal: cancellation.requestedSignal() }
-            : null,
-          viewport,
-          runDirectory: resources.harness.runDirectory,
-          currentPhases: {
-            client: resources.clientMonitor?.currentPhase(),
-            admin: resources.adminMonitor?.currentPhase(),
-          },
-          completedStages: stages.map(({ label, state }) => ({
-            label,
-            wallet: state.wallet,
-            movements: state.movements.length,
-          })),
-          apiDiagnostics: resources.harness.diagnosticsSnapshot() ?? null,
-          screenshots,
-          evidenceCollection: {
-            browser: monitors.map((monitor) => ({
-              contextId: monitor.contextId,
-              ...monitor.browserEvidenceCollection(),
-            })),
-            firestoreProbe: {
-              status: executionStatus === "pass"
-                ? "collected"
-                : firestoreProbeEvidence.length > 0
-                  ? "partial"
-                  : "not-collected",
-              observations: firestoreProbeEvidence.length,
-            },
-          },
-          listen400Incidents: [
-            ...(resources.clientMonitor?.network ?? []),
-            ...(resources.adminMonitor?.network ?? []),
-          ].filter(isFirestoreListen400Response),
-          }, null, 2)}\n`,
-          "utf8",
-        ),
         ]),
       ];
       evidenceFailures.push(...evidenceWrites
@@ -681,9 +652,9 @@ async function runViewport(
       }
     },
     closePage: (page) => page.close(),
-    closeMonitor: async (monitor) => {
-      if (cancellation.signal.aborted) monitor.stopBrowserEvidenceForCancellation();
-      await monitor.context.close();
+    closeMonitor: async (monitor, _role, options) => {
+      if (options?.reason) monitor.stopBrowserEvidenceForCancellation(options.reason);
+      await monitor.context.close(options?.reason ? { reason: options.reason } : undefined);
     },
     closeCancellationFallback: () => closeBrowserAfterContextFailure(),
     stopHarness: (harness) => harness.stop(),
@@ -702,7 +673,6 @@ async function runViewport(
       ]);
     },
     cancellation,
-    isCoordinatedCancellationInterruption: isPlaywrightTargetClosedError,
     onPrimaryError: recordPrimaryOperationError,
     onCleanupIssue: (step) => logCleanupIssue(viewport.label, step),
   }, async ({ harness, clientMonitor, adminMonitor, clientPage, adminPage }) => {
@@ -1210,8 +1180,60 @@ async function runViewport(
     };
     await writeFile(resolve(harness.runDirectory, "result.json"), `${JSON.stringify(result, null, 2)}\n`, "utf8");
     cancellation.throwIfRequested();
-    executionStatus = "pass";
+    businessScenarioCompleted = true;
     return result;
+  }, async (outcome: ViewportTerminalOutcome<Record<string, unknown>>, resources) => {
+    const harness = resources.harness;
+    if (!harness) return;
+    const monitors = [resources.clientMonitor, resources.adminMonitor].filter(
+      (monitor): monitor is MonitoredContext => Boolean(monitor),
+    );
+    const outcomeError = outcome.status === "PASS" ? undefined : outcome.error;
+    await publishViewportTerminalEvidence({
+      path: resolve(harness.runDirectory, "execution-summary.json"),
+      cancellation,
+      requireUninterrupted: outcome.status === "PASS",
+      contents: `${JSON.stringify({
+        status: outcome.status,
+        error: outcomeError === undefined ? null : safeError(outcomeError),
+        cleanupIssues: outcomeError === undefined ? [] : attachedCleanupIssues(outcomeError),
+        interruption: cancellation.requestedSignal()
+          ? { status: "CANCELLED", signal: cancellation.requestedSignal() }
+          : null,
+        viewport,
+        runDirectory: harness.runDirectory,
+        currentPhases: {
+          client: resources.clientMonitor?.currentPhase(),
+          admin: resources.adminMonitor?.currentPhase(),
+        },
+        businessScenario: businessScenarioCompleted ? "completed" : "incomplete",
+        completedStages: stages.map(({ label, state }) => ({
+          label,
+          wallet: state.wallet,
+          movements: state.movements.length,
+        })),
+        apiDiagnostics: harness.diagnosticsSnapshot() ?? null,
+        screenshots,
+        evidenceCollection: {
+          browser: monitors.map((monitor) => ({
+            contextId: monitor.contextId,
+            ...monitor.browserEvidenceCollection(),
+          })),
+          firestoreProbe: {
+            status: businessScenarioCompleted
+              ? "collected"
+              : firestoreProbeEvidence.length > 0
+                ? "partial"
+                : "not-collected",
+            observations: firestoreProbeEvidence.length,
+          },
+        },
+        listen400Incidents: [
+          ...(resources.clientMonitor?.network ?? []),
+          ...(resources.adminMonitor?.network ?? []),
+        ].filter(isFirestoreListen400Response),
+      }, null, 2)}\n`,
+    });
   }).finally(() => {
     if (!stoppedForFailClosed) writeRecipeStdoutLine(`${viewport.label}: arrêt de sécurité appliqué avant la fin du scénario.`);
   });
@@ -1262,7 +1284,7 @@ async function monitoredContext(
   const requestIds = new WeakMap<Request, string>();
   const pendingEvidence = new Set<Promise<void>>();
   const pendingEvidenceFailures: unknown[] = [];
-  let coordinatedCancellationClosureRequested = false;
+  let coordinatedCancellationClosureReason: string | undefined;
   let interruptedPendingReads = 0;
   let pageCount = 0;
   let requestCount = 0;
@@ -1367,8 +1389,8 @@ async function monitoredContext(
             .then((signature) => { evidence.responseSignature = signature; })
             .catch((error) => {
               if (
-                coordinatedCancellationClosureRequested &&
-                isPlaywrightTargetClosedError(error)
+                coordinatedCancellationClosureReason &&
+                isPlaywrightClosureReason(error, coordinatedCancellationClosureReason)
               ) {
                 interruptedPendingReads += 1;
                 return;
@@ -1426,11 +1448,11 @@ async function monitoredContext(
         await mergeBrowserFirestoreResponseEvidence(page, pageId(page), network);
       }
     },
-    isCoordinatedClosureError: isPlaywrightTargetClosedError,
+    isCoordinatedClosureError: isPlaywrightClosureReason,
   });
-  const stopBrowserEvidenceForCancellation = () => {
-    coordinatedCancellationClosureRequested = true;
-    browserEvidenceCollection.stopForCoordinatedCancellation();
+  const stopBrowserEvidenceForCancellation = (reason: string) => {
+    coordinatedCancellationClosureReason = reason;
+    browserEvidenceCollection.stopForCoordinatedCancellation(reason);
   };
   return {
     context,
@@ -1442,7 +1464,6 @@ async function monitoredContext(
     pageId,
     async collectBrowserEvidence() {
       if (cancellation.signal.aborted) {
-        stopBrowserEvidenceForCancellation();
         cancellation.throwIfRequested();
       }
       await browserEvidenceCollection.collect();
@@ -1476,12 +1497,11 @@ async function monitoredContext(
   };
 }
 
-function isPlaywrightTargetClosedError(error: unknown) {
+function isPlaywrightClosureReason(error: unknown, reason: string): boolean {
   if (error instanceof AggregateError) {
-    return error.errors.length > 0 && error.errors.every(isPlaywrightTargetClosedError);
+    return error.errors.length > 0 && error.errors.every((entry) => isPlaywrightClosureReason(entry, reason));
   }
-  const message = error instanceof Error ? error.message : String(error);
-  return /Target page, context or browser has been closed|Target closed/i.test(message);
+  return safeError(error).includes(reason);
 }
 
 async function mergeBrowserFirestoreResponseEvidence(

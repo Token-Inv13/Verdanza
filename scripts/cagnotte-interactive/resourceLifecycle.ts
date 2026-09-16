@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 export type ViewportResourceRole = "client" | "admin";
 
 export type ViewportResources<Harness, Monitor, Page> = {
@@ -34,6 +36,11 @@ export type ResourceCancellationControl = {
   isCancellationError: (error: unknown) => boolean;
 };
 
+export type ViewportTerminalOutcome<Result> =
+  | { status: "PASS"; result: Result }
+  | { status: "CANCELLED"; error: unknown }
+  | { status: "FAIL"; error: unknown };
+
 export type ViewportResourceDependencies<Harness, Monitor, Page> = {
   label: string;
   startHarness: () => Promise<Harness>;
@@ -43,7 +50,11 @@ export type ViewportResourceDependencies<Harness, Monitor, Page> = {
     resources: PartialViewportResources<Harness, Monitor, Page>,
   ) => Promise<void>;
   closePage: (page: Page, role: ViewportResourceRole) => Promise<void>;
-  closeMonitor: (monitor: Monitor, role: ViewportResourceRole) => Promise<void>;
+  closeMonitor: (
+    monitor: Monitor,
+    role: ViewportResourceRole,
+    options?: { reason?: string },
+  ) => Promise<void>;
   stopHarness: (harness: Harness) => Promise<void>;
   writeCleanupReport?: (
     report: CleanupReport,
@@ -54,7 +65,6 @@ export type ViewportResourceDependencies<Harness, Monitor, Page> = {
     role: ViewportResourceRole;
     error: unknown;
   }) => Promise<void>;
-  isCoordinatedCancellationInterruption?: (error: unknown) => boolean;
   onPrimaryError?: (error: unknown) => void;
   onCleanupIssue?: (step: CleanupStepResult) => void;
   cleanupTimeoutMs?: number;
@@ -81,15 +91,22 @@ export function createSharedResourceClosure<Result = void>(
 export async function runWithViewportResources<Harness, Monitor, Page, Result>(
   dependencies: ViewportResourceDependencies<Harness, Monitor, Page>,
   operation: (resources: ViewportResources<Harness, Monitor, Page>) => Promise<Result>,
+  persistFinalOutcome?: (
+    outcome: ViewportTerminalOutcome<Result>,
+    resources: PartialViewportResources<Harness, Monitor, Page>,
+  ) => Promise<void>,
 ): Promise<Result> {
   const resources: PartialViewportResources<Harness, Monitor, Page> = {};
   const timeoutMs = dependencies.cleanupTimeoutMs ?? 10_000;
   const pageClosures: Partial<Record<ViewportResourceRole, SharedResourceClosure<{ closedBy?: string } | void>>> = {};
-  const monitorClosures: Partial<Record<ViewportResourceRole, SharedResourceClosure>> = {};
+  const monitorClosures: Partial<Record<ViewportResourceRole, {
+    closure: SharedResourceClosure;
+    cancellationReason?: string;
+  }>> = {};
   let harnessClosure: SharedResourceClosure | undefined;
   let fallbackClosure: SharedResourceClosure | undefined;
   let cancellationRequested = dependencies.cancellation?.signal.aborted ?? false;
-  const cancellationClosuresStarted = new Set<ViewportResourceRole>();
+  const cancellationRunId = randomUUID();
 
   const startCancellationFallback = (role: ViewportResourceRole, error: unknown) => {
     if (!dependencies.closeCancellationFallback) return;
@@ -103,8 +120,14 @@ export async function runWithViewportResources<Harness, Monitor, Page, Result>(
     void fallback.then(undefined, () => undefined);
   };
 
-  const createMonitorClosure = (monitor: Monitor, role: ViewportResourceRole) => (
-    createSharedResourceClosure(async () => {
+  const createMonitorClosure = (monitor: Monitor, role: ViewportResourceRole) => {
+    const registered: {
+      closure: SharedResourceClosure;
+      cancellationReason?: string;
+    } = {
+      closure: undefined as unknown as SharedResourceClosure,
+    };
+    registered.closure = createSharedResourceClosure(async () => {
       let timeoutError: Error | undefined;
       let timer: ReturnType<typeof setTimeout> | undefined;
       if (cancellationRequested && dependencies.closeCancellationFallback) {
@@ -114,7 +137,11 @@ export async function runWithViewportResources<Harness, Monitor, Page, Result>(
         }, timeoutMs);
       }
       try {
-        await dependencies.closeMonitor(monitor, role);
+        await dependencies.closeMonitor(
+          monitor,
+          role,
+          registered.cancellationReason ? { reason: registered.cancellationReason } : undefined,
+        );
       } catch (error) {
         if (cancellationRequested) startCancellationFallback(role, error);
         throw error;
@@ -122,14 +149,17 @@ export async function runWithViewportResources<Harness, Monitor, Page, Result>(
         if (timer) clearTimeout(timer);
       }
       if (timeoutError) throw timeoutError;
-    })
-  );
+    });
+    return registered;
+  };
 
   const startMonitorClosure = (role: ViewportResourceRole, requestedByCancellation = false) => {
-    const closure = monitorClosures[role];
-    if (!closure) return Promise.resolve();
-    if (requestedByCancellation) cancellationClosuresStarted.add(role);
-    const closing = closure.close();
+    const registered = monitorClosures[role];
+    if (!registered) return Promise.resolve();
+    if (requestedByCancellation && !registered.closure.started() && !registered.cancellationReason) {
+      registered.cancellationReason = `verdanza-recipe-cancellation:${cancellationRunId}:${role}`;
+    }
+    const closing = registered.closure.close();
     // Une fermeture lancée par le signal sera rejointe et vérifiée par le nettoyage normal.
     void closing.then(undefined, () => undefined);
     return closing;
@@ -189,8 +219,10 @@ export async function runWithViewportResources<Harness, Monitor, Page, Result>(
       );
       const coordinatedClosureInterruption = Boolean(
         cancellation?.signal.aborted &&
-        cancellationClosuresStarted.size > 0 &&
-        dependencies.isCoordinatedCancellationInterruption?.(error),
+        Object.values(monitorClosures).some((registered) => (
+          registered?.cancellationReason &&
+          safeError(error).includes(registered.cancellationReason)
+        )),
       );
       primaryError = identifiedCancellation || coordinatedClosureInterruption
         ? cancellationError(cancellation!, error)
@@ -256,16 +288,47 @@ export async function runWithViewportResources<Harness, Monitor, Page, Result>(
         // Le rapport de nettoyage doit rester secondaire face à l'erreur initiale.
       }
     }
-    if (primaryError !== undefined) {
-      attachCleanupFailures(primaryError, cleanupFailures);
-      throw primaryError;
-    }
-    if (cleanupFailures.length > 0) {
-      throw new AggregateError(
+    let terminalError = primaryError;
+    if (terminalError !== undefined) {
+      attachCleanupFailures(terminalError, cleanupFailures);
+    } else if (cleanupFailures.length > 0) {
+      terminalError = new AggregateError(
         cleanupFailures.map((failure) => new Error(`${failure.name}: ${failure.error}`)),
         `Nettoyage incomplet pour ${dependencies.label}.`,
       );
     }
+
+    let outcome: ViewportTerminalOutcome<Result> = terminalError === undefined
+      ? { status: "PASS", result: result as Result }
+      : dependencies.cancellation?.isCancellationError(terminalError)
+        ? { status: "CANCELLED", error: terminalError }
+        : { status: "FAIL", error: terminalError };
+    if (persistFinalOutcome) {
+      try {
+        await persistFinalOutcome(outcome, resources);
+      } catch (finalizationError) {
+        const cancellationDuringFinalization = Boolean(
+          outcome.status === "PASS" &&
+          dependencies.cancellation?.signal.aborted &&
+          dependencies.cancellation.isCancellationError(finalizationError),
+        );
+        if (cancellationDuringFinalization) {
+          terminalError = finalizationError;
+          outcome = { status: "CANCELLED", error: finalizationError };
+          try {
+            await persistFinalOutcome(outcome, resources);
+          } catch (retryError) {
+            attachFinalizationFailure(terminalError, retryError);
+          }
+        } else if (terminalError !== undefined) {
+          attachFinalizationFailure(terminalError, finalizationError);
+        } else {
+          terminalError = finalizationError;
+        }
+      }
+    }
+
+    if (terminalError !== undefined) throw terminalError;
     return result as Result;
   } finally {
     dependencies.cancellation?.signal.removeEventListener("abort", requestCancellationClosure);
@@ -353,14 +416,27 @@ async function bounded<Result>(action: () => Promise<Result>, timeoutMs: number,
 function attachCleanupFailures(primaryError: unknown, failures: CleanupStepResult[]) {
   if (failures.length === 0 || !(primaryError instanceof Error)) return;
   try {
+    const current = (primaryError as Error & { cleanupFailures?: CleanupStepResult[] }).cleanupFailures;
     Object.defineProperty(primaryError, "cleanupFailures", {
       configurable: true,
       enumerable: false,
-      value: failures.map((failure) => ({ ...failure })),
+      value: [
+        ...(Array.isArray(current) ? current.map((failure) => ({ ...failure })) : []),
+        ...failures.map((failure) => ({ ...failure })),
+      ],
     });
   } catch {
     // Certaines erreurs peuvent être non extensibles ; leur identité reste prioritaire.
   }
+}
+
+function attachFinalizationFailure(primaryError: unknown, finalizationError: unknown) {
+  attachCleanupFailures(primaryError, [{
+    name: "persist-final-outcome",
+    status: "failed",
+    durationMs: 0,
+    error: safeError(finalizationError),
+  }]);
 }
 
 function attachCancellationContext(cancellationError: unknown, interruptedError: unknown) {
