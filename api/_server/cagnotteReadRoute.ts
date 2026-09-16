@@ -1,18 +1,24 @@
 import { assertAdminUser, verifyFirebaseIdToken } from "./adminAuth.js";
-import { CAGNOTTE_READ_SERVER_ENABLED, CagnotteReadError, readCagnotte, validatedId } from "./cagnotteRead.js";
+import { CagnotteReadError, readCagnotte, validatedId } from "./cagnotteRead.js";
 import { getAdminDb } from "./firebaseAdmin.js";
 import { assertMethod, sendJson, type VercelRequestLike, type VercelResponseLike } from "./http.js";
-import { CAGNOTTE_RESERVATION_PROGRAM } from "./cagnotteReservations.js";
-import { CAGNOTTE_SERVER_PROGRAM } from "./cagnotteProgram.js";
+import {
+  cagnotteRuntimeCapabilities,
+  CagnotteRuntimeConfigurationError,
+  getCagnotteRuntimeConfiguration,
+  type CagnotteRuntimeConfiguration,
+} from "./cagnotteRuntimeConfig.js";
 
 type ReadService = typeof readCagnotte;
 
 export function createCagnotteReadHandler(dependencies: {
-  enabled: boolean;
+  enabled?: boolean;
   getDb: () => Parameters<ReadService>[0]["db"];
   verifyToken: typeof verifyFirebaseIdToken;
   read: ReadService;
-  cursorSecret: () => string;
+  cursorSecret?: () => string;
+  getRuntimeConfiguration?: () => CagnotteRuntimeConfiguration;
+  now?: () => number;
   capabilities?: {
     canRequestReservation: boolean;
     canAccrueLoyalty: boolean;
@@ -21,9 +27,26 @@ export function createCagnotteReadHandler(dependencies: {
   return async function handler(request: VercelRequestLike, response: VercelResponseLike) {
     response.setHeader("Cache-Control", "private, no-store");
     if (assertMethod(request, response, "GET")) return;
-    if (dependencies.enabled !== true) {
+    let runtimeConfiguration: CagnotteRuntimeConfiguration | undefined;
+    try {
+      runtimeConfiguration = dependencies.getRuntimeConfiguration?.();
+    } catch (error) {
+      if (error instanceof CagnotteRuntimeConfigurationError) {
+        return sendJson(response, {
+          code: "cagnotte_configuration_invalid",
+          error: "Configuration cagnotte indisponible.",
+        }, 503);
+      }
+      throw error;
+    }
+    const enabled = runtimeConfiguration?.readServerEnabled ?? dependencies.enabled === true;
+    if (!enabled) {
       return sendJson(response, { code: "cagnotte_read_disabled", error: "Consultation des avantages indisponible." }, 503);
     }
+    const cursorSecret = runtimeConfiguration?.readCursorSecret ?? dependencies.cursorSecret?.() ?? "";
+    const capabilities = runtimeConfiguration
+      ? cagnotteRuntimeCapabilities(runtimeConfiguration, (dependencies.now ?? Date.now)())
+      : dependencies.capabilities;
     try {
       const token = bearerToken(request);
       if (!token) return sendJson(response, { code: "authentication_required", error: "Connexion requise." }, 401);
@@ -40,7 +63,7 @@ export function createCagnotteReadHandler(dependencies: {
         }
         const user = await dependencies.verifyToken(token);
         const db = dependencies.getDb();
-        const result = await dependencies.read({ db, beneficiaryId: user.uid, scope: "self", cursor, limit, cursorSecret: dependencies.cursorSecret(), capabilities: dependencies.capabilities });
+        const result = await dependencies.read({ db, beneficiaryId: user.uid, scope: "self", cursor, limit, cursorSecret, capabilities });
         return sendJson(response, result);
       }
       if (scope === "admin") {
@@ -49,7 +72,7 @@ export function createCagnotteReadHandler(dependencies: {
         const targetUid = validatedId(targets[0], "Client cible invalide.");
         const db = dependencies.getDb();
         await assertAdminUser(db, token, dependencies.verifyToken);
-        const result = await dependencies.read({ db, beneficiaryId: targetUid, scope: "admin", cursor, limit, cursorSecret: dependencies.cursorSecret(), capabilities: dependencies.capabilities });
+        const result = await dependencies.read({ db, beneficiaryId: targetUid, scope: "admin", cursor, limit, cursorSecret, capabilities });
         return sendJson(response, result);
       }
       throw new CagnotteReadError("invalid_request", "Portée de consultation invalide.");
@@ -79,13 +102,8 @@ function bearerToken(request: VercelRequestLike) {
 }
 
 export const handleCagnotteRead = createCagnotteReadHandler({
-  enabled: CAGNOTTE_READ_SERVER_ENABLED,
   getDb: getAdminDb,
   verifyToken: verifyFirebaseIdToken,
   read: readCagnotte,
-  cursorSecret: () => process.env.CAGNOTTE_READ_CURSOR_SECRET ?? "",
-  capabilities: {
-    canRequestReservation: CAGNOTTE_RESERVATION_PROGRAM !== null,
-    canAccrueLoyalty: CAGNOTTE_SERVER_PROGRAM !== null,
-  },
+  getRuntimeConfiguration: getCagnotteRuntimeConfiguration,
 });

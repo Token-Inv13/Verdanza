@@ -17,20 +17,23 @@ import {
   resolveCagnotteProductionProgram,
   resolveCagnotteProductionReservationProgram,
 } from "../api/_server/cagnotteProgram.js";
-import {
-  CAGNOTTE_READ_SERVER_ENABLED,
-  readCagnotte,
-} from "../api/_server/cagnotteRead.js";
+import { readCagnotte } from "../api/_server/cagnotteRead.js";
 import { createCagnotteReadHandler } from "../api/_server/cagnotteReadRoute.js";
 import {
   CAGNOTTE_RESERVATION_PROGRAM,
   createCagnotteReservationIntent,
 } from "../api/_server/cagnotteReservations.js";
-import { ORDER_REFUNDS_ENABLED } from "../api/_server/orderRefunds.js";
+import {
+  CAGNOTTE_CLOSED_RUNTIME_CONFIGURATION,
+  CAGNOTTE_RUNTIME_ENV_KEYS,
+  CagnotteRuntimeConfigurationError,
+  resolveCagnotteRuntimeConfiguration,
+} from "../api/_server/cagnotteRuntimeConfig.js";
 import {
   CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED,
   CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED,
   CAGNOTTE_READ_DISPLAY_ENABLED,
+  resolveCagnotteDisplayConfiguration,
 } from "../src/config/cagnotteFeatures.js";
 import {
   assertCagnotteAdminDurableSendOrdering,
@@ -167,13 +170,27 @@ class FakeResponse {
 }
 
 await check("sept gardes normaux fermés", () => {
-  assert.equal(CAGNOTTE_SERVER_PROGRAM, null);
-  assert.equal(CAGNOTTE_RESERVATION_PROGRAM, null);
-  assert.equal(CAGNOTTE_READ_SERVER_ENABLED, false);
+  const runtime = resolveCagnotteRuntimeConfiguration({
+    environment: {},
+    getFirebaseProjectId: () => { throw new Error("configuration fermée : Firebase ne doit pas être résolu"); },
+  });
+  assert.strictEqual(runtime, CAGNOTTE_CLOSED_RUNTIME_CONFIGURATION);
+  assert.equal(runtime.accrualProgram, null);
+  assert.equal(runtime.reservationProgram, null);
+  assert.equal(runtime.readServerEnabled, false);
   assert.equal(CAGNOTTE_READ_DISPLAY_ENABLED, false);
   assert.equal(CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED, false);
   assert.equal(CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED, false);
-  assert.equal(ORDER_REFUNDS_ENABLED, false);
+  assert.equal(runtime.orderRefundsEnabled, false);
+  assert.deepEqual(resolveCagnotteDisplayConfiguration({
+    VITE_CAGNOTTE_READ_DISPLAY_ENABLED: "false",
+    VITE_CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED: false,
+    VITE_CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED: "TRUE",
+  }), {
+    readDisplayEnabled: false,
+    checkoutUseDisplayEnabled: false,
+    adminToolsDisplayEnabled: false,
+  });
 });
 
 await check("contrats Production présents mais définition statique inerte", () => {
@@ -209,12 +226,10 @@ await check("résolveurs Production purs, fermés hors Production et sur projet 
   assert.equal(reservationDrain?.reservationsEnabled, false);
 });
 
-await check("aucun mécanisme parallèle d’activation cagnotte", () => {
+await check("configuration centrale unique et entrées normales raccordées", () => {
   const runtimeFiles = [...walk("api"), ...walk("src")]
     .filter((file) => [".ts", ".tsx", ".js", ".jsx", ".mjs"].includes(extname(file)));
-  const forbidden = [
-    /VITE_[A-Z0-9_]*(?:CAGNOTTE|LOYALTY|ORDER_REFUND)/i,
-    /(?:CAGNOTTE|LOYALTY|ORDER_REFUND)[A-Z0-9_]*(?:ENABLED|ACTIVE|BYPASS)\s*=\s*(?:process\.env|import\.meta\.env)/i,
+  const forbiddenEverywhere = [
     /x-(?:enable|activate|bypass)-(?:cagnotte|loyalty|refunds?)/i,
     /localStorage\.(?:getItem|setItem)\([^)]*(?:cagnotte|loyalty)/i,
     /NODE_ENV[^\n;]*(?:cagnotte|loyalty|refund)/i,
@@ -222,30 +237,36 @@ await check("aucun mécanisme parallèle d’activation cagnotte", () => {
   ];
   const violations = runtimeFiles.flatMap((file) => {
     const source = read(file);
-    return forbidden.some((pattern) => pattern.test(source)) ? [file] : [];
+    return forbiddenEverywhere.some((pattern) => pattern.test(source)) ? [file] : [];
   });
   assert.deepEqual(violations, []);
 
-  const activationConstants = runtimeFiles.flatMap((file) =>
-    [...read(file).matchAll(/export const ((?:CAGNOTTE|ORDER_REFUNDS)[A-Z0-9_]*(?:ENABLED|PROGRAM))\b/g)]
-      .map((match) => match[1]),
-  ).sort();
-  assert.deepEqual(activationConstants, [
-    "CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED",
-    "CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED",
-    "CAGNOTTE_READ_DISPLAY_ENABLED",
-    "CAGNOTTE_READ_SERVER_ENABLED",
-    "CAGNOTTE_RESERVATION_PROGRAM",
-    "CAGNOTTE_SERVER_PROGRAM",
-    "ORDER_REFUNDS_ENABLED",
-  ]);
+  const serverConfiguration = read("api/_server/cagnotteRuntimeConfig.ts");
+  const displayConfiguration = read("src/config/cagnotteFeatures.ts");
+  for (const file of runtimeFiles.filter((entry) =>
+    entry !== "api/_server/cagnotteRuntimeConfig.ts" && entry !== "src/config/cagnotteFeatures.ts")) {
+    assert.doesNotMatch(
+      read(file),
+      /(?:process\.env|import\.meta\.env)[^\n;]*(?:CAGNOTTE|LOYALTY|ORDER_REFUND)/i,
+      `${file}: lecture de configuration cagnotte dispersée`,
+    );
+  }
+  for (const key of CAGNOTTE_RUNTIME_ENV_KEYS) assert.match(serverConfiguration, new RegExp(`"${key}"`));
+  assert.match(serverConfiguration, /process\.env\.VERCEL_ENV/);
+  assert.match(serverConfiguration, /getAdminProjectId/);
+  assert.doesNotMatch(serverConfiguration, /Date\.now|local_test/);
+  assert.match(displayConfiguration, /=== "true"/);
+  assert.doesNotMatch(displayConfiguration, /Boolean\(|!!/);
 
-  assert.match(read("api/_server/cagnotteReadRoute.ts"), /enabled:\s*CAGNOTTE_READ_SERVER_ENABLED/);
-  assert.match(read("api/_server/orderRefundRoute.ts"), /enabled:\s*ORDER_REFUNDS_ENABLED/);
-  assert.match(read("api/create-order.ts"), /reservationProgram:\s*CAGNOTTE_RESERVATION_PROGRAM/);
-  assert.match(read("api/create-order.ts"), /accrualProgram:\s*CAGNOTTE_SERVER_PROGRAM/);
-  assert.match(read("api/quote-order.ts"), /reservationProgram:\s*CAGNOTTE_RESERVATION_PROGRAM/);
-  assert.match(read("api/quote-order.ts"), /accrualProgram:\s*CAGNOTTE_SERVER_PROGRAM/);
+  for (const file of [
+    "api/create-order.ts",
+    "api/quote-order.ts",
+    "api/update-order-status.ts",
+    "api/_server/cagnotteReadRoute.ts",
+    "api/_server/orderRefundRoute.ts",
+  ]) assert.match(read(file), /getCagnotteRuntimeConfiguration/);
+  assert.doesNotMatch(read("api/create-order.ts") + read("api/quote-order.ts") + read("api/update-order-status.ts"),
+    /(?:accrualProgram|reservationProgram):\s*CAGNOTTE_(?:SERVER|RESERVATION)_PROGRAM/);
 });
 
 await check("mode fermé sans écritures cagnotte ni fallback silencieux", async () => {
@@ -305,8 +326,9 @@ await check("rate-limit fermé ciblé disponible sans changer le défaut histori
 });
 
 await check("endpoints fermés avant Firebase, Auth et secret curseur", async () => {
-  const previousCursorSecret = process.env.CAGNOTTE_READ_CURSOR_SECRET;
-  delete process.env.CAGNOTTE_READ_CURSOR_SECRET;
+  const controlledNames = [...CAGNOTTE_RUNTIME_ENV_KEYS, "VERCEL_ENV"];
+  const previous = new Map(controlledNames.map((name) => [name, process.env[name]]));
+  for (const name of controlledNames) delete process.env[name];
   try {
     const readResponse = new FakeResponse();
     await cagnotteHandler(request("GET", "/api/cagnotte?scope=self"), readResponse as never);
@@ -325,7 +347,7 @@ await check("endpoints fermés avant Firebase, Auth et secret curseur", async ()
       error: "Enregistrement des remboursements désactivé.",
     });
   } finally {
-    restoreEnvironment("CAGNOTTE_READ_CURSOR_SECRET", previousCursorSecret);
+    for (const [name, value] of previous) restoreEnvironment(name, value);
   }
 });
 
@@ -347,8 +369,29 @@ await check("lecture activée sans secret curseur échoue explicitement fermée"
     });
   }
   const routeSource = read("api/_server/cagnotteReadRoute.ts");
-  assert.match(routeSource, /process\.env\.CAGNOTTE_READ_CURSOR_SECRET\s*\?\?\s*""/);
-  assert.doesNotMatch(routeSource, /CAGNOTTE_READ_CURSOR_SECRET[^\n]*(?:randomBytes|randomUUID)/);
+  const runtimeSource = read("api/_server/cagnotteRuntimeConfig.ts");
+  assert.match(runtimeSource, /environment\.CAGNOTTE_READ_CURSOR_SECRET/);
+  assert.doesNotMatch(routeSource + runtimeSource, /CAGNOTTE_READ_CURSOR_SECRET[^\n]*(?:randomBytes|randomUUID)/);
+});
+
+await check("configuration runtime invalide refusée avant Firebase, Auth et lecture du corps", async () => {
+  let dependencyCalls = 0;
+  const handler = createCagnotteReadHandler({
+    getDb: () => { dependencyCalls += 1; return {} as never; },
+    verifyToken: async () => { dependencyCalls += 1; return { uid: "unexpected", email: null }; },
+    read: async () => { dependencyCalls += 1; return {} as never; },
+    getRuntimeConfiguration: () => {
+      throw new CagnotteRuntimeConfigurationError("synthetic invalid configuration");
+    },
+  });
+  const response = new FakeResponse();
+  await handler(request("GET", "/api/cagnotte?scope=self", undefined, "Bearer synthetic"), response as never);
+  assert.equal(response.statusCode, 503);
+  assert.deepEqual(response.body, {
+    code: "cagnotte_configuration_invalid",
+    error: "Configuration cagnotte indisponible.",
+  });
+  assert.equal(dependencyCalls, 0);
 });
 
 await check("18 fonctions API et deux ajouts fidélité seulement", () => {
@@ -386,8 +429,8 @@ await check("aucun rate limit ou ciblage client contournable sur les nouvelles r
   const readRoute = read("api/_server/cagnotteReadRoute.ts");
   const refundRoute = read("api/_server/orderRefundRoute.ts");
   assert.doesNotMatch(readRoute + refundRoute, /enforcePublicSubmissionRateLimit|RATE_LIMIT_HMAC_SECRET/);
-  assert.ok(readRoute.indexOf("dependencies.enabled !== true") < readRoute.indexOf("bearerToken(request)"));
-  assert.ok(refundRoute.indexOf("dependencies.enabled !== true") < refundRoute.indexOf("request.body"));
+  assert.ok(readRoute.indexOf("if (!enabled)") < readRoute.indexOf("bearerToken(request)"));
+  assert.ok(refundRoute.indexOf("if (!enabled)") < refundRoute.indexOf("request.body"));
   assert.match(readRoute, /scope === "self"[\s\S]*searchParams\.has\("targetUid"\)[\s\S]*foreign_account_forbidden/);
   assert.match(readRoute, /scope === "admin"[\s\S]*assertAdminUser/);
   assert.doesNotMatch(read("api/_server/orderRefunds.ts").slice(0, 12_000), /targetUid/);
@@ -404,7 +447,7 @@ await check("workflow refund complet et inspection admin structurée prêts derr
   const adminController = read("src/lib/cagnotteAdminController.ts");
   const recoveryStorage = read("src/lib/cagnotteAdminFrozenOperationStorage.ts");
   for (const action of ["inspect", "preview", "record_confirmed", "preview_correction", "record_correction"]) assert.match(refunds, new RegExp(`action: "${action}"`));
-  assert.ok(route.indexOf("dependencies.enabled !== true") < route.indexOf("request.body"));
+  assert.ok(route.indexOf("if (!enabled)") < route.indexOf("request.body"));
   assert.match(refunds, /refund_historical_order_not_supported/);
   for (const field of ["operationalState", "enrollment", "accrual", "wallet", "reservation", "refund", "movements"]) {
     assert.match(adminTypes, new RegExp(`\\b${field}:`));
@@ -463,7 +506,7 @@ await check("règles Firestore candidates et protections commandes", () => {
   assert.match(rules, /allow delete: if isAdmin\(\) && !resource\.data\.keys\(\)\.hasAny\(\["cagnotte"\]\)/);
 });
 
-await check("index candidat exact et non activé dans firebase.json", () => {
+await check("index candidat exact raccordé localement dans firebase.json", () => {
   const candidate = JSON.parse(read("firestore.cagnotte-read.indexes.json"));
   assert.deepEqual(candidate, {
     indexes: [{
@@ -479,7 +522,7 @@ await check("index candidat exact et non activé dans firebase.json", () => {
   });
   const firebase = JSON.parse(read("firebase.json"));
   assert.equal(firebase.firestore.rules, "firestore.rules");
-  assert.equal(firebase.firestore.indexes, undefined);
+  assert.equal(firebase.firestore.indexes, "firestore.cagnotte-read.indexes.json");
 });
 
 await check("rules-unit-testing 4.0.1 reste une devDependency locale", () => {

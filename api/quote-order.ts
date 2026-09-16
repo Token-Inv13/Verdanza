@@ -17,11 +17,13 @@ import {
   prepareCagnotteCheckoutQuote,
   readAvailableCagnotteCents,
 } from "./_server/cagnotteCheckout.js";
-import { CAGNOTTE_RESERVATION_PROGRAM } from "./_server/cagnotteReservations.js";
 import type { CagnotteReservationProgram } from "./_server/cagnotteReservationTypes.js";
-import { CAGNOTTE_SERVER_PROGRAM } from "./_server/cagnotteProgram.js";
 import type { CagnotteAccrualProgram } from "./_server/cagnotteLedgerTypes.js";
-import { getAdminProjectId } from "./_server/firebaseAdmin.js";
+import {
+  CagnotteRuntimeConfigurationError,
+  getCagnotteRuntimeConfiguration,
+  type CagnotteRuntimeConfiguration,
+} from "./_server/cagnotteRuntimeConfig.js";
 import type {
   Coupon,
   Address,
@@ -43,6 +45,7 @@ export function createQuoteOrderHandler(dependencies: {
   accrualProgram?: CagnotteAccrualProgram | null;
   reservationProgram?: CagnotteReservationProgram | null;
   getFirebaseProjectId?: () => string | null;
+  getRuntimeConfiguration?: () => CagnotteRuntimeConfiguration;
   now?: () => number;
 }) {
 return async function handler(
@@ -57,14 +60,23 @@ return async function handler(
   if (assertMethod(request, response, "POST")) return;
 
   try {
+    const runtimeConfiguration = dependencies.getRuntimeConfiguration?.();
+    const accrualProgram = runtimeConfiguration
+      ? runtimeConfiguration.accrualProgram
+      : dependencies.accrualProgram ?? null;
+    const reservationProgram = runtimeConfiguration
+      ? runtimeConfiguration.reservationProgram
+      : dependencies.reservationProgram ?? null;
+    const firebaseProjectId = runtimeConfiguration
+      ? runtimeConfiguration.firebaseProjectId
+      : accrualProgram || reservationProgram
+        ? dependencies.getFirebaseProjectId?.()
+        : null;
     const requestBody =
       typeof request.body === "string" ? JSON.parse(request.body) : request.body;
     const body = parseQuoteBody(requestBody);
     const db = dependencies.getDb();
     const requestedCents = body.cagnotteUse?.requestedCents ?? 0;
-    const reservationProgram = dependencies.reservationProgram === undefined
-      ? CAGNOTTE_RESERVATION_PROGRAM
-      : dependencies.reservationProgram;
     let beneficiaryId = "";
     if (requestedCents > 0) {
       if (!reservationProgram) {
@@ -85,12 +97,10 @@ return async function handler(
           priced,
           beneficiaryId,
           availableCents: await readAvailableCagnotteCents(db, beneficiaryId),
-          accrualProgram: dependencies.accrualProgram === undefined
-            ? CAGNOTTE_SERVER_PROGRAM
-            : dependencies.accrualProgram,
+          accrualProgram,
           reservationProgram,
           createdAtEpochMs: (dependencies.now ?? Date.now)(),
-          firebaseProjectId: dependencies.getFirebaseProjectId?.(),
+          firebaseProjectId,
         }).quote
       : undefined;
     if (cagnotteUse) {
@@ -121,6 +131,12 @@ return async function handler(
       ...(cagnotteUse ? { cagnotteUse } : {}),
     });
   } catch (error) {
+    if (error instanceof CagnotteRuntimeConfigurationError) {
+      return sendJson(response, {
+        code: "cagnotte_configuration_invalid",
+        error: "Configuration cagnotte indisponible.",
+      }, 503);
+    }
     const message = error instanceof Error ? error.message : "";
     const status = error instanceof CagnotteCheckoutError
       ? error.code === "AUTH_REQUIRED" ? 401 : 409
@@ -140,9 +156,7 @@ return async function handler(
 export default createQuoteOrderHandler({
   getDb: getAdminDb,
   verifyToken: verifyFirebaseIdToken,
-  accrualProgram: CAGNOTTE_SERVER_PROGRAM,
-  reservationProgram: CAGNOTTE_RESERVATION_PROGRAM,
-  getFirebaseProjectId: getAdminProjectId,
+  getRuntimeConfiguration: getCagnotteRuntimeConfiguration,
 });
 
 function isPublicPromoBannersRequest(request: VercelRequestLike) {

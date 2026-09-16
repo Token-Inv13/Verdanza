@@ -8,7 +8,7 @@ import { createOrderHandler } from "../api/create-order.js";
 import { createQuoteOrderHandler } from "../api/quote-order.js";
 import { createOrderStatusHandler } from "../api/_server/orderStatusRoute.js";
 import { createOrderRefundHandler } from "../api/_server/orderRefundRoute.js";
-import { CAGNOTTE_READ_SERVER_ENABLED, readCagnotte } from "../api/_server/cagnotteRead.js";
+import { readCagnotte } from "../api/_server/cagnotteRead.js";
 import { CAGNOTTE_SERVER_PROGRAM } from "../api/_server/cagnotteProgram.js";
 import { CAGNOTTE_RESERVATION_PROGRAM } from "../api/_server/cagnotteReservations.js";
 import {
@@ -18,7 +18,7 @@ import {
   type CagnotteTestProgram,
 } from "../api/_server/cagnotteLedgerTypes.js";
 import type { CagnotteReservationTestProgram } from "../api/_server/cagnotteReservationTypes.js";
-import { ORDER_REFUNDS_ENABLED } from "../api/_server/orderRefunds.js";
+import { CAGNOTTE_CLOSED_RUNTIME_CONFIGURATION } from "../api/_server/cagnotteRuntimeConfig.js";
 import type { VerifiedFirebaseUser } from "../api/_server/adminAuth.js";
 import type { VercelRequestLike, VercelResponseLike } from "../api/_server/http.js";
 import { CagnotteView } from "../src/components/cagnotte/CagnottePanel.js";
@@ -37,11 +37,11 @@ import { CAGNOTTE_DEMO, connectCagnotteEmulator, validateCagnotteTestEnvironment
 validateCagnotteTestEnvironment(process.env);
 assert.equal(CAGNOTTE_SERVER_PROGRAM, null);
 assert.equal(CAGNOTTE_RESERVATION_PROGRAM, null);
-assert.equal(CAGNOTTE_READ_SERVER_ENABLED, false);
+assert.equal(CAGNOTTE_CLOSED_RUNTIME_CONFIGURATION.readServerEnabled, false);
 assert.equal(CAGNOTTE_READ_DISPLAY_ENABLED, false);
 assert.equal(CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED, false);
 assert.equal(CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED, false);
-assert.equal(ORDER_REFUNDS_ENABLED, false);
+assert.equal(CAGNOTTE_CLOSED_RUNTIME_CONFIGURATION.orderRefundsEnabled, false);
 
 const db = await connectCagnotteEmulator(CAGNOTTE_DEMO);
 const baseTime = Date.parse("2000-01-01T00:00:00.000Z");

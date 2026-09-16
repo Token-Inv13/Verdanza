@@ -13,6 +13,13 @@ const forbidden = [
   "19099",
   "18086",
   "cagnotte-produit-fictif.svg",
+  "CAGNOTTE_RUNTIME_ENVIRONMENT",
+  "CAGNOTTE_ACCRUAL_MODE",
+  "CAGNOTTE_RESERVATION_MODE",
+  "CAGNOTTE_STARTS_AT_EPOCH_MS",
+  "CAGNOTTE_READ_SERVER_ENABLED",
+  "ORDER_REFUNDS_ENABLED",
+  "CAGNOTTE_READ_CURSOR_SECRET",
 ];
 const files = await list(dist);
 const textual = files.filter((file) => /\.(?:css|html|js|json|map|svg|txt|xml)$/i.test(file));

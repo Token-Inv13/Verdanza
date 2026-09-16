@@ -10,7 +10,6 @@ import type {
 import { CAGNOTTE_REGULARIZATION_VERSION, CAGNOTTE_RESERVATION_VERSION } from "./cagnotteLedgerTypes.js";
 import { CagnotteLedgerError, readCagnotteWallet } from "./cagnotteLedger.js";
 
-export const CAGNOTTE_READ_SERVER_ENABLED = false as const;
 export const CAGNOTTE_READ_DEFAULT_LIMIT = 20;
 export const CAGNOTTE_READ_MAX_LIMIT = 50;
 

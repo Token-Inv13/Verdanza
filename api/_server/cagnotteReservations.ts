@@ -22,7 +22,7 @@ import { CAGNOTTE_CONSUMED_REFUND_VERSION } from "./cagnotteReservationTypes.js"
 import type { CagnotteAccrualProgram } from "./cagnotteLedgerTypes.js";
 import { assertCagnotteProgramFirebaseProject } from "./cagnotteProgram.js";
 
-/** Normal application configuration. Only tests inject an enabled local program. */
+/** Safe service fallback. Only tests inject local_test programs; normal HTTP routes use the runtime resolver. */
 export const CAGNOTTE_RESERVATION_PROGRAM: CagnotteReservationProgram | null = null;
 
 type ReservationAction = "reserve" | "consume" | "release" | "cancel";

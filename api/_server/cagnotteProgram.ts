@@ -100,5 +100,5 @@ function assertProductionFirebaseProject(projectId: string | null | undefined) {
   }
 }
 
-/** Normal entry point: disabled, no launch date, environment switch or fallback. */
+/** Safe service fallback. Normal HTTP entry points resolve the central runtime configuration lazily. */
 export const CAGNOTTE_SERVER_PROGRAM: CagnotteProductionProgram | null = null;

@@ -25,7 +25,6 @@ import { CAGNOTTE_REGULARIZATION_VERSION, CAGNOTTE_RESERVATION_VERSION, type Cag
 import { prepareCagnotteRefundComposition, readCagnotteConsumedRefundBasis, readCagnotteReservationBasis } from "./cagnotteReservations.js";
 import { readUnpaidOrderContext } from "./unpaidOrderReview.js";
 
-export const ORDER_REFUNDS_ENABLED = false;
 export const ORDER_REFUND_VERSION = "order-refund-record-v1";
 export const ORDER_MIXED_REFUND_VERSION = "order-mixed-refund-record-v1";
 export const ORDER_REFUND_CORRECTION_VERSION = "order-refund-correction-v1";

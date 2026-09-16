@@ -1,6 +1,6 @@
 # Readiness technique de la cagnotte V1
 
-Ce manifeste décrit l'état local vérifié avant toute intégration ou mise en production. Il ne vaut ni validation Vercel réelle, ni déploiement Firebase, ni activation commerciale.
+Ce manifeste conserve la référence historique vérifiée avant intégration. Le raccordement runtime courant est décrit dans `PROGRAMME-PRODUCTION-INERT-FIRST.md`. Aucun des deux documents ne vaut activation commerciale ni modification de configuration distante.
 
 ## Référence auditée
 
@@ -20,17 +20,17 @@ Ce manifeste décrit l'état local vérifié avant toute intégration ou mise en
 
 | Fonction | Garde normale | État | Effet fermé |
 |---|---|---:|---|
-| Inscription et attribution | `CAGNOTTE_SERVER_PROGRAM` | `null` | Aucune inscription, attribution ou régularisation cagnotte sur une commande ordinaire. |
-| Réservation, consommation et libération | `CAGNOTTE_RESERVATION_PROGRAM` | `null` | Aucune nouvelle réservation ; une demande positive est refusée avec `RESERVATIONS_DISABLED`. |
+| Inscription et attribution | `CAGNOTTE_ACCRUAL_MODE` | `off` effectif | Aucune inscription, attribution ou régularisation cagnotte sur une commande ordinaire. |
+| Réservation, consommation et libération | `CAGNOTTE_RESERVATION_MODE` | `off` effectif | Aucune nouvelle réservation ; une demande positive est refusée avec `RESERVATIONS_DISABLED`. |
 | API de lecture | `CAGNOTTE_READ_SERVER_ENABLED` | `false` | `GET /api/cagnotte` répond `503 cagnotte_read_disabled` avant Auth, Firestore et lecture du secret curseur. |
-| Affichage Mes avantages | `CAGNOTTE_READ_DISPLAY_ENABLED` | `false` | Aucun accès actif à Mes avantages dans l'application normale. |
-| Utilisation au panier/checkout | `CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED` | `false` | Aucun panneau d'utilisation de la cagnotte. |
-| Outils administratifs | `CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED` | `false` | Aucun outil cagnotte dans l'interface administrateur normale. |
+| Affichage Mes avantages | `VITE_CAGNOTTE_READ_DISPLAY_ENABLED` | `false` | Aucun accès actif à Mes avantages dans l'application normale. |
+| Utilisation au panier/checkout | `VITE_CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED` | `false` | Aucun panneau d'utilisation de la cagnotte. |
+| Outils administratifs | `VITE_CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED` | `false` | Aucun outil cagnotte dans l'interface administrateur normale. |
 | Remboursements | `ORDER_REFUNDS_ENABLED` | `false` | `POST /api/order-refunds` répond `503 order_refunds_disabled` avant corps, Auth et Firestore. |
 
-La recherche statique ne relève aucun autre flag cagnotte, variable `VITE_*`, paramètre de requête, en-tête, `localStorage`, traitement spécial de `localhost` ou de `NODE_ENV` capable de contourner ces gardes. Une commande sans snapshot `cagnotte` suit le chemin historique sans accès aux collections cagnotte. Une demande positive lorsque les réservations sont fermées échoue explicitement ; elle n'est pas convertie silencieusement en commande au plein tarif.
+Les lectures de configuration sont centralisées dans `cagnotteRuntimeConfig.ts` côté serveur et `cagnotteFeatures.ts` côté public. Aucun paramètre de requête, en-tête, `localStorage`, traitement spécial de `localhost` ou de `NODE_ENV` ne contourne ces gardes. Une commande sans snapshot `cagnotte` suit le chemin historique sans accès aux collections cagnotte. Une demande positive lorsque les réservations sont fermées échoue explicitement ; elle n'est pas convertie silencieusement en commande au plein tarif.
 
-L'architecture actuelle ne contient pas encore de programme de production : les seuls types de programme activables sont réservés à `local_test` et injectés par les tests. La définition d'un programme de production et son mécanisme explicite de bascule forment donc un lot distinct obligatoire avant toute activation serveur.
+Les fabriques Production sont raccordées par une configuration explicite, mais l'absence de cette configuration conserve les deux programmes à `null`. Les programmes `local_test` restent des injections de tests inaccessibles à l'application normale.
 
 ## Fonctions API et packaging statique
 
@@ -55,7 +55,7 @@ L'arbre statique de `cagnotte.ts` contient 15 modules locaux et requiert `fireba
 - Les accès directs client en lecture et écriture sont refusés pour les cinq collections cagnotte.
 - Les commandes qui portent une clé `cagnotte` ne peuvent pas être créées, modifiées ou supprimées directement par les règles clientes d'administration prévues pour les commandes historiques.
 - Le candidat `firestore.cagnotte-read.indexes.json` contient exactement l'index collection `cagnotteMovements` sur `beneficiaryId ASC`, `recordedAtEpochMs DESC`, `__name__ DESC`.
-- `firebase.json` référence les règles, mais ne référence pas ce fichier d'index : rien ne le publie automatiquement.
+- `firebase.json` référence localement les règles et ce fichier d'index. Aucun déploiement Firebase n'est effectué par ce raccord de dépôt.
 - `@firebase/rules-unit-testing` est fixé à `4.0.1`, uniquement dans `devDependencies`, y compris dans le lockfile ; aucun runtime Vercel cagnotte ne l'importe.
 
 | Collection | Créateur/modificateur serveur | Lecteur serveur | Client direct | Index propre requis | Expiration automatique |
@@ -74,9 +74,9 @@ Les commandes peuvent porter les snapshots `cagnotte`, `cagnotteReservationInten
 
 | Classe | Variable(s) et lecture | Usage et comportement absent | Besoin futur |
 |---|---|---|---|
-| A — code déployé, gardes fermées | Aucune variable spécifique à la cagnotte | Les deux endpoints sortent en `503` avant Auth, Firestore et secret curseur. Les imports de modules restent sûrs. | Preview puis Production, gardes fermées. |
-| B — activation lecture | `CAGNOTTE_READ_CURSOR_SECRET`, lu dans `api/_server/cagnotteReadRoute.ts` | Signe les curseurs. Si la lecture est ouverte et que la valeur est absente ou trop courte, réponse explicite `500 unavailable`. Aucun secret aléatoire n'est créé au démarrage. | Secret distinct, imprévisible, d'au moins 32 caractères, dans chaque environnement où la lecture est ouverte. |
-| B — activation métier | Aucun secret ni variable existante | `CAGNOTTE_SERVER_PROGRAM` et `CAGNOTTE_RESERVATION_PROGRAM` sont des constantes `null`. Il n'existe pas de bascule de production par environnement. | Concevoir et revoir séparément une configuration de programme de production avant ouverture. |
+| A — code déployé, gardes fermées | Paramètres cagnotte absents | Les deux endpoints sortent en `503` avant Auth, Firestore et secret curseur. Les imports restent sûrs et n'initialisent pas Firebase. | Preview puis Production, configuration absente ou explicitement fermée. |
+| B — activation lecture | `CAGNOTTE_READ_CURSOR_SECRET`, lu par `cagnotteRuntimeConfig.ts` | Signe les curseurs. Si la lecture est demandée et que la valeur est absente ou trop courte, la configuration est refusée en `503` avant Auth/Firestore. Aucun secret aléatoire n'est créé. | Secret distinct, imprévisible, d'au moins 32 caractères, dans chaque environnement où la lecture est ouverte. |
+| B — activation métier | `CAGNOTTE_RUNTIME_ENVIRONMENT`, modes, instant et ouvertures API | La configuration absente reste fermée ; une configuration partielle ou incohérente est refusée. | Autorisation distante et déploiement distincts avant toute ouverture. |
 | C — Auth/Firebase existants | `VITE_FIREBASE_API_KEY` dans `adminAuth.ts` | Requis après ouverture pour vérifier le jeton via Identity Toolkit ; absence : erreur explicite. | Preview/Production pour les routes authentifiées. |
 | C — Firebase Admin existant | `FIREBASE_SERVICE_ACCOUNT_BASE64`, ou ensemble `FIREBASE_PROJECT_ID` + `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY`, dans `firebaseAdmin.ts` | À défaut, Firebase Admin utilise `applicationDefault()` ; la garde fermée empêche l'initialisation par les nouveaux endpoints. | Identité Firebase Admin approuvée et limitée au projet explicitement choisi. |
 | C — Storage existant | `FIREBASE_STORAGE_BUCKET` ou `VITE_FIREBASE_STORAGE_BUCKET` dans `firebaseAdmin.ts` | Paramètre optionnel de l'app Admin partagée ; aucun endpoint cagnotte ne demande Storage. | Aucun besoin spécifique à la cagnotte. |

@@ -1,17 +1,38 @@
 import { assertAdminUser, verifyFirebaseIdToken } from "./adminAuth.js";
 import { getAdminDb } from "./firebaseAdmin.js";
 import { assertMethod, sendJson, type VercelRequestLike, type VercelResponseLike } from "./http.js";
-import { executeOrderRefund, parseOrderRefundRequest, ORDER_REFUNDS_ENABLED, OrderRefundError } from "./orderRefunds.js";
+import { executeOrderRefund, parseOrderRefundRequest, OrderRefundError } from "./orderRefunds.js";
 import { CagnotteLedgerError } from "./cagnotteLedger.js";
 import { CagnotteReservationError } from "./cagnotteReservations.js";
+import {
+  CagnotteRuntimeConfigurationError,
+  getCagnotteRuntimeConfiguration,
+  type CagnotteRuntimeConfiguration,
+} from "./cagnotteRuntimeConfig.js";
 
 type Service = Parameters<typeof executeOrderRefund>[0];
 export function createOrderRefundHandler(dependencies: {
-  enabled: boolean; getDb: () => Service["db"]; verifyToken: typeof verifyFirebaseIdToken; now?: () => string; log?: Service["log"];
+  enabled?: boolean; getDb: () => Service["db"]; verifyToken: typeof verifyFirebaseIdToken; now?: () => string; log?: Service["log"];
+  getRuntimeConfiguration?: () => CagnotteRuntimeConfiguration;
 }) {
   return async function handler(request: VercelRequestLike, response: VercelResponseLike) {
     if (assertMethod(request, response, "POST")) return;
-    if (dependencies.enabled !== true) return sendJson(response, { code: "order_refunds_disabled", error: "Enregistrement des remboursements désactivé." }, 503);
+    let runtimeConfiguration: CagnotteRuntimeConfiguration | undefined;
+    try {
+      runtimeConfiguration = dependencies.getRuntimeConfiguration?.();
+    } catch (error) {
+      if (error instanceof CagnotteRuntimeConfigurationError) {
+        return sendJson(response, {
+          code: "cagnotte_configuration_invalid",
+          error: "Configuration cagnotte indisponible.",
+          bankingOperationExecuted: false,
+          bankingTransferVerified: false,
+        }, 503);
+      }
+      throw error;
+    }
+    const enabled = runtimeConfiguration?.orderRefundsEnabled ?? dependencies.enabled === true;
+    if (!enabled) return sendJson(response, { code: "order_refunds_disabled", error: "Enregistrement des remboursements désactivé." }, 503);
     try {
       let raw: unknown;
       try { raw = typeof request.body === "string" ? JSON.parse(request.body) : request.body; }
@@ -35,4 +56,8 @@ export function createOrderRefundHandler(dependencies: {
     }
   };
 }
-export const handleOrderRefund = createOrderRefundHandler({ enabled: ORDER_REFUNDS_ENABLED, getDb: getAdminDb, verifyToken: verifyFirebaseIdToken });
+export const handleOrderRefund = createOrderRefundHandler({
+  getDb: getAdminDb,
+  verifyToken: verifyFirebaseIdToken,
+  getRuntimeConfiguration: getCagnotteRuntimeConfiguration,
+});

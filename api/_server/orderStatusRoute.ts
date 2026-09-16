@@ -15,6 +15,10 @@ import type {
 import { CagnotteLedgerError } from "./cagnotteLedger.js";
 import { CagnotteReservationError } from "./cagnotteReservations.js";
 import { UnpaidReviewError, type UnpaidReviewRequest } from "./unpaidOrderReview.js";
+import {
+  CagnotteRuntimeConfigurationError,
+  type CagnotteRuntimeConfiguration,
+} from "./cagnotteRuntimeConfig.js";
 
 const orderStatuses: OrderStatus[] = [
   "new",
@@ -50,6 +54,7 @@ export function createOrderStatusHandler(dependencies: {
   accrualProgram?: Parameters<typeof commitOrderStatusTransition>[0]["accrualProgram"];
   reservationProgram?: Parameters<typeof commitOrderStatusTransition>[0]["reservationProgram"];
   getFirebaseProjectId?: () => string | null;
+  getRuntimeConfiguration?: () => CagnotteRuntimeConfiguration;
   now?: Parameters<typeof commitOrderStatusTransition>[0]["now"];
 }) {
 return async function handler(
@@ -59,6 +64,18 @@ return async function handler(
   if (assertMethod(request, response, "POST")) return;
 
   try {
+    const runtimeConfiguration = dependencies.getRuntimeConfiguration?.();
+    const accrualProgram = runtimeConfiguration
+      ? runtimeConfiguration.accrualProgram
+      : dependencies.accrualProgram;
+    const reservationProgram = runtimeConfiguration
+      ? runtimeConfiguration.reservationProgram
+      : dependencies.reservationProgram;
+    const firebaseProjectId = runtimeConfiguration
+      ? runtimeConfiguration.firebaseProjectId
+      : accrualProgram || reservationProgram
+        ? dependencies.getFirebaseProjectId?.()
+        : null;
     const rawBody = parseJsonObject(request.body);
     const idToken = rawBody.authToken || bearerToken(request);
     if (!idToken) {
@@ -75,11 +92,9 @@ return async function handler(
         db,
         body,
         admin,
-        accrualProgram: dependencies.accrualProgram,
-        reservationProgram: dependencies.reservationProgram,
-        firebaseProjectId: dependencies.accrualProgram || dependencies.reservationProgram
-          ? dependencies.getFirebaseProjectId?.()
-          : null,
+        accrualProgram,
+        reservationProgram,
+        firebaseProjectId,
         now: dependencies.now,
       });
 
@@ -97,6 +112,13 @@ return async function handler(
 
     sendJson(response, { ok: true, analyticsPurchase: purchaseAnalyticsResult, unpaidReview: committed.unpaidReviewContext });
   } catch (error) {
+    if (error instanceof CagnotteRuntimeConfigurationError) {
+      console.error("update-order-status cagnotte configuration invalid");
+      return sendJson(response, {
+        code: "cagnotte_configuration_invalid",
+        error: "Configuration cagnotte indisponible.",
+      }, 503);
+    }
     console.error("update-order-status failed", error);
     const message =
       error instanceof Error ? error.message : "Mise a jour commande impossible.";
