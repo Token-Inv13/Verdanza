@@ -1,6 +1,50 @@
 # Programme cagnotte Production — socle inert-first
 
-## État courant — finalisation Windows et EPIPE de la PR #9
+## État courant — raccordement runtime fermé par défaut
+
+La PR #9 est fusionnée dans `main` au commit squash `a2bb765ec10d3f255d7a8eb0a834983422d4c251`. Le raccordement normal est développé sur `codex/cagnotte-runtime-config-v1`. Il ne constitue ni une ouverture, ni une modification de variables Vercel/Firebase, ni une autorisation commerciale.
+
+Les routes normales résolvent la configuration à la demande, après le contrôle de méthode et seulement sur les frontières cagnotte concernées. L'absence complète des paramètres de contrôle produit deux programmes `null` et deux API fermées, sans lire l'identité Firebase Admin. Une configuration explicite doit fournir les six paramètres de contrôle ensemble ; une valeur absente, vide, entourée d'espaces, inconnue ou incohérente échoue avec `cagnotte_configuration_invalid` avant Auth, Firestore ou écriture métier. `NODE_ENV=production` n'est jamais une preuve d'environnement : `CAGNOTTE_RUNTIME_ENVIRONMENT` doit correspondre exactement à `VERCEL_ENV`, et toute capacité opérationnelle reste interdite hors `VERCEL_ENV=production`.
+
+L'identité de projet n'est pas une valeur déclarative de la configuration cagnotte. Elle provient de `getAdminProjectId()`, donc du credential Firebase Admin effectivement résolu. Une ouverture exige exactement `verdanza-1f621`. Les programmes `local_test` restent des injections de fabriques réservées aux suites locales et ne sont jamais sélectionnés par la configuration normale.
+
+| Paramètre | Portée | Valeur fermée sans configuration | Valeurs admises | Dépendances et refus |
+|---|---|---|---|---|
+| `CAGNOTTE_RUNTIME_ENVIRONMENT` | serveur | paramètre absent ; runtime non configuré | `preview`, `production` | doit égaler `VERCEL_ENV` ; toute ouverture est refusée en Preview |
+| `CAGNOTTE_ACCRUAL_MODE` | serveur | `off` effectif | `off`, `drain`, `accrue` | `drain`/`accrue` exigent Production, instant explicite et projet Admin exact |
+| `CAGNOTTE_RESERVATION_MODE` | serveur | `off` effectif | `off`, `drain`, `reserve` | `drain`/`reserve` exigent Production, instant explicite et projet Admin exact |
+| `CAGNOTTE_STARTS_AT_EPOCH_MS` | serveur | aucune date | entier epoch millisecondes sûr, non négatif | toujours explicite dans une configuration ; aucun `Date.now()` de secours |
+| `CAGNOTTE_READ_SERVER_ENABLED` | serveur | `false` | chaîne exacte `true` ou `false` | `true` exige le projet Admin exact et un secret de curseur valide |
+| `ORDER_REFUNDS_ENABLED` | serveur | `false` | chaîne exacte `true` ou `false` | `true` exige le projet Admin exact ; aucune opération bancaire n'est ajoutée |
+| `CAGNOTTE_READ_CURSOR_SECRET` | secret serveur | inutilisé lorsque la lecture est fermée | secret d'au moins 32 caractères | obligatoire avec `CAGNOTTE_READ_SERVER_ENABLED=true`, jamais exposé au client |
+| `VITE_CAGNOTTE_READ_DISPLAY_ENABLED` | public, build frontend | `false` | chaîne exacte `true` | n'accorde aucune lecture serveur |
+| `VITE_CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED` | public, build frontend | `false` | chaîne exacte `true` | n'accorde aucune réservation serveur |
+| `VITE_CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED` | public, build frontend | `false` | chaîne exacte `true` | n'ouvre pas l'API de remboursement |
+
+La chaîne `"false"`, un booléen JavaScript, `TRUE`, `1` ou toute autre valeur ne peut pas activer un affichage. Côté serveur, une valeur différente des chaînes exactes `true` et `false` invalide toute la configuration. Les variables publiques ne contiennent aucun secret.
+
+Les entrées raccordées sont : devis, création de commande, transitions de paiement/livraison/annulation, lecture `/api/cagnotte`, remboursements `/api/order-refunds`, compte client, panier/checkout et outils administratifs. Les handlers de commande conservent les injections directes de tests ; les exports normaux utilisent uniquement le résolveur central. La requête publique des bannières promotionnelles ne résout pas la configuration cagnotte et reste indépendante.
+
+Les capacités renvoyées par la lecture sont calculées à l'instant de la requête. Un programme non nul en `drain` ou avant `CAGNOTTE_STARTS_AT_EPOCH_MS` expose `canAccrueLoyalty=false` et `canRequestReservation=false`. `drain` conserve néanmoins l'identité du programme afin que les commandes inscrites et réservations engagées puissent terminer leurs transitions. Une configuration invalide ne devient jamais silencieusement `off`.
+
+`firebase.json` référence localement `firestore.cagnotte-read.indexes.json`. Ce raccord ne déploie ni index ni règles et ne prouve pas leur état distant.
+
+### Procédure d'ouverture future
+
+1. Conserver l'ordre de sécurité **refunds API → admin UI → acquisition** et valider lecture et utilisation avant toute ouverture commerciale.
+2. Préparer ensemble les six paramètres serveur, l'identité Admin effective, les trois paramètres publics nécessaires et, si la lecture est visée, le secret de curseur. Fixer un instant futur approuvé ; ne jamais le déduire de l'heure du déploiement.
+3. Modifier les variables dans le scope Vercel expressément autorisé, puis déclencher et valider un nouveau build/déploiement. Une variable Vercel n'est pas un interrupteur instantané sur un déploiement déjà construit.
+4. Ouvrir séparément les API et affichages dans l'ordre approuvé, vérifier leurs refus fermés, puis seulement autoriser `accrue` et éventuellement `reserve`. Aucun affichage seul ne vaut autorisation serveur.
+
+### Retour en drain
+
+Fermer d'abord l'interface administrateur et l'API de remboursement pour empêcher de nouvelles déclarations, puis passer acquisition et réservation à `drain`. Conserver l'instant et la version de programme afin que les opérations engagées gardent leur identité. Fermer ensuite les affichages selon la procédure d'incident. Chaque changement de variable exige un nouveau déploiement validé ; ne pas basculer directement vers `off` tant que des commandes inscrites ou réservations existent.
+
+### Prérequis restant distincts
+
+Restent à valider séparément, sans décision implicite dans ce lot : le parcours distant contrôlé remboursements/administration, le secret de curseur et la lecture, la protection rate-limit en environnement autorisé, l'utilisation checkout avant acquisition commerciale, les factures et avoirs, la validation comptable, les validations cloud et l'observabilité Analytics. Aucune date de lancement n'est fixée.
+
+## Historique — finalisation Windows et EPIPE de la PR #9
 
 Le candidat de clôture part du HEAD publié `e944078917e20f69c71eace3637a2dac7f01d22b` de `codex/cagnotte-interactive-local-v1`, sur la base `main` `3a7ab99a7837cf902c187b525195bc8fe1f67416`. Le travail reste limité au cycle de vie du runner de recette locale, à son superviseur Windows et à leurs preuves : aucune garde, règle métier, dépendance, configuration Firebase/Vercel ou donnée distante n'est modifiée.
 
@@ -25,7 +69,7 @@ Les tests ciblés et `npm run verify` passent sur ce contenu sous Windows, y com
 
 Les sections datées et celles dont le titre commence par « Historique » conservent les preuves de candidats antérieurs. Leurs SHA, états de PR, déploiements et nombres de contrôles ne décrivent pas automatiquement le HEAD courant. Les contrats d'architecture, les commandes de recette et les prérequis d'ouverture restent les références techniques tant qu'un lot ultérieur ne les remplace pas explicitement.
 
-Ce socle ajoute les contrats nécessaires à un futur programme Production sans l'activer. Les entrées normales `CAGNOTTE_SERVER_PROGRAM` et `CAGNOTTE_RESERVATION_PROGRAM` restent littéralement à `null`. Aucun résolveur n'est connecté à `process.env` et aucune date de lancement n'est définie.
+Ce socle ajoutait les contrats nécessaires à un futur programme Production sans l'activer. Les constantes de repli des services `CAGNOTTE_SERVER_PROGRAM` et `CAGNOTTE_RESERVATION_PROGRAM` restent littéralement à `null`. Les entrées HTTP normales utilisent désormais le résolveur central décrit dans l'état courant ; aucune date de lancement n'est définie par défaut.
 
 ## Acquisition
 
@@ -72,7 +116,7 @@ La décision ne dépend d'aucun UID, `customerId` ou état cagnotte fourni par l
 
 ## Remboursements et outils administratifs
 
-L'ordre d'ouverture futur reste strict : ouvrir d'abord l'API de remboursement, vérifier son refus des commandes historiques et son inspection des commandes inscrites, puis ouvrir l'interface administrateur. L'acquisition ne vient qu'après validation de ce parcours : **refunds API → admin UI → acquisition**. `ORDER_REFUNDS_ENABLED` et `CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED` restent à `false` dans le socle livré.
+L'ordre d'ouverture futur reste strict : ouvrir d'abord l'API de remboursement, vérifier son refus des commandes historiques et son inspection des commandes inscrites, puis ouvrir l'interface administrateur. L'acquisition ne vient qu'après validation de ce parcours : **refunds API → admin UI → acquisition**. Sans configuration autorisée, `ORDER_REFUNDS_ENABLED` et `VITE_CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED` restent effectivement fermés.
 
 `inspect`, `preview` et `preview_correction` ne produisent aucune écriture. `record_confirmed` enregistre une déclaration externe déjà confirmée et `record_correction` la corrige avec une référence idempotente. Aucune de ces actions ne contacte un prestataire de paiement, ne déclenche de remboursement bancaire et n'envoie d'e-mail. Le montant financier déclaré reste séparé de la restitution de crédit et de la correction du gain.
 

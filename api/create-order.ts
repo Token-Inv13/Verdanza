@@ -3,7 +3,7 @@ import { commitCheckoutOrder } from "./_server/checkoutOrder.js";
 export { commitCheckoutOrder, assertFixedPriceOrderItemStillMatchesProduct } from "./_server/checkoutOrder.js";
 import { FieldValue } from "firebase-admin/firestore";
 import crypto from "node:crypto";
-import { getAdminDb, getAdminProjectId } from "./_server/firebaseAdmin.js";
+import { getAdminDb } from "./_server/firebaseAdmin.js";
 import {
   assertMethod,
   sendJson,
@@ -18,10 +18,14 @@ import {
 import { createCheckoutIdentityResolver } from "./_server/checkoutIdentity.js";
 import { verifyFirebaseIdToken } from "./_server/adminAuth.js";
 import { CagnotteCheckoutError } from "./_server/cagnotteCheckout.js";
-import { CAGNOTTE_RESERVATION_PROGRAM, CagnotteReservationError } from "./_server/cagnotteReservations.js";
+import { CagnotteReservationError } from "./_server/cagnotteReservations.js";
 import type { CagnotteReservationProgram } from "./_server/cagnotteReservationTypes.js";
-import { CAGNOTTE_SERVER_PROGRAM } from "./_server/cagnotteProgram.js";
 import type { CagnotteAccrualProgram } from "./_server/cagnotteLedgerTypes.js";
+import {
+  CagnotteRuntimeConfigurationError,
+  getCagnotteRuntimeConfiguration,
+  type CagnotteRuntimeConfiguration,
+} from "./_server/cagnotteRuntimeConfig.js";
 import { orderPaymentAmount } from "./_server/cagnotteOrders.js";
 import { resolveCheckoutRateLimitPolicy } from "./_server/checkoutRateLimitPolicy.js";
 import {
@@ -57,6 +61,7 @@ export function createOrderHandler(dependencies: {
   accrualProgram?: CagnotteAccrualProgram | null;
   reservationProgram?: CagnotteReservationProgram | null;
   getFirebaseProjectId?: () => string | null;
+  getRuntimeConfiguration?: () => CagnotteRuntimeConfiguration;
   now?: () => number;
   processSideEffects?: typeof processOrderSideEffectsBestEffort;
   enforceRateLimit?: typeof enforcePublicSubmissionRateLimit;
@@ -68,19 +73,22 @@ return async function handler(
   if (assertMethod(request, response, "POST")) return;
 
   try {
+    const runtimeConfiguration = dependencies.getRuntimeConfiguration?.();
+    const accrualProgram = runtimeConfiguration
+      ? runtimeConfiguration.accrualProgram
+      : dependencies.accrualProgram ?? null;
+    const reservationProgram = runtimeConfiguration
+      ? runtimeConfiguration.reservationProgram
+      : dependencies.reservationProgram ?? null;
+    const firebaseProjectId = runtimeConfiguration
+      ? runtimeConfiguration.firebaseProjectId
+      : accrualProgram || reservationProgram
+        ? dependencies.getFirebaseProjectId?.()
+        : null;
     const requestBody =
       typeof request.body === "string" ? JSON.parse(request.body) : request.body;
     const body = parseCheckoutBody(requestBody);
     const operationNowEpochMs = (dependencies.now ?? Date.now)();
-    const accrualProgram = dependencies.accrualProgram === undefined
-      ? CAGNOTTE_SERVER_PROGRAM
-      : dependencies.accrualProgram;
-    const reservationProgram = dependencies.reservationProgram === undefined
-      ? CAGNOTTE_RESERVATION_PROGRAM
-      : dependencies.reservationProgram;
-    const firebaseProjectId = accrualProgram || reservationProgram
-      ? dependencies.getFirebaseProjectId?.()
-      : null;
     const checkoutRequestId = validateCheckoutRequestId(body.checkoutRequestId);
     body.checkoutRequestId = checkoutRequestId;
     const payloadFingerprint = checkoutPayloadFingerprint(body);
@@ -233,6 +241,13 @@ return async function handler(
       },
     });
   } catch (error) {
+    if (error instanceof CagnotteRuntimeConfigurationError) {
+      console.error("create-order cagnotte configuration invalid");
+      return sendJson(response, {
+        code: "cagnotte_configuration_invalid",
+        error: "Configuration cagnotte indisponible.",
+      }, 503);
+    }
     console.error("create-order failed", error);
     const message = error instanceof Error ? error.message : "";
     const stockOrProductError =
@@ -290,9 +305,7 @@ return async function handler(
 export default createOrderHandler({
   getDb: getAdminDb,
   verifyToken: verifyFirebaseIdToken,
-  accrualProgram: CAGNOTTE_SERVER_PROGRAM,
-  reservationProgram: CAGNOTTE_RESERVATION_PROGRAM,
-  getFirebaseProjectId: getAdminProjectId,
+  getRuntimeConfiguration: getCagnotteRuntimeConfiguration,
 });
 
 async function processOrderSideEffectsBestEffort(

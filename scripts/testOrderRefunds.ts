@@ -4,8 +4,9 @@ import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { connectCagnotteEmulator, CAGNOTTE_DEMO } from "./cagnotteEmulator.js";
 import { createOrderRefundHandler, handleOrderRefund } from "../api/_server/orderRefundRoute.js";
-import { ORDER_REFUNDS_ENABLED, type OrderRefundOperationalLog } from "../api/_server/orderRefunds.js";
+import type { OrderRefundOperationalLog } from "../api/_server/orderRefunds.js";
 import { CAGNOTTE_SERVER_PROGRAM } from "../api/_server/cagnotteProgram.js";
+import { CAGNOTTE_CLOSED_RUNTIME_CONFIGURATION } from "../api/_server/cagnotteRuntimeConfig.js";
 import { commitOrderStatusTransition, type OrderStatusChange } from "../api/_server/orderStatusTransition.js";
 import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
 import { fixtureSpentGain, assertWalletJournal } from "./cagnotteRegularizationFixtures.js";
@@ -289,7 +290,7 @@ async function expectCorruptHistoryRejectedEverywhere(
 }
 
 try {
-  equal(CAGNOTTE_SERVER_PROGRAM, null); equal(ORDER_REFUNDS_ENABLED, false);
+  equal(CAGNOTTE_SERVER_PROGRAM, null); equal(CAGNOTTE_CLOSED_RUNTIME_CONFIGURATION.orderRefundsEnabled, false);
   await db.collection("adminUsers").doc(actor.uid).set({ isActive: true });
   await db.collection("adminUsers").doc("inactive-refund").set({ isActive: false });
   await db.collection("adminUsers").doc("fallback-refund@example.test").set({ isActive: true });

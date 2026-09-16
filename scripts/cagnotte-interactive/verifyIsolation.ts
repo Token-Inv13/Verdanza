@@ -15,14 +15,19 @@ assertInteractivePrerequisites();
 const normalFeatures = await source("src/config/cagnotteFeatures.ts");
 const normalProgram = await source("api/_server/cagnotteProgram.ts");
 const normalReservations = await source("api/_server/cagnotteReservations.ts");
-const normalRefunds = await source("api/_server/orderRefunds.ts");
+const normalRuntime = await source("api/_server/cagnotteRuntimeConfig.ts");
 assert.match(normalProgram, /CAGNOTTE_SERVER_PROGRAM[^=]*= null;/);
 assert.match(normalReservations, /CAGNOTTE_RESERVATION_PROGRAM[^=]*= null;/);
-assert.match(normalFeatures, /CAGNOTTE_READ_DISPLAY_ENABLED[^=]*= false(?: as const)?;/);
-assert.match(normalFeatures, /CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED[^=]*= false(?: as const)?;/);
-assert.match(normalFeatures, /CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED[^=]*= false(?: as const)?;/);
-assert.match(await source("api/_server/cagnotteRead.ts"), /CAGNOTTE_READ_SERVER_ENABLED[^=]*= false(?: as const)?;/);
-assert.match(normalRefunds, /ORDER_REFUNDS_ENABLED[^=]*= false(?: as const)?;/);
+assert.match(normalRuntime, /CAGNOTTE_CLOSED_RUNTIME_CONFIGURATION[\s\S]*accrualProgram:\s*null[\s\S]*reservationProgram:\s*null/);
+assert.match(normalRuntime, /readServerEnabled:\s*false[\s\S]*orderRefundsEnabled:\s*false/);
+for (const variable of [
+  "VITE_CAGNOTTE_READ_DISPLAY_ENABLED",
+  "VITE_CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED",
+  "VITE_CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED",
+]) assert.match(normalFeatures, new RegExp(`${variable} === "true"`));
+for (const route of ["api/create-order.ts", "api/quote-order.ts", "api/update-order-status.ts", "api/_server/cagnotteReadRoute.ts", "api/_server/orderRefundRoute.ts"]) {
+  assert.match(await source(route), /getCagnotteRuntimeConfiguration/);
+}
 
 const viteNormal = await source("vite.config.ts");
 const viteRecipe = await source("vite.cagnotte-interactive.config.ts");
@@ -42,6 +47,15 @@ assert.equal(environment.FIREBASE_AUTH_EMULATOR_HOST, `127.0.0.1:${RECIPE_PORTS.
 for (const forbidden of ["FIREBASE_SERVICE_ACCOUNT_BASE64", "FIREBASE_PRIVATE_KEY", "FIREBASE_TOKEN", "GOOGLE_APPLICATION_CREDENTIALS", "VERCEL_TOKEN"]) {
   assert.equal(environment[forbidden], undefined, `${forbidden} ne doit pas être transmis`);
 }
+for (const normalRuntimeVariable of [
+  "CAGNOTTE_RUNTIME_ENVIRONMENT",
+  "CAGNOTTE_ACCRUAL_MODE",
+  "CAGNOTTE_RESERVATION_MODE",
+  "CAGNOTTE_STARTS_AT_EPOCH_MS",
+  "CAGNOTTE_READ_SERVER_ENABLED",
+  "ORDER_REFUNDS_ENABLED",
+  "VERCEL_ENV",
+]) assert.equal(environment[normalRuntimeVariable], undefined, `${normalRuntimeVariable} reste inaccessible à la recette`);
 assert.throws(() => validateRecipeEnvironment({ ...environment, GCLOUD_PROJECT: "verdanza-1f621" }), /ISOLATION/);
 assert.throws(() => validateRecipeEnvironment({ ...environment, FIREBASE_AUTH_EMULATOR_HOST: "identitytoolkit.googleapis.com" }), /ISOLATION/);
 
