@@ -31,6 +31,7 @@ export type CleanupReport = {
 export type ResourceCancellationControl = {
   signal: AbortSignal;
   throwIfRequested: () => void;
+  isCancellationError: (error: unknown) => boolean;
 };
 
 export type ViewportResourceDependencies<Harness, Monitor, Page> = {
@@ -53,6 +54,7 @@ export type ViewportResourceDependencies<Harness, Monitor, Page> = {
     role: ViewportResourceRole;
     error: unknown;
   }) => Promise<void>;
+  isCoordinatedCancellationInterruption?: (error: unknown) => boolean;
   onPrimaryError?: (error: unknown) => void;
   onCleanupIssue?: (step: CleanupStepResult) => void;
   cleanupTimeoutMs?: number;
@@ -87,6 +89,7 @@ export async function runWithViewportResources<Harness, Monitor, Page, Result>(
   let harnessClosure: SharedResourceClosure | undefined;
   let fallbackClosure: SharedResourceClosure | undefined;
   let cancellationRequested = dependencies.cancellation?.signal.aborted ?? false;
+  const cancellationClosuresStarted = new Set<ViewportResourceRole>();
 
   const startCancellationFallback = (role: ViewportResourceRole, error: unknown) => {
     if (!dependencies.closeCancellationFallback) return;
@@ -122,9 +125,10 @@ export async function runWithViewportResources<Harness, Monitor, Page, Result>(
     })
   );
 
-  const startMonitorClosure = (role: ViewportResourceRole) => {
+  const startMonitorClosure = (role: ViewportResourceRole, requestedByCancellation = false) => {
     const closure = monitorClosures[role];
     if (!closure) return Promise.resolve();
+    if (requestedByCancellation) cancellationClosuresStarted.add(role);
     const closing = closure.close();
     // Une fermeture lancée par le signal sera rejointe et vérifiée par le nettoyage normal.
     void closing.then(undefined, () => undefined);
@@ -139,14 +143,14 @@ export async function runWithViewportResources<Harness, Monitor, Page, Result>(
     if (role === "client") resources.clientMonitor = monitor;
     else resources.adminMonitor = monitor;
     monitorClosures[role] = createMonitorClosure(monitor, role);
-    if (cancellationRequested) void startMonitorClosure(role);
+    if (cancellationRequested) void startMonitorClosure(role, true);
   };
   const registerPage = (page: Page, role: ViewportResourceRole) => {
     if (role === "client") resources.clientPage = page;
     else resources.adminPage = page;
     pageClosures[role] = createSharedResourceClosure(async () => {
       if (cancellationRequested && monitorClosures[role]) {
-        await startMonitorClosure(role);
+        await startMonitorClosure(role, true);
         return { closedBy: `close-${role}-context` };
       }
       await dependencies.closePage(page, role);
@@ -154,8 +158,8 @@ export async function runWithViewportResources<Harness, Monitor, Page, Result>(
   };
   const requestCancellationClosure = () => {
     cancellationRequested = true;
-    void startMonitorClosure("admin");
-    void startMonitorClosure("client");
+    void startMonitorClosure("admin", true);
+    void startMonitorClosure("client", true);
   };
 
   dependencies.cancellation?.signal.addEventListener("abort", requestCancellationClosure);
@@ -164,7 +168,6 @@ export async function runWithViewportResources<Harness, Monitor, Page, Result>(
   try {
     let result: Result | undefined;
     let primaryError: unknown;
-    let primaryErrorPrecededCancellation = false;
     try {
       dependencies.cancellation?.throwIfRequested();
       registerHarness(await dependencies.startHarness());
@@ -180,9 +183,19 @@ export async function runWithViewportResources<Harness, Monitor, Page, Result>(
       result = await operation(resources as ViewportResources<Harness, Monitor, Page>);
       dependencies.cancellation?.throwIfRequested();
     } catch (error) {
-      primaryError = error;
-      primaryErrorPrecededCancellation = !dependencies.cancellation?.signal.aborted;
-      if (primaryErrorPrecededCancellation) {
+      const cancellation = dependencies.cancellation;
+      const identifiedCancellation = Boolean(
+        cancellation?.signal.aborted && cancellation.isCancellationError(error),
+      );
+      const coordinatedClosureInterruption = Boolean(
+        cancellation?.signal.aborted &&
+        cancellationClosuresStarted.size > 0 &&
+        dependencies.isCoordinatedCancellationInterruption?.(error),
+      );
+      primaryError = identifiedCancellation || coordinatedClosureInterruption
+        ? cancellationError(cancellation!, error)
+        : error;
+      if (!identifiedCancellation && !coordinatedClosureInterruption) {
         try {
           dependencies.onPrimaryError?.(error);
         } catch {
@@ -213,11 +226,10 @@ export async function runWithViewportResources<Harness, Monitor, Page, Result>(
       harnessClosure!.close()
     ));
 
-    if (dependencies.cancellation?.signal.aborted && !primaryErrorPrecededCancellation) {
+    if (primaryError === undefined && dependencies.cancellation?.signal.aborted) {
       try {
         dependencies.cancellation.throwIfRequested();
       } catch (cancellationError) {
-        attachCancellationContext(cancellationError, primaryError);
         primaryError = cancellationError;
       }
     }
@@ -364,6 +376,19 @@ function attachCancellationContext(cancellationError: unknown, interruptedError:
   } catch {
     // L'annulation reste exploitable même sans propriété de contexte supplémentaire.
   }
+}
+
+function cancellationError(
+  cancellation: ResourceCancellationControl,
+  interruptedError: unknown,
+) {
+  try {
+    cancellation.throwIfRequested();
+  } catch (error) {
+    attachCancellationContext(error, interruptedError);
+    return error;
+  }
+  return interruptedError;
 }
 
 function safeError(error: unknown) {

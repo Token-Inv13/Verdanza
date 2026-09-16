@@ -302,6 +302,7 @@ export async function publishCurrentPassEvidence(options: {
 export async function runAutomatedRecipe(options: {
   signalSource?: RecipeSignalSource;
   signalProbe?: RunnerSignalProbe;
+  viewportRunner?: typeof runViewport;
 } = {}): Promise<AutomatedRecipeResult> {
   const cancellation = installRecipeSignalCancellation(options.signalSource ?? process);
   const latestEvidence = resolve(RECIPE_CACHE_ROOT, "latest-result.json");
@@ -338,7 +339,7 @@ export async function runAutomatedRecipe(options: {
         cancellation,
         run: async (viewport) => {
           if (options.signalProbe) writeRecipeStdoutLine(`RUNNER_VIEWPORT_START ${viewport.label}`);
-          return runViewport(
+          return (options.viewportRunner ?? runViewport)(
             browser as Browser,
             viewport,
             cancellation,
@@ -353,8 +354,12 @@ export async function runAutomatedRecipe(options: {
     } catch (error) {
       const failedRunDirectory = record(error).runDirectory;
       if (typeof failedRunDirectory === "string") activeRunDirectory = failedRunDirectory;
-      if (executionError === undefined && !cancellation.signal.aborted) executionError = error;
-      else interruptionError ??= error;
+      if (executionError === undefined) {
+        if (cancellation.isCancellationError(error)) interruptionError ??= error;
+        else executionError = error;
+      } else if (cancellation.isCancellationError(error)) {
+        interruptionError ??= error;
+      }
     }
 
     try {
@@ -374,7 +379,10 @@ export async function runAutomatedRecipe(options: {
         activeRunDirectory,
         completedExecutions: executions,
         ...(cancellation.requestedSignal() ? { interruptedBy: cancellation.requestedSignal() } : {}),
-        cleanupIssues: cancellationCleanupIssues(interruptionError, browserCloseError),
+        cleanupIssues: [
+          ...attachedCleanupIssues(executionError),
+          ...cancellationCleanupIssues(interruptionError, browserCloseError),
+        ],
       });
       writeRecipeStderrLine(`Preuve interactive d’échec : ${latestFailureEvidence}`);
       throw executionError;
@@ -496,6 +504,12 @@ function cancellationCleanupIssues(...errors: unknown[]) {
   return [...new Set(issues)];
 }
 
+function attachedCleanupIssues(error: unknown) {
+  const cleanupFailures = record(error).cleanupFailures;
+  if (!Array.isArray(cleanupFailures)) return [];
+  return cleanupFailures.map(safeCleanupIssue);
+}
+
 function attachRunnerCleanupIssue(primaryError: unknown, name: string, cleanupError: unknown) {
   if (!(primaryError instanceof Error)) return;
   try {
@@ -543,6 +557,11 @@ async function runViewport(
   let cleanupProbeReported = false;
   let evidenceSequence = 0;
   let executionStatus: "running" | "pass" = "running";
+  let primaryOperationError: unknown;
+  const recordPrimaryOperationError = (error: unknown) => {
+    primaryOperationError ??= error;
+    onPrimaryError(error);
+  };
   const screenshots: string[] = [];
   const stages: Array<{ label: string; state: RecipeState }> = [];
   const firestoreProbeEvidence: FirestoreListenProbeEvidence[] = [];
@@ -606,7 +625,12 @@ async function runViewport(
         writeFile(
           resolve(resources.harness.runDirectory, "execution-summary.json"),
           `${JSON.stringify({
-          status: executionStatus === "pass" && !cancellation.signal.aborted ? "PASS" : "INTERRUPTED",
+          status: primaryOperationError !== undefined
+            ? "FAIL"
+            : executionStatus === "pass" && !cancellation.signal.aborted
+              ? "PASS"
+              : "INTERRUPTED",
+          error: primaryOperationError === undefined ? null : safeError(primaryOperationError),
           interruption: cancellation.requestedSignal()
             ? { status: "CANCELLED", signal: cancellation.requestedSignal() }
             : null,
@@ -678,7 +702,8 @@ async function runViewport(
       ]);
     },
     cancellation,
-    onPrimaryError,
+    isCoordinatedCancellationInterruption: isPlaywrightTargetClosedError,
+    onPrimaryError: recordPrimaryOperationError,
     onCleanupIssue: (step) => logCleanupIssue(viewport.label, step),
   }, async ({ harness, clientMonitor, adminMonitor, clientPage, adminPage }) => {
     cancellation.throwIfRequested();

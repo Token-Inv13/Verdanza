@@ -52,6 +52,7 @@ import {
   createBrowserEvidenceCollection,
   persistBrowserEvidence,
   publishCurrentPassEvidence,
+  runAutomatedRecipe,
   runViewportSequence,
 } from "./test.js";
 
@@ -778,23 +779,144 @@ await check("une fermeture Playwright inattendue sans signal reste une erreur", 
   );
 });
 
-await check("une erreur de parcours observée avant le signal reste prioritaire", async () => {
+await check("une erreur rejetée juste avant SIGINT reste prioritaire au retour du await", async () => {
   const signals = new EventEmitter();
   const cancellation = installRecipeSignalCancellation(signals);
   const fixture = fakeDependencies({ failAt: "cleanup" });
+  const operationStarted = deferred<void>();
+  const controlledOperation = deferred<void>();
+  const primaryError = Object.assign(new Error("injected-operation-race"), {
+    code: "INJECTED_OPERATION_RACE",
+  });
+  let observedPrimary: unknown;
+  let primaryCalls = 0;
   fixture.dependencies.cancellation = cancellation;
-  fixture.dependencies.onPrimaryError = () => { signals.emit("SIGTERM"); };
+  fixture.dependencies.onPrimaryError = (error) => {
+    observedPrimary = error;
+    primaryCalls += 1;
+  };
   try {
-    await assert.rejects(
-      runWithViewportResources(fixture.dependencies, async () => {
-        throw new Error("injected-primary-before-signal");
-      }),
-      /injected-primary-before-signal/,
-    );
-    assert.equal(cancellation.requestedSignal(), "SIGTERM");
+    const execution = runWithViewportResources(fixture.dependencies, async () => {
+      operationStarted.resolve();
+      await controlledOperation.promise;
+    });
+    await operationStarted.promise;
+    controlledOperation.reject(primaryError);
+    signals.emit("SIGINT");
+    await assert.rejects(execution, (error) => error === primaryError);
+    assert.equal(cancellation.requestedSignal(), "SIGINT");
+    assert.equal(observedPrimary, primaryError);
+    assert.equal(primaryCalls, 1, "onPrimaryError doit recevoir l’erreur originale une seule fois");
+    assert.equal(primaryError.code, "INJECTED_OPERATION_RACE");
+    assert.equal(fixture.harness.stopCalls, 1);
+    assert.equal(fixture.clientMonitor.closeCalls, 1);
+    assert.equal(fixture.adminMonitor.closeCalls, 1);
+  } finally {
+    cancellation.dispose();
+  }
+});
+
+await check("une erreur indépendante reçue après annulation reste bloquante", async () => {
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const fixture = fakeDependencies({ failAt: "cleanup" });
+  const operationStarted = deferred<void>();
+  const controlledOperation = deferred<void>();
+  const primaryError = new Error("injected-independent-after-abort");
+  let primaryCalls = 0;
+  fixture.dependencies.cancellation = cancellation;
+  fixture.dependencies.onPrimaryError = () => { primaryCalls += 1; };
+  try {
+    const execution = runWithViewportResources(fixture.dependencies, async () => {
+      operationStarted.resolve();
+      await controlledOperation.promise;
+    });
+    await operationStarted.promise;
+    signals.emit("SIGTERM");
+    controlledOperation.reject(primaryError);
+    await assert.rejects(execution, (error) => error === primaryError);
+    assert.equal(primaryCalls, 1);
     assert.equal(fixture.harness.stopCalls, 1);
   } finally {
     cancellation.dispose();
+  }
+});
+
+await check("une fermeture de contexte provoquée par le coordinateur reste CANCELLED", async () => {
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const fixture = fakeDependencies({ failAt: "cleanup" });
+  const operationStarted = deferred<void>();
+  const interruptedOperation = deferred<void>();
+  const closureError = new Error("Target page, context or browser has been closed");
+  let primaryCalls = 0;
+  fixture.dependencies.cancellation = cancellation;
+  fixture.dependencies.isCoordinatedCancellationInterruption = (error) => error === closureError;
+  fixture.dependencies.onPrimaryError = () => { primaryCalls += 1; };
+  fixture.dependencies.closeMonitor = async (monitor) => {
+    monitor.closeCalls += 1;
+    if (monitor.role === "admin") interruptedOperation.reject(closureError);
+  };
+  try {
+    const execution = runWithViewportResources(fixture.dependencies, async () => {
+      operationStarted.resolve();
+      await interruptedOperation.promise;
+    });
+    await operationStarted.promise;
+    signals.emit("SIGTERM");
+    await assert.rejects(execution, (error) => (
+      isRecipeSignalCancellation(error) && error.signal === "SIGTERM"
+    ));
+    assert.equal(primaryCalls, 0);
+    assert.equal(fixture.clientMonitor.closeCalls, 1);
+    assert.equal(fixture.adminMonitor.closeCalls, 1);
+    assert.equal(fixture.harness.stopCalls, 1);
+  } finally {
+    cancellation.dispose();
+  }
+});
+
+await check("le runner publie FAIL et conserve SIGINT comme information secondaire", async () => {
+  const signals = new EventEmitter();
+  const latestResult = resolve(RECIPE_CACHE_ROOT, "latest-result.json");
+  const latestFailure = resolve(RECIPE_CACHE_ROOT, "latest-failure.json");
+  const primaryError = Object.assign(new Error("injected-runner-operation-race"), {
+    code: "INJECTED_RUNNER_OPERATION_RACE",
+  });
+  await mkdir(RECIPE_CACHE_ROOT, { recursive: true });
+  await Promise.all([rm(latestResult, { force: true }), rm(latestFailure, { force: true })]);
+  try {
+    await assert.rejects(
+      runAutomatedRecipe({
+        signalSource: signals,
+        viewportRunner: async (
+          _browser,
+          _viewport,
+          _cancellation,
+          _signalProbe,
+          _onHarnessStarted,
+          onPrimaryError,
+        ) => {
+          onPrimaryError(primaryError);
+          signals.emit("SIGINT");
+          throw primaryError;
+        },
+      }),
+      (error) => error === primaryError,
+    );
+    const result = JSON.parse(await readFile(latestFailure, "utf8")) as {
+      status?: string;
+      error?: string;
+      interruptedBy?: string;
+      cleanupIssues?: unknown[];
+    };
+    assert.equal(result.status, "FAIL");
+    assert.match(result.error ?? "", /injected-runner-operation-race/);
+    assert.equal(result.interruptedBy, "SIGINT");
+    assert.deepEqual(result.cleanupIssues, []);
+    await assert.rejects(access(latestResult), /ENOENT/, "aucun PASS ne doit remplacer l’échec");
+  } finally {
+    await Promise.all([rm(latestResult, { force: true }), rm(latestFailure, { force: true })]);
   }
 });
 
@@ -1143,11 +1265,22 @@ await check("erreur initiale préservée malgré les erreurs de preuve et de fer
     failClientClose: true,
     failHarnessStop: true,
   });
+  const primaryError = new Error("injected-primary-failure");
   await assert.rejects(
     runWithViewportResources(fixture.dependencies, async () => {
-      throw new Error("injected-primary-failure");
+      throw primaryError;
     }),
-    /injected-primary-failure/,
+    (error) => {
+      if (error !== primaryError) return false;
+      const cleanupFailures = (
+        error as Error & { cleanupFailures?: CleanupReport["steps"] }
+      ).cleanupFailures ?? [];
+      return [
+        "injected-execution-summary-write-failure",
+        "injected-client-close-failure",
+        "injected-harness-stop-failure",
+      ].every((message) => cleanupFailures.some((failure) => failure.error?.includes(message)));
+    },
   );
   assert.equal(fixture.clientPage.closeCalls, 1);
   assert.equal(fixture.adminPage.closeCalls, 1);

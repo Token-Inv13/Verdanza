@@ -32,12 +32,17 @@ export function isRecipeSignalCancellation(error: unknown): error is RecipeSigna
   );
 }
 
+export function isRecipeCancellationError(error: unknown) {
+  return isRecipeSignalCancellation(error) || isRecipeStartupCancelled(error);
+}
+
 export type RecipeSignalCancellation = {
   signal: AbortSignal;
   requestedSignal: () => RecipeSignal | undefined;
   exitCode: () => 130 | 143 | undefined;
   waitForRequest: () => Promise<void>;
   throwIfRequested: () => void;
+  isCancellationError: (error: unknown) => boolean;
   dispose: () => void;
 };
 
@@ -71,6 +76,7 @@ export function installRecipeSignalCancellation(
     throwIfRequested: () => {
       if (requestedSignal) throw new RecipeSignalCancellationError(requestedSignal);
     },
+    isCancellationError: isRecipeCancellationError,
     dispose: () => {
       if (disposed) return;
       disposed = true;
