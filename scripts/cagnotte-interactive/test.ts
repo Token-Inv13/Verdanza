@@ -306,16 +306,57 @@ export async function publishViewportTerminalEvidence(options: {
   cancellation: RecipeSignalCancellation;
   requireUninterrupted: boolean;
   beforeCommit?: () => void | Promise<void>;
+  fileOperations?: {
+    rename?: (source: string, destination: string) => Promise<void>;
+    remove?: (path: string) => Promise<void>;
+  };
 }) {
   const temporaryPath = `${options.path}.${process.pid}.${randomUUID()}.tmp`;
+  const renameFile = options.fileOperations?.rename ?? rename;
+  const removeFile = options.fileOperations?.remove ?? ((path: string) => rm(path, { force: true }));
+  let committed = false;
+  let accepted = false;
+  let publicationError: unknown;
   try {
     await writeFile(temporaryPath, options.contents, "utf8");
     await options.beforeCommit?.();
     if (options.requireUninterrupted) options.cancellation.throwIfRequested();
-    await rename(temporaryPath, options.path);
-  } finally {
-    await rm(temporaryPath, { force: true });
+    await renameFile(temporaryPath, options.path);
+    committed = true;
+  } catch (error) {
+    publicationError = error;
   }
+  try {
+    await removeFile(temporaryPath);
+  } catch (cleanupError) {
+    if (publicationError === undefined) publicationError = cleanupError;
+    else attachRunnerCleanupIssue(publicationError, "remove-terminal-temporary", cleanupError);
+  }
+
+  if (publicationError === undefined) {
+    if (options.requireUninterrupted) {
+      try {
+        options.cancellation.throwIfRequested();
+        accepted = true;
+      } catch (error) {
+        publicationError = error;
+      }
+    } else {
+      accepted = true;
+    }
+  }
+  if (accepted) return;
+
+  if (committed) {
+    try {
+      await removeFile(options.path);
+    } catch (cleanupError) {
+      if (publicationError === undefined) publicationError = cleanupError;
+      else attachRunnerCleanupIssue(publicationError, "invalidate-terminal-outcome", cleanupError);
+    }
+  }
+  if (publicationError === undefined) throw new Error("Publication terminale refusée sans cause identifiable.");
+  throw publicationError;
 }
 
 export async function runAutomatedRecipe(options: {
@@ -532,10 +573,14 @@ function attachedCleanupIssues(error: unknown) {
 function attachRunnerCleanupIssue(primaryError: unknown, name: string, cleanupError: unknown) {
   if (!(primaryError instanceof Error)) return;
   try {
+    const current = (primaryError as Error & { cleanupFailures?: unknown[] }).cleanupFailures;
     Object.defineProperty(primaryError, "cleanupFailures", {
       configurable: true,
       enumerable: false,
-      value: [{ name, status: "failed", durationMs: 0, error: safeError(cleanupError) }],
+      value: [
+        ...(Array.isArray(current) ? current : []),
+        { name, status: "failed", durationMs: 0, error: safeError(cleanupError) },
+      ],
     });
   } catch {
     // L'annulation initiale reste prioritaire si l'erreur n'est pas extensible.

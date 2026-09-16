@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { access, copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -1160,6 +1160,309 @@ await check("un signal pendant la publication terminale ne laisse aucun PASS pé
     assert.deepEqual(attemptedStatuses, ["PASS", "CANCELLED"]);
     assert.deepEqual(JSON.parse(await readFile(summaryPath, "utf8")), { status: "CANCELLED" });
   } finally {
+    cancellation.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+await check("un signal pendant le renommage réel republie CANCELLED", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "verdanza-viewport-rename-cancel-"));
+  const partialPath = resolve(directory, "partial-facts.json");
+  const summaryPath = resolve(directory, "execution-summary.json");
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const fixture = fakeDependencies({ failAt: "cleanup" });
+  const renameCompleted = deferred<void>();
+  const releaseRename = deferred<void>();
+  const attemptedStatuses: string[] = [];
+  fixture.dependencies.cancellation = cancellation;
+  fixture.dependencies.persistEvidence = async () => {
+    await writeFile(partialPath, '{"businessScenario":"completed"}\n', "utf8");
+  };
+  try {
+    const execution = runWithViewportResources(
+      fixture.dependencies,
+      async () => ({ viewport: "desktop" }),
+      async (outcome) => {
+        attemptedStatuses.push(outcome.status);
+        await publishViewportTerminalEvidence({
+          path: summaryPath,
+          contents: `${JSON.stringify({ status: outcome.status })}\n`,
+          cancellation,
+          requireUninterrupted: outcome.status === "PASS",
+          fileOperations: outcome.status === "PASS"
+            ? {
+                rename: async (source, destination) => {
+                  await rename(source, destination);
+                  renameCompleted.resolve();
+                  await releaseRename.promise;
+                },
+              }
+            : undefined,
+        });
+      },
+    );
+    const rejected = assert.rejects(
+      execution,
+      (error) => isRecipeSignalCancellation(error) && error.signal === "SIGINT",
+    );
+    await renameCompleted.promise;
+    signals.emit("SIGINT");
+    releaseRename.resolve();
+    await rejected;
+    assert.deepEqual(attemptedStatuses, ["PASS", "CANCELLED"]);
+    assert.deepEqual(JSON.parse(await readFile(partialPath, "utf8")), { businessScenario: "completed" });
+    assert.deepEqual(JSON.parse(await readFile(summaryPath, "utf8")), { status: "CANCELLED" });
+    assert.deepEqual((await readdir(directory)).sort(), ["execution-summary.json", "partial-facts.json"]);
+  } finally {
+    releaseRename.resolve();
+    cancellation.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+await check("un signal pendant le nettoyage du temporaire republie CANCELLED", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "verdanza-viewport-temp-cleanup-cancel-"));
+  const summaryPath = resolve(directory, "execution-summary.json");
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const fixture = fakeDependencies({ failAt: "cleanup" });
+  const cleanupStarted = deferred<void>();
+  const releaseCleanup = deferred<void>();
+  const attemptedStatuses: string[] = [];
+  let cleanupHeld = false;
+  fixture.dependencies.cancellation = cancellation;
+  try {
+    const execution = runWithViewportResources(
+      fixture.dependencies,
+      async () => ({ viewport: "desktop" }),
+      async (outcome) => {
+        attemptedStatuses.push(outcome.status);
+        await publishViewportTerminalEvidence({
+          path: summaryPath,
+          contents: `${JSON.stringify({ status: outcome.status })}\n`,
+          cancellation,
+          requireUninterrupted: outcome.status === "PASS",
+          fileOperations: outcome.status === "PASS"
+            ? {
+                remove: async (path) => {
+                  await rm(path, { force: true });
+                  if (!cleanupHeld && path !== summaryPath) {
+                    cleanupHeld = true;
+                    cleanupStarted.resolve();
+                    await releaseCleanup.promise;
+                  }
+                },
+              }
+            : undefined,
+        });
+      },
+    );
+    const rejected = assert.rejects(
+      execution,
+      (error) => isRecipeSignalCancellation(error) && error.signal === "SIGTERM",
+    );
+    await cleanupStarted.promise;
+    signals.emit("SIGTERM");
+    releaseCleanup.resolve();
+    await rejected;
+    assert.deepEqual(attemptedStatuses, ["PASS", "CANCELLED"]);
+    assert.deepEqual(JSON.parse(await readFile(summaryPath, "utf8")), { status: "CANCELLED" });
+    assert.deepEqual(await readdir(directory), ["execution-summary.json"]);
+  } finally {
+    releaseCleanup.resolve();
+    cancellation.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+await check("un viewport accepté reste PASS quand le signal arrive ensuite", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "verdanza-viewport-accepted-pass-"));
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const started: string[] = [];
+  const completed: string[] = [];
+  try {
+    await assert.rejects(
+      runViewportSequence({
+        items: ["desktop", "mobile"],
+        cancellation,
+        run: async (viewport) => {
+          started.push(viewport);
+          const fixture = fakeDependencies({ failAt: "cleanup" });
+          fixture.dependencies.cancellation = cancellation;
+          const result = await runWithViewportResources(
+            fixture.dependencies,
+            async () => ({ viewport }),
+            async (outcome) => publishViewportTerminalEvidence({
+              path: resolve(directory, `${viewport}.json`),
+              contents: `${JSON.stringify({ status: outcome.status, viewport })}\n`,
+              cancellation,
+              requireUninterrupted: outcome.status === "PASS",
+            }),
+          );
+          if (viewport === "desktop") signals.emit("SIGINT");
+          return result;
+        },
+        onCompleted: (result) => completed.push(result.viewport),
+      }),
+      (error) => isRecipeSignalCancellation(error) && error.signal === "SIGINT",
+    );
+    assert.deepEqual(started, ["desktop"]);
+    assert.deepEqual(completed, ["desktop"]);
+    assert.deepEqual(JSON.parse(await readFile(resolve(directory, "desktop.json"), "utf8")), {
+      status: "PASS",
+      viewport: "desktop",
+    });
+    await assert.rejects(access(resolve(directory, "mobile.json")), /ENOENT/);
+  } finally {
+    cancellation.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+await check("la publication terminale nominale accepte PASS sans temporaire", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "verdanza-viewport-nominal-pass-"));
+  const summaryPath = resolve(directory, "execution-summary.json");
+  const cancellation = installRecipeSignalCancellation(new EventEmitter());
+  const fixture = fakeDependencies({ failAt: "cleanup" });
+  fixture.dependencies.cancellation = cancellation;
+  try {
+    await runWithViewportResources(
+      fixture.dependencies,
+      async () => ({ viewport: "desktop" }),
+      async (outcome) => publishViewportTerminalEvidence({
+        path: summaryPath,
+        contents: `${JSON.stringify({ status: outcome.status })}\n`,
+        cancellation,
+        requireUninterrupted: outcome.status === "PASS",
+      }),
+    );
+    assert.deepEqual(JSON.parse(await readFile(summaryPath, "utf8")), { status: "PASS" });
+    assert.deepEqual(await readdir(directory), ["execution-summary.json"]);
+  } finally {
+    cancellation.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+await check("un échec de renommage reste l’échec terminal et ne laisse aucun résumé", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "verdanza-viewport-rename-failure-"));
+  const summaryPath = resolve(directory, "execution-summary.json");
+  const cancellation = installRecipeSignalCancellation(new EventEmitter());
+  const fixture = fakeDependencies({ failAt: "cleanup" });
+  const renameError = new Error("injected-terminal-rename-failure");
+  fixture.dependencies.cancellation = cancellation;
+  try {
+    await assert.rejects(
+      runWithViewportResources(
+        fixture.dependencies,
+        async () => ({ viewport: "desktop" }),
+        async (outcome) => publishViewportTerminalEvidence({
+          path: summaryPath,
+          contents: `${JSON.stringify({ status: outcome.status })}\n`,
+          cancellation,
+          requireUninterrupted: outcome.status === "PASS",
+          fileOperations: { rename: async () => { throw renameError; } },
+        }),
+      ),
+      (error) => error === renameError,
+    );
+    await assert.rejects(access(summaryPath), /ENOENT/);
+    assert.deepEqual(await readdir(directory), []);
+  } finally {
+    cancellation.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+await check("un échec de nettoyage du temporaire invalide PASS et conserve sa cause", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "verdanza-viewport-temp-cleanup-failure-"));
+  const summaryPath = resolve(directory, "execution-summary.json");
+  const cancellation = installRecipeSignalCancellation(new EventEmitter());
+  const fixture = fakeDependencies({ failAt: "cleanup" });
+  const cleanupError = new Error("injected-terminal-temporary-cleanup-failure");
+  fixture.dependencies.cancellation = cancellation;
+  try {
+    await assert.rejects(
+      runWithViewportResources(
+        fixture.dependencies,
+        async () => ({ viewport: "desktop" }),
+        async (outcome) => publishViewportTerminalEvidence({
+          path: summaryPath,
+          contents: `${JSON.stringify({ status: outcome.status })}\n`,
+          cancellation,
+          requireUninterrupted: outcome.status === "PASS",
+          fileOperations: {
+            remove: async (path) => {
+              if (path !== summaryPath) throw cleanupError;
+              await rm(path, { force: true });
+            },
+          },
+        }),
+      ),
+      (error) => error === cleanupError,
+    );
+    await assert.rejects(access(summaryPath), /ENOENT/);
+    assert.deepEqual(await readdir(directory), []);
+  } finally {
+    cancellation.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+await check("un échec de republication CANCELLED reste attaché à l’annulation", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "verdanza-viewport-correction-failure-"));
+  const summaryPath = resolve(directory, "execution-summary.json");
+  const signals = new EventEmitter();
+  const cancellation = installRecipeSignalCancellation(signals);
+  const fixture = fakeDependencies({ failAt: "cleanup" });
+  const renameCompleted = deferred<void>();
+  const releaseRename = deferred<void>();
+  const correctionError = new Error("injected-cancelled-summary-correction-failure");
+  const attemptedStatuses: string[] = [];
+  fixture.dependencies.cancellation = cancellation;
+  try {
+    const execution = runWithViewportResources(
+      fixture.dependencies,
+      async () => ({ viewport: "desktop" }),
+      async (outcome) => {
+        attemptedStatuses.push(outcome.status);
+        await publishViewportTerminalEvidence({
+          path: summaryPath,
+          contents: `${JSON.stringify({ status: outcome.status })}\n`,
+          cancellation,
+          requireUninterrupted: outcome.status === "PASS",
+          fileOperations: {
+            rename: outcome.status === "PASS"
+              ? async (source, destination) => {
+                  await rename(source, destination);
+                  renameCompleted.resolve();
+                  await releaseRename.promise;
+                }
+              : async () => { throw correctionError; },
+          },
+        });
+      },
+    );
+    const rejected = assert.rejects(execution, (error) => {
+      if (!isRecipeSignalCancellation(error) || error.signal !== "SIGTERM") return false;
+      const cleanupFailures = (error as Error & {
+        cleanupFailures?: Array<{ name?: string; error?: string }>;
+      }).cleanupFailures;
+      return cleanupFailures?.some((failure) => (
+        failure.name === "persist-final-outcome" && failure.error?.includes(correctionError.message)
+      )) === true;
+    });
+    await renameCompleted.promise;
+    signals.emit("SIGTERM");
+    releaseRename.resolve();
+    await rejected;
+    assert.deepEqual(attemptedStatuses, ["PASS", "CANCELLED"]);
+    await assert.rejects(access(summaryPath), /ENOENT/);
+    assert.deepEqual(await readdir(directory), []);
+  } finally {
+    releaseRename.resolve();
     cancellation.dispose();
     await rm(directory, { recursive: true, force: true });
   }
