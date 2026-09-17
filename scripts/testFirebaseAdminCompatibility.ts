@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { deleteApp, initializeApp } from "firebase-admin/app";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { deleteApp, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getStorage } from "firebase-admin/storage";
+import type {
+  FirebaseAdminIdentityProof,
+  FirebaseAdminInitializerDependencies,
+} from "../api/_server/firebaseAdmin.js";
 
 type StorageDeleteOptions = { ignoreNotFound: true };
 type StorageFile = { delete(options: StorageDeleteOptions): Promise<void> };
@@ -58,6 +62,224 @@ assert.match(bootstrapAuthSource, /const auth = getAuth\(\);/);
 assert.match(bootstrapAuthSource, /auth\.getUserByEmail\(email\)/);
 assert.match(bootstrapAuthSource, /auth\.createUser\(/);
 assert.match(bootstrapAuthSource, /auth\.updateUser\(/);
+
+const appsBeforeServerModuleImport = getApps().map((entry) => entry.name);
+const importLogs: unknown[][] = [];
+const originalConsoleInfo = console.info;
+let firebaseAdminModule: typeof import("../api/_server/firebaseAdmin.js");
+try {
+  console.info = (...args: unknown[]) => { importLogs.push(args); };
+  firebaseAdminModule = await import("../api/_server/firebaseAdmin.js");
+} finally {
+  console.info = originalConsoleInfo;
+}
+assert.deepEqual(getApps().map((entry) => entry.name), appsBeforeServerModuleImport);
+assert.deepEqual(importLogs, []);
+
+const {
+  FirebaseAdminCredentialConfigurationError,
+  initializeFirebaseAdminApp,
+} = firebaseAdminModule;
+
+type SyntheticServiceAccount = {
+  projectId: string;
+  clientEmail: string;
+  privateKey: string;
+};
+type SyntheticCredential = {
+  kind: "cert" | "application_default";
+  serviceAccount?: SyntheticServiceAccount;
+};
+type SyntheticApp = { name: string };
+
+function initializerHarness(initialApps: SyntheticApp[] = [], onLog?: () => void) {
+  const apps = [...initialApps];
+  const certInputs: SyntheticServiceAccount[] = [];
+  const credentials: SyntheticCredential[] = [];
+  const initializeInputs: Array<{ credential: SyntheticCredential; storageBucket?: string }> = [];
+  const logs: Array<{
+    event: FirebaseAdminIdentityProof["event"];
+    payload: FirebaseAdminIdentityProof;
+  }> = [];
+  let applicationDefaultCalls = 0;
+  let logAttempts = 0;
+
+  const dependencies: FirebaseAdminInitializerDependencies<SyntheticApp, SyntheticCredential> = {
+    getApps: () => apps,
+    cert(serviceAccount) {
+      certInputs.push(serviceAccount);
+      const credential: SyntheticCredential = { kind: "cert", serviceAccount };
+      credentials.push(credential);
+      return credential;
+    },
+    applicationDefault() {
+      applicationDefaultCalls += 1;
+      const credential: SyntheticCredential = { kind: "application_default" };
+      credentials.push(credential);
+      return credential;
+    },
+    initializeApp(options) {
+      initializeInputs.push(options);
+      const app = { name: `synthetic-${initializeInputs.length}` };
+      apps.splice(0, apps.length, app);
+      return app;
+    },
+    log(event, payload) {
+      logAttempts += 1;
+      if (onLog) onLog();
+      logs.push({ event, payload });
+    },
+  };
+
+  return {
+    apps,
+    certInputs,
+    credentials,
+    dependencies,
+    emittedApps: new WeakSet<object>(),
+    initializeInputs,
+    logs,
+    get applicationDefaultCalls() { return applicationDefaultCalls; },
+    get logAttempts() { return logAttempts; },
+  };
+}
+
+const privateKeySentinel = "PRIVATE_KEY_SENTINEL_DO_NOT_LOG";
+const encodedServiceAccount = Buffer.from(JSON.stringify({
+  project_id: "synthetic-base64-project",
+  client_email: "base64-service@synthetic.invalid",
+  private_key: privateKeySentinel,
+})).toString("base64");
+
+{
+  const harness = initializerHarness();
+  const environment = {
+    FIREBASE_SERVICE_ACCOUNT_BASE64: encodedServiceAccount,
+    FIREBASE_PROJECT_ID: "synthetic-fields-project",
+    FIREBASE_CLIENT_EMAIL: "fields-service@synthetic.invalid",
+    FIREBASE_PRIVATE_KEY: "ignored-private-key",
+    FIREBASE_STORAGE_BUCKET: "synthetic-bucket.invalid",
+    VERCEL_DEPLOYMENT_ID: "dpl_synthetic_identity",
+    VERCEL_URL: "ignored-synthetic.vercel.app",
+    VERCEL_GIT_COMMIT_SHA: "a".repeat(40),
+  };
+  const app = initializeFirebaseAdminApp(environment, harness.dependencies, harness.emittedApps);
+  assert.equal(app.name, "synthetic-1");
+  assert.equal(harness.certInputs.length, 1);
+  assert.equal(harness.certInputs[0].projectId, "synthetic-base64-project");
+  assert.equal(harness.applicationDefaultCalls, 0);
+  assert.strictEqual(harness.initializeInputs[0].credential, harness.credentials[0]);
+  assert.equal(harness.initializeInputs[0].storageBucket, "synthetic-bucket.invalid");
+  assert.deepEqual(harness.logs, [{
+    event: "firebase_admin_identity_configured",
+    payload: {
+      event: "firebase_admin_identity_configured",
+      credentialMethod: "service_account_base64",
+      projectId: "synthetic-base64-project",
+      clientEmail: "base64-service@synthetic.invalid",
+      deploymentReference: "dpl_synthetic_identity",
+      commit: "a".repeat(40),
+    },
+  }]);
+  assert.deepEqual(Object.keys(harness.logs[0].payload).sort(), [
+    "clientEmail",
+    "commit",
+    "credentialMethod",
+    "deploymentReference",
+    "event",
+    "projectId",
+  ]);
+  assert.equal(JSON.stringify(harness.logs).includes(privateKeySentinel), false);
+
+  assert.strictEqual(
+    initializeFirebaseAdminApp(environment, harness.dependencies, harness.emittedApps),
+    app,
+  );
+  assert.equal(harness.initializeInputs.length, 1);
+  assert.equal(harness.logs.length, 1);
+}
+
+{
+  const harness = initializerHarness();
+  initializeFirebaseAdminApp({
+    FIREBASE_PROJECT_ID: "synthetic-fields-project",
+    FIREBASE_CLIENT_EMAIL: "fields-service@synthetic.invalid",
+    FIREBASE_PRIVATE_KEY: "line-one\\nline-two",
+  }, harness.dependencies, harness.emittedApps);
+  assert.equal(harness.certInputs[0].privateKey, "line-one\nline-two");
+  assert.equal(harness.logs[0].payload.credentialMethod, "service_account_fields");
+  assert.equal(harness.logs[0].payload.projectId, "synthetic-fields-project");
+  assert.equal(harness.logs[0].payload.clientEmail, "fields-service@synthetic.invalid");
+}
+
+{
+  const harness = initializerHarness();
+  initializeFirebaseAdminApp({}, harness.dependencies, harness.emittedApps);
+  assert.equal(harness.certInputs.length, 0);
+  assert.equal(harness.applicationDefaultCalls, 1);
+  assert.deepEqual(harness.logs[0].payload, {
+    event: "firebase_admin_identity_configured",
+    credentialMethod: "application_default_unresolved",
+    projectId: null,
+    clientEmail: null,
+    deploymentReference: null,
+    commit: null,
+  });
+}
+
+{
+  const existingApp = { name: "preexisting" };
+  const harness = initializerHarness([existingApp]);
+  assert.strictEqual(
+    initializeFirebaseAdminApp({}, harness.dependencies, harness.emittedApps),
+    existingApp,
+  );
+  assert.equal(harness.certInputs.length, 0);
+  assert.equal(harness.applicationDefaultCalls, 0);
+  assert.equal(harness.initializeInputs.length, 0);
+  assert.equal(harness.logs[0].payload.credentialMethod, "preexisting_app_unresolved");
+  assert.equal(harness.logs[0].payload.projectId, null);
+  assert.equal(harness.logs[0].payload.clientEmail, null);
+  initializeFirebaseAdminApp({}, harness.dependencies, harness.emittedApps);
+  assert.equal(harness.logs.length, 1);
+}
+
+{
+  const malformed = Buffer.from(
+    `{"project_id":"synthetic","private_key":"${privateKeySentinel}"`,
+  ).toString("base64");
+  const harness = initializerHarness();
+  let captured: unknown;
+  try {
+    initializeFirebaseAdminApp(
+      { FIREBASE_SERVICE_ACCOUNT_BASE64: malformed },
+      harness.dependencies,
+      harness.emittedApps,
+    );
+  } catch (error) {
+    captured = error;
+  }
+  assert.ok(captured instanceof FirebaseAdminCredentialConfigurationError);
+  assert.equal(captured.code, "firebase_admin_credential_invalid");
+  assert.equal(String(captured).includes(privateKeySentinel), false);
+  assert.equal(JSON.stringify(captured).includes(privateKeySentinel), false);
+  assert.equal(harness.initializeInputs.length, 0);
+  assert.equal(harness.logs.length, 0);
+}
+
+{
+  const harness = initializerHarness([], () => { throw new Error("synthetic log failure"); });
+  const app = initializeFirebaseAdminApp({}, harness.dependencies, harness.emittedApps);
+  assert.equal(app.name, "synthetic-1");
+  assert.equal(harness.initializeInputs.length, 1);
+  assert.equal(harness.logAttempts, 1);
+  initializeFirebaseAdminApp({}, harness.dependencies, harness.emittedApps);
+  assert.equal(harness.logAttempts, 1);
+}
+
+const frontendSources = collectTypeScriptSources(resolve("src"));
+assert.equal(frontendSources.includes("firebase_admin_identity_configured"), false);
+assert.equal(frontendSources.includes("api/_server/firebaseAdmin"), false);
 
 const app = initializeApp(
   { projectId: "verdanza-firebase-admin-compatibility", storageBucket: "verdanza-test.invalid" },
@@ -161,4 +383,15 @@ assert.deepEqual(authCalls, [
   "updateUser:existing-user",
 ]);
 
-console.info("Firebase Admin Storage and Auth compatibility tests passed without network calls.");
+console.info("Firebase Admin identity, Storage and Auth compatibility tests passed without network calls.");
+
+function collectTypeScriptSources(directory: string): string {
+  return readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => !entry.name.startsWith("."))
+    .map((entry) => {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) return collectTypeScriptSources(path);
+      return /\.[cm]?[jt]sx?$/.test(entry.name) ? readFileSync(path, "utf8") : "";
+    })
+    .join("\n");
+}
