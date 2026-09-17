@@ -1,4 +1,5 @@
 export const publishedBlogArticleSlugs = [
+  "isolat-spectre-large-complet-cbd",
   "reception-commande-cbd-verifications",
   "pourcentage-mg-g-ppm-analyse-cbd",
   "manucure-fleurs-cbd-feuilles-tiges",

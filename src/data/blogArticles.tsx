@@ -6,6 +6,278 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "isolat-spectre-large-complet-cbd",
+    title: "Isolat, spectre large ou complet : comprendre les mentions CBD",
+    seoTitle: "Isolat et spectres CBD : comprendre les mentions | Verdanza",
+    description:
+      "Isolat, spectre large et spectre complet : comprenez ce que ces mentions CBD décrivent, leurs limites et les points à vérifier sur une analyse de lot.",
+    excerpt:
+      "Les mentions isolat, spectre large et spectre complet décrivent des compositions différentes, mais elles ne remplacent ni une liste d'ingrédients ni une analyse de lot.",
+    category: "Guide qualité",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-09-17T12:40:00+02:00",
+    dateModified: "2026-09-17T12:40:00+02:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/isolat-spectre-large-complet-cbd-1x1.webp",
+      landscape: "/images/blog/isolat-spectre-large-complet-cbd-4x3.webp",
+      wide: "/images/blog/isolat-spectre-large-complet-cbd-16x9.webp",
+    },
+    relatedSlugs: [
+      "comment-lire-analyse-cbd",
+      "pourcentage-mg-g-ppm-analyse-cbd",
+      "etiquette-numero-lot-cbd-tracabilite",
+    ],
+    links: [
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/comment-lire-analyse-cbd",
+        label: "Lire une analyse CBD",
+      },
+      {
+        to: "/blog/pourcentage-mg-g-ppm-analyse-cbd",
+        label: "Comprendre les unités d'analyse",
+      },
+      {
+        to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+        label: "Vérifier l'étiquette et le lot",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les expressions « isolat », « spectre large » et « spectre complet »
+            apparaissent sur des extraits et des produits CBD. Elles donnent un
+            premier repère sur la famille de constituants annoncée, mais ne
+            décrivent pas à elles seules la composition exacte, la pureté ou la
+            qualité d'un lot.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Ces mentions commerciales ne constituent pas une analyse. Pour
+            vérifier un produit, il faut les rapprocher de la liste
+            d'ingrédients, du numéro de lot et d'un bulletin d'analyse lié à ce
+            même lot.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "trois-mentions",
+        text: "Trois mentions pour décrire la composition annoncée",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Ces termes servent surtout à distinguer un cannabinoïde isolé d'un
+            extrait qui conserve plusieurs familles de composés. Leur emploi
+            peut varier d'un fabricant à l'autre : le nom affiché doit donc être
+            confirmé par les informations techniques du produit.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Lecture prudente des mentions isolat, spectre large et spectre complet.",
+          headers: ["Mention", "Ce qu'elle décrit généralement", "Ce qu'elle ne prouve pas"],
+          rows: [
+            [
+              "Isolat",
+              "Une matière fortement purifiée autour d'un cannabinoïde identifié, le plus souvent le CBD.",
+              "La pureté exacte, l'absence de résidus ou l'identité du lot sans document d'analyse.",
+            ],
+            [
+              "Spectre large",
+              "Un extrait réunissant plusieurs constituants du chanvre, avec une revendication de THC retiré ou non détecté.",
+              "Une absence absolue de THC ni la liste complète des molécules présentes.",
+            ],
+            [
+              "Spectre complet",
+              "Un extrait conservant une gamme plus étendue de constituants naturellement présents dans la matière végétale.",
+              "Une proportion fixe de chaque composé, une qualité supérieure ou un résultat identique entre deux lots.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "isolat",
+        text: "Isolat : une matière centrée sur un cannabinoïde",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Un isolat est obtenu par des étapes de séparation et de purification
+            visant à concentrer une molécule. Une fiche peut annoncer un isolat
+            de CBD, mais le pourcentage réel doit rester une valeur mesurée. Une
+            mention telle que « 99 % » doit préciser son unité et être cohérente
+            avec le bulletin du lot.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le mot « isolat » ne renseigne pas, à lui seul, sur les solvants
+            résiduels, les contaminants recherchés ou la méthode analytique. Il
+            ne permet pas non plus de déduire la composition d'un produit fini
+            dans lequel l'isolat a été incorporé avec d'autres ingrédients.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "spectre-large",
+        text: "Spectre large : plusieurs composés, avec une limite à vérifier",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Un extrait dit à spectre large est généralement présenté comme
+            contenant plusieurs cannabinoïdes ou composés végétaux, tout en
+            ayant fait l'objet d'une étape destinée à retirer le THC. La formule
+            reste générale : deux extraits portant cette mention peuvent avoir
+            des profils très différents.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            « Non détecté » signifie que le laboratoire n'a pas mesuré le
+            composé au-dessus de sa limite de détection ou de quantification.
+            Cette formulation n'est pas équivalente à la preuve d'une absence
+            absolue.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "spectre-complet",
+        text: "Spectre complet : une composition plus étendue, pas une formule unique",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La mention spectre complet indique généralement que l'extrait
+            conserve plusieurs constituants issus du chanvre. Elle ne fixe
+            toutefois aucun profil universel : la matière première, le procédé
+            d'extraction et les étapes de transformation influencent les valeurs
+            observées dans le produit final.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La présence annoncée de plusieurs composés ne permet pas de conclure
+            à une efficacité, à un ressenti ou à une qualité supérieurs. Pour une
+            lecture factuelle, il faut revenir aux lignes mesurées et aux seuils
+            indiqués sur l'analyse.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "analyse-lot",
+        text: "Comment vérifier la mention sur une analyse de lot",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Commencez par confirmer que le numéro de lot du document correspond
+            au produit. Repérez ensuite la date, le laboratoire, la matrice
+            analysée et les unités utilisées. Le guide consacré à la {" "}
+            <Link to="/blog/pourcentage-mg-g-ppm-analyse-cbd">
+              lecture des pourcentages, mg/g et ppm
+            </Link>{" "}
+            aide à comparer les résultats sur une même base.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "vérifier l'identité du produit et le numéro de lot ;",
+          "distinguer les valeurs mesurées des mentions commerciales ;",
+          "repérer les unités et la base de calcul employées ;",
+          "lire les limites de détection ou de quantification du laboratoire ;",
+          "contrôler si le document concerne l'extrait ou le produit fini ;",
+          "ne pas interpréter une ligne absente comme un résultat égal à zéro.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "produit-fini",
+        text: "Ne pas confondre l'extrait et le produit fini",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une matière première peut être décrite comme isolat ou extrait à
+            spectre, puis être utilisée dans une formulation comprenant d'autres
+            ingrédients. L'analyse de la matière première et celle du produit
+            fini répondent alors à deux questions différentes. Pour contrôler
+            ce qui est effectivement commercialisé, le document le plus utile
+            est celui qui correspond à la référence et au lot du produit fini.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "comparaison-fiable",
+        text: "Comparer sans transformer une mention en classement",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Isolat, spectre large et spectre complet décrivent des choix de
+            composition différents. Ils ne forment pas une échelle automatique
+            du moins bon au meilleur. Une comparaison utile repose sur des
+            documents cohérents, des lots identifiés et des résultats exprimés
+            dans des unités comparables.
+          </>
+        ),
+      },
+      {
+        type: "links",
+        title: "Compléter la lecture",
+        links: [
+          {
+            to: "/blog/comment-lire-analyse-cbd",
+            label: "Lire un bulletin d'analyse CBD",
+          },
+          {
+            to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+            label: "Relier l'étiquette au bon lot",
+          },
+          {
+            to: "/qualite-conformite",
+            label: "Consulter la démarche qualité Verdanza",
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "reception-commande-cbd-verifications",
     title: "Réception d'une commande CBD : les vérifications utiles",
     seoTitle: "Réception d'une commande CBD : vérifications | Verdanza",

@@ -59,6 +59,10 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" }
 > = {
+  "isolat-spectre-large-complet-cbd": {
+    label: "Isolat et spectres CBD",
+    kind: "analysis",
+  },
   "reception-commande-cbd-verifications": {
     label: "Réception d'une commande CBD",
     sources: [
