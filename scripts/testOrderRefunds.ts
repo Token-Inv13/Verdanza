@@ -972,6 +972,10 @@ try {
     await refused({ ...c, confirmedAt: "1999-12-31T23:59:59.000Z" }, "refund_confirmation_date_invalid");
     await refused({ ...c, confirmedAt: "02/01/2000 12:00" }, "refund_date_invalid");
     const valid = await call(c); equal(valid.status, 200, JSON.stringify(valid));
+    const boundaryFixture = await fixture(), boundarySelection = selection(boundaryFixture);
+    const boundary = confirmation(boundarySelection, await preview(boundarySelection), "paid-at-boundary");
+    const equalToPaidAt = await call({ ...boundary, confirmedAt: "2000-01-01T00:00:00.000Z" });
+    equal(equalToPaidAt.status, 200, JSON.stringify(equalToPaidAt));
   });
   await test("echec avant commit : tous les documents et effets annexes inchanges", async () => {
     const f = await fixture(), s = selection(f), c = confirmation(s, await preview(s), "rollback"); await refused(c, undefined, { fail: true });

@@ -55,6 +55,7 @@ import {
   assertCreateOrderRateLimitEvidence,
   type RateLimitEvidence,
 } from "./rateLimitEvidence.js";
+import { refundConfirmationDateTimeLocal } from "./refundConfirmationDate.js";
 import {
   installRecipeSignalCancellation,
   isRecipeSignalCancellation,
@@ -78,6 +79,8 @@ type RecipeState = {
     paymentAmountCents: number;
     paymentStatus: string;
     orderStatus: string;
+    paidAt: string;
+    paymentConfirmedAt: string;
     programVersion: string;
     loyaltyCents: number;
     appliedCagnotteCents: number;
@@ -975,11 +978,17 @@ async function runViewport(
     assertWallet(bDelivered, [0, 475, 0, 0]);
     assertAccrual(bDelivered, orderBId, [475, 475, "available", true, true]);
     assert.equal(bDelivered.movements.length, 8);
+    const bDeliveredOrder = bDelivered.orders.find((order) => order.id === orderBId);
+    assert.ok(bDeliveredOrder, `commande ${orderBId} absente après livraison`);
+    assert.equal(bDeliveredOrder.paidAt, bDeliveredOrder.paymentConfirmedAt);
+    const refundConfirmedAt = refundConfirmationDateTimeLocal({
+      paidAt: bDeliveredOrder.paidAt,
+    });
 
     cancellation.throwIfRequested();
     adminMonitor.setPhase("admin-b-refund");
     await openAdminOrders(adminPage, "Livrées");
-    await recordFullRefund(adminPage, orderBId, viewport.label);
+    await recordFullRefund(adminPage, orderBId, viewport.label, refundConfirmedAt);
     await capture(adminPage, harness, viewport, "06-remboursement-b-admin", screenshots);
     clientMonitor.setPhase("client-final-wallet");
     await openAdvantages(clientPage, RECIPE_ACCOUNTS.client1.email);
@@ -1933,7 +1942,12 @@ async function updateOrder(
   await page.waitForTimeout(350);
 }
 
-async function recordFullRefund(page: Page, orderId: string, viewport: string) {
+async function recordFullRefund(
+  page: Page,
+  orderId: string,
+  viewport: string,
+  confirmedAt: { localValue: string; confirmedAtEpochMs: number },
+) {
   assertPageActive(page);
   const card = await visibleOrderCard(page, orderId);
   const tools = card.locator('section[aria-label="Outils administratifs de cagnotte"]');
@@ -1947,9 +1961,10 @@ async function recordFullRefund(page: Page, orderId: string, viewport: string) {
   await tools.getByLabel("Montant financier déclaré (€)", { exact: true }).fill("95,00");
   assertPageActive(page);
   await tools.getByLabel("Référence métier", { exact: true }).fill(`recette-interactive-${viewport}`);
+  await waitUntilPast(page, confirmedAt.confirmedAtEpochMs);
   await setDateTimeLocal(
     tools.getByLabel("Date de confirmation", { exact: true }),
-    recentLocalDateTime(),
+    confirmedAt.localValue,
   );
   assertPageActive(page);
   const [preview] = await Promise.all([
@@ -2218,12 +2233,13 @@ async function setDateTimeLocal(input: ReturnType<Page["getByLabel"]>, value: st
   assert.equal(await input.inputValue(), value);
 }
 
-function recentLocalDateTime() {
-  const date = new Date(Date.now() - 1_000);
-  if (date.getSeconds() === 0) date.setTime(date.getTime() - 1_000);
-  const part = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${part(date.getMonth() + 1)}-${part(date.getDate())}` +
-    `T${part(date.getHours())}:${part(date.getMinutes())}:${part(date.getSeconds())}`;
+async function waitUntilPast(page: Page, epochMs: number) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() <= epochMs) {
+    if (Date.now() >= deadline) throw new Error("La date de confirmation dérivée du paiement reste dans le futur.");
+    assertPageActive(page);
+    await page.waitForTimeout(Math.min(100, epochMs - Date.now() + 1));
+  }
 }
 
 async function mainText(page: Page) {
