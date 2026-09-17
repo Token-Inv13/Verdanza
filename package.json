@@ -61,7 +61,7 @@
     "prepare:cagnotte-firestore-emulator": "node scripts/prepareCagnotteFirestoreEmulator.mjs",
     "prepare:cagnotte-interactive": "node scripts/prepareCagnotteInteractive.mjs",
     "dev:cagnotte-interactive": "node --import tsx scripts/cagnotte-interactive/run.ts",
-    "test:cagnotte-interactive": "node --import tsx scripts/cagnotte-interactive/test.ts",
+    "test:cagnotte-interactive": "node --import tsx scripts/cagnotte-interactive/testRefundConfirmationDate.ts && node --import tsx scripts/cagnotte-interactive/test.ts",
     "test:cagnotte-rate-limit-windows": "node --import tsx scripts/runCagnotteLedgerTests.ts --rate-limit-windows-only",
     "test:cagnotte-interactive-reliability": "node --import tsx scripts/cagnotte-interactive/testReliability.ts",
     "test:cagnotte-interactive-diagnostics": "node --import tsx scripts/cagnotte-interactive/testDiagnosticJournal.ts",

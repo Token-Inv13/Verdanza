@@ -84,6 +84,8 @@ function orderEvidence(id: string, value: Record<string, unknown>) {
     paymentAmountCents: Math.round(number(value.paymentAmount ?? value.total) * 100),
     paymentStatus: string(value.paymentStatus),
     orderStatus: string(value.orderStatus),
+    paidAt: string(value.paidAt),
+    paymentConfirmedAt: string(value.paymentConfirmedAt),
     programVersion: string(record(value.cagnotte).programVersion),
     loyaltyCents: number(snapshot.loyaltyCents),
     appliedCagnotteCents: number(snapshot.appliedCagnotteCents),
