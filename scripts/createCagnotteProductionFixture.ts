@@ -41,6 +41,8 @@ import {
   CAGNOTTE_PRODUCTION_FIXTURE_WRITE_CHALLENGE,
   cagnotteProductionFixtureCheckoutBody,
   cagnotteProductionFixtureCustomerDocument,
+  cagnotteProductionFixtureDeliveredStatusChange,
+  cagnotteProductionFixturePaidStatusChange,
   cagnotteProductionFixturePricedCheckout,
   cagnotteProductionFixtureProductDocument,
   cagnotteProductionFixtureStockMovementDocument,
@@ -159,16 +161,17 @@ export async function runCagnotteProductionFixtureCommand(input: FixtureRunInput
     case "create":
       return createFixture(input);
     case "mark-paid":
-      return transitionFixture(input, {
-        paymentStatus: "paid",
-        finalPaymentMethod: "other",
-        historyNote: "Paiement synthetique fixture confirme par l outil interne.",
-      }, CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT);
+      return transitionFixture(
+        input,
+        cagnotteProductionFixturePaidStatusChange(),
+        CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT,
+      );
     case "mark-delivered":
-      return transitionFixture(input, {
-        orderStatus: "delivered",
-        historyNote: "Livraison synthetique fixture confirmee par l outil interne.",
-      }, CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_AT);
+      return transitionFixture(
+        input,
+        cagnotteProductionFixtureDeliveredStatusChange(),
+        CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_AT,
+      );
     case "inspect":
       return inspectCagnotteProductionFixture(input.db);
   }
@@ -307,6 +310,7 @@ async function prepareFixtureDocuments(db: Firestore): Promise<"prepared" | "exi
       stockMovement,
       wallet,
       accrual,
+      reservation,
     ] = await Promise.all([
       transaction.get(refs.customer),
       transaction.get(refs.product),
@@ -317,7 +321,11 @@ async function prepareFixtureDocuments(db: Firestore): Promise<"prepared" | "exi
       transaction.get(refs.stockMovement),
       transaction.get(refs.wallet),
       transaction.get(refs.accrual),
+      transaction.get(refs.reservation),
     ]);
+    if (reservation.exists) {
+      throw new Error("production_fixture_reservation_collision");
+    }
     if (admin.exists) throw new Error("production_fixture_admin_collision");
     const existingOrderState = [order.exists, checkoutRequest.exists, sideEffects.exists];
     if (existingOrderState.every(Boolean)) {
@@ -384,6 +392,7 @@ async function transitionFixture(
     accrualProgram: cagnotteProductionFixtureProgram(),
     reservationProgram: null,
     firebaseProjectId: input.firebaseProjectId,
+    productionFixtureCapability: input.capability,
     now: () => instant,
   });
   await processOrderStatusTransitionEffects({

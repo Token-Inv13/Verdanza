@@ -29,6 +29,10 @@ import { executePaymentLinkDelivery } from "../api/_server/paymentLinkDelivery.j
 import { executeGuardedInvoiceSend } from "../api/_server/invoiceEmailSend.js";
 import { processPurchaseAnalyticsOutbox } from "../api/_server/purchaseAnalytics.js";
 import { executeOrderRefund } from "../api/_server/orderRefunds.js";
+import {
+  commitOrderStatusTransition,
+  type OrderStatusChange,
+} from "../api/_server/orderStatusTransition.js";
 import { shouldMountCagnotteAdminTools } from "../src/lib/cagnotteAdminEligibility.js";
 import {
   assertOrdinaryProductAdminMutationAllowed,
@@ -39,10 +43,12 @@ import {
   CAGNOTTE_PRODUCTION_FIXTURE_CHALLENGE,
   CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_EMAIL,
+  CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_AT,
   CAGNOTTE_PRODUCTION_FIXTURE_FIXED_PRICE_OPTION_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_INITIAL_STOCK,
   CAGNOTTE_PRODUCTION_FIXTURE_MARKER,
   CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+  CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT,
   CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_PROJECT_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_REMAINING_STOCK,
@@ -51,11 +57,14 @@ import {
   CAGNOTTE_PRODUCTION_FIXTURE_UID,
   cagnotteProductionFixtureCheckoutBody,
   cagnotteProductionFixtureCustomerDocument,
+  cagnotteProductionFixtureDeliveredStatusChange,
+  cagnotteProductionFixturePaidStatusChange,
   cagnotteProductionFixturePricedCheckout,
   cagnotteProductionFixtureProductDocument,
   cagnotteProductionFixtureStockMovementDocument,
   createCagnotteProductionFixtureCapability,
   createCagnotteProductionFixtureTestCapability,
+  type CagnotteProductionFixtureCapability,
 } from "../api/_server/cagnotteProductionFixture.js";
 import {
   buildCagnotteProductionFixturePlan,
@@ -197,6 +206,44 @@ try {
       productionFixtureCapability: forgedCapability,
     }), /production_fixture_capability_required/);
     deepStrictEqual(await databaseCounts(), before);
+  });
+
+  await check("reservation residuelle seule refuse create avant toute autre ecriture", async () => {
+    const reservationRef = db.collection("cagnotteReservations")
+      .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID);
+    const orphan = { orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID, status: "reserved" };
+    await reservationRef.set(orphan);
+    const before = await databaseCounts();
+    await rejects(() => command("create"), /production_fixture_reservation_collision/);
+    deepStrictEqual((await reservationRef.get()).data(), orphan);
+    deepStrictEqual(await databaseCounts(), before);
+    equal((await db.collection("customers").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).exists, false);
+    equal((await db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID).get()).exists, false);
+    equal((await db.collection("orders").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
+    await reservationRef.delete();
+  });
+
+  await check("reservation residuelle preserve customer et produit preexistants", async () => {
+    const customerRef = db.collection("customers").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID);
+    const productRef = db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID);
+    const reservationRef = db.collection("cagnotteReservations")
+      .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID);
+    const customer = cagnotteProductionFixtureCustomerDocument();
+    const product = cagnotteProductionFixtureProductDocument();
+    const reservation = { orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID, status: "reserved" };
+    await Promise.all([
+      customerRef.set(customer),
+      productRef.set(product),
+      reservationRef.set(reservation),
+    ]);
+    const before = await databaseCounts();
+    await rejects(() => command("create"), /production_fixture_reservation_collision/);
+    deepStrictEqual((await customerRef.get()).data(), customer);
+    deepStrictEqual((await productRef.get()).data(), product);
+    deepStrictEqual((await reservationRef.get()).data(), reservation);
+    deepStrictEqual(await databaseCounts(), before);
+    equal((await db.collection("orders").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
+    await Promise.all([customerRef.delete(), productRef.delete(), reservationRef.delete()]);
   });
 
   await check("wallet preexistant seul refuse create sans aucune ecriture annexe", async () => {
@@ -368,6 +415,18 @@ try {
     equal((await db.collection("orders").doc(orderId).get()).exists, true);
     const movements = await db.collection("stockMovements").where("orderId", "==", orderId).get();
     equal(movements.size, 1);
+    const ordinaryTransition = await commitOrderStatusTransition({
+      db,
+      body: { orderId, internalNote: "Commande ordinaire modifiable sans capacite fixture." },
+      admin: { uid: "ordinary-admin", email: "admin@fixture.test" },
+      accrualProgram: null,
+      reservationProgram: null,
+      now: () => CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT,
+    });
+    equal(ordinaryTransition.updatedOrder?.internalNote,
+      "Commande ordinaire modifiable sans capacite fixture.");
+    equal((await db.collection("orders").doc(orderId).get()).data()?.internalNote,
+      "Commande ordinaire modifiable sans capacite fixture.");
     await Promise.all([
       db.collection("products").doc(productId).delete(),
       db.collection("orders").doc(orderId).delete(),
@@ -414,6 +473,108 @@ try {
     deepStrictEqual(await stableFinancialState(), before);
     equal((await db.collection("cagnotteAccruals").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
     await walletRef.delete();
+  });
+
+  await check("fixture complete refuse une reservation residuelle au rejeu create", async () => {
+    const reservationRef = db.collection("cagnotteReservations")
+      .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID);
+    const reservation = { orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID, status: "reserved" };
+    await reservationRef.set(reservation);
+    const before = await stableFinancialState();
+    await rejects(() => command("create"), /production_fixture_reservation_collision/);
+    deepStrictEqual(await stableFinancialState(), before);
+    await reservationRef.delete();
+  });
+
+  await check("toute mutation admin fixture sans capacite est refusee avant ecriture", async () => {
+    const mutations: Array<readonly [string, Omit<OrderStatusChange, "orderId">]> = [
+      ["paymentStatus", cagnotteProductionFixturePaidStatusChange()],
+      ["orderStatus delivered", cagnotteProductionFixtureDeliveredStatusChange()],
+      ["orderStatus cancelled", { orderStatus: "cancelled" }],
+      ["archive", { archived: true }],
+      ["hide", { hidden: true }],
+      ["restore", { restore: true }],
+      ["internalNote", { internalNote: "Mutation ordinaire interdite." }],
+      ["trackingNumber", { trackingNumber: "FIXTURE-TRACKING" }],
+      ["paymentReference", { paymentReference: "FIXTURE-PAYMENT" }],
+      ["unpaidReview", {
+        unpaidReview: {
+          action: "record",
+          outcome: "unpaid_confirmed",
+          source: "fixture-test",
+          reason: "Mutation fixture interdite",
+          expectedStateVersion: "a".repeat(64),
+        },
+      }],
+      ["paymentLink", {
+        paymentLinkUrl: "https://payment.example.test/fixture",
+        paymentLinkLabel: "Fixture",
+        paymentLinkAmount: 100,
+        paymentLinkCurrency: "EUR",
+        paymentLinkChannel: "email",
+        paymentLinkSent: true,
+      }],
+      ["deleteCancelled", { deleteCancelled: true }],
+    ];
+    for (const [name, mutation] of mutations) {
+      const before = await stableFinancialState();
+      await rejects(
+        () => commitFixtureStatus(mutation),
+        /production_fixture_status_mutation_forbidden/,
+        name,
+      );
+      deepStrictEqual(await stableFinancialState(), before, name);
+    }
+  });
+
+  await check("capacite fixture forgee refuse une transition exacte sans ecriture", async () => {
+    const forgedCapability = {
+      execution: capability.execution,
+      marker: structuredClone(capability.marker),
+    } as unknown as CagnotteProductionFixtureCapability;
+    const before = await stableFinancialState();
+    await rejects(
+      () => commitFixtureStatus(
+        cagnotteProductionFixturePaidStatusChange(),
+        forgedCapability,
+        CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT,
+      ),
+      /production_fixture_capability_required/,
+    );
+    deepStrictEqual(await stableFinancialState(), before);
+  });
+
+  await check("vraie capacite fixture ne permet aucun payload hors contrat", async () => {
+    const invalidTransitions: Array<readonly [
+      string,
+      Omit<OrderStatusChange, "orderId">,
+      string,
+    ]> = [
+      ["cancel", { orderStatus: "cancelled" }, CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT],
+      ["archive", { archived: true }, CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT],
+      ["hide", { hidden: true }, CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT],
+      ["note", { internalNote: "Capacite non generique." }, CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT],
+      ["tracking", { trackingNumber: "CAPABILITY-TRACKING" }, CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT],
+      ["paid method", {
+        ...cagnotteProductionFixturePaidStatusChange(),
+        finalPaymentMethod: "bank_transfer",
+      }, CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT],
+      ["delivered extra field", {
+        ...cagnotteProductionFixtureDeliveredStatusChange(),
+        trackingNumber: "EXTRA-FIELD",
+      }, CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_AT],
+      ["paid wrong instant", cagnotteProductionFixturePaidStatusChange(),
+        CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_AT],
+    ];
+    for (const [name, mutation, instant] of invalidTransitions) {
+      const before = await stableFinancialState();
+      await rejects(
+        () => commitFixtureStatus(mutation, capability, instant),
+        /production_fixture_status_transition_invalid/,
+        name,
+      );
+      deepStrictEqual(await stableFinancialState(), before, name);
+    }
   });
 
   await check("checkoutRequest, stock et outbox sont deterministes et neutres", async () => {
@@ -507,9 +668,29 @@ try {
     equal(accrual.initialGainCents, 500);
     equal(accrual.paymentConfirmed, true);
     equal(accrual.deliveryConfirmed, false);
+    equal((await db.collection("cagnotteReservations")
+      .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
+    const beforePaidReplay = await stableFinancialState();
+    await command("mark-paid");
+    deepStrictEqual(await stableFinancialState(), beforePaidReplay);
     const beforeReplay = await stableFinancialState();
     await command("create");
     deepStrictEqual(await stableFinancialState(), beforeReplay);
+  });
+
+  await check("fixture payee refuse une reservation residuelle au rejeu create", async () => {
+    const reservationRef = db.collection("cagnotteReservations")
+      .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID);
+    await reservationRef.set({
+      orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+      status: "reserved",
+    });
+    const before = await stableFinancialState();
+    await rejects(() => command("create"), /production_fixture_reservation_collision/);
+    deepStrictEqual(await stableFinancialState(), before);
+    equal((await db.collection("cagnotteWallets")
+      .doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).data()?.pendingCents, 500);
+    await reservationRef.delete();
   });
 
   await check("wallet exact apres livraison autorise le rejeu create idempotent", async () => {
@@ -520,9 +701,29 @@ try {
     equal(accrual.deliveryConfirmed, true);
     equal(accrual.credited, true);
     equal((await fixtureMovements()).length, 3);
+    equal((await db.collection("cagnotteReservations")
+      .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
+    const beforeDeliveredReplay = await stableFinancialState();
+    await command("mark-delivered");
+    deepStrictEqual(await stableFinancialState(), beforeDeliveredReplay);
     const beforeReplay = await stableFinancialState();
     await command("create");
     deepStrictEqual(await stableFinancialState(), beforeReplay);
+  });
+
+  await check("fixture livree refuse une reservation residuelle au rejeu create", async () => {
+    const reservationRef = db.collection("cagnotteReservations")
+      .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID);
+    await reservationRef.set({
+      orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+      status: "reserved",
+    });
+    const before = await stableFinancialState();
+    await rejects(() => command("create"), /production_fixture_reservation_collision/);
+    deepStrictEqual(await stableFinancialState(), before);
+    equal((await db.collection("cagnotteWallets")
+      .doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).data()?.availableCents, 500);
+    await reservationRef.delete();
   });
 
   await check("fixture complete refuse tout wallet divergent sans mutation", async () => {
@@ -638,6 +839,23 @@ function commitFixtureCheckout(
   });
 }
 
+function commitFixtureStatus(
+  body: Omit<OrderStatusChange, "orderId">,
+  productionFixtureCapability?: CagnotteProductionFixtureCapability,
+  instant = CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT,
+) {
+  return commitOrderStatusTransition({
+    db,
+    body: { orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID, ...body },
+    admin: { uid: "fixture-admin", email: "admin@fixture.test" },
+    accrualProgram: cagnotteProductionFixtureProgram(),
+    reservationProgram: null,
+    firebaseProjectId: CAGNOTTE_PRODUCTION_FIXTURE_PROJECT_ID,
+    productionFixtureCapability,
+    now: () => instant,
+  });
+}
+
 async function assertMarkedProductRejectedByOrdinaryCheckout(
   productDocument: Record<string, unknown>,
 ) {
@@ -670,15 +888,29 @@ async function fixtureMovements() {
 }
 
 async function stableFinancialState() {
-  const [wallet, accrual, movements, refunds, product, stockMovements] = await Promise.all([
+  const [
+    order,
+    wallet,
+    accrual,
+    movements,
+    refunds,
+    product,
+    stockMovements,
+    sideEffects,
+    reservation,
+  ] = await Promise.all([
+    db.collection("orders").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
     db.collection("cagnotteWallets").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get(),
     db.collection("cagnotteAccruals").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
     fixtureMovements(),
     db.collection("cagnotteRefunds").get(),
     db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID).get(),
     db.collection("stockMovements").where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
+    db.collection("orderSideEffects").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
+    db.collection("cagnotteReservations").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
   ]);
   return {
+    order: withoutUpdatedAt(order.data()),
     wallet: wallet.data(),
     accrual: accrual.data(),
     movements: movements.sort((left, right) => left.id.localeCompare(right.id)),
@@ -687,7 +919,16 @@ async function stableFinancialState() {
     stockMovements: stockMovements.docs
       .map((entry) => ({ id: entry.id, ...entry.data() }))
       .sort((left, right) => left.id.localeCompare(right.id)),
+    sideEffects: sideEffects.data(),
+    reservation: reservation.data(),
   };
+}
+
+function withoutUpdatedAt(value: FirebaseFirestore.DocumentData | undefined) {
+  if (!value) return value;
+  const copy = { ...value };
+  delete copy.updatedAt;
+  return copy;
 }
 
 async function databaseCounts() {
@@ -701,6 +942,7 @@ async function databaseCounts() {
     "cagnotteWallets",
     "cagnotteAccruals",
     "cagnotteMovements",
+    "cagnotteReservations",
   ];
   return Object.fromEntries(await Promise.all(names.map(async (name) => [
     name,

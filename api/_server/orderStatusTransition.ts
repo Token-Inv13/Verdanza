@@ -14,8 +14,10 @@ import type { EmailResult } from "./email.js";
 import type { PurchaseAnalyticsProcessResult } from "./purchaseAnalytics.js";
 import type { Order, OrderStatus, PaymentStatus, ProductCost, SupplierPurchase, FinalPaymentMethod, PaymentLinkChannel } from "../../src/types/index.js";
 import {
+  assertCagnotteProductionFixtureStatusTransition,
   hasPersistedCagnotteProductionFixtureMarker,
   isExactCagnotteProductionFixtureOrder,
+  type CagnotteProductionFixtureCapability,
 } from "./cagnotteProductionFixture.js";
 
 export type OrderStatusChange = {
@@ -31,12 +33,14 @@ export type OrderStatusChange = {
 export async function commitOrderStatusTransition({
   db, body, admin, accrualProgram = CAGNOTTE_SERVER_PROGRAM,
   reservationProgram = CAGNOTTE_RESERVATION_PROGRAM, firebaseProjectId,
+  productionFixtureCapability,
   now = () => new Date().toISOString(),
 }: {
   db: Firestore; body: OrderStatusChange; admin: {uid:string; email:string | null};
   accrualProgram?: CagnotteAccrualProgram | null;
   reservationProgram?: CagnotteReservationProgram | null;
   firebaseProjectId?: string | null;
+  productionFixtureCapability?: CagnotteProductionFixtureCapability;
   now?: ()=>string;
 }): Promise<{ updatedOrder: Order | null; previousStatus: OrderStatus | null; purchaseAnalyticsQueued: boolean; missingPromotionIds: string[]; unpaidReviewContext: Awaited<ReturnType<typeof prepareUnpaidReviewControl>>["context"] | null }> {
   const operationTime=now();
@@ -58,15 +62,13 @@ export async function commitOrderStatusTransition({
     if (productionFixture && !isExactCagnotteProductionFixtureOrder(order)) {
       throw new Error("production_fixture_marker_invalid");
     }
-    if (productionFixture && (
-      body.paymentLinkUrl !== undefined ||
-      body.paymentLinkLabel !== undefined ||
-      body.paymentLinkAmount !== undefined ||
-      body.paymentLinkCurrency !== undefined ||
-      body.paymentLinkChannel !== undefined ||
-      body.paymentLinkSent !== undefined
-    )) {
-      throw new Error("production_fixture_external_effect_forbidden");
+    if (productionFixture) {
+      assertCagnotteProductionFixtureStatusTransition({
+        capability: productionFixtureCapability,
+        order,
+        body,
+        operationTime,
+      });
     }
     if (hasCagnotteEnrollment(order) && (order.orderStatus === "cancelled" || order.cancelledAt) &&
       ((body.orderStatus && body.orderStatus !== "cancelled") || (body.paymentStatus && body.paymentStatus !== "cancelled"))) {

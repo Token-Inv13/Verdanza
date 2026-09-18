@@ -24,6 +24,10 @@ export const CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT =
   "2026-09-18T13:00:00.000Z" as const;
 export const CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_AT =
   "2026-09-18T14:00:00.000Z" as const;
+export const CAGNOTTE_PRODUCTION_FIXTURE_PAID_HISTORY_NOTE =
+  "Paiement synthetique fixture confirme par l outil interne." as const;
+export const CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_HISTORY_NOTE =
+  "Livraison synthetique fixture confirmee par l outil interne." as const;
 export const CAGNOTTE_PRODUCTION_FIXTURE_SIDE_EFFECT_REASON =
   "production_fixture" as const;
 
@@ -85,6 +89,49 @@ export function assertCagnotteProductionFixtureCapability(
   const capability = value as CagnotteProductionFixtureCapability;
   if (!isExactCagnotteProductionFixtureMarker(capability.marker)) {
     throw new Error("production_fixture_capability_invalid");
+  }
+}
+
+export function cagnotteProductionFixturePaidStatusChange() {
+  return {
+    paymentStatus: "paid" as const,
+    finalPaymentMethod: "other" as const,
+    historyNote: CAGNOTTE_PRODUCTION_FIXTURE_PAID_HISTORY_NOTE,
+  };
+}
+
+export function cagnotteProductionFixtureDeliveredStatusChange() {
+  return {
+    orderStatus: "delivered" as const,
+    historyNote: CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_HISTORY_NOTE,
+  };
+}
+
+export function assertCagnotteProductionFixtureStatusTransition(input: {
+  capability: unknown;
+  order: unknown;
+  body: object;
+  operationTime: string;
+}) {
+  if (!isExactCagnotteProductionFixtureOrder(input.order)) {
+    throw new Error("production_fixture_marker_invalid");
+  }
+  if (input.capability === undefined) {
+    throw new Error("production_fixture_status_mutation_forbidden");
+  }
+  assertCagnotteProductionFixtureCapability(input.capability);
+
+  const paid = isDeepStrictEqual(input.body, {
+    orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+    ...cagnotteProductionFixturePaidStatusChange(),
+  }) && input.operationTime === CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT;
+  const delivered = isDeepStrictEqual(input.body, {
+    orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+    ...cagnotteProductionFixtureDeliveredStatusChange(),
+  }) && input.operationTime === CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_AT;
+
+  if (!paid && !delivered) {
+    throw new Error("production_fixture_status_transition_invalid");
   }
 }
 
