@@ -5,15 +5,19 @@ import type {
   QuerySnapshot,
   Transaction,
 } from "firebase-admin/firestore";
+import { calculateCagnotte } from "../../src/lib/cagnotteCalculations.js";
 import type { Order } from "../../src/types/index.js";
-import type { CheckoutRequestBody } from "./checkout.js";
+import type { CheckoutRequestBody, PricedCheckout } from "./checkout.js";
 import {
   cagnotteLedgerMovementId,
   readCagnotteRefundBasis,
   readCagnotteWallet,
   validateCagnotteLedgerMovementForRead,
 } from "./cagnotteLedger.js";
-import { validateOrderCagnotteEnrollment } from "./cagnotteOrders.js";
+import {
+  cagnotteCalculationForPricedCheckout,
+  validateOrderCagnotteEnrollment,
+} from "./cagnotteOrders.js";
 import { CAGNOTTE_PRODUCTION_PROGRAM_VERSION } from "./cagnotteProgram.js";
 import {
   CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID,
@@ -117,6 +121,7 @@ export async function validateCagnotteProductionFixtureState({
     db.collection("cagnotteMovements")
       .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID),
   );
+  await validateCagnotteProductionFixtureExternalArtifacts({ db, transaction });
 
   assertFixtureDocuments({
     customer,
@@ -147,6 +152,40 @@ export async function validateCagnotteProductionFixtureState({
   });
   assertTransitionPrecondition(state, expectedTransition);
   return state;
+}
+
+/** The fixture contract requires that no external-delivery artifact exists. */
+export async function validateCagnotteProductionFixtureExternalArtifacts({
+  db,
+  transaction,
+}: {
+  db: Firestore;
+  transaction: Transaction;
+}) {
+  const [invoices, analyticsOutbox, paymentLinkRequests] = await Promise.all([
+    transaction.get(
+      db.collection("invoices")
+        .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
+        .limit(1),
+    ),
+    transaction.get(
+      db.collection("analyticsOutbox")
+        .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
+        .limit(1),
+    ),
+    transaction.get(
+      db.collection("paymentLinkRequests")
+        .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
+        .limit(1),
+    ),
+  ]);
+  if (!invoices.empty) throw new Error("production_fixture_invoice_collision");
+  if (!analyticsOutbox.empty) {
+    throw new Error("production_fixture_analytics_outbox_collision");
+  }
+  if (!paymentLinkRequests.empty) {
+    throw new Error("production_fixture_payment_link_collision");
+  }
 }
 
 function assertFixtureDocuments(input: {
@@ -226,12 +265,20 @@ function assertFixtureDocuments(input: {
 
 function assertStoredFixtureOrder(order: Order) {
   if (!isExactCagnotteProductionFixtureOrder(order)) fixtureOrderCollision();
-  const enrollment = validateOrderCagnotteEnrollment(order);
+  const enrollment = fixtureOrderEnrollment(order);
+  const expectedSnapshot = calculateCagnotte(
+    cagnotteCalculationForPricedCheckout(
+      cagnotteProductionFixturePricedCheckout() as PricedCheckout,
+      0,
+      0,
+    ),
+  );
   if (
     enrollment.programVersion !== CAGNOTTE_PRODUCTION_PROGRAM_VERSION ||
     enrollment.calculationVersion !== "cagnotte-math-v1" ||
     enrollment.createdAtEpochMs !== CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS ||
     enrollment.accrualEnrollment !== "enrolled" ||
+    !isDeepStrictEqual(enrollment.snapshot, expectedSnapshot) ||
     enrollment.snapshot.loyaltyCents !== 500 ||
     enrollment.snapshot.appliedCagnotteCents !== 0 ||
     order.finalPaymentMethod !== "other" ||
@@ -248,6 +295,14 @@ function assertStoredFixtureOrder(order: Order) {
     )
   ) {
     fixtureOrderCollision();
+  }
+}
+
+function fixtureOrderEnrollment(order: Order) {
+  try {
+    return validateOrderCagnotteEnrollment(order);
+  } catch {
+    return fixtureOrderCollision();
   }
 }
 

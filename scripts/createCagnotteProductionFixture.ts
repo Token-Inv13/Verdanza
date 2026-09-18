@@ -41,6 +41,7 @@ import {
 } from "../api/_server/cagnotteProductionFixture.js";
 import {
   cagnotteProductionFixtureReferences,
+  validateCagnotteProductionFixtureExternalArtifacts,
   validateCagnotteProductionFixtureState,
 } from "../api/_server/cagnotteProductionFixtureState.js";
 
@@ -191,6 +192,9 @@ export async function inspectCagnotteProductionFixture(db: Firestore) {
   const analytics = await db.collection("analyticsOutbox")
     .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
     .get();
+  const paymentLinkRequests = await db.collection("paymentLinkRequests")
+    .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
+    .get();
   return {
     customer: documentState(customer),
     product: documentState(product),
@@ -204,6 +208,7 @@ export async function inspectCagnotteProductionFixture(db: Firestore) {
     movements: movements.docs.map((entry) => ({ id: entry.id, ...entry.data() })),
     invoiceCount: invoices.size,
     analyticsOutboxCount: analytics.size,
+    paymentLinkRequestCount: paymentLinkRequests.size,
   };
 }
 
@@ -327,6 +332,7 @@ async function prepareFixtureDocuments(db: Firestore): Promise<"prepared" | "exi
     if (existingOrderState.some(Boolean)) {
       throw new Error("production_fixture_partial_collision");
     }
+    await validateCagnotteProductionFixtureExternalArtifacts({ db, transaction });
     if (reservation.exists) {
       throw new Error("production_fixture_reservation_collision");
     }

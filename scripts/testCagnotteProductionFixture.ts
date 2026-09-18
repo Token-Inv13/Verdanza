@@ -210,6 +210,46 @@ try {
     deepStrictEqual(await databaseCounts(), before);
   });
 
+  await check("artefacts externes residuels refusent create avant toute ecriture", async () => {
+    const collisions = [
+      {
+        collection: "invoices",
+        id: "production-fixture-residual-invoice-v1",
+        expected: /production_fixture_invoice_collision/,
+      },
+      {
+        collection: "analyticsOutbox",
+        id: "production-fixture-residual-analytics-v1",
+        expected: /production_fixture_analytics_outbox_collision/,
+      },
+      {
+        collection: "paymentLinkRequests",
+        id: "production-fixture-residual-payment-link-v1",
+        expected: /production_fixture_payment_link_collision/,
+      },
+    ] as const;
+    for (const collision of collisions) {
+      const ref = db.collection(collision.collection).doc(collision.id);
+      await ref.set({
+        orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+        status: "residual",
+      });
+      try {
+        const before = await databaseCounts();
+        await rejects(() => command("create"), collision.expected, collision.collection);
+        deepStrictEqual(await databaseCounts(), before, collision.collection);
+        equal((await db.collection("customers")
+          .doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).exists, false);
+        equal((await db.collection("products")
+          .doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID).get()).exists, false);
+        equal((await db.collection("orders")
+          .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
+      } finally {
+        await ref.delete();
+      }
+    }
+  });
+
   await check("reservation residuelle seule refuse create avant toute autre ecriture", async () => {
     const reservationRef = db.collection("cagnotteReservations")
       .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID);
@@ -488,6 +528,56 @@ try {
     await reservationRef.delete();
   });
 
+  await check("artefacts externes residuels refusent le rejeu create sans mutation", async () => {
+    const collisions = [
+      {
+        collection: "invoices",
+        id: "production-fixture-existing-invoice-v1",
+        expected: /production_fixture_invoice_collision/,
+      },
+      {
+        collection: "analyticsOutbox",
+        id: "production-fixture-existing-analytics-v1",
+        expected: /production_fixture_analytics_outbox_collision/,
+      },
+      {
+        collection: "paymentLinkRequests",
+        id: "production-fixture-existing-payment-link-v1",
+        expected: /production_fixture_payment_link_collision/,
+      },
+    ] as const;
+    for (const collision of collisions) {
+      const ref = db.collection(collision.collection).doc(collision.id);
+      await ref.set({
+        orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+        status: "residual",
+      });
+      try {
+        const before = await stableFinancialState();
+        await rejects(() => command("create"), collision.expected, collision.collection);
+        deepStrictEqual(await stableFinancialState(), before, collision.collection);
+      } finally {
+        await ref.delete();
+      }
+    }
+  });
+
+  await check("facture residuelle refuse mark-paid sans mutation", async () => {
+    const invoiceRef = db.collection("invoices")
+      .doc("production-fixture-before-paid-invoice-v1");
+    await invoiceRef.set({
+      orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+      status: "draft",
+    });
+    try {
+      const before = await stableFinancialState();
+      await rejects(() => command("mark-paid"), /production_fixture_invoice_collision/);
+      deepStrictEqual(await stableFinancialState(), before);
+    } finally {
+      await invoiceRef.delete();
+    }
+  });
+
   await check("toute mutation admin fixture sans capacite est refusee avant ecriture", async () => {
     const mutations: Array<readonly [string, Omit<OrderStatusChange, "orderId">]> = [
       ["paymentStatus", cagnotteProductionFixturePaidStatusChange()],
@@ -586,6 +676,44 @@ try {
       /production_fixture_state_transition_invalid/,
     );
     deepStrictEqual(await stableFinancialState(), before);
+  });
+
+  await check("snapshot cagnotte complet refuse chaque divergence avant mark-paid", async () => {
+    const orderRef = cagnotteProductionFixtureReferences(db).order;
+    const corruptions: Array<readonly [string, (snapshot: FixtureSnapshot) => void]> = [
+      ["lineId avec totaux inchanges", (snapshot) => {
+        snapshot.lines[0].lineId = "fixture-line-divergente";
+      }],
+      ["initialCents ligne", (snapshot) => {
+        snapshot.lines[0].initialCents = 9_999;
+      }],
+      ["loyaltyCents", (snapshot) => {
+        snapshot.loyaltyCents = 499;
+      }],
+      ["eligibleCents", (snapshot) => {
+        snapshot.eligibleCents = 9_999;
+      }],
+      ["productsPaidCents", (snapshot) => {
+        snapshot.productsPaidCents = 9_999;
+      }],
+      ["appliedCagnotteCents", (snapshot) => {
+        snapshot.appliedCagnotteCents = 1;
+      }],
+      ["calculationVersion", (snapshot) => {
+        snapshot.calculationVersion = "cagnotte-math-divergent";
+      }],
+      ["limitationReasons", (snapshot) => {
+        snapshot.limitationReasons = ["available_balance"];
+      }],
+    ];
+    for (const [name, mutateSnapshot] of corruptions) {
+      await assertFixtureCorruptionRejected({
+        name,
+        ref: orderRef,
+        mutate: fixtureSnapshotCorruption(mutateSnapshot),
+        expected: /production_fixture_order_collision/,
+      }, "mark-paid");
+    }
   });
 
   await check("validation atomique refuse chaque divergence avant mark-paid", async () => {
@@ -802,6 +930,25 @@ try {
     await reservationRef.delete();
   });
 
+  await check("facture residuelle refuse mark-delivered sans mutation", async () => {
+    const invoiceRef = db.collection("invoices")
+      .doc("production-fixture-before-delivery-invoice-v1");
+    await invoiceRef.set({
+      orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+      status: "draft",
+    });
+    try {
+      const before = await stableFinancialState();
+      await rejects(
+        () => command("mark-delivered"),
+        /production_fixture_invoice_collision/,
+      );
+      deepStrictEqual(await stableFinancialState(), before);
+    } finally {
+      await invoiceRef.delete();
+    }
+  });
+
   await check("validation atomique refuse chaque divergence avant mark-delivered", async () => {
     const refs = cagnotteProductionFixtureReferences(db);
     const paymentMovement = db.collection("cagnotteMovements").doc(
@@ -1015,6 +1162,7 @@ try {
     const inspection = await inspectCagnotteProductionFixture(db);
     equal(inspection.invoiceCount, 0);
     equal(inspection.analyticsOutboxCount, 0);
+    equal(inspection.paymentLinkRequestCount, 0);
     equal(inspection.reservation.exists, false);
     equal(inspection.movements.length, 3);
     equal(inspection.product.data?.isActive, false);
@@ -1085,6 +1233,31 @@ type FixtureCorruption = Readonly<{
   expected: RegExp;
 }>;
 
+type FixtureSnapshot = Record<string, unknown> & {
+  lines: Array<Record<string, unknown>>;
+  loyaltyCents: number;
+  eligibleCents: number;
+  productsPaidCents: number;
+  appliedCagnotteCents: number;
+  calculationVersion: string;
+  limitationReasons: string[];
+};
+
+function fixtureSnapshotCorruption(
+  mutateSnapshot: (snapshot: FixtureSnapshot) => void,
+): FixtureCorruption["mutate"] {
+  return async (ref, original) => {
+    if (!original) throw new Error("production_fixture_test_order_missing");
+    const corrupted = structuredClone(original);
+    const enrollment = corrupted.cagnotte as { snapshot?: FixtureSnapshot } | undefined;
+    if (!enrollment?.snapshot) {
+      throw new Error("production_fixture_test_snapshot_missing");
+    }
+    mutateSnapshot(enrollment.snapshot);
+    return ref.set(corrupted);
+  };
+}
+
 async function assertFixtureCorruptionRejected(
   corruption: FixtureCorruption,
   transition: "mark-paid" | "mark-delivered",
@@ -1147,6 +1320,9 @@ async function stableFinancialState() {
     stockMovements,
     sideEffects,
     reservation,
+    invoices,
+    analyticsOutbox,
+    paymentLinkRequests,
   ] = await Promise.all([
     db.collection("customers").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get(),
     db.collection("adminUsers").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get(),
@@ -1160,6 +1336,9 @@ async function stableFinancialState() {
     db.collection("stockMovements").where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
     db.collection("orderSideEffects").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
     db.collection("cagnotteReservations").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
+    db.collection("invoices").where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
+    db.collection("analyticsOutbox").where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
+    db.collection("paymentLinkRequests").where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
   ]);
   return {
     customer: customer.data(),
@@ -1176,7 +1355,16 @@ async function stableFinancialState() {
       .sort((left, right) => left.id.localeCompare(right.id)),
     sideEffects: sideEffects.data(),
     reservation: reservation.data(),
+    invoices: sortedDocuments(invoices),
+    analyticsOutbox: sortedDocuments(analyticsOutbox),
+    paymentLinkRequests: sortedDocuments(paymentLinkRequests),
   };
+}
+
+function sortedDocuments(snapshot: FirebaseFirestore.QuerySnapshot) {
+  return snapshot.docs
+    .map((entry) => ({ id: entry.id, ...entry.data() }))
+    .sort((left, right) => left.id.localeCompare(right.id));
 }
 
 function withoutUpdatedAt(value: FirebaseFirestore.DocumentData | undefined) {
@@ -1198,6 +1386,9 @@ async function databaseCounts() {
     "cagnotteAccruals",
     "cagnotteMovements",
     "cagnotteReservations",
+    "invoices",
+    "analyticsOutbox",
+    "paymentLinkRequests",
   ];
   return Object.fromEntries(await Promise.all(names.map(async (name) => [
     name,
