@@ -19,6 +19,7 @@ import {
   isExactCagnotteProductionFixtureOrder,
   type CagnotteProductionFixtureCapability,
 } from "./cagnotteProductionFixture.js";
+import { validateCagnotteProductionFixtureState } from "./cagnotteProductionFixtureState.js";
 
 export type OrderStatusChange = {
   orderId: string; orderStatus?: OrderStatus; paymentStatus?: PaymentStatus;
@@ -63,11 +64,17 @@ export async function commitOrderStatusTransition({
       throw new Error("production_fixture_marker_invalid");
     }
     if (productionFixture) {
-      assertCagnotteProductionFixtureStatusTransition({
+      const expectedTransition = assertCagnotteProductionFixtureStatusTransition({
         capability: productionFixtureCapability,
         order,
         body,
         operationTime,
+      });
+      await validateCagnotteProductionFixtureState({
+        db,
+        transaction,
+        orderSnapshot: snapshot,
+        expectedTransition,
       });
     }
     if (hasCagnotteEnrollment(order) && (order.orderStatus === "cancelled" || order.cancelledAt) &&

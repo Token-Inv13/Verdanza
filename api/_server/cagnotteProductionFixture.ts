@@ -112,7 +112,7 @@ export function assertCagnotteProductionFixtureStatusTransition(input: {
   order: unknown;
   body: object;
   operationTime: string;
-}) {
+}): "mark-paid" | "mark-delivered" {
   if (!isExactCagnotteProductionFixtureOrder(input.order)) {
     throw new Error("production_fixture_marker_invalid");
   }
@@ -130,9 +130,9 @@ export function assertCagnotteProductionFixtureStatusTransition(input: {
     ...cagnotteProductionFixtureDeliveredStatusChange(),
   }) && input.operationTime === CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_AT;
 
-  if (!paid && !delivered) {
-    throw new Error("production_fixture_status_transition_invalid");
-  }
+  if (paid) return "mark-paid";
+  if (delivered) return "mark-delivered";
+  throw new Error("production_fixture_status_transition_invalid");
 }
 
 export function assertCagnotteProductionFixtureCheckout(input: {

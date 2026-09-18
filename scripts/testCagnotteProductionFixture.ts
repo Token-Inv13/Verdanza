@@ -29,6 +29,7 @@ import { executePaymentLinkDelivery } from "../api/_server/paymentLinkDelivery.j
 import { executeGuardedInvoiceSend } from "../api/_server/invoiceEmailSend.js";
 import { processPurchaseAnalyticsOutbox } from "../api/_server/purchaseAnalytics.js";
 import { executeOrderRefund } from "../api/_server/orderRefunds.js";
+import { cagnotteLedgerMovementId } from "../api/_server/cagnotteLedger.js";
 import {
   commitOrderStatusTransition,
   type OrderStatusChange,
@@ -66,6 +67,7 @@ import {
   createCagnotteProductionFixtureTestCapability,
   type CagnotteProductionFixtureCapability,
 } from "../api/_server/cagnotteProductionFixture.js";
+import { cagnotteProductionFixtureReferences } from "../api/_server/cagnotteProductionFixtureState.js";
 import {
   buildCagnotteProductionFixturePlan,
   assertCagnotteProductionFixtureProductionEnvironment,
@@ -577,6 +579,113 @@ try {
     }
   });
 
+  await check("mark-delivered refuse une fixture CREATED complete sans aucune mutation", async () => {
+    const before = await stableFinancialState();
+    await rejects(
+      () => command("mark-delivered"),
+      /production_fixture_state_transition_invalid/,
+    );
+    deepStrictEqual(await stableFinancialState(), before);
+  });
+
+  await check("validation atomique refuse chaque divergence avant mark-paid", async () => {
+    const refs = cagnotteProductionFixtureReferences(db);
+    const unexpectedMovement = db.collection("cagnotteMovements")
+      .doc("production-fixture-created-extra-movement-v1");
+    const corruptions: FixtureCorruption[] = [
+      {
+        name: "customer divergent",
+        ref: refs.customer,
+        mutate: async (ref, original) => ref.set({ ...original, displayName: "Fixture divergente" }),
+        expected: /production_fixture_customer_collision/,
+      },
+      {
+        name: "admin fixture present",
+        ref: refs.admin,
+        mutate: async (ref) => ref.set({ role: "admin", isAdmin: true }),
+        expected: /production_fixture_admin_collision/,
+      },
+      {
+        name: "product divergent",
+        ref: refs.product,
+        mutate: async (ref, original) => ref.set({ ...original, stock: 9 }),
+        expected: /production_fixture_product_collision/,
+      },
+      {
+        name: "checkout request divergent",
+        ref: refs.checkoutRequest,
+        mutate: async (ref, original) => ref.set({ ...original, payloadFingerprint: "divergent" }),
+        expected: /production_fixture_checkout_request_collision/,
+      },
+      {
+        name: "outbox divergent",
+        ref: refs.sideEffects,
+        mutate: async (ref, original) => {
+          const tasks = original?.tasks as Record<string, Record<string, unknown>>;
+          await ref.set({
+            ...original,
+            tasks: {
+              ...tasks,
+              customer_confirmation_email: {
+                ...tasks.customer_confirmation_email,
+                status: "pending",
+              },
+            },
+          });
+        },
+        expected: /production_fixture_outbox_collision/,
+      },
+      {
+        name: "stock movement divergent",
+        ref: refs.stockMovement,
+        mutate: async (ref, original) => ref.set({ ...original, quantity: -9 }),
+        expected: /production_fixture_stock_movement_collision/,
+      },
+      {
+        name: "reservation presente",
+        ref: refs.reservation,
+        mutate: async (ref) => ref.set({
+          orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+          status: "reserved",
+        }),
+        expected: /production_fixture_reservation_collision/,
+      },
+      {
+        name: "wallet inattendu",
+        ref: refs.wallet,
+        mutate: async (ref) => ref.set(fixtureWalletDocument({ pendingCents: 500 })),
+        expected: /production_fixture_wallet_collision/,
+      },
+      {
+        name: "accrual inattendu",
+        ref: refs.accrual,
+        mutate: async (ref) => ref.set({
+          orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+          beneficiaryId: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+        }),
+        expected: /production_fixture_wallet_collision/,
+      },
+      {
+        name: "mouvement inattendu",
+        ref: unexpectedMovement,
+        mutate: async (ref) => ref.set({
+          orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+          businessEvent: "payment_confirmed",
+        }),
+        expected: /production_fixture_movement_collision/,
+      },
+      {
+        name: "order divergent",
+        ref: refs.order,
+        mutate: async (ref, original) => ref.set({ ...original, total: 101 }),
+        expected: /production_fixture_order_collision/,
+      },
+    ];
+    for (const corruption of corruptions) {
+      await assertFixtureCorruptionRejected(corruption, "mark-paid");
+    }
+  });
+
   await check("checkoutRequest, stock et outbox sont deterministes et neutres", async () => {
     const request = await db.collection("checkoutRequests")
       .doc(CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID).get();
@@ -691,6 +800,116 @@ try {
     equal((await db.collection("cagnotteWallets")
       .doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).data()?.pendingCents, 500);
     await reservationRef.delete();
+  });
+
+  await check("validation atomique refuse chaque divergence avant mark-delivered", async () => {
+    const refs = cagnotteProductionFixtureReferences(db);
+    const paymentMovement = db.collection("cagnotteMovements").doc(
+      cagnotteLedgerMovementId(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID, "payment_confirmed"),
+    );
+    const unexpectedMovement = db.collection("cagnotteMovements")
+      .doc("production-fixture-paid-extra-movement-v1");
+    const corruptions: FixtureCorruption[] = [
+      {
+        name: "customer divergent",
+        ref: refs.customer,
+        mutate: async (ref, original) => ref.set({ ...original, email: "divergent@verdanza.test" }),
+        expected: /production_fixture_customer_collision/,
+      },
+      {
+        name: "admin fixture present",
+        ref: refs.admin,
+        mutate: async (ref) => ref.set({ role: "admin", isAdmin: true }),
+        expected: /production_fixture_admin_collision/,
+      },
+      {
+        name: "product divergent",
+        ref: refs.product,
+        mutate: async (ref, original) => ref.set({ ...original, isActive: true }),
+        expected: /production_fixture_product_collision/,
+      },
+      {
+        name: "checkout request divergent",
+        ref: refs.checkoutRequest,
+        mutate: async (ref, original) => ref.set({
+          ...original,
+          cagnotteBeneficiaryId: "autre-beneficiaire",
+        }),
+        expected: /production_fixture_checkout_request_collision/,
+      },
+      {
+        name: "outbox divergente",
+        ref: refs.sideEffects,
+        mutate: async (ref, original) => {
+          const tasks = original?.tasks as Record<string, Record<string, unknown>>;
+          await ref.set({
+            ...original,
+            tasks: {
+              ...tasks,
+              draft_invoice: { ...tasks.draft_invoice, attempts: 1 },
+            },
+          });
+        },
+        expected: /production_fixture_outbox_collision/,
+      },
+      {
+        name: "stock movement divergent",
+        ref: refs.stockMovement,
+        mutate: async (ref, original) => ref.set({ ...original, createdBy: "autre" }),
+        expected: /production_fixture_stock_movement_collision/,
+      },
+      {
+        name: "reservation presente",
+        ref: refs.reservation,
+        mutate: async (ref) => ref.set({
+          orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+          status: "reserved",
+        }),
+        expected: /production_fixture_reservation_collision/,
+      },
+      {
+        name: "wallet divergent",
+        ref: refs.wallet,
+        mutate: async (ref, original) => ref.set({ ...original, pendingCents: 499 }),
+        expected: /production_fixture_wallet_collision/,
+      },
+      {
+        name: "accrual divergent",
+        ref: refs.accrual,
+        mutate: async (ref, original) => ref.set({ ...original, remainingGainCents: 499 }),
+        expected: /production_fixture_ledger_collision/,
+      },
+      {
+        name: "mouvement divergent",
+        ref: paymentMovement,
+        mutate: async (ref, original) => ref.set({ ...original, pendingDeltaCents: 499 }),
+        expected: /production_fixture_(ledger|movement)_collision/,
+      },
+      {
+        name: "mouvement manquant",
+        ref: paymentMovement,
+        mutate: async (ref) => ref.delete(),
+        expected: /production_fixture_movement_collision/,
+      },
+      {
+        name: "mouvement supplementaire",
+        ref: unexpectedMovement,
+        mutate: async (ref) => ref.set({
+          orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+          businessEvent: "unexpected",
+        }),
+        expected: /production_fixture_movement_collision/,
+      },
+      {
+        name: "order divergent",
+        ref: refs.order,
+        mutate: async (ref, original) => ref.set({ ...original, subtotal: 101 }),
+        expected: /production_fixture_order_collision/,
+      },
+    ];
+    for (const corruption of corruptions) {
+      await assertFixtureCorruptionRejected(corruption, "mark-delivered");
+    }
   });
 
   await check("wallet exact apres livraison autorise le rejeu create idempotent", async () => {
@@ -842,7 +1061,7 @@ function commitFixtureCheckout(
 function commitFixtureStatus(
   body: Omit<OrderStatusChange, "orderId">,
   productionFixtureCapability?: CagnotteProductionFixtureCapability,
-  instant = CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT,
+  instant: string = CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT,
 ) {
   return commitOrderStatusTransition({
     db,
@@ -854,6 +1073,33 @@ function commitFixtureStatus(
     productionFixtureCapability,
     now: () => instant,
   });
+}
+
+type FixtureCorruption = Readonly<{
+  name: string;
+  ref: FirebaseFirestore.DocumentReference;
+  mutate: (
+    ref: FirebaseFirestore.DocumentReference,
+    original: FirebaseFirestore.DocumentData | undefined,
+  ) => Promise<unknown>;
+  expected: RegExp;
+}>;
+
+async function assertFixtureCorruptionRejected(
+  corruption: FixtureCorruption,
+  transition: "mark-paid" | "mark-delivered",
+) {
+  const original = await corruption.ref.get();
+  const originalData = original.data();
+  try {
+    await corruption.mutate(corruption.ref, originalData);
+    const before = await stableFinancialState();
+    await rejects(() => command(transition), corruption.expected, corruption.name);
+    deepStrictEqual(await stableFinancialState(), before, corruption.name);
+  } finally {
+    if (original.exists) await corruption.ref.set(originalData!);
+    else await corruption.ref.delete();
+  }
 }
 
 async function assertMarkedProductRejectedByOrdinaryCheckout(
@@ -889,7 +1135,10 @@ async function fixtureMovements() {
 
 async function stableFinancialState() {
   const [
+    customer,
+    admin,
     order,
+    checkoutRequest,
     wallet,
     accrual,
     movements,
@@ -899,7 +1148,10 @@ async function stableFinancialState() {
     sideEffects,
     reservation,
   ] = await Promise.all([
+    db.collection("customers").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get(),
+    db.collection("adminUsers").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get(),
     db.collection("orders").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
+    db.collection("checkoutRequests").doc(CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID).get(),
     db.collection("cagnotteWallets").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get(),
     db.collection("cagnotteAccruals").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
     fixtureMovements(),
@@ -910,7 +1162,10 @@ async function stableFinancialState() {
     db.collection("cagnotteReservations").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
   ]);
   return {
+    customer: customer.data(),
+    admin: admin.data(),
     order: withoutUpdatedAt(order.data()),
+    checkoutRequest: checkoutRequest.data(),
     wallet: wallet.data(),
     accrual: accrual.data(),
     movements: movements.sort((left, right) => left.id.localeCompare(right.id)),

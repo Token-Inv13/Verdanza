@@ -6,22 +6,15 @@ import { pathToFileURL } from "node:url";
 import type { Firestore } from "firebase-admin/firestore";
 import { commitCheckoutOrder } from "../api/_server/checkoutOrder.js";
 import type { CheckoutRequestBody, PricedCheckout } from "../api/_server/checkout.js";
-import { checkoutPayloadFingerprint, orderSideEffectTaskNames } from "../api/_server/orderSideEffects.js";
+import { checkoutPayloadFingerprint } from "../api/_server/orderSideEffects.js";
 import {
   commitOrderStatusTransition,
   processOrderStatusTransitionEffects,
   type OrderStatusChange,
 } from "../api/_server/orderStatusTransition.js";
-import {
-  CAGNOTTE_PRODUCTION_PROGRAM_VERSION,
-  resolveCagnotteProductionProgram,
-} from "../api/_server/cagnotteProgram.js";
-import { readCagnotteRefundBasis } from "../api/_server/cagnotteLedger.js";
+import { resolveCagnotteProductionProgram } from "../api/_server/cagnotteProgram.js";
 import type { CagnotteProductionProgram } from "../api/_server/cagnotteLedgerTypes.js";
 import { getAdminDb, getAdminProjectId } from "../api/_server/firebaseAdmin.js";
-import { orderFromSnapshot } from "../api/_server/orderProtection.js";
-import { validateOrderCagnotteEnrollment } from "../api/_server/cagnotteOrders.js";
-import type { Order } from "../src/types/index.js";
 import {
   CAGNOTTE_PRODUCTION_FIXTURE_CHALLENGE,
   CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID,
@@ -34,9 +27,6 @@ import {
   CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT,
   CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_PROJECT_ID,
-  CAGNOTTE_PRODUCTION_FIXTURE_REMAINING_STOCK,
-  CAGNOTTE_PRODUCTION_FIXTURE_SIDE_EFFECT_REASON,
-  CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_UID,
   CAGNOTTE_PRODUCTION_FIXTURE_WRITE_CHALLENGE,
   cagnotteProductionFixtureCheckoutBody,
@@ -45,13 +35,14 @@ import {
   cagnotteProductionFixturePaidStatusChange,
   cagnotteProductionFixturePricedCheckout,
   cagnotteProductionFixtureProductDocument,
-  cagnotteProductionFixtureStockMovementDocument,
   assertCagnotteProductionFixtureCapability,
   createCagnotteProductionFixtureCapability,
-  isExactCagnotteProductionFixtureMarker,
-  isExactCagnotteProductionFixtureOrder,
   type CagnotteProductionFixtureCapability,
 } from "../api/_server/cagnotteProductionFixture.js";
+import {
+  cagnotteProductionFixtureReferences,
+  validateCagnotteProductionFixtureState,
+} from "../api/_server/cagnotteProductionFixtureState.js";
 
 export type CagnotteProductionFixtureCommand =
   | "create"
@@ -178,7 +169,7 @@ export async function runCagnotteProductionFixtureCommand(input: FixtureRunInput
 }
 
 export async function inspectCagnotteProductionFixture(db: Firestore) {
-  const refs = fixtureReferences(db);
+  const refs = cagnotteProductionFixtureReferences(db);
   const [customer, product, order, checkoutRequest, sideEffects, stockMovement, wallet, accrual, reservation] =
     await Promise.all([
       refs.customer.get(),
@@ -298,7 +289,7 @@ async function createFixture(input: FixtureRunInput) {
 }
 
 async function prepareFixtureDocuments(db: Firestore): Promise<"prepared" | "existing"> {
-  const refs = fixtureReferences(db);
+  const refs = cagnotteProductionFixtureReferences(db);
   return db.runTransaction(async (transaction) => {
     const [
       customer,
@@ -323,40 +314,28 @@ async function prepareFixtureDocuments(db: Firestore): Promise<"prepared" | "exi
       transaction.get(refs.accrual),
       transaction.get(refs.reservation),
     ]);
+    const existingOrderState = [order.exists, checkoutRequest.exists, sideEffects.exists];
+    if (existingOrderState.every(Boolean)) {
+      await validateCagnotteProductionFixtureState({
+        db,
+        transaction,
+        orderSnapshot: order,
+        expectedTransition: "existing",
+      });
+      return "existing";
+    }
+    if (existingOrderState.some(Boolean)) {
+      throw new Error("production_fixture_partial_collision");
+    }
     if (reservation.exists) {
       throw new Error("production_fixture_reservation_collision");
     }
     if (admin.exists) throw new Error("production_fixture_admin_collision");
-    const existingOrderState = [order.exists, checkoutRequest.exists, sideEffects.exists];
-    if (existingOrderState.every(Boolean)) {
-      if (!stockMovement.exists) {
-        throw new Error("production_fixture_partial_collision");
-      }
-      const storedOrder = assertExistingFixtureDocuments({
-        customer,
-        product,
-        order,
-        checkoutRequest,
-        sideEffects,
-        stockMovement,
-      });
-      await assertExistingFixtureLedger({
-        db,
-        transaction,
-        order: storedOrder,
-        wallet,
-        accrual,
-      });
-      return "existing";
-    }
     if (wallet.exists || accrual.exists) {
       throw new Error("production_fixture_wallet_collision");
     }
     if (stockMovement.exists) {
       throw new Error("production_fixture_stock_movement_collision");
-    }
-    if (existingOrderState.some(Boolean)) {
-      throw new Error("production_fixture_partial_collision");
     }
     if (customer.exists && !isDeepStrictEqual(customer.data(), cagnotteProductionFixtureCustomerDocument())) {
       throw new Error("production_fixture_customer_collision");
@@ -381,10 +360,6 @@ async function transitionFixture(
   body: Omit<OrderStatusChange, "orderId">,
   instant: string,
 ) {
-  const before = await input.db.collection("orders").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get();
-  if (!before.exists || !isExactCagnotteProductionFixtureOrder({ id: before.id, ...before.data() })) {
-    throw new Error("production_fixture_order_missing_or_divergent");
-  }
   const committed = await commitOrderStatusTransition({
     db: input.db,
     body: { orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID, ...body },
@@ -403,195 +378,6 @@ async function transitionFixture(
     processAnalytics: async () => ({ status: "skipped", code: "production_fixture" }),
   });
   return inspectCagnotteProductionFixture(input.db);
-}
-
-function assertExistingFixtureDocuments(input: {
-  customer: FirebaseFirestore.DocumentSnapshot;
-  product: FirebaseFirestore.DocumentSnapshot;
-  order: FirebaseFirestore.DocumentSnapshot;
-  checkoutRequest: FirebaseFirestore.DocumentSnapshot;
-  sideEffects: FirebaseFirestore.DocumentSnapshot;
-  stockMovement: FirebaseFirestore.DocumentSnapshot;
-}) {
-  if (!isDeepStrictEqual(input.customer.data(), cagnotteProductionFixtureCustomerDocument())) {
-    throw new Error("production_fixture_customer_collision");
-  }
-  if (!isDeepStrictEqual(
-    input.product.data(),
-    cagnotteProductionFixtureProductDocument(CAGNOTTE_PRODUCTION_FIXTURE_REMAINING_STOCK),
-  )) {
-    throw new Error("production_fixture_product_collision");
-  }
-  const order = orderFromSnapshot(input.order);
-  assertStoredFixtureOrder(order);
-  const request = input.checkoutRequest.data() || {};
-  if (
-    request.orderId !== CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID ||
-    request.cagnotteBeneficiaryId !== CAGNOTTE_PRODUCTION_FIXTURE_UID ||
-    request.payloadFingerprint !== checkoutPayloadFingerprint(
-      cagnotteProductionFixtureCheckoutBody() as CheckoutRequestBody,
-    ) ||
-    !isExactCagnotteProductionFixtureMarker(request.productionFixture)
-  ) {
-    throw new Error("production_fixture_checkout_request_collision");
-  }
-  const outbox = input.sideEffects.data() || {};
-  if (!isExactCagnotteProductionFixtureMarker(outbox.productionFixture)) {
-    throw new Error("production_fixture_outbox_collision");
-  }
-  for (const task of orderSideEffectTaskNames) {
-    const state = (outbox.tasks as Record<string, Record<string, unknown>> | undefined)?.[task];
-    if (
-      state?.status !== "skipped" ||
-      state.attempts !== 0 ||
-      state.lastErrorCode !== CAGNOTTE_PRODUCTION_FIXTURE_SIDE_EFFECT_REASON ||
-      state.skipReason !== CAGNOTTE_PRODUCTION_FIXTURE_SIDE_EFFECT_REASON
-    ) {
-      throw new Error("production_fixture_outbox_collision");
-    }
-  }
-  if (!isDeepStrictEqual(
-    input.stockMovement.data(),
-    cagnotteProductionFixtureStockMovementDocument(),
-  )) {
-    throw new Error("production_fixture_stock_movement_collision");
-  }
-  return order;
-}
-
-async function assertExistingFixtureLedger(input: {
-  db: Firestore;
-  transaction: FirebaseFirestore.Transaction;
-  order: Order;
-  wallet: FirebaseFirestore.DocumentSnapshot;
-  accrual: FirebaseFirestore.DocumentSnapshot;
-}) {
-  const created =
-    input.order.paymentStatus === "to_confirm" &&
-    input.order.orderStatus === "contact_required";
-  const pending =
-    input.order.paymentStatus === "paid" &&
-    input.order.orderStatus === "contact_required";
-  const available =
-    input.order.paymentStatus === "paid" &&
-    input.order.orderStatus === "delivered";
-
-  if (created) {
-    if (input.wallet.exists || input.accrual.exists) fixtureWalletCollision();
-    return;
-  }
-  if ((!pending && !available) || !input.wallet.exists || !input.accrual.exists) {
-    fixtureWalletCollision();
-  }
-
-  const enrollment = validateOrderCagnotteEnrollment(input.order);
-  let basis: Awaited<ReturnType<typeof readCagnotteRefundBasis>>;
-  try {
-    basis = await readCagnotteRefundBasis({
-      db: input.db,
-      transaction: input.transaction,
-      order: {
-        orderId: input.order.id,
-        beneficiaryId: enrollment.beneficiaryId,
-        programVersion: enrollment.programVersion,
-        createdAtEpochMs: enrollment.createdAtEpochMs,
-        snapshot: enrollment.snapshot,
-      },
-    });
-  } catch {
-    return fixtureWalletCollision();
-  }
-
-  const state = basis.state;
-  const expectedCompartment = available ? "available" : "pending";
-  const expectedPendingCents = pending ? 500 : 0;
-  const expectedAvailableCents = available ? 500 : 0;
-  if (
-    !state ||
-    state.schemaVersion !== 1 ||
-    state.calculationVersion !== "cagnotte-math-v1" ||
-    state.currency !== "EUR" ||
-    state.orderId !== CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID ||
-    state.beneficiaryId !== CAGNOTTE_PRODUCTION_FIXTURE_UID ||
-    state.programVersion !== CAGNOTTE_PRODUCTION_PROGRAM_VERSION ||
-    !isDeepStrictEqual(state.initialSnapshot, enrollment.snapshot) ||
-    state.initialGainCents !== 500 ||
-    state.paymentConfirmed !== true ||
-    state.deliveryConfirmed !== available ||
-    state.cancelled !== false ||
-    state.credited !== true ||
-    state.compartment !== expectedCompartment ||
-    state.remainingGainCents !== 500 ||
-    !isDeepStrictEqual(
-      state.cumulativeReturns,
-      enrollment.snapshot.lines.map((line) => ({
-        lineId: line.lineId,
-        returnedNetCents: 0,
-      })),
-    ) ||
-    !isDeepStrictEqual(input.wallet.data(), basis.wallet) ||
-    basis.wallet.pendingCents !== expectedPendingCents ||
-    basis.wallet.availableCents !== expectedAvailableCents ||
-    basis.wallet.reservedCents !== 0 ||
-    basis.wallet.regularizationCents !== 0
-  ) {
-    fixtureWalletCollision();
-  }
-}
-
-function fixtureWalletCollision(): never {
-  throw new Error("production_fixture_wallet_collision");
-}
-
-function assertStoredFixtureOrder(order: Order) {
-  if (!isExactCagnotteProductionFixtureOrder(order)) {
-    throw new Error("production_fixture_order_collision");
-  }
-  const enrollment = validateOrderCagnotteEnrollment(order);
-  if (
-    enrollment.programVersion !== CAGNOTTE_PRODUCTION_PROGRAM_VERSION ||
-    enrollment.calculationVersion !== "cagnotte-math-v1" ||
-    enrollment.createdAtEpochMs !== CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS ||
-    enrollment.accrualEnrollment !== "enrolled" ||
-    enrollment.snapshot.loyaltyCents !== 500 ||
-    enrollment.snapshot.appliedCagnotteCents !== 0 ||
-    order.finalPaymentMethod !== "other" ||
-    order.subtotal !== 100 ||
-    order.deliveryFee !== 0 ||
-    order.total !== 100 ||
-    order.couponCode !== null ||
-    order.contestPrizeId !== null ||
-    (order.appliedPromotions?.length ?? 0) !== 0 ||
-    order.cagnotteReservationIntent !== undefined ||
-    !isDeepStrictEqual(order.items.map(stripPurchaseCost),
-      cagnotteProductionFixturePricedCheckout().orderItems)
-  ) {
-    throw new Error("production_fixture_order_collision");
-  }
-}
-
-function stripPurchaseCost(item: Order["items"][number]) {
-  const copy = { ...item } as Record<string, unknown>;
-  delete copy.purchasePricePerGramSnapshot;
-  delete copy.purchaseCostTotalSnapshot;
-  delete copy.purchaseCostCapturedAt;
-  delete copy.purchaseCostSource;
-  return copy;
-}
-
-function fixtureReferences(db: Firestore) {
-  return {
-    customer: db.collection("customers").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID),
-    admin: db.collection("adminUsers").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID),
-    product: db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID),
-    order: db.collection("orders").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID),
-    checkoutRequest: db.collection("checkoutRequests").doc(CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID),
-    sideEffects: db.collection("orderSideEffects").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID),
-    stockMovement: db.collection("stockMovements").doc(CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID),
-    wallet: db.collection("cagnotteWallets").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID),
-    accrual: db.collection("cagnotteAccruals").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID),
-    reservation: db.collection("cagnotteReservations").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID),
-  };
 }
 
 function documentState(snapshot: FirebaseFirestore.DocumentSnapshot) {
