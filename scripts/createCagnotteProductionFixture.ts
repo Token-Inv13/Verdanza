@@ -42,6 +42,7 @@ import {
   cagnotteProductionFixtureCustomerDocument,
   cagnotteProductionFixturePricedCheckout,
   cagnotteProductionFixtureProductDocument,
+  cagnotteProductionFixtureStockMovementDocument,
   assertCagnotteProductionFixtureCapability,
   createCagnotteProductionFixtureCapability,
   isExactCagnotteProductionFixtureMarker,
@@ -295,20 +296,36 @@ async function createFixture(input: FixtureRunInput) {
 async function prepareFixtureDocuments(db: Firestore): Promise<"prepared" | "existing"> {
   const refs = fixtureReferences(db);
   return db.runTransaction(async (transaction) => {
-    const [customer, product, admin, order, checkoutRequest, sideEffects] = await Promise.all([
+    const [customer, product, admin, order, checkoutRequest, sideEffects, stockMovement] = await Promise.all([
       transaction.get(refs.customer),
       transaction.get(refs.product),
       transaction.get(refs.admin),
       transaction.get(refs.order),
       transaction.get(refs.checkoutRequest),
       transaction.get(refs.sideEffects),
+      transaction.get(refs.stockMovement),
     ]);
     if (admin.exists) throw new Error("production_fixture_admin_collision");
     const existingOrderState = [order.exists, checkoutRequest.exists, sideEffects.exists];
-    if (existingOrderState.some(Boolean)) {
-      if (!existingOrderState.every(Boolean)) throw new Error("production_fixture_partial_collision");
-      assertExistingFixtureDocuments({ customer, product, order, checkoutRequest, sideEffects });
+    if (existingOrderState.every(Boolean)) {
+      if (!stockMovement.exists) {
+        throw new Error("production_fixture_partial_collision");
+      }
+      assertExistingFixtureDocuments({
+        customer,
+        product,
+        order,
+        checkoutRequest,
+        sideEffects,
+        stockMovement,
+      });
       return "existing";
+    }
+    if (stockMovement.exists) {
+      throw new Error("production_fixture_stock_movement_collision");
+    }
+    if (existingOrderState.some(Boolean)) {
+      throw new Error("production_fixture_partial_collision");
     }
     if (customer.exists && !isDeepStrictEqual(customer.data(), cagnotteProductionFixtureCustomerDocument())) {
       throw new Error("production_fixture_customer_collision");
@@ -362,6 +379,7 @@ function assertExistingFixtureDocuments(input: {
   order: FirebaseFirestore.DocumentSnapshot;
   checkoutRequest: FirebaseFirestore.DocumentSnapshot;
   sideEffects: FirebaseFirestore.DocumentSnapshot;
+  stockMovement: FirebaseFirestore.DocumentSnapshot;
 }) {
   if (!isDeepStrictEqual(input.customer.data(), cagnotteProductionFixtureCustomerDocument())) {
     throw new Error("production_fixture_customer_collision");
@@ -399,6 +417,12 @@ function assertExistingFixtureDocuments(input: {
     ) {
       throw new Error("production_fixture_outbox_collision");
     }
+  }
+  if (!isDeepStrictEqual(
+    input.stockMovement.data(),
+    cagnotteProductionFixtureStockMovementDocument(),
+  )) {
+    throw new Error("production_fixture_stock_movement_collision");
   }
 }
 

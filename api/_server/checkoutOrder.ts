@@ -25,8 +25,10 @@ import {
   assertCagnotteProductionFixtureCustomer,
   assertCagnotteProductionFixtureOrderItem,
   assertCagnotteProductionFixtureProduct,
+  cagnotteProductionFixtureStockMovementDocument,
   CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS,
   CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID,
+  hasPersistedCagnotteProductionFixtureMarker,
   isExactCagnotteProductionFixtureMarker,
   isExactCagnotteProductionFixtureOrder,
   type CagnotteProductionFixtureCapability,
@@ -80,6 +82,9 @@ export async function commitCheckoutOrder(input: {
         body: body as unknown as Record<string, unknown>,
         priced: priced as unknown as Record<string, unknown>,
       });
+  const fixtureStockMovementRef = fixtureMarker
+    ? db.collection("stockMovements").doc(CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID)
+    : null;
 
   return db.runTransaction(async (transaction) => {
     const requestSnapshot = await transaction.get(requestRef);
@@ -105,11 +110,15 @@ export async function commitCheckoutOrder(input: {
     }
 
     if (fixtureMarker) {
-      const [orderCollision, customerSnapshot, adminSnapshot] = await Promise.all([
+      const [orderCollision, customerSnapshot, adminSnapshot, stockMovementCollision] = await Promise.all([
         transaction.get(orderRef),
         transaction.get(db.collection("customers").doc(fixtureMarker.uid)),
         transaction.get(db.collection("adminUsers").doc(fixtureMarker.uid)),
+        transaction.get(fixtureStockMovementRef!),
       ]);
+      if (stockMovementCollision.exists) {
+        throw new Error("production_fixture_stock_movement_collision");
+      }
       if (orderCollision.exists || adminSnapshot.exists) {
         throw new CheckoutRequestConflictError();
       }
@@ -277,8 +286,13 @@ export async function commitCheckoutOrder(input: {
       const stock = Number(data?.stock ?? 0);
       if (fixtureMarker) {
         assertCagnotteProductionFixtureProduct(fixtureMarker, productId, data);
-      } else if (data?.isActive !== true) {
-        throw new Error(`Produit indisponible : ${productName}.`);
+      } else {
+        if (hasPersistedCagnotteProductionFixtureMarker(data)) {
+          throw new Error(`Produit fixture indisponible : ${productName}.`);
+        }
+        if (data?.isActive !== true) {
+          throw new Error(`Produit indisponible : ${productName}.`);
+        }
       }
       if (stock < requestedQuantity) {
         const giftItem = matchingItems.find((item) => item.isGift);
@@ -303,28 +317,30 @@ export async function commitCheckoutOrder(input: {
           ? new Date(CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS).toISOString()
           : FieldValue.serverTimestamp(),
       }));
-      for (const item of matchingItems) {
-        stockWrites.push(() => transaction.set(
-          fixtureMarker
-            ? db.collection("stockMovements").doc(CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID)
-            : db.collection("stockMovements").doc(),
-          {
-          productId: item.productId,
-          productName: item.name,
-          type: item.isGift ? "promotion_gift" : "sale",
-          quantity: -item.quantity,
-          note: item.isGift
-            ? `Cadeau promotion ${item.promotionLabel || item.promotionId || "Verdanza"} - commande ${orderRef.id}`
-            : `Commande manuelle ${orderRef.id}`,
-          createdAt: fixtureMarker
-            ? new Date(CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS).toISOString()
-            : FieldValue.serverTimestamp(),
-          createdBy: fixtureMarker ? "production-fixture" : "manual-checkout",
-          orderId: orderRef.id,
-          ...(fixtureMarker ? { productionFixture: fixtureMarker } : {}),
-          ...(item.isGift && item.promotionId ? { promotionId: item.promotionId } : {}),
-          },
+      if (fixtureMarker) {
+        stockWrites.push(() => transaction.create(
+          fixtureStockMovementRef!,
+          cagnotteProductionFixtureStockMovementDocument(),
         ));
+      } else {
+        for (const item of matchingItems) {
+          stockWrites.push(() => transaction.set(
+            db.collection("stockMovements").doc(),
+            {
+              productId: item.productId,
+              productName: item.name,
+              type: item.isGift ? "promotion_gift" : "sale",
+              quantity: -item.quantity,
+              note: item.isGift
+                ? `Cadeau promotion ${item.promotionLabel || item.promotionId || "Verdanza"} - commande ${orderRef.id}`
+                : `Commande manuelle ${orderRef.id}`,
+              createdAt: FieldValue.serverTimestamp(),
+              createdBy: "manual-checkout",
+              orderId: orderRef.id,
+              ...(item.isGift && item.promotionId ? { promotionId: item.promotionId } : {}),
+            },
+          ));
+        }
       }
     }
 

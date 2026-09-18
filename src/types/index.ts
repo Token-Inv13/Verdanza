@@ -8,6 +8,16 @@ export type CultureType =
   | "Autre"
   | "A renseigner";
 
+export type ProductionFixtureMarker = Readonly<{
+  schemaVersion: 1;
+  marker: string;
+  projectId: string;
+  uid: string;
+  productId: string;
+  orderId: string;
+  checkoutRequestId: string;
+}>;
+
 export type Product = {
   id: string;
   internalReference?: string;
@@ -42,6 +52,7 @@ export type Product = {
   lowStockThreshold: number;
   isActive: boolean;
   isFeatured: boolean;
+  productionFixture?: ProductionFixtureMarker;
   seoTitle: string;
   seoDescription: string;
 };
@@ -584,6 +595,7 @@ export type Order = {
   cagnotte?: import("./cagnotte.js").CagnotteOrderEnrollment;
   cagnotteReservationIntent?: import("./cagnotte.js").CagnotteOrderReservationIntent;
   cagnottePaymentEvidence?: import("./cagnotte.js").CagnottePaymentEvidence;
+  productionFixture?: ProductionFixtureMarker;
   id: string;
   checkoutRequestId?: string;
   orderType?: OrderType;

@@ -506,7 +506,7 @@ export function AdminPage({ section }: { section: string }) {
     if (productSource === "local") {
       await upsertProduct({ ...product, ...flags });
     } else {
-      await updateProductFlags(product.id, flags);
+      await updateProductFlags(product, flags);
     }
     await refresh();
   }

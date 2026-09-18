@@ -53,6 +53,19 @@ await test("projection admin conserve une inscription mixte et son intention can
   equal(projected.cagnotteReservationIntent, source.cagnotteReservationIntent);
   equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "firestore", order: projected }), true);
 });
+await test("projection admin conserve le marqueur Production fixture sans transformation", () => {
+  const productionFixture = {
+    schemaVersion: 1 as const,
+    marker: "verdanza-cagnotte-production-fixture-v1",
+    projectId: "verdanza-1f621",
+    uid: "fixture-user",
+    productId: "fixture-product",
+    orderId: "fixture-order",
+    checkoutRequestId: "fixture-request",
+  };
+  const source = { ...projectableOrder(eligibleOrder()), productionFixture };
+  equal(adminOrderRow(source).productionFixture, productionFixture);
+});
 await test("projection admin refuse historique, inscription invalide, source non Firestore et garde fermee", () => {
   const ordinary = adminOrderRow(projectableOrder({ id: "CMD-HISTORIQUE", customerId: "client-fictif" }));
   equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "firestore", order: ordinary }), false);

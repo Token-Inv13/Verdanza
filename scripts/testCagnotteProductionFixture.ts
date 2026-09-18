@@ -30,11 +30,13 @@ import { executeGuardedInvoiceSend } from "../api/_server/invoiceEmailSend.js";
 import { processPurchaseAnalyticsOutbox } from "../api/_server/purchaseAnalytics.js";
 import { executeOrderRefund } from "../api/_server/orderRefunds.js";
 import { shouldMountCagnotteAdminTools } from "../src/lib/cagnotteAdminEligibility.js";
+import { assertOrdinaryProductAdminMutationAllowed } from "../src/lib/productionFixtureMarker.js";
 import type { Invoice, Order } from "../src/types/index.js";
 import {
   CAGNOTTE_PRODUCTION_FIXTURE_CHALLENGE,
   CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_EMAIL,
+  CAGNOTTE_PRODUCTION_FIXTURE_FIXED_PRICE_OPTION_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_INITIAL_STOCK,
   CAGNOTTE_PRODUCTION_FIXTURE_MARKER,
   CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
@@ -48,6 +50,7 @@ import {
   cagnotteProductionFixtureCustomerDocument,
   cagnotteProductionFixturePricedCheckout,
   cagnotteProductionFixtureProductDocument,
+  cagnotteProductionFixtureStockMovementDocument,
   createCagnotteProductionFixtureCapability,
   createCagnotteProductionFixtureTestCapability,
 } from "../api/_server/cagnotteProductionFixture.js";
@@ -101,6 +104,18 @@ try {
     equal(program.newAccrualsEnabled, true);
   });
 
+  await check("mutation admin ordinaire refuse toute ressource produit marquee", () => {
+    throws(
+      () => assertOrdinaryProductAdminMutationAllowed(cagnotteProductionFixtureProductDocument()),
+      /production_fixture_product_admin_mutation_forbidden/,
+    );
+    throws(
+      () => assertOrdinaryProductAdminMutationAllowed({ productionFixture: { marker: "partiel" } }),
+      /production_fixture_product_admin_mutation_forbidden/,
+    );
+    assertOrdinaryProductAdminMutationAllowed({ id: "produit-ordinaire", isActive: true });
+  });
+
   await check("dry-run pur et cible strictement bornee", async () => {
     const before = await databaseCounts();
     const plan = buildCagnotteProductionFixturePlan({
@@ -147,6 +162,53 @@ try {
     deepStrictEqual(await databaseCounts(), before);
   });
 
+  await check("collision mouvement stock divergente refusee sans aucune autre ecriture", async () => {
+    const ref = db.collection("stockMovements").doc(CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID);
+    const divergent = { productId: "produit-reel", quantity: -999, note: "ne pas ecraser" };
+    await ref.set(divergent);
+    const before = await databaseCounts();
+    await rejects(() => command("create"), /production_fixture_stock_movement_collision/);
+    deepStrictEqual((await ref.get()).data(), divergent);
+    deepStrictEqual(await databaseCounts(), before);
+    equal((await db.collection("customers").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).exists, false);
+    equal((await db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID).get()).exists, false);
+    await ref.delete();
+  });
+
+  await check("mouvement stock identique mais orphelin reste fail-closed", async () => {
+    const ref = db.collection("stockMovements").doc(CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID);
+    const identicalOrphan = cagnotteProductionFixtureStockMovementDocument();
+    await ref.set(identicalOrphan);
+    const before = await databaseCounts();
+    await rejects(() => command("create"), /production_fixture_stock_movement_collision/);
+    deepStrictEqual((await ref.get()).data(), identicalOrphan);
+    deepStrictEqual(await databaseCounts(), before);
+    equal((await db.collection("orders").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
+    equal((await db.collection("checkoutRequests").doc(CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID).get()).exists, false);
+    await ref.delete();
+  });
+
+  await check("transaction checkout fixture refuse elle-meme une collision stock", async () => {
+    const customerRef = db.collection("customers").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID);
+    const productRef = db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID);
+    const movementRef = db.collection("stockMovements").doc(CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID);
+    const customer = cagnotteProductionFixtureCustomerDocument();
+    const product = cagnotteProductionFixtureProductDocument();
+    const collision = { productId: "collision-directe", quantity: -1 };
+    await Promise.all([
+      customerRef.set(customer),
+      productRef.set(product),
+      movementRef.set(collision),
+    ]);
+    const before = await databaseCounts();
+    await rejects(() => commitFixtureCheckout(), /production_fixture_stock_movement_collision/);
+    deepStrictEqual((await customerRef.get()).data(), customer);
+    deepStrictEqual((await productRef.get()).data(), product);
+    deepStrictEqual((await movementRef.get()).data(), collision);
+    deepStrictEqual(await databaseCounts(), before);
+    await Promise.all([customerRef.delete(), productRef.delete(), movementRef.delete()]);
+  });
+
   await check("collision produit divergent refusee sans ecrasement", async () => {
     const ref = db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID);
     const divergent = { name: "Produit reel ou divergent", isActive: false, stock: 777 };
@@ -180,37 +242,74 @@ try {
     await db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID).delete();
   });
 
-  await check("checkout normal refuse la fixture et tout autre produit inactif", async () => {
-    const otherId = "another-inactive-product";
-    await db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID)
-      .set(cagnotteProductionFixtureProductDocument());
-    await db.collection("products").doc(otherId).set({
-      ...cagnotteProductionFixtureProductDocument(),
-      productionFixture: { marker: "unrelated" },
-      internalReference: "OTHER-INACTIVE",
-      slug: otherId,
-      name: "Other inactive product",
-    });
-    await rejects(
-      () => priceCheckout(db, fixtureBody()),
-      /Produit inactif refuse/,
+  await check("checkout normal refuse le produit fixture exact inactif sans ecriture", async () => {
+    await assertMarkedProductRejectedByOrdinaryCheckout(
+      cagnotteProductionFixtureProductDocument(),
     );
-    await rejects(
-      () => priceCheckout(db, {
-        ...fixtureBody(),
-        items: [{ productId: otherId, quantity: 1 }],
-      }),
-      /Produit inactif refuse/,
-    );
-    await db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID).delete();
   });
 
-  await check("commit normal ne peut pas commander le produit fixture inactif", async () => {
-    await db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID)
-      .set(cagnotteProductionFixtureProductDocument());
-    await rejects(() => commitFixtureCheckout({ productionFixtureCapability: undefined }), /Produit indisponible/);
-    equal((await db.collection("orders").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
-    await db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID).delete();
+  await check("checkout normal refuse le produit fixture exact force actif sans ecriture", async () => {
+    await assertMarkedProductRejectedByOrdinaryCheckout({
+      ...cagnotteProductionFixtureProductDocument(),
+      isActive: true,
+    });
+  });
+
+  await check("checkout normal refuse un marqueur fixture partiel sans ecriture", async () => {
+    await assertMarkedProductRejectedByOrdinaryCheckout({
+      ...cagnotteProductionFixtureProductDocument(),
+      isActive: true,
+      productionFixture: { marker: "corrompu" },
+    });
+  });
+
+  await check("checkout normal conserve un produit actif non marque", async () => {
+    const productId = "ordinary-active-product";
+    const orderId = "ordinary-active-order";
+    const checkoutRequestId = "c011ec7e-0003-4000-8000-000000000003";
+    const product = {
+      ...cagnotteProductionFixtureProductDocument(),
+      internalReference: "ORDINARY-ACTIVE",
+      slug: productId,
+      name: "Produit ordinaire actif",
+      isActive: true,
+    };
+    delete (product as { productionFixture?: unknown }).productionFixture;
+    await db.collection("products").doc(productId).set(product);
+    const body = {
+      ...fixtureBody(),
+      checkoutRequestId,
+      items: [{
+        productId,
+        quantity: 1,
+        purchaseMode: "fixed_price" as const,
+        fixedPriceOptionId: CAGNOTTE_PRODUCTION_FIXTURE_FIXED_PRICE_OPTION_ID,
+      }],
+    };
+    const priced = await priceCheckout(db, body);
+    const result = await commitCheckoutOrder({
+      db,
+      body,
+      priced,
+      checkoutRequestId,
+      payloadFingerprint: checkoutPayloadFingerprint(body),
+      orderId,
+      accrualProgram: null,
+      reservationProgram: null,
+      firebaseProjectId: CAGNOTTE_PRODUCTION_FIXTURE_PROJECT_ID,
+      nowEpochMs: Date.parse("2026-09-18T12:00:00.000Z"),
+    });
+    equal(result.created, true);
+    equal((await db.collection("orders").doc(orderId).get()).exists, true);
+    const movements = await db.collection("stockMovements").where("orderId", "==", orderId).get();
+    equal(movements.size, 1);
+    await Promise.all([
+      db.collection("products").doc(productId).delete(),
+      db.collection("orders").doc(orderId).delete(),
+      db.collection("checkoutRequests").doc(checkoutRequestId).delete(),
+      db.collection("orderSideEffects").doc(orderId).delete(),
+      ...movements.docs.map((entry) => entry.ref.delete()),
+    ]);
   });
 
   await check("creation transactionnelle exacte et produit invisible publiquement", async () => {
@@ -248,9 +347,7 @@ try {
     const movements = await db.collection("stockMovements").get();
     equal(movements.size, 1);
     equal(movements.docs[0]?.id, CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID);
-    equal(movements.docs[0]?.data().productId, CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID);
-    const other = await db.collection("products").doc("another-inactive-product").get();
-    equal(other.data()?.stock, CAGNOTTE_PRODUCTION_FIXTURE_INITIAL_STOCK);
+    deepStrictEqual(movements.docs[0]?.data(), cagnotteProductionFixtureStockMovementDocument());
     const outbox = (await db.collection("orderSideEffects")
       .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).data()!;
     for (const task of orderSideEffectTaskNames) {
@@ -438,6 +535,25 @@ function commitFixtureCheckout(
   });
 }
 
+async function assertMarkedProductRejectedByOrdinaryCheckout(
+  productDocument: Record<string, unknown>,
+) {
+  const productRef = db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID);
+  await productRef.set(productDocument);
+  const before = await databaseCounts();
+  await rejects(() => priceCheckout(db, fixtureBody()), /Produit fixture refuse/);
+  await rejects(
+    () => commitFixtureCheckout({ productionFixtureCapability: undefined }),
+    /Produit fixture indisponible/,
+  );
+  deepStrictEqual(await databaseCounts(), before);
+  equal((await db.collection("orders").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
+  equal((await db.collection("checkoutRequests").doc(CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID).get()).exists, false);
+  equal((await db.collection("orderSideEffects").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
+  equal((await db.collection("stockMovements").get()).size, 0);
+  await productRef.delete();
+}
+
 async function storedOrder() {
   const snapshot = await db.collection("orders").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get();
   ok(snapshot.exists);
@@ -451,17 +567,23 @@ async function fixtureMovements() {
 }
 
 async function stableFinancialState() {
-  const [wallet, accrual, movements, refunds] = await Promise.all([
+  const [wallet, accrual, movements, refunds, product, stockMovements] = await Promise.all([
     db.collection("cagnotteWallets").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get(),
     db.collection("cagnotteAccruals").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
     fixtureMovements(),
     db.collection("cagnotteRefunds").get(),
+    db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID).get(),
+    db.collection("stockMovements").where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
   ]);
   return {
     wallet: wallet.data(),
     accrual: accrual.data(),
     movements: movements.sort((left, right) => left.id.localeCompare(right.id)),
     refunds: refunds.docs.map((entry) => ({ id: entry.id, ...entry.data() })),
+    product: product.data(),
+    stockMovements: stockMovements.docs
+      .map((entry) => ({ id: entry.id, ...entry.data() }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
   };
 }
 
@@ -472,6 +594,7 @@ async function databaseCounts() {
     "orders",
     "checkoutRequests",
     "orderSideEffects",
+    "stockMovements",
     "cagnotteWallets",
     "cagnotteAccruals",
     "cagnotteMovements",

@@ -16,6 +16,7 @@ import { BRAND_DOCUMENT_LOGO } from "../src/lib/brandAssets.js";
 import { normalizeSupplierPurchaseInput } from "../src/lib/accountingCosts.js";
 import { buildCustomerInvoiceLines } from "../src/lib/customerInvoiceLines.js";
 import { buildOrderFinancingDocumentSnapshot } from "../src/lib/orderFinancing.js";
+import { assertOrdinaryProductAdminMutationAllowed } from "../src/lib/productionFixtureMarker.js";
 import {
   normalizeSupplierLabel,
   normalizeText,
@@ -503,6 +504,7 @@ async function upsertProductAdmin(db: FirebaseFirestore.Firestore, rawProduct: u
 
   const productId = await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
+    if (snapshot.exists) assertOrdinaryProductAdminMutationAllowed(snapshot.data());
     const existingReference = snapshot.data()?.internalReference;
     const update: Record<string, unknown> = {
       ...payload,

@@ -169,6 +169,7 @@ export type AdminOrderRow = {
   customerId?: string;
   cagnotte?: Order["cagnotte"];
   cagnotteReservationIntent?: Order["cagnotteReservationIntent"];
+  productionFixture?: Order["productionFixture"];
   orderType?: OrderType;
   customer: string;
   customerEmail?: string;
@@ -278,6 +279,7 @@ export function adminOrderRow(order: Order): AdminOrderRow {
         customerId: order.customerId,
         cagnotte: order.cagnotte,
         cagnotteReservationIntent: order.cagnotteReservationIntent,
+        productionFixture: order.productionFixture,
         orderType: order.orderType || "order",
         customer: order.customerName || order.customerEmail || "Client",
         customerEmail: order.customerEmail,

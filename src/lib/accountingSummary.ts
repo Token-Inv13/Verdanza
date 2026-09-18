@@ -59,7 +59,9 @@ export function buildAccountingSummary(
   weightedSupplierCosts: Map<string, WeightedSupplierCost>,
   range: AccountingPeriodRange,
 ) {
-  const eligibleOrders = orders.filter((order) => !isCancelledOrDeletedOrder(order));
+  const eligibleOrders = orders.filter(
+    (order) => !isProductionFixtureOrder(order) && !isCancelledOrDeletedOrder(order),
+  );
   const createdOrdersInPeriod = eligibleOrders.filter((order) =>
     accountingDateInPeriod(orderCreatedDate(order), range),
   );
@@ -272,6 +274,12 @@ export function buildAccountingSummary(
     historicalPaymentDateIssues,
     comparisonValues,
   };
+}
+
+export function isProductionFixtureOrder(
+  order: Pick<AdminOrderRow, "productionFixture">,
+) {
+  return order.productionFixture !== undefined;
 }
 
 function paymentDateQualitySummary(

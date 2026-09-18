@@ -193,6 +193,96 @@ check(summary.supplierPurchaseMissingDateCount, 1, "Missing supplier dates are c
 check(summary.estimatedStockValue, 22.5, "Current stock remains a current snapshot");
 check(Object.hasOwn(summary.comparisonValues, "estimatedStockValue"), false, "Current stock is not a historical comparison metric");
 
+const commercialWitness = orderFixture({
+  id: "COMMERCIAL-WITNESS",
+  paymentStatus: "paid",
+  orderStatus: "delivered",
+  createdAt: "2026-08-10T09:00:00.000Z",
+  paymentConfirmedAt: "2026-08-10T10:00:00.000Z",
+});
+const productionFixtureOrder = orderFixture({
+  id: "PRODUCTION-FIXTURE",
+  productionFixture: {
+    schemaVersion: 1,
+    marker: "verdanza-cagnotte-production-fixture-v1",
+    projectId: "verdanza-1f621",
+    uid: "fixture-user",
+    productId: "fixture-product",
+    orderId: "PRODUCTION-FIXTURE",
+    checkoutRequestId: "fixture-request",
+  },
+  paymentStatus: "paid",
+  orderStatus: "delivered",
+  deliveryMethod: "postal",
+  delivery: "Postal",
+  createdAt: "2026-08-11T09:00:00.000Z",
+  paymentConfirmedAt: "2026-08-11T10:00:00.000Z",
+  items: [{
+    productId: "fixture-product",
+    name: "Produit fixture",
+    quantity: 10,
+    unitPrice: 10,
+    lineTotal: 100,
+    purchasePricePerGramSnapshot: 2.5,
+    purchaseCostTotalSnapshot: 25,
+    purchaseCostCapturedAt: "2026-08-11T08:00:00.000Z",
+    purchaseCostSource: "fixture",
+  }],
+  subtotalBeforePromotion: 100,
+  subtotalAfterPromotion: 100,
+  promotionDiscountTotal: 0,
+  subtotal: 100,
+  deliveryFee: 0,
+  total: "100,00 EUR",
+});
+const commercialOnlySummary = buildAccountingSummary(
+  [commercialWitness],
+  [product],
+  productCosts,
+  [supplierValidated],
+  weightedCosts,
+  augustMonth,
+);
+const summaryWithProductionFixture = buildAccountingSummary(
+  [commercialWitness, productionFixtureOrder],
+  [product],
+  productCosts,
+  [supplierValidated],
+  weightedCosts,
+  augustMonth,
+);
+const orderCommercialMetrics = (value: typeof commercialOnlySummary) => ({
+  collectedRevenue: value.collectedRevenue,
+  createdOrdersCount: value.createdOrdersCount,
+  paidOrdersCount: value.paidOrdersCount,
+  productNetRevenue: value.productNetRevenue,
+  deliveryRevenue: value.deliveryRevenue,
+  estimatedProductCost: value.estimatedProductCost,
+  grossMargin: value.grossMargin,
+  averagePaidOrder: value.averagePaidOrder,
+  localOrders: value.localOrders,
+  postalOrders: value.postalOrders,
+  productRows: value.productRows,
+  paymentDateQualityCounts: value.paymentDateQualityCounts,
+  historicalPaymentDateIssues: value.historicalPaymentDateIssues,
+  comparisonValues: value.comparisonValues,
+});
+check(
+  orderCommercialMetrics(summaryWithProductionFixture),
+  orderCommercialMetrics(commercialOnlySummary),
+  "A paid in-period Production fixture contributes to no order-derived accounting metric",
+);
+check(
+  summaryWithProductionFixture.supplierPurchasesTotal,
+  100,
+  "Production fixture filtering does not exclude real supplier purchases",
+);
+check(
+  commercialOnlySummary.collectedRevenue,
+  71.55,
+  "The ordinary commercial witness remains counted",
+);
+
 const legacySummary = buildAccountingSummary(
   [
     orderFixture({ id: "EXACT", paymentStatus: "paid", paymentConfirmedAt: "2026-08-01T10:00:00.000Z" }),

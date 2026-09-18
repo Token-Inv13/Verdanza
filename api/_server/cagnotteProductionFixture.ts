@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { hasOwnProductionFixtureMarker } from "../../src/lib/productionFixtureMarker.js";
 
 export const CAGNOTTE_PRODUCTION_FIXTURE_MARKER =
   "verdanza-cagnotte-production-fixture-v1" as const;
@@ -178,11 +179,7 @@ export function isExactCagnotteProductionFixtureMarker(
 
 /** Presence is deliberately sufficient for outbound fail-closed checks. */
 export function hasPersistedCagnotteProductionFixtureMarker(value: unknown): boolean {
-  return Boolean(
-    value &&
-    typeof value === "object" &&
-    Object.prototype.hasOwnProperty.call(value, "productionFixture"),
-  );
+  return hasOwnProductionFixtureMarker(value);
 }
 
 export function isExactCagnotteProductionFixtureOrder(value: unknown): boolean {
@@ -326,6 +323,21 @@ export function cagnotteProductionFixturePricedCheckout() {
     deliveryFeeStatus: "free",
     deliveryNote: "Livraison postale offerte.",
     giftPromotions: [] as unknown[],
+  };
+}
+
+export function cagnotteProductionFixtureStockMovementDocument() {
+  const item = cagnotteProductionFixturePricedCheckout().orderItems[0];
+  return {
+    productId: item.productId,
+    productName: item.name,
+    type: "sale",
+    quantity: -item.quantity,
+    note: `Commande manuelle ${CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID}`,
+    createdAt: new Date(CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS).toISOString(),
+    createdBy: "production-fixture",
+    orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+    productionFixture: cagnotteProductionFixtureMarker(),
   };
 }
 
