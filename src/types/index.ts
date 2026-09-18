@@ -846,6 +846,7 @@ export type CustomerProfile = {
   assignedPromos?: CustomerAssignedPromo[];
   loyaltyHistory?: CustomerLoyaltyHistoryEntry[];
   internalNotes?: CustomerInternalNote[];
+  productionFixture?: ProductionFixtureMarker;
   role: "customer";
   createdAt?: string;
   updatedAt?: string;

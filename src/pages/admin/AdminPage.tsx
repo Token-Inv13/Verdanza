@@ -116,7 +116,6 @@ const AdminCagnotteTools = CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED
   ? lazy(() => import("../../components/cagnotte/CagnotteAdminTools").then((module) => ({ default: module.CagnotteAdminTools })))
   : null;
 import type {
-  AdminMetric,
   BillingSettings,
   Coupon,
   CustomerProfile,
@@ -186,6 +185,16 @@ import {
   buildAccountingSummary,
   type AccountingMetricKey,
 } from "../../lib/accountingSummary";
+import { buildDashboardMetrics } from "../../lib/adminDashboardMetrics";
+import {
+  buildCommercialCustomerEntries,
+  commercialAdminCustomers,
+  commercialAdminOrders,
+  commercialCustomerStats,
+  commercialCustomerStatus,
+  ordersForCommercialCustomer,
+  type CustomerComputedStats,
+} from "../../lib/adminCustomerCommercial";
 import {
   currentAccountingPeriodRange,
   previousAccountingPeriodRange,
@@ -193,7 +202,7 @@ import {
   type AccountingPeriodFilter,
 } from "../../lib/accountingPeriods";
 import { formatLocalDeliveryEstimate } from "../../lib/deliveryEstimate";
-import { adminDateValue, formatAdminDate, formatAdminDateTime } from "../../lib/adminDatePresentation";
+import { formatAdminDate, formatAdminDateTime } from "../../lib/adminDatePresentation";
 import {
   promotionAvailability,
   promotionDateTimeLocalToIso,
@@ -515,7 +524,7 @@ export function AdminPage({ section }: { section: string }) {
     if (productSource === "local") {
       await upsertProduct({ ...product, stock, lowStockThreshold: threshold });
     } else {
-      await updateProductStock(product.id, stock, threshold);
+      await updateProductStock(product, stock, threshold);
     }
     await refresh();
   }
@@ -748,7 +757,7 @@ export function AdminPage({ section }: { section: string }) {
     customer: CustomerProfile,
     data: { status?: CustomerProfile["status"]; archived?: boolean; hidden?: boolean },
   ) {
-    await updateCustomerAdminStatus(customer.id, data);
+    await updateCustomerAdminStatus(customer, data);
     setMessage("Fiche client mise a jour.");
     await refresh();
   }
@@ -1059,7 +1068,7 @@ export function AdminPage({ section }: { section: string }) {
             coupons={coupons}
             onAdjustPoints={handleLoyaltyAdjustment}
             onNote={async (customer, note) => {
-              await updateCustomerInternalNote(customer.id, note);
+              await updateCustomerInternalNote(customer, note);
               setMessage("Note client enregistree.");
               await refresh();
             }}
@@ -3833,10 +3842,20 @@ function CustomersTable({
     data: { status?: CustomerProfile["status"]; archived?: boolean; hidden?: boolean },
   ) => Promise<void>;
 }) {
+  const commercialCustomers = useMemo(
+    () => commercialAdminCustomers(customers),
+    [customers],
+  );
+  const commercialOrders = useMemo(
+    () => commercialAdminOrders(orders),
+    [orders],
+  );
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<CustomerFilter>("active");
   const [sort, setSort] = useState<CustomerSort>("lastOrder");
-  const [selectedCustomerId, setSelectedCustomerId] = useState(customers[0]?.id || "");
+  const [selectedCustomerId, setSelectedCustomerId] = useState(
+    commercialCustomers[0]?.id || "",
+  );
   const [promoCouponId, setPromoCouponId] = useState(coupons[0]?.id || "");
   const [promoNote, setPromoNote] = useState("");
   const [details, setDetails] = useState<CustomerAdminDetails>({
@@ -3844,15 +3863,21 @@ function CustomersTable({
     favorites: [],
     reviews: [],
   });
-  const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId) || customers[0];
-  const selectedOrders = selectedCustomer ? ordersForCustomer(orders, selectedCustomer) : [];
-  const selectedStats = selectedCustomer ? customerStats(selectedCustomer, selectedOrders) : null;
+  const selectedCustomer =
+    commercialCustomers.find((customer) => customer.id === selectedCustomerId) ||
+    commercialCustomers[0];
+  const selectedOrders = selectedCustomer
+    ? ordersForCommercialCustomer(commercialOrders, selectedCustomer)
+    : [];
+  const selectedStats = selectedCustomer
+    ? commercialCustomerStats(selectedCustomer, selectedOrders)
+    : null;
 
   useEffect(() => {
-    if (!selectedCustomerId && customers[0]?.id) {
-      setSelectedCustomerId(customers[0].id);
+    if (!commercialCustomers.some((customer) => customer.id === selectedCustomerId)) {
+      setSelectedCustomerId(commercialCustomers[0]?.id || "");
     }
-  }, [customers, selectedCustomerId]);
+  }, [commercialCustomers, selectedCustomerId]);
 
   useEffect(() => {
     if (!selectedCustomer) {
@@ -3869,16 +3894,8 @@ function CustomersTable({
   }, [selectedCustomer]);
 
   const enrichedCustomers = useMemo(
-    () =>
-      customers.map((customer) => {
-        const customerOrders = ordersForCustomer(orders, customer);
-        return {
-          customer,
-          orders: customerOrders,
-          stats: customerStats(customer, customerOrders),
-        };
-      }),
-    [customers, orders],
+    () => buildCommercialCustomerEntries(commercialCustomers, commercialOrders),
+    [commercialCustomers, commercialOrders],
   );
 
   const visibleCustomers = useMemo(() => {
@@ -3897,8 +3914,8 @@ function CustomersTable({
         if (normalizedSearch && !haystack.includes(normalizedSearch)) return false;
         if (filter === "archived") return customer.archived === true || customer.status === "archived";
         if (customer.archived || customer.hidden) return false;
-        if (filter === "loyal") return customerStatus(customer, customerOrders).label === "Fidele";
-        if (filter === "new") return customerStatus(customer, customerOrders).label === "Nouveau";
+        if (filter === "loyal") return commercialCustomerStatus(customer, customerOrders).label === "Fidele";
+        if (filter === "new") return commercialCustomerStatus(customer, customerOrders).label === "Nouveau";
         if (filter === "withOrders") return customerOrders.length > 0;
         if (filter === "withoutOrders") return customerOrders.length === 0;
         if (filter === "withNote") return Boolean(customer.internalNote?.trim());
@@ -3913,7 +3930,7 @@ function CustomersTable({
   return (
     <section className="mt-8 space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminStatCard label="Clients" value={String(customers.length)} detail="Profils en base" />
+        <AdminStatCard label="Clients" value={String(commercialCustomers.length)} detail="Profils en base" />
         <AdminStatCard
           label="Avec commandes"
           value={String(enrichedCustomers.filter((entry) => entry.orders.length > 0).length)}
@@ -3926,7 +3943,7 @@ function CustomersTable({
         />
         <AdminStatCard
           label="Promos attribuees"
-          value={String(customers.reduce((sum, customer) => sum + (customer.assignedPromos?.length || 0), 0))}
+          value={String(commercialCustomers.reduce((sum, customer) => sum + (customer.assignedPromos?.length || 0), 0))}
           detail="Suivi interne"
         />
       </div>
@@ -3973,13 +3990,13 @@ function CustomersTable({
         </div>
       </div>
 
-      {!customers.length && (
+      {!commercialCustomers.length && (
         <AdminEmptyState
           title="Aucun client pour le moment."
           description="Les profils clients apparaitront ici apres inscription ou commande connectee."
         />
       )}
-      {!!customers.length && (
+      {!!commercialCustomers.length && (
         <div className="grid gap-5 2xl:grid-cols-[minmax(360px,520px)_1fr]">
           <div className="space-y-3">
             {!visibleCustomers.length && (
@@ -4459,61 +4476,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-type CustomerComputedStats = {
-  orderCount: number;
-  totalSpent: number;
-  averageCart: number;
-  lastOrderAt: number;
-  lastOrderLabel: string;
-  status: { value: NonNullable<CustomerProfile["status"]>; label: string; tone: AdminBadgeTone };
-};
-
-function ordersForCustomer(orders: AdminOrderRow[], customer: CustomerProfile) {
-  const email = customer.email?.toLowerCase();
-  const phone = normalizeCustomerPhone(customer.phone);
-  const uid = customer.uid || customer.id;
-  return orders.filter((order) => {
-    if (order.customerId && uid && order.customerId === uid) return true;
-    if (email && order.customerEmail?.toLowerCase() === email) return true;
-    if (phone && normalizeCustomerPhone(order.customerPhone) === phone) return true;
-    return false;
-  });
-}
-
-function customerStats(customer: CustomerProfile, orders: AdminOrderRow[]): CustomerComputedStats {
-  const orderCount = Math.max(Number(customer.orderCount || 0), orders.length);
-  const orderTotal = orders.reduce((sum, order) => sum + parseEuro(order.total), 0);
-  const totalSpent = Math.max(Number(customer.totalSpent || 0), orderTotal);
-  const lastOrderAt = orders.reduce(
-    (latest, order) => Math.max(latest, adminDateValue(order.createdAt)),
-    0,
-  );
-  return {
-    orderCount,
-    totalSpent,
-    averageCart: orderCount ? totalSpent / orderCount : 0,
-    lastOrderAt,
-    lastOrderLabel: lastOrderAt ? formatAdminDate(lastOrderAt) : "Aucune",
-    status: customerStatus(customer, orders),
-  };
-}
-
-function customerStatus(customer: CustomerProfile, orders: AdminOrderRow[]) {
-  if (customer.archived || customer.status === "archived") {
-    return { value: "archived" as const, label: "Archive", tone: "muted" as const };
-  }
-  if (customer.status === "watch") {
-    return { value: "watch" as const, label: "A suivre", tone: "warning" as const };
-  }
-  if (customer.status === "loyal" || Number(customer.orderCount || orders.length) >= 3) {
-    return { value: "loyal" as const, label: "Fidele", tone: "gold" as const };
-  }
-  if (customer.status === "active" || orders.length > 0 || Number(customer.orderCount || 0) > 0) {
-    return { value: "active" as const, label: "Actif", tone: "success" as const };
-  }
-  return { value: "new" as const, label: "Nouveau", tone: "neutral" as const };
-}
-
 function sortCustomers(
   left: { customer: CustomerProfile; stats: CustomerComputedStats },
   right: { customer: CustomerProfile; stats: CustomerComputedStats },
@@ -4531,10 +4493,6 @@ function sortCustomers(
     );
   }
   return right.stats.lastOrderAt - left.stats.lastOrderAt;
-}
-
-function normalizeCustomerPhone(value?: string) {
-  return value?.replace(/\D/g, "") || "";
 }
 
 function BillingWarning({ settings }: { settings: BillingSettings }) {
@@ -8846,83 +8804,6 @@ function supplierMatchLabel(
 }
 function formatCurrency(value: number) {
   return `${formatEuro(value)} EUR`;
-}
-
-function buildDashboardMetrics(
-  products: Product[],
-  orders: {
-    paymentStatus: string;
-    orderStatus: string;
-    delivery: string;
-    total: string;
-  }[],
-): AdminMetric[] {
-  const activeOrders = orders.filter((order) => order.orderStatus !== "cancelled");
-  const paidOrders = activeOrders.filter((order) => order.paymentStatus === "paid");
-  const paymentToConfirm = activeOrders.filter((order) =>
-    ["to_confirm", "payment_link_sent", "pending"].includes(order.paymentStatus),
-  );
-  const preparingOrders = activeOrders.filter((order) =>
-    [
-      "new",
-      "contact_required",
-      "confirmed",
-      "preparing",
-    ].includes(order.orderStatus),
-  );
-  const deliveryOrders = activeOrders.filter((order) =>
-    order.orderStatus === "out_for_delivery",
-  );
-  const lowStockProducts = products.filter(
-    (product) => product.stock <= product.lowStockThreshold,
-  );
-  const activeProducts = products.filter((product) => product.isActive);
-  const totalStock = activeProducts.reduce(
-    (sum, product) => sum + Number(product.stock || 0),
-    0,
-  );
-
-  return [
-    {
-      label: "Règlements à suivre",
-      value: String(paymentToConfirm.length),
-      detail: `${paidOrders.length} déjà réglé(s)`,
-    },
-    {
-      label: "À préparer",
-      value: String(preparingOrders.length),
-      detail: "Nouvelles, à confirmer ou à préparer",
-    },
-    {
-      label: "En livraison",
-      value: String(deliveryOrders.length),
-      detail: "Commandes en cours de livraison",
-    },
-    {
-      label: "Produits actifs",
-      value: String(activeProducts.length),
-      detail: "Catalogue public",
-    },
-    {
-      label: "Stock total",
-      value: `${totalStock} g`,
-      detail: "Produits actifs",
-    },
-    {
-      label: "Stocks bas",
-      value: String(lowStockProducts.length),
-      detail: "Selon seuil produit",
-    },
-    {
-      label: "Ruptures",
-      value: String(products.filter((product) => product.stock <= 0).length),
-      detail: "Stock à 0 g",
-    },
-  ];
-}
-
-function parseEuro(value: string) {
-  return Number(value.replace("EUR", "").replace(",", ".").trim()) || 0;
 }
 
 function formatEuro(value: number) {

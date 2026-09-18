@@ -23,7 +23,25 @@ import { CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED } from "../src/config/cagnotteFeat
 import { cagnotteAdminCorrectionBusinessFingerprint, cagnotteAdminRefundBusinessFingerprint } from "../src/lib/cagnotteAdminOperationIdentity.js";
 import type { CagnotteAdminInspection, CorrectionPreview, RefundPreview } from "../src/types/cagnotteAdmin.js";
 import { adminOrderRow } from "../src/services/ordersService.js";
-import type { Order } from "../src/types/index.js";
+import type { AdminOrderRow } from "../src/services/ordersService.js";
+import {
+  adjustCustomerLoyalty,
+  assignPromoToCustomer,
+  updateCustomerAdminStatus,
+  updateCustomerInternalNote,
+} from "../src/services/adminCustomersService.js";
+import {
+  buildDashboardMetrics,
+  type AdminDashboardOrder,
+} from "../src/lib/adminDashboardMetrics.js";
+import {
+  buildCommercialCustomerEntries,
+  commercialAdminCustomers,
+  commercialAdminOrders,
+  ordersForCommercialCustomer,
+} from "../src/lib/adminCustomerCommercial.js";
+import { assertOrdinaryCustomerAdminMutationAllowed } from "../src/lib/productionFixtureMarker.js";
+import type { Coupon, CustomerProfile, Order } from "../src/types/index.js";
 
 let tests = 0;
 function test(name: string, run: () => void | Promise<void>) {
@@ -65,6 +83,187 @@ await test("projection admin conserve le marqueur Production fixture sans transf
   };
   const source = { ...projectableOrder(eligibleOrder()), productionFixture };
   equal(adminOrderRow(source).productionFixture, productionFixture);
+});
+await test("dashboard exclut toutes les fixtures de ses metriques commerciales", () => {
+  const commercialOrder: AdminDashboardOrder = {
+    paymentStatus: "paid",
+    orderStatus: "confirmed",
+    delivery: "Livraison locale",
+    total: "100,00 EUR",
+  };
+  const fixtureMarker = {
+    schemaVersion: 1 as const,
+    marker: "verdanza-cagnotte-production-fixture-v1",
+    projectId: "verdanza-1f621",
+    uid: "fixture-user",
+    productId: "fixture-product",
+    orderId: "fixture-order",
+    checkoutRequestId: "fixture-request",
+  };
+  const fixtureOrders: AdminDashboardOrder[] = [
+    {
+      ...commercialOrder,
+      productionFixture: fixtureMarker,
+    },
+    {
+      paymentStatus: "to_confirm",
+      orderStatus: "preparing",
+      delivery: "Livraison locale",
+      total: "100,00 EUR",
+      productionFixture: fixtureMarker,
+    },
+    {
+      paymentStatus: "paid",
+      orderStatus: "out_for_delivery",
+      delivery: "Livraison locale",
+      total: "100,00 EUR",
+      productionFixture: fixtureMarker,
+    },
+  ];
+  const commercialMetrics = buildDashboardMetrics([], [commercialOrder]);
+  const mixedMetrics = buildDashboardMetrics([], [commercialOrder, ...fixtureOrders]);
+  deepEqual(mixedMetrics, commercialMetrics);
+  equal(
+    mixedMetrics.find((metric) => metric.label === "Règlements à suivre")?.detail,
+    "1 déjà réglé(s)",
+  );
+  equal(mixedMetrics.find((metric) => metric.label === "À préparer")?.value, "1");
+  equal(mixedMetrics.find((metric) => metric.label === "En livraison")?.value, "0");
+});
+await test("section clients exclut profils et commandes fixture de tous les calculs commerciaux", () => {
+  const fixtureMarker = {
+    schemaVersion: 1 as const,
+    marker: "verdanza-cagnotte-production-fixture-v1",
+    projectId: "verdanza-1f621",
+    uid: "fixture-user",
+    productId: "fixture-product",
+    orderId: "fixture-order",
+    checkoutRequestId: "fixture-request",
+  };
+  const commercialCustomer: CustomerProfile = {
+    id: "customer-commercial",
+    uid: "customer-commercial",
+    email: "client@verdanza.test",
+    displayName: "Client commercial",
+    phone: "0600000001",
+    loyaltyPoints: 0,
+    orderCount: 0,
+    totalSpent: 0,
+    role: "customer",
+  };
+  const fixtureCustomer: CustomerProfile = {
+    ...commercialCustomer,
+    id: "customer-fixture",
+    uid: "customer-fixture",
+    email: "fixture@verdanza.test",
+    displayName: "Client fixture",
+    productionFixture: fixtureMarker,
+  };
+  const commercialOrder = {
+    id: "order-commercial",
+    customerId: commercialCustomer.uid,
+    customerEmail: commercialCustomer.email,
+    customerPhone: commercialCustomer.phone,
+    paymentStatus: "paid",
+    orderStatus: "confirmed",
+    delivery: "Livraison locale",
+    total: "100,00 EUR",
+    createdAt: "2026-09-01T10:00:00.000Z",
+  } as AdminOrderRow;
+  const fixtureOrder = {
+    ...commercialOrder,
+    id: "order-fixture",
+    customerId: fixtureCustomer.uid,
+    customerEmail: fixtureCustomer.email,
+    customerPhone: fixtureCustomer.phone,
+    total: "999,00 EUR",
+    createdAt: "2026-09-02T10:00:00.000Z",
+    productionFixture: fixtureMarker,
+  } as AdminOrderRow;
+
+  const baseline = buildCommercialCustomerEntries(
+    [commercialCustomer],
+    [commercialOrder],
+  );
+  const mixed = buildCommercialCustomerEntries(
+    [commercialCustomer, fixtureCustomer],
+    [commercialOrder, fixtureOrder],
+  );
+
+  deepEqual(mixed, baseline);
+  equal(commercialAdminCustomers([commercialCustomer, fixtureCustomer]).length, 1);
+  equal(commercialAdminOrders([commercialOrder, fixtureOrder]).length, 1);
+  equal(mixed.length, 1);
+  equal(mixed[0]?.customer.id, commercialCustomer.id);
+  equal(mixed.filter((entry) => entry.orders.length > 0).length, 1);
+  equal(mixed[0]?.stats.orderCount, 1);
+  equal(mixed[0]?.stats.totalSpent, 100);
+  equal(mixed[0]?.stats.averageCart, 100);
+  equal(mixed[0]?.stats.status.label, "Actif");
+  equal(mixed.some((entry) => entry.customer.id === fixtureCustomer.id), false);
+  equal(ordersForCommercialCustomer([fixtureOrder], fixtureCustomer).length, 0);
+  equal(
+    ordersForCommercialCustomer(
+      [{ ...fixtureOrder, customerId: commercialCustomer.uid }],
+      commercialCustomer,
+    ).length,
+    0,
+  );
+});
+await test("mutations client ordinaires refusent tout profil portant le marqueur fixture", async () => {
+  const ordinary = {
+    id: "customer-commercial",
+    uid: "customer-commercial",
+    email: "client@verdanza.test",
+    displayName: "Client commercial",
+    phone: "0600000001",
+    loyaltyPoints: 0,
+    orderCount: 0,
+    totalSpent: 0,
+    role: "customer",
+  } satisfies CustomerProfile;
+  const exactFixture = {
+    ...ordinary,
+    productionFixture: {
+      schemaVersion: 1 as const,
+      marker: "verdanza-cagnotte-production-fixture-v1",
+      projectId: "verdanza-1f621",
+      uid: "fixture-user",
+      productId: "fixture-product",
+      orderId: "fixture-order",
+      checkoutRequestId: "fixture-request",
+    },
+  } satisfies CustomerProfile;
+  const partialFixture = {
+    ...ordinary,
+    productionFixture: { marker: "partiel" },
+  } as unknown as CustomerProfile;
+
+  assertOrdinaryCustomerAdminMutationAllowed(ordinary);
+  throws(
+    () => assertOrdinaryCustomerAdminMutationAllowed(exactFixture),
+    /production_fixture_customer_admin_mutation_forbidden/,
+  );
+  throws(
+    () => assertOrdinaryCustomerAdminMutationAllowed(partialFixture),
+    /production_fixture_customer_admin_mutation_forbidden/,
+  );
+  await rejects(
+    () => adjustCustomerLoyalty(exactFixture, 1, "test"),
+    /production_fixture_customer_admin_mutation_forbidden/,
+  );
+  await rejects(
+    () => assignPromoToCustomer(exactFixture, {} as Coupon, "test"),
+    /production_fixture_customer_admin_mutation_forbidden/,
+  );
+  await rejects(
+    () => updateCustomerInternalNote(exactFixture, "test"),
+    /production_fixture_customer_admin_mutation_forbidden/,
+  );
+  await rejects(
+    () => updateCustomerAdminStatus(exactFixture, { status: "archived" }),
+    /production_fixture_customer_admin_mutation_forbidden/,
+  );
 });
 await test("projection admin refuse historique, inscription invalide, source non Firestore et garde fermee", () => {
   const ordinary = adminOrderRow(projectableOrder({ id: "CMD-HISTORIQUE", customerId: "client-fictif" }));

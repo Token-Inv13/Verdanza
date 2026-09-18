@@ -16,6 +16,7 @@ import {
   CAGNOTTE_PRODUCTION_PROGRAM_VERSION,
   resolveCagnotteProductionProgram,
 } from "../api/_server/cagnotteProgram.js";
+import { readCagnotteRefundBasis } from "../api/_server/cagnotteLedger.js";
 import type { CagnotteProductionProgram } from "../api/_server/cagnotteLedgerTypes.js";
 import { getAdminDb, getAdminProjectId } from "../api/_server/firebaseAdmin.js";
 import { orderFromSnapshot } from "../api/_server/orderProtection.js";
@@ -296,7 +297,17 @@ async function createFixture(input: FixtureRunInput) {
 async function prepareFixtureDocuments(db: Firestore): Promise<"prepared" | "existing"> {
   const refs = fixtureReferences(db);
   return db.runTransaction(async (transaction) => {
-    const [customer, product, admin, order, checkoutRequest, sideEffects, stockMovement] = await Promise.all([
+    const [
+      customer,
+      product,
+      admin,
+      order,
+      checkoutRequest,
+      sideEffects,
+      stockMovement,
+      wallet,
+      accrual,
+    ] = await Promise.all([
       transaction.get(refs.customer),
       transaction.get(refs.product),
       transaction.get(refs.admin),
@@ -304,6 +315,8 @@ async function prepareFixtureDocuments(db: Firestore): Promise<"prepared" | "exi
       transaction.get(refs.checkoutRequest),
       transaction.get(refs.sideEffects),
       transaction.get(refs.stockMovement),
+      transaction.get(refs.wallet),
+      transaction.get(refs.accrual),
     ]);
     if (admin.exists) throw new Error("production_fixture_admin_collision");
     const existingOrderState = [order.exists, checkoutRequest.exists, sideEffects.exists];
@@ -311,7 +324,7 @@ async function prepareFixtureDocuments(db: Firestore): Promise<"prepared" | "exi
       if (!stockMovement.exists) {
         throw new Error("production_fixture_partial_collision");
       }
-      assertExistingFixtureDocuments({
+      const storedOrder = assertExistingFixtureDocuments({
         customer,
         product,
         order,
@@ -319,7 +332,17 @@ async function prepareFixtureDocuments(db: Firestore): Promise<"prepared" | "exi
         sideEffects,
         stockMovement,
       });
+      await assertExistingFixtureLedger({
+        db,
+        transaction,
+        order: storedOrder,
+        wallet,
+        accrual,
+      });
       return "existing";
+    }
+    if (wallet.exists || accrual.exists) {
+      throw new Error("production_fixture_wallet_collision");
     }
     if (stockMovement.exists) {
       throw new Error("production_fixture_stock_movement_collision");
@@ -424,6 +447,91 @@ function assertExistingFixtureDocuments(input: {
   )) {
     throw new Error("production_fixture_stock_movement_collision");
   }
+  return order;
+}
+
+async function assertExistingFixtureLedger(input: {
+  db: Firestore;
+  transaction: FirebaseFirestore.Transaction;
+  order: Order;
+  wallet: FirebaseFirestore.DocumentSnapshot;
+  accrual: FirebaseFirestore.DocumentSnapshot;
+}) {
+  const created =
+    input.order.paymentStatus === "to_confirm" &&
+    input.order.orderStatus === "contact_required";
+  const pending =
+    input.order.paymentStatus === "paid" &&
+    input.order.orderStatus === "contact_required";
+  const available =
+    input.order.paymentStatus === "paid" &&
+    input.order.orderStatus === "delivered";
+
+  if (created) {
+    if (input.wallet.exists || input.accrual.exists) fixtureWalletCollision();
+    return;
+  }
+  if ((!pending && !available) || !input.wallet.exists || !input.accrual.exists) {
+    fixtureWalletCollision();
+  }
+
+  const enrollment = validateOrderCagnotteEnrollment(input.order);
+  let basis: Awaited<ReturnType<typeof readCagnotteRefundBasis>>;
+  try {
+    basis = await readCagnotteRefundBasis({
+      db: input.db,
+      transaction: input.transaction,
+      order: {
+        orderId: input.order.id,
+        beneficiaryId: enrollment.beneficiaryId,
+        programVersion: enrollment.programVersion,
+        createdAtEpochMs: enrollment.createdAtEpochMs,
+        snapshot: enrollment.snapshot,
+      },
+    });
+  } catch {
+    return fixtureWalletCollision();
+  }
+
+  const state = basis.state;
+  const expectedCompartment = available ? "available" : "pending";
+  const expectedPendingCents = pending ? 500 : 0;
+  const expectedAvailableCents = available ? 500 : 0;
+  if (
+    !state ||
+    state.schemaVersion !== 1 ||
+    state.calculationVersion !== "cagnotte-math-v1" ||
+    state.currency !== "EUR" ||
+    state.orderId !== CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID ||
+    state.beneficiaryId !== CAGNOTTE_PRODUCTION_FIXTURE_UID ||
+    state.programVersion !== CAGNOTTE_PRODUCTION_PROGRAM_VERSION ||
+    !isDeepStrictEqual(state.initialSnapshot, enrollment.snapshot) ||
+    state.initialGainCents !== 500 ||
+    state.paymentConfirmed !== true ||
+    state.deliveryConfirmed !== available ||
+    state.cancelled !== false ||
+    state.credited !== true ||
+    state.compartment !== expectedCompartment ||
+    state.remainingGainCents !== 500 ||
+    !isDeepStrictEqual(
+      state.cumulativeReturns,
+      enrollment.snapshot.lines.map((line) => ({
+        lineId: line.lineId,
+        returnedNetCents: 0,
+      })),
+    ) ||
+    !isDeepStrictEqual(input.wallet.data(), basis.wallet) ||
+    basis.wallet.pendingCents !== expectedPendingCents ||
+    basis.wallet.availableCents !== expectedAvailableCents ||
+    basis.wallet.reservedCents !== 0 ||
+    basis.wallet.regularizationCents !== 0
+  ) {
+    fixtureWalletCollision();
+  }
+}
+
+function fixtureWalletCollision(): never {
+  throw new Error("production_fixture_wallet_collision");
 }
 
 function assertStoredFixtureOrder(order: Order) {

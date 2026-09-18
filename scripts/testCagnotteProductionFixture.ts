@@ -30,8 +30,11 @@ import { executeGuardedInvoiceSend } from "../api/_server/invoiceEmailSend.js";
 import { processPurchaseAnalyticsOutbox } from "../api/_server/purchaseAnalytics.js";
 import { executeOrderRefund } from "../api/_server/orderRefunds.js";
 import { shouldMountCagnotteAdminTools } from "../src/lib/cagnotteAdminEligibility.js";
-import { assertOrdinaryProductAdminMutationAllowed } from "../src/lib/productionFixtureMarker.js";
-import type { Invoice, Order } from "../src/types/index.js";
+import {
+  assertOrdinaryProductAdminMutationAllowed,
+  ordinaryProductStockMutation,
+} from "../src/lib/productionFixtureMarker.js";
+import type { Invoice, Order, Product } from "../src/types/index.js";
 import {
   CAGNOTTE_PRODUCTION_FIXTURE_CHALLENGE,
   CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID,
@@ -104,16 +107,50 @@ try {
     equal(program.newAccrualsEnabled, true);
   });
 
-  await check("mutation admin ordinaire refuse toute ressource produit marquee", () => {
+  await check("mutations admin flags et stock refusent toute ressource produit marquee", () => {
+    const exactFixture = {
+      id: CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID,
+      ...cagnotteProductionFixtureProductDocument(),
+    } as unknown as Product;
+    const partialFixture = {
+      ...exactFixture,
+      productionFixture: { marker: "partiel" },
+    } as unknown as Product;
+    const ordinaryProduct = {
+      ...exactFixture,
+      id: "produit-ordinaire",
+      productionFixture: undefined,
+      stock: 8,
+      lowStockThreshold: 2,
+    } as Product;
+    delete (ordinaryProduct as { productionFixture?: unknown }).productionFixture;
+    const exactBefore = structuredClone(exactFixture);
+    const partialBefore = structuredClone(partialFixture);
     throws(
-      () => assertOrdinaryProductAdminMutationAllowed(cagnotteProductionFixtureProductDocument()),
+      () => assertOrdinaryProductAdminMutationAllowed(exactFixture),
       /production_fixture_product_admin_mutation_forbidden/,
     );
     throws(
-      () => assertOrdinaryProductAdminMutationAllowed({ productionFixture: { marker: "partiel" } }),
+      () => assertOrdinaryProductAdminMutationAllowed(partialFixture),
       /production_fixture_product_admin_mutation_forbidden/,
     );
-    assertOrdinaryProductAdminMutationAllowed({ id: "produit-ordinaire", isActive: true });
+    throws(
+      () => ordinaryProductStockMutation(exactFixture, 12, 3),
+      /production_fixture_product_admin_mutation_forbidden/,
+    );
+    throws(
+      () => ordinaryProductStockMutation(partialFixture, 12, 3),
+      /production_fixture_product_admin_mutation_forbidden/,
+    );
+    deepStrictEqual(exactFixture, exactBefore);
+    deepStrictEqual(partialFixture, partialBefore);
+    assertOrdinaryProductAdminMutationAllowed(ordinaryProduct);
+    deepStrictEqual(
+      ordinaryProductStockMutation(ordinaryProduct, 12, 3),
+      { productId: ordinaryProduct.id, stock: 12, lowStockThreshold: 3 },
+    );
+    equal(ordinaryProduct.stock, 8);
+    equal(ordinaryProduct.lowStockThreshold, 2);
   });
 
   await check("dry-run pur et cible strictement bornee", async () => {
@@ -160,6 +197,34 @@ try {
       productionFixtureCapability: forgedCapability,
     }), /production_fixture_capability_required/);
     deepStrictEqual(await databaseCounts(), before);
+  });
+
+  await check("wallet preexistant seul refuse create sans aucune ecriture annexe", async () => {
+    const walletRef = db.collection("cagnotteWallets").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID);
+    const orphan = fixtureWalletDocument();
+    await walletRef.set(orphan);
+    const before = await databaseCounts();
+    await rejects(() => command("create"), /production_fixture_wallet_collision/);
+    deepStrictEqual((await walletRef.get()).data(), orphan);
+    deepStrictEqual(await databaseCounts(), before);
+    equal((await db.collection("customers").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).exists, false);
+    equal((await db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID).get()).exists, false);
+    equal((await db.collection("orders").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
+    await walletRef.delete();
+  });
+
+  await check("wallet disponible residuel sans fixture refuse create sans mutation", async () => {
+    const walletRef = db.collection("cagnotteWallets").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID);
+    const orphan = fixtureWalletDocument({ availableCents: 500 });
+    await walletRef.set(orphan);
+    const before = await databaseCounts();
+    await rejects(() => command("create"), /production_fixture_wallet_collision/);
+    deepStrictEqual((await walletRef.get()).data(), orphan);
+    deepStrictEqual(await databaseCounts(), before);
+    equal((await db.collection("checkoutRequests").doc(CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID).get()).exists, false);
+    equal((await db.collection("orderSideEffects").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
+    equal((await db.collection("stockMovements").get()).size, 0);
+    await walletRef.delete();
   });
 
   await check("collision mouvement stock divergente refusee sans aucune autre ecriture", async () => {
@@ -340,6 +405,17 @@ try {
     deepStrictEqual(order.appliedPromotions, []);
   });
 
+  await check("fixture creee non payee refuse un wallet injecte au rejeu create", async () => {
+    const walletRef = db.collection("cagnotteWallets").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID);
+    const injected = fixtureWalletDocument({ pendingCents: 500 });
+    await walletRef.set(injected);
+    const before = await stableFinancialState();
+    await rejects(() => command("create"), /production_fixture_wallet_collision/);
+    deepStrictEqual(await stableFinancialState(), before);
+    equal((await db.collection("cagnotteAccruals").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
+    await walletRef.delete();
+  });
+
   await check("checkoutRequest, stock et outbox sont deterministes et neutres", async () => {
     const request = await db.collection("checkoutRequests")
       .doc(CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID).get();
@@ -423,23 +499,50 @@ try {
     equal(providers, 0);
   });
 
-  await check("paiement puis livraison utilisent le journal reel et le gain exact", async () => {
+  await check("wallet exact apres paiement autorise le rejeu create idempotent", async () => {
     await command("mark-paid");
-    let wallet = (await db.collection("cagnotteWallets").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).data()!;
-    equal(wallet.pendingCents, 500);
-    equal(wallet.availableCents, 0);
-    let accrual = (await db.collection("cagnotteAccruals").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).data()!;
+    const wallet = (await db.collection("cagnotteWallets").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).data()!;
+    deepStrictEqual(wallet, fixtureWalletDocument({ pendingCents: 500 }));
+    const accrual = (await db.collection("cagnotteAccruals").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).data()!;
     equal(accrual.initialGainCents, 500);
     equal(accrual.paymentConfirmed, true);
     equal(accrual.deliveryConfirmed, false);
+    const beforeReplay = await stableFinancialState();
+    await command("create");
+    deepStrictEqual(await stableFinancialState(), beforeReplay);
+  });
+
+  await check("wallet exact apres livraison autorise le rejeu create idempotent", async () => {
     await command("mark-delivered");
-    wallet = (await db.collection("cagnotteWallets").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).data()!;
-    accrual = (await db.collection("cagnotteAccruals").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).data()!;
-    equal(wallet.pendingCents, 0);
-    equal(wallet.availableCents, 500);
+    const wallet = (await db.collection("cagnotteWallets").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).data()!;
+    const accrual = (await db.collection("cagnotteAccruals").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).data()!;
+    deepStrictEqual(wallet, fixtureWalletDocument({ availableCents: 500 }));
     equal(accrual.deliveryConfirmed, true);
     equal(accrual.credited, true);
     equal((await fixtureMovements()).length, 3);
+    const beforeReplay = await stableFinancialState();
+    await command("create");
+    deepStrictEqual(await stableFinancialState(), beforeReplay);
+  });
+
+  await check("fixture complete refuse tout wallet divergent sans mutation", async () => {
+    const walletRef = db.collection("cagnotteWallets").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID);
+    const exact = fixtureWalletDocument({ availableCents: 500 });
+    const variants = [
+      { ...exact, beneficiaryId: "autre-beneficiaire" },
+      { ...exact, availableCents: 499 },
+      { ...exact, pendingCents: 500, availableCents: 0 },
+      { ...exact, reservedCents: 1 },
+      { ...exact, regularizationCents: 1 },
+      { ...exact, schemaVersion: 99 },
+    ];
+    for (const divergent of variants) {
+      await walletRef.set(divergent);
+      const before = await stableFinancialState();
+      await rejects(() => command("create"), /production_fixture_wallet_collision/);
+      deepStrictEqual(await stableFinancialState(), before);
+    }
+    await walletRef.set(exact);
   });
 
   await check("rejeu create, paid et delivered ne duplique aucun journal", async () => {
@@ -603,6 +706,27 @@ async function databaseCounts() {
     name,
     (await db.collection(name).get()).size,
   ])));
+}
+
+function fixtureWalletDocument(
+  overrides: Partial<{
+    pendingCents: number;
+    availableCents: number;
+    reservedCents: number;
+    regularizationCents: number;
+  }> = {},
+) {
+  return {
+    schemaVersion: 3,
+    regularizationVersion: "cagnotte-regularization-v1",
+    reservationVersion: "cagnotte-reservation-v1",
+    currency: "EUR",
+    beneficiaryId: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+    pendingCents: overrides.pendingCents ?? 0,
+    availableCents: overrides.availableCents ?? 0,
+    reservedCents: overrides.reservedCents ?? 0,
+    regularizationCents: overrides.regularizationCents ?? 0,
+  };
 }
 
 function hasOnlyFixtureIdentity(value: unknown) {

@@ -20,7 +20,10 @@ import {
 } from "../lib/fixedPriceOptions";
 import { normalizeLegacyInternalReferences } from "../lib/productReferences";
 import { syncProductPrimaryImage } from "../lib/productImages";
-import { assertOrdinaryProductAdminMutationAllowed } from "../lib/productionFixtureMarker";
+import {
+  assertOrdinaryProductAdminMutationAllowed,
+  ordinaryProductStockMutation,
+} from "../lib/productionFixtureMarker";
 import type { Product } from "../types";
 
 export type ProductInput = Omit<Product, "id"> & { id?: string };
@@ -234,14 +237,15 @@ export async function updateProductFlags(
 }
 
 export async function updateProductStock(
-  productId: string,
+  product: Product,
   stock: number,
   lowStockThreshold: number,
 ) {
+  const mutation = ordinaryProductStockMutation(product, stock, lowStockThreshold);
   if (!db) throw new Error("Firebase is not configured.");
-  await updateDoc(doc(db, collections.products, productId), {
-    stock,
-    lowStockThreshold,
+  await updateDoc(doc(db, collections.products, mutation.productId), {
+    stock: mutation.stock,
+    lowStockThreshold: mutation.lowStockThreshold,
     updatedAt: serverTimestamp(),
   });
 }
