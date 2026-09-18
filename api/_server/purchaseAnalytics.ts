@@ -1,6 +1,7 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { Order } from "../../src/types/index.js";
 import { isPurchaseEligible, sendGa4Purchase, type Ga4PurchaseResult } from "./ga4MeasurementProtocol.js";
+import { hasPersistedCagnotteProductionFixtureMarker } from "./cagnotteProductionFixture.js";
 
 const outboxCollection = "analyticsOutbox";
 
@@ -18,6 +19,7 @@ export async function enqueuePurchaseAnalyticsForPaidTransition(input: {
   update: Record<string, unknown>;
 }) {
   const { db, transaction, order, update } = input;
+  if (hasPersistedCagnotteProductionFixtureMarker(order)) return false;
   if (order.paymentStatus === "paid") return false;
   const nextOrder = {
     ...order,
@@ -53,6 +55,7 @@ export async function ensurePurchaseAnalyticsRetryQueued(
   db: FirebaseFirestore.Firestore,
   order: Order,
 ) {
+  if (hasPersistedCagnotteProductionFixtureMarker(order)) return false;
   if (!isPurchaseEligible(order)) return false;
   const ref = db.collection(outboxCollection).doc(outboxId(order.id));
   await ref.set(
@@ -86,6 +89,13 @@ export async function processPurchaseAnalyticsOutbox(
   }
 
   const order = { id: orderSnapshot.id, ...orderSnapshot.data() } as Order;
+  if (hasPersistedCagnotteProductionFixtureMarker(order)) {
+    await markOutbox(db, orderId, {
+      status: "not_eligible",
+      code: "production_fixture",
+    });
+    return { status: "skipped", code: "production_fixture" };
+  }
   if (!isPurchaseEligible(order)) {
     const status = order.analytics?.purchaseStatus === "sent" ? "sent" : "not_eligible";
     await markOutbox(db, orderId, { status, code: "purchase_not_eligible" });

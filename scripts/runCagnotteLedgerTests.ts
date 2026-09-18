@@ -44,6 +44,7 @@ const allowedOptions = new Set([
   "--security-only",
   "--read-only",
   "--rate-limit-windows-only",
+  "--isolated-fixture-only",
 ]);
 const options = process.argv.slice(2);
 if (options.length > 1 || options.some((option) => !allowedOptions.has(option))) {
@@ -212,6 +213,9 @@ try {
   if (mode === "--read-only") await run("scripts/testCagnotteRead.ts");
   if (mode === "--rate-limit-windows-only") {
     await run("scripts/cagnotte-interactive/testRateLimitWindows.ts");
+  }
+  if (mode === "--isolated-fixture-only") {
+    await run("scripts/testCagnotteProductionFixture.ts");
   }
 } finally {
   // Stop only the direct Java child created by this runner.

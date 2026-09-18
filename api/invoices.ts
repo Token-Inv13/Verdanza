@@ -1,4 +1,5 @@
 import { orderFromSnapshot } from "./_server/orderProtection.js";
+import { hasPersistedCagnotteProductionFixtureMarker } from "./_server/cagnotteProductionFixture.js";
 import { FieldValue } from "firebase-admin/firestore";
 import { assertAdminUser } from "./_server/adminAuth.js";
 import { getAdminDb, getAdminStorageBucket } from "./_server/firebaseAdmin.js";
@@ -199,6 +200,9 @@ export default async function handler(
     if (body.action === "sendEmail") {
       const invoice = await getInvoice(db, String(body.invoiceId || ""));
       const linkedOrder = await getLinkedOrder(db, invoice);
+      if (hasPersistedCagnotteProductionFixtureMarker(linkedOrder)) {
+        throw new Error("production_fixture_external_effect_forbidden");
+      }
       assertInvoiceSendable(invoice, linkedOrder);
       if (!invoice.customerEmail) throw new Error("Email client absent.");
       const settings = await getBillingSettings(db);
@@ -303,14 +307,17 @@ async function getLinkedOrder(
 
 async function createInvoiceFromOrder(db: FirebaseFirestore.Firestore, orderId: string) {
   if (!orderId) throw new Error("orderId requis.");
+  const orderSnapshot = await db.collection("orders").doc(orderId).get();
+  if (!orderSnapshot.exists) throw new Error("Commande introuvable.");
+  const order = orderFromSnapshot(orderSnapshot);
+  if (hasPersistedCagnotteProductionFixtureMarker(order)) {
+    throw new Error("production_fixture_external_effect_forbidden");
+  }
   const existing = await db.collection("invoices").where("orderId", "==", orderId).limit(1).get();
   if (!existing.empty) {
     const invoice = existing.docs[0];
     return { invoiceId: invoice.id, invoiceNumber: invoice.data().invoiceNumber as string };
   }
-  const orderSnapshot = await db.collection("orders").doc(orderId).get();
-  if (!orderSnapshot.exists) throw new Error("Commande introuvable.");
-  const order = orderFromSnapshot(orderSnapshot);
   const invoiceNumber = await nextInvoiceNumber(db);
   const now = new Date().toISOString();
   const lines = buildCustomerInvoiceLines(order);
