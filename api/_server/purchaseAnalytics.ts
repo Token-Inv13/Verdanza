@@ -35,7 +35,7 @@ export async function enqueuePurchaseAnalyticsForPaidTransition(input: {
     return false;
   }
 
-  const outboxRef = db.collection(outboxCollection).doc(outboxId(order.id));
+  const outboxRef = db.collection(outboxCollection).doc(purchaseAnalyticsOutboxId(order.id));
   update["analytics.purchaseStatus"] = "pending";
   transaction.set(
     outboxRef,
@@ -57,7 +57,7 @@ export async function ensurePurchaseAnalyticsRetryQueued(
 ) {
   if (hasPersistedCagnotteProductionFixtureMarker(order)) return false;
   if (!isPurchaseEligible(order)) return false;
-  const ref = db.collection(outboxCollection).doc(outboxId(order.id));
+  const ref = db.collection(outboxCollection).doc(purchaseAnalyticsOutboxId(order.id));
   await ref.set(
     {
       type: "purchase",
@@ -115,7 +115,7 @@ export async function processPurchaseAnalyticsOutbox(
 }
 
 async function claimOutbox(db: FirebaseFirestore.Firestore, orderId: string) {
-  const ref = db.collection(outboxCollection).doc(outboxId(orderId));
+  const ref = db.collection(outboxCollection).doc(purchaseAnalyticsOutboxId(orderId));
   return db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists) return false;
@@ -144,7 +144,7 @@ async function persistSendResult(
   result: Ga4PurchaseResult,
 ) {
   const orderRef = db.collection("orders").doc(orderId);
-  const outboxRef = db.collection(outboxCollection).doc(outboxId(orderId));
+  const outboxRef = db.collection(outboxCollection).doc(purchaseAnalyticsOutboxId(orderId));
   if (result.status === "sent") {
     await Promise.all([
       outboxRef.set(
@@ -193,7 +193,7 @@ async function markOutbox(
   orderId: string,
   input: { status: AnalyticsOutboxStatus; code?: string },
 ) {
-  await db.collection(outboxCollection).doc(outboxId(orderId)).set(
+  await db.collection(outboxCollection).doc(purchaseAnalyticsOutboxId(orderId)).set(
     {
       status: input.status,
       lastErrorCode: input.code || FieldValue.delete(),
@@ -212,6 +212,6 @@ function timestampToMs(value: unknown) {
   return 0;
 }
 
-function outboxId(orderId: string) {
+export function purchaseAnalyticsOutboxId(orderId: string) {
   return `purchase_${orderId}`;
 }

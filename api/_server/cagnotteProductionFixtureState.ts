@@ -43,6 +43,7 @@ import {
 } from "./cagnotteProductionFixture.js";
 import { checkoutPayloadFingerprint, orderSideEffectTaskNames } from "./orderSideEffects.js";
 import { orderFromSnapshot } from "./orderProtection.js";
+import { purchaseAnalyticsOutboxId } from "./purchaseAnalytics.js";
 
 export type CagnotteProductionFixtureState = "created" | "paid" | "delivered";
 export type CagnotteProductionFixtureExpectedTransition =
@@ -254,6 +255,7 @@ export async function validateCagnotteProductionFixtureExternalArtifacts({
   const [
     invoices,
     analyticsOutbox,
+    canonicalAnalyticsOutbox,
     analyticsOperationalEvents,
     paymentLinkRequests,
     refunds,
@@ -267,6 +269,11 @@ export async function validateCagnotteProductionFixtureExternalArtifacts({
       db.collection("analyticsOutbox")
         .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
         .limit(1),
+    ),
+    transaction.get(
+      db.collection("analyticsOutbox").doc(
+        purchaseAnalyticsOutboxId(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID),
+      ),
     ),
     transaction.get(
       db.collection("analyticsOperationalEvents")
@@ -285,7 +292,7 @@ export async function validateCagnotteProductionFixtureExternalArtifacts({
     ),
   ]);
   if (!invoices.empty) throw new Error("production_fixture_invoice_collision");
-  if (!analyticsOutbox.empty) {
+  if (!analyticsOutbox.empty || canonicalAnalyticsOutbox.exists) {
     throw new Error("production_fixture_analytics_outbox_collision");
   }
   if (!analyticsOperationalEvents.empty) {

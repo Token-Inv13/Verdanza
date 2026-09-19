@@ -8,6 +8,7 @@ import { cagnotteLedgerMovementId } from "../api/_server/cagnotteLedger.js";
 import { commitCheckoutOrder } from "../api/_server/checkoutOrder.js";
 import type { CheckoutRequestBody, PricedCheckout } from "../api/_server/checkout.js";
 import { checkoutPayloadFingerprint } from "../api/_server/orderSideEffects.js";
+import { purchaseAnalyticsOutboxId } from "../api/_server/purchaseAnalytics.js";
 import {
   commitOrderStatusTransition,
   processOrderStatusTransitionEffects,
@@ -213,9 +214,7 @@ export async function inspectCagnotteProductionFixture(db: Firestore) {
   const invoices = await db.collection("invoices")
     .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
     .get();
-  const analytics = await db.collection("analyticsOutbox")
-    .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
-    .get();
+  const analytics = await inspectCagnotteProductionFixtureAnalyticsOutbox(db);
   const analyticsOperationalEvents = await db.collection("analyticsOperationalEvents")
     .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
     .get();
@@ -237,7 +236,7 @@ export async function inspectCagnotteProductionFixture(db: Firestore) {
     reservation: documentState(reservation),
     movements: movements.map((entry) => ({ id: entry.id, ...(entry.data() ?? {}) })),
     invoiceCount: invoices.size,
-    analyticsOutboxCount: analytics.size,
+    analyticsOutboxCount: analytics.length,
     analyticsOperationalEventCount: analyticsOperationalEvents.size,
     paymentLinkRequestCount: paymentLinkRequests.size,
     refundCount: refunds.size,
@@ -285,6 +284,21 @@ async function inspectCagnotteProductionFixtureMovements(db: Firestore) {
     if (snapshot.exists) movementById.set(snapshot.id, snapshot);
   }
   return [...movementById.values()];
+}
+
+async function inspectCagnotteProductionFixtureAnalyticsOutbox(db: Firestore) {
+  const collection = db.collection("analyticsOutbox");
+  const [byOrder, canonical] = await Promise.all([
+    collection.where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
+    collection.doc(
+      purchaseAnalyticsOutboxId(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID),
+    ).get(),
+  ]);
+  const outboxById = new Map<string, FirebaseFirestore.DocumentSnapshot>();
+  for (const snapshot of [...byOrder.docs, canonical]) {
+    if (snapshot.exists) outboxById.set(snapshot.id, snapshot);
+  }
+  return [...outboxById.values()];
 }
 
 export function isCagnotteProductionFixtureOutboundTargetAllowed(

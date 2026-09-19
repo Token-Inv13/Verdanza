@@ -33,7 +33,10 @@ import {
   saveSupplierPurchase,
   stripUndefinedFields,
 } from "../api/invoices.js";
-import { processPurchaseAnalyticsOutbox } from "../api/_server/purchaseAnalytics.js";
+import {
+  processPurchaseAnalyticsOutbox,
+  purchaseAnalyticsOutboxId,
+} from "../api/_server/purchaseAnalytics.js";
 import { executeOrderRefund } from "../api/_server/orderRefunds.js";
 import { cagnotteLedgerMovementId } from "../api/_server/cagnotteLedger.js";
 import {
@@ -130,6 +133,9 @@ const canonicalFixtureMovementIds = {
   release: cagnotteLedgerMovementId(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID, "made_available"),
   cancellation: cagnotteLedgerMovementId(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID, "cancelled"),
 } as const;
+const canonicalFixtureAnalyticsOutboxId = purchaseAnalyticsOutboxId(
+  CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+);
 const healthyInspectionMovementIds: Record<"created" | "paid" | "delivered", string[]> = {
   created: [],
   paid: [],
@@ -155,6 +161,10 @@ try {
     equal(isCagnotteProductionFixtureOutboundTargetAllowed("https://www.googleapis.com", true), false);
     equal(isCagnotteProductionFixtureOutboundTargetAllowed("https://example.googleapis.com", true), false);
     equal(isCagnotteProductionFixtureOutboundTargetAllowed("http://identitytoolkit.googleapis.com", false), false);
+  });
+
+  await check("ID analytics outbox canonique conserve le contrat runtime", () => {
+    equal(purchaseAnalyticsOutboxId("abc"), "purchase_abc");
   });
 
   await check("UID fixture Auth absent, collision et panne restent fail-closed sans mutation Auth", async () => {
@@ -552,6 +562,9 @@ try {
       });
       try {
         const before = await databaseCounts();
+        if (collision.collection === "analyticsOutbox") {
+          equal((await inspectCagnotteProductionFixture(db)).analyticsOutboxCount, 1);
+        }
         await rejects(() => command("create"), collision.expected, collision.collection);
         deepStrictEqual(await databaseCounts(), before, collision.collection);
         equal((await db.collection("customers")
@@ -563,6 +576,79 @@ try {
       } finally {
         await ref.delete();
       }
+    }
+  });
+
+  await check("analytics outbox canonique corrompu refuse create avant toute ecriture", async () => {
+    const ref = db.collection("analyticsOutbox").doc(canonicalFixtureAnalyticsOutboxId);
+    const corrupted = { orderId: "another-order", status: "pending" };
+    await ref.set(corrupted);
+    try {
+      const before = await databaseCounts();
+      equal((await inspectCagnotteProductionFixture(db)).analyticsOutboxCount, 1);
+      await rejects(() => command("create"), /production_fixture_analytics_outbox_collision/);
+      deepStrictEqual(await databaseCounts(), before);
+      deepStrictEqual((await ref.get()).data(), corrupted);
+      equal((await db.collection("customers")
+        .doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).exists, false);
+      equal((await db.collection("products")
+        .doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID).get()).exists, false);
+      equal((await db.collection("orders")
+        .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
+    } finally {
+      await ref.delete();
+    }
+  });
+
+  await check("analytics outbox canonique vide refuse create", async () => {
+    const ref = db.collection("analyticsOutbox").doc(canonicalFixtureAnalyticsOutboxId);
+    await ref.set({});
+    try {
+      const before = await databaseCounts();
+      equal((await inspectCagnotteProductionFixture(db)).analyticsOutboxCount, 1);
+      await rejects(() => command("create"), /production_fixture_analytics_outbox_collision/);
+      deepStrictEqual(await databaseCounts(), before);
+      deepStrictEqual((await ref.get()).data(), {});
+    } finally {
+      await ref.delete();
+    }
+  });
+
+  await check("inspection deduplique l analytics outbox canonique par document ID", async () => {
+    const ref = db.collection("analyticsOutbox").doc(canonicalFixtureAnalyticsOutboxId);
+    const residual = {
+      orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+      status: "pending",
+    };
+    await ref.set(residual);
+    try {
+      equal((await inspectCagnotteProductionFixture(db)).analyticsOutboxCount, 1);
+      await rejects(() => command("create"), /production_fixture_analytics_outbox_collision/);
+      deepStrictEqual((await ref.get()).data(), residual);
+    } finally {
+      await ref.delete();
+    }
+  });
+
+  await check("inspection compte les deux axes analytics outbox distincts", async () => {
+    const canonicalRef = db.collection("analyticsOutbox").doc(canonicalFixtureAnalyticsOutboxId);
+    const queriedRef = db.collection("analyticsOutbox")
+      .doc("production-fixture-residual-analytics-second-axis-v1");
+    const canonical = { orderId: "another-order", status: "pending" };
+    const queried = {
+      orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+      status: "pending",
+    };
+    await Promise.all([canonicalRef.set(canonical), queriedRef.set(queried)]);
+    try {
+      const before = await databaseCounts();
+      equal((await inspectCagnotteProductionFixture(db)).analyticsOutboxCount, 2);
+      await rejects(() => command("create"), /production_fixture_analytics_outbox_collision/);
+      deepStrictEqual(await databaseCounts(), before);
+      deepStrictEqual((await canonicalRef.get()).data(), canonical);
+      deepStrictEqual((await queriedRef.get()).data(), queried);
+    } finally {
+      await Promise.all([canonicalRef.delete(), queriedRef.delete()]);
     }
   });
 
@@ -1336,6 +1422,24 @@ try {
     }
   });
 
+  await check("analytics outbox canonique corrompu bloque create et mark-paid", async () => {
+    const ref = db.collection("analyticsOutbox").doc(canonicalFixtureAnalyticsOutboxId);
+    const corrupted = { orderId: "another-order", status: "pending" };
+    await ref.set(corrupted);
+    try {
+      const beforeState = await stableFinancialState();
+      const beforeCounts = await databaseCounts();
+      equal((await inspectCagnotteProductionFixture(db)).analyticsOutboxCount, 1);
+      await rejects(() => command("create"), /production_fixture_analytics_outbox_collision/);
+      await rejects(() => command("mark-paid"), /production_fixture_analytics_outbox_collision/);
+      deepStrictEqual(await stableFinancialState(), beforeState);
+      deepStrictEqual(await databaseCounts(), beforeCounts);
+      deepStrictEqual((await ref.get()).data(), corrupted);
+    } finally {
+      await ref.delete();
+    }
+  });
+
   await check("facture residuelle refuse mark-paid sans mutation", async () => {
     const invoiceRef = db.collection("invoices")
       .doc("production-fixture-before-paid-invoice-v1");
@@ -1764,6 +1868,23 @@ try {
       }),
       expected: /production_fixture_order_collision/,
     }, "mark-delivered");
+  });
+
+  await check("analytics outbox canonique corrompu bloque mark-delivered", async () => {
+    const ref = db.collection("analyticsOutbox").doc(canonicalFixtureAnalyticsOutboxId);
+    const corrupted = { status: "pending" };
+    await ref.set(corrupted);
+    try {
+      const beforeState = await stableFinancialState();
+      const beforeCounts = await databaseCounts();
+      equal((await inspectCagnotteProductionFixture(db)).analyticsOutboxCount, 1);
+      await rejects(() => command("mark-delivered"), /production_fixture_analytics_outbox_collision/);
+      deepStrictEqual(await stableFinancialState(), beforeState);
+      deepStrictEqual(await databaseCounts(), beforeCounts);
+      deepStrictEqual((await ref.get()).data(), corrupted);
+    } finally {
+      await ref.delete();
+    }
   });
 
   await check("analytics operationnel residuel refuse mark-delivered", async () => {
