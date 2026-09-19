@@ -51,9 +51,12 @@ import {
   CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_EMAIL,
   CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_AT,
+  CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_HISTORY_NOTE,
   CAGNOTTE_PRODUCTION_FIXTURE_FIXED_PRICE_OPTION_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_INITIAL_STOCK,
   CAGNOTTE_PRODUCTION_FIXTURE_MARKER,
+  CAGNOTTE_PRODUCTION_FIXTURE_INITIAL_HISTORY_NOTE,
+  CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS,
   CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT,
   CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID,
@@ -61,6 +64,7 @@ import {
   CAGNOTTE_PRODUCTION_FIXTURE_REMAINING_STOCK,
   CAGNOTTE_PRODUCTION_FIXTURE_SIDE_EFFECT_REASON,
   CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID,
+  CAGNOTTE_PRODUCTION_FIXTURE_TOOL_UID,
   CAGNOTTE_PRODUCTION_FIXTURE_UID,
   cagnotteProductionFixtureCheckoutBody,
   cagnotteProductionFixtureCustomerDocument,
@@ -550,6 +554,33 @@ try {
     }
   });
 
+  await check("analytics operationnel residuel refuse create avant toute ecriture", async () => {
+    const ref = db.collection("analyticsOperationalEvents")
+      .doc("production-fixture-residual-operational-analytics-before-create-v1");
+    const residual = {
+      orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+      event: "unrelated_operational_event",
+    };
+    await ref.set(residual);
+    try {
+      const before = await databaseCounts();
+      await rejects(
+        () => command("create"),
+        /production_fixture_analytics_operational_event_collision/,
+      );
+      deepStrictEqual(await databaseCounts(), before);
+      equal((await db.collection("customers")
+        .doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).exists, false);
+      equal((await db.collection("products")
+        .doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID).get()).exists, false);
+      equal((await db.collection("orders")
+        .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
+      deepStrictEqual((await ref.get()).data(), residual);
+    } finally {
+      await ref.delete();
+    }
+  });
+
   await check("journal residuel par beneficiaire ou commande refuse create avant ecriture", async () => {
     const collisions = [
       {
@@ -994,6 +1025,72 @@ try {
     equal(order.couponCode, null);
     equal(order.contestPrizeId, null);
     deepStrictEqual(order.appliedPromotions, []);
+  });
+
+  await check("cycle created exige audit, historique et lignes exacts", async () => {
+    const orderRef = cagnotteProductionFixtureReferences(db).order;
+    const order = await storedOrder();
+    deepStrictEqual(order.statusHistory, fixtureInitialStatusHistory());
+    for (const field of ["paidAt", "paymentConfirmedAt", "paymentConfirmedBy"] as const) {
+      equal(Object.prototype.hasOwnProperty.call(order, field), false, field);
+    }
+    deepStrictEqual(order.items, cagnotteProductionFixturePricedCheckout().orderItems);
+
+    const corruptions: Array<readonly [string, (order: MutableFixtureOrder) => void]> = [
+      ["paidAt ajoute", (value) => { value.paidAt = CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT; }],
+      ["paymentConfirmedAt ajoute", (value) => {
+        value.paymentConfirmedAt = CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT;
+      }],
+      ["paymentConfirmedBy ajoute", (value) => { value.paymentConfirmedBy = null; }],
+      ["historique initial changedAt", (value) => {
+        value.statusHistory[0].changedAt = "2026-09-18T12:00:01.000Z";
+      }],
+      ["historique initial changedBy", (value) => { value.statusHistory[0].changedBy = "admin"; }],
+      ["historique initial note", (value) => { value.statusHistory[0].note = "Note divergente"; }],
+      ["historique initial supplementaire", (value) => {
+        value.statusHistory.push({ ...value.statusHistory[0] });
+      }],
+      ["snapshot prix achat ajoute", (value) => {
+        value.items[0].purchasePricePerGramSnapshot = null;
+      }],
+      ["snapshot cout achat ajoute", (value) => {
+        value.items[0].purchaseCostTotalSnapshot = null;
+      }],
+      ["snapshot date achat ajoute", (value) => {
+        value.items[0].purchaseCostCapturedAt = CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT;
+      }],
+    ];
+    for (const [name, mutate] of corruptions) {
+      await assertFixtureCorruptionRejected({
+        name,
+        ref: orderRef,
+        mutate: fixtureOrderCorruption(mutate),
+        expected: /production_fixture_order_collision/,
+      }, "mark-paid");
+    }
+  });
+
+  await check("analytics operationnel residuel refuse replay create et mark-paid", async () => {
+    for (const fixtureCommand of ["create", "mark-paid"] as const) {
+      const ref = db.collection("analyticsOperationalEvents")
+        .doc(`production-fixture-operational-analytics-created-${fixtureCommand}`);
+      const residual = {
+        orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+        event: fixtureCommand === "create" ? "arbitrary_replay_event" : "arbitrary_paid_event",
+      };
+      await ref.set(residual);
+      try {
+        const before = await stableFinancialState();
+        await rejects(
+          () => command(fixtureCommand),
+          /production_fixture_analytics_operational_event_collision/,
+        );
+        deepStrictEqual(await stableFinancialState(), before, fixtureCommand);
+        deepStrictEqual((await ref.get()).data(), residual, fixtureCommand);
+      } finally {
+        await ref.delete();
+      }
+    }
   });
 
   await check("fixture creee refuse le journal d un autre order pour son beneficiaire", async () => {
@@ -1527,6 +1624,69 @@ try {
     deepStrictEqual(await stableFinancialState(), beforeReplay);
   });
 
+  await check("cycle paid exige audit paiement, historique et snapshots exacts", async () => {
+    const orderRef = cagnotteProductionFixtureReferences(db).order;
+    const order = await storedOrder();
+    equal(order.paidAt, CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT);
+    equal(order.paymentConfirmedAt, CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT);
+    equal(order.paymentConfirmedBy, null);
+    deepStrictEqual(order.statusHistory, fixtureInitialStatusHistory());
+    deepStrictEqual(order.items, fixturePaidOrderItems());
+
+    const corruptions: Array<readonly [string, (order: MutableFixtureOrder) => void]> = [
+      ["paidAt absent", (value) => { delete value.paidAt; }],
+      ["paidAt incorrect", (value) => { value.paidAt = "2026-09-18T13:00:01.000Z"; }],
+      ["paymentConfirmedAt absent", (value) => { delete value.paymentConfirmedAt; }],
+      ["paymentConfirmedAt incorrect", (value) => {
+        value.paymentConfirmedAt = "2026-09-18T13:00:01.000Z";
+      }],
+      ["paymentConfirmedBy absent", (value) => { delete value.paymentConfirmedBy; }],
+      ["paymentConfirmedBy non null", (value) => { value.paymentConfirmedBy = "admin@fixture.test"; }],
+      ["historique paid supplementaire", (value) => {
+        value.statusHistory.push({ ...value.statusHistory[0] });
+      }],
+      ["historique paid initial altere", (value) => { value.statusHistory[0].note = "Divergent"; }],
+      ["purchaseCostCapturedAt incorrect", (value) => {
+        value.items[0].purchaseCostCapturedAt = "2026-09-18T13:00:01.000Z";
+      }],
+      ["purchasePricePerGramSnapshot non null", (value) => {
+        value.items[0].purchasePricePerGramSnapshot = 1;
+      }],
+      ["purchaseCostTotalSnapshot non null", (value) => {
+        value.items[0].purchaseCostTotalSnapshot = 10;
+      }],
+    ];
+    for (const [name, mutate] of corruptions) {
+      await assertFixtureCorruptionRejected({
+        name,
+        ref: orderRef,
+        mutate: fixtureOrderCorruption(mutate),
+        expected: /production_fixture_order_collision/,
+      }, "mark-delivered");
+    }
+  });
+
+  await check("analytics operationnel residuel refuse mark-delivered", async () => {
+    const ref = db.collection("analyticsOperationalEvents")
+      .doc("production-fixture-operational-analytics-before-delivered-v1");
+    const residual = {
+      orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+      event: "any_operational_event_type",
+    };
+    await ref.set(residual);
+    try {
+      const before = await stableFinancialState();
+      await rejects(
+        () => command("mark-delivered"),
+        /production_fixture_analytics_operational_event_collision/,
+      );
+      deepStrictEqual(await stableFinancialState(), before);
+      deepStrictEqual((await ref.get()).data(), residual);
+    } finally {
+      await ref.delete();
+    }
+  });
+
   await check("fixture payee refuse un mouvement parasite avant mark-delivered", async () => {
     const ref = db.collection("stockMovements")
       .doc("production-fixture-paid-extra-product-v1");
@@ -1781,6 +1941,52 @@ try {
     deepStrictEqual(await stableFinancialState(), beforeReplay);
   });
 
+  await check("cycle delivered exige audit paiement, historique et snapshots exacts", async () => {
+    const orderRef = cagnotteProductionFixtureReferences(db).order;
+    const order = await storedOrder();
+    equal(order.paidAt, CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT);
+    equal(order.paymentConfirmedAt, CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT);
+    equal(order.paymentConfirmedBy, null);
+    deepStrictEqual(order.statusHistory, fixtureDeliveredStatusHistory());
+    deepStrictEqual(order.items, fixturePaidOrderItems());
+
+    const corruptions: Array<readonly [string, (order: MutableFixtureOrder) => void]> = [
+      ["historique delivered absent", (value) => { value.statusHistory.pop(); }],
+      ["historique delivered previousStatus", (value) => {
+        value.statusHistory[1].previousStatus = "processing";
+      }],
+      ["historique delivered changedAt", (value) => {
+        value.statusHistory[1].changedAt = "2026-09-18T14:00:01.000Z";
+      }],
+      ["historique delivered changedBy", (value) => {
+        value.statusHistory[1].changedBy = "system";
+      }],
+      ["historique delivered changedByUid", (value) => {
+        value.statusHistory[1].changedByUid = "autre-acteur";
+      }],
+      ["historique delivered note", (value) => {
+        value.statusHistory[1].note = "Livraison divergente";
+      }],
+      ["historique delivered supplementaire", (value) => {
+        value.statusHistory.push({ ...value.statusHistory[1] });
+      }],
+      ["audit paiement delivered altere", (value) => {
+        value.paymentConfirmedAt = "2026-09-18T14:00:01.000Z";
+      }],
+      ["snapshot cout delivered altere", (value) => {
+        value.items[0].purchaseCostTotalSnapshot = 10;
+      }],
+    ];
+    for (const [name, mutate] of corruptions) {
+      await assertFixtureCorruptionRejected({
+        name,
+        ref: orderRef,
+        mutate: fixtureOrderCorruption(mutate),
+        expected: /production_fixture_order_collision/,
+      }, "mark-delivered");
+    }
+  });
+
   await check("fixture livree refuse un second mouvement au rejeu", async () => {
     const ref = db.collection("stockMovements")
       .doc("production-fixture-delivered-extra-order-v1");
@@ -1886,6 +2092,7 @@ try {
     const inspection = await inspectCagnotteProductionFixture(db);
     equal(inspection.invoiceCount, 0);
     equal(inspection.analyticsOutboxCount, 0);
+    equal(inspection.analyticsOperationalEventCount, 0);
     equal(inspection.paymentLinkRequestCount, 0);
     equal(inspection.refundCount, 0);
     equal(inspection.reservation.exists, false);
@@ -2029,6 +2236,54 @@ type FixtureSnapshot = Record<string, unknown> & {
   limitationReasons: string[];
 };
 
+type MutableFixtureOrder = Record<string, unknown> & {
+  items: Array<Record<string, unknown>>;
+  statusHistory: Array<Record<string, unknown>>;
+};
+
+function fixtureInitialStatusHistory() {
+  return [{
+    status: "contact_required",
+    changedAt: new Date(CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS).toISOString(),
+    changedBy: "system",
+    note: CAGNOTTE_PRODUCTION_FIXTURE_INITIAL_HISTORY_NOTE,
+  }];
+}
+
+function fixtureDeliveredStatusHistory() {
+  return [
+    ...fixtureInitialStatusHistory(),
+    {
+      status: "delivered",
+      previousStatus: "contact_required",
+      changedAt: CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_AT,
+      changedBy: "admin",
+      changedByUid: CAGNOTTE_PRODUCTION_FIXTURE_TOOL_UID,
+      note: CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_HISTORY_NOTE,
+    },
+  ];
+}
+
+function fixturePaidOrderItems() {
+  return cagnotteProductionFixturePricedCheckout().orderItems.map((item) => ({
+    ...item,
+    purchasePricePerGramSnapshot: null,
+    purchaseCostTotalSnapshot: null,
+    purchaseCostCapturedAt: CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT,
+  }));
+}
+
+function fixtureOrderCorruption(
+  mutateOrder: (order: MutableFixtureOrder) => void,
+): FixtureCorruption["mutate"] {
+  return async (ref, original) => {
+    if (!original) throw new Error("production_fixture_test_order_missing");
+    const corrupted = structuredClone(original) as MutableFixtureOrder;
+    mutateOrder(corrupted);
+    return ref.set(corrupted);
+  };
+}
+
 function fixtureSnapshotCorruption(
   mutateSnapshot: (snapshot: FixtureSnapshot) => void,
 ): FixtureCorruption["mutate"] {
@@ -2111,6 +2366,7 @@ async function stableFinancialState() {
     reservation,
     invoices,
     analyticsOutbox,
+    analyticsOperationalEvents,
     paymentLinkRequests,
     supplierPurchases,
     productCost,
@@ -2130,6 +2386,8 @@ async function stableFinancialState() {
     db.collection("cagnotteReservations").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
     db.collection("invoices").where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
     db.collection("analyticsOutbox").where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
+    db.collection("analyticsOperationalEvents")
+      .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
     db.collection("paymentLinkRequests").where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
     db.collection("supplierPurchases").get(),
     db.collection("productCosts").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID).get(),
@@ -2153,6 +2411,7 @@ async function stableFinancialState() {
     reservation: reservation.data(),
     invoices: sortedDocuments(invoices),
     analyticsOutbox: sortedDocuments(analyticsOutbox),
+    analyticsOperationalEvents: sortedDocuments(analyticsOperationalEvents),
     paymentLinkRequests: sortedDocuments(paymentLinkRequests),
     supplierPurchases: sortedDocuments(supplierPurchases),
     productCost: productCost.data(),
@@ -2188,6 +2447,7 @@ async function databaseCounts() {
     "cagnotteRefunds",
     "invoices",
     "analyticsOutbox",
+    "analyticsOperationalEvents",
     "paymentLinkRequests",
     "supplierPurchases",
     "productCosts",

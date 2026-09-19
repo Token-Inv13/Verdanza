@@ -27,6 +27,7 @@ import {
   CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT,
   CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_PROJECT_ID,
+  CAGNOTTE_PRODUCTION_FIXTURE_TOOL_UID,
   CAGNOTTE_PRODUCTION_FIXTURE_UID,
   CAGNOTTE_PRODUCTION_FIXTURE_WRITE_CHALLENGE,
   cagnotteProductionFixtureCheckoutBody,
@@ -80,7 +81,7 @@ export type CagnotteProductionFixtureAuthLookup = Readonly<{
 }>;
 
 const internalActor = Object.freeze({
-  uid: "verdanza-cagnotte-production-fixture-tool-v1",
+  uid: CAGNOTTE_PRODUCTION_FIXTURE_TOOL_UID,
   email: null,
 });
 
@@ -216,6 +217,9 @@ export async function inspectCagnotteProductionFixture(db: Firestore) {
   const analytics = await db.collection("analyticsOutbox")
     .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
     .get();
+  const analyticsOperationalEvents = await db.collection("analyticsOperationalEvents")
+    .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
+    .get();
   const paymentLinkRequests = await db.collection("paymentLinkRequests")
     .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
     .get();
@@ -235,6 +239,7 @@ export async function inspectCagnotteProductionFixture(db: Firestore) {
     movements: movements.docs.map((entry) => ({ id: entry.id, ...entry.data() })),
     invoiceCount: invoices.size,
     analyticsOutboxCount: analytics.size,
+    analyticsOperationalEventCount: analyticsOperationalEvents.size,
     paymentLinkRequestCount: paymentLinkRequests.size,
     refundCount: refunds.size,
   };

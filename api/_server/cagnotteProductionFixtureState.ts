@@ -21,6 +21,8 @@ import { CAGNOTTE_PRODUCTION_PROGRAM_VERSION } from "./cagnotteProgram.js";
 import {
   CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_AT,
+  CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_HISTORY_NOTE,
+  CAGNOTTE_PRODUCTION_FIXTURE_INITIAL_HISTORY_NOTE,
   CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS,
   CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT,
@@ -28,6 +30,7 @@ import {
   CAGNOTTE_PRODUCTION_FIXTURE_REMAINING_STOCK,
   CAGNOTTE_PRODUCTION_FIXTURE_SIDE_EFFECT_REASON,
   CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID,
+  CAGNOTTE_PRODUCTION_FIXTURE_TOOL_UID,
   CAGNOTTE_PRODUCTION_FIXTURE_UID,
   cagnotteProductionFixtureCheckoutBody,
   cagnotteProductionFixtureCustomerDocument,
@@ -124,6 +127,7 @@ export async function validateCagnotteProductionFixtureState({
   });
   const order = orderFromSnapshot(orderSnapshot);
   const state = fixtureState(order);
+  assertFixtureLifecycleAudit(order, state);
   const movements = await validateCagnotteProductionFixtureMovements({
     db,
     transaction,
@@ -246,7 +250,13 @@ export async function validateCagnotteProductionFixtureExternalArtifacts({
   db: Firestore;
   transaction: Transaction;
 }) {
-  const [invoices, analyticsOutbox, paymentLinkRequests, refunds] = await Promise.all([
+  const [
+    invoices,
+    analyticsOutbox,
+    analyticsOperationalEvents,
+    paymentLinkRequests,
+    refunds,
+  ] = await Promise.all([
     transaction.get(
       db.collection("invoices")
         .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
@@ -254,6 +264,11 @@ export async function validateCagnotteProductionFixtureExternalArtifacts({
     ),
     transaction.get(
       db.collection("analyticsOutbox")
+        .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
+        .limit(1),
+    ),
+    transaction.get(
+      db.collection("analyticsOperationalEvents")
         .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
         .limit(1),
     ),
@@ -271,6 +286,9 @@ export async function validateCagnotteProductionFixtureExternalArtifacts({
   if (!invoices.empty) throw new Error("production_fixture_invoice_collision");
   if (!analyticsOutbox.empty) {
     throw new Error("production_fixture_analytics_outbox_collision");
+  }
+  if (!analyticsOperationalEvents.empty) {
+    throw new Error("production_fixture_analytics_operational_event_collision");
   }
   if (!paymentLinkRequests.empty) {
     throw new Error("production_fixture_payment_link_collision");
@@ -410,11 +428,7 @@ function assertStoredFixtureOrder(order: Order) {
     order.couponCode !== null ||
     order.contestPrizeId !== null ||
     (order.appliedPromotions?.length ?? 0) !== 0 ||
-    order.cagnotteReservationIntent !== undefined ||
-    !isDeepStrictEqual(
-      order.items.map(stripPurchaseCost),
-      cagnotteProductionFixturePricedCheckout().orderItems,
-    )
+    order.cagnotteReservationIntent !== undefined
   ) {
     fixtureOrderCollision();
   }
@@ -442,6 +456,66 @@ function fixtureState(order: Order): CagnotteProductionFixtureState {
     order.orderStatus === "delivered"
   ) return "delivered";
   return fixtureOrderCollision();
+}
+
+function assertFixtureLifecycleAudit(
+  order: Order,
+  state: CagnotteProductionFixtureState,
+) {
+  const initialHistory = {
+    status: "contact_required",
+    changedAt: new Date(CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS).toISOString(),
+    changedBy: "system",
+    note: CAGNOTTE_PRODUCTION_FIXTURE_INITIAL_HISTORY_NOTE,
+  };
+  const expectedHistory = state === "delivered"
+    ? [
+        initialHistory,
+        {
+          status: "delivered",
+          previousStatus: "contact_required",
+          changedAt: CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_AT,
+          changedBy: "admin",
+          changedByUid: CAGNOTTE_PRODUCTION_FIXTURE_TOOL_UID,
+          note: CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_HISTORY_NOTE,
+        },
+      ]
+    : [initialHistory];
+  if (!isDeepStrictEqual(order.statusHistory, expectedHistory)) fixtureOrderCollision();
+
+  const paymentAuditFields = [
+    "paidAt",
+    "paymentConfirmedAt",
+    "paymentConfirmedBy",
+  ] as const;
+  const expectedItems = cagnotteProductionFixturePricedCheckout().orderItems;
+  if (state === "created") {
+    if (
+      paymentAuditFields.some((field) => Object.prototype.hasOwnProperty.call(order, field)) ||
+      !isDeepStrictEqual(order.items, expectedItems)
+    ) {
+      fixtureOrderCollision();
+    }
+    return;
+  }
+
+  if (
+    paymentAuditFields.some((field) => !Object.prototype.hasOwnProperty.call(order, field)) ||
+    order.paidAt !== CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT ||
+    order.paymentConfirmedAt !== CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT ||
+    order.paymentConfirmedBy !== null ||
+    !isDeepStrictEqual(
+      order.items,
+      expectedItems.map((item) => ({
+        ...item,
+        purchasePricePerGramSnapshot: null,
+        purchaseCostTotalSnapshot: null,
+        purchaseCostCapturedAt: CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT,
+      })),
+    )
+  ) {
+    fixtureOrderCollision();
+  }
 }
 
 async function assertFixtureLedger(input: {
@@ -637,15 +711,6 @@ function assertTransitionPrecondition(
   if (expectedTransition === "existing" || expectedTransition === "mark-paid") return;
   if (state === "paid" || state === "delivered") return;
   throw new Error("production_fixture_state_transition_invalid");
-}
-
-function stripPurchaseCost(item: Order["items"][number]) {
-  const copy = { ...item } as Record<string, unknown>;
-  delete copy.purchasePricePerGramSnapshot;
-  delete copy.purchaseCostTotalSnapshot;
-  delete copy.purchaseCostCapturedAt;
-  delete copy.purchaseCostSource;
-  return copy;
 }
 
 function fixtureOrderCollision(): never {

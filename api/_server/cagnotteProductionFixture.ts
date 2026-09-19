@@ -8,6 +8,8 @@ export const CAGNOTTE_PRODUCTION_FIXTURE_UID =
   "verdanza-cagnotte-production-fixture-user-v1" as const;
 export const CAGNOTTE_PRODUCTION_FIXTURE_EMAIL =
   "cagnotte.production.fixture@verdanza.test" as const;
+export const CAGNOTTE_PRODUCTION_FIXTURE_TOOL_UID =
+  "verdanza-cagnotte-production-fixture-tool-v1" as const;
 export const CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID =
   "verdanza-cagnotte-production-fixture-product-v1" as const;
 export const CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID =
@@ -24,6 +26,8 @@ export const CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT =
   "2026-09-18T13:00:00.000Z" as const;
 export const CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_AT =
   "2026-09-18T14:00:00.000Z" as const;
+export const CAGNOTTE_PRODUCTION_FIXTURE_INITIAL_HISTORY_NOTE =
+  "Commande transmise. Client a contacter pour confirmer disponibilites, livraison et reglement." as const;
 export const CAGNOTTE_PRODUCTION_FIXTURE_PAID_HISTORY_NOTE =
   "Paiement synthetique fixture confirme par l outil interne." as const;
 export const CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_HISTORY_NOTE =
