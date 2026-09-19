@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { commercialSupplierInvoiceContext } from "../api/_server/supplierInvoiceAnalysis";
 import { parseSupplierInvoiceText } from "../src/lib/supplierInvoiceParsers";
 import type { Product, SupplierProductAlias } from "../src/types";
 
@@ -51,6 +52,34 @@ assert.equal(ambiguous.purchase.lines?.[0].matchConfidence, "ambiguous");
 
 const noText = parseSupplierInvoiceText("", { products, aliases });
 assert.equal(noText.isBlocked, true);
+
+const exactFixture = {
+  ...product("fixture-exact", "FIXTURE-EXACT", "Fixture exacte"),
+  productionFixture: { marker: "verdanza-cagnotte-production-fixture-v1" },
+} as unknown as Product;
+const corruptFixture = {
+  ...product("fixture-corrupt", "FIXTURE-CORRUPT", "Fixture corrompue"),
+  productionFixture: { marker: "corrompu" },
+} as unknown as Product;
+const fixtureAliases = [
+  ...aliases,
+  {
+    ...aliases[0],
+    id: "alias-fixture-exact",
+    productId: exactFixture.id,
+  },
+  {
+    ...aliases[0],
+    id: "alias-fixture-corrupt",
+    productId: corruptFixture.id,
+  },
+];
+const commercialContext = commercialSupplierInvoiceContext(
+  [...products, exactFixture, corruptFixture],
+  fixtureAliases,
+);
+assert.deepEqual(commercialContext.products.map((entry) => entry.id), products.map((entry) => entry.id));
+assert.deepEqual(commercialContext.aliases.map((entry) => entry.id), aliases.map((entry) => entry.id));
 
 console.log("Supplier invoice import tests passed.");
 

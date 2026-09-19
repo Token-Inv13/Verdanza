@@ -94,7 +94,6 @@ export async function validateCagnotteProductionFixtureState({
     product,
     checkoutRequest,
     sideEffects,
-    stockMovement,
     wallet,
     accrual,
     reservation,
@@ -108,7 +107,6 @@ export async function validateCagnotteProductionFixtureState({
     refs.product,
     refs.checkoutRequest,
     refs.sideEffects,
-    refs.stockMovement,
     refs.wallet,
     refs.accrual,
     refs.reservation,
@@ -121,6 +119,11 @@ export async function validateCagnotteProductionFixtureState({
     db.collection("cagnotteMovements")
       .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID),
   );
+  await validateCagnotteProductionFixtureStockMovements({
+    db,
+    transaction,
+    expected: "canonical",
+  });
   await validateCagnotteProductionFixtureExternalArtifacts({ db, transaction });
 
   assertFixtureDocuments({
@@ -130,7 +133,6 @@ export async function validateCagnotteProductionFixtureState({
     orderSnapshot,
     checkoutRequest,
     sideEffects,
-    stockMovement,
     reservation,
   });
   const order = orderFromSnapshot(orderSnapshot);
@@ -152,6 +154,52 @@ export async function validateCagnotteProductionFixtureState({
   });
   assertTransitionPrecondition(state, expectedTransition);
   return state;
+}
+
+export async function validateCagnotteProductionFixtureStockMovements({
+  db,
+  transaction,
+  expected,
+}: {
+  db: Firestore;
+  transaction: Transaction;
+  expected: "absent" | "canonical";
+}) {
+  const canonicalRef = cagnotteProductionFixtureReferences(db).stockMovement;
+  const [byOrder, byProduct, canonical] = await Promise.all([
+    transaction.get(
+      db.collection("stockMovements")
+        .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID),
+    ),
+    transaction.get(
+      db.collection("stockMovements")
+        .where("productId", "==", CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID),
+    ),
+    transaction.get(canonicalRef),
+  ]);
+  const linkedMovementIds = new Set([
+    ...byOrder.docs.map((snapshot) => snapshot.id),
+    ...byProduct.docs.map((snapshot) => snapshot.id),
+  ]);
+
+  if (expected === "absent") {
+    if (canonical.exists || linkedMovementIds.size !== 0) {
+      throw new Error("production_fixture_stock_movement_collision");
+    }
+    return;
+  }
+
+  if (
+    !canonical.exists ||
+    linkedMovementIds.size !== 1 ||
+    !linkedMovementIds.has(CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID) ||
+    !isDeepStrictEqual(
+      canonical.data(),
+      cagnotteProductionFixtureStockMovementDocument(),
+    )
+  ) {
+    throw new Error("production_fixture_stock_movement_collision");
+  }
 }
 
 /** The fixture contract requires that no external-delivery artifact exists. */
@@ -203,7 +251,6 @@ function assertFixtureDocuments(input: {
   orderSnapshot: DocumentSnapshot;
   checkoutRequest: DocumentSnapshot;
   sideEffects: DocumentSnapshot;
-  stockMovement: DocumentSnapshot;
   reservation: DocumentSnapshot;
 }) {
   if (!isDeepStrictEqual(
@@ -260,12 +307,6 @@ function assertFixtureDocuments(input: {
     }
   }
 
-  if (!isDeepStrictEqual(
-    input.stockMovement.data(),
-    cagnotteProductionFixtureStockMovementDocument(),
-  )) {
-    throw new Error("production_fixture_stock_movement_collision");
-  }
   if (input.reservation.exists) {
     throw new Error("production_fixture_reservation_collision");
   }

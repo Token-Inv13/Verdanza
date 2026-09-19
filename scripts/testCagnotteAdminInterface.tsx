@@ -40,8 +40,11 @@ import {
   commercialAdminOrders,
   ordersForCommercialCustomer,
 } from "../src/lib/adminCustomerCommercial.js";
-import { assertOrdinaryCustomerAdminMutationAllowed } from "../src/lib/productionFixtureMarker.js";
-import type { Coupon, CustomerProfile, Order } from "../src/types/index.js";
+import {
+  assertOrdinaryCustomerAdminMutationAllowed,
+  filterOrdinaryProducts,
+} from "../src/lib/productionFixtureMarker.js";
+import type { Coupon, CustomerProfile, Order, Product } from "../src/types/index.js";
 
 let tests = 0;
 function test(name: string, run: () => void | Promise<void>) {
@@ -287,6 +290,37 @@ await test("mutations client ordinaires refusent tout profil portant le marqueur
     () => updateCustomerAdminStatus(exactFixture, { status: "archived" }),
     /production_fixture_customer_admin_mutation_forbidden/,
   );
+});
+await test("comptabilite et formulaire fournisseur n exposent que les produits commerciaux", async () => {
+  const ordinary = { id: "ordinary-product", name: "Produit commercial" } as Product;
+  const exactFixture = {
+    id: "fixture-product",
+    name: "Produit fixture",
+    productionFixture: { marker: "verdanza-cagnotte-production-fixture-v1" },
+  } as unknown as Product;
+  const corruptFixture = {
+    id: "fixture-corrupt-product",
+    name: "Produit fixture corrompu",
+    productionFixture: { marker: "corrompu" },
+  } as unknown as Product;
+  const commercialProducts = filterOrdinaryProducts([
+    exactFixture,
+    corruptFixture,
+    ordinary,
+  ]);
+  deepEqual(commercialProducts, [ordinary]);
+  equal(commercialProducts[0]?.id || "", ordinary.id);
+  equal(filterOrdinaryProducts([exactFixture, corruptFixture])[0]?.id || "", "");
+
+  const adminPage = await readFile(resolve("src/pages/admin/AdminPage.tsx"), "utf8");
+  match(adminPage, /const commercialProducts = useMemo\([\s\S]*?filterOrdinaryProducts\(products\)/);
+  match(adminPage, /buildProductCostFilters\(commercialProducts,/);
+  match(adminPage, /<SupplierPurchaseForm[\s\S]*?products=\{commercialProducts\}/);
+  match(adminPage, /const selectableProducts = useMemo\([\s\S]*?filterOrdinaryProducts\(products\)/);
+  match(adminPage, /const firstProductId = selectableProducts\[0\]\?\.id \|\| ""/);
+  match(adminPage, /productById\.has\(productId\) \? productId : ""/);
+  match(adminPage, /selectableProducts\.map\(\(product\) =>/);
+  match(adminPage, /emptySupplierLine\(firstProductId\)/);
 });
 await test("projection admin refuse historique, inscription invalide, source non Firestore et garde fermee", () => {
   const ordinary = adminOrderRow(projectableOrder({ id: "CMD-HISTORIQUE", customerId: "client-fictif" }));

@@ -27,6 +27,12 @@ import {
 } from "../api/_server/email.js";
 import { executePaymentLinkDelivery } from "../api/_server/paymentLinkDelivery.js";
 import { executeGuardedInvoiceSend } from "../api/_server/invoiceEmailSend.js";
+import {
+  saveProductCost,
+  saveSupplierProductAlias,
+  saveSupplierPurchase,
+  stripUndefinedFields,
+} from "../api/invoices.js";
 import { processPurchaseAnalyticsOutbox } from "../api/_server/purchaseAnalytics.js";
 import { executeOrderRefund } from "../api/_server/orderRefunds.js";
 import { cagnotteLedgerMovementId } from "../api/_server/cagnotteLedger.js";
@@ -237,6 +243,184 @@ try {
     equal(ordinaryProduct.lowStockThreshold, 2);
   });
 
+  await check("achats, alias et couts fournisseur refusent tout produit fixture avant ecriture", async () => {
+    const actor = { uid: "fixture-admin", email: "admin@fixture.test" };
+    const ordinaryProductId = "supplier-ordinary-product";
+    const exactFixtureProductId = "supplier-exact-fixture-product";
+    const corruptFixtureProductId = "supplier-corrupt-fixture-product";
+    const productRefs = [
+      db.collection("products").doc(ordinaryProductId),
+      db.collection("products").doc(exactFixtureProductId),
+      db.collection("products").doc(corruptFixtureProductId),
+    ];
+    const purchaseIds = [
+      "supplier-normal-purchase",
+      "supplier-fixture-draft",
+      "supplier-fixture-validated",
+      "supplier-corrupt-draft",
+      "supplier-edit-draft",
+    ];
+    let ordinaryAliasId = "";
+    await Promise.all([
+      productRefs[0].set({
+        name: "Produit fournisseur ordinaire",
+        internalReference: "SUPPLIER-ORDINARY",
+      }),
+      productRefs[1].set(cagnotteProductionFixtureProductDocument()),
+      productRefs[2].set({
+        name: "Produit fixture corrompu",
+        internalReference: "SUPPLIER-CORRUPT",
+        productionFixture: { marker: "corrompu" },
+      }),
+    ]);
+    try {
+      const serializationDate = new Date("2026-09-18T08:00:00.000Z");
+      const serializationProbe = stripUndefinedFields({
+        zero: 0,
+        disabled: false,
+        nullable: null,
+        empty: "",
+        omitted: undefined,
+        nested: { kept: 0, omitted: undefined },
+        lines: [{ kept: false, omitted: undefined }],
+        date: serializationDate,
+      });
+      deepStrictEqual(serializationProbe, {
+        zero: 0,
+        disabled: false,
+        nullable: null,
+        empty: "",
+        nested: { kept: 0 },
+        lines: [{ kept: false }],
+        date: serializationDate,
+      });
+      equal(serializationProbe.date, serializationDate);
+
+      const normalPurchase = supplierPurchaseInput(
+        purchaseIds[0],
+        ordinaryProductId,
+        "draft",
+      );
+      await saveSupplierPurchase(db, normalPurchase, actor);
+      const normalDraft = (await db.collection("supplierPurchases")
+        .doc(purchaseIds[0]).get()).data()!;
+      equal(Object.hasOwn(normalDraft, "validatedAt"), false);
+      equal(documentContainsUndefined(normalDraft), false);
+      equal(Object.hasOwn(normalDraft.lines[0], "matchSource"), false);
+      equal(Object.hasOwn(normalDraft.lines[0], "matchConfidence"), false);
+      equal(normalDraft.globalDiscountExVat, 0);
+      equal(normalDraft.shippingExVat, 0);
+      await saveSupplierPurchase(
+        db,
+        supplierPurchaseInput(purchaseIds[0], ordinaryProductId, "validated"),
+        actor,
+      );
+      const normalValidated = (await db.collection("supplierPurchases")
+        .doc(purchaseIds[0]).get()).data()!;
+      equal(typeof normalValidated.validatedAt, "string");
+      equal(normalValidated.validatedAt.length > 0, true);
+      equal(documentContainsUndefined(normalValidated), false);
+
+      await rejects(
+        () => saveSupplierPurchase(
+          db,
+          supplierPurchaseInput(purchaseIds[1], exactFixtureProductId, "draft"),
+          actor,
+        ),
+        /production_fixture_supplier_purchase_forbidden/,
+      );
+      equal((await db.collection("supplierPurchases").doc(purchaseIds[1]).get()).exists, false);
+      await rejects(
+        () => saveSupplierPurchase(
+          db,
+          supplierPurchaseInput(purchaseIds[2], exactFixtureProductId, "validated"),
+          actor,
+        ),
+        /production_fixture_supplier_purchase_forbidden/,
+      );
+      equal((await db.collection("supplierPurchases").doc(purchaseIds[2]).get()).exists, false);
+      await rejects(
+        () => saveSupplierPurchase(
+          db,
+          supplierPurchaseInput(purchaseIds[3], corruptFixtureProductId, "draft"),
+          actor,
+        ),
+        /production_fixture_supplier_purchase_forbidden/,
+      );
+      equal((await db.collection("supplierPurchases").doc(purchaseIds[3]).get()).exists, false);
+
+      await saveSupplierPurchase(
+        db,
+        supplierPurchaseInput(purchaseIds[4], ordinaryProductId, "draft"),
+        actor,
+      );
+      const editableBefore = (await db.collection("supplierPurchases")
+        .doc(purchaseIds[4]).get()).data();
+      await rejects(
+        () => saveSupplierPurchase(
+          db,
+          supplierPurchaseInput(purchaseIds[4], exactFixtureProductId, "draft"),
+          actor,
+        ),
+        /production_fixture_supplier_purchase_forbidden/,
+      );
+      deepStrictEqual(
+        (await db.collection("supplierPurchases").doc(purchaseIds[4]).get()).data(),
+        editableBefore,
+      );
+
+      const ordinaryAlias = await saveSupplierProductAlias(db, {
+        supplierName: "Fournisseur ordinaire",
+        originalLabel: "Produit ordinaire",
+        productId: ordinaryProductId,
+      }, actor);
+      ordinaryAliasId = ordinaryAlias.aliasId;
+      equal((await db.collection("supplierProductAliases").doc(ordinaryAliasId).get()).exists, true);
+      const aliasCount = (await db.collection("supplierProductAliases").get()).size;
+      await rejects(
+        () => saveSupplierProductAlias(db, {
+          supplierName: "Fournisseur fixture",
+          originalLabel: "Produit fixture exact",
+          productId: exactFixtureProductId,
+        }, actor),
+        /production_fixture_product_admin_mutation_forbidden/,
+      );
+      await rejects(
+        () => saveSupplierProductAlias(db, {
+          supplierName: "Fournisseur fixture",
+          originalLabel: "Produit fixture corrompu",
+          productId: corruptFixtureProductId,
+        }, actor),
+        /production_fixture_product_admin_mutation_forbidden/,
+      );
+      equal((await db.collection("supplierProductAliases").get()).size, aliasCount);
+
+      await saveProductCost(db, ordinaryProductId, 2.5, actor);
+      equal((await db.collection("productCosts").doc(ordinaryProductId).get()).exists, true);
+      await rejects(
+        () => saveProductCost(db, exactFixtureProductId, 999, actor),
+        /production_fixture_product_admin_mutation_forbidden/,
+      );
+      await rejects(
+        () => saveProductCost(db, corruptFixtureProductId, 999, actor),
+        /production_fixture_product_admin_mutation_forbidden/,
+      );
+      equal((await db.collection("productCosts").doc(exactFixtureProductId).get()).exists, false);
+      equal((await db.collection("productCosts").doc(corruptFixtureProductId).get()).exists, false);
+    } finally {
+      await Promise.all([
+        ...productRefs.map((ref) => ref.delete()),
+        ...purchaseIds.map((id) => db.collection("supplierPurchases").doc(id).delete()),
+        db.collection("productCosts").doc(ordinaryProductId).delete(),
+        db.collection("productCosts").doc(exactFixtureProductId).delete(),
+        db.collection("productCosts").doc(corruptFixtureProductId).delete(),
+        ...(ordinaryAliasId
+          ? [db.collection("supplierProductAliases").doc(ordinaryAliasId).delete()]
+          : []),
+      ]);
+    }
+  });
+
   await check("dry-run pur et cible strictement bornee", async () => {
     const before = await databaseCounts();
     const plan = buildCagnotteProductionFixturePlan({
@@ -426,6 +610,57 @@ try {
     equal((await db.collection("orders").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
     equal((await db.collection("checkoutRequests").doc(CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID).get()).exists, false);
     await ref.delete();
+  });
+
+  await check("tout mouvement lie par orderId ou productId refuse create avant ecriture", async () => {
+    const collisions = [
+      {
+        id: "production-fixture-stock-order-only-v1",
+        data: { orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID, quantity: -1 },
+      },
+      {
+        id: "production-fixture-stock-order-other-product-v1",
+        data: {
+          orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+          productId: "other-product",
+          quantity: -1,
+        },
+      },
+      {
+        id: "production-fixture-stock-product-only-v1",
+        data: { productId: CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID, quantity: -1 },
+      },
+      {
+        id: "production-fixture-stock-product-other-order-v1",
+        data: {
+          orderId: "other-order",
+          productId: CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID,
+          quantity: -1,
+        },
+      },
+      {
+        id: "production-fixture-stock-duplicate-axes-v1",
+        data: {
+          orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+          productId: CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID,
+          quantity: -1,
+        },
+      },
+    ];
+    for (const collision of collisions) {
+      const ref = db.collection("stockMovements").doc(collision.id);
+      await ref.set(collision.data);
+      try {
+        const before = await databaseCounts();
+        await rejects(() => command("create"), /production_fixture_stock_movement_collision/);
+        deepStrictEqual((await ref.get()).data(), collision.data);
+        deepStrictEqual(await databaseCounts(), before);
+        equal((await db.collection("customers").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).exists, false);
+        equal((await db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID).get()).exists, false);
+      } finally {
+        await ref.delete();
+      }
+    }
   });
 
   await check("transaction checkout fixture refuse elle-meme une collision stock", async () => {
@@ -648,6 +883,44 @@ try {
     equal(order.couponCode, null);
     equal(order.contestPrizeId, null);
     deepStrictEqual(order.appliedPromotions, []);
+  });
+
+  await check("fixture creee refuse tout second mouvement sur les deux axes", async () => {
+    const parasites = [
+      {
+        id: "production-fixture-created-extra-order-v1",
+        data: {
+          orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+          productId: "other-product",
+          quantity: -1,
+        },
+      },
+      {
+        id: "production-fixture-created-extra-product-v1",
+        data: {
+          orderId: "other-order",
+          productId: CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID,
+          quantity: -1,
+        },
+      },
+      {
+        id: "production-fixture-created-extra-product-no-order-v1",
+        data: { productId: CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID, quantity: -1 },
+      },
+    ];
+    for (const parasite of parasites) {
+      const ref = db.collection("stockMovements").doc(parasite.id);
+      await ref.set(parasite.data);
+      try {
+        const before = await stableFinancialState();
+        await rejects(() => command("create"), /production_fixture_stock_movement_collision/);
+        await rejects(() => command("mark-paid"), /production_fixture_stock_movement_collision/);
+        deepStrictEqual(await stableFinancialState(), before);
+        deepStrictEqual((await ref.get()).data(), parasite.data);
+      } finally {
+        await ref.delete();
+      }
+    }
   });
 
   await check("fixture creee non payee refuse un wallet injecte au rejeu create", async () => {
@@ -1084,6 +1357,22 @@ try {
     deepStrictEqual(await stableFinancialState(), beforeReplay);
   });
 
+  await check("fixture payee refuse un mouvement parasite avant mark-delivered", async () => {
+    const ref = db.collection("stockMovements")
+      .doc("production-fixture-paid-extra-product-v1");
+    const parasite = { productId: CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID, quantity: -1 };
+    await ref.set(parasite);
+    try {
+      const before = await stableFinancialState();
+      await rejects(() => command("create"), /production_fixture_stock_movement_collision/);
+      await rejects(() => command("mark-delivered"), /production_fixture_stock_movement_collision/);
+      deepStrictEqual(await stableFinancialState(), before);
+      deepStrictEqual((await ref.get()).data(), parasite);
+    } finally {
+      await ref.delete();
+    }
+  });
+
   await check("fixture payee refuse une reservation residuelle au rejeu create", async () => {
     const reservationRef = db.collection("cagnotteReservations")
       .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID);
@@ -1265,6 +1554,26 @@ try {
     deepStrictEqual(await stableFinancialState(), beforeReplay);
   });
 
+  await check("fixture livree refuse un second mouvement au rejeu", async () => {
+    const ref = db.collection("stockMovements")
+      .doc("production-fixture-delivered-extra-order-v1");
+    const parasite = {
+      orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+      productId: "other-product",
+      quantity: -1,
+    };
+    await ref.set(parasite);
+    try {
+      const before = await stableFinancialState();
+      await rejects(() => command("create"), /production_fixture_stock_movement_collision/);
+      await rejects(() => command("mark-delivered"), /production_fixture_stock_movement_collision/);
+      deepStrictEqual(await stableFinancialState(), before);
+      deepStrictEqual((await ref.get()).data(), parasite);
+    } finally {
+      await ref.delete();
+    }
+  });
+
   await check("fixture livree refuse une reservation residuelle au rejeu create", async () => {
     const reservationRef = db.collection("cagnotteReservations")
       .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID);
@@ -1365,6 +1674,40 @@ try {
 
 function fixtureBody() {
   return cagnotteProductionFixtureCheckoutBody() as CheckoutRequestBody;
+}
+
+function supplierPurchaseInput(
+  id: string,
+  productId: string,
+  status: "draft" | "validated",
+) {
+  return {
+    id,
+    supplierName: "Fournisseur fixture test",
+    invoiceNumber: `FIXTURE-${id}`,
+    invoiceDate: "2026-09-18",
+    globalDiscountExVat: 0,
+    shippingExVat: 0,
+    vatRate: 0,
+    costBase: "HT" as const,
+    status,
+    lines: [{
+      id: "line-1",
+      productId,
+      quantityGrams: 10,
+      grossAmountExVat: 20,
+      vatRate: 0,
+      lineDiscountAmount: 0,
+    }],
+  };
+}
+
+function documentContainsUndefined(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (Array.isArray(value)) return value.some(documentContainsUndefined);
+  if (!value || typeof value !== "object") return false;
+  if (value instanceof Date) return false;
+  return Object.values(value).some(documentContainsUndefined);
 }
 
 function fixturePriced() {
@@ -1531,7 +1874,7 @@ async function stableFinancialState() {
     fixtureMovements(),
     db.collection("cagnotteRefunds").get(),
     db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID).get(),
-    db.collection("stockMovements").where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
+    db.collection("stockMovements").get(),
     db.collection("orderSideEffects").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
     db.collection("cagnotteReservations").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
     db.collection("invoices").where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),

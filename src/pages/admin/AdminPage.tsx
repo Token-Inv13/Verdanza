@@ -185,6 +185,7 @@ import {
   buildAccountingSummary,
   type AccountingMetricKey,
 } from "../../lib/accountingSummary";
+import { filterOrdinaryProducts } from "../../lib/productionFixtureMarker";
 import { buildDashboardMetrics } from "../../lib/adminDashboardMetrics";
 import {
   buildCommercialCustomerEntries,
@@ -5111,6 +5112,10 @@ function AccountingPanel({
   const [costFilter, setCostFilter] = useState<ProductCostFilter>("all");
   const [editingSupplierPurchase, setEditingSupplierPurchase] =
     useState<Partial<SupplierPurchase> | null>(null);
+  const commercialProducts = useMemo(
+    () => filterOrdinaryProducts(products),
+    [products],
+  );
   const productCostMap = useMemo(
     () => new Map(productCosts.map((cost) => [cost.productId, cost])),
     [productCosts],
@@ -5120,16 +5125,16 @@ function AccountingPanel({
     [supplierPurchases],
   );
   const productCostFilters = useMemo(
-    () => buildProductCostFilters(products, productCostMap, weightedSupplierCosts),
-    [productCostMap, products, weightedSupplierCosts],
+    () => buildProductCostFilters(commercialProducts, productCostMap, weightedSupplierCosts),
+    [commercialProducts, productCostMap, weightedSupplierCosts],
   );
   const filteredCostProducts = useMemo(
-    () => products.filter((product) => productMatchesProductCostFilter(product, productCostMap, weightedSupplierCosts, costFilter)),
-    [costFilter, productCostMap, products, weightedSupplierCosts],
+    () => commercialProducts.filter((product) => productMatchesProductCostFilter(product, productCostMap, weightedSupplierCosts, costFilter)),
+    [commercialProducts, costFilter, productCostMap, weightedSupplierCosts],
   );
   const activeProductsMissingCost = useMemo(
-    () => products.filter((product) => product.isActive && !weightedSupplierCosts.has(product.id) && productCostMap.get(product.id)?.purchasePricePerGram == null),
-    [productCostMap, products, weightedSupplierCosts],
+    () => commercialProducts.filter((product) => product.isActive && !weightedSupplierCosts.has(product.id) && productCostMap.get(product.id)?.purchasePricePerGram == null),
+    [commercialProducts, productCostMap, weightedSupplierCosts],
   );
   const periodSelection = useMemo(() => {
     try {
@@ -5149,12 +5154,12 @@ function AccountingPanel({
   }, [customEnd, customStart, period, todayInput]);
   const periodRange = periodSelection.range;
   const summary = useMemo(
-    () => buildAccountingSummary(orders, products, productCostMap, supplierPurchases, weightedSupplierCosts, periodRange),
-    [orders, periodRange, productCostMap, products, supplierPurchases, weightedSupplierCosts],
+    () => buildAccountingSummary(orders, commercialProducts, productCostMap, supplierPurchases, weightedSupplierCosts, periodRange),
+    [commercialProducts, orders, periodRange, productCostMap, supplierPurchases, weightedSupplierCosts],
   );
   const previousSummary = useMemo(
-    () => buildAccountingSummary(orders, products, productCostMap, supplierPurchases, weightedSupplierCosts, previousAccountingPeriodRange(periodRange)),
-    [orders, periodRange, productCostMap, products, supplierPurchases, weightedSupplierCosts],
+    () => buildAccountingSummary(orders, commercialProducts, productCostMap, supplierPurchases, weightedSupplierCosts, previousAccountingPeriodRange(periodRange)),
+    [commercialProducts, orders, periodRange, productCostMap, supplierPurchases, weightedSupplierCosts],
   );
   const periodFilters: Array<{ value: AccountingPeriodFilter; label: string }> = [
     { value: "week", label: "Semaine en cours" },
@@ -5453,7 +5458,7 @@ function AccountingPanel({
           </p>
         </div>
         <SupplierPurchaseForm
-          products={products}
+          products={commercialProducts}
           editingPurchase={editingSupplierPurchase}
           onImportedPurchase={setEditingSupplierPurchase}
           onCancelEdit={() => setEditingSupplierPurchase(null)}
@@ -5471,7 +5476,7 @@ function AccountingPanel({
         {(!supplierPurchasesError || supplierPurchases.length > 0) && (
           <SupplierPurchasesTable
             purchases={supplierPurchases}
-            products={products}
+            products={commercialProducts}
             onEdit={setEditingSupplierPurchase}
             onDelete={onDeleteSupplierPurchase}
             onCancel={onCancelSupplierPurchase}
@@ -5625,7 +5630,15 @@ function SupplierPurchaseForm({
   onSaveAlias: (alias: { supplierName: string; originalLabel: string; productId: string }) => Promise<void>;
   onCancelEdit: () => void;
 }) {
-  const firstProductId = products[0]?.id || "";
+  const selectableProducts = useMemo(
+    () => filterOrdinaryProducts(products),
+    [products],
+  );
+  const productById = useMemo(
+    () => new Map(selectableProducts.map((product) => [product.id, product])),
+    [selectableProducts],
+  );
+  const firstProductId = selectableProducts[0]?.id || "";
   const [supplierName, setSupplierName] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(toDateInputValue(new Date()));
@@ -5650,19 +5663,23 @@ function SupplierPurchaseForm({
     setStatus(editingPurchase.status === "validated" ? "validated" : "draft");
     setLines(
       editingPurchase.lines?.length
-        ? editingPurchase.lines.map((line, index) => ({
-            ...emptySupplierLine(firstProductId),
-            ...line,
-            id: line.id || `line-${index + 1}`,
-          }))
+        ? editingPurchase.lines.map((line, index) => {
+            const productId = String(line.productId || "");
+            const selectableProductId = productById.has(productId) ? productId : "";
+            return {
+              ...emptySupplierLine(firstProductId),
+              ...line,
+              id: line.id || `line-${index + 1}`,
+              productId: selectableProductId,
+              productName: selectableProductId ? line.productName : "",
+              productInternalReference: selectableProductId
+                ? line.productInternalReference
+                : "",
+            };
+          })
         : [emptySupplierLine(firstProductId)],
     );
-  }, [editingPurchase, firstProductId]);
-
-  const productById = useMemo(
-    () => new Map(products.map((product) => [product.id, product])),
-    [products],
-  );
+  }, [editingPurchase, firstProductId, productById]);
   let preview: SupplierPurchase | null = null;
   try {
     preview = normalizeSupplierPurchaseInput(buildPayload()) as SupplierPurchase;
@@ -5765,7 +5782,7 @@ function SupplierPurchaseForm({
                 <td className="px-3 py-3">
                   <select className="input-field min-w-56" value={line.productId} onChange={(event) => updateLine(index, { productId: event.target.value })}>
                     <option value="">Selectionner un produit</option>
-                    {products.map((product) => (
+                    {selectableProducts.map((product) => (
                       <option key={product.id} value={product.id}>
                         {product.internalReference ? `${product.internalReference} - ` : ""}{product.name}
                       </option>

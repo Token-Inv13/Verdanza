@@ -193,6 +193,61 @@ check(summary.supplierPurchaseMissingDateCount, 1, "Missing supplier dates are c
 check(summary.estimatedStockValue, 22.5, "Current stock remains a current snapshot");
 check(Object.hasOwn(summary.comparisonValues, "estimatedStockValue"), false, "Current stock is not a historical comparison metric");
 
+const exactFixtureProduct = {
+  ...productFixture(),
+  id: "fixture-product-exact",
+  stock: 10,
+  productionFixture: {
+    schemaVersion: 1,
+    marker: "verdanza-cagnotte-production-fixture-v1",
+  },
+} as unknown as Product;
+const corruptFixtureProduct = {
+  ...productFixture(),
+  id: "fixture-product-corrupt",
+  stock: 10,
+  productionFixture: { marker: "corrompu" },
+} as unknown as Product;
+const stockCostsWithFixtures = new Map(weightedCosts);
+stockCostsWithFixtures.set(exactFixtureProduct.id, {
+  productId: exactFixtureProduct.id,
+  totalQuantityGrams: 10,
+  totalCost: 1_000_000,
+  weightedCostPerGram: 100_000,
+});
+stockCostsWithFixtures.set(corruptFixtureProduct.id, {
+  productId: corruptFixtureProduct.id,
+  totalQuantityGrams: 10,
+  totalCost: 2_000_000,
+  weightedCostPerGram: 200_000,
+});
+const summaryWithExactFixtureProduct = buildAccountingSummary(
+  [exactPaid],
+  [product, exactFixtureProduct],
+  productCosts,
+  [],
+  stockCostsWithFixtures,
+  augustMonth,
+);
+const summaryWithAllFixtureProducts = buildAccountingSummary(
+  [exactPaid],
+  [product, exactFixtureProduct, corruptFixtureProduct],
+  productCosts,
+  [],
+  stockCostsWithFixtures,
+  augustMonth,
+);
+check(
+  summaryWithExactFixtureProduct.estimatedStockValue,
+  summary.estimatedStockValue,
+  "An exact Production fixture product cannot change stock valuation",
+);
+check(
+  summaryWithAllFixtureProducts.estimatedStockValue,
+  summary.estimatedStockValue,
+  "A corrupt Production fixture marker cannot change stock valuation",
+);
+
 const commercialWitness = orderFixture({
   id: "COMMERCIAL-WITNESS",
   paymentStatus: "paid",

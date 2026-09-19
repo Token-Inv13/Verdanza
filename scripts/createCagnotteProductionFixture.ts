@@ -43,6 +43,7 @@ import {
   cagnotteProductionFixtureReferences,
   validateCagnotteProductionFixtureExternalArtifacts,
   validateCagnotteProductionFixtureState,
+  validateCagnotteProductionFixtureStockMovements,
 } from "../api/_server/cagnotteProductionFixtureState.js";
 
 export type CagnotteProductionFixtureCommand =
@@ -337,7 +338,6 @@ async function prepareFixtureDocuments(db: Firestore): Promise<"prepared" | "exi
       order,
       checkoutRequest,
       sideEffects,
-      stockMovement,
       wallet,
       accrual,
       reservation,
@@ -348,7 +348,6 @@ async function prepareFixtureDocuments(db: Firestore): Promise<"prepared" | "exi
       transaction.get(refs.order),
       transaction.get(refs.checkoutRequest),
       transaction.get(refs.sideEffects),
-      transaction.get(refs.stockMovement),
       transaction.get(refs.wallet),
       transaction.get(refs.accrual),
       transaction.get(refs.reservation),
@@ -366,6 +365,11 @@ async function prepareFixtureDocuments(db: Firestore): Promise<"prepared" | "exi
     if (existingOrderState.some(Boolean)) {
       throw new Error("production_fixture_partial_collision");
     }
+    await validateCagnotteProductionFixtureStockMovements({
+      db,
+      transaction,
+      expected: "absent",
+    });
     await validateCagnotteProductionFixtureExternalArtifacts({ db, transaction });
     if (reservation.exists) {
       throw new Error("production_fixture_reservation_collision");
@@ -373,9 +377,6 @@ async function prepareFixtureDocuments(db: Firestore): Promise<"prepared" | "exi
     if (admin.exists) throw new Error("production_fixture_admin_collision");
     if (wallet.exists || accrual.exists) {
       throw new Error("production_fixture_wallet_collision");
-    }
-    if (stockMovement.exists) {
-      throw new Error("production_fixture_stock_movement_collision");
     }
     if (customer.exists && !isDeepStrictEqual(customer.data(), cagnotteProductionFixtureCustomerDocument())) {
       throw new Error("production_fixture_customer_collision");

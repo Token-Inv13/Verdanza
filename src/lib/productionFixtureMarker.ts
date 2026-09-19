@@ -10,6 +10,10 @@ export function hasOwnProductionFixtureMarker(
   );
 }
 
+export function filterOrdinaryProducts<T>(products: readonly T[]): T[] {
+  return products.filter((product) => !hasOwnProductionFixtureMarker(product));
+}
+
 export function assertOrdinaryProductAdminMutationAllowed(value: unknown) {
   if (hasOwnProductionFixtureMarker(value)) {
     throw new Error("production_fixture_product_admin_mutation_forbidden");

@@ -16,6 +16,7 @@ import {
   type AccountingPeriodRange,
 } from "./accountingPeriods.js";
 import { orderItemLineTotal } from "./orderLineDisplay.js";
+import { filterOrdinaryProducts } from "./productionFixtureMarker.js";
 
 export type AccountingMetricKey =
   | "collectedRevenue"
@@ -59,6 +60,7 @@ export function buildAccountingSummary(
   weightedSupplierCosts: Map<string, WeightedSupplierCost>,
   range: AccountingPeriodRange,
 ) {
+  const commercialProducts = filterOrdinaryProducts(products);
   const eligibleOrders = orders.filter(
     (order) => !isProductionFixtureOrder(order) && !isCancelledOrDeletedOrder(order),
   );
@@ -101,7 +103,7 @@ export function buildAccountingSummary(
   const supplierPurchaseMissingDateCount = supplierPurchaseDateEntries.filter(
     (entry) => entry.accountingDate.quality === "missing",
   ).length;
-  const estimatedStockValue = estimateStockValue(products, weightedSupplierCosts);
+  const estimatedStockValue = estimateStockValue(commercialProducts, weightedSupplierCosts);
   const collectedRevenue = paidOrdersInPeriod.reduce(
     (sum, order) => sum + orderTotalAmount(order),
     0,
@@ -128,7 +130,9 @@ export function buildAccountingSummary(
   );
   const missingCostIds = new Set<string>();
   const productRowsById = new Map<string, AccountingProductRow>();
-  const productNameById = new Map(products.map((product) => [product.id, product.name]));
+  const productNameById = new Map(
+    commercialProducts.map((product) => [product.id, product.name]),
+  );
   let hasUnfrozenHistoricalCosts = false;
   let estimatedProductCost = 0;
 

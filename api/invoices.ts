@@ -16,7 +16,10 @@ import { BRAND_DOCUMENT_LOGO } from "../src/lib/brandAssets.js";
 import { normalizeSupplierPurchaseInput } from "../src/lib/accountingCosts.js";
 import { buildCustomerInvoiceLines } from "../src/lib/customerInvoiceLines.js";
 import { buildOrderFinancingDocumentSnapshot } from "../src/lib/orderFinancing.js";
-import { assertOrdinaryProductAdminMutationAllowed } from "../src/lib/productionFixtureMarker.js";
+import {
+  assertOrdinaryProductAdminMutationAllowed,
+  hasOwnProductionFixtureMarker,
+} from "../src/lib/productionFixtureMarker.js";
 import {
   normalizeSupplierLabel,
   normalizeText,
@@ -226,15 +229,7 @@ export default async function handler(
       const productId = String(body.productId || "").trim();
       if (!productId) throw new Error("Produit requis.");
       const purchasePricePerGram = optionalNonNegativeNumber(body.purchasePricePerGram);
-      await db.collection("productCosts").doc(productId).set(
-        {
-          productId,
-          purchasePricePerGram: purchasePricePerGram ?? null,
-          updatedAt: FieldValue.serverTimestamp(),
-          updatedBy: adminUser.email || adminUser.uid,
-        },
-        { merge: true },
-      );
+      await saveProductCost(db, productId, purchasePricePerGram, adminUser);
       sendJson(response, { ok: true, productId, purchasePricePerGram });
       return;
     }
@@ -418,7 +413,29 @@ async function getBillingSettings(db: FirebaseFirestore.Firestore) {
   } as BillingSettings;
 }
 
-async function saveSupplierPurchase(
+export async function saveProductCost(
+  db: FirebaseFirestore.Firestore,
+  productId: string,
+  purchasePricePerGram: number | null,
+  adminUser: { email?: string | null; uid: string },
+) {
+  const productSnapshot = await db.collection("products").doc(productId).get();
+  if (productSnapshot.exists) {
+    assertOrdinaryProductAdminMutationAllowed(productSnapshot.data());
+  }
+  await db.collection("productCosts").doc(productId).set(
+    {
+      productId,
+      purchasePricePerGram,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: adminUser.email || adminUser.uid,
+    },
+    { merge: true },
+  );
+  return { ok: true, productId, purchasePricePerGram };
+}
+
+export async function saveSupplierPurchase(
   db: FirebaseFirestore.Firestore,
   rawPurchase: unknown,
   adminUser: { email?: string | null; uid: string },
@@ -454,6 +471,7 @@ async function saveSupplierPurchase(
       throw new Error("Validation refusee: chaque ligne fournisseur doit etre liee a un produit.");
     }
   }
+  await assertSupplierPurchaseProductsAllowed(db, normalized);
 
   const now = new Date().toISOString();
   const ref = existingRef || db.collection("supplierPurchases").doc();
@@ -470,8 +488,49 @@ async function saveSupplierPurchase(
     sourceFileSha256: normalized.sourceFileSha256 || existing?.sourceFileSha256,
     importedFromPdfAt: normalized.importedFromPdfAt || existing?.importedFromPdfAt,
   };
-  await ref.set(payload, { merge: true });
+  await ref.set(stripUndefinedFields(payload), { merge: true });
   return { ok: true, purchaseId: ref.id };
+}
+
+export function stripUndefinedFields<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((entry) => {
+      if (entry === undefined) {
+        throw new Error("firestore_undefined_array_value");
+      }
+      return stripUndefinedFields(entry);
+    }) as unknown as T;
+  }
+  if (!isPlainObject(value)) return value;
+
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry !== undefined) cleaned[key] = stripUndefinedFields(entry);
+  }
+  return cleaned as unknown as T;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object") return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+async function assertSupplierPurchaseProductsAllowed(
+  db: FirebaseFirestore.Firestore,
+  purchase: SupplierPurchase,
+) {
+  const productIds = [...new Set(
+    purchase.lines.map((line) => String(line.productId || "").trim()).filter(Boolean),
+  )];
+  const productSnapshots = await Promise.all(
+    productIds.map((productId) => db.collection("products").doc(productId).get()),
+  );
+  if (productSnapshots.some(
+    (snapshot) => snapshot.exists && hasOwnProductionFixtureMarker(snapshot.data()),
+  )) {
+    throw new Error("production_fixture_supplier_purchase_forbidden");
+  }
 }
 
 async function upsertProductAdmin(db: FirebaseFirestore.Firestore, rawProduct: unknown) {
@@ -666,7 +725,7 @@ async function countQuery(query: FirebaseFirestore.Query) {
   return snapshot.size;
 }
 
-async function saveSupplierProductAlias(
+export async function saveSupplierProductAlias(
   db: FirebaseFirestore.Firestore,
   rawAlias: unknown,
   adminUser: { email?: string | null; uid: string },
@@ -682,6 +741,7 @@ async function saveSupplierProductAlias(
   const productSnapshot = await db.collection("products").doc(productId).get();
   if (!productSnapshot.exists) throw new Error("Produit introuvable pour cet alias.");
   const product = { id: productSnapshot.id, ...productSnapshot.data() } as Product;
+  assertOrdinaryProductAdminMutationAllowed(product);
   const id = `${slugifyForId(supplierName)}-${slugifyForId(originalLabel)}`.slice(0, 180);
   const now = new Date().toISOString();
   await db.collection("supplierProductAliases").doc(id).set(
