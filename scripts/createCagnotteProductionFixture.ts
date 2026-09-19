@@ -4,6 +4,7 @@ import https from "node:https";
 import { syncBuiltinESMExports } from "node:module";
 import { pathToFileURL } from "node:url";
 import type { Firestore } from "firebase-admin/firestore";
+import { cagnotteLedgerMovementId } from "../api/_server/cagnotteLedger.js";
 import { commitCheckoutOrder } from "../api/_server/checkoutOrder.js";
 import type { CheckoutRequestBody, PricedCheckout } from "../api/_server/checkout.js";
 import { checkoutPayloadFingerprint } from "../api/_server/orderSideEffects.js";
@@ -208,9 +209,7 @@ export async function inspectCagnotteProductionFixture(db: Firestore) {
       refs.accrual.get(),
       refs.reservation.get(),
     ]);
-  const movements = await db.collection("cagnotteMovements")
-    .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
-    .get();
+  const movements = await inspectCagnotteProductionFixtureMovements(db);
   const invoices = await db.collection("invoices")
     .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
     .get();
@@ -236,13 +235,56 @@ export async function inspectCagnotteProductionFixture(db: Firestore) {
     wallet: documentState(wallet),
     accrual: documentState(accrual),
     reservation: documentState(reservation),
-    movements: movements.docs.map((entry) => ({ id: entry.id, ...entry.data() })),
+    movements: movements.map((entry) => ({ id: entry.id, ...(entry.data() ?? {}) })),
     invoiceCount: invoices.size,
     analyticsOutboxCount: analytics.size,
     analyticsOperationalEventCount: analyticsOperationalEvents.size,
     paymentLinkRequestCount: paymentLinkRequests.size,
     refundCount: refunds.size,
   };
+}
+
+async function inspectCagnotteProductionFixtureMovements(db: Firestore) {
+  const collection = db.collection("cagnotteMovements");
+  const [
+    byOrder,
+    byBeneficiary,
+    payment,
+    delivery,
+    release,
+    cancellation,
+  ] = await Promise.all([
+    collection.where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
+    collection.where("beneficiaryId", "==", CAGNOTTE_PRODUCTION_FIXTURE_UID).get(),
+    collection.doc(cagnotteLedgerMovementId(
+      CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+      "payment_confirmed",
+    )).get(),
+    collection.doc(cagnotteLedgerMovementId(
+      CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+      "delivery_confirmed",
+    )).get(),
+    collection.doc(cagnotteLedgerMovementId(
+      CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+      "made_available",
+    )).get(),
+    collection.doc(cagnotteLedgerMovementId(
+      CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+      "cancelled",
+    )).get(),
+  ]);
+  const movementById = new Map<string, FirebaseFirestore.DocumentSnapshot>();
+  for (const snapshot of [
+    ...byOrder.docs,
+    ...byBeneficiary.docs,
+    payment,
+    delivery,
+    release,
+    cancellation,
+  ]) {
+    if (snapshot.exists) movementById.set(snapshot.id, snapshot);
+  }
+  return [...movementById.values()];
 }
 
 export function isCagnotteProductionFixtureOutboundTargetAllowed(

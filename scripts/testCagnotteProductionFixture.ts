@@ -124,6 +124,17 @@ async function check(name: string, run: () => void | Promise<void>) {
   checks += 1;
   console.log(`OK [fixture Production] ${name}`);
 }
+const canonicalFixtureMovementIds = {
+  payment: cagnotteLedgerMovementId(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID, "payment_confirmed"),
+  delivery: cagnotteLedgerMovementId(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID, "delivery_confirmed"),
+  release: cagnotteLedgerMovementId(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID, "made_available"),
+  cancellation: cagnotteLedgerMovementId(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID, "cancelled"),
+} as const;
+const healthyInspectionMovementIds: Record<"created" | "paid" | "delivered", string[]> = {
+  created: [],
+  paid: [],
+  delivered: [],
+};
 
 try {
   await check("fetch, http, https, DNS et sockets externes sont bloques", () => {
@@ -1002,6 +1013,9 @@ try {
 
   await check("creation transactionnelle exacte et produit invisible publiquement", async () => {
     await command("create");
+    healthyInspectionMovementIds.created = inspectedMovementIds(
+      await inspectCagnotteProductionFixture(db),
+    );
     const customer = await db.collection("customers").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get();
     const admin = await db.collection("adminUsers").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get();
     const product = await db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID).get();
@@ -1679,6 +1693,9 @@ try {
 
   await check("wallet exact apres paiement autorise le rejeu create idempotent", async () => {
     await command("mark-paid");
+    healthyInspectionMovementIds.paid = inspectedMovementIds(
+      await inspectCagnotteProductionFixture(db),
+    );
     const wallet = (await db.collection("cagnotteWallets").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).data()!;
     deepStrictEqual(wallet, fixtureWalletDocument({ pendingCents: 500 }));
     const accrual = (await db.collection("cagnotteAccruals").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).data()!;
@@ -2008,6 +2025,9 @@ try {
 
   await check("wallet exact apres livraison autorise le rejeu create idempotent", async () => {
     await command("mark-delivered");
+    healthyInspectionMovementIds.delivered = inspectedMovementIds(
+      await inspectCagnotteProductionFixture(db),
+    );
     const wallet = (await db.collection("cagnotteWallets").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).data()!;
     const accrual = (await db.collection("cagnotteAccruals").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).data()!;
     deepStrictEqual(wallet, fixtureWalletDocument({ availableCents: 500 }));
@@ -2169,6 +2189,87 @@ try {
     equal(preview.correction.availableDeltaCents, -500);
     deepStrictEqual(await stableFinancialState(), before);
     equal((await db.collection("cagnotteRefunds").get()).size, 0);
+  });
+
+  await check("inspection saine couvre created paid et delivered", () => {
+    deepStrictEqual(healthyInspectionMovementIds.created, []);
+    deepStrictEqual(healthyInspectionMovementIds.paid, [canonicalFixtureMovementIds.payment]);
+    deepStrictEqual(healthyInspectionMovementIds.delivered, [
+      canonicalFixtureMovementIds.delivery,
+      canonicalFixtureMovementIds.payment,
+      canonicalFixtureMovementIds.release,
+    ].sort());
+  });
+
+  await check("inspection inclut un mouvement du beneficiaire fixture lie a une autre commande", async () => {
+    const ref = db.collection("cagnotteMovements")
+      .doc("production-fixture-inspect-beneficiary-other-order-v1");
+    const corrupted = {
+      orderId: "other-order",
+      beneficiaryId: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+      businessEvent: "corrupted-beneficiary-movement",
+    };
+    await ref.set(corrupted);
+    try {
+      const inspection = await inspectCagnotteProductionFixture(db);
+      deepStrictEqual(
+        inspection.movements.find((movement) => movement.id === ref.id),
+        { id: ref.id, ...corrupted },
+      );
+    } finally {
+      await ref.delete();
+    }
+  });
+
+  await check("inspection inclut un mouvement de la commande fixture lie a un autre beneficiaire", async () => {
+    const ref = db.collection("cagnotteMovements")
+      .doc("production-fixture-inspect-order-other-beneficiary-v1");
+    const corrupted = {
+      orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+      beneficiaryId: "other-beneficiary",
+      businessEvent: "corrupted-order-movement",
+    };
+    await ref.set(corrupted);
+    try {
+      const inspection = await inspectCagnotteProductionFixture(db);
+      deepStrictEqual(
+        inspection.movements.find((movement) => movement.id === ref.id),
+        { id: ref.id, ...corrupted },
+      );
+    } finally {
+      await ref.delete();
+    }
+  });
+
+  await check("inspection inclut un ID canonique corrompu hors des deux requetes", async () => {
+    const ref = db.collection("cagnotteMovements").doc(canonicalFixtureMovementIds.cancellation);
+    equal((await ref.get()).exists, false);
+    const corrupted = {
+      orderId: "other-order",
+      beneficiaryId: "other-beneficiary",
+      businessEvent: "corrupted-canonical-movement",
+    };
+    await ref.set(corrupted);
+    try {
+      const inspection = await inspectCagnotteProductionFixture(db);
+      deepStrictEqual(
+        inspection.movements.find((movement) => movement.id === ref.id),
+        { id: ref.id, ...corrupted },
+      );
+    } finally {
+      await ref.delete();
+    }
+  });
+
+  await check("inspection deduplique les mouvements par document ID", async () => {
+    const inspection = await inspectCagnotteProductionFixture(db);
+    const ids = inspectedMovementIds(inspection);
+    equal(ids.length, new Set(ids).size);
+    deepStrictEqual(ids, [
+      canonicalFixtureMovementIds.delivery,
+      canonicalFixtureMovementIds.payment,
+      canonicalFixtureMovementIds.release,
+    ].sort());
   });
 
   await check("inspection finale confirme l absence de tout effet externe", async () => {
@@ -2506,6 +2607,12 @@ function sortedDocuments(snapshot: FirebaseFirestore.QuerySnapshot) {
   return snapshot.docs
     .map((entry) => ({ id: entry.id, ...entry.data() }))
     .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function inspectedMovementIds(
+  inspection: Awaited<ReturnType<typeof inspectCagnotteProductionFixture>>,
+) {
+  return inspection.movements.map((movement) => String(movement.id)).sort();
 }
 
 function withoutUpdatedAt(value: FirebaseFirestore.DocumentData | undefined) {
