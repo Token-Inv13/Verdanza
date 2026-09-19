@@ -1,6 +1,8 @@
 /** Test-process preload. Fail even when an SDK catches/suppresses an outbound attempt. */
 import net from "node:net";
 import dns from "node:dns";
+import http from "node:http";
+import https from "node:https";
 import { syncBuiltinESMExports } from "node:module";
 
 let unexpected = 0;
@@ -30,6 +32,38 @@ dns.promises.lookup = new Proxy(dns.promises.lookup, {
     return Reflect.apply(target, receiver, args);
   },
 });
+const allowedHttpTarget = (value: unknown) => {
+  try {
+    if (value instanceof URL) return value.hostname === "127.0.0.1" && value.port === "18085";
+    if (typeof value === "string") {
+      const url = new URL(value);
+      return url.hostname === "127.0.0.1" && url.port === "18085";
+    }
+    const options = value as { hostname?: string; host?: string; port?: unknown } | undefined;
+    return (options?.hostname ?? options?.host) === "127.0.0.1" && Number(options?.port) === 18085;
+  } catch {
+    return false;
+  }
+};
+for (const api of [http, https]) {
+  for (const method of ["request", "get"] as const) {
+    const original = api[method];
+    Reflect.set(api, method, new Proxy(original, {
+      apply(target, receiver, args) {
+        if (!allowedHttpTarget(args[0])) block();
+        return Reflect.apply(target, receiver, args);
+      },
+    }));
+  }
+}
+if (globalThis.fetch) {
+  globalThis.fetch = new Proxy(globalThis.fetch, {
+    apply(target, receiver, args) {
+      if (!allowedHttpTarget(args[0])) block();
+      return Reflect.apply(target, receiver, args);
+    },
+  });
+}
 // c-ares DNS APIs can bypass Socket.connect; the numeric target needs none of them.
 for (const api of [dns, dns.promises]) {
   for (const key of Object.keys(api).filter((name) => name.startsWith("resolve") || name === "reverse")) {

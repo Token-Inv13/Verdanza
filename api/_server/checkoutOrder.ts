@@ -1,6 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { orderPayload, priceCheckout, type CheckoutRequestBody, type PricedCheckout } from "./checkout.js";
-import { CheckoutRequestConflictError, checkoutRequestDocument, checkoutRequestsCollection, orderSideEffectsCollection, orderSideEffectsDocument, validateCheckoutRequestId } from "./orderSideEffects.js";
+import { CheckoutRequestConflictError, cagnotteProductionFixtureSideEffectsDocument, checkoutRequestDocument, checkoutRequestsCollection, orderSideEffectsCollection, orderSideEffectsDocument, validateCheckoutRequestId } from "./orderSideEffects.js";
 import { fixedPriceEffectiveUnitPrice, fixedPriceLineTotal, resolveFixedPriceOptions } from "../../src/lib/fixedPriceOptions.js";
 import type { Order, Product } from "../../src/types/index.js";
 import { promotionAvailability } from "../../src/lib/promotionDates.js";
@@ -20,6 +20,20 @@ import {
   createCagnotteReservationIntent,
   prepareCagnotteReservationOperation,
 } from "./cagnotteReservations.js";
+import {
+  assertCagnotteProductionFixtureCheckout,
+  assertCagnotteProductionFixtureCustomer,
+  assertCagnotteProductionFixtureOrderItem,
+  assertCagnotteProductionFixtureProduct,
+  cagnotteProductionFixtureStockMovementDocument,
+  CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS,
+  CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID,
+  CAGNOTTE_PRODUCTION_FIXTURE_UID,
+  hasPersistedCagnotteProductionFixtureMarker,
+  isExactCagnotteProductionFixtureMarker,
+  isExactCagnotteProductionFixtureOrder,
+  type CagnotteProductionFixtureCapability,
+} from "./cagnotteProductionFixture.js";
 
 export async function commitCheckoutOrder(input: {
   db: FirebaseFirestore.Firestore;
@@ -34,6 +48,7 @@ export async function commitCheckoutOrder(input: {
   reservationProgram?: CagnotteReservationProgram | null;
   firebaseProjectId?: string | null;
   nowEpochMs?: number;
+  productionFixtureCapability?: CagnotteProductionFixtureCapability;
 }) {
   const {
     db,
@@ -57,6 +72,23 @@ export async function commitCheckoutOrder(input: {
   const reservationProgram = input.reservationProgram === undefined
     ? CAGNOTTE_RESERVATION_PROGRAM
     : input.reservationProgram;
+  const fixtureMarker = input.productionFixtureCapability === undefined
+    ? null
+    : assertCagnotteProductionFixtureCheckout({
+        capability: input.productionFixtureCapability,
+        firebaseProjectId: input.firebaseProjectId,
+        customerId,
+        orderId: orderRef.id,
+        checkoutRequestId: normalizedRequestId,
+        body: body as unknown as Record<string, unknown>,
+        priced: priced as unknown as Record<string, unknown>,
+      });
+  if (customerId === CAGNOTTE_PRODUCTION_FIXTURE_UID && !fixtureMarker) {
+    throw new Error("production_fixture_customer_checkout_forbidden");
+  }
+  const fixtureStockMovementRef = fixtureMarker
+    ? db.collection("stockMovements").doc(CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID)
+    : null;
 
   return db.runTransaction(async (transaction) => {
     const requestSnapshot = await transaction.get(requestRef);
@@ -65,14 +97,40 @@ export async function commitCheckoutOrder(input: {
       if (existing.payloadFingerprint !== payloadFingerprint || !existing.orderId) {
         throw new CheckoutRequestConflictError();
       }
+      if (fixtureMarker && !isExactCagnotteProductionFixtureMarker(existing.productionFixture)) {
+        throw new CheckoutRequestConflictError();
+      }
       if (existing.cagnotteBeneficiaryId) {
         const original = await transaction.get(db.collection("orders").doc(String(existing.orderId)));
         if (existing.cagnotteBeneficiaryId !== customerId || !original.exists ||
           original.data()?.cagnotte?.beneficiaryId !== customerId || original.data()?.customerId !== customerId) {
           throw new CheckoutRequestConflictError();
         }
+        if (fixtureMarker && !isExactCagnotteProductionFixtureOrder({ id: original.id, ...original.data() })) {
+          throw new CheckoutRequestConflictError();
+        }
       }
       return { created: false, orderId: String(existing.orderId) };
+    }
+
+    if (fixtureMarker) {
+      const [orderCollision, customerSnapshot, adminSnapshot, stockMovementCollision] = await Promise.all([
+        transaction.get(orderRef),
+        transaction.get(db.collection("customers").doc(fixtureMarker.uid)),
+        transaction.get(db.collection("adminUsers").doc(fixtureMarker.uid)),
+        transaction.get(fixtureStockMovementRef!),
+      ]);
+      if (stockMovementCollision.exists) {
+        throw new Error("production_fixture_stock_movement_collision");
+      }
+      if (orderCollision.exists || adminSnapshot.exists) {
+        throw new CheckoutRequestConflictError();
+      }
+      assertCagnotteProductionFixtureCustomer(
+        fixtureMarker,
+        customerSnapshot.id,
+        customerSnapshot.data(),
+      );
     }
 
     const positiveUseRequested = Number(body.cagnotteUse?.requestedCents || 0) > 0;
@@ -177,6 +235,17 @@ export async function commitCheckoutOrder(input: {
     const payload = orderPayload(
       { ...body, checkoutRequestId: normalizedRequestId }, committedPrice, customerId, analyticsRevocationTokenHash,
     );
+    if (fixtureMarker) {
+      const controlledInstant = new Date(CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS).toISOString();
+      payload.productionFixture = fixtureMarker;
+      payload.finalPaymentMethod = "other";
+      payload.createdAt = controlledInstant;
+      payload.updatedAt = controlledInstant;
+      payload.statusHistory = (payload.statusHistory as Array<Record<string, unknown>>).map((entry) => ({
+        ...entry,
+        changedAt: controlledInstant,
+      }));
+    }
     const enrollment = reservationIntent && reservationIntent.amountCents > 0
       ? {
           schemaVersion: 1 as const,
@@ -219,8 +288,15 @@ export async function commitCheckoutOrder(input: {
 
       const data = productSnapshot.data();
       const stock = Number(data?.stock ?? 0);
-      if (data?.isActive !== true) {
-        throw new Error(`Produit indisponible : ${productName}.`);
+      if (fixtureMarker) {
+        assertCagnotteProductionFixtureProduct(fixtureMarker, productId, data);
+      } else {
+        if (hasPersistedCagnotteProductionFixtureMarker(data)) {
+          throw new Error(`Produit fixture indisponible : ${productName}.`);
+        }
+        if (data?.isActive !== true) {
+          throw new Error(`Produit indisponible : ${productName}.`);
+        }
       }
       if (stock < requestedQuantity) {
         const giftItem = matchingItems.find((item) => item.isGift);
@@ -231,28 +307,44 @@ export async function commitCheckoutOrder(input: {
         );
       }
       for (const item of matchingItems.filter((entry) => entry.purchaseMode === "fixed_price")) {
-        const product = { id: productSnapshot.id, ...data } as Product;
-        assertFixedPriceOrderItemStillMatchesProduct(item, product);
+        if (fixtureMarker) {
+          assertCagnotteProductionFixtureOrderItem(fixtureMarker, item);
+        } else {
+          const product = { id: productSnapshot.id, ...data } as Product;
+          assertFixedPriceOrderItemStillMatchesProduct(item, product);
+        }
       }
 
       stockWrites.push(() => transaction.update(productRef, {
         stock: stock - requestedQuantity,
-        updatedAt: FieldValue.serverTimestamp(),
+        updatedAt: fixtureMarker
+          ? new Date(CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS).toISOString()
+          : FieldValue.serverTimestamp(),
       }));
-      for (const item of matchingItems) {
-        stockWrites.push(() => transaction.set(db.collection("stockMovements").doc(), {
-          productId: item.productId,
-          productName: item.name,
-          type: item.isGift ? "promotion_gift" : "sale",
-          quantity: -item.quantity,
-          note: item.isGift
-            ? `Cadeau promotion ${item.promotionLabel || item.promotionId || "Verdanza"} - commande ${orderRef.id}`
-            : `Commande manuelle ${orderRef.id}`,
-          createdAt: FieldValue.serverTimestamp(),
-          createdBy: "manual-checkout",
-          orderId: orderRef.id,
-          ...(item.isGift && item.promotionId ? { promotionId: item.promotionId } : {}),
-        }));
+      if (fixtureMarker) {
+        stockWrites.push(() => transaction.create(
+          fixtureStockMovementRef!,
+          cagnotteProductionFixtureStockMovementDocument(),
+        ));
+      } else {
+        for (const item of matchingItems) {
+          stockWrites.push(() => transaction.set(
+            db.collection("stockMovements").doc(),
+            {
+              productId: item.productId,
+              productName: item.name,
+              type: item.isGift ? "promotion_gift" : "sale",
+              quantity: -item.quantity,
+              note: item.isGift
+                ? `Cadeau promotion ${item.promotionLabel || item.promotionId || "Verdanza"} - commande ${orderRef.id}`
+                : `Commande manuelle ${orderRef.id}`,
+              createdAt: FieldValue.serverTimestamp(),
+              createdBy: "manual-checkout",
+              orderId: orderRef.id,
+              ...(item.isGift && item.promotionId ? { promotionId: item.promotionId } : {}),
+            },
+          ));
+        }
       }
     }
 
@@ -322,9 +414,20 @@ export async function commitCheckoutOrder(input: {
     );
     transaction.set(
       requestRef,
-      checkoutRequestDocument(orderRef.id, payloadFingerprint, enrollment?.beneficiaryId),
+      {
+        ...checkoutRequestDocument(orderRef.id, payloadFingerprint, enrollment?.beneficiaryId),
+        ...(fixtureMarker ? { productionFixture: fixtureMarker } : {}),
+      },
     );
-    transaction.set(sideEffectsRef, orderSideEffectsDocument(orderRef.id));
+    transaction.set(
+      sideEffectsRef,
+      fixtureMarker
+        ? cagnotteProductionFixtureSideEffectsDocument(
+            orderRef.id,
+            input.productionFixtureCapability!,
+          )
+        : orderSideEffectsDocument(orderRef.id),
+    );
     return { created: true, orderId: orderRef.id };
   });
 }

@@ -11,6 +11,7 @@ import { publicDeliveryLabel } from "../../src/lib/deliveryPresentation.js";
 import { invoiceDocumentSendBlock } from "../../src/lib/invoiceSendPolicy.js";
 import { orderItemLineTotal, orderItemSummaryLabel } from "../../src/lib/orderLineDisplay.js";
 import { BRAND_EMAIL_LOGO_URL } from "../../src/lib/brandAssets.js";
+import { hasPersistedCagnotteProductionFixtureMarker } from "./cagnotteProductionFixture.js";
 import {
   financingDisplayItems,
   financingNotices,
@@ -52,6 +53,7 @@ const statusLabels: Record<OrderStatus, string> = {
 };
 
 export async function sendOrderConfirmationEmail(order: Order) {
+  if (hasPersistedCagnotteProductionFixtureMarker(order)) return productionFixtureEmailResult();
   if (!order.customerEmail) {
     console.info("Email client ignore", {
       kind: "order_confirmation",
@@ -65,6 +67,7 @@ export async function sendOrderConfirmationEmail(order: Order) {
 }
 
 export async function sendAdminNewOrderEmail(order: Order) {
+  if (hasPersistedCagnotteProductionFixtureMarker(order)) return productionFixtureEmailResult();
   const adminEmails = adminNotificationEmails();
   if (!adminEmails.length) return { status: "skipped", reason: "ADMIN_NOTIFICATION_EMAILS absent" } satisfies EmailResult;
 
@@ -80,6 +83,7 @@ export async function sendAdminNewOrderEmail(order: Order) {
 }
 
 export async function sendManualOrderConfirmationEmail(order: Order) {
+  if (hasPersistedCagnotteProductionFixtureMarker(order)) return productionFixtureEmailResult();
   if (!order.customerEmail) {
     console.info("Email client ignore", {
       kind: "order_confirmation",
@@ -101,6 +105,7 @@ export async function sendManualOrderConfirmationEmail(order: Order) {
 }
 
 export async function sendAdminManualOrderEmail(order: Order) {
+  if (hasPersistedCagnotteProductionFixtureMarker(order)) return productionFixtureEmailResult();
   const adminEmails = adminNotificationEmails();
   if (!adminEmails.length) return { status: "skipped", reason: "ADMIN_NOTIFICATION_EMAILS absent" } satisfies EmailResult;
 
@@ -183,6 +188,7 @@ export async function sendOrderStatusUpdateEmail(
   _previousStatus: OrderStatus,
   nextStatus: OrderStatus,
 ) {
+  if (hasPersistedCagnotteProductionFixtureMarker(order)) return productionFixtureEmailResult();
   const subject = `Commande Verdanza ${shortOrderId(order.id)} : ${statusLabels[nextStatus]}`;
   const message = customerStatusUpdateMessage(nextStatus);
   return sendTransactionalEmail({
@@ -207,6 +213,13 @@ function customerStatusUpdateMessage(nextStatus: OrderStatus) {
     return "Votre commande Verdanza a été livrée.";
   }
   return `Le statut de votre commande Verdanza a été mis à jour : ${statusLabels[nextStatus]}.`;
+}
+
+function productionFixtureEmailResult() {
+  return {
+    status: "skipped",
+    reason: "production_fixture",
+  } satisfies EmailResult;
 }
 
 export async function sendContactMessageEmail(input: {

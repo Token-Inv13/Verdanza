@@ -3,6 +3,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import {
   parseSupplierInvoiceText,
 } from "../../src/lib/supplierInvoiceParsers.js";
+import { filterOrdinaryProducts } from "../../src/lib/productionFixtureMarker.js";
 import type {
   Product,
   SupplierProductAlias,
@@ -21,14 +22,18 @@ export async function analyzeSupplierInvoicePdfBuffer(
     db.collection("products").get(),
     db.collection("supplierProductAliases").get(),
   ]);
-  const products = productsSnapshot.docs.map((entry) => ({
+  const storedProducts = productsSnapshot.docs.map((entry) => ({
     id: entry.id,
     ...entry.data(),
   })) as Product[];
-  const aliases = aliasesSnapshot.docs.map((entry) => ({
+  const storedAliases = aliasesSnapshot.docs.map((entry) => ({
     id: entry.id,
     ...entry.data(),
   })) as SupplierProductAlias[];
+  const { products, aliases } = commercialSupplierInvoiceContext(
+    storedProducts,
+    storedAliases,
+  );
   const result = parseSupplierInvoiceText(text, { products, aliases });
   const duplicate = await supplierPurchaseDuplicate(db, {
     sha256,
@@ -40,6 +45,18 @@ export async function analyzeSupplierInvoicePdfBuffer(
     ...result,
     fileSha256: sha256,
     duplicate,
+  };
+}
+
+export function commercialSupplierInvoiceContext(
+  products: readonly Product[],
+  aliases: readonly SupplierProductAlias[],
+) {
+  const commercialProducts = filterOrdinaryProducts(products);
+  const commercialProductIds = new Set(commercialProducts.map((product) => product.id));
+  return {
+    products: commercialProducts,
+    aliases: aliases.filter((alias) => commercialProductIds.has(alias.productId)),
   };
 }
 

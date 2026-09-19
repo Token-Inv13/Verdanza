@@ -14,6 +14,7 @@ import {
   persistOrderSideEffectResult,
   type OrderSideEffectTaskName,
 } from "./orderSideEffects.js";
+import { hasPersistedCagnotteProductionFixtureMarker } from "./cagnotteProductionFixture.js";
 
 export type AlertResult =
   | { status: "sent"; id?: string }
@@ -48,6 +49,9 @@ export async function sendOrderCreationAlerts(
 }
 
 export async function sendAdminOrderSms(order: Order): Promise<AlertResult> {
+  if (hasPersistedCagnotteProductionFixtureMarker(order)) {
+    return { status: "skipped", reason: "production_fixture" };
+  }
   const from = process.env.TWILIO_SMS_FROM;
   const to = process.env.ADMIN_ALERT_PHONE;
   if (!from || !to) {
@@ -68,6 +72,9 @@ export async function sendAdminOrderSms(order: Order): Promise<AlertResult> {
 }
 
 export async function sendAdminOrderWhatsapp(order: Order): Promise<AlertResult> {
+  if (hasPersistedCagnotteProductionFixtureMarker(order)) {
+    return { status: "skipped", reason: "production_fixture" };
+  }
   const from = process.env.TWILIO_WHATSAPP_FROM;
   const to = process.env.ADMIN_ALERT_WHATSAPP;
   if (!from || !to) {

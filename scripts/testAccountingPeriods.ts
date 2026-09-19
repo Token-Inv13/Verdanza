@@ -12,7 +12,11 @@ import {
   supplierPurchaseAccountingDate,
 } from "../src/lib/accountingPeriods.js";
 import { buildAccountingSummary } from "../src/lib/accountingSummary.js";
-import type { WeightedSupplierCost } from "../src/lib/accountingCosts.js";
+import {
+  computeWeightedSupplierCosts,
+  type WeightedSupplierCost,
+} from "../src/lib/accountingCosts.js";
+import { filterOrdinarySupplierPurchases } from "../src/lib/productionFixtureMarker.js";
 import type { AdminOrderRow } from "../src/services/ordersService.js";
 import type { Product, ProductCost, SupplierPurchase } from "../src/types/index.js";
 
@@ -192,6 +196,225 @@ check(summary.supplierPurchaseFallbackCount, 1, "Supplier fallback dates are cou
 check(summary.supplierPurchaseMissingDateCount, 1, "Missing supplier dates are counted");
 check(summary.estimatedStockValue, 22.5, "Current stock remains a current snapshot");
 check(Object.hasOwn(summary.comparisonValues, "estimatedStockValue"), false, "Current stock is not a historical comparison metric");
+
+const exactFixtureProduct = {
+  ...productFixture(),
+  id: "fixture-product-exact",
+  stock: 10,
+  productionFixture: {
+    schemaVersion: 1,
+    marker: "verdanza-cagnotte-production-fixture-v1",
+  },
+} as unknown as Product;
+const corruptFixtureProduct = {
+  ...productFixture(),
+  id: "fixture-product-corrupt",
+  stock: 10,
+  productionFixture: { marker: "corrompu" },
+} as unknown as Product;
+const stockCostsWithFixtures = new Map(weightedCosts);
+stockCostsWithFixtures.set(exactFixtureProduct.id, {
+  productId: exactFixtureProduct.id,
+  totalQuantityGrams: 10,
+  totalCost: 1_000_000,
+  weightedCostPerGram: 100_000,
+});
+stockCostsWithFixtures.set(corruptFixtureProduct.id, {
+  productId: corruptFixtureProduct.id,
+  totalQuantityGrams: 10,
+  totalCost: 2_000_000,
+  weightedCostPerGram: 200_000,
+});
+const summaryWithExactFixtureProduct = buildAccountingSummary(
+  [exactPaid],
+  [product, exactFixtureProduct],
+  productCosts,
+  [],
+  stockCostsWithFixtures,
+  augustMonth,
+);
+const summaryWithAllFixtureProducts = buildAccountingSummary(
+  [exactPaid],
+  [product, exactFixtureProduct, corruptFixtureProduct],
+  productCosts,
+  [],
+  stockCostsWithFixtures,
+  augustMonth,
+);
+check(
+  summaryWithExactFixtureProduct.estimatedStockValue,
+  summary.estimatedStockValue,
+  "An exact Production fixture product cannot change stock valuation",
+);
+check(
+  summaryWithAllFixtureProducts.estimatedStockValue,
+  summary.estimatedStockValue,
+  "A corrupt Production fixture marker cannot change stock valuation",
+);
+
+const ordinaryWeightedPurchase = supplierFixture({
+  id: "SUPPLIER-COMMERCIAL",
+  validatedAt: "2026-08-07T10:00:00.000Z",
+  totalExVat: 25,
+  lines: [{
+    id: "line-commercial",
+    productId: product.id,
+    quantityGrams: 10,
+    grossAmountExVat: 25,
+    vatRate: 20,
+    netCostAmount: 25,
+  }],
+});
+const contaminatedWeightedPurchase = supplierFixture({
+  id: "SUPPLIER-FIXTURE-CONTAMINATED",
+  validatedAt: "2026-08-08T10:00:00.000Z",
+  totalExVat: 1_000_000,
+  lines: [{
+    id: "line-fixture",
+    productId: exactFixtureProduct.id,
+    quantityGrams: 10,
+    grossAmountExVat: 1_000_000,
+    vatRate: 20,
+    netCostAmount: 1_000_000,
+  }, {
+    id: "line-commercial-contaminated",
+    productId: product.id,
+    quantityGrams: 10,
+    grossAmountExVat: 1_000_000,
+    vatRate: 20,
+    netCostAmount: 1_000_000,
+  }],
+});
+const commercialSupplierPurchases = filterOrdinarySupplierPurchases(
+  [product, exactFixtureProduct, corruptFixtureProduct],
+  [ordinaryWeightedPurchase, contaminatedWeightedPurchase],
+);
+check(
+  commercialSupplierPurchases.map((purchase) => purchase.id),
+  [ordinaryWeightedPurchase.id],
+  "A purchase containing a fixture product is excluded as a whole",
+);
+const isolatedWeightedCosts = computeWeightedSupplierCosts(
+  commercialSupplierPurchases,
+).costByProductId;
+check(
+  [...isolatedWeightedCosts.keys()],
+  [product.id],
+  "A contaminated purchase creates no commercial weighted supplier cost",
+);
+check(
+  isolatedWeightedCosts.get(product.id)?.weightedCostPerGram,
+  2.5,
+  "The ordinary supplier purchase keeps its exact weighted cost",
+);
+const isolatedSupplierSummary = buildAccountingSummary(
+  [exactPaid],
+  [product, exactFixtureProduct, corruptFixtureProduct],
+  productCosts,
+  [ordinaryWeightedPurchase, contaminatedWeightedPurchase],
+  isolatedWeightedCosts,
+  augustMonth,
+);
+check(
+  isolatedSupplierSummary.supplierPurchasesTotal,
+  25,
+  "A contaminated purchase contributes nothing to commercial supplier totals",
+);
+check(
+  isolatedSupplierSummary.estimatedStockValue,
+  25,
+  "A contaminated purchase cannot alter commercial stock valuation",
+);
+
+const commercialWitness = orderFixture({
+  id: "COMMERCIAL-WITNESS",
+  paymentStatus: "paid",
+  orderStatus: "delivered",
+  createdAt: "2026-08-10T09:00:00.000Z",
+  paymentConfirmedAt: "2026-08-10T10:00:00.000Z",
+});
+const productionFixtureOrder = orderFixture({
+  id: "PRODUCTION-FIXTURE",
+  productionFixture: {
+    schemaVersion: 1,
+    marker: "verdanza-cagnotte-production-fixture-v1",
+    projectId: "verdanza-1f621",
+    uid: "fixture-user",
+    productId: "fixture-product",
+    orderId: "PRODUCTION-FIXTURE",
+    checkoutRequestId: "fixture-request",
+  },
+  paymentStatus: "paid",
+  orderStatus: "delivered",
+  deliveryMethod: "postal",
+  delivery: "Postal",
+  createdAt: "2026-08-11T09:00:00.000Z",
+  paymentConfirmedAt: "2026-08-11T10:00:00.000Z",
+  items: [{
+    productId: "fixture-product",
+    name: "Produit fixture",
+    quantity: 10,
+    unitPrice: 10,
+    lineTotal: 100,
+    purchasePricePerGramSnapshot: 2.5,
+    purchaseCostTotalSnapshot: 25,
+    purchaseCostCapturedAt: "2026-08-11T08:00:00.000Z",
+    purchaseCostSource: "fixture",
+  }],
+  subtotalBeforePromotion: 100,
+  subtotalAfterPromotion: 100,
+  promotionDiscountTotal: 0,
+  subtotal: 100,
+  deliveryFee: 0,
+  total: "100,00 EUR",
+});
+const commercialOnlySummary = buildAccountingSummary(
+  [commercialWitness],
+  [product],
+  productCosts,
+  [supplierValidated],
+  weightedCosts,
+  augustMonth,
+);
+const summaryWithProductionFixture = buildAccountingSummary(
+  [commercialWitness, productionFixtureOrder],
+  [product],
+  productCosts,
+  [supplierValidated],
+  weightedCosts,
+  augustMonth,
+);
+const orderCommercialMetrics = (value: typeof commercialOnlySummary) => ({
+  collectedRevenue: value.collectedRevenue,
+  createdOrdersCount: value.createdOrdersCount,
+  paidOrdersCount: value.paidOrdersCount,
+  productNetRevenue: value.productNetRevenue,
+  deliveryRevenue: value.deliveryRevenue,
+  estimatedProductCost: value.estimatedProductCost,
+  grossMargin: value.grossMargin,
+  averagePaidOrder: value.averagePaidOrder,
+  localOrders: value.localOrders,
+  postalOrders: value.postalOrders,
+  productRows: value.productRows,
+  paymentDateQualityCounts: value.paymentDateQualityCounts,
+  historicalPaymentDateIssues: value.historicalPaymentDateIssues,
+  comparisonValues: value.comparisonValues,
+});
+check(
+  orderCommercialMetrics(summaryWithProductionFixture),
+  orderCommercialMetrics(commercialOnlySummary),
+  "A paid in-period Production fixture contributes to no order-derived accounting metric",
+);
+check(
+  summaryWithProductionFixture.supplierPurchasesTotal,
+  100,
+  "Production fixture filtering does not exclude real supplier purchases",
+);
+check(
+  commercialOnlySummary.collectedRevenue,
+  71.55,
+  "The ordinary commercial witness remains counted",
+);
 
 const legacySummary = buildAccountingSummary(
   [

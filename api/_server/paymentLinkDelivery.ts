@@ -10,6 +10,7 @@ import type {
   PaymentLinkDeliveryStatus,
   PaymentLinkDeliverySummary,
 } from "../../src/types/index.js";
+import { hasPersistedCagnotteProductionFixtureMarker } from "./cagnotteProductionFixture.js";
 
 export const paymentLinkRequestsCollection = "paymentLinkRequests";
 
@@ -279,6 +280,7 @@ function assertOrderCanReceivePaymentLink(order: Order, request: PaymentLinkDeli
 }
 
 function orderStateError(order: Order) {
+  if (hasPersistedCagnotteProductionFixtureMarker(order)) return "production_fixture_external_effect_forbidden";
   if (order.deletedAt) return "order_deleted";
   if (order.orderStatus === "cancelled" || order.paymentStatus === "cancelled" || order.cancelledAt) return "order_cancelled";
   if (order.paymentStatus === "paid") return "order_already_paid";

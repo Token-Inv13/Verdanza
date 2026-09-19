@@ -188,11 +188,11 @@ const recordedRefund = administrationRefundFixture();
 const correctedRefund = administrationCorrectionFixture(false);
 const reviewCorrection = administrationCorrectionFixture(true);
 const administrationCards = [
-  previewCard("Saisie d’un retour", <CagnotteAdminToolsView model={adminModel("refund", adminInspection)} form={administrationFormFixture()} />),
-  previewCard("Résultat enregistré · scénario 100 / 8 / 92 €", <CagnotteAdminToolsView model={{ ...adminModel("refund", adminInspection), refundPreview: recordedRefund, notice: "Déclaration enregistrée. Aucun remboursement bancaire n’a été exécuté." }} form={administrationFormFixture()} />),
-  previewCard("Correction d’une déclaration", <CagnotteAdminToolsView model={{ ...adminModel("correction", adminInspection), correctionPreview: correctedRefund, notice: "Correction prévisualisée par le serveur." }} form={administrationFormFixture()} />),
-  previewCard("Correction nécessitant vérification", <CagnotteAdminToolsView model={{ ...adminModel("correction", adminInspection), correctionPreview: reviewCorrection, notice: reviewCorrection.reviewReason || "Correction à vérifier." }} form={administrationFormFixture()} />),
-  previewCard("Revue d’un impayé · transport incertain", <CagnotteAdminToolsView model={adminModel("unpaid", adminInspection)} form={administrationFormFixture()} />),
+  previewCard("Saisie d’un retour", <CagnotteAdminToolsView mutationsEnabled model={adminModel("refund", adminInspection)} form={administrationFormFixture()} />),
+  previewCard("Résultat enregistré · scénario 100 / 8 / 92 €", <CagnotteAdminToolsView mutationsEnabled model={{ ...adminModel("refund", adminInspection), refundPreview: recordedRefund, notice: "Déclaration enregistrée. Aucun remboursement bancaire n’a été exécuté." }} form={administrationFormFixture()} />),
+  previewCard("Correction d’une déclaration", <CagnotteAdminToolsView mutationsEnabled model={{ ...adminModel("correction", adminInspection), correctionPreview: correctedRefund, notice: "Correction prévisualisée par le serveur." }} form={administrationFormFixture()} />),
+  previewCard("Correction nécessitant vérification", <CagnotteAdminToolsView mutationsEnabled model={{ ...adminModel("correction", adminInspection), correctionPreview: reviewCorrection, notice: reviewCorrection.reviewReason || "Correction à vérifier." }} form={administrationFormFixture()} />),
+  previewCard("Revue d’un impayé · transport incertain", <CagnotteAdminToolsView mutationsEnabled model={adminModel("unpaid", adminInspection)} form={administrationFormFixture()} />),
 ].join("\n");
 const administrationHtml = page(
   "Aperçu fictif — Administration de la cagnotte Verdanza",
