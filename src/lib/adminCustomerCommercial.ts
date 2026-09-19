@@ -1,6 +1,7 @@
 import type { AdminOrderRow } from "../services/ordersService.js";
 import type { CustomerProfile } from "../types/index.js";
 import { adminDateValue, formatAdminDate } from "./adminDatePresentation.js";
+import { isExactCagnotteProductionFixtureCustomer } from "./cagnotteProductionFixtureIdentity.js";
 import { hasOwnProductionFixtureMarker } from "./productionFixtureMarker.js";
 
 export type CustomerComputedStats = {
@@ -23,7 +24,7 @@ export type CommercialCustomerEntry = {
 };
 
 export function commercialAdminCustomers(customers: readonly CustomerProfile[]) {
-  return customers.filter((customer) => !hasOwnProductionFixtureMarker(customer));
+  return customers.filter((customer) => !isExactCagnotteProductionFixtureCustomer(customer));
 }
 
 export function commercialAdminOrders(orders: readonly AdminOrderRow[]) {

@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { initializeTestEnvironment } from "@firebase/rules-unit-testing";
 import { collection, collectionGroup, deleteDoc, deleteField, doc, getDoc, getDocs, increment, query, setDoc, setLogLevel, updateDoc, where, writeBatch } from "firebase/firestore";
+import { cagnotteProductionFixtureMarker } from "../src/lib/cagnotteProductionFixtureIdentity.js";
 import { assertCagnotteEmulatorAvailable, CAGNOTTE_DEMO, validateCagnotteTestEnvironment } from "./cagnotteEmulator.js";
 
 validateCagnotteTestEnvironment(process.env);
@@ -125,6 +126,46 @@ try {
   }
 
   const a = profiles[1][1].firestore(), b = profiles[2][1].firestore(), admin = profiles[3][1].firestore();
+  await test("Clients", "own ordinary profile creation remains allowed", async () => {
+    const uid = "ordinary-self-profile";
+    const email = "ordinary-self@example.test";
+    const db = env.authenticatedContext(uid, { email, email_verified: true }).firestore();
+    const ref = doc(db, `customers/${uid}`);
+    await setDoc(ref, {
+      uid,
+      email,
+      role: "customer",
+      displayName: "Ordinary customer",
+      phone: "0600000000",
+      loyaltyPoints: 0,
+      orderCount: 0,
+      totalSpent: 0,
+    });
+    equal((await getDoc(ref)).exists(), true);
+  });
+  const reservedFixtureValues: readonly (readonly [string, unknown])[] = [
+    ["null", null],
+    ["empty object", {}],
+    ["false", false],
+    ["string", "fixture"],
+    ["exact marker", cagnotteProductionFixtureMarker()],
+  ];
+  for (const [index, [label, productionFixture]] of reservedFixtureValues.entries()) {
+    await test("Clients", `own profile creation rejects productionFixture ${label}`, async () => {
+      const uid = `reserved-fixture-field-${index}`;
+      const email = `${uid}@example.test`;
+      const db = env.authenticatedContext(uid, { email, email_verified: true }).firestore();
+      await denied(setDoc(doc(db, `customers/${uid}`), {
+        uid,
+        email,
+        role: "customer",
+        productionFixture,
+      }));
+    });
+  }
+  await test("Clients", "own profile update rejects productionFixture null", async () => {
+    await denied(updateDoc(doc(a, "customers/client-a"), { productionFixture: null }));
+  });
   await test("Non regression", "own profile read/update", async () => {
     equal((await getDoc(doc(a, "customers/client-a"))).exists(), true);
     await updateDoc(doc(a, "customers/client-a"), { displayName: "Synthetic updated" });

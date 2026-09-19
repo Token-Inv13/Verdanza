@@ -41,6 +41,12 @@ import {
   ordersForCommercialCustomer,
 } from "../src/lib/adminCustomerCommercial.js";
 import {
+  CAGNOTTE_PRODUCTION_FIXTURE_UID,
+  cagnotteProductionFixtureMarker,
+  isExactCagnotteProductionFixtureCustomer,
+  isExactCagnotteProductionFixtureMarker,
+} from "../src/lib/cagnotteProductionFixtureIdentity.js";
+import {
   assertOrdinaryCustomerAdminMutationAllowed,
   filterOrdinaryProducts,
   filterOrdinarySupplierPurchases,
@@ -158,15 +164,7 @@ await test("dashboard exclut toutes les fixtures de ses metriques commerciales",
   equal(mixedMetrics.find((metric) => metric.label === "En livraison")?.value, "0");
 });
 await test("section clients exclut profils et commandes fixture de tous les calculs commerciaux", () => {
-  const fixtureMarker = {
-    schemaVersion: 1 as const,
-    marker: "verdanza-cagnotte-production-fixture-v1",
-    projectId: "verdanza-1f621",
-    uid: "fixture-user",
-    productId: "fixture-product",
-    orderId: "fixture-order",
-    checkoutRequestId: "fixture-request",
-  };
+  const fixtureMarker = cagnotteProductionFixtureMarker();
   const commercialCustomer: CustomerProfile = {
     id: "customer-commercial",
     uid: "customer-commercial",
@@ -180,8 +178,8 @@ await test("section clients exclut profils et commandes fixture de tous les calc
   };
   const fixtureCustomer: CustomerProfile = {
     ...commercialCustomer,
-    id: "customer-fixture",
-    uid: "customer-fixture",
+    id: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+    uid: CAGNOTTE_PRODUCTION_FIXTURE_UID,
     email: "fixture@verdanza.test",
     displayName: "Client fixture",
     productionFixture: fixtureMarker,
@@ -236,6 +234,93 @@ await test("section clients exclut profils et commandes fixture de tous les calc
     ).length,
     0,
   );
+});
+await test("identite client fixture exige le double contrat UID et marqueur exacts", () => {
+  const marker = cagnotteProductionFixtureMarker();
+  const exactCustomer = {
+    id: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+    uid: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+    productionFixture: marker,
+  };
+  equal(isExactCagnotteProductionFixtureMarker(marker), true);
+  equal(isExactCagnotteProductionFixtureMarker({ ...marker, extra: true }), false);
+  equal(isExactCagnotteProductionFixtureCustomer(exactCustomer), true);
+  equal(isExactCagnotteProductionFixtureCustomer({ ...exactCustomer, id: "wrong-id" }), false);
+  equal(isExactCagnotteProductionFixtureCustomer({ ...exactCustomer, productionFixture: null }), false);
+  equal(isExactCagnotteProductionFixtureCustomer({ uid: "ordinary", productionFixture: marker }), false);
+});
+await test("section clients conserve les marqueurs absents, nuls, malformes ou forges", () => {
+  const marker = cagnotteProductionFixtureMarker();
+  const ordinary: CustomerProfile = {
+    id: "ordinary-customer",
+    uid: "ordinary-customer",
+    email: "ordinary@verdanza.test",
+    displayName: "Ordinary customer",
+    phone: "0600000002",
+    loyaltyPoints: 0,
+    orderCount: 0,
+    totalSpent: 0,
+    role: "customer",
+  };
+  const visibleCustomers = [
+    ordinary,
+    { ...ordinary, id: "null-marker", uid: "null-marker", productionFixture: null },
+    { ...ordinary, id: "empty-marker", uid: "empty-marker", productionFixture: {} },
+    { ...ordinary, id: "corrupt-marker", uid: "corrupt-marker", productionFixture: { marker: "corrompu" } },
+    { ...ordinary, id: "forged-marker", uid: "forged-marker", productionFixture: marker },
+    {
+      ...ordinary,
+      id: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+      uid: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+      productionFixture: null,
+    },
+  ] as unknown as CustomerProfile[];
+  deepEqual(
+    commercialAdminCustomers(visibleCustomers).map((customer) => customer.id),
+    visibleCustomers.map((customer) => customer.id),
+  );
+  equal(
+    commercialAdminCustomers([
+      ...visibleCustomers,
+      {
+        ...ordinary,
+        id: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+        uid: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+        productionFixture: marker,
+      },
+    ]).length,
+    visibleCustomers.length,
+  );
+});
+await test("profil ordinaire avec productionFixture null reste exploitable dans la section clients", () => {
+  const customer = {
+    id: "p3-visible-customer",
+    uid: "p3-visible-customer",
+    email: "p3-visible@verdanza.test",
+    displayName: "P3 visible customer",
+    phone: "0600000003",
+    loyaltyPoints: 0,
+    orderCount: 0,
+    totalSpent: 0,
+    role: "customer",
+    productionFixture: null,
+  } as unknown as CustomerProfile;
+  const order = {
+    id: "p3-visible-order",
+    customerId: customer.uid,
+    customerEmail: customer.email,
+    customerPhone: customer.phone,
+    paymentStatus: "paid",
+    orderStatus: "confirmed",
+    delivery: "Livraison locale",
+    total: "42,00 EUR",
+    createdAt: "2026-09-03T10:00:00.000Z",
+  } as AdminOrderRow;
+  const entries = buildCommercialCustomerEntries([customer], [order]);
+  equal(entries.length, 1);
+  equal(entries[0]?.customer.id, customer.id);
+  equal(entries[0]?.stats.orderCount, 1);
+  equal(entries[0]?.stats.totalSpent, 42);
 });
 await test("mutations client ordinaires refusent tout profil portant le marqueur fixture", async () => {
   const ordinary = {

@@ -70,7 +70,8 @@ service cloud.firestore {
         && customerId == request.auth.uid
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.email == request.auth.token.email
-        && request.resource.data.role == "customer";
+        && request.resource.data.role == "customer"
+        && !request.resource.data.keys().hasAny(["productionFixture"]);
       allow update: if signedIn()
         && customerId == request.auth.uid
         && resource.data.uid == request.auth.uid

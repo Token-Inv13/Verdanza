@@ -44,7 +44,7 @@ import {
 } from "./cagnotteProductionReadinessAssertions.js";
 
 const baseMain = "322f65895fb0a75479c92bc4a3054caa4073d2f8";
-const expectedRulesHash = "bfac684e58aff26b20dde1cb65abec49e40fc98a7d64272262e53b35b5f6091e";
+const expectedRulesHash = "d2ed755c2da2b9990e45766fd626e7794dd998c10098dccc5028cd66dd4165c3";
 const expectedEndpoints = [
   "admin-contests.ts",
   "admin-payment-links.ts",
@@ -531,6 +531,10 @@ await check("règles Firestore candidates et protections commandes", () => {
   ]) {
     assert.match(rules, new RegExp(`match /${collection}/\\{document=\\*\\*\\} \\{ allow read, write: if false; \\}`));
   }
+  assert.match(
+    rules,
+    /match \/customers\/\{customerId\} \{[\s\S]*?allow create:[\s\S]*?!request\.resource\.data\.keys\(\)\.hasAny\(\["productionFixture"\]\)[\s\S]*?allow update:/,
+  );
   assert.match(rules, /allow create: if isAdmin\(\) && !request\.resource\.data\.keys\(\)\.hasAny\(\["cagnotte"\]\)/);
   assert.match(rules, /!resource\.data\.keys\(\)\.hasAny\(\["cagnotte"\]\)[\s\S]*!request\.resource\.data\.keys\(\)\.hasAny\(\["cagnotte"\]\)/);
   assert.match(rules, /allow delete: if isAdmin\(\) && !resource\.data\.keys\(\)\.hasAny\(\["cagnotte"\]\)/);
