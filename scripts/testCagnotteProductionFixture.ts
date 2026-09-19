@@ -70,10 +70,13 @@ import {
 import { cagnotteProductionFixtureReferences } from "../api/_server/cagnotteProductionFixtureState.js";
 import {
   buildCagnotteProductionFixturePlan,
+  assertCagnotteProductionFixtureAuthUidAvailable,
   assertCagnotteProductionFixtureProductionEnvironment,
   cagnotteProductionFixtureProgram,
   inspectCagnotteProductionFixture,
+  isCagnotteProductionFixtureOutboundTargetAllowed,
   runCagnotteProductionFixtureCommand,
+  type CagnotteProductionFixtureAuthLookup,
 } from "./createCagnotteProductionFixture.js";
 
 const db = await connectCagnotteEmulator(CAGNOTTE_DEMO);
@@ -87,12 +90,22 @@ const capability = createCagnotteProductionFixtureTestCapability(() => {
     throw new Error("production_fixture_test_environment_invalid");
   }
 });
-const command = (name: "create" | "mark-paid" | "mark-delivered" | "inspect") =>
+const fixtureAuthUidAbsent: CagnotteProductionFixtureAuthLookup = {
+  getUser: async (uid) => {
+    equal(uid, CAGNOTTE_PRODUCTION_FIXTURE_UID);
+    throw Object.assign(new Error("synthetic user not found"), { code: "auth/user-not-found" });
+  },
+};
+const command = (
+  name: "create" | "mark-paid" | "mark-delivered" | "inspect",
+  auth: CagnotteProductionFixtureAuthLookup = fixtureAuthUidAbsent,
+) =>
   runCagnotteProductionFixtureCommand({
     db,
     command: name,
     capability,
     firebaseProjectId: CAGNOTTE_PRODUCTION_FIXTURE_PROJECT_ID,
+    auth,
   });
 let checks = 0;
 async function check(name: string, run: () => void | Promise<void>) {
@@ -108,6 +121,66 @@ try {
       throws(() => http.get("http://example.com"), /TEST_NETWORK_BLOCKED/);
       throws(() => https.get("https://api.twilio.com"), /TEST_NETWORK_BLOCKED/);
     });
+  });
+
+  await check("allowlist Firebase Admin borne exactement le endpoint Auth", () => {
+    equal(isCagnotteProductionFixtureOutboundTargetAllowed(
+      "https://identitytoolkit.googleapis.com/v1/projects/verdanza-1f621/accounts:lookup",
+      true,
+    ), true);
+    equal(isCagnotteProductionFixtureOutboundTargetAllowed("https://firestore.googleapis.com", true), true);
+    equal(isCagnotteProductionFixtureOutboundTargetAllowed("https://oauth2.googleapis.com/token", true), true);
+    equal(isCagnotteProductionFixtureOutboundTargetAllowed("https://www.googleapis.com", true), false);
+    equal(isCagnotteProductionFixtureOutboundTargetAllowed("https://example.googleapis.com", true), false);
+    equal(isCagnotteProductionFixtureOutboundTargetAllowed("http://identitytoolkit.googleapis.com", false), false);
+  });
+
+  await check("UID fixture Auth absent, collision et panne restent fail-closed sans mutation Auth", async () => {
+    let creates = 0;
+    let deletes = 0;
+    const auth = (getUser: CagnotteProductionFixtureAuthLookup["getUser"]) => ({
+      getUser,
+      createUser: async () => { creates += 1; },
+      deleteUser: async () => { deletes += 1; },
+    });
+    await assertCagnotteProductionFixtureAuthUidAvailable(auth(async () => {
+      throw Object.assign(new Error("absent"), { code: "auth/user-not-found" });
+    }));
+    await rejects(
+      () => assertCagnotteProductionFixtureAuthUidAvailable(auth(async () => ({ uid: CAGNOTTE_PRODUCTION_FIXTURE_UID }))),
+      /production_fixture_auth_collision/,
+    );
+    await rejects(
+      () => assertCagnotteProductionFixtureAuthUidAvailable(auth(async () => {
+        throw Object.assign(new Error("permission denied"), { code: "auth/insufficient-permission" });
+      })),
+      /production_fixture_auth_verification_failed/,
+    );
+    await rejects(
+      () => assertCagnotteProductionFixtureAuthUidAvailable(undefined),
+      /production_fixture_auth_verification_failed/,
+    );
+    equal(creates, 0);
+    equal(deletes, 0);
+  });
+
+  await check("toute commande mutante verifie Auth avant Firestore, inspect reste passif", async () => {
+    const collidingAuth: CagnotteProductionFixtureAuthLookup = {
+      getUser: async () => ({ uid: CAGNOTTE_PRODUCTION_FIXTURE_UID }),
+    };
+    const before = await databaseCounts();
+    for (const mutation of ["create", "mark-paid", "mark-delivered"] as const) {
+      await rejects(() => command(mutation, collidingAuth), /production_fixture_auth_collision/);
+      deepStrictEqual(await databaseCounts(), before);
+    }
+    let inspectAuthLookups = 0;
+    await command("inspect", {
+      getUser: async () => {
+        inspectAuthLookups += 1;
+        throw new Error("inspect must not query Auth");
+      },
+    });
+    equal(inspectAuthLookups, 0);
   });
 
   await check("programme Production en memoire, runtime global non modifie", () => {
@@ -227,12 +300,25 @@ try {
         id: "production-fixture-residual-payment-link-v1",
         expected: /production_fixture_payment_link_collision/,
       },
+      {
+        collection: "cagnotteRefunds",
+        id: "production-fixture-residual-refund-v1",
+        expected: /production_fixture_refund_collision/,
+        action: "record_confirmed",
+      },
+      {
+        collection: "cagnotteRefunds",
+        id: "production-fixture-residual-correction-v1",
+        expected: /production_fixture_refund_collision/,
+        action: "record_correction",
+      },
     ] as const;
     for (const collision of collisions) {
       const ref = db.collection(collision.collection).doc(collision.id);
       await ref.set({
         orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
         status: "residual",
+        ...("action" in collision ? { action: collision.action } : {}),
       });
       try {
         const before = await databaseCounts();
@@ -417,6 +503,63 @@ try {
     });
   });
 
+  await check("checkout ordinaire refuse le UID fixture avant acces au wallet de 500 cents", async () => {
+    const productId = "ordinary-fixture-uid-guard-product";
+    const orderId = "ordinary-fixture-uid-guard-order";
+    const checkoutRequestId = "c011ec7e-0004-4000-8000-000000000004";
+    const product = {
+      ...cagnotteProductionFixtureProductDocument(),
+      internalReference: "ORDINARY-UID-GUARD",
+      slug: productId,
+      name: "Produit ordinaire garde UID",
+      isActive: true,
+    };
+    delete (product as { productionFixture?: unknown }).productionFixture;
+    const walletRef = db.collection("cagnotteWallets").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID);
+    await Promise.all([
+      db.collection("products").doc(productId).set(product),
+      walletRef.set(fixtureWalletDocument({ availableCents: 500 })),
+    ]);
+    try {
+      const body = {
+        ...fixtureBody(),
+        checkoutRequestId,
+        items: [{
+          productId,
+          quantity: 1,
+          purchaseMode: "fixed_price" as const,
+          fixedPriceOptionId: CAGNOTTE_PRODUCTION_FIXTURE_FIXED_PRICE_OPTION_ID,
+        }],
+        cagnotteUse: { requestedCents: 500 },
+      };
+      const priced = await priceCheckout(db, body);
+      const before = await databaseCounts();
+      await rejects(() => commitCheckoutOrder({
+        db,
+        body,
+        priced,
+        checkoutRequestId,
+        payloadFingerprint: checkoutPayloadFingerprint(body),
+        customerId: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+        orderId,
+        accrualProgram: null,
+        reservationProgram: null,
+        firebaseProjectId: CAGNOTTE_PRODUCTION_FIXTURE_PROJECT_ID,
+      }), /production_fixture_customer_checkout_forbidden/);
+      deepStrictEqual(await databaseCounts(), before);
+      equal((await walletRef.get()).data()?.availableCents, 500);
+      equal((await db.collection("products").doc(productId).get()).data()?.stock,
+        CAGNOTTE_PRODUCTION_FIXTURE_INITIAL_STOCK);
+      equal((await db.collection("orders").doc(orderId).get()).exists, false);
+      equal((await db.collection("checkoutRequests").doc(checkoutRequestId).get()).exists, false);
+    } finally {
+      await Promise.all([
+        db.collection("products").doc(productId).delete(),
+        walletRef.delete(),
+      ]);
+    }
+  });
+
   await check("checkout normal conserve un produit actif non marque", async () => {
     const productId = "ordinary-active-product";
     const orderId = "ordinary-active-order";
@@ -447,6 +590,7 @@ try {
       priced,
       checkoutRequestId,
       payloadFingerprint: checkoutPayloadFingerprint(body),
+      customerId: "ordinary-customer",
       orderId,
       accrualProgram: null,
       reservationProgram: null,
@@ -545,6 +689,11 @@ try {
         id: "production-fixture-existing-payment-link-v1",
         expected: /production_fixture_payment_link_collision/,
       },
+      {
+        collection: "cagnotteRefunds",
+        id: "production-fixture-existing-refund-v1",
+        expected: /production_fixture_refund_collision/,
+      },
     ] as const;
     for (const collision of collisions) {
       const ref = db.collection(collision.collection).doc(collision.id);
@@ -575,6 +724,25 @@ try {
       deepStrictEqual(await stableFinancialState(), before);
     } finally {
       await invoiceRef.delete();
+    }
+  });
+
+  await check("refund residuel refuse mark-paid sans mutation", async () => {
+    const refundRef = db.collection("cagnotteRefunds")
+      .doc("production-fixture-before-paid-refund-v1");
+    const residual = {
+      orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+      action: "record_confirmed",
+      status: "recorded",
+    };
+    await refundRef.set(residual);
+    try {
+      const before = await stableFinancialState();
+      await rejects(() => command("mark-paid"), /production_fixture_refund_collision/);
+      deepStrictEqual(await stableFinancialState(), before);
+      deepStrictEqual((await refundRef.get()).data(), residual);
+    } finally {
+      await refundRef.delete();
     }
   });
 
@@ -844,6 +1012,7 @@ try {
       "contestAudits",
       "securityRateLimits",
       "cagnotteReservations",
+      "cagnotteRefunds",
       "invoices",
       "analyticsOutbox",
       "paymentLinkRequests",
@@ -946,6 +1115,25 @@ try {
       deepStrictEqual(await stableFinancialState(), before);
     } finally {
       await invoiceRef.delete();
+    }
+  });
+
+  await check("correction residuelle refuse mark-delivered sans mutation", async () => {
+    const refundRef = db.collection("cagnotteRefunds")
+      .doc("production-fixture-before-delivery-correction-v1");
+    const residual = {
+      orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+      action: "record_correction",
+      status: "recorded",
+    };
+    await refundRef.set(residual);
+    try {
+      const before = await stableFinancialState();
+      await rejects(() => command("mark-delivered"), /production_fixture_refund_collision/);
+      deepStrictEqual(await stableFinancialState(), before);
+      deepStrictEqual((await refundRef.get()).data(), residual);
+    } finally {
+      await refundRef.delete();
     }
   });
 
@@ -1163,6 +1351,7 @@ try {
     equal(inspection.invoiceCount, 0);
     equal(inspection.analyticsOutboxCount, 0);
     equal(inspection.paymentLinkRequestCount, 0);
+    equal(inspection.refundCount, 0);
     equal(inspection.reservation.exists, false);
     equal(inspection.movements.length, 3);
     equal(inspection.product.data?.isActive, false);
@@ -1183,20 +1372,26 @@ function fixturePriced() {
 }
 
 function commitFixtureCheckout(
-  overrides: { productionFixtureCapability?: typeof capability } = {},
+  overrides: {
+    productionFixtureCapability?: typeof capability;
+    customerId?: string;
+  } = {},
 ) {
   const body = fixtureBody();
   const selectedCapability = Object.prototype.hasOwnProperty.call(
     overrides,
     "productionFixtureCapability",
   ) ? overrides.productionFixtureCapability : capability;
+  const customerId = Object.prototype.hasOwnProperty.call(overrides, "customerId")
+    ? overrides.customerId
+    : CAGNOTTE_PRODUCTION_FIXTURE_UID;
   return commitCheckoutOrder({
     db,
     body,
     priced: fixturePriced(),
     checkoutRequestId: CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID,
     payloadFingerprint: checkoutPayloadFingerprint(body),
-    customerId: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+    customerId,
     orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
     accrualProgram: cagnotteProductionFixtureProgram(),
     reservationProgram: null,
@@ -1283,7 +1478,10 @@ async function assertMarkedProductRejectedByOrdinaryCheckout(
   const before = await databaseCounts();
   await rejects(() => priceCheckout(db, fixtureBody()), /Produit fixture refuse/);
   await rejects(
-    () => commitFixtureCheckout({ productionFixtureCapability: undefined }),
+    () => commitFixtureCheckout({
+      productionFixtureCapability: undefined,
+      customerId: "ordinary-fixture-product-customer",
+    }),
     /Produit fixture indisponible/,
   );
   deepStrictEqual(await databaseCounts(), before);
@@ -1386,6 +1584,7 @@ async function databaseCounts() {
     "cagnotteAccruals",
     "cagnotteMovements",
     "cagnotteReservations",
+    "cagnotteRefunds",
     "invoices",
     "analyticsOutbox",
     "paymentLinkRequests",

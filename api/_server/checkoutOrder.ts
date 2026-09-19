@@ -28,6 +28,7 @@ import {
   cagnotteProductionFixtureStockMovementDocument,
   CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS,
   CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID,
+  CAGNOTTE_PRODUCTION_FIXTURE_UID,
   hasPersistedCagnotteProductionFixtureMarker,
   isExactCagnotteProductionFixtureMarker,
   isExactCagnotteProductionFixtureOrder,
@@ -82,6 +83,9 @@ export async function commitCheckoutOrder(input: {
         body: body as unknown as Record<string, unknown>,
         priced: priced as unknown as Record<string, unknown>,
       });
+  if (customerId === CAGNOTTE_PRODUCTION_FIXTURE_UID && !fixtureMarker) {
+    throw new Error("production_fixture_customer_checkout_forbidden");
+  }
   const fixtureStockMovementRef = fixtureMarker
     ? db.collection("stockMovements").doc(CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID)
     : null;

@@ -162,7 +162,7 @@ export async function validateCagnotteProductionFixtureExternalArtifacts({
   db: Firestore;
   transaction: Transaction;
 }) {
-  const [invoices, analyticsOutbox, paymentLinkRequests] = await Promise.all([
+  const [invoices, analyticsOutbox, paymentLinkRequests, refunds] = await Promise.all([
     transaction.get(
       db.collection("invoices")
         .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
@@ -178,6 +178,11 @@ export async function validateCagnotteProductionFixtureExternalArtifacts({
         .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
         .limit(1),
     ),
+    transaction.get(
+      db.collection("cagnotteRefunds")
+        .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
+        .limit(1),
+    ),
   ]);
   if (!invoices.empty) throw new Error("production_fixture_invoice_collision");
   if (!analyticsOutbox.empty) {
@@ -185,6 +190,9 @@ export async function validateCagnotteProductionFixtureExternalArtifacts({
   }
   if (!paymentLinkRequests.empty) {
     throw new Error("production_fixture_payment_link_collision");
+  }
+  if (!refunds.empty) {
+    throw new Error("production_fixture_refund_collision");
   }
 }
 

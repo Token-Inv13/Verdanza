@@ -14,7 +14,7 @@ import {
 } from "../api/_server/orderStatusTransition.js";
 import { resolveCagnotteProductionProgram } from "../api/_server/cagnotteProgram.js";
 import type { CagnotteProductionProgram } from "../api/_server/cagnotteLedgerTypes.js";
-import { getAdminDb, getAdminProjectId } from "../api/_server/firebaseAdmin.js";
+import { getAdminAuth, getAdminDb, getAdminProjectId } from "../api/_server/firebaseAdmin.js";
 import {
   CAGNOTTE_PRODUCTION_FIXTURE_CHALLENGE,
   CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID,
@@ -69,6 +69,11 @@ type FixtureRunInput = Readonly<{
   command: CagnotteProductionFixtureCommand;
   capability: CagnotteProductionFixtureCapability;
   firebaseProjectId: typeof CAGNOTTE_PRODUCTION_FIXTURE_PROJECT_ID;
+  auth?: CagnotteProductionFixtureAuthLookup;
+}>;
+
+export type CagnotteProductionFixtureAuthLookup = Readonly<{
+  getUser: (uid: string) => Promise<unknown>;
 }>;
 
 const internalActor = Object.freeze({
@@ -149,6 +154,9 @@ export async function runCagnotteProductionFixtureCommand(input: FixtureRunInput
   if (input.firebaseProjectId !== CAGNOTTE_PRODUCTION_FIXTURE_PROJECT_ID) {
     throw new Error("production_fixture_project_invalid");
   }
+  if (input.command !== "inspect") {
+    await assertCagnotteProductionFixtureAuthUidAvailable(input.auth);
+  }
   switch (input.command) {
     case "create":
       return createFixture(input);
@@ -167,6 +175,19 @@ export async function runCagnotteProductionFixtureCommand(input: FixtureRunInput
     case "inspect":
       return inspectCagnotteProductionFixture(input.db);
   }
+}
+
+export async function assertCagnotteProductionFixtureAuthUidAvailable(
+  auth: CagnotteProductionFixtureAuthLookup | undefined,
+) {
+  if (!auth) throw new Error("production_fixture_auth_verification_failed");
+  try {
+    await auth.getUser(CAGNOTTE_PRODUCTION_FIXTURE_UID);
+  } catch (error) {
+    if (firebaseAuthErrorCode(error) === "auth/user-not-found") return;
+    throw new Error("production_fixture_auth_verification_failed");
+  }
+  throw new Error("production_fixture_auth_collision");
 }
 
 export async function inspectCagnotteProductionFixture(db: Firestore) {
@@ -195,6 +216,9 @@ export async function inspectCagnotteProductionFixture(db: Firestore) {
   const paymentLinkRequests = await db.collection("paymentLinkRequests")
     .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
     .get();
+  const refunds = await db.collection("cagnotteRefunds")
+    .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
+    .get();
   return {
     customer: documentState(customer),
     product: documentState(product),
@@ -209,7 +233,22 @@ export async function inspectCagnotteProductionFixture(db: Firestore) {
     invoiceCount: invoices.size,
     analyticsOutboxCount: analytics.size,
     paymentLinkRequestCount: paymentLinkRequests.size,
+    refundCount: refunds.size,
   };
+}
+
+export function isCagnotteProductionFixtureOutboundTargetAllowed(
+  candidate: unknown,
+  encrypted: boolean,
+) {
+  const url = requestUrl(candidate, encrypted);
+  const localEmulator = url.hostname === "127.0.0.1" && url.port === "18085";
+  const firebaseAdmin = encrypted && (
+    url.hostname === "oauth2.googleapis.com" ||
+    url.hostname === "firestore.googleapis.com" ||
+    url.hostname === "identitytoolkit.googleapis.com"
+  );
+  return localEmulator || firebaseAdmin;
 }
 
 export function installCagnotteProductionFixtureOutboundGuard() {
@@ -220,12 +259,7 @@ export function installCagnotteProductionFixtureOutboundGuard() {
   const originalHttpsGet = https.get;
   const assertAllowed = (candidate: unknown, encrypted: boolean) => {
     const url = requestUrl(candidate, encrypted);
-    const localEmulator = url.hostname === "127.0.0.1" && url.port === "18085";
-    const firebaseAdmin = encrypted && (
-      url.hostname === "oauth2.googleapis.com" ||
-      url.hostname === "firestore.googleapis.com"
-    );
-    if (!localEmulator && !firebaseAdmin) {
+    if (!isCagnotteProductionFixtureOutboundTargetAllowed(url, encrypted)) {
       throw new Error(`production_fixture_network_blocked:${url.hostname || "unknown"}`);
     }
   };
@@ -394,6 +428,16 @@ function documentState(snapshot: FirebaseFirestore.DocumentSnapshot) {
   };
 }
 
+function firebaseAuthErrorCode(error: unknown) {
+  if (!error || typeof error !== "object") return null;
+  const direct = Reflect.get(error, "code");
+  if (typeof direct === "string") return direct;
+  const errorInfo = Reflect.get(error, "errorInfo");
+  if (!errorInfo || typeof errorInfo !== "object") return null;
+  const nested = Reflect.get(errorInfo, "code");
+  return typeof nested === "string" ? nested : null;
+}
+
 function parseCli(argv: readonly string[], environment: NodeJS.ProcessEnv) {
   assertCagnotteProductionFixtureProductionEnvironment(environment);
   const commands = argv.filter((arg) => !arg.startsWith("--"));
@@ -478,11 +522,13 @@ async function main() {
   });
   const restoreNetwork = installCagnotteProductionFixtureOutboundGuard();
   try {
+    const auth = parsed.command === "inspect" ? undefined : getAdminAuth();
     const result = await runCagnotteProductionFixtureCommand({
       db: getAdminDb(),
       command: parsed.command,
       capability,
       firebaseProjectId: CAGNOTTE_PRODUCTION_FIXTURE_PROJECT_ID,
+      auth,
     });
     console.log(JSON.stringify(result, null, 2));
   } finally {
