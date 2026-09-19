@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { hasOwnProductionFixtureMarker } from "../../src/lib/productionFixtureMarker.js";
+import { orderPayload, type CheckoutRequestBody, type PricedCheckout } from "./checkout.js";
 
 export const CAGNOTTE_PRODUCTION_FIXTURE_MARKER =
   "verdanza-cagnotte-production-fixture-v1" as const;
@@ -375,6 +376,28 @@ export function cagnotteProductionFixturePricedCheckout() {
     deliveryNote: "Livraison postale offerte.",
     giftPromotions: [] as unknown[],
   };
+}
+
+export function cagnotteProductionFixtureInitialOrderDocument() {
+  const controlledInstant = new Date(
+    CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS,
+  ).toISOString();
+  const payload = orderPayload(
+    cagnotteProductionFixtureCheckoutBody() as CheckoutRequestBody,
+    cagnotteProductionFixturePricedCheckout() as PricedCheckout,
+    CAGNOTTE_PRODUCTION_FIXTURE_UID,
+  );
+  payload.productionFixture = cagnotteProductionFixtureMarker();
+  payload.finalPaymentMethod = "other";
+  payload.createdAt = controlledInstant;
+  payload.updatedAt = controlledInstant;
+  payload.statusHistory = (payload.statusHistory as Array<Record<string, unknown>>).map(
+    (entry) => ({
+      ...entry,
+      changedAt: controlledInstant,
+    }),
+  );
+  return payload;
 }
 
 export function cagnotteProductionFixtureStockMovementDocument() {

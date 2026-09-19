@@ -34,6 +34,7 @@ import {
   CAGNOTTE_PRODUCTION_FIXTURE_UID,
   cagnotteProductionFixtureCheckoutBody,
   cagnotteProductionFixtureCustomerDocument,
+  cagnotteProductionFixtureInitialOrderDocument,
   cagnotteProductionFixturePricedCheckout,
   cagnotteProductionFixtureProductDocument,
   cagnotteProductionFixtureStockMovementDocument,
@@ -405,6 +406,12 @@ function assertFixtureDocuments(input: {
 
 function assertStoredFixtureOrder(order: Order) {
   if (!isExactCagnotteProductionFixtureOrder(order)) fixtureOrderCollision();
+  if (!isDeepStrictEqual(
+    fixtureOrderInvariantProjection(order),
+    fixtureOrderInvariantProjection(cagnotteProductionFixtureInitialOrderDocument()),
+  )) {
+    fixtureOrderCollision();
+  }
   const enrollment = fixtureOrderEnrollment(order);
   const expectedSnapshot = calculateCagnotte(
     cagnotteCalculationForPricedCheckout(
@@ -420,18 +427,29 @@ function assertStoredFixtureOrder(order: Order) {
     enrollment.accrualEnrollment !== "enrolled" ||
     !isDeepStrictEqual(enrollment.snapshot, expectedSnapshot) ||
     enrollment.snapshot.loyaltyCents !== 500 ||
-    enrollment.snapshot.appliedCagnotteCents !== 0 ||
-    order.finalPaymentMethod !== "other" ||
-    order.subtotal !== 100 ||
-    order.deliveryFee !== 0 ||
-    order.total !== 100 ||
-    order.couponCode !== null ||
-    order.contestPrizeId !== null ||
-    (order.appliedPromotions?.length ?? 0) !== 0 ||
-    order.cagnotteReservationIntent !== undefined
+    enrollment.snapshot.appliedCagnotteCents !== 0
   ) {
     fixtureOrderCollision();
   }
+}
+
+const fixtureOrderInvariantExclusions = new Set([
+  "id",
+  "cagnotte",
+  "updatedAt",
+  "paymentStatus",
+  "orderStatus",
+  "statusHistory",
+  "items",
+  "paidAt",
+  "paymentConfirmedAt",
+  "paymentConfirmedBy",
+]);
+
+function fixtureOrderInvariantProjection(order: object) {
+  return Object.fromEntries(
+    Object.entries(order).filter(([field]) => !fixtureOrderInvariantExclusions.has(field)),
+  );
 }
 
 function fixtureOrderEnrollment(order: Order) {
@@ -491,6 +509,9 @@ function assertFixtureLifecycleAudit(
   const expectedItems = cagnotteProductionFixturePricedCheckout().orderItems;
   if (state === "created") {
     if (
+      order.updatedAt !== new Date(
+        CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS,
+      ).toISOString() ||
       paymentAuditFields.some((field) => Object.prototype.hasOwnProperty.call(order, field)) ||
       !isDeepStrictEqual(order.items, expectedItems)
     ) {

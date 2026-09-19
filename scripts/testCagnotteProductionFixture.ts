@@ -69,6 +69,7 @@ import {
   cagnotteProductionFixtureCheckoutBody,
   cagnotteProductionFixtureCustomerDocument,
   cagnotteProductionFixtureDeliveredStatusChange,
+  cagnotteProductionFixtureInitialOrderDocument,
   cagnotteProductionFixturePaidStatusChange,
   cagnotteProductionFixturePricedCheckout,
   cagnotteProductionFixtureProductDocument,
@@ -1070,6 +1071,76 @@ try {
     }
   });
 
+  await check("ordre created compare tous les invariants et refuse les champs inattendus", async () => {
+    const orderRef = cagnotteProductionFixtureReferences(db).order;
+    const persisted = (await orderRef.get()).data();
+    ok(persisted);
+    deepStrictEqual(
+      Object.keys(persisted).filter((field) => field !== "cagnotte").sort(),
+      Object.keys(cagnotteProductionFixtureInitialOrderDocument()).sort(),
+    );
+    equal(
+      persisted.updatedAt,
+      new Date(CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS).toISOString(),
+    );
+
+    const corruptions: Array<readonly [string, (order: MutableFixtureOrder) => void]> = [
+      ["deliveryMethod", (value) => { value.deliveryMethod = "local_express"; }],
+      ["deliveryAddress.line1", (value) => {
+        const address = value.deliveryAddress;
+        if (!address || typeof address !== "object" || Array.isArray(address)) {
+          throw new Error("production_fixture_test_address_missing");
+        }
+        value.deliveryAddress = { ...address, line1: "2 rue divergente" };
+      }],
+      ["deliveryAddress.city", (value) => {
+        const address = value.deliveryAddress;
+        if (!address || typeof address !== "object" || Array.isArray(address)) {
+          throw new Error("production_fixture_test_address_missing");
+        }
+        value.deliveryAddress = { ...address, city: "Lyon" };
+      }],
+      ["createdAt", (value) => { value.createdAt = "2026-09-18T12:00:01.000Z"; }],
+      ["updatedAt created", (value) => { value.updatedAt = "2026-09-18T12:00:01.000Z"; }],
+      ["preferredPaymentMethod", (value) => { value.preferredPaymentMethod = "bank_transfer"; }],
+      ["customerEmail", (value) => { value.customerEmail = "divergent@example.test"; }],
+      ["customerPhone", (value) => { value.customerPhone = "0611111111"; }],
+      ["customerName", (value) => { value.customerName = "Client Divergent"; }],
+      ["customerMessage", (value) => { value.customerMessage = "Message divergent"; }],
+      ["deliveryZone", (value) => { value.deliveryZone = "Zone divergente"; }],
+      ["deliveryZoneId", (value) => { value.deliveryZoneId = "zone-divergente"; }],
+      ["deliveryNote", (value) => { value.deliveryNote = "Note divergente"; }],
+      ["paymentInstructions", (value) => {
+        value.paymentInstructions = "Instructions divergentes";
+      }],
+      ["trackingNumber", (value) => { value.trackingNumber = "TRACKING-DIVERGENT"; }],
+      ["analytics", (value) => {
+        value.analytics = {
+          consentGrantedAtSubmission: false,
+          purchaseStatus: "pending",
+        };
+      }],
+      ["emails", (value) => {
+        value.emails = { orderConfirmationStatus: "sent" };
+      }],
+      ["archived ajoute", (value) => { value.archived = true; }],
+      ["champ arbitraire ajoute", (value) => {
+        value.unexpectedFixtureField = "unexpected";
+      }],
+      ["cagnottePaymentEvidence ajoute", (value) => {
+        value.cagnottePaymentEvidence = { version: "unexpected" };
+      }],
+    ];
+    for (const [name, mutate] of corruptions) {
+      await assertFixtureCorruptionRejected({
+        name,
+        ref: orderRef,
+        mutate: fixtureOrderCorruption(mutate),
+        expected: /production_fixture_order_collision/,
+      }, "create");
+    }
+  });
+
   await check("analytics operationnel residuel refuse replay create et mark-paid", async () => {
     for (const fixtureCommand of ["create", "mark-paid"] as const) {
       const ref = db.collection("analyticsOperationalEvents")
@@ -1664,6 +1735,18 @@ try {
         expected: /production_fixture_order_collision/,
       }, "mark-delivered");
     }
+  });
+
+  await check("ordre paid refuse un invariant divergent avant mark-delivered", async () => {
+    const orderRef = cagnotteProductionFixtureReferences(db).order;
+    await assertFixtureCorruptionRejected({
+      name: "deliveryMethod paid divergent",
+      ref: orderRef,
+      mutate: fixtureOrderCorruption((value) => {
+        value.deliveryMethod = "local_express";
+      }),
+      expected: /production_fixture_order_collision/,
+    }, "mark-delivered");
   });
 
   await check("analytics operationnel residuel refuse mark-delivered", async () => {
@@ -2301,7 +2384,7 @@ function fixtureSnapshotCorruption(
 
 async function assertFixtureCorruptionRejected(
   corruption: FixtureCorruption,
-  transition: "mark-paid" | "mark-delivered",
+  transition: "create" | "mark-paid" | "mark-delivered",
 ) {
   const original = await corruption.ref.get();
   const originalData = original.data();
