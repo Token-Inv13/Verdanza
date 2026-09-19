@@ -41,7 +41,9 @@ import {
 } from "../api/_server/cagnotteProductionFixture.js";
 import {
   cagnotteProductionFixtureReferences,
+  validateCagnotteProductionFixtureAccountingArtifacts,
   validateCagnotteProductionFixtureExternalArtifacts,
+  validateCagnotteProductionFixtureMovements,
   validateCagnotteProductionFixtureState,
   validateCagnotteProductionFixtureStockMovements,
 } from "../api/_server/cagnotteProductionFixtureState.js";
@@ -370,7 +372,13 @@ async function prepareFixtureDocuments(db: Firestore): Promise<"prepared" | "exi
       transaction,
       expected: "absent",
     });
+    await validateCagnotteProductionFixtureMovements({
+      db,
+      transaction,
+      expected: "absent",
+    });
     await validateCagnotteProductionFixtureExternalArtifacts({ db, transaction });
+    await validateCagnotteProductionFixtureAccountingArtifacts({ db, transaction });
     if (reservation.exists) {
       throw new Error("production_fixture_reservation_collision");
     }

@@ -1,5 +1,8 @@
 import { orderFromSnapshot } from "./_server/orderProtection.js";
-import { hasPersistedCagnotteProductionFixtureMarker } from "./_server/cagnotteProductionFixture.js";
+import {
+  CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID,
+  hasPersistedCagnotteProductionFixtureMarker,
+} from "./_server/cagnotteProductionFixture.js";
 import { FieldValue } from "firebase-admin/firestore";
 import { assertAdminUser } from "./_server/adminAuth.js";
 import { getAdminDb, getAdminStorageBucket } from "./_server/firebaseAdmin.js";
@@ -419,6 +422,9 @@ export async function saveProductCost(
   purchasePricePerGram: number | null,
   adminUser: { email?: string | null; uid: string },
 ) {
+  if (productId === CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID) {
+    throw new Error("production_fixture_product_cost_forbidden");
+  }
   const productSnapshot = await db.collection("products").doc(productId).get();
   if (productSnapshot.exists) {
     assertOrdinaryProductAdminMutationAllowed(productSnapshot.data());
@@ -523,6 +529,9 @@ async function assertSupplierPurchaseProductsAllowed(
   const productIds = [...new Set(
     purchase.lines.map((line) => String(line.productId || "").trim()).filter(Boolean),
   )];
+  if (productIds.includes(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID)) {
+    throw new Error("production_fixture_supplier_purchase_forbidden");
+  }
   const productSnapshots = await Promise.all(
     productIds.map((productId) => db.collection("products").doc(productId).get()),
   );
@@ -737,6 +746,9 @@ export async function saveSupplierProductAlias(
   const productId = String(input.productId || "").trim();
   if (!supplierName || !originalLabel || !productId) {
     throw new Error("Fournisseur, libelle et produit requis pour memoriser l'alias.");
+  }
+  if (productId === CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID) {
+    throw new Error("production_fixture_supplier_alias_forbidden");
   }
   const productSnapshot = await db.collection("products").doc(productId).get();
   if (!productSnapshot.exists) throw new Error("Produit introuvable pour cet alias.");

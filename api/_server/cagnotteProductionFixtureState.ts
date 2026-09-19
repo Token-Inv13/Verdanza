@@ -2,7 +2,6 @@ import { isDeepStrictEqual } from "node:util";
 import type {
   DocumentSnapshot,
   Firestore,
-  QuerySnapshot,
   Transaction,
 } from "firebase-admin/firestore";
 import { calculateCagnotte } from "../../src/lib/cagnotteCalculations.js";
@@ -87,7 +86,6 @@ export async function validateCagnotteProductionFixtureState({
   if (!orderSnapshot.exists) fixtureOrderCollision();
 
   const refs = cagnotteProductionFixtureReferences(db);
-  const movementRefs = fixtureMovementReferences(db);
   const [
     customer,
     admin,
@@ -97,10 +95,6 @@ export async function validateCagnotteProductionFixtureState({
     wallet,
     accrual,
     reservation,
-    paymentMovement,
-    deliveryMovement,
-    releaseMovement,
-    cancellationMovement,
   ] = await transaction.getAll(
     refs.customer,
     refs.admin,
@@ -110,14 +104,6 @@ export async function validateCagnotteProductionFixtureState({
     refs.wallet,
     refs.accrual,
     refs.reservation,
-    movementRefs.payment,
-    movementRefs.delivery,
-    movementRefs.release,
-    movementRefs.cancellation,
-  );
-  const movements = await transaction.get(
-    db.collection("cagnotteMovements")
-      .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID),
   );
   await validateCagnotteProductionFixtureStockMovements({
     db,
@@ -125,6 +111,7 @@ export async function validateCagnotteProductionFixtureState({
     expected: "canonical",
   });
   await validateCagnotteProductionFixtureExternalArtifacts({ db, transaction });
+  await validateCagnotteProductionFixtureAccountingArtifacts({ db, transaction });
 
   assertFixtureDocuments({
     customer,
@@ -137,6 +124,11 @@ export async function validateCagnotteProductionFixtureState({
   });
   const order = orderFromSnapshot(orderSnapshot);
   const state = fixtureState(order);
+  const movements = await validateCagnotteProductionFixtureMovements({
+    db,
+    transaction,
+    expected: state,
+  });
   await assertFixtureLedger({
     db,
     transaction,
@@ -145,15 +137,59 @@ export async function validateCagnotteProductionFixtureState({
     wallet,
     accrual,
     movements,
-    movementSnapshots: {
-      payment: paymentMovement,
-      delivery: deliveryMovement,
-      release: releaseMovement,
-      cancellation: cancellationMovement,
-    },
   });
   assertTransitionPrecondition(state, expectedTransition);
   return state;
+}
+
+export async function validateCagnotteProductionFixtureMovements({
+  db,
+  transaction,
+  expected,
+}: {
+  db: Firestore;
+  transaction: Transaction;
+  expected: "absent" | CagnotteProductionFixtureState;
+}) {
+  const refs = fixtureMovementReferences(db);
+  const [
+    byOrder,
+    byBeneficiary,
+    payment,
+    delivery,
+    release,
+    cancellation,
+  ] = await Promise.all([
+    transaction.get(
+      db.collection("cagnotteMovements")
+        .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID),
+    ),
+    transaction.get(
+      db.collection("cagnotteMovements")
+        .where("beneficiaryId", "==", CAGNOTTE_PRODUCTION_FIXTURE_UID),
+    ),
+    transaction.get(refs.payment),
+    transaction.get(refs.delivery),
+    transaction.get(refs.release),
+    transaction.get(refs.cancellation),
+  ]);
+  const movementById = new Map<string, DocumentSnapshot>();
+  for (const snapshot of [
+    ...byOrder.docs,
+    ...byBeneficiary.docs,
+    payment,
+    delivery,
+    release,
+    cancellation,
+  ]) {
+    if (snapshot.exists) movementById.set(snapshot.id, snapshot);
+  }
+  const movements = [...movementById.values()];
+  const expectedMovements = expected === "absent"
+    ? new Map<string, FixtureMovementExpectation>()
+    : fixtureMovementExpectations(expected);
+  assertExactMovementSet(movements, expectedMovements);
+  return movements;
 }
 
 export async function validateCagnotteProductionFixtureStockMovements({
@@ -241,6 +277,43 @@ export async function validateCagnotteProductionFixtureExternalArtifacts({
   }
   if (!refunds.empty) {
     throw new Error("production_fixture_refund_collision");
+  }
+}
+
+export async function validateCagnotteProductionFixtureAccountingArtifacts({
+  db,
+  transaction,
+}: {
+  db: Firestore;
+  transaction: Transaction;
+}) {
+  const [supplierPurchases, productCost, supplierAliases] = await Promise.all([
+    transaction.get(db.collection("supplierPurchases")),
+    transaction.get(
+      db.collection("productCosts").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID),
+    ),
+    transaction.get(
+      db.collection("supplierProductAliases")
+        .where("productId", "==", CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID),
+    ),
+  ]);
+  const supplierPurchaseCollision = supplierPurchases.docs.some((snapshot) => {
+    const lines = snapshot.data().lines;
+    return Array.isArray(lines) && lines.some((line) => (
+      line &&
+      typeof line === "object" &&
+      String((line as { productId?: unknown }).productId || "").trim() ===
+        CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID
+    ));
+  });
+  if (supplierPurchaseCollision) {
+    throw new Error("production_fixture_supplier_purchase_collision");
+  }
+  if (productCost.exists) {
+    throw new Error("production_fixture_product_cost_collision");
+  }
+  if (!supplierAliases.empty) {
+    throw new Error("production_fixture_supplier_alias_collision");
   }
 }
 
@@ -378,14 +451,9 @@ async function assertFixtureLedger(input: {
   state: CagnotteProductionFixtureState;
   wallet: DocumentSnapshot;
   accrual: DocumentSnapshot;
-  movements: QuerySnapshot;
-  movementSnapshots: Record<
-    "payment" | "delivery" | "release" | "cancellation",
-    DocumentSnapshot
-  >;
+  movements: DocumentSnapshot[];
 }) {
   const expectedMovements = fixtureMovementExpectations(input.state);
-  assertExactMovementSet(input.movements, input.movementSnapshots, expectedMovements);
 
   if (input.state === "created") {
     if (input.wallet.exists || input.accrual.exists) fixtureWalletCollision();
@@ -462,15 +530,17 @@ async function assertFixtureLedger(input: {
     fixtureLedgerCollision();
   }
 
-  for (const movement of input.movements.docs) {
+  for (const movement of input.movements) {
+    if (!movement.exists) fixtureMovementCollision();
+    const value = movement.data();
+    if (!value) fixtureMovementCollision();
     const expected = expectedMovements.get(movement.id);
     if (!expected) fixtureMovementCollision();
     try {
-      validateCagnotteLedgerMovementForRead(movement.data(), movement.id, state);
+      validateCagnotteLedgerMovementForRead(value, movement.id, state);
     } catch {
       return fixtureMovementCollision();
     }
-    const value = movement.data();
     if (
       value.schemaVersion !== 3 ||
       value.orderId !== CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID ||
@@ -494,23 +564,12 @@ async function assertFixtureLedger(input: {
 }
 
 function assertExactMovementSet(
-  movements: QuerySnapshot,
-  snapshots: Record<"payment" | "delivery" | "release" | "cancellation", DocumentSnapshot>,
+  movements: readonly DocumentSnapshot[],
   expected: Map<string, FixtureMovementExpectation>,
 ) {
-  const actualIds = movements.docs.map((entry) => entry.id).sort();
+  const actualIds = movements.map((entry) => entry.id).sort();
   const expectedIds = [...expected.keys()].sort();
   if (!isDeepStrictEqual(actualIds, expectedIds)) fixtureMovementCollision();
-
-  const fixed = [
-    snapshots.payment,
-    snapshots.delivery,
-    snapshots.release,
-    snapshots.cancellation,
-  ];
-  for (const snapshot of fixed) {
-    if (snapshot.exists !== expected.has(snapshot.id)) fixtureMovementCollision();
-  }
 }
 
 type FixtureMovementExpectation = Readonly<{

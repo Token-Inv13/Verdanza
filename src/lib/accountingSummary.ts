@@ -16,7 +16,10 @@ import {
   type AccountingPeriodRange,
 } from "./accountingPeriods.js";
 import { orderItemLineTotal } from "./orderLineDisplay.js";
-import { filterOrdinaryProducts } from "./productionFixtureMarker.js";
+import {
+  filterOrdinaryProducts,
+  filterOrdinarySupplierPurchases,
+} from "./productionFixtureMarker.js";
 
 export type AccountingMetricKey =
   | "collectedRevenue"
@@ -61,6 +64,10 @@ export function buildAccountingSummary(
   range: AccountingPeriodRange,
 ) {
   const commercialProducts = filterOrdinaryProducts(products);
+  const commercialSupplierPurchases = filterOrdinarySupplierPurchases(
+    products,
+    supplierPurchases,
+  );
   const eligibleOrders = orders.filter(
     (order) => !isProductionFixtureOrder(order) && !isCancelledOrDeletedOrder(order),
   );
@@ -81,7 +88,7 @@ export function buildAccountingSummary(
   const currentReceivableOrders = eligibleOrders.filter((order) =>
     receivablePaymentStatuses.has(order.paymentStatus),
   );
-  const supplierPurchaseDateEntries = supplierPurchases
+  const supplierPurchaseDateEntries = commercialSupplierPurchases
     .filter((purchase) => purchase.status === "validated")
     .map((purchase) => ({
       purchase,

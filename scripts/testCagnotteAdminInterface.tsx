@@ -43,6 +43,7 @@ import {
 import {
   assertOrdinaryCustomerAdminMutationAllowed,
   filterOrdinaryProducts,
+  filterOrdinarySupplierPurchases,
 } from "../src/lib/productionFixtureMarker.js";
 import type { Coupon, CustomerProfile, Order, Product } from "../src/types/index.js";
 
@@ -311,9 +312,23 @@ await test("comptabilite et formulaire fournisseur n exposent que les produits c
   deepEqual(commercialProducts, [ordinary]);
   equal(commercialProducts[0]?.id || "", ordinary.id);
   equal(filterOrdinaryProducts([exactFixture, corruptFixture])[0]?.id || "", "");
+  const ordinaryPurchase = { id: "purchase-ordinary", lines: [{ productId: ordinary.id }] };
+  const contaminatedPurchase = {
+    id: "purchase-fixture",
+    lines: [{ productId: exactFixture.id }, { productId: ordinary.id }],
+  };
+  deepEqual(
+    filterOrdinarySupplierPurchases(
+      [ordinary, exactFixture, corruptFixture],
+      [ordinaryPurchase, contaminatedPurchase],
+    ),
+    [ordinaryPurchase],
+  );
 
   const adminPage = await readFile(resolve("src/pages/admin/AdminPage.tsx"), "utf8");
   match(adminPage, /const commercialProducts = useMemo\([\s\S]*?filterOrdinaryProducts\(products\)/);
+  match(adminPage, /const commercialSupplierPurchases = useMemo\([\s\S]*?filterOrdinarySupplierPurchases\(products, supplierPurchases\)/);
+  match(adminPage, /computeWeightedSupplierCosts\(commercialSupplierPurchases\)/);
   match(adminPage, /buildProductCostFilters\(commercialProducts,/);
   match(adminPage, /<SupplierPurchaseForm[\s\S]*?products=\{commercialProducts\}/);
   match(adminPage, /const selectableProducts = useMemo\([\s\S]*?filterOrdinaryProducts\(products\)/);

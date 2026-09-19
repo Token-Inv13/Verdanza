@@ -12,7 +12,11 @@ import {
   supplierPurchaseAccountingDate,
 } from "../src/lib/accountingPeriods.js";
 import { buildAccountingSummary } from "../src/lib/accountingSummary.js";
-import type { WeightedSupplierCost } from "../src/lib/accountingCosts.js";
+import {
+  computeWeightedSupplierCosts,
+  type WeightedSupplierCost,
+} from "../src/lib/accountingCosts.js";
+import { filterOrdinarySupplierPurchases } from "../src/lib/productionFixtureMarker.js";
 import type { AdminOrderRow } from "../src/services/ordersService.js";
 import type { Product, ProductCost, SupplierPurchase } from "../src/types/index.js";
 
@@ -246,6 +250,80 @@ check(
   summaryWithAllFixtureProducts.estimatedStockValue,
   summary.estimatedStockValue,
   "A corrupt Production fixture marker cannot change stock valuation",
+);
+
+const ordinaryWeightedPurchase = supplierFixture({
+  id: "SUPPLIER-COMMERCIAL",
+  validatedAt: "2026-08-07T10:00:00.000Z",
+  totalExVat: 25,
+  lines: [{
+    id: "line-commercial",
+    productId: product.id,
+    quantityGrams: 10,
+    grossAmountExVat: 25,
+    vatRate: 20,
+    netCostAmount: 25,
+  }],
+});
+const contaminatedWeightedPurchase = supplierFixture({
+  id: "SUPPLIER-FIXTURE-CONTAMINATED",
+  validatedAt: "2026-08-08T10:00:00.000Z",
+  totalExVat: 1_000_000,
+  lines: [{
+    id: "line-fixture",
+    productId: exactFixtureProduct.id,
+    quantityGrams: 10,
+    grossAmountExVat: 1_000_000,
+    vatRate: 20,
+    netCostAmount: 1_000_000,
+  }, {
+    id: "line-commercial-contaminated",
+    productId: product.id,
+    quantityGrams: 10,
+    grossAmountExVat: 1_000_000,
+    vatRate: 20,
+    netCostAmount: 1_000_000,
+  }],
+});
+const commercialSupplierPurchases = filterOrdinarySupplierPurchases(
+  [product, exactFixtureProduct, corruptFixtureProduct],
+  [ordinaryWeightedPurchase, contaminatedWeightedPurchase],
+);
+check(
+  commercialSupplierPurchases.map((purchase) => purchase.id),
+  [ordinaryWeightedPurchase.id],
+  "A purchase containing a fixture product is excluded as a whole",
+);
+const isolatedWeightedCosts = computeWeightedSupplierCosts(
+  commercialSupplierPurchases,
+).costByProductId;
+check(
+  [...isolatedWeightedCosts.keys()],
+  [product.id],
+  "A contaminated purchase creates no commercial weighted supplier cost",
+);
+check(
+  isolatedWeightedCosts.get(product.id)?.weightedCostPerGram,
+  2.5,
+  "The ordinary supplier purchase keeps its exact weighted cost",
+);
+const isolatedSupplierSummary = buildAccountingSummary(
+  [exactPaid],
+  [product, exactFixtureProduct, corruptFixtureProduct],
+  productCosts,
+  [ordinaryWeightedPurchase, contaminatedWeightedPurchase],
+  isolatedWeightedCosts,
+  augustMonth,
+);
+check(
+  isolatedSupplierSummary.supplierPurchasesTotal,
+  25,
+  "A contaminated purchase contributes nothing to commercial supplier totals",
+);
+check(
+  isolatedSupplierSummary.estimatedStockValue,
+  25,
+  "A contaminated purchase cannot alter commercial stock valuation",
 );
 
 const commercialWitness = orderFixture({

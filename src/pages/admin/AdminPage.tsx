@@ -185,7 +185,10 @@ import {
   buildAccountingSummary,
   type AccountingMetricKey,
 } from "../../lib/accountingSummary";
-import { filterOrdinaryProducts } from "../../lib/productionFixtureMarker";
+import {
+  filterOrdinaryProducts,
+  filterOrdinarySupplierPurchases,
+} from "../../lib/productionFixtureMarker";
 import { buildDashboardMetrics } from "../../lib/adminDashboardMetrics";
 import {
   buildCommercialCustomerEntries,
@@ -5116,13 +5119,17 @@ function AccountingPanel({
     () => filterOrdinaryProducts(products),
     [products],
   );
+  const commercialSupplierPurchases = useMemo(
+    () => filterOrdinarySupplierPurchases(products, supplierPurchases),
+    [products, supplierPurchases],
+  );
   const productCostMap = useMemo(
     () => new Map(productCosts.map((cost) => [cost.productId, cost])),
     [productCosts],
   );
   const weightedSupplierCosts = useMemo(
-    () => computeWeightedSupplierCosts(supplierPurchases).costByProductId,
-    [supplierPurchases],
+    () => computeWeightedSupplierCosts(commercialSupplierPurchases).costByProductId,
+    [commercialSupplierPurchases],
   );
   const productCostFilters = useMemo(
     () => buildProductCostFilters(commercialProducts, productCostMap, weightedSupplierCosts),
@@ -5154,12 +5161,12 @@ function AccountingPanel({
   }, [customEnd, customStart, period, todayInput]);
   const periodRange = periodSelection.range;
   const summary = useMemo(
-    () => buildAccountingSummary(orders, commercialProducts, productCostMap, supplierPurchases, weightedSupplierCosts, periodRange),
-    [commercialProducts, orders, periodRange, productCostMap, supplierPurchases, weightedSupplierCosts],
+    () => buildAccountingSummary(orders, products, productCostMap, commercialSupplierPurchases, weightedSupplierCosts, periodRange),
+    [commercialSupplierPurchases, orders, periodRange, productCostMap, products, weightedSupplierCosts],
   );
   const previousSummary = useMemo(
-    () => buildAccountingSummary(orders, commercialProducts, productCostMap, supplierPurchases, weightedSupplierCosts, previousAccountingPeriodRange(periodRange)),
-    [commercialProducts, orders, periodRange, productCostMap, supplierPurchases, weightedSupplierCosts],
+    () => buildAccountingSummary(orders, products, productCostMap, commercialSupplierPurchases, weightedSupplierCosts, previousAccountingPeriodRange(periodRange)),
+    [commercialSupplierPurchases, orders, periodRange, productCostMap, products, weightedSupplierCosts],
   );
   const periodFilters: Array<{ value: AccountingPeriodFilter; label: string }> = [
     { value: "week", label: "Semaine en cours" },
