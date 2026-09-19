@@ -17,6 +17,7 @@ import type { CagnotteTestProgram } from "../api/_server/cagnotteLedgerTypes.js"
 import type { VerifiedFirebaseUser } from "../api/_server/adminAuth.js";
 import type { VercelRequestLike, VercelResponseLike } from "../api/_server/http.js";
 import { readUnpaidOrderContext } from "../api/_server/unpaidOrderReview.js";
+import { cagnotteProductionFixtureMarker } from "../api/_server/cagnotteProductionFixture.js";
 
 const db = await connectCagnotteEmulator(CAGNOTTE_DEMO);
 const actor: VerifiedFirebaseUser = { uid: "refund-admin", email: "refund-admin@example.test", emailVerified: true };
@@ -306,6 +307,77 @@ try {
     const f = await fixture(), before = await dump(), p = await preview(selection(f)); eq(await dump(), before);
     equal(p.kind, "refund_preview"); equal(p.totalFinancialCents, 2500); equal(p.correction.theoreticalCents, 125);
     equal(p.recordedAt, undefined);
+  });
+  await test("fixture conserve inspect et previews sans aucune ecriture", async () => {
+    const f = await fixture();
+    await db.collection("orders").doc(f.id).update({ productionFixture: cagnotteProductionFixtureMarker() });
+    const before = await dump();
+    const inspection = await call({ action: "inspect", orderId: f.id });
+    equal(inspection.status, 200, JSON.stringify(inspection)); equal(inspection.stats.writes, 0);
+    const refundPreview = await call(selection(f));
+    equal(refundPreview.status, 200, JSON.stringify(refundPreview)); equal(refundPreview.stats.writes, 0);
+    const correctionPreview = await call({
+      ...correctionSelection(f, "a".repeat(64), 0, 100, 100),
+    });
+    equal(correctionPreview.status, 404); equal(correctionPreview.code, "correction_target_missing");
+    equal(correctionPreview.stats.writes, 0); eq(await dump(), before);
+  });
+  await test("record_confirmed fixture est refuse avant ecriture et avant rejeu idempotent", async () => {
+    const fresh = await fixture();
+    await db.collection("orders").doc(fresh.id).update({ productionFixture: cagnotteProductionFixtureMarker() });
+    const freshSelection = selection(fresh), freshPreview = await preview(freshSelection);
+    const freshBefore = await dump();
+    const freshRefusal = await call(confirmation(freshSelection, freshPreview, "fixture-refund-blocked"));
+    equal(freshRefusal.status, 409); equal(freshRefusal.code, "refund_production_fixture_mutation_forbidden");
+    equal(freshRefusal.stats.writes, 0); equal(freshRefusal.stats.walletWrites, 0); eq(await dump(), freshBefore);
+
+    const replay = await fixture();
+    const recorded = await record(replay, 2500, "fixture-refund-prior");
+    await db.collection("orders").doc(replay.id).update({ productionFixture: cagnotteProductionFixtureMarker() });
+    const replayBefore = await dump();
+    const replayRefusal = await call(recorded.command);
+    equal(replayRefusal.status, 409); equal(replayRefusal.code, "refund_production_fixture_mutation_forbidden");
+    equal(replayRefusal.stats.writes, 0); equal(replayRefusal.stats.walletWrites, 0); eq(await dump(), replayBefore);
+  });
+  await test("record_correction fixture est refuse avant cible et avant rejeu idempotent", async () => {
+    const fresh = await fixture();
+    await record(fresh, 2500, "fixture-correction-original");
+    const freshTarget = await correctionTarget(fresh);
+    await db.collection("orders").doc(fresh.id).update({ productionFixture: cagnotteProductionFixtureMarker() });
+    const body = correctionSelection(fresh, freshTarget, 0, 1000, 1000);
+    const correctionPreview = await preview(body);
+    const freshBefore = await dump();
+    const freshRefusal = await call({ ...body, action: "record_correction", correctionReference: "fixture-correction-blocked", expectedPreviewVersion: correctionPreview.previewVersion });
+    equal(freshRefusal.status, 409); equal(freshRefusal.code, "refund_production_fixture_mutation_forbidden");
+    equal(freshRefusal.stats.writes, 0); equal(freshRefusal.stats.walletWrites, 0); eq(await dump(), freshBefore);
+    const missingTarget = await call({ ...body, action: "record_correction", targetEventId: "b".repeat(64), correctionReference: "fixture-correction-before-target", expectedPreviewVersion: "f".repeat(64) });
+    equal(missingTarget.status, 409); equal(missingTarget.code, "refund_production_fixture_mutation_forbidden");
+    equal(missingTarget.stats.writes, 0); eq(await dump(), freshBefore);
+
+    const replay = await fixture();
+    await record(replay, 2500, "fixture-correction-replay-original");
+    const replayTarget = await correctionTarget(replay);
+    const recorded = await recordCorrection(replay, replayTarget, 0, 1000, 1000, "fixture-correction-prior");
+    await db.collection("orders").doc(replay.id).update({ productionFixture: cagnotteProductionFixtureMarker() });
+    const replayBefore = await dump();
+    const replayRefusal = await call(recorded.command);
+    equal(replayRefusal.status, 409); equal(replayRefusal.code, "refund_production_fixture_mutation_forbidden");
+    equal(replayRefusal.stats.writes, 0); equal(replayRefusal.stats.walletWrites, 0); eq(await dump(), replayBefore);
+  });
+  await test("marqueur fixture corrompu bloque les deux mutations par simple presence", async () => {
+    const f = await fixture();
+    await record(f, 2500, "fixture-corrupt-original");
+    const target = await correctionTarget(f);
+    await db.collection("orders").doc(f.id).update({ productionFixture: { marker: "corrompu" } });
+    const refundSelection = selection(f, 1000), refundPreview = await preview(refundSelection);
+    const correctionBody = correctionSelection(f, target, 0, 1000, 1000);
+    const correctionPreview = await preview(correctionBody);
+    const before = await dump();
+    const refundRefusal = await call(confirmation(refundSelection, refundPreview, "fixture-corrupt-refund"));
+    equal(refundRefusal.status, 409); equal(refundRefusal.code, "refund_production_fixture_mutation_forbidden");
+    const correctionRefusal = await call({ ...correctionBody, action: "record_correction", correctionReference: "fixture-corrupt-correction", expectedPreviewVersion: correctionPreview.previewVersion });
+    equal(correctionRefusal.status, 409); equal(correctionRefusal.code, "refund_production_fixture_mutation_forbidden");
+    equal(refundRefusal.stats.writes, 0); equal(correctionRefusal.stats.writes, 0); eq(await dump(), before);
   });
   await test("references de correction bancaires sont refusees au parsing avant transaction", async () => {
     const f = await fixture();

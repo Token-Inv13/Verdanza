@@ -24,6 +24,7 @@ import {
 import { CAGNOTTE_REGULARIZATION_VERSION, CAGNOTTE_RESERVATION_VERSION, type CagnotteAccrual, type CagnotteMovement, type CagnotteWallet } from "./cagnotteLedgerTypes.js";
 import { prepareCagnotteRefundComposition, readCagnotteConsumedRefundBasis, readCagnotteReservationBasis } from "./cagnotteReservations.js";
 import { readUnpaidOrderContext } from "./unpaidOrderReview.js";
+import { hasPersistedCagnotteProductionFixtureMarker } from "./cagnotteProductionFixture.js";
 
 export const ORDER_REFUND_VERSION = "order-refund-record-v1";
 export const ORDER_MIXED_REFUND_VERSION = "order-mixed-refund-record-v1";
@@ -290,6 +291,9 @@ export async function executeOrderRefund(input: {
   const result = await input.db.runTransaction(async (tx) => {
     const orderRef = input.db.collection("orders").doc(request.orderId);
     const orderDoc = await tx.get(orderRef);
+    if (!orderDoc.exists) fail("refund_order_missing", 404);
+    const order = orderFromSnapshot(orderDoc);
+    assertProductionFixtureRefundMutationAllowed(order, request.action);
     const prior = eventRef ? await tx.get(eventRef) : null;
     // A committed event is authoritative even when its restored credit has since been used.
     if (prior?.exists) {
@@ -306,8 +310,6 @@ export async function executeOrderRefund(input: {
         ...(latestCorrection ? { corrected: true, currentRevision: latestCorrection.revision, effective: latestCorrection.result.effective } : {}),
       };
     }
-    if (!orderDoc.exists) fail("refund_order_missing", 404);
-    const order = orderFromSnapshot(orderDoc);
     if (!hasCagnotteEnrollment(order)) fail("refund_historical_order_not_supported");
     const enrollment = refundEnrollment(order);
     const { paidAt, deliveryCharged, mixed } = validateRefundOrderFinancialBasis({
@@ -1215,8 +1217,11 @@ async function executeOrderRefundCorrection(input: {
   const result = await input.db.runTransaction(async (tx) => {
     const orderRef = input.db.collection("orders").doc(request.orderId);
     const targetRef = input.db.collection(collection).doc(request.targetEventId);
-    const [orderDoc, targetDoc, history, priorCorrection] = await Promise.all([
-      tx.get(orderRef),
+    const orderDoc = await tx.get(orderRef);
+    if (!orderDoc.exists) fail("refund_order_missing", 404);
+    const order = orderFromSnapshot(orderDoc);
+    assertProductionFixtureRefundMutationAllowed(order, request.action);
+    const [targetDoc, history, priorCorrection] = await Promise.all([
       tx.get(targetRef),
       tx.get(input.db.collection(collection).where("orderId", "==", request.orderId).limit(historyLimit + 1)),
       correctionRef ? tx.get(correctionRef) : Promise.resolve(null),
@@ -1230,9 +1235,7 @@ async function executeOrderRefundCorrection(input: {
       }
       return publicCorrectionResult(prior.result, true);
     }
-    if (!orderDoc.exists) fail("refund_order_missing", 404);
     if (history.size > historyLimit) fail("refund_history_requires_verification");
-    const order = orderFromSnapshot(orderDoc);
     if (!hasCagnotteEnrollment(order)) fail("refund_historical_order_not_supported");
     if (!targetDoc.exists || targetDoc.data()?.kind === "refund_correction") fail("correction_target_missing", 404);
     const enrollment = refundEnrollment(order);
@@ -1804,3 +1807,15 @@ function emitOperationalLog(log: ((entry: OrderRefundOperationalLog) => void) | 
   }
 }
 function fail(code: string, status = 409): never { throw new OrderRefundError(code, status); }
+
+function assertProductionFixtureRefundMutationAllowed(
+  order: unknown,
+  action: OrderRefundRequest["action"],
+) {
+  if (
+    (action === "record_confirmed" || action === "record_correction") &&
+    hasPersistedCagnotteProductionFixtureMarker(order)
+  ) {
+    fail("refund_production_fixture_mutation_forbidden", 409);
+  }
+}

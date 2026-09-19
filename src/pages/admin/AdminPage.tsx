@@ -175,7 +175,7 @@ import {
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../../config/deliveryRules";
 import { BRAND_PRODUCT_PLACEHOLDER } from "../../lib/brandAssets";
-import { shouldMountCagnotteAdminTools } from "../../lib/cagnotteAdminEligibility";
+import { cagnotteAdminMutationsAllowed, shouldMountCagnotteAdminTools } from "../../lib/cagnotteAdminEligibility";
 import {
   computeWeightedSupplierCosts,
   normalizeSupplierPurchaseInput,
@@ -6883,7 +6883,7 @@ function AdminOrders({
               </div>
               {AdminCagnotteTools && shouldMountCagnotteAdminTools({ displayEnabled: CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED, orderSource, order }) && (
                 <Suspense fallback={<div className="mt-4 rounded-md border border-forest/10 p-4 text-sm">Chargement des outils administratifs…</div>}>
-                  <div className="mt-4"><AdminCagnotteTools orderId={order.id} enabled={CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED} onOrderReload={() => onRefreshOrder?.(order.id)} /></div>
+                  <div className="mt-4"><AdminCagnotteTools orderId={order.id} enabled={CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED} mutationsEnabled={cagnotteAdminMutationsAllowed(order)} onOrderReload={() => onRefreshOrder?.(order.id)} /></div>
                 </Suspense>
               )}
             </article>
@@ -7459,7 +7459,7 @@ function DesktopOrderCard({
       {AdminCagnotteTools && shouldMountCagnotteAdminTools({ displayEnabled: CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED, orderSource, order }) && (
         <Suspense fallback={<div className="mt-4 rounded-md border border-forest/10 p-4 text-sm">Chargement des outils administratifs…</div>}>
           <div className="mt-4">
-            <AdminCagnotteTools orderId={order.id} enabled={CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED} onOrderReload={onRefresh} />
+            <AdminCagnotteTools orderId={order.id} enabled={CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED} mutationsEnabled={cagnotteAdminMutationsAllowed(order)} onOrderReload={onRefresh} />
           </div>
         </Suspense>
       )}
