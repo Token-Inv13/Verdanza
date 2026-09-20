@@ -29,6 +29,7 @@ import {
   CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT,
   CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_PROJECT_ID,
+  CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_TOOL_UID,
   CAGNOTTE_PRODUCTION_FIXTURE_UID,
   CAGNOTTE_PRODUCTION_FIXTURE_WRITE_CHALLENGE,
@@ -198,18 +199,18 @@ export async function assertCagnotteProductionFixtureAuthUidAvailable(
 
 export async function inspectCagnotteProductionFixture(db: Firestore) {
   const refs = cagnotteProductionFixtureReferences(db);
-  const [customer, product, order, checkoutRequest, sideEffects, stockMovement, wallet, accrual, reservation] =
+  const [customer, product, order, checkoutRequest, sideEffects, wallet, accrual, reservation] =
     await Promise.all([
       refs.customer.get(),
       refs.product.get(),
       refs.order.get(),
       refs.checkoutRequest.get(),
       refs.sideEffects.get(),
-      refs.stockMovement.get(),
       refs.wallet.get(),
       refs.accrual.get(),
       refs.reservation.get(),
     ]);
+  const stockMovements = await inspectCagnotteProductionFixtureStockMovements(db);
   const movements = await inspectCagnotteProductionFixtureMovements(db);
   const invoices = await db.collection("invoices")
     .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID)
@@ -230,7 +231,12 @@ export async function inspectCagnotteProductionFixture(db: Firestore) {
     order: documentState(order),
     checkoutRequest: documentState(checkoutRequest),
     sideEffects: documentState(sideEffects),
-    stockMovement: documentState(stockMovement),
+    stockMovement: documentState(stockMovements.canonical),
+    stockMovements: stockMovements.documents.map((entry) => ({
+      id: entry.id,
+      ...(entry.data() ?? {}),
+    })),
+    stockMovementCount: stockMovements.documents.length,
     wallet: documentState(wallet),
     accrual: documentState(accrual),
     reservation: documentState(reservation),
@@ -240,6 +246,24 @@ export async function inspectCagnotteProductionFixture(db: Firestore) {
     analyticsOperationalEventCount: analyticsOperationalEvents.size,
     paymentLinkRequestCount: paymentLinkRequests.size,
     refundCount: refunds.size,
+  };
+}
+
+async function inspectCagnotteProductionFixtureStockMovements(db: Firestore) {
+  const collection = db.collection("stockMovements");
+  const [byOrder, byProduct, canonical] = await Promise.all([
+    collection.where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get(),
+    collection.where("productId", "==", CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID).get(),
+    collection.doc(CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID).get(),
+  ]);
+  const movementById = new Map<string, FirebaseFirestore.DocumentSnapshot>();
+  for (const snapshot of [...byOrder.docs, ...byProduct.docs, canonical]) {
+    if (snapshot.exists) movementById.set(snapshot.id, snapshot);
+  }
+  return {
+    canonical,
+    documents: [...movementById.values()].sort((left, right) =>
+      left.id.localeCompare(right.id)),
   };
 }
 

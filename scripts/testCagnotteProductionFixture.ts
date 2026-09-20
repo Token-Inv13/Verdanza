@@ -141,6 +141,11 @@ const healthyInspectionMovementIds: Record<"created" | "paid" | "delivered", str
   paid: [],
   delivered: [],
 };
+const healthyInspectionStockMovementIds: Record<"created" | "paid" | "delivered", string[]> = {
+  created: [],
+  paid: [],
+  delivered: [],
+};
 
 try {
   await check("fetch, http, https, DNS et sockets externes sont bloques", () => {
@@ -826,11 +831,28 @@ try {
     await walletRef.delete();
   });
 
+  await check("inspection stock absente expose la forme canonique vide", async () => {
+    const inspection = await inspectCagnotteProductionFixture(db);
+    equal(inspection.stockMovement.exists, false);
+    equal(inspection.stockMovementCount, 0);
+    deepStrictEqual(inspection.stockMovements, []);
+  });
+
   await check("collision mouvement stock divergente refusee sans aucune autre ecriture", async () => {
     const ref = db.collection("stockMovements").doc(CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID);
-    const divergent = { productId: "produit-reel", quantity: -999, note: "ne pas ecraser" };
+    const divergent = {
+      orderId: "wrong-order",
+      productId: "wrong-product",
+      quantity: -999,
+      note: "ne pas ecraser",
+    };
     await ref.set(divergent);
     const before = await databaseCounts();
+    const inspection = await inspectCagnotteProductionFixture(db);
+    equal(inspection.stockMovement.exists, true);
+    deepStrictEqual(inspection.stockMovement.data, divergent);
+    equal(inspection.stockMovementCount, 1);
+    deepStrictEqual(inspection.stockMovements, [{ id: ref.id, ...divergent }]);
     await rejects(() => command("create"), /production_fixture_stock_movement_collision/);
     deepStrictEqual((await ref.get()).data(), divergent);
     deepStrictEqual(await databaseCounts(), before);
@@ -892,6 +914,10 @@ try {
       await ref.set(collision.data);
       try {
         const before = await databaseCounts();
+        const inspection = await inspectCagnotteProductionFixture(db);
+        equal(inspection.stockMovement.exists, false);
+        equal(inspection.stockMovementCount, 1);
+        deepStrictEqual(inspection.stockMovements, [{ id: ref.id, ...collision.data }]);
         await rejects(() => command("create"), /production_fixture_stock_movement_collision/);
         deepStrictEqual((await ref.get()).data(), collision.data);
         deepStrictEqual(await databaseCounts(), before);
@@ -1099,9 +1125,11 @@ try {
 
   await check("creation transactionnelle exacte et produit invisible publiquement", async () => {
     await command("create");
-    healthyInspectionMovementIds.created = inspectedMovementIds(
-      await inspectCagnotteProductionFixture(db),
-    );
+    const inspection = await inspectCagnotteProductionFixture(db);
+    healthyInspectionMovementIds.created = inspectedMovementIds(inspection);
+    healthyInspectionStockMovementIds.created = inspectedStockMovementIds(inspection);
+    equal(inspection.stockMovement.exists, true);
+    equal(inspection.stockMovementCount, 1);
     const customer = await db.collection("customers").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get();
     const admin = await db.collection("adminUsers").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get();
     const product = await db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID).get();
@@ -1358,6 +1386,41 @@ try {
       } finally {
         await ref.delete();
       }
+    }
+  });
+
+  await check("inspection stock compte le canonique et deux parasites distincts", async () => {
+    const byOrderRef = db.collection("stockMovements")
+      .doc("extra-stock-by-order");
+    const byProductRef = db.collection("stockMovements")
+      .doc("extra-stock-by-product");
+    const byOrder = {
+      orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
+      productId: "other-product",
+      quantity: -1,
+    };
+    const byProduct = {
+      orderId: "other-order",
+      productId: CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID,
+      quantity: -1,
+    };
+    await Promise.all([byOrderRef.set(byOrder), byProductRef.set(byProduct)]);
+    try {
+      const before = await stableFinancialState();
+      const inspection = await inspectCagnotteProductionFixture(db);
+      equal(inspection.stockMovementCount, 3);
+      deepStrictEqual(inspectedStockMovementIds(inspection), [
+        CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID,
+        byOrderRef.id,
+        byProductRef.id,
+      ].sort());
+      await rejects(() => command("create"), /production_fixture_stock_movement_collision/);
+      await rejects(() => command("mark-paid"), /production_fixture_stock_movement_collision/);
+      deepStrictEqual(await stableFinancialState(), before);
+      deepStrictEqual((await byOrderRef.get()).data(), byOrder);
+      deepStrictEqual((await byProductRef.get()).data(), byProduct);
+    } finally {
+      await Promise.all([byOrderRef.delete(), byProductRef.delete()]);
     }
   });
 
@@ -1797,9 +1860,10 @@ try {
 
   await check("wallet exact apres paiement autorise le rejeu create idempotent", async () => {
     await command("mark-paid");
-    healthyInspectionMovementIds.paid = inspectedMovementIds(
-      await inspectCagnotteProductionFixture(db),
-    );
+    const inspection = await inspectCagnotteProductionFixture(db);
+    healthyInspectionMovementIds.paid = inspectedMovementIds(inspection);
+    healthyInspectionStockMovementIds.paid = inspectedStockMovementIds(inspection);
+    equal(inspection.stockMovementCount, 1);
     const wallet = (await db.collection("cagnotteWallets").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).data()!;
     deepStrictEqual(wallet, fixtureWalletDocument({ pendingCents: 500 }));
     const accrual = (await db.collection("cagnotteAccruals").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).data()!;
@@ -1915,6 +1979,12 @@ try {
     await ref.set(parasite);
     try {
       const before = await stableFinancialState();
+      const inspection = await inspectCagnotteProductionFixture(db);
+      equal(inspection.stockMovementCount, 2);
+      deepStrictEqual(inspectedStockMovementIds(inspection), [
+        CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID,
+        ref.id,
+      ].sort());
       await rejects(() => command("create"), /production_fixture_stock_movement_collision/);
       await rejects(() => command("mark-delivered"), /production_fixture_stock_movement_collision/);
       deepStrictEqual(await stableFinancialState(), before);
@@ -2146,9 +2216,10 @@ try {
 
   await check("wallet exact apres livraison autorise le rejeu create idempotent", async () => {
     await command("mark-delivered");
-    healthyInspectionMovementIds.delivered = inspectedMovementIds(
-      await inspectCagnotteProductionFixture(db),
-    );
+    const inspection = await inspectCagnotteProductionFixture(db);
+    healthyInspectionMovementIds.delivered = inspectedMovementIds(inspection);
+    healthyInspectionStockMovementIds.delivered = inspectedStockMovementIds(inspection);
+    equal(inspection.stockMovementCount, 1);
     const wallet = (await db.collection("cagnotteWallets").doc(CAGNOTTE_PRODUCTION_FIXTURE_UID).get()).data()!;
     const accrual = (await db.collection("cagnotteAccruals").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).data()!;
     deepStrictEqual(wallet, fixtureWalletDocument({ availableCents: 500 }));
@@ -2222,6 +2293,12 @@ try {
     await ref.set(parasite);
     try {
       const before = await stableFinancialState();
+      const inspection = await inspectCagnotteProductionFixture(db);
+      equal(inspection.stockMovementCount, 2);
+      deepStrictEqual(inspectedStockMovementIds(inspection), [
+        CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID,
+        ref.id,
+      ].sort());
       await rejects(() => command("create"), /production_fixture_stock_movement_collision/);
       await rejects(() => command("mark-delivered"), /production_fixture_stock_movement_collision/);
       deepStrictEqual(await stableFinancialState(), before);
@@ -2320,6 +2397,15 @@ try {
       canonicalFixtureMovementIds.payment,
       canonicalFixtureMovementIds.release,
     ].sort());
+    deepStrictEqual(healthyInspectionStockMovementIds.created, [
+      CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID,
+    ]);
+    deepStrictEqual(healthyInspectionStockMovementIds.paid, [
+      CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID,
+    ]);
+    deepStrictEqual(healthyInspectionStockMovementIds.delivered, [
+      CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID,
+    ]);
   });
 
   await check("inspection inclut un mouvement du beneficiaire fixture lie a une autre commande", async () => {
@@ -2402,6 +2488,10 @@ try {
     equal(inspection.refundCount, 0);
     equal(inspection.reservation.exists, false);
     equal(inspection.movements.length, 3);
+    equal(inspection.stockMovementCount, 1);
+    deepStrictEqual(inspectedStockMovementIds(inspection), [
+      CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID,
+    ]);
     equal(inspection.product.data?.isActive, false);
     equal(hasOnlyFixtureIdentity(inspection.order.data), true);
   });
@@ -2734,6 +2824,12 @@ function inspectedMovementIds(
   inspection: Awaited<ReturnType<typeof inspectCagnotteProductionFixture>>,
 ) {
   return inspection.movements.map((movement) => String(movement.id)).sort();
+}
+
+function inspectedStockMovementIds(
+  inspection: Awaited<ReturnType<typeof inspectCagnotteProductionFixture>>,
+) {
+  return inspection.stockMovements.map((movement) => String(movement.id)).sort();
 }
 
 function withoutUpdatedAt(value: FirebaseFirestore.DocumentData | undefined) {
