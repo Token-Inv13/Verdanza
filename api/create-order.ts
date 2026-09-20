@@ -53,6 +53,7 @@ import {
 } from "./_server/publicRateLimit.js";
 import { buildCustomerInvoiceLines } from "../src/lib/customerInvoiceLines.js";
 import { buildOrderFinancingDocumentSnapshot } from "../src/lib/orderFinancing.js";
+import { CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID } from "../src/lib/cagnotteProductionFixtureIdentity.js";
 import type { Invoice, Order } from "../src/types/index.js";
 
 export function createOrderHandler(dependencies: {
@@ -90,6 +91,9 @@ return async function handler(
     const body = parseCheckoutBody(requestBody);
     const operationNowEpochMs = (dependencies.now ?? Date.now)();
     const checkoutRequestId = validateCheckoutRequestId(body.checkoutRequestId);
+    if (checkoutRequestId === CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID) {
+      throw new Error("checkout_request_id_reserved");
+    }
     body.checkoutRequestId = checkoutRequestId;
     const payloadFingerprint = checkoutPayloadFingerprint(body);
     const db = dependencies.getDb();
@@ -273,6 +277,7 @@ return async function handler(
       (error instanceof CagnotteCheckoutError && error.code !== "AUTH_REQUIRED");
     const authenticationRequired = error instanceof CagnotteCheckoutError && error.code === "AUTH_REQUIRED";
     const invalidRequestId = message === "checkout_request_id_invalid";
+    const reservedRequestId = message === "checkout_request_id_reserved";
     const code = error instanceof CheckoutRequestConflictError
       ? "checkout_request_conflict"
       : error instanceof CagnotteCheckoutError
@@ -281,9 +286,11 @@ return async function handler(
           ? `cagnotte_${error.code.toLowerCase()}`
           : invalidRequestId
             ? "checkout_request_id_invalid"
-            : stockOrProductError || safeBusinessError === message
-              ? "checkout_rejected"
-              : "checkout_result_uncertain";
+            : reservedRequestId
+              ? "checkout_request_id_reserved"
+              : stockOrProductError || safeBusinessError === message
+                ? "checkout_rejected"
+                : "checkout_result_uncertain";
     sendJson(
       response,
       {
@@ -292,7 +299,7 @@ return async function handler(
           ? error.message
           : isConflict
           ? "Cette tentative ne correspond plus au panier initial. Verifiez vos commandes avant de recommencer."
-          : invalidRequestId
+          : invalidRequestId || reservedRequestId
             ? "Tentative de commande invalide. Rechargez la page avant de reessayer."
             : safeBusinessError,
       },

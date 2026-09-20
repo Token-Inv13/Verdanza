@@ -13,6 +13,14 @@ import { prepareUnpaidReviewControl, type UnpaidReviewRequest } from "./unpaidOr
 import type { EmailResult } from "./email.js";
 import type { PurchaseAnalyticsProcessResult } from "./purchaseAnalytics.js";
 import type { Order, OrderStatus, PaymentStatus, ProductCost, SupplierPurchase, FinalPaymentMethod, PaymentLinkChannel } from "../../src/types/index.js";
+import {
+  assertCagnotteProductionFixtureStatusTransition,
+  cagnotteProductionFixtureUpdatedAtForState,
+  hasPersistedCagnotteProductionFixtureMarker,
+  isExactCagnotteProductionFixtureOrder,
+  type CagnotteProductionFixtureCapability,
+} from "./cagnotteProductionFixture.js";
+import { validateCagnotteProductionFixtureState } from "./cagnotteProductionFixtureState.js";
 
 export type OrderStatusChange = {
   orderId: string; orderStatus?: OrderStatus; paymentStatus?: PaymentStatus;
@@ -27,12 +35,14 @@ export type OrderStatusChange = {
 export async function commitOrderStatusTransition({
   db, body, admin, accrualProgram = CAGNOTTE_SERVER_PROGRAM,
   reservationProgram = CAGNOTTE_RESERVATION_PROGRAM, firebaseProjectId,
+  productionFixtureCapability,
   now = () => new Date().toISOString(),
 }: {
   db: Firestore; body: OrderStatusChange; admin: {uid:string; email:string | null};
   accrualProgram?: CagnotteAccrualProgram | null;
   reservationProgram?: CagnotteReservationProgram | null;
   firebaseProjectId?: string | null;
+  productionFixtureCapability?: CagnotteProductionFixtureCapability;
   now?: ()=>string;
 }): Promise<{ updatedOrder: Order | null; previousStatus: OrderStatus | null; purchaseAnalyticsQueued: boolean; missingPromotionIds: string[]; unpaidReviewContext: Awaited<ReturnType<typeof prepareUnpaidReviewControl>>["context"] | null }> {
   const operationTime=now();
@@ -50,6 +60,24 @@ export async function commitOrderStatusTransition({
     if (!snapshot.exists) throw new Error("Commande introuvable.");
 
     const order = orderFromSnapshot(snapshot);
+    const productionFixture = hasPersistedCagnotteProductionFixtureMarker(order);
+    if (productionFixture && !isExactCagnotteProductionFixtureOrder(order)) {
+      throw new Error("production_fixture_marker_invalid");
+    }
+    if (productionFixture) {
+      const expectedTransition = assertCagnotteProductionFixtureStatusTransition({
+        capability: productionFixtureCapability,
+        order,
+        body,
+        operationTime,
+      });
+      await validateCagnotteProductionFixtureState({
+        db,
+        transaction,
+        orderSnapshot: snapshot,
+        expectedTransition,
+      });
+    }
     if (hasCagnotteEnrollment(order) && (order.orderStatus === "cancelled" || order.cancelledAt) &&
       ((body.orderStatus && body.orderStatus !== "cancelled") || (body.paymentStatus && body.paymentStatus !== "cancelled"))) {
       throw new CagnotteReservationError("CONFLICT", "Une commande inscrite annulée ne peut pas être réactivée.");
@@ -85,10 +113,13 @@ export async function commitOrderStatusTransition({
     }
 
     const nextStatus = body.orderStatus ?? order.orderStatus;
+    const fixtureNextPaymentStatus = body.paymentStatus ?? order.paymentStatus;
     const nextFinalPaymentMethod =
       body.finalPaymentMethod || order.finalPaymentMethod || undefined;
     const update: Record<string, unknown> = {
-      updatedAt: FieldValue.serverTimestamp(),
+      updatedAt: productionFixture
+        ? cagnotteProductionFixtureUpdatedAtForState(fixtureNextPaymentStatus, nextStatus)
+        : FieldValue.serverTimestamp(),
     };
     if (body.unpaidReview || (body.orderStatus === "cancelled" && hasCagnotteEnrollment(order))) {
       const unpaidControl = await prepareUnpaidReviewControl({
@@ -130,12 +161,19 @@ export async function commitOrderStatusTransition({
         update.paidAt = paidAt;
         update.paymentConfirmedAt = paidAt;
         update.paymentConfirmedBy = admin.email;
-        update.items = await capturePurchaseCostSnapshots({
-          db,
-          transaction,
-          order,
-          capturedAt: paidAt,
-        });
+        update.items = productionFixture
+          ? order.items.map((item) => ({
+              ...item,
+              purchasePricePerGramSnapshot: null,
+              purchaseCostTotalSnapshot: null,
+              purchaseCostCapturedAt: paidAt,
+            }))
+          : await capturePurchaseCostSnapshots({
+              db,
+              transaction,
+              order,
+              capturedAt: paidAt,
+            });
       }
     }
     if (body.finalPaymentMethod !== undefined) {
@@ -262,7 +300,7 @@ export async function commitOrderStatusTransition({
     cancellationPlan?.write();
     writePaymentLinkEvent?.();
     cagnottePlan?.write();
-    if (body.paymentStatus === "paid") {
+    if (body.paymentStatus === "paid" && !productionFixture) {
       purchaseAnalyticsQueued = await enqueuePurchaseAnalyticsForPaidTransition({
         db,
         transaction,
@@ -314,6 +352,12 @@ export async function processOrderStatusTransitionEffects(input: {
 }) {
   const { db, body, committed, sendStatusEmail, processAnalytics } = input;
   const { updatedOrder, previousStatus, purchaseAnalyticsQueued } = committed;
+  if (updatedOrder && hasPersistedCagnotteProductionFixtureMarker(updatedOrder)) {
+    if (!isExactCagnotteProductionFixtureOrder(updatedOrder)) {
+      throw new Error("production_fixture_marker_invalid");
+    }
+    return null;
+  }
   if (updatedOrder && body.orderStatus && previousStatus && body.orderStatus !== previousStatus) {
     const result = await sendStatusEmail(updatedOrder, previousStatus, body.orderStatus);
     if (result.status === "sent") {

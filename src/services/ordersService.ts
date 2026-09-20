@@ -35,6 +35,7 @@ import {
   presentOrderFinancing,
   type OrderFinancingPresentation,
 } from "../lib/orderFinancing";
+import { hasOwnProductionFixtureMarker } from "../lib/productionFixtureMarker";
 
 export type CreateCheckoutOrderInput = {
   checkoutRequestId: string;
@@ -169,6 +170,7 @@ export type AdminOrderRow = {
   customerId?: string;
   cagnotte?: Order["cagnotte"];
   cagnotteReservationIntent?: Order["cagnotteReservationIntent"];
+  productionFixture?: Order["productionFixture"];
   orderType?: OrderType;
   customer: string;
   customerEmail?: string;
@@ -278,6 +280,7 @@ export function adminOrderRow(order: Order): AdminOrderRow {
         customerId: order.customerId,
         cagnotte: order.cagnotte,
         cagnotteReservationIntent: order.cagnotteReservationIntent,
+        ...(hasOwnProductionFixtureMarker(order) ? { productionFixture: order.productionFixture } : {}),
         orderType: order.orderType || "order",
         customer: order.customerName || order.customerEmail || "Client",
         customerEmail: order.customerEmail,

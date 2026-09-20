@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { getCurrentFirebaseUser } from "../lib/firebaseAuth";
+import { assertOrdinaryCustomerAdminMutationAllowed } from "../lib/productionFixtureMarker";
 import { collections } from "./collections";
 import type {
   Coupon,
@@ -57,6 +58,7 @@ export async function adjustCustomerLoyalty(
   mode: "add" | "remove" | "set" = "add",
   reason = "admin_adjustment",
 ) {
+  assertOrdinaryCustomerAdminMutationAllowed(customer);
   if (!db) throw new Error("Firebase is not configured.");
   const currentUser = await getCurrentFirebaseUser();
   const currentBalance = Number(customer.loyaltyPoints || 0);
@@ -95,7 +97,8 @@ export async function adjustCustomerLoyalty(
   }
 }
 
-export async function updateCustomerInternalNote(customerId: string, internalNote: string) {
+export async function updateCustomerInternalNote(customer: CustomerProfile, internalNote: string) {
+  assertOrdinaryCustomerAdminMutationAllowed(customer);
   if (!db) throw new Error("Firebase is not configured.");
   const currentUser = await getCurrentFirebaseUser();
   const updatePayload = {
@@ -112,17 +115,18 @@ export async function updateCustomerInternalNote(customerId: string, internalNot
         }
       : {}),
   };
-  await updateDoc(doc(db, collections.customers, customerId), updatePayload);
+  await updateDoc(doc(db, collections.customers, customer.id), updatePayload);
 }
 
 export async function updateCustomerAdminStatus(
-  customerId: string,
+  customer: CustomerProfile,
   data: { status?: CustomerProfile["status"]; archived?: boolean; hidden?: boolean },
 ) {
+  assertOrdinaryCustomerAdminMutationAllowed(customer);
   if (!db) throw new Error("Firebase is not configured.");
   const currentUser = await getCurrentFirebaseUser();
   const now = serverTimestamp();
-  await updateDoc(doc(db, collections.customers, customerId), {
+  await updateDoc(doc(db, collections.customers, customer.id), {
     ...data,
     archivedAt: data.archived ? now : null,
     archivedBy: data.archived ? currentUser?.email || currentUser?.uid || "admin" : null,
@@ -137,6 +141,7 @@ export async function assignPromoToCustomer(
   coupon: Coupon,
   note: string,
 ) {
+  assertOrdinaryCustomerAdminMutationAllowed(customer);
   if (!db) throw new Error("Firebase is not configured.");
   const currentUser = await getCurrentFirebaseUser();
   const assignment: CustomerAssignedPromo = {

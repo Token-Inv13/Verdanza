@@ -4,6 +4,7 @@ import {
   InvoiceSendConflictError,
   type LinkedOrderInvoiceState,
 } from "../../src/lib/invoiceSendPolicy.js";
+import { hasPersistedCagnotteProductionFixtureMarker } from "./cagnotteProductionFixture.js";
 
 type InvoiceEmailResult = {
   status: "sent" | "partial" | "skipped" | "failed";
@@ -21,6 +22,12 @@ export async function executeGuardedInvoiceSend<T extends InvoiceEmailResult>({
   send: () => Promise<T>;
   finalize: () => Promise<void>;
 }) {
+  if (hasPersistedCagnotteProductionFixtureMarker(linkedOrder)) {
+    throw new InvoiceSendConflictError(
+      "invoice_invalidated",
+      "production_fixture_external_effect_forbidden",
+    );
+  }
   assertInvoiceSendable(invoice, linkedOrder);
   const result = await send();
   if (result.status !== "sent") {
@@ -59,6 +66,12 @@ export async function finalizeAcceptedInvoiceSend({
       transaction,
       currentInvoice,
     );
+    if (hasPersistedCagnotteProductionFixtureMarker(currentLinkedOrder)) {
+      throw new InvoiceSendConflictError(
+        "invoice_invalidated",
+        "production_fixture_external_effect_forbidden",
+      );
+    }
     assertInvoiceSendable(currentInvoice, currentLinkedOrder);
     transaction.update(invoiceReference, {
       status: "sent",

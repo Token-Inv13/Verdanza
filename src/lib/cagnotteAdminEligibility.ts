@@ -1,4 +1,5 @@
 import { simulateCagnotteRefund } from "./cagnotteCalculations";
+import { hasOwnProductionFixtureMarker } from "./productionFixtureMarker";
 import type { Order } from "../types";
 
 /**
@@ -32,6 +33,16 @@ export function shouldMountCagnotteAdminTools(input: {
   order: Pick<Order, "id" | "customerId" | "cagnotte" | "cagnotteReservationIntent">;
 }) {
   return input.displayEnabled && input.orderSource === "firestore" && hasValidCagnotteAdminEnrollment(input.order);
+}
+
+export function cagnotteAdminMutationsAllowed(order: unknown) {
+  return !hasOwnProductionFixtureMarker(order);
+}
+
+export function assertCagnotteAdminMutationAllowed(mutationsEnabled: boolean) {
+  if (!mutationsEnabled) {
+    throw new Error("Fixture Production : inspection et prévisualisation uniquement.");
+  }
 }
 
 function sameJsonValue(left: unknown, right: unknown): boolean {

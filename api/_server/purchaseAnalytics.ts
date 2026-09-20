@@ -1,6 +1,7 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { Order } from "../../src/types/index.js";
 import { isPurchaseEligible, sendGa4Purchase, type Ga4PurchaseResult } from "./ga4MeasurementProtocol.js";
+import { hasPersistedCagnotteProductionFixtureMarker } from "./cagnotteProductionFixture.js";
 
 const outboxCollection = "analyticsOutbox";
 
@@ -18,6 +19,7 @@ export async function enqueuePurchaseAnalyticsForPaidTransition(input: {
   update: Record<string, unknown>;
 }) {
   const { db, transaction, order, update } = input;
+  if (hasPersistedCagnotteProductionFixtureMarker(order)) return false;
   if (order.paymentStatus === "paid") return false;
   const nextOrder = {
     ...order,
@@ -33,7 +35,7 @@ export async function enqueuePurchaseAnalyticsForPaidTransition(input: {
     return false;
   }
 
-  const outboxRef = db.collection(outboxCollection).doc(outboxId(order.id));
+  const outboxRef = db.collection(outboxCollection).doc(purchaseAnalyticsOutboxId(order.id));
   update["analytics.purchaseStatus"] = "pending";
   transaction.set(
     outboxRef,
@@ -53,8 +55,9 @@ export async function ensurePurchaseAnalyticsRetryQueued(
   db: FirebaseFirestore.Firestore,
   order: Order,
 ) {
+  if (hasPersistedCagnotteProductionFixtureMarker(order)) return false;
   if (!isPurchaseEligible(order)) return false;
-  const ref = db.collection(outboxCollection).doc(outboxId(order.id));
+  const ref = db.collection(outboxCollection).doc(purchaseAnalyticsOutboxId(order.id));
   await ref.set(
     {
       type: "purchase",
@@ -86,6 +89,13 @@ export async function processPurchaseAnalyticsOutbox(
   }
 
   const order = { id: orderSnapshot.id, ...orderSnapshot.data() } as Order;
+  if (hasPersistedCagnotteProductionFixtureMarker(order)) {
+    await markOutbox(db, orderId, {
+      status: "not_eligible",
+      code: "production_fixture",
+    });
+    return { status: "skipped", code: "production_fixture" };
+  }
   if (!isPurchaseEligible(order)) {
     const status = order.analytics?.purchaseStatus === "sent" ? "sent" : "not_eligible";
     await markOutbox(db, orderId, { status, code: "purchase_not_eligible" });
@@ -105,7 +115,7 @@ export async function processPurchaseAnalyticsOutbox(
 }
 
 async function claimOutbox(db: FirebaseFirestore.Firestore, orderId: string) {
-  const ref = db.collection(outboxCollection).doc(outboxId(orderId));
+  const ref = db.collection(outboxCollection).doc(purchaseAnalyticsOutboxId(orderId));
   return db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists) return false;
@@ -134,7 +144,7 @@ async function persistSendResult(
   result: Ga4PurchaseResult,
 ) {
   const orderRef = db.collection("orders").doc(orderId);
-  const outboxRef = db.collection(outboxCollection).doc(outboxId(orderId));
+  const outboxRef = db.collection(outboxCollection).doc(purchaseAnalyticsOutboxId(orderId));
   if (result.status === "sent") {
     await Promise.all([
       outboxRef.set(
@@ -183,7 +193,7 @@ async function markOutbox(
   orderId: string,
   input: { status: AnalyticsOutboxStatus; code?: string },
 ) {
-  await db.collection(outboxCollection).doc(outboxId(orderId)).set(
+  await db.collection(outboxCollection).doc(purchaseAnalyticsOutboxId(orderId)).set(
     {
       status: input.status,
       lastErrorCode: input.code || FieldValue.delete(),
@@ -202,6 +212,6 @@ function timestampToMs(value: unknown) {
   return 0;
 }
 
-function outboxId(orderId: string) {
+export function purchaseAnalyticsOutboxId(orderId: string) {
   return `purchase_${orderId}`;
 }

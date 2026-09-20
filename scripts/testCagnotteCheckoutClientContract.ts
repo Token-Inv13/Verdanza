@@ -7,6 +7,7 @@ import { CAGNOTTE_RESERVATION_VERSION, type CagnotteInternalOrder, type Cagnotte
 import type { CagnotteReservationTestProgram } from "../api/_server/cagnotteReservationTypes.js";
 import type { VercelRequestLike, VercelResponseLike } from "../api/_server/http.js";
 import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
+import { CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID } from "../src/lib/cagnotteProductionFixtureIdentity.js";
 import {
   CagnotteCheckoutController,
   CheckoutAttemptController,
@@ -85,6 +86,7 @@ try {
   });
 
   const checkoutRequestId = randomUUID();
+  assert.notEqual(checkoutRequestId, CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID);
   const request: CreateCheckoutOrderInput = {
     checkoutRequestId,
     items: [{ productId: "product-main", quantity: 10 }],
@@ -98,6 +100,68 @@ try {
     },
     cagnotteUse: { requestedCents: 800, acceptance: acceptance! },
   };
+
+  const reservedRequestBody = {
+    ...request,
+    checkoutRequestId: CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID,
+    cagnotteUse: { requestedCents: 0 },
+  };
+  const reservedAttemptCounters = {
+    getDb: 0,
+    verifyToken: 0,
+    rateLimit: 0,
+    sideEffects: 0,
+  };
+  const reservedHandler = createOrderHandler({
+    getDb: () => {
+      reservedAttemptCounters.getDb += 1;
+      return db;
+    },
+    accrualProgram: activeAccrualProgram,
+    reservationProgram: activeProgram,
+    now: () => 10_000,
+    verifyToken: async () => {
+      reservedAttemptCounters.verifyToken += 1;
+      return { uid: "ordinary-customer", email: "ordinary@example.test", emailVerified: true };
+    },
+    enforceRateLimit: async () => {
+      reservedAttemptCounters.rateLimit += 1;
+      return { allowed: true, code: "allowed", retryAfterSeconds: 0 };
+    },
+    processSideEffects: async () => {
+      reservedAttemptCounters.sideEffects += 1;
+      return {
+        client: { status: "skipped" as const, reason: "synthetic" },
+        admin: { status: "skipped" as const, reason: "synthetic" },
+      };
+    },
+  });
+  const beforeReservedAttempts = await collectionCounts();
+  for (const authToken of [undefined, "ordinary-auth-token"] as const) {
+    const response = await fetchAdapter(reservedHandler)("/api/create-order", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ...reservedRequestBody,
+        ...(authToken ? { authToken } : {}),
+      }),
+    });
+    assert.equal(response.status, 400);
+    const payload = await response.json() as { code?: string; error?: string };
+    assert.deepEqual(payload, {
+      code: "checkout_request_id_reserved",
+      error: "Tentative de commande invalide. Rechargez la page avant de reessayer.",
+    });
+    assert.equal(JSON.stringify(payload).includes("fixture"), false);
+    assert.equal(JSON.stringify(payload).includes(CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID), false);
+  }
+  assert.deepEqual(reservedAttemptCounters, {
+    getDb: 0,
+    verifyToken: 0,
+    rateLimit: 0,
+    sideEffects: 0,
+  });
+  assert.deepEqual(await collectionCounts(), beforeReservedAttempts);
 
   const markers: CheckoutAttemptMarker[] = [];
   const attempts = new CheckoutAttemptController(() => undefined, {
@@ -234,4 +298,12 @@ async function clear() {
     const snapshot = await db.collection(name).get();
     await Promise.all(snapshot.docs.map((document) => document.ref.delete()));
   }
+}
+
+async function collectionCounts() {
+  const counts = await Promise.all(collections.map(async (name) => [
+    name,
+    (await db.collection(name).get()).size,
+  ] as const));
+  return Object.fromEntries(counts);
 }

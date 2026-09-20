@@ -16,6 +16,7 @@ import { cagnotteAdminDefinitiveRejectionState, cagnotteAdminFailureState, cagno
 import { cagnotteRefundDateTimeLocalToIso } from "../../lib/cagnotteAdminDate";
 import { cagnotteAdminCorrectionMaximumNetCents, cagnotteAdminMaximumLineInput } from "../../lib/cagnotteAdminLineInput";
 import { paymentStatusLabel } from "../../utils/orderStatus";
+import { assertCagnotteAdminMutationAllowed } from "../../lib/cagnotteAdminEligibility";
 
 type Mode = "refund" | "correction" | "unpaid";
 export type { CagnotteAdminViewModel } from "../../lib/cagnotteAdminState";
@@ -38,9 +39,10 @@ type Form = {
 
 const adminRefreshChannel = createCagnotteAdminRefreshChannel();
 
-export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOperationStore = browserCagnotteAdminFrozenOperationStore }: {
+export function CagnotteAdminTools({ orderId, enabled, mutationsEnabled, onOrderReload, frozenOperationStore = browserCagnotteAdminFrozenOperationStore }: {
   orderId: string;
   enabled: boolean;
+  mutationsEnabled: boolean;
   onOrderReload?: () => Promise<void> | void;
   frozenOperationStore?: CagnotteAdminFrozenOperationStore;
 }) {
@@ -241,6 +243,7 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
     setModel((value) => ({ ...value, busy: true }));
     try { await operation(); } finally { setModel((value) => ({ ...value, busy: false })); }
   }, setFailure(setModel));
+  const assertMutationAllowed = () => assertCagnotteAdminMutationAllowed(mutationsEnabled);
 
   const previewRefund = () => runAdminAction(async () => {
     if (model.uncertain) throw new Error("Réinspectez la commande avant toute nouvelle tentative.");
@@ -248,6 +251,7 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
     setModel((value) => ({ ...value, refundPreview: result, correctionPreview: null, notice: "Prévisualisation serveur prête." }));
   });
   const confirmRefund = () => runAdminAction(async () => {
+    assertMutationAllowed();
     if (model.uncertain) throw new Error("Réinspectez la commande avant toute nouvelle tentative.");
     if (!model.refundPreview) throw new Error("Une prévisualisation serveur est requise.");
     pendingRefund.current ??= {
@@ -296,6 +300,7 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
       notice: result.kind === "correction_requires_review" ? result.reviewReason || "Correction à vérifier." : "Correction prévisualisée par le serveur." }));
   });
   const confirmCorrection = () => runAdminAction(async () => {
+    assertMutationAllowed();
     if (model.uncertain) throw new Error("Réinspectez la commande avant toute nouvelle tentative.");
     if (!model.inspection?.correctionTarget || !model.correctionPreview || model.correctionPreview.kind === "correction_requires_review") {
       throw new Error("Une correction sûre prévisualisée est requise.");
@@ -335,6 +340,7 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
     await refreshCagnotteAdminAfterWrite(() => reload(notice), onOrderReload);
   });
   const submitReview = () => runAdminAction(async () => {
+    assertMutationAllowed();
     if (!model.inspection) throw new Error("Inspection requise.");
     await recordUnpaidReview({ orderId, outcome: form.reviewOutcome, source: form.reviewSource.trim(), reason: form.reviewReason.trim(),
       expectedStateVersion: model.inspection.unpaid.stateVersion });
@@ -343,6 +349,7 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
     await onOrderReload?.();
   });
   const cancelUnpaid = () => runAdminAction(async () => {
+    assertMutationAllowed();
     if (!model.inspection?.unpaid.review?.current || model.inspection.unpaid.review.outcome !== "unpaid_confirmed") {
       throw new Error("Une revue actuelle confirmant l’impayé est requise.");
     }
@@ -355,6 +362,7 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
     await reconcileStorage(frozenOperation.current ? "Inspection actualisée. L’opération exacte est confirmée dans l’historique." : "Inspection actualisée.");
   });
   const retryFrozenOperation = () => runAdminAction(async () => {
+    assertMutationAllowed();
     const operation = frozenOperation.current;
     if (!operation) return;
     let result;
@@ -384,7 +392,7 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
   });
 
   if (!enabled) return null;
-  return <CagnotteAdminToolsView model={model} form={form} onForm={update} onMode={(mode) => { if (!frozenOperation.current) setModel((value) => ({ ...value, mode })); }}
+  return <CagnotteAdminToolsView model={model} form={form} mutationsEnabled={mutationsEnabled} onForm={update} onMode={(mode) => { if (!frozenOperation.current) setModel((value) => ({ ...value, mode })); }}
     onPreviewRefund={previewRefund} onConfirmRefund={confirmRefund} onPreviewCorrection={previewCorrection}
     onConfirmCorrection={confirmCorrection} onReview={submitReview} onCancelUnpaid={cancelUnpaid}
     onReinspectBeforeRetry={reinspectBeforeRetry} onRetryFrozenOperation={retryFrozenOperation} />;
@@ -393,9 +401,10 @@ export function CagnotteAdminTools({ orderId, enabled, onOrderReload, frozenOper
 export function CagnotteAdminToolsView({ model, form = emptyForm(model.inspection ?? undefined), onForm = () => undefined,
   onMode = () => undefined, onPreviewRefund = () => undefined, onConfirmRefund = () => undefined,
   onPreviewCorrection = () => undefined, onConfirmCorrection = () => undefined, onReview = () => undefined,
-  onCancelUnpaid = () => undefined, onReinspectBeforeRetry = () => undefined, onRetryFrozenOperation = () => undefined,
+  onCancelUnpaid = () => undefined, onReinspectBeforeRetry = () => undefined, onRetryFrozenOperation = () => undefined, mutationsEnabled,
 }: {
   model: CagnotteAdminViewModel;
+  mutationsEnabled: boolean;
   form?: Form;
   onForm?: (patch: Partial<Form>) => void;
   onMode?: (mode: Mode) => void;
@@ -411,12 +420,14 @@ export function CagnotteAdminToolsView({ model, form = emptyForm(model.inspectio
   const inspection = model.inspection;
   if (model.phase === "loading") return <section className="cagnotte-admin" aria-busy="true">Chargement des données administratives…</section>;
   if (!inspection) return <section className="cagnotte-admin"><strong>Outils cagnotte indisponibles</strong><p>{model.notice}</p>
-    {model.uncertain && <FrozenOperationRecovery model={model} onReinspect={onReinspectBeforeRetry} onRetry={onRetryFrozenOperation} />}</section>;
+    {model.uncertain && <FrozenOperationRecovery model={model} mutationsEnabled={mutationsEnabled} onReinspect={onReinspectBeforeRetry} onRetry={onRetryFrozenOperation} />}</section>;
   const activeUnpaidReservation = inspection.reservation.state === "reserved" && inspection.unpaid.reservationState === "reserved";
   return <section className="cagnotte-admin" aria-label="Outils administratifs de cagnotte" aria-busy={model.busy}>
     <h3>Administration de la cagnotte</h3>
     <p><strong>{inspection.order.id}</strong> · {inspection.order.customer.name} · {inspection.order.customer.email}</p>
-    <p className="cagnotte-admin__warning"><strong>Cette action enregistre votre déclaration.</strong><br />Elle n’effectue aucun remboursement bancaire.</p>
+    {mutationsEnabled
+      ? <p className="cagnotte-admin__warning"><strong>Cette action enregistre votre déclaration.</strong><br />Elle n’effectue aucun remboursement bancaire.</p>
+      : <p className="cagnotte-admin__warning"><strong>Fixture Production : inspection et prévisualisation uniquement.</strong></p>}
     <article className="cagnotte-admin__status">
       <strong>{inspection.operationalState.label}</strong>
       <p>→ {inspection.operationalState.detail}</p>
@@ -424,7 +435,7 @@ export function CagnotteAdminToolsView({ model, form = emptyForm(model.inspectio
     </article>
     <div className="cagnotte-admin__actions" aria-label="Opérations quotidiennes">
       <span className="cagnotte-admin__tag">1. Consulter</span><span className="cagnotte-admin__tag">2. Confirmer paiement / livraison</span>
-      {activeUnpaidReservation && <button className="secondary" type="button" disabled={model.busy || model.uncertain} onClick={() => onMode("unpaid")}>3. Revoir / annuler un impayé</button>}
+      {activeUnpaidReservation && mutationsEnabled && <button className="secondary" type="button" disabled={model.busy || model.uncertain} onClick={() => onMode("unpaid")}>3. Revoir / annuler un impayé</button>}
       <button className="secondary" type="button" disabled={model.busy || model.uncertain} onClick={() => onMode("refund")}>4. Enregistrer un retour</button>
       <button className="secondary" type="button" disabled={model.busy || model.uncertain} onClick={() => onMode("correction")}>5. Corriger une déclaration</button>
     </div>
@@ -460,16 +471,17 @@ export function CagnotteAdminToolsView({ model, form = emptyForm(model.inspectio
     </div>
     <AdminMovementHistory inspection={inspection} />
     <AdminRefundHistory inspection={inspection} />
-    {model.mode === "refund" && <RefundForm inspection={inspection} form={form} preview={model.refundPreview} busy={model.busy} uncertain={model.uncertain} onForm={onForm} onPreview={onPreviewRefund} onConfirm={onConfirmRefund} />}
-    {model.mode === "correction" && <CorrectionForm inspection={inspection} form={form} preview={model.correctionPreview} busy={model.busy} uncertain={model.uncertain} onForm={onForm} onPreview={onPreviewCorrection} onConfirm={onConfirmCorrection} />}
-    {model.mode === "unpaid" && activeUnpaidReservation && <UnpaidReview inspection={inspection} form={form} busy={model.busy} uncertain={model.uncertain} onForm={onForm} onReview={onReview} onCancel={onCancelUnpaid} />}
+    {model.mode === "refund" && <RefundForm inspection={inspection} form={form} preview={model.refundPreview} busy={model.busy} uncertain={model.uncertain} mutationsEnabled={mutationsEnabled} onForm={onForm} onPreview={onPreviewRefund} onConfirm={onConfirmRefund} />}
+    {model.mode === "correction" && <CorrectionForm inspection={inspection} form={form} preview={model.correctionPreview} busy={model.busy} uncertain={model.uncertain} mutationsEnabled={mutationsEnabled} onForm={onForm} onPreview={onPreviewCorrection} onConfirm={onConfirmCorrection} />}
+    {model.mode === "unpaid" && activeUnpaidReservation && mutationsEnabled && <UnpaidReview inspection={inspection} form={form} busy={model.busy} uncertain={model.uncertain} onForm={onForm} onReview={onReview} onCancel={onCancelUnpaid} />}
     {model.notice && <p className={`cagnotte-admin__status${model.uncertain || model.correctionPreview?.kind === "correction_requires_review" ? " review" : ""}`}>{model.notice}</p>}
-    {model.uncertain && <FrozenOperationRecovery model={model} onReinspect={onReinspectBeforeRetry} onRetry={onRetryFrozenOperation} />}
+    {model.uncertain && <FrozenOperationRecovery model={model} mutationsEnabled={mutationsEnabled} onReinspect={onReinspectBeforeRetry} onRetry={onRetryFrozenOperation} />}
   </section>;
 }
 
-function FrozenOperationRecovery({ model, onReinspect, onRetry }: {
+function FrozenOperationRecovery({ model, mutationsEnabled, onReinspect, onRetry }: {
   model: CagnotteAdminViewModel;
+  mutationsEnabled: boolean;
   onReinspect: () => void;
   onRetry: () => void;
 }) {
@@ -479,12 +491,12 @@ function FrozenOperationRecovery({ model, onReinspect, onRetry }: {
     {operation ? <>
       <p>Type : {operation.kind === "refund" ? "remboursement" : "correction"} · Commande : {operation.orderId}</p>
       <p>Référence métier : {operation.kind === "refund" ? operation.payload.reference : operation.payload.correctionReference}</p>
-      <p>Vous pouvez réinspecter ou rejouer exactement le payload conservé. Aucune nouvelle déclaration ne peut être créée pour le moment.</p>
+      <p>{mutationsEnabled ? "Vous pouvez réinspecter ou rejouer exactement le payload conservé. Aucune nouvelle déclaration ne peut être créée pour le moment." : "Vous pouvez réinspecter le payload conservé pour diagnostic. Son rejeu est désactivé pour cette fixture."}</p>
     </> : <p>{model.recoveryBlocked
       ? "Réinspectez la commande avant toute nouvelle tentative. Le stockage local doit rester exploitable pour autoriser un enregistrement."
       : "La réinspection serveur doit aboutir avant toute nouvelle prévisualisation ou déclaration."}</p>}
     <button type="button" disabled={model.busy} onClick={onReinspect}>Réinspecter avant toute nouvelle tentative</button>
-    {operation && <button type="button" disabled={model.busy} onClick={onRetry}>Rejouer exactement l’opération précédente</button>}
+    {operation && mutationsEnabled && <button type="button" disabled={model.busy} onClick={onRetry}>Rejouer exactement l’opération précédente</button>}
   </div>;
 }
 
@@ -524,7 +536,7 @@ function AdminRefundHistory({ inspection }: { inspection: CagnotteAdminInspectio
   </article>;
 }
 
-function RefundForm({ inspection, form, preview, busy, uncertain, onForm, onPreview, onConfirm }: { inspection: CagnotteAdminInspection; form: Form; preview: RefundPreview | null; busy: boolean; uncertain: boolean; onForm: (patch: Partial<Form>) => void; onPreview: () => void; onConfirm: () => void }) {
+function RefundForm({ inspection, form, preview, busy, uncertain, mutationsEnabled, onForm, onPreview, onConfirm }: { inspection: CagnotteAdminInspection; form: Form; preview: RefundPreview | null; busy: boolean; uncertain: boolean; mutationsEnabled: boolean; onForm: (patch: Partial<Form>) => void; onPreview: () => void; onConfirm: () => void }) {
   return <fieldset disabled={busy || uncertain} className="cagnotte-admin__box cagnotte-admin__fieldset" style={{ marginTop: "1rem" }}><h4>Enregistrer un remboursement déjà confirmé</h4>
     <LineInputs inspection={inspection} form={form} onForm={onForm} />
     <div className="cagnotte-admin__grid"><Input label="Livraison remboursée (€)" value={form.delivery} onChange={(delivery) => onForm({ delivery })} />
@@ -536,11 +548,11 @@ function RefundForm({ inspection, form, preview, busy, uncertain, onForm, onPrev
       <label>Motif<select value={form.reason} onChange={(event) => onForm({ reason: event.target.value as Form["reason"] })}><option value="product_return">Retour produit</option><option value="order_cancellation">Annulation de commande</option><option value="delivery_refund">Remboursement de livraison</option></select></label></div>
     {preview && <Consequences refund={preview} />}
     <div className="cagnotte-admin__actions"><button type="button" onClick={onPreview}>Prévisualiser sur le serveur</button>
-      <button type="button" onClick={onConfirm} disabled={uncertain || !preview || preview.kind === "administrative_refund_recorded"}>Confirmer l’enregistrement</button></div>
+      <button type="button" onClick={onConfirm} disabled={!mutationsEnabled || uncertain || !preview || preview.kind === "administrative_refund_recorded"}>Confirmer l’enregistrement</button></div>
   </fieldset>;
 }
 
-function CorrectionForm({ inspection, form, preview, busy, uncertain, onForm, onPreview, onConfirm }: { inspection: CagnotteAdminInspection; form: Form; preview: CorrectionPreview | null; busy: boolean; uncertain: boolean; onForm: (patch: Partial<Form>) => void; onPreview: () => void; onConfirm: () => void }) {
+function CorrectionForm({ inspection, form, preview, busy, uncertain, mutationsEnabled, onForm, onPreview, onConfirm }: { inspection: CagnotteAdminInspection; form: Form; preview: CorrectionPreview | null; busy: boolean; uncertain: boolean; mutationsEnabled: boolean; onForm: (patch: Partial<Form>) => void; onPreview: () => void; onConfirm: () => void }) {
   return <fieldset disabled={busy || uncertain} className="cagnotte-admin__box cagnotte-admin__fieldset" style={{ marginTop: "1rem" }}><h4>Corriger une déclaration</h4>
     <p>Seule la dernière déclaration effective peut être neutralisée ou remplacée. L’original reste dans l’historique.</p>
     {!inspection.correctionTarget ? <p>Aucune déclaration corrigeable.</p> : <><LineInputs inspection={inspection} form={form} onForm={onForm}
@@ -552,7 +564,7 @@ function CorrectionForm({ inspection, form, preview, busy, uncertain, onForm, on
       <label style={{ marginTop: ".75rem", display: "flex", gridTemplateColumns: "auto 1fr", alignItems: "center" }}><input style={{ width: "auto" }} type="checkbox" checked={form.externalVerificationConfirmed} onChange={(event) => onForm({ externalVerificationConfirmed: event.target.checked })} />Je confirme avoir vérifié extérieurement la réalité financière et corriger uniquement la saisie administrative.</label>
       {preview && <CorrectionConsequences value={preview} />}
       <div className="cagnotte-admin__actions"><button type="button" onClick={onPreview}>Prévisualiser la correction</button>
-        <button type="button" onClick={onConfirm} disabled={uncertain || !preview || preview.kind === "correction_requires_review" || !form.externalVerificationConfirmed}>Confirmer après vérification externe</button></div></>}
+        <button type="button" onClick={onConfirm} disabled={!mutationsEnabled || uncertain || !preview || preview.kind === "correction_requires_review" || !form.externalVerificationConfirmed}>Confirmer après vérification externe</button></div></>}
   </fieldset>;
 }
 

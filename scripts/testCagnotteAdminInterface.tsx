@@ -17,13 +17,41 @@ import { CagnotteAdminRequestError } from "../src/services/cagnotteAdminService.
 import { cagnotteRefundDateTimeLocalToIso, cagnotteRefundDateTimeLocalValue } from "../src/lib/cagnotteAdminDate.js";
 import { formatAdminDateTime } from "../src/lib/adminDatePresentation.js";
 import { isExpectedNonAdminLookupError } from "../src/lib/adminLookupPresentation.js";
-import { shouldMountCagnotteAdminTools } from "../src/lib/cagnotteAdminEligibility.js";
+import { assertCagnotteAdminMutationAllowed, cagnotteAdminMutationsAllowed, shouldMountCagnotteAdminTools } from "../src/lib/cagnotteAdminEligibility.js";
 import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
 import { CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED } from "../src/config/cagnotteFeatures.js";
 import { cagnotteAdminCorrectionBusinessFingerprint, cagnotteAdminRefundBusinessFingerprint } from "../src/lib/cagnotteAdminOperationIdentity.js";
 import type { CagnotteAdminInspection, CorrectionPreview, RefundPreview } from "../src/types/cagnotteAdmin.js";
 import { adminOrderRow } from "../src/services/ordersService.js";
-import type { Order } from "../src/types/index.js";
+import type { AdminOrderRow } from "../src/services/ordersService.js";
+import {
+  adjustCustomerLoyalty,
+  assignPromoToCustomer,
+  updateCustomerAdminStatus,
+  updateCustomerInternalNote,
+} from "../src/services/adminCustomersService.js";
+import {
+  buildDashboardMetrics,
+  type AdminDashboardOrder,
+} from "../src/lib/adminDashboardMetrics.js";
+import {
+  buildCommercialCustomerEntries,
+  commercialAdminCustomers,
+  commercialAdminOrders,
+  ordersForCommercialCustomer,
+} from "../src/lib/adminCustomerCommercial.js";
+import {
+  CAGNOTTE_PRODUCTION_FIXTURE_UID,
+  cagnotteProductionFixtureMarker,
+  isExactCagnotteProductionFixtureCustomer,
+  isExactCagnotteProductionFixtureMarker,
+} from "../src/lib/cagnotteProductionFixtureIdentity.js";
+import {
+  assertOrdinaryCustomerAdminMutationAllowed,
+  filterOrdinaryProducts,
+  filterOrdinarySupplierPurchases,
+} from "../src/lib/productionFixtureMarker.js";
+import type { Coupon, CustomerProfile, Order, Product } from "../src/types/index.js";
 
 let tests = 0;
 function test(name: string, run: () => void | Promise<void>) {
@@ -34,7 +62,7 @@ const base: CagnotteAdminViewModel = { phase: "ready", inspection, mode: "refund
 
 await test("garde normal desactive : aucun rendu ni appel", () => {
   equal(CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED, false);
-  equal(renderToStaticMarkup(<CagnotteAdminTools orderId="demo" enabled={false} />), "");
+  equal(renderToStaticMarkup(<CagnotteAdminTools mutationsEnabled orderId="demo" enabled={false} />), "");
 });
 await test("commande historique : aucun montage meme avec garde simulee ouverte", () => {
   equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "firestore", order: { id: "historique", customerId: "client" } }), false);
@@ -44,6 +72,8 @@ await test("projection admin conserve une inscription acquisition seule sans int
   const projected = adminOrderRow(source);
   equal(projected.cagnotte, source.cagnotte);
   equal(projected.cagnotteReservationIntent, undefined);
+  equal(Object.hasOwn(projected, "productionFixture"), false);
+  equal(cagnotteAdminMutationsAllowed(projected), true);
   equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "firestore", order: projected }), true);
 });
 await test("projection admin conserve une inscription mixte et son intention canonique", () => {
@@ -52,6 +82,345 @@ await test("projection admin conserve une inscription mixte et son intention can
   equal(projected.cagnotte, source.cagnotte);
   equal(projected.cagnotteReservationIntent, source.cagnotteReservationIntent);
   equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "firestore", order: projected }), true);
+});
+await test("projection admin conserve le marqueur Production fixture sans transformation", () => {
+  const productionFixture = {
+    schemaVersion: 1 as const,
+    marker: "verdanza-cagnotte-production-fixture-v1",
+    projectId: "verdanza-1f621",
+    uid: "fixture-user",
+    productId: "fixture-product",
+    orderId: "fixture-order",
+    checkoutRequestId: "fixture-request",
+  };
+  const source = { ...projectableOrder(eligibleOrder()), productionFixture };
+  equal(adminOrderRow(source).productionFixture, productionFixture);
+});
+await test("fixture exacte ou corrompue reste montee mais interdit explicitement les mutations", () => {
+  const enrolled = projectableOrder(eligibleOrder());
+  const exactFixture = { ...enrolled, productionFixture: {
+    schemaVersion: 1 as const,
+    marker: "verdanza-cagnotte-production-fixture-v1",
+    projectId: "verdanza-1f621",
+    uid: "fixture-user",
+    productId: "fixture-product",
+    orderId: "fixture-order",
+    checkoutRequestId: "fixture-request",
+  } };
+  const corruptFixture = { ...enrolled, productionFixture: { marker: "corrompu" } };
+  const projectedCorruptFixture = adminOrderRow(corruptFixture as unknown as Order);
+  equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "firestore", order: exactFixture }), true);
+  equal(shouldMountCagnotteAdminTools({ displayEnabled: true, orderSource: "firestore", order: corruptFixture }), true);
+  equal(cagnotteAdminMutationsAllowed(exactFixture), false);
+  equal(cagnotteAdminMutationsAllowed(corruptFixture), false);
+  equal(Object.hasOwn(projectedCorruptFixture, "productionFixture"), true);
+  equal(cagnotteAdminMutationsAllowed(projectedCorruptFixture), false);
+  equal(cagnotteAdminMutationsAllowed(enrolled), true);
+});
+await test("dashboard exclut toutes les fixtures de ses metriques commerciales", () => {
+  const commercialOrder: AdminDashboardOrder = {
+    paymentStatus: "paid",
+    orderStatus: "confirmed",
+    delivery: "Livraison locale",
+    total: "100,00 EUR",
+  };
+  const fixtureMarker = {
+    schemaVersion: 1 as const,
+    marker: "verdanza-cagnotte-production-fixture-v1",
+    projectId: "verdanza-1f621",
+    uid: "fixture-user",
+    productId: "fixture-product",
+    orderId: "fixture-order",
+    checkoutRequestId: "fixture-request",
+  };
+  const fixtureOrders: AdminDashboardOrder[] = [
+    {
+      ...commercialOrder,
+      productionFixture: fixtureMarker,
+    },
+    {
+      paymentStatus: "to_confirm",
+      orderStatus: "preparing",
+      delivery: "Livraison locale",
+      total: "100,00 EUR",
+      productionFixture: fixtureMarker,
+    },
+    {
+      paymentStatus: "paid",
+      orderStatus: "out_for_delivery",
+      delivery: "Livraison locale",
+      total: "100,00 EUR",
+      productionFixture: fixtureMarker,
+    },
+  ];
+  const commercialMetrics = buildDashboardMetrics([], [commercialOrder]);
+  const mixedMetrics = buildDashboardMetrics([], [commercialOrder, ...fixtureOrders]);
+  deepEqual(mixedMetrics, commercialMetrics);
+  equal(
+    mixedMetrics.find((metric) => metric.label === "Règlements à suivre")?.detail,
+    "1 déjà réglé(s)",
+  );
+  equal(mixedMetrics.find((metric) => metric.label === "À préparer")?.value, "1");
+  equal(mixedMetrics.find((metric) => metric.label === "En livraison")?.value, "0");
+});
+await test("section clients exclut profils et commandes fixture de tous les calculs commerciaux", () => {
+  const fixtureMarker = cagnotteProductionFixtureMarker();
+  const commercialCustomer: CustomerProfile = {
+    id: "customer-commercial",
+    uid: "customer-commercial",
+    email: "client@verdanza.test",
+    displayName: "Client commercial",
+    phone: "0600000001",
+    loyaltyPoints: 0,
+    orderCount: 0,
+    totalSpent: 0,
+    role: "customer",
+  };
+  const fixtureCustomer: CustomerProfile = {
+    ...commercialCustomer,
+    id: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+    uid: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+    email: "fixture@verdanza.test",
+    displayName: "Client fixture",
+    productionFixture: fixtureMarker,
+  };
+  const commercialOrder = {
+    id: "order-commercial",
+    customerId: commercialCustomer.uid,
+    customerEmail: commercialCustomer.email,
+    customerPhone: commercialCustomer.phone,
+    paymentStatus: "paid",
+    orderStatus: "confirmed",
+    delivery: "Livraison locale",
+    total: "100,00 EUR",
+    createdAt: "2026-09-01T10:00:00.000Z",
+  } as AdminOrderRow;
+  const fixtureOrder = {
+    ...commercialOrder,
+    id: "order-fixture",
+    customerId: fixtureCustomer.uid,
+    customerEmail: fixtureCustomer.email,
+    customerPhone: fixtureCustomer.phone,
+    total: "999,00 EUR",
+    createdAt: "2026-09-02T10:00:00.000Z",
+    productionFixture: fixtureMarker,
+  } as AdminOrderRow;
+
+  const baseline = buildCommercialCustomerEntries(
+    [commercialCustomer],
+    [commercialOrder],
+  );
+  const mixed = buildCommercialCustomerEntries(
+    [commercialCustomer, fixtureCustomer],
+    [commercialOrder, fixtureOrder],
+  );
+
+  deepEqual(mixed, baseline);
+  equal(commercialAdminCustomers([commercialCustomer, fixtureCustomer]).length, 1);
+  equal(commercialAdminOrders([commercialOrder, fixtureOrder]).length, 1);
+  equal(mixed.length, 1);
+  equal(mixed[0]?.customer.id, commercialCustomer.id);
+  equal(mixed.filter((entry) => entry.orders.length > 0).length, 1);
+  equal(mixed[0]?.stats.orderCount, 1);
+  equal(mixed[0]?.stats.totalSpent, 100);
+  equal(mixed[0]?.stats.averageCart, 100);
+  equal(mixed[0]?.stats.status.label, "Actif");
+  equal(mixed.some((entry) => entry.customer.id === fixtureCustomer.id), false);
+  equal(ordersForCommercialCustomer([fixtureOrder], fixtureCustomer).length, 0);
+  equal(
+    ordersForCommercialCustomer(
+      [{ ...fixtureOrder, customerId: commercialCustomer.uid }],
+      commercialCustomer,
+    ).length,
+    0,
+  );
+});
+await test("identite client fixture exige le double contrat UID et marqueur exacts", () => {
+  const marker = cagnotteProductionFixtureMarker();
+  const exactCustomer = {
+    id: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+    uid: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+    productionFixture: marker,
+  };
+  equal(isExactCagnotteProductionFixtureMarker(marker), true);
+  equal(isExactCagnotteProductionFixtureMarker({ ...marker, extra: true }), false);
+  equal(isExactCagnotteProductionFixtureCustomer(exactCustomer), true);
+  equal(isExactCagnotteProductionFixtureCustomer({ ...exactCustomer, id: "wrong-id" }), false);
+  equal(isExactCagnotteProductionFixtureCustomer({ ...exactCustomer, productionFixture: null }), false);
+  equal(isExactCagnotteProductionFixtureCustomer({ uid: "ordinary", productionFixture: marker }), false);
+});
+await test("section clients conserve les marqueurs absents, nuls, malformes ou forges", () => {
+  const marker = cagnotteProductionFixtureMarker();
+  const ordinary: CustomerProfile = {
+    id: "ordinary-customer",
+    uid: "ordinary-customer",
+    email: "ordinary@verdanza.test",
+    displayName: "Ordinary customer",
+    phone: "0600000002",
+    loyaltyPoints: 0,
+    orderCount: 0,
+    totalSpent: 0,
+    role: "customer",
+  };
+  const visibleCustomers = [
+    ordinary,
+    { ...ordinary, id: "null-marker", uid: "null-marker", productionFixture: null },
+    { ...ordinary, id: "empty-marker", uid: "empty-marker", productionFixture: {} },
+    { ...ordinary, id: "corrupt-marker", uid: "corrupt-marker", productionFixture: { marker: "corrompu" } },
+    { ...ordinary, id: "forged-marker", uid: "forged-marker", productionFixture: marker },
+    {
+      ...ordinary,
+      id: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+      uid: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+      productionFixture: null,
+    },
+  ] as unknown as CustomerProfile[];
+  deepEqual(
+    commercialAdminCustomers(visibleCustomers).map((customer) => customer.id),
+    visibleCustomers.map((customer) => customer.id),
+  );
+  equal(
+    commercialAdminCustomers([
+      ...visibleCustomers,
+      {
+        ...ordinary,
+        id: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+        uid: CAGNOTTE_PRODUCTION_FIXTURE_UID,
+        productionFixture: marker,
+      },
+    ]).length,
+    visibleCustomers.length,
+  );
+});
+await test("profil ordinaire avec productionFixture null reste exploitable dans la section clients", () => {
+  const customer = {
+    id: "p3-visible-customer",
+    uid: "p3-visible-customer",
+    email: "p3-visible@verdanza.test",
+    displayName: "P3 visible customer",
+    phone: "0600000003",
+    loyaltyPoints: 0,
+    orderCount: 0,
+    totalSpent: 0,
+    role: "customer",
+    productionFixture: null,
+  } as unknown as CustomerProfile;
+  const order = {
+    id: "p3-visible-order",
+    customerId: customer.uid,
+    customerEmail: customer.email,
+    customerPhone: customer.phone,
+    paymentStatus: "paid",
+    orderStatus: "confirmed",
+    delivery: "Livraison locale",
+    total: "42,00 EUR",
+    createdAt: "2026-09-03T10:00:00.000Z",
+  } as AdminOrderRow;
+  const entries = buildCommercialCustomerEntries([customer], [order]);
+  equal(entries.length, 1);
+  equal(entries[0]?.customer.id, customer.id);
+  equal(entries[0]?.stats.orderCount, 1);
+  equal(entries[0]?.stats.totalSpent, 42);
+});
+await test("mutations client ordinaires refusent tout profil portant le marqueur fixture", async () => {
+  const ordinary = {
+    id: "customer-commercial",
+    uid: "customer-commercial",
+    email: "client@verdanza.test",
+    displayName: "Client commercial",
+    phone: "0600000001",
+    loyaltyPoints: 0,
+    orderCount: 0,
+    totalSpent: 0,
+    role: "customer",
+  } satisfies CustomerProfile;
+  const exactFixture = {
+    ...ordinary,
+    productionFixture: {
+      schemaVersion: 1 as const,
+      marker: "verdanza-cagnotte-production-fixture-v1",
+      projectId: "verdanza-1f621",
+      uid: "fixture-user",
+      productId: "fixture-product",
+      orderId: "fixture-order",
+      checkoutRequestId: "fixture-request",
+    },
+  } satisfies CustomerProfile;
+  const partialFixture = {
+    ...ordinary,
+    productionFixture: { marker: "partiel" },
+  } as unknown as CustomerProfile;
+
+  assertOrdinaryCustomerAdminMutationAllowed(ordinary);
+  throws(
+    () => assertOrdinaryCustomerAdminMutationAllowed(exactFixture),
+    /production_fixture_customer_admin_mutation_forbidden/,
+  );
+  throws(
+    () => assertOrdinaryCustomerAdminMutationAllowed(partialFixture),
+    /production_fixture_customer_admin_mutation_forbidden/,
+  );
+  await rejects(
+    () => adjustCustomerLoyalty(exactFixture, 1, "test"),
+    /production_fixture_customer_admin_mutation_forbidden/,
+  );
+  await rejects(
+    () => assignPromoToCustomer(exactFixture, {} as Coupon, "test"),
+    /production_fixture_customer_admin_mutation_forbidden/,
+  );
+  await rejects(
+    () => updateCustomerInternalNote(exactFixture, "test"),
+    /production_fixture_customer_admin_mutation_forbidden/,
+  );
+  await rejects(
+    () => updateCustomerAdminStatus(exactFixture, { status: "archived" }),
+    /production_fixture_customer_admin_mutation_forbidden/,
+  );
+});
+await test("comptabilite et formulaire fournisseur n exposent que les produits commerciaux", async () => {
+  const ordinary = { id: "ordinary-product", name: "Produit commercial" } as Product;
+  const exactFixture = {
+    id: "fixture-product",
+    name: "Produit fixture",
+    productionFixture: { marker: "verdanza-cagnotte-production-fixture-v1" },
+  } as unknown as Product;
+  const corruptFixture = {
+    id: "fixture-corrupt-product",
+    name: "Produit fixture corrompu",
+    productionFixture: { marker: "corrompu" },
+  } as unknown as Product;
+  const commercialProducts = filterOrdinaryProducts([
+    exactFixture,
+    corruptFixture,
+    ordinary,
+  ]);
+  deepEqual(commercialProducts, [ordinary]);
+  equal(commercialProducts[0]?.id || "", ordinary.id);
+  equal(filterOrdinaryProducts([exactFixture, corruptFixture])[0]?.id || "", "");
+  const ordinaryPurchase = { id: "purchase-ordinary", lines: [{ productId: ordinary.id }] };
+  const contaminatedPurchase = {
+    id: "purchase-fixture",
+    lines: [{ productId: exactFixture.id }, { productId: ordinary.id }],
+  };
+  deepEqual(
+    filterOrdinarySupplierPurchases(
+      [ordinary, exactFixture, corruptFixture],
+      [ordinaryPurchase, contaminatedPurchase],
+    ),
+    [ordinaryPurchase],
+  );
+
+  const adminPage = await readFile(resolve("src/pages/admin/AdminPage.tsx"), "utf8");
+  match(adminPage, /const commercialProducts = useMemo\([\s\S]*?filterOrdinaryProducts\(products\)/);
+  match(adminPage, /const commercialSupplierPurchases = useMemo\([\s\S]*?filterOrdinarySupplierPurchases\(products, supplierPurchases\)/);
+  match(adminPage, /computeWeightedSupplierCosts\(commercialSupplierPurchases\)/);
+  match(adminPage, /buildProductCostFilters\(commercialProducts,/);
+  match(adminPage, /<SupplierPurchaseForm[\s\S]*?products=\{commercialProducts\}/);
+  match(adminPage, /const selectableProducts = useMemo\([\s\S]*?filterOrdinaryProducts\(products\)/);
+  match(adminPage, /const firstProductId = selectableProducts\[0\]\?\.id \|\| ""/);
+  match(adminPage, /productById\.has\(productId\) \? productId : ""/);
+  match(adminPage, /selectableProducts\.map\(\(product\) =>/);
+  match(adminPage, /emptySupplierLine\(firstProductId\)/);
 });
 await test("projection admin refuse historique, inscription invalide, source non Firestore et garde fermee", () => {
   const ordinary = adminOrderRow(projectableOrder({ id: "CMD-HISTORIQUE", customerId: "client-fictif" }));
@@ -74,21 +443,52 @@ await test("meme projection admin alimente mobile et bureau puis recharge par ge
   match(adminData, /const order = await getAdminOrder\(orderId\);[\s\S]*?entry\.id === orderId \? order : entry/);
 });
 await test("vrai composant : libelles, financement et operations applicables", () => {
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={base} />);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={base} />);
   for (const text of ["Enregistrer un remboursement déjà confirmé", "Cette action enregistre votre déclaration.",
     "Elle n’effectue aucun remboursement bancaire.", "Consulter", "Confirmer paiement / livraison",
     "Enregistrer un retour", "Corriger une déclaration", "Tout le montant restant"]) match(html, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   doesNotMatch(html, /Revoir \/ annuler un impayé/);
 });
+await test("fixture UI conserve inspection et previews mais ferme chaque mutation", () => {
+  const preview = { ...refund(), kind: "refund_preview" as const, recordedAt: undefined };
+  const refundHtml = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled={false} model={{ ...base, refundPreview: preview }} />);
+  match(refundHtml, /Fixture Production : inspection et prévisualisation uniquement/);
+  match(refundHtml, /Journal cagnotte de la commande|Historique administratif/);
+  match(refundHtml, />Prévisualiser sur le serveur<\/button>/);
+  match(refundHtml, /button[^>]*disabled=""[^>]*>Confirmer l’enregistrement<\/button>/);
+
+  const correctionPreview = { ...correctionReview(), kind: "refund_correction_preview" as const, reviewReason: undefined };
+  const correctionHtml = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled={false} model={{ ...base, mode: "correction", correctionPreview }} />);
+  match(correctionHtml, />Prévisualiser la correction<\/button>/);
+  match(correctionHtml, /button[^>]*disabled=""[^>]*>Confirmer après vérification externe<\/button>/);
+
+  const reserved = { ...inspection,
+    reservation: { ...inspection.reservation, state: "reserved" as const, cumulativeRestitutedCents: 0 },
+    unpaid: { ...inspection.unpaid, reservationState: "reserved" as const } };
+  const unpaidHtml = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled={false} model={{ ...base, inspection: reserved, mode: "unpaid" }} />);
+  doesNotMatch(unpaidHtml, /Revoir \/ annuler un impayé|Enregistrer la revue|Annuler après revue/);
+
+  const operation = freezeCagnotteAdminRefund({ orderId: inspection.order.id,
+    additionalReturns: [{ lineId: "line-0", additionalNetCents: 2500 }], deliveryRefundCents: 0,
+    source: "admin", reference: "fixture-frozen", declaredFinancialCents: 2300, reason: "product_return",
+    confirmedAt: "2026-09-06T10:00:00.000Z", expectedPreviewVersion: "c".repeat(64) });
+  const frozen = cagnotteAdminFrozenOperationState({ ...base, refundPreview: preview }, operation,
+    new CagnotteAdminRequestError("Réponse absente", "response_unknown", true));
+  const frozenHtml = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled={false} model={frozen} />);
+  match(frozenHtml, /réinspecter le payload conservé pour diagnostic/);
+  doesNotMatch(frozenHtml, /Rejouer exactement l’opération précédente/);
+  throws(() => assertCagnotteAdminMutationAllowed(false), /inspection et prévisualisation uniquement/);
+  assertCagnotteAdminMutationAllowed(true);
+});
 await test("inspection lisible distingue inscription, gain commande et portefeuille global", () => {
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={base} />);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={base} />);
   for (const text of ["REMBOURSEMENT/CORRECTION ENREGISTRÉ", "Inscription de la commande", "Acquisition fidélité :", "inscrite", "Gain de cette commande",
     "Gain estimé", "Gain en attente", "Gain disponible", "Gain annulé ou réduit", "Portefeuille global du client",
     "Disponible global", "La régularisation est globale au client et peut provenir d’autres commandes.", "Réservation de cette commande", "Consommée", "Journal cagnotte de la commande"]) match(html, new RegExp(text));
 });
 await test("historique legacy partiel affiche un avertissement discret sans corruption", () => {
   const partial = { ...inspection, movementHistory: { complete: false, omittedLegacyUndatedCount: 2 } };
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: partial }} />);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={{ ...base, inspection: partial }} />);
   match(html, /Journal partiel : certains anciens mouvements/);
   match(html, /ne sont pas affichés dans cette chronologie/);
   match(html, /\(2\)/);
@@ -100,14 +500,14 @@ await test("etats par commande paiement en attente livre et annule sont explicit
     [{ code: "delivered_available" as const, label: "LIVRÉE", detail: "GAIN DISPONIBLE POUR CETTE COMMANDE" }, /LIVRÉE[\s\S]*Gain disponible pour cette commande/],
     [{ code: "cancelled" as const, label: "ANNULÉE", detail: "Le gain de cette commande est annulé." }, /ANNULÉE/],
   ] as const;
-  for (const [operationalState, pattern] of cases) match(renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: { ...inspection, operationalState } }} />), pattern);
+  for (const [operationalState, pattern] of cases) match(renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={{ ...base, inspection: { ...inspection, operationalState } }} />), pattern);
 });
 await test("preview et resultat persisté presentent les effets separement", () => {
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, refundPreview: refund(), notice: "Déclaration enregistrée." }} />);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={{ ...base, refundPreview: refund(), notice: "Déclaration enregistrée." }} />);
   for (const text of ["Part financière déclarée", "Cagnotte brute restituée", "Correction du gain", "Compensation", "Disponible estimé"]) match(html, new RegExp(text));
 });
 await test("correction a verifier affiche le refus cible et sa limite", () => {
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, mode: "correction", correctionPreview: correctionReview(), notice: "Vérification requise" }} />);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={{ ...base, mode: "correction", correctionPreview: correctionReview(), notice: "Vérification requise" }} />);
   match(html, /CORRECTION_REQUIRES_REVIEW/); match(html, /réservé ou utilisé/); match(html, /L’original reste dans l’historique/);
   match(html, /Révision actuelle : 0/); match(html, /nouvelle révision : 1/); match(html, /Variation régularisation/);
 });
@@ -115,7 +515,7 @@ await test("impaye separe transport et reglement, seuil sans automatisme", () =>
   const reserved = { ...inspection,
     reservation: { ...inspection.reservation, state: "reserved" as const, cumulativeRestitutedCents: 0 },
     unpaid: { ...inspection.unpaid, reservationState: "reserved" as const } };
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: reserved, mode: "unpaid" }} />);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={{ ...base, inspection: reserved, mode: "unpaid" }} />);
   for (const text of ["À revoir · plus de 72 heures", "Cagnotte réservée", "Règlement de la commande", "Lien CB envoyé", "Transmission du lien", "Résultat à vérifier", "n’est ni une preuve de paiement ni une preuve d’impayé", "ne révoque pas le lien externe"]) match(html, new RegExp(text));
   doesNotMatch(html, />to_confirm<|>unknown<|Cagnotte consommée/);
 });
@@ -124,18 +524,18 @@ await test("impaye est masque hors reservation active", () => {
     const inactive = { ...inspection,
       reservation: { ...inspection.reservation, state },
       unpaid: { ...inspection.unpaid, reservationState: state } };
-    const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: inactive, mode: "unpaid" }} />);
+    const html = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={{ ...base, inspection: inactive, mode: "unpaid" }} />);
     doesNotMatch(html, /Revoir \/ annuler un impayé|Enregistrer la revue|Annuler la commande/);
   }
   const inconsistent = { ...inspection,
     reservation: { ...inspection.reservation, state: "reserved" as const },
     unpaid: { ...inspection.unpaid, reservationState: "consumed" as const } };
-  doesNotMatch(renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: inconsistent, mode: "unpaid" }} />),
+  doesNotMatch(renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={{ ...base, inspection: inconsistent, mode: "unpaid" }} />),
     /Revoir \/ annuler un impayé|Enregistrer la revue|Annuler la commande/);
 });
 await test("financement consomme utilise le libelle correspondant", () => {
   const consumed = { ...inspection, unpaid: { ...inspection.unpaid, reservationState: "consumed", reservedAmountCents: 0 } };
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: consumed }} />);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={{ ...base, inspection: consumed }} />);
   match(html, /Cagnotte consommée/);
   doesNotMatch(html, /Cagnotte réservée/);
 });
@@ -152,7 +552,7 @@ await test("historique apres neutralisation conserve l original et rend la corre
         resultingAvailableCents: 1660, effective: true, targetEventId: inspection.history[0].id, targetReference: "demo" },
     ], correctionTarget: { eventId: inspection.history[0].id, revision: 1, effective: zero,
       lines: inspection.correctionTarget!.lines } };
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: corrected, mode: "correction" }} />);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={{ ...base, inspection: corrected, mode: "correction" }} />);
   for (const text of ["Historique administratif", "Déclaration initiale", "Corrigée / inactive", "Correction · neutralisation",
     "Active / effective", "Retour net", "25,00", "Financier", "23,00", "Cagnotte restituée", "2,00",
     "Solde disponible résultant", "16,60", "Aucun flux bancaire n’est modifié"]) match(html, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
@@ -165,13 +565,13 @@ await test("H19 correction utilise le plafond serveur de la cible et refund gard
     correctionTarget: { ...inspection.correctionTarget!, effective: { ...inspection.effective, returnedProductNetCents: 5000 },
       lines: [{ lineId: "line-0", maxReplacementNetCents: 7000 }] },
   };
-  const correctionHtml = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: multipleRefunds, mode: "correction" }} />);
+  const correctionHtml = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={{ ...base, inspection: multipleRefunds, mode: "correction" }} />);
   match(correctionHtml, /70,00\s*€ admissibles/);
   doesNotMatch(correctionHtml, /100,00\s*€ admissibles|50,00\s*€ admissibles/);
   const maximum = cagnotteAdminCorrectionMaximumNetCents(multipleRefunds, "line-0");
   equal(maximum, 7000);
   equal(cagnotteAdminMaximumLineInput({}, "line-0", maximum)["line-0"], "70,00");
-  const refundHtml = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: multipleRefunds, mode: "refund" }} />);
+  const refundHtml = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={{ ...base, inspection: multipleRefunds, mode: "refund" }} />);
   match(refundHtml, /50,00\s*€ admissibles/);
   doesNotMatch(refundHtml, /70,00\s*€ admissibles/);
 });
@@ -180,7 +580,7 @@ await test("revue et date sont presentees sans codes internes", () => {
     reservation: { ...inspection.reservation, state: "reserved" as const },
     unpaid: { ...inspection.unpaid, reservationState: "reserved" as const,
       review: { outcome: "unpaid_confirmed" as const, source: "fixture", reason: "fixture", reviewedAt: "2026-09-06T10:00:00.000Z", reviewedByEmail: "admin@example.test", current: true } } };
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: reviewed, mode: "unpaid" }} />);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={{ ...base, inspection: reviewed, mode: "unpaid" }} />);
   match(html, /Dernière revue : Impayé confirmé après vérification/);
   match(html, /6 sept. 2026/);
   doesNotMatch(html, />unpaid_confirmed<|2026-09-06T10:00:00.000Z/);
@@ -190,7 +590,7 @@ await test("bouton desactive visuellement distinct", async () => {
   match(css, /\.cagnotte-admin button:disabled\{[^}]*cursor:not-allowed[^}]*opacity:/);
 });
 await test("mutation en cours desactive les controles et expose aria-busy", () => {
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, busy: true }} />);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={{ ...base, busy: true }} />);
   match(html, /aria-busy="true"/); match(html, /<fieldset disabled=""/); match(html, /button[^>]*disabled=""/);
 });
 await test("operation refund incertaine reste gelee jusqu a sa preuve exacte", async () => {
@@ -210,7 +610,7 @@ await test("operation refund incertaine reste gelee jusqu a sa preuve exacte", a
   state = cagnotteAdminFormUpdatedState(state); equal(state.uncertain, true);
   const raced = cagnotteAdminInspectionSuccessState(state, { ...inspection, history: [] });
   equal(raced.uncertain, true); equal(raced.pendingOperation, operation); ok(raced.refundPreview);
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...raced, phase: "ready" }} />);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={{ ...raced, phase: "ready" }} />);
   match(html, /Une opération précédente reste à confirmer/); match(html, /Réinspecter avant toute nouvelle tentative/); match(html, /Rejouer exactement l’opération précédente/);
   match(html, /Type : remboursement/); match(html, /Référence métier : Reference-Figee/); match(html, /Aucune nouvelle déclaration ne peut être créée/);
   match(html, /Confirmer l’enregistrement<\/button>/); match(html, /button[^>]*disabled=""[^>]*>Confirmer l’enregistrement/);
@@ -257,7 +657,7 @@ await test("rejet definitif du premier envoi invalide les apercus et rend une no
   new CagnotteAdminRequestError("Prévisualisation périmée.", "refund_preview_stale", false));
   equal(state.refundPreview, null); equal(state.correctionPreview, null); equal(state.pendingOperation, null);
   equal(state.uncertain, false); equal(state.recoveryBlocked, false); match(state.notice, /périmée/i);
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={state} />);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={state} />);
   doesNotMatch(html, /Conséquences calculées par le serveur|Rejouer exactement l’opération précédente/);
 });
 await test("storage pre-send revenu vide debloque apres reinspection sans remount", () => {
@@ -278,7 +678,7 @@ await test("storage pre-send revenu vide debloque apres reinspection sans remoun
   equal(ready.pendingOperation, null);
   equal(ready.refundPreview, null);
   equal(ready.correctionPreview, null);
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={ready} />);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={ready} />);
   doesNotMatch(html, /<fieldset disabled=""/);
   match(html, />Prévisualiser sur le serveur<\/button>/);
   doesNotMatch(html, /Reprise locale bloquée|Rejouer exactement l’opération précédente/);
@@ -305,7 +705,7 @@ await test("acquisition non inscrite affiche zero gain mais conserve financement
     enrollment: { ...inspection.enrollment, enrolled: false, accrualEnrollment: "not_enrolled" },
     accrual: { present: false, initialGainCents: 0, remainingGainCents: 0, paymentConfirmed: false, deliveryConfirmed: false, credited: false, compartment: "none", cancelled: false },
   };
-  const html = renderToStaticMarkup(<CagnotteAdminToolsView model={{ ...base, inspection: notEnrolled }} />);
+  const html = renderToStaticMarkup(<CagnotteAdminToolsView mutationsEnabled model={{ ...base, inspection: notEnrolled }} />);
   for (const text of ["AUCUN GAIN POUR CETTE COMMANDE", "Acquisition fidélité :", "non inscrite", "Aucun gain attribué", "Gain attribué", "0,00", "Consommée", "Cagnotte consommée", "8,00", "Paiement externe total", "92,00"]) match(html, new RegExp(text));
   doesNotMatch(html, /Gain estimé|Gain en attente|Gain disponible|PAIEMENT À CONFIRMER/);
 });
@@ -508,9 +908,9 @@ async function exerciseMountedInspectionSynchronization() {
     globalThis.__adminStats = stats;
     createRoot(document.getElementById("root")).render(
       <main>
-        <div data-panel="desktop"><CagnotteAdminTools orderId={mainOrderId} enabled frozenOperationStore={store} /></div>
-        <div data-panel="mobile"><CagnotteAdminTools orderId={mainOrderId} enabled frozenOperationStore={store} /></div>
-        <div data-panel="other"><CagnotteAdminTools orderId={otherOrderId} enabled frozenOperationStore={store} /></div>
+        <div data-panel="desktop"><CagnotteAdminTools mutationsEnabled orderId={mainOrderId} enabled frozenOperationStore={store} /></div>
+        <div data-panel="mobile"><CagnotteAdminTools mutationsEnabled orderId={mainOrderId} enabled frozenOperationStore={store} /></div>
+        <div data-panel="other"><CagnotteAdminTools mutationsEnabled orderId={otherOrderId} enabled frozenOperationStore={store} /></div>
       </main>,
     );
   `;

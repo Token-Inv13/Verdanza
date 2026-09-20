@@ -1,4 +1,5 @@
 import { applicationDefault, cert, getApps, initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 
@@ -96,6 +97,10 @@ export function getAdminDb() {
   return getFirestore();
 }
 
+export function getAdminAuth() {
+  return getAuth(ensureAdminApp());
+}
+
 /** Resolved credential/project identity only. Never logs or returns credential material. */
 export function getAdminProjectId(): string | null {
   const source = resolveCredentialSource(process.env);
@@ -109,7 +114,7 @@ export function getAdminStorageBucket() {
 }
 
 function ensureAdminApp() {
-  initializeFirebaseAdminApp(
+  return initializeFirebaseAdminApp(
     process.env,
     {
       getApps,

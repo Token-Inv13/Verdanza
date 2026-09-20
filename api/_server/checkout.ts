@@ -55,6 +55,7 @@ import {
   resolveFixedPriceOptions,
 } from "../../src/lib/fixedPriceOptions.js";
 import { orderItemLineTotal } from "../../src/lib/orderLineDisplay.js";
+import { hasOwnProductionFixtureMarker } from "../../src/lib/productionFixtureMarker.js";
 import { omitUndefinedDeep } from "./firestoreSerialization.js";
 import type { PublicSubmissionSecurityContext } from "./publicRateLimit.js";
 import { contestEmailHash } from "./contests.js";
@@ -307,9 +308,16 @@ export async function priceCheckout(
       throw new Error("Ce produit n'est plus disponible.");
     }
 
+    const productData = productSnapshot.data();
+    if (hasOwnProductionFixtureMarker(productData)) {
+      throw new Error(
+        `Produit fixture refuse : ${String((productData as Record<string, unknown>).name || productId)}.`,
+      );
+    }
+
     const product = {
       id: productSnapshot.id,
-      ...productSnapshot.data(),
+      ...productData,
     } as Product;
 
     if (!product.isActive) {

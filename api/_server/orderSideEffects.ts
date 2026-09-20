@@ -4,6 +4,12 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { CheckoutRequestBody } from "./checkout.js";
 import type { EmailResult } from "./email.js";
 import type { Order } from "../../src/types/index.js";
+import {
+  assertCagnotteProductionFixtureCapability,
+  CAGNOTTE_PRODUCTION_FIXTURE_SIDE_EFFECT_REASON,
+  hasPersistedCagnotteProductionFixtureMarker,
+  type CagnotteProductionFixtureCapability,
+} from "./cagnotteProductionFixture.js";
 
 export const checkoutRequestsCollection = "checkoutRequests";
 export const orderSideEffectsCollection = "orderSideEffects";
@@ -137,6 +143,17 @@ export function orderSideEffectsDocument(orderId: string) {
   };
 }
 
+export function cagnotteProductionFixtureSideEffectsDocument(
+  orderId: string,
+  capability: CagnotteProductionFixtureCapability,
+) {
+  assertCagnotteProductionFixtureCapability(capability);
+  if (capability.marker.orderId !== orderId) {
+    throw new Error("production_fixture_order_id_invalid");
+  }
+  return skippedProductionFixtureSideEffectsDocument(orderId, capability.marker);
+}
+
 export async function findCheckoutRequest(
   db: FirebaseFirestore.Firestore,
   checkoutRequestId: string,
@@ -165,9 +182,22 @@ export async function ensureOrderSideEffectsOutbox(
   orderId: string,
 ) {
   const ref = db.collection(orderSideEffectsCollection).doc(orderId);
-  const snapshot = await ref.get();
-  if (snapshot.exists) return;
-  await ref.set(orderSideEffectsDocument(orderId), { merge: true });
+  const orderRef = db.collection("orders").doc(orderId);
+  await db.runTransaction(async (transaction) => {
+    const [snapshot, orderSnapshot] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(orderRef),
+    ]);
+    if (snapshot.exists) return;
+    const order = orderSnapshot.data() || {};
+    transaction.set(
+      ref,
+      hasPersistedCagnotteProductionFixtureMarker(order)
+        ? skippedProductionFixtureSideEffectsDocument(orderId, order.productionFixture)
+        : orderSideEffectsDocument(orderId),
+      { merge: true },
+    );
+  });
 }
 
 export async function resetOrderSideEffectTask(
@@ -175,13 +205,30 @@ export async function resetOrderSideEffectTask(
   orderId: string,
   task: OrderSideEffectTaskName,
 ) {
-  await ensureOrderSideEffectsOutbox(db, orderId);
-  await db.collection(orderSideEffectsCollection).doc(orderId).update({
-    [`tasks.${task}.status`]: "pending",
-    [`tasks.${task}.leaseUntil`]: FieldValue.delete(),
-    [`tasks.${task}.completedAt`]: FieldValue.delete(),
-    [`tasks.${task}.lastErrorCode`]: FieldValue.delete(),
-    updatedAt: FieldValue.serverTimestamp(),
+  const ref = db.collection(orderSideEffectsCollection).doc(orderId);
+  const orderRef = db.collection("orders").doc(orderId);
+  await db.runTransaction(async (transaction) => {
+    const [snapshot, orderSnapshot] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(orderRef),
+    ]);
+    if (
+      hasPersistedCagnotteProductionFixtureMarker(orderSnapshot.data()) ||
+      hasPersistedCagnotteProductionFixtureMarker(snapshot.data())
+    ) {
+      throw new Error("production_fixture_external_effect_forbidden");
+    }
+    if (!snapshot.exists) {
+      transaction.set(ref, orderSideEffectsDocument(orderId));
+      return;
+    }
+    transaction.update(ref, {
+      [`tasks.${task}.status`]: "pending",
+      [`tasks.${task}.leaseUntil`]: FieldValue.delete(),
+      [`tasks.${task}.completedAt`]: FieldValue.delete(),
+      [`tasks.${task}.lastErrorCode`]: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
   });
 }
 
@@ -191,9 +238,17 @@ export async function claimOrderSideEffectTask(
   task: OrderSideEffectTaskName,
 ) {
   const ref = db.collection(orderSideEffectsCollection).doc(orderId);
+  const orderRef = db.collection("orders").doc(orderId);
   return db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(ref);
+    const [snapshot, orderSnapshot] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(orderRef),
+    ]);
     if (!snapshot.exists) return false;
+    if (
+      hasPersistedCagnotteProductionFixtureMarker(orderSnapshot.data()) ||
+      hasPersistedCagnotteProductionFixtureMarker(snapshot.data())
+    ) return false;
     const taskState = snapshot.data()?.tasks?.[task] || {};
     if (taskState.status === "sent" || taskState.status === "skipped") return false;
     if (
@@ -355,4 +410,31 @@ function timestampToMs(value: unknown) {
 
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function skippedProductionFixtureSideEffectsDocument(
+  orderId: string,
+  marker: unknown,
+) {
+  return {
+    orderId,
+    productionFixture: marker,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+    tasks: Object.fromEntries(
+      orderSideEffectTaskNames.map((task) => [
+        task,
+        {
+          status: "skipped",
+          attempts: 0,
+          createdAt: FieldValue.serverTimestamp(),
+          lastAttemptAt: null,
+          completedAt: FieldValue.serverTimestamp(),
+          lastErrorCode: CAGNOTTE_PRODUCTION_FIXTURE_SIDE_EFFECT_REASON,
+          skipReason: CAGNOTTE_PRODUCTION_FIXTURE_SIDE_EFFECT_REASON,
+          leaseUntil: null,
+        },
+      ]),
+    ),
+  };
 }

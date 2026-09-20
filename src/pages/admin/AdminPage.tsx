@@ -116,7 +116,6 @@ const AdminCagnotteTools = CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED
   ? lazy(() => import("../../components/cagnotte/CagnotteAdminTools").then((module) => ({ default: module.CagnotteAdminTools })))
   : null;
 import type {
-  AdminMetric,
   BillingSettings,
   Coupon,
   CustomerProfile,
@@ -176,7 +175,7 @@ import {
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../../config/deliveryRules";
 import { BRAND_PRODUCT_PLACEHOLDER } from "../../lib/brandAssets";
-import { shouldMountCagnotteAdminTools } from "../../lib/cagnotteAdminEligibility";
+import { cagnotteAdminMutationsAllowed, shouldMountCagnotteAdminTools } from "../../lib/cagnotteAdminEligibility";
 import {
   computeWeightedSupplierCosts,
   normalizeSupplierPurchaseInput,
@@ -187,13 +186,27 @@ import {
   type AccountingMetricKey,
 } from "../../lib/accountingSummary";
 import {
+  filterOrdinaryProducts,
+  filterOrdinarySupplierPurchases,
+} from "../../lib/productionFixtureMarker";
+import { buildDashboardMetrics } from "../../lib/adminDashboardMetrics";
+import {
+  buildCommercialCustomerEntries,
+  commercialAdminCustomers,
+  commercialAdminOrders,
+  commercialCustomerStats,
+  commercialCustomerStatus,
+  ordersForCommercialCustomer,
+  type CustomerComputedStats,
+} from "../../lib/adminCustomerCommercial";
+import {
   currentAccountingPeriodRange,
   previousAccountingPeriodRange,
   toAccountingDateInputValue,
   type AccountingPeriodFilter,
 } from "../../lib/accountingPeriods";
 import { formatLocalDeliveryEstimate } from "../../lib/deliveryEstimate";
-import { adminDateValue, formatAdminDate, formatAdminDateTime } from "../../lib/adminDatePresentation";
+import { formatAdminDate, formatAdminDateTime } from "../../lib/adminDatePresentation";
 import {
   promotionAvailability,
   promotionDateTimeLocalToIso,
@@ -506,7 +519,7 @@ export function AdminPage({ section }: { section: string }) {
     if (productSource === "local") {
       await upsertProduct({ ...product, ...flags });
     } else {
-      await updateProductFlags(product.id, flags);
+      await updateProductFlags(product, flags);
     }
     await refresh();
   }
@@ -515,7 +528,7 @@ export function AdminPage({ section }: { section: string }) {
     if (productSource === "local") {
       await upsertProduct({ ...product, stock, lowStockThreshold: threshold });
     } else {
-      await updateProductStock(product.id, stock, threshold);
+      await updateProductStock(product, stock, threshold);
     }
     await refresh();
   }
@@ -748,7 +761,7 @@ export function AdminPage({ section }: { section: string }) {
     customer: CustomerProfile,
     data: { status?: CustomerProfile["status"]; archived?: boolean; hidden?: boolean },
   ) {
-    await updateCustomerAdminStatus(customer.id, data);
+    await updateCustomerAdminStatus(customer, data);
     setMessage("Fiche client mise a jour.");
     await refresh();
   }
@@ -1059,7 +1072,7 @@ export function AdminPage({ section }: { section: string }) {
             coupons={coupons}
             onAdjustPoints={handleLoyaltyAdjustment}
             onNote={async (customer, note) => {
-              await updateCustomerInternalNote(customer.id, note);
+              await updateCustomerInternalNote(customer, note);
               setMessage("Note client enregistree.");
               await refresh();
             }}
@@ -3833,10 +3846,20 @@ function CustomersTable({
     data: { status?: CustomerProfile["status"]; archived?: boolean; hidden?: boolean },
   ) => Promise<void>;
 }) {
+  const commercialCustomers = useMemo(
+    () => commercialAdminCustomers(customers),
+    [customers],
+  );
+  const commercialOrders = useMemo(
+    () => commercialAdminOrders(orders),
+    [orders],
+  );
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<CustomerFilter>("active");
   const [sort, setSort] = useState<CustomerSort>("lastOrder");
-  const [selectedCustomerId, setSelectedCustomerId] = useState(customers[0]?.id || "");
+  const [selectedCustomerId, setSelectedCustomerId] = useState(
+    commercialCustomers[0]?.id || "",
+  );
   const [promoCouponId, setPromoCouponId] = useState(coupons[0]?.id || "");
   const [promoNote, setPromoNote] = useState("");
   const [details, setDetails] = useState<CustomerAdminDetails>({
@@ -3844,15 +3867,21 @@ function CustomersTable({
     favorites: [],
     reviews: [],
   });
-  const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId) || customers[0];
-  const selectedOrders = selectedCustomer ? ordersForCustomer(orders, selectedCustomer) : [];
-  const selectedStats = selectedCustomer ? customerStats(selectedCustomer, selectedOrders) : null;
+  const selectedCustomer =
+    commercialCustomers.find((customer) => customer.id === selectedCustomerId) ||
+    commercialCustomers[0];
+  const selectedOrders = selectedCustomer
+    ? ordersForCommercialCustomer(commercialOrders, selectedCustomer)
+    : [];
+  const selectedStats = selectedCustomer
+    ? commercialCustomerStats(selectedCustomer, selectedOrders)
+    : null;
 
   useEffect(() => {
-    if (!selectedCustomerId && customers[0]?.id) {
-      setSelectedCustomerId(customers[0].id);
+    if (!commercialCustomers.some((customer) => customer.id === selectedCustomerId)) {
+      setSelectedCustomerId(commercialCustomers[0]?.id || "");
     }
-  }, [customers, selectedCustomerId]);
+  }, [commercialCustomers, selectedCustomerId]);
 
   useEffect(() => {
     if (!selectedCustomer) {
@@ -3869,16 +3898,8 @@ function CustomersTable({
   }, [selectedCustomer]);
 
   const enrichedCustomers = useMemo(
-    () =>
-      customers.map((customer) => {
-        const customerOrders = ordersForCustomer(orders, customer);
-        return {
-          customer,
-          orders: customerOrders,
-          stats: customerStats(customer, customerOrders),
-        };
-      }),
-    [customers, orders],
+    () => buildCommercialCustomerEntries(commercialCustomers, commercialOrders),
+    [commercialCustomers, commercialOrders],
   );
 
   const visibleCustomers = useMemo(() => {
@@ -3897,8 +3918,8 @@ function CustomersTable({
         if (normalizedSearch && !haystack.includes(normalizedSearch)) return false;
         if (filter === "archived") return customer.archived === true || customer.status === "archived";
         if (customer.archived || customer.hidden) return false;
-        if (filter === "loyal") return customerStatus(customer, customerOrders).label === "Fidele";
-        if (filter === "new") return customerStatus(customer, customerOrders).label === "Nouveau";
+        if (filter === "loyal") return commercialCustomerStatus(customer, customerOrders).label === "Fidele";
+        if (filter === "new") return commercialCustomerStatus(customer, customerOrders).label === "Nouveau";
         if (filter === "withOrders") return customerOrders.length > 0;
         if (filter === "withoutOrders") return customerOrders.length === 0;
         if (filter === "withNote") return Boolean(customer.internalNote?.trim());
@@ -3913,7 +3934,7 @@ function CustomersTable({
   return (
     <section className="mt-8 space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminStatCard label="Clients" value={String(customers.length)} detail="Profils en base" />
+        <AdminStatCard label="Clients" value={String(commercialCustomers.length)} detail="Profils en base" />
         <AdminStatCard
           label="Avec commandes"
           value={String(enrichedCustomers.filter((entry) => entry.orders.length > 0).length)}
@@ -3926,7 +3947,7 @@ function CustomersTable({
         />
         <AdminStatCard
           label="Promos attribuees"
-          value={String(customers.reduce((sum, customer) => sum + (customer.assignedPromos?.length || 0), 0))}
+          value={String(commercialCustomers.reduce((sum, customer) => sum + (customer.assignedPromos?.length || 0), 0))}
           detail="Suivi interne"
         />
       </div>
@@ -3973,13 +3994,13 @@ function CustomersTable({
         </div>
       </div>
 
-      {!customers.length && (
+      {!commercialCustomers.length && (
         <AdminEmptyState
           title="Aucun client pour le moment."
           description="Les profils clients apparaitront ici apres inscription ou commande connectee."
         />
       )}
-      {!!customers.length && (
+      {!!commercialCustomers.length && (
         <div className="grid gap-5 2xl:grid-cols-[minmax(360px,520px)_1fr]">
           <div className="space-y-3">
             {!visibleCustomers.length && (
@@ -4459,61 +4480,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-type CustomerComputedStats = {
-  orderCount: number;
-  totalSpent: number;
-  averageCart: number;
-  lastOrderAt: number;
-  lastOrderLabel: string;
-  status: { value: NonNullable<CustomerProfile["status"]>; label: string; tone: AdminBadgeTone };
-};
-
-function ordersForCustomer(orders: AdminOrderRow[], customer: CustomerProfile) {
-  const email = customer.email?.toLowerCase();
-  const phone = normalizeCustomerPhone(customer.phone);
-  const uid = customer.uid || customer.id;
-  return orders.filter((order) => {
-    if (order.customerId && uid && order.customerId === uid) return true;
-    if (email && order.customerEmail?.toLowerCase() === email) return true;
-    if (phone && normalizeCustomerPhone(order.customerPhone) === phone) return true;
-    return false;
-  });
-}
-
-function customerStats(customer: CustomerProfile, orders: AdminOrderRow[]): CustomerComputedStats {
-  const orderCount = Math.max(Number(customer.orderCount || 0), orders.length);
-  const orderTotal = orders.reduce((sum, order) => sum + parseEuro(order.total), 0);
-  const totalSpent = Math.max(Number(customer.totalSpent || 0), orderTotal);
-  const lastOrderAt = orders.reduce(
-    (latest, order) => Math.max(latest, adminDateValue(order.createdAt)),
-    0,
-  );
-  return {
-    orderCount,
-    totalSpent,
-    averageCart: orderCount ? totalSpent / orderCount : 0,
-    lastOrderAt,
-    lastOrderLabel: lastOrderAt ? formatAdminDate(lastOrderAt) : "Aucune",
-    status: customerStatus(customer, orders),
-  };
-}
-
-function customerStatus(customer: CustomerProfile, orders: AdminOrderRow[]) {
-  if (customer.archived || customer.status === "archived") {
-    return { value: "archived" as const, label: "Archive", tone: "muted" as const };
-  }
-  if (customer.status === "watch") {
-    return { value: "watch" as const, label: "A suivre", tone: "warning" as const };
-  }
-  if (customer.status === "loyal" || Number(customer.orderCount || orders.length) >= 3) {
-    return { value: "loyal" as const, label: "Fidele", tone: "gold" as const };
-  }
-  if (customer.status === "active" || orders.length > 0 || Number(customer.orderCount || 0) > 0) {
-    return { value: "active" as const, label: "Actif", tone: "success" as const };
-  }
-  return { value: "new" as const, label: "Nouveau", tone: "neutral" as const };
-}
-
 function sortCustomers(
   left: { customer: CustomerProfile; stats: CustomerComputedStats },
   right: { customer: CustomerProfile; stats: CustomerComputedStats },
@@ -4531,10 +4497,6 @@ function sortCustomers(
     );
   }
   return right.stats.lastOrderAt - left.stats.lastOrderAt;
-}
-
-function normalizeCustomerPhone(value?: string) {
-  return value?.replace(/\D/g, "") || "";
 }
 
 function BillingWarning({ settings }: { settings: BillingSettings }) {
@@ -5153,25 +5115,33 @@ function AccountingPanel({
   const [costFilter, setCostFilter] = useState<ProductCostFilter>("all");
   const [editingSupplierPurchase, setEditingSupplierPurchase] =
     useState<Partial<SupplierPurchase> | null>(null);
+  const commercialProducts = useMemo(
+    () => filterOrdinaryProducts(products),
+    [products],
+  );
+  const commercialSupplierPurchases = useMemo(
+    () => filterOrdinarySupplierPurchases(products, supplierPurchases),
+    [products, supplierPurchases],
+  );
   const productCostMap = useMemo(
     () => new Map(productCosts.map((cost) => [cost.productId, cost])),
     [productCosts],
   );
   const weightedSupplierCosts = useMemo(
-    () => computeWeightedSupplierCosts(supplierPurchases).costByProductId,
-    [supplierPurchases],
+    () => computeWeightedSupplierCosts(commercialSupplierPurchases).costByProductId,
+    [commercialSupplierPurchases],
   );
   const productCostFilters = useMemo(
-    () => buildProductCostFilters(products, productCostMap, weightedSupplierCosts),
-    [productCostMap, products, weightedSupplierCosts],
+    () => buildProductCostFilters(commercialProducts, productCostMap, weightedSupplierCosts),
+    [commercialProducts, productCostMap, weightedSupplierCosts],
   );
   const filteredCostProducts = useMemo(
-    () => products.filter((product) => productMatchesProductCostFilter(product, productCostMap, weightedSupplierCosts, costFilter)),
-    [costFilter, productCostMap, products, weightedSupplierCosts],
+    () => commercialProducts.filter((product) => productMatchesProductCostFilter(product, productCostMap, weightedSupplierCosts, costFilter)),
+    [commercialProducts, costFilter, productCostMap, weightedSupplierCosts],
   );
   const activeProductsMissingCost = useMemo(
-    () => products.filter((product) => product.isActive && !weightedSupplierCosts.has(product.id) && productCostMap.get(product.id)?.purchasePricePerGram == null),
-    [productCostMap, products, weightedSupplierCosts],
+    () => commercialProducts.filter((product) => product.isActive && !weightedSupplierCosts.has(product.id) && productCostMap.get(product.id)?.purchasePricePerGram == null),
+    [commercialProducts, productCostMap, weightedSupplierCosts],
   );
   const periodSelection = useMemo(() => {
     try {
@@ -5191,12 +5161,12 @@ function AccountingPanel({
   }, [customEnd, customStart, period, todayInput]);
   const periodRange = periodSelection.range;
   const summary = useMemo(
-    () => buildAccountingSummary(orders, products, productCostMap, supplierPurchases, weightedSupplierCosts, periodRange),
-    [orders, periodRange, productCostMap, products, supplierPurchases, weightedSupplierCosts],
+    () => buildAccountingSummary(orders, products, productCostMap, commercialSupplierPurchases, weightedSupplierCosts, periodRange),
+    [commercialSupplierPurchases, orders, periodRange, productCostMap, products, weightedSupplierCosts],
   );
   const previousSummary = useMemo(
-    () => buildAccountingSummary(orders, products, productCostMap, supplierPurchases, weightedSupplierCosts, previousAccountingPeriodRange(periodRange)),
-    [orders, periodRange, productCostMap, products, supplierPurchases, weightedSupplierCosts],
+    () => buildAccountingSummary(orders, products, productCostMap, commercialSupplierPurchases, weightedSupplierCosts, previousAccountingPeriodRange(periodRange)),
+    [commercialSupplierPurchases, orders, periodRange, productCostMap, products, weightedSupplierCosts],
   );
   const periodFilters: Array<{ value: AccountingPeriodFilter; label: string }> = [
     { value: "week", label: "Semaine en cours" },
@@ -5495,7 +5465,7 @@ function AccountingPanel({
           </p>
         </div>
         <SupplierPurchaseForm
-          products={products}
+          products={commercialProducts}
           editingPurchase={editingSupplierPurchase}
           onImportedPurchase={setEditingSupplierPurchase}
           onCancelEdit={() => setEditingSupplierPurchase(null)}
@@ -5513,7 +5483,7 @@ function AccountingPanel({
         {(!supplierPurchasesError || supplierPurchases.length > 0) && (
           <SupplierPurchasesTable
             purchases={supplierPurchases}
-            products={products}
+            products={commercialProducts}
             onEdit={setEditingSupplierPurchase}
             onDelete={onDeleteSupplierPurchase}
             onCancel={onCancelSupplierPurchase}
@@ -5667,7 +5637,15 @@ function SupplierPurchaseForm({
   onSaveAlias: (alias: { supplierName: string; originalLabel: string; productId: string }) => Promise<void>;
   onCancelEdit: () => void;
 }) {
-  const firstProductId = products[0]?.id || "";
+  const selectableProducts = useMemo(
+    () => filterOrdinaryProducts(products),
+    [products],
+  );
+  const productById = useMemo(
+    () => new Map(selectableProducts.map((product) => [product.id, product])),
+    [selectableProducts],
+  );
+  const firstProductId = selectableProducts[0]?.id || "";
   const [supplierName, setSupplierName] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(toDateInputValue(new Date()));
@@ -5692,19 +5670,23 @@ function SupplierPurchaseForm({
     setStatus(editingPurchase.status === "validated" ? "validated" : "draft");
     setLines(
       editingPurchase.lines?.length
-        ? editingPurchase.lines.map((line, index) => ({
-            ...emptySupplierLine(firstProductId),
-            ...line,
-            id: line.id || `line-${index + 1}`,
-          }))
+        ? editingPurchase.lines.map((line, index) => {
+            const productId = String(line.productId || "");
+            const selectableProductId = productById.has(productId) ? productId : "";
+            return {
+              ...emptySupplierLine(firstProductId),
+              ...line,
+              id: line.id || `line-${index + 1}`,
+              productId: selectableProductId,
+              productName: selectableProductId ? line.productName : "",
+              productInternalReference: selectableProductId
+                ? line.productInternalReference
+                : "",
+            };
+          })
         : [emptySupplierLine(firstProductId)],
     );
-  }, [editingPurchase, firstProductId]);
-
-  const productById = useMemo(
-    () => new Map(products.map((product) => [product.id, product])),
-    [products],
-  );
+  }, [editingPurchase, firstProductId, productById]);
   let preview: SupplierPurchase | null = null;
   try {
     preview = normalizeSupplierPurchaseInput(buildPayload()) as SupplierPurchase;
@@ -5807,7 +5789,7 @@ function SupplierPurchaseForm({
                 <td className="px-3 py-3">
                   <select className="input-field min-w-56" value={line.productId} onChange={(event) => updateLine(index, { productId: event.target.value })}>
                     <option value="">Selectionner un produit</option>
-                    {products.map((product) => (
+                    {selectableProducts.map((product) => (
                       <option key={product.id} value={product.id}>
                         {product.internalReference ? `${product.internalReference} - ` : ""}{product.name}
                       </option>
@@ -6925,7 +6907,7 @@ function AdminOrders({
               </div>
               {AdminCagnotteTools && shouldMountCagnotteAdminTools({ displayEnabled: CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED, orderSource, order }) && (
                 <Suspense fallback={<div className="mt-4 rounded-md border border-forest/10 p-4 text-sm">Chargement des outils administratifs…</div>}>
-                  <div className="mt-4"><AdminCagnotteTools orderId={order.id} enabled={CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED} onOrderReload={() => onRefreshOrder?.(order.id)} /></div>
+                  <div className="mt-4"><AdminCagnotteTools orderId={order.id} enabled={CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED} mutationsEnabled={cagnotteAdminMutationsAllowed(order)} onOrderReload={() => onRefreshOrder?.(order.id)} /></div>
                 </Suspense>
               )}
             </article>
@@ -7501,7 +7483,7 @@ function DesktopOrderCard({
       {AdminCagnotteTools && shouldMountCagnotteAdminTools({ displayEnabled: CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED, orderSource, order }) && (
         <Suspense fallback={<div className="mt-4 rounded-md border border-forest/10 p-4 text-sm">Chargement des outils administratifs…</div>}>
           <div className="mt-4">
-            <AdminCagnotteTools orderId={order.id} enabled={CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED} onOrderReload={onRefresh} />
+            <AdminCagnotteTools orderId={order.id} enabled={CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED} mutationsEnabled={cagnotteAdminMutationsAllowed(order)} onOrderReload={onRefresh} />
           </div>
         </Suspense>
       )}
@@ -8846,83 +8828,6 @@ function supplierMatchLabel(
 }
 function formatCurrency(value: number) {
   return `${formatEuro(value)} EUR`;
-}
-
-function buildDashboardMetrics(
-  products: Product[],
-  orders: {
-    paymentStatus: string;
-    orderStatus: string;
-    delivery: string;
-    total: string;
-  }[],
-): AdminMetric[] {
-  const activeOrders = orders.filter((order) => order.orderStatus !== "cancelled");
-  const paidOrders = activeOrders.filter((order) => order.paymentStatus === "paid");
-  const paymentToConfirm = activeOrders.filter((order) =>
-    ["to_confirm", "payment_link_sent", "pending"].includes(order.paymentStatus),
-  );
-  const preparingOrders = activeOrders.filter((order) =>
-    [
-      "new",
-      "contact_required",
-      "confirmed",
-      "preparing",
-    ].includes(order.orderStatus),
-  );
-  const deliveryOrders = activeOrders.filter((order) =>
-    order.orderStatus === "out_for_delivery",
-  );
-  const lowStockProducts = products.filter(
-    (product) => product.stock <= product.lowStockThreshold,
-  );
-  const activeProducts = products.filter((product) => product.isActive);
-  const totalStock = activeProducts.reduce(
-    (sum, product) => sum + Number(product.stock || 0),
-    0,
-  );
-
-  return [
-    {
-      label: "Règlements à suivre",
-      value: String(paymentToConfirm.length),
-      detail: `${paidOrders.length} déjà réglé(s)`,
-    },
-    {
-      label: "À préparer",
-      value: String(preparingOrders.length),
-      detail: "Nouvelles, à confirmer ou à préparer",
-    },
-    {
-      label: "En livraison",
-      value: String(deliveryOrders.length),
-      detail: "Commandes en cours de livraison",
-    },
-    {
-      label: "Produits actifs",
-      value: String(activeProducts.length),
-      detail: "Catalogue public",
-    },
-    {
-      label: "Stock total",
-      value: `${totalStock} g`,
-      detail: "Produits actifs",
-    },
-    {
-      label: "Stocks bas",
-      value: String(lowStockProducts.length),
-      detail: "Selon seuil produit",
-    },
-    {
-      label: "Ruptures",
-      value: String(products.filter((product) => product.stock <= 0).length),
-      detail: "Stock à 0 g",
-    },
-  ];
-}
-
-function parseEuro(value: string) {
-  return Number(value.replace("EUR", "").replace(",", ".").trim()) || 0;
 }
 
 function formatEuro(value: number) {
