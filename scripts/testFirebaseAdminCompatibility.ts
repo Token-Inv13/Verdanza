@@ -56,6 +56,8 @@ const invoicesSource = readFileSync(resolve("api/invoices.ts"), "utf8");
 const bootstrapAuthSource = readFileSync(resolve("scripts/bootstrapAdminAuth.ts"), "utf8");
 
 assert.match(firebaseAdminSource, /return getStorage\(\)\.bucket\(\);/);
+assert.doesNotMatch(firebaseAdminSource, /firebase-admin\/auth/);
+assert.doesNotMatch(firebaseAdminSource, /\bgetAuth\s*\(/);
 assert.match(invoicesSource, /bucket\.file\(path\)\.delete\(\{ ignoreNotFound: true \}\)/);
 assert.match(invoicesSource, /catch \{\s*failed\.push\(path\);/);
 assert.match(bootstrapAuthSource, /const auth = getAuth\(\);/);

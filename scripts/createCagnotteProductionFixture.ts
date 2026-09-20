@@ -3,6 +3,7 @@ import http from "node:http";
 import https from "node:https";
 import { syncBuiltinESMExports } from "node:module";
 import { pathToFileURL } from "node:url";
+import { getAuth } from "firebase-admin/auth";
 import type { Firestore } from "firebase-admin/firestore";
 import { cagnotteLedgerMovementId } from "../api/_server/cagnotteLedger.js";
 import { commitCheckoutOrder } from "../api/_server/checkoutOrder.js";
@@ -16,7 +17,7 @@ import {
 } from "../api/_server/orderStatusTransition.js";
 import { resolveCagnotteProductionProgram } from "../api/_server/cagnotteProgram.js";
 import type { CagnotteProductionProgram } from "../api/_server/cagnotteLedgerTypes.js";
-import { getAdminAuth, getAdminDb, getAdminProjectId } from "../api/_server/firebaseAdmin.js";
+import { getAdminDb, getAdminProjectId } from "../api/_server/firebaseAdmin.js";
 import {
   CAGNOTTE_PRODUCTION_FIXTURE_CHALLENGE,
   CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID,
@@ -616,9 +617,10 @@ async function main() {
   });
   const restoreNetwork = installCagnotteProductionFixtureOutboundGuard();
   try {
-    const auth = parsed.command === "inspect" ? undefined : getAdminAuth();
+    const db = getAdminDb();
+    const auth = parsed.command === "inspect" ? undefined : getAuth();
     const result = await runCagnotteProductionFixtureCommand({
-      db: getAdminDb(),
+      db,
       command: parsed.command,
       capability,
       firebaseProjectId: CAGNOTTE_PRODUCTION_FIXTURE_PROJECT_ID,
