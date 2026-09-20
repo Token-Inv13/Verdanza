@@ -114,6 +114,22 @@ export function cagnotteProductionFixtureDeliveredStatusChange() {
   };
 }
 
+export function cagnotteProductionFixtureUpdatedAtForState(
+  paymentStatus: unknown,
+  orderStatus: unknown,
+) {
+  if (paymentStatus === "to_confirm" && orderStatus === "contact_required") {
+    return new Date(CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS).toISOString();
+  }
+  if (paymentStatus === "paid" && orderStatus === "contact_required") {
+    return CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT;
+  }
+  if (paymentStatus === "paid" && orderStatus === "delivered") {
+    return CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_AT;
+  }
+  throw new Error("production_fixture_status_transition_invalid");
+}
+
 export function assertCagnotteProductionFixtureStatusTransition(input: {
   capability: unknown;
   order: unknown;

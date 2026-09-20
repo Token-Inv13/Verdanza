@@ -8,6 +8,7 @@ import {
 import http from "node:http";
 import https from "node:https";
 import { isDeepStrictEqual } from "node:util";
+import { Timestamp } from "firebase-admin/firestore";
 import { connectCagnotteEmulator, CAGNOTTE_DEMO } from "./cagnotteEmulator.js";
 import { expectBlockedNetwork } from "./cagnotteNetworkGuard.js";
 import { commitCheckoutOrder } from "../api/_server/checkoutOrder.js";
@@ -1798,6 +1799,111 @@ try {
     }
   });
 
+  await check("taches outbox fixture strictes bloquent chaque corruption au rejeu create", async () => {
+    const ref = cagnotteProductionFixtureReferences(db).sideEffects;
+    const original = (await ref.get()).data();
+    ok(original);
+    const originalTask = fixtureOutboxTask(original, "draft_invoice");
+    const alternateTimestamp = Timestamp.fromMillis(
+      fixtureTestTimestampMillis(originalTask.createdAt) + 1_000,
+    );
+    const corruptions: Array<readonly [
+      string,
+      (task: Record<string, unknown>) => void,
+    ]> = [
+      ["lastAttemptAt non null", (task) => { task.lastAttemptAt = alternateTimestamp; }],
+      ["leaseUntil non null", (task) => { task.leaseUntil = alternateTimestamp; }],
+      ["completedAt absent", (task) => { delete task.completedAt; }],
+      ["completedAt null", (task) => { task.completedAt = null; }],
+      ["completedAt string", (task) => { task.completedAt = "2026-09-18T12:00:00.000Z"; }],
+      ["completedAt divergent", (task) => { task.completedAt = alternateTimestamp; }],
+      ["createdAt absent", (task) => { delete task.createdAt; }],
+      ["createdAt null", (task) => { task.createdAt = null; }],
+      ["createdAt string", (task) => { task.createdAt = "2026-09-18T12:00:00.000Z"; }],
+      ["metadata supplementaire", (task) => { task.deliveryMetadata = { forged: true }; }],
+      ["attempts non nul", (task) => { task.attempts = 1; }],
+      ...(["pending", "processing", "sent", "failed"] as const).map((status) => [
+        `status ${status}`,
+        (task: Record<string, unknown>) => { task.status = status; },
+      ] as const),
+    ];
+
+    for (const [name, mutate] of corruptions) {
+      const corrupted = fixtureOutboxWithTaskMutation(original, "draft_invoice", mutate);
+      await ref.set(corrupted);
+      try {
+        const before = await stableFinancialState();
+        const inspection = await inspectCagnotteProductionFixture(db);
+        deepStrictEqual(inspection.sideEffects.data, corrupted, name);
+        await rejects(() => command("create"), /production_fixture_outbox_collision/, name);
+        deepStrictEqual(await stableFinancialState(), before, name);
+        deepStrictEqual((await ref.get()).data(), corrupted, name);
+      } finally {
+        await ref.set(original);
+      }
+    }
+  });
+
+  await check("forme top-level outbox fixture stricte bloque le rejeu create", async () => {
+    const ref = cagnotteProductionFixtureReferences(db).sideEffects;
+    const original = (await ref.get()).data();
+    ok(original);
+    const alternateTimestamp = Timestamp.fromMillis(
+      fixtureTestTimestampMillis(original.createdAt) + 1_000,
+    );
+    const corruptions: Array<readonly [
+      string,
+      (outbox: Record<string, unknown>) => void,
+    ]> = [
+      ["metadata supplementaire", (outbox) => { outbox.metadata = {}; }],
+      ["createdAt absent", (outbox) => { delete outbox.createdAt; }],
+      ["createdAt null", (outbox) => { outbox.createdAt = null; }],
+      ["createdAt string", (outbox) => { outbox.createdAt = "2026-09-18T12:00:00.000Z"; }],
+      ["updatedAt absent", (outbox) => { delete outbox.updatedAt; }],
+      ["updatedAt null", (outbox) => { outbox.updatedAt = null; }],
+      ["updatedAt string", (outbox) => { outbox.updatedAt = "2026-09-18T12:00:00.000Z"; }],
+      ["updatedAt divergent", (outbox) => { outbox.updatedAt = alternateTimestamp; }],
+    ];
+    for (const [name, mutate] of corruptions) {
+      const corrupted = { ...original };
+      mutate(corrupted);
+      await ref.set(corrupted);
+      try {
+        const before = await stableFinancialState();
+        await rejects(() => command("create"), /production_fixture_outbox_collision/, name);
+        deepStrictEqual(await stableFinancialState(), before, name);
+      } finally {
+        await ref.set(original);
+      }
+    }
+  });
+
+  await check("tache outbox corrompue bloque mark-paid et reste visible en inspection", async () => {
+    const ref = cagnotteProductionFixtureReferences(db).sideEffects;
+    const original = (await ref.get()).data();
+    ok(original);
+    const task = fixtureOutboxTask(original, "customer_confirmation_email");
+    const corrupted = fixtureOutboxWithTaskMutation(
+      original,
+      "customer_confirmation_email",
+      (value) => {
+        value.lastAttemptAt = Timestamp.fromMillis(
+          fixtureTestTimestampMillis(task.createdAt) + 1_000,
+        );
+      },
+    );
+    await ref.set(corrupted);
+    try {
+      const before = await stableFinancialState();
+      deepStrictEqual((await inspectCagnotteProductionFixture(db)).sideEffects.data, corrupted);
+      await rejects(() => command("mark-paid"), /production_fixture_outbox_collision/);
+      deepStrictEqual(await stableFinancialState(), before);
+      deepStrictEqual((await ref.get()).data(), corrupted);
+    } finally {
+      await ref.set(original);
+    }
+  });
+
   await check("checkoutRequest, stock et outbox sont deterministes et neutres", async () => {
     const request = await db.collection("checkoutRequests")
       .doc(CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID).get();
@@ -1808,12 +1914,33 @@ try {
     deepStrictEqual(movements.docs[0]?.data(), cagnotteProductionFixtureStockMovementDocument());
     const outbox = (await db.collection("orderSideEffects")
       .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).data()!;
+    deepStrictEqual(
+      Object.keys(outbox).sort(),
+      ["orderId", "productionFixture", "createdAt", "updatedAt", "tasks"].sort(),
+    );
     equal(outbox.orderId, CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID);
     deepStrictEqual(outbox.productionFixture, cagnotteProductionFixtureMarker());
+    const outboxTimestamp = fixtureTestTimestampMillis(outbox.createdAt);
+    equal(fixtureTestTimestampMillis(outbox.updatedAt), outboxTimestamp);
     deepStrictEqual(Object.keys(outbox.tasks).sort(), [...orderSideEffectTaskNames].sort());
     for (const task of orderSideEffectTaskNames) {
+      deepStrictEqual(
+        Object.keys(outbox.tasks[task]).sort(),
+        [
+          "status",
+          "attempts",
+          "createdAt",
+          "lastAttemptAt",
+          "completedAt",
+          "lastErrorCode",
+          "skipReason",
+          "leaseUntil",
+        ].sort(),
+      );
       equal(outbox.tasks[task].status, "skipped");
       equal(outbox.tasks[task].attempts, 0);
+      equal(fixtureTestTimestampMillis(outbox.tasks[task].createdAt), outboxTimestamp);
+      equal(fixtureTestTimestampMillis(outbox.tasks[task].completedAt), outboxTimestamp);
       equal(outbox.tasks[task].lastAttemptAt, null);
       equal(outbox.tasks[task].lastErrorCode, CAGNOTTE_PRODUCTION_FIXTURE_SIDE_EFFECT_REASON);
       equal(outbox.tasks[task].skipReason, CAGNOTTE_PRODUCTION_FIXTURE_SIDE_EFFECT_REASON);
@@ -1889,6 +2016,10 @@ try {
 
   await check("wallet exact apres paiement autorise le rejeu create idempotent", async () => {
     await command("mark-paid");
+    const orderRef = cagnotteProductionFixtureReferences(db).order;
+    const paidOrder = (await orderRef.get()).data();
+    ok(paidOrder);
+    equal(paidOrder.updatedAt, CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT);
     const inspection = await inspectCagnotteProductionFixture(db);
     healthyInspectionMovementIds.paid = inspectedMovementIds(inspection);
     healthyInspectionStockMovementIds.paid = inspectedStockMovementIds(inspection);
@@ -1901,9 +2032,12 @@ try {
     equal(accrual.deliveryConfirmed, false);
     equal((await db.collection("cagnotteReservations")
       .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
-    const beforePaidReplay = await stableFinancialState();
+    const beforePaidReplay = (await orderRef.get()).data();
+    ok(beforePaidReplay);
+    const beforePaidReplayState = await stableFinancialState();
     await command("mark-paid");
-    deepStrictEqual(await stableFinancialState(), beforePaidReplay);
+    deepStrictEqual((await orderRef.get()).data(), beforePaidReplay);
+    deepStrictEqual(await stableFinancialState(), beforePaidReplayState);
     const beforeReplay = await stableFinancialState();
     await command("create");
     deepStrictEqual(await stableFinancialState(), beforeReplay);
@@ -1919,6 +2053,31 @@ try {
       const before = await stableFinancialState();
       const inspection = await inspectCagnotteProductionFixture(db);
       equal(inspection.sideEffects.data?.orderId, "another-order");
+      await rejects(() => command("mark-delivered"), /production_fixture_outbox_collision/);
+      deepStrictEqual(await stableFinancialState(), before);
+      deepStrictEqual((await ref.get()).data(), corrupted);
+    } finally {
+      await ref.set(original);
+    }
+  });
+
+  await check("tache outbox corrompue bloque mark-delivered avant mutation", async () => {
+    const ref = cagnotteProductionFixtureReferences(db).sideEffects;
+    const original = (await ref.get()).data();
+    ok(original);
+    const task = fixtureOutboxTask(original, "admin_notification_email");
+    const corrupted = fixtureOutboxWithTaskMutation(
+      original,
+      "admin_notification_email",
+      (value) => {
+        value.leaseUntil = Timestamp.fromMillis(
+          fixtureTestTimestampMillis(task.createdAt) + 1_000,
+        );
+      },
+    );
+    await ref.set(corrupted);
+    try {
+      const before = await stableFinancialState();
       await rejects(() => command("mark-delivered"), /production_fixture_outbox_collision/);
       deepStrictEqual(await stableFinancialState(), before);
       deepStrictEqual((await ref.get()).data(), corrupted);
@@ -1945,6 +2104,7 @@ try {
       }],
       ["paymentConfirmedBy absent", (value) => { delete value.paymentConfirmedBy; }],
       ["paymentConfirmedBy non null", (value) => { value.paymentConfirmedBy = "admin@fixture.test"; }],
+      ["updatedAt paid incorrect", (value) => { value.updatedAt = "2026-09-18T13:00:01.000Z"; }],
       ["historique paid supplementaire", (value) => {
         value.statusHistory.push({ ...value.statusHistory[0] });
       }],
@@ -2263,6 +2423,10 @@ try {
 
   await check("wallet exact apres livraison autorise le rejeu create idempotent", async () => {
     await command("mark-delivered");
+    const orderRef = cagnotteProductionFixtureReferences(db).order;
+    const deliveredOrder = (await orderRef.get()).data();
+    ok(deliveredOrder);
+    equal(deliveredOrder.updatedAt, CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_AT);
     const inspection = await inspectCagnotteProductionFixture(db);
     healthyInspectionMovementIds.delivered = inspectedMovementIds(inspection);
     healthyInspectionStockMovementIds.delivered = inspectedStockMovementIds(inspection);
@@ -2275,9 +2439,12 @@ try {
     equal((await fixtureMovements()).length, 3);
     equal((await db.collection("cagnotteReservations")
       .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
-    const beforeDeliveredReplay = await stableFinancialState();
+    const beforeDeliveredReplay = (await orderRef.get()).data();
+    ok(beforeDeliveredReplay);
+    const beforeDeliveredReplayState = await stableFinancialState();
     await command("mark-delivered");
-    deepStrictEqual(await stableFinancialState(), beforeDeliveredReplay);
+    deepStrictEqual((await orderRef.get()).data(), beforeDeliveredReplay);
+    deepStrictEqual(await stableFinancialState(), beforeDeliveredReplayState);
     const beforeReplay = await stableFinancialState();
     await command("create");
     deepStrictEqual(await stableFinancialState(), beforeReplay);
@@ -2314,6 +2481,9 @@ try {
       }],
       ["audit paiement delivered altere", (value) => {
         value.paymentConfirmedAt = "2026-09-18T14:00:01.000Z";
+      }],
+      ["updatedAt delivered incorrect", (value) => {
+        value.updatedAt = "2026-09-18T14:00:01.000Z";
       }],
       ["snapshot cout delivered altere", (value) => {
         value.items[0].purchaseCostTotalSnapshot = 10;
@@ -2392,9 +2562,16 @@ try {
 
   await check("rejeu create, paid et delivered ne duplique aucun journal", async () => {
     const before = await stableFinancialState();
+    const orderRef = cagnotteProductionFixtureReferences(db).order;
+    const beforeOrder = (await orderRef.get()).data();
+    ok(beforeOrder);
+    equal(beforeOrder.updatedAt, CAGNOTTE_PRODUCTION_FIXTURE_DELIVERED_AT);
     await command("create");
+    deepStrictEqual((await orderRef.get()).data(), beforeOrder);
     await command("mark-paid");
+    deepStrictEqual((await orderRef.get()).data(), beforeOrder);
     await command("mark-delivered");
+    deepStrictEqual((await orderRef.get()).data(), beforeOrder);
     deepStrictEqual(await stableFinancialState(), before);
     equal((await db.collection("cagnotteAccruals")
       .where("orderId", "==", CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).size, 1);
@@ -2713,6 +2890,46 @@ function fixturePaidOrderItems() {
     purchaseCostTotalSnapshot: null,
     purchaseCostCapturedAt: CAGNOTTE_PRODUCTION_FIXTURE_PAID_AT,
   }));
+}
+
+function fixtureOutboxTask(
+  outbox: Record<string, unknown>,
+  taskName: (typeof orderSideEffectTaskNames)[number],
+) {
+  const tasks = outbox.tasks;
+  if (!tasks || typeof tasks !== "object" || Array.isArray(tasks)) {
+    throw new Error("production_fixture_test_outbox_tasks_missing");
+  }
+  const task = Reflect.get(tasks, taskName);
+  if (!task || typeof task !== "object" || Array.isArray(task)) {
+    throw new Error("production_fixture_test_outbox_task_missing");
+  }
+  return task as Record<string, unknown>;
+}
+
+function fixtureOutboxWithTaskMutation(
+  original: Record<string, unknown>,
+  taskName: (typeof orderSideEffectTaskNames)[number],
+  mutate: (task: Record<string, unknown>) => void,
+) {
+  const tasks = original.tasks;
+  if (!tasks || typeof tasks !== "object" || Array.isArray(tasks)) {
+    throw new Error("production_fixture_test_outbox_tasks_missing");
+  }
+  const task = { ...fixtureOutboxTask(original, taskName) };
+  mutate(task);
+  return {
+    ...original,
+    tasks: {
+      ...tasks,
+      [taskName]: task,
+    },
+  };
+}
+
+function fixtureTestTimestampMillis(value: unknown) {
+  ok(value instanceof Timestamp);
+  return value.toMillis();
 }
 
 function fixtureOrderCorruption(

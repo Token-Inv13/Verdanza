@@ -15,6 +15,7 @@ import type { PurchaseAnalyticsProcessResult } from "./purchaseAnalytics.js";
 import type { Order, OrderStatus, PaymentStatus, ProductCost, SupplierPurchase, FinalPaymentMethod, PaymentLinkChannel } from "../../src/types/index.js";
 import {
   assertCagnotteProductionFixtureStatusTransition,
+  cagnotteProductionFixtureUpdatedAtForState,
   hasPersistedCagnotteProductionFixtureMarker,
   isExactCagnotteProductionFixtureOrder,
   type CagnotteProductionFixtureCapability,
@@ -112,10 +113,13 @@ export async function commitOrderStatusTransition({
     }
 
     const nextStatus = body.orderStatus ?? order.orderStatus;
+    const fixtureNextPaymentStatus = body.paymentStatus ?? order.paymentStatus;
     const nextFinalPaymentMethod =
       body.finalPaymentMethod || order.finalPaymentMethod || undefined;
     const update: Record<string, unknown> = {
-      updatedAt: FieldValue.serverTimestamp(),
+      updatedAt: productionFixture
+        ? cagnotteProductionFixtureUpdatedAtForState(fixtureNextPaymentStatus, nextStatus)
+        : FieldValue.serverTimestamp(),
     };
     if (body.unpaidReview || (body.orderStatus === "cancelled" && hasCagnotteEnrollment(order))) {
       const unpaidControl = await prepareUnpaidReviewControl({

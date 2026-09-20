@@ -1,11 +1,14 @@
 import { isDeepStrictEqual } from "node:util";
-import type {
-  DocumentSnapshot,
-  Firestore,
-  Transaction,
+import {
+  Timestamp,
+  type DocumentSnapshot,
+  type Firestore,
+  type Transaction,
 } from "firebase-admin/firestore";
+import type {
+  Order,
+} from "../../src/types/index.js";
 import { calculateCagnotte } from "../../src/lib/cagnotteCalculations.js";
-import type { Order } from "../../src/types/index.js";
 import type { CheckoutRequestBody, PricedCheckout } from "./checkout.js";
 import {
   cagnotteLedgerMovementId,
@@ -38,6 +41,7 @@ import {
   cagnotteProductionFixturePricedCheckout,
   cagnotteProductionFixtureProductDocument,
   cagnotteProductionFixtureStockMovementDocument,
+  cagnotteProductionFixtureUpdatedAtForState,
   isExactCagnotteProductionFixtureMarker,
   isExactCagnotteProductionFixtureOrder,
 } from "./cagnotteProductionFixture.js";
@@ -382,29 +386,29 @@ function assertFixtureDocuments(input: {
     throw new Error("production_fixture_checkout_request_collision");
   }
 
-  const outbox = input.sideEffects.data() || {};
-  const tasks = outbox.tasks as Record<string, Record<string, unknown>> | undefined;
+  const outbox = input.sideEffects.data();
   if (
+    !isRecord(outbox) ||
+    !isDeepStrictEqual(
+      Object.keys(outbox).sort(),
+      ["orderId", "productionFixture", "createdAt", "updatedAt", "tasks"].sort(),
+    ) ||
     outbox.orderId !== CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID ||
     !isExactCagnotteProductionFixtureMarker(outbox.productionFixture) ||
-    !tasks ||
+    !isRecord(outbox.tasks) ||
     !isDeepStrictEqual(
-      Object.keys(tasks).sort(),
+      Object.keys(outbox.tasks).sort(),
       [...orderSideEffectTaskNames].sort(),
     )
   ) {
-    throw new Error("production_fixture_outbox_collision");
+    fixtureOutboxCollision();
+  }
+  const outboxCreatedAt = fixtureTimestampMillis(outbox.createdAt);
+  if (fixtureTimestampMillis(outbox.updatedAt) !== outboxCreatedAt) {
+    fixtureOutboxCollision();
   }
   for (const task of orderSideEffectTaskNames) {
-    const taskState = tasks[task];
-    if (
-      taskState?.status !== "skipped" ||
-      taskState.attempts !== 0 ||
-      taskState.lastErrorCode !== CAGNOTTE_PRODUCTION_FIXTURE_SIDE_EFFECT_REASON ||
-      taskState.skipReason !== CAGNOTTE_PRODUCTION_FIXTURE_SIDE_EFFECT_REASON
-    ) {
-      throw new Error("production_fixture_outbox_collision");
-    }
+    assertFixtureSideEffectsTask(outbox.tasks[task], outboxCreatedAt);
   }
 
   if (input.reservation.exists) {
@@ -488,6 +492,14 @@ function assertFixtureLifecycleAudit(
   order: Order,
   state: CagnotteProductionFixtureState,
 ) {
+  if (
+    order.updatedAt !== cagnotteProductionFixtureUpdatedAtForState(
+      order.paymentStatus,
+      order.orderStatus,
+    )
+  ) {
+    fixtureOrderCollision();
+  }
   const initialHistory = {
     status: "contact_required",
     changedAt: new Date(CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS).toISOString(),
@@ -517,9 +529,6 @@ function assertFixtureLifecycleAudit(
   const expectedItems = cagnotteProductionFixturePricedCheckout().orderItems;
   if (state === "created") {
     if (
-      order.updatedAt !== new Date(
-        CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS,
-      ).toISOString() ||
       paymentAuditFields.some((field) => Object.prototype.hasOwnProperty.call(order, field)) ||
       !isDeepStrictEqual(order.items, expectedItems)
     ) {
@@ -744,6 +753,53 @@ function assertTransitionPrecondition(
 
 function fixtureOrderCollision(): never {
   throw new Error("production_fixture_order_collision");
+}
+
+function assertFixtureSideEffectsTask(value: unknown, expectedTimestampMs: number) {
+  if (
+    !isRecord(value) ||
+    !isDeepStrictEqual(
+      Object.keys(value).sort(),
+      [
+        "status",
+        "attempts",
+        "createdAt",
+        "lastAttemptAt",
+        "completedAt",
+        "lastErrorCode",
+        "skipReason",
+        "leaseUntil",
+      ].sort(),
+    ) ||
+    value.status !== "skipped" ||
+    value.attempts !== 0 ||
+    value.lastAttemptAt !== null ||
+    value.lastErrorCode !== CAGNOTTE_PRODUCTION_FIXTURE_SIDE_EFFECT_REASON ||
+    value.skipReason !== CAGNOTTE_PRODUCTION_FIXTURE_SIDE_EFFECT_REASON ||
+    value.leaseUntil !== null
+  ) {
+    fixtureOutboxCollision();
+  }
+  const createdAt = fixtureTimestampMillis(value.createdAt);
+  const completedAt = fixtureTimestampMillis(value.completedAt);
+  if (createdAt !== completedAt || createdAt !== expectedTimestampMs) {
+    fixtureOutboxCollision();
+  }
+}
+
+function fixtureTimestampMillis(value: unknown) {
+  if (!(value instanceof Timestamp)) fixtureOutboxCollision();
+  const millis = value.toMillis();
+  if (!Number.isFinite(millis)) fixtureOutboxCollision();
+  return millis;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function fixtureOutboxCollision(): never {
+  throw new Error("production_fixture_outbox_collision");
 }
 
 function fixtureWalletCollision(): never {
