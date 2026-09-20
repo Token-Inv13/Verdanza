@@ -69,6 +69,7 @@ import {
   CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_TOOL_UID,
   CAGNOTTE_PRODUCTION_FIXTURE_UID,
+  cagnotteProductionFixtureMarker,
   cagnotteProductionFixtureCheckoutBody,
   cagnotteProductionFixtureCustomerDocument,
   cagnotteProductionFixtureDeliveredStatusChange,
@@ -1774,6 +1775,29 @@ try {
     }
   });
 
+  await check("orderId outbox absent null vide et divergent bloque create et mark-paid", async () => {
+    const ref = cagnotteProductionFixtureReferences(db).sideEffects;
+    const original = (await ref.get()).data();
+    ok(original);
+    for (const value of [undefined, null, "", "another-order"] as const) {
+      const corrupted = { ...original };
+      if (value === undefined) delete corrupted.orderId;
+      else corrupted.orderId = value;
+      await ref.set(corrupted);
+      try {
+        const before = await stableFinancialState();
+        const inspection = await inspectCagnotteProductionFixture(db);
+        equal(inspection.sideEffects.data?.orderId, value);
+        await rejects(() => command("create"), /production_fixture_outbox_collision/);
+        await rejects(() => command("mark-paid"), /production_fixture_outbox_collision/);
+        deepStrictEqual(await stableFinancialState(), before);
+        deepStrictEqual((await ref.get()).data(), corrupted);
+      } finally {
+        await ref.set(original);
+      }
+    }
+  });
+
   await check("checkoutRequest, stock et outbox sont deterministes et neutres", async () => {
     const request = await db.collection("checkoutRequests")
       .doc(CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID).get();
@@ -1784,11 +1808,16 @@ try {
     deepStrictEqual(movements.docs[0]?.data(), cagnotteProductionFixtureStockMovementDocument());
     const outbox = (await db.collection("orderSideEffects")
       .doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).data()!;
+    equal(outbox.orderId, CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID);
+    deepStrictEqual(outbox.productionFixture, cagnotteProductionFixtureMarker());
+    deepStrictEqual(Object.keys(outbox.tasks).sort(), [...orderSideEffectTaskNames].sort());
     for (const task of orderSideEffectTaskNames) {
       equal(outbox.tasks[task].status, "skipped");
       equal(outbox.tasks[task].attempts, 0);
+      equal(outbox.tasks[task].lastAttemptAt, null);
       equal(outbox.tasks[task].lastErrorCode, CAGNOTTE_PRODUCTION_FIXTURE_SIDE_EFFECT_REASON);
       equal(outbox.tasks[task].skipReason, CAGNOTTE_PRODUCTION_FIXTURE_SIDE_EFFECT_REASON);
+      equal(outbox.tasks[task].leaseUntil, null);
     }
     await rejects(
       () => resetOrderSideEffectTask(db, CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID, "customer_confirmation_email"),
@@ -1878,6 +1907,24 @@ try {
     const beforeReplay = await stableFinancialState();
     await command("create");
     deepStrictEqual(await stableFinancialState(), beforeReplay);
+  });
+
+  await check("orderId outbox divergent bloque mark-delivered sans mutation", async () => {
+    const ref = cagnotteProductionFixtureReferences(db).sideEffects;
+    const original = (await ref.get()).data();
+    ok(original);
+    const corrupted = { ...original, orderId: "another-order" };
+    await ref.set(corrupted);
+    try {
+      const before = await stableFinancialState();
+      const inspection = await inspectCagnotteProductionFixture(db);
+      equal(inspection.sideEffects.data?.orderId, "another-order");
+      await rejects(() => command("mark-delivered"), /production_fixture_outbox_collision/);
+      deepStrictEqual(await stableFinancialState(), before);
+      deepStrictEqual((await ref.get()).data(), corrupted);
+    } finally {
+      await ref.set(original);
+    }
   });
 
   await check("cycle paid exige audit paiement, historique et snapshots exacts", async () => {

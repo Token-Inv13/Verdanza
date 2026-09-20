@@ -385,6 +385,7 @@ function assertFixtureDocuments(input: {
   const outbox = input.sideEffects.data() || {};
   const tasks = outbox.tasks as Record<string, Record<string, unknown>> | undefined;
   if (
+    outbox.orderId !== CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID ||
     !isExactCagnotteProductionFixtureMarker(outbox.productionFixture) ||
     !tasks ||
     !isDeepStrictEqual(
