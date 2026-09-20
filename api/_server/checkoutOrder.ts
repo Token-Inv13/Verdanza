@@ -26,6 +26,7 @@ import {
   assertCagnotteProductionFixtureOrderItem,
   assertCagnotteProductionFixtureProduct,
   cagnotteProductionFixtureStockMovementDocument,
+  CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS,
   CAGNOTTE_PRODUCTION_FIXTURE_STOCK_MOVEMENT_ID,
   CAGNOTTE_PRODUCTION_FIXTURE_UID,
@@ -83,6 +84,12 @@ export async function commitCheckoutOrder(input: {
         body: body as unknown as Record<string, unknown>,
         priced: priced as unknown as Record<string, unknown>,
       });
+  if (
+    normalizedRequestId === CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID &&
+    !fixtureMarker
+  ) {
+    throw new Error("production_fixture_checkout_request_id_reserved");
+  }
   if (customerId === CAGNOTTE_PRODUCTION_FIXTURE_UID && !fixtureMarker) {
     throw new Error("production_fixture_customer_checkout_forbidden");
   }

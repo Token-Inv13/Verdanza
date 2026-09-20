@@ -512,6 +512,15 @@ try {
     }), /production_fixture_challenge_invalid/);
   });
 
+  await check("ID checkout fixture reserve refuse un commit direct sans capacite", async () => {
+    const before = await databaseCounts();
+    await rejects(() => commitFixtureCheckout({
+      productionFixtureCapability: undefined,
+      customerId: "ordinary-customer",
+    }), /production_fixture_checkout_request_id_reserved/);
+    deepStrictEqual(await databaseCounts(), before);
+  });
+
   await check("une capacite structurellement forgee est refusee avant toute ecriture", async () => {
     const before = await databaseCounts();
     const forgedCapability = {
@@ -968,6 +977,22 @@ try {
     await ref.set(divergent);
     await rejects(() => command("create"), /production_fixture_partial_collision/);
     deepStrictEqual((await ref.get()).data(), divergent);
+    await ref.delete();
+  });
+
+  await check("checkout request fixture preempte reste fail-closed sans nettoyage", async () => {
+    const ref = db.collection("checkoutRequests")
+      .doc(CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID);
+    const foreignRequest = {
+      orderId: "external-order",
+      payloadFingerprint: "external-payload",
+      createdAt: Timestamp.fromMillis(CAGNOTTE_PRODUCTION_FIXTURE_OPERATION_EPOCH_MS - 1),
+    };
+    await ref.set(foreignRequest);
+    const before = await databaseCounts();
+    await rejects(() => command("create"), /production_fixture_partial_collision/);
+    deepStrictEqual((await ref.get()).data(), foreignRequest);
+    deepStrictEqual(await databaseCounts(), before);
     await ref.delete();
   });
 
@@ -2792,9 +2817,15 @@ function commitFixtureCheckout(
   overrides: {
     productionFixtureCapability?: typeof capability;
     customerId?: string;
+    checkoutRequestId?: string;
   } = {},
 ) {
-  const body = fixtureBody();
+  const selectedCheckoutRequestId = overrides.checkoutRequestId ??
+    CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID;
+  const body = {
+    ...fixtureBody(),
+    checkoutRequestId: selectedCheckoutRequestId,
+  };
   const selectedCapability = Object.prototype.hasOwnProperty.call(
     overrides,
     "productionFixtureCapability",
@@ -2806,7 +2837,7 @@ function commitFixtureCheckout(
     db,
     body,
     priced: fixturePriced(),
-    checkoutRequestId: CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID,
+    checkoutRequestId: selectedCheckoutRequestId,
     payloadFingerprint: checkoutPayloadFingerprint(body),
     customerId,
     orderId: CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID,
@@ -2978,6 +3009,7 @@ async function assertFixtureCorruptionRejected(
 async function assertMarkedProductRejectedByOrdinaryCheckout(
   productDocument: Record<string, unknown>,
 ) {
+  const checkoutRequestId = "017f22e2-79b0-4d29-aad7-2f6f3f019999";
   const productRef = db.collection("products").doc(CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID);
   await productRef.set(productDocument);
   const before = await databaseCounts();
@@ -2986,12 +3018,13 @@ async function assertMarkedProductRejectedByOrdinaryCheckout(
     () => commitFixtureCheckout({
       productionFixtureCapability: undefined,
       customerId: "ordinary-fixture-product-customer",
+      checkoutRequestId,
     }),
     /Produit fixture indisponible/,
   );
   deepStrictEqual(await databaseCounts(), before);
   equal((await db.collection("orders").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
-  equal((await db.collection("checkoutRequests").doc(CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID).get()).exists, false);
+  equal((await db.collection("checkoutRequests").doc(checkoutRequestId).get()).exists, false);
   equal((await db.collection("orderSideEffects").doc(CAGNOTTE_PRODUCTION_FIXTURE_ORDER_ID).get()).exists, false);
   equal((await db.collection("stockMovements").get()).size, 0);
   await productRef.delete();
