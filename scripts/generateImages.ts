@@ -59,6 +59,10 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" }
 > = {
+  "analyse-cbd-nd-lod-loq": {
+    label: "Analyse CBD : ND, LOD et LOQ",
+    kind: "analysis",
+  },
   "isolat-spectre-large-complet-cbd": {
     label: "Isolat et spectres CBD",
     kind: "analysis",

@@ -6,6 +6,288 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "analyse-cbd-nd-lod-loq",
+    title: "Analyse CBD : comprendre ND, LOD et LOQ",
+    seoTitle: "Analyse CBD : comprendre ND, LOD et LOQ | Verdanza",
+    description:
+      "ND, LOD, LOQ ou inférieur à la limite : apprenez à lire ces mentions sur une analyse CBD sans confondre non-détection, absence et résultat quantifié.",
+    excerpt:
+      "ND, LOD et LOQ précisent ce qu'une méthode analytique peut détecter ou quantifier. Ces repères évitent de transformer une non-détection en valeur nulle.",
+    category: "Guide qualité",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-09-21T15:50:00+02:00",
+    dateModified: "2026-09-21T15:50:00+02:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/analyse-cbd-nd-lod-loq-1x1.webp",
+      landscape: "/images/blog/analyse-cbd-nd-lod-loq-4x3.webp",
+      wide: "/images/blog/analyse-cbd-nd-lod-loq-16x9.webp",
+    },
+    relatedSlugs: [
+      "pourcentage-mg-g-ppm-analyse-cbd",
+      "comment-lire-analyse-cbd",
+      "etiquette-numero-lot-cbd-tracabilite",
+    ],
+    links: [
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/pourcentage-mg-g-ppm-analyse-cbd",
+        label: "Comprendre %, mg/g et ppm",
+      },
+      {
+        to: "/blog/comment-lire-analyse-cbd",
+        label: "Lire une analyse CBD",
+      },
+      {
+        to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+        label: "Vérifier l'étiquette et le lot",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Un bulletin d'analyse ne présente pas toujours uniquement des
+            valeurs chiffrées. Les mentions ND, LOD, LOQ, « inférieur à la
+            limite » ou « non quantifié » indiquent les capacités et les limites
+            de la méthode utilisée. Leur lecture est essentielle pour ne pas
+            confondre une non-détection avec une absence certaine.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Une valeur ND n'est pas automatiquement égale à zéro. Elle signifie
+            que le composé n'a pas été détecté au-dessus de la limite annoncée
+            pour cette analyse, dans cet échantillon et avec cette méthode.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "trois-reperes",
+        text: "ND, LOD et LOQ : trois repères différents",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Ces abréviations décrivent le niveau de confiance associé à un
+            résultat. Elles ne remplacent ni l'unité ni la valeur de la limite,
+            qui doivent être lues dans le tableau, sa légende ou les notes du
+            laboratoire.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Repères pour lire les limites d'une analyse CBD.",
+          headers: ["Mention", "Signification générale", "Lecture prudente"],
+          rows: [
+            [
+              "ND",
+              "Non détecté au-dessus de la limite appliquée par la méthode.",
+              "Ne pas traduire automatiquement par zéro ou absence absolue.",
+            ],
+            [
+              "LOD",
+              "Limite de détection : niveau minimal auquel la méthode distingue un signal.",
+              "Un signal détectable n'est pas nécessairement quantifiable avec fiabilité.",
+            ],
+            [
+              "LOQ",
+              "Limite de quantification : niveau minimal auquel une valeur peut être chiffrée selon les critères du laboratoire.",
+              "Sous cette limite, une présence peut être signalée sans valeur quantitative robuste.",
+            ],
+            [
+              "< LOQ",
+              "Résultat inférieur à la limite de quantification indiquée.",
+              "La valeur exacte n'est pas à déduire du seul symbole.",
+            ],
+            [
+              "Non testé",
+              "Le composé ou le paramètre n'a pas été recherché dans le périmètre présenté.",
+              "Cette mention ne fournit aucune conclusion sur sa présence ou son absence.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "limite-detection",
+        text: "La LOD indique ce que la méthode peut détecter",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La limite de détection correspond au plus faible niveau auquel un
+            laboratoire peut distinguer le signal d'un composé du bruit de
+            mesure, selon son protocole. Elle dépend notamment de la méthode, de
+            l'appareil, de la préparation de l'échantillon et de la matrice
+            analysée.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une ligne ND doit donc être lue avec la LOD associée. Si deux
+            bulletins utilisent des limites différentes, ils n'apportent pas le
+            même niveau d'information, même lorsque les deux affichent « non
+            détecté ».
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "limite-quantification",
+        text: "La LOQ précise à partir de quel niveau une valeur est quantifiée",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La limite de quantification est généralement supérieure ou égale à
+            la limite de détection. Entre ces deux repères, le laboratoire peut
+            parfois observer un signal sans pouvoir annoncer une valeur avec le
+            niveau de précision requis. Le résultat peut alors apparaître sous
+            la forme « &lt; LOQ », « détecté, non quantifié » ou une formulation
+            équivalente.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Les abréviations et symboles varient selon les laboratoires. La
+            légende du bulletin reste la référence pour comprendre la convention
+            utilisée sur le document consulté.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "unites",
+        text: "Toujours rapprocher la limite de son unité",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une LOD ou une LOQ n'a de sens que si son unité est connue : %, mg/g,
+            mg/kg ou ppm, par exemple. Avant de comparer deux documents, il faut
+            convertir les valeurs sur une même base et vérifier qu'elles
+            concernent la même matrice. Le guide sur les {" "}
+            <Link to="/blog/pourcentage-mg-g-ppm-analyse-cbd">
+              unités utilisées dans les analyses CBD
+            </Link>{" "}
+            détaille ces équivalences.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Exemples de résultats et conclusions possibles.",
+          headers: ["Résultat affiché", "Ce que l'on peut dire", "Ce qu'il faut éviter"],
+          rows: [
+            [
+              "ND, LOD 0,01 %",
+              "Le composé n'a pas été détecté au-dessus de 0,01 % selon la méthode annoncée.",
+              "Affirmer que sa concentration est exactement nulle.",
+            ],
+            [
+              "< LOQ 0,02 %",
+              "Le résultat se situe sous la limite de quantification de 0,02 %.",
+              "Utiliser 0,02 % comme valeur mesurée de l'échantillon.",
+            ],
+            [
+              "0,15 %",
+              "Une valeur quantitative est rapportée dans l'unité indiquée.",
+              "La comparer à une autre unité sans conversion.",
+            ],
+            [
+              "Case vide",
+              "Aucune conclusion sans consulter la légende ou le périmètre d'essai.",
+              "Assimiler automatiquement la case à ND ou à zéro.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "comparer-bulletins",
+        text: "Pourquoi deux bulletins ND ne sont pas forcément équivalents",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Un laboratoire peut atteindre une limite plus basse qu'un autre, ou
+            appliquer une méthode différente à une autre matrice. Pour comparer
+            deux résultats ND, il faut donc vérifier la valeur de la limite,
+            l'unité, le composé recherché et la nature de l'échantillon. La seule
+            abréviation ne suffit pas.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "verifications",
+        text: "Les vérifications à faire avant d'interpréter le résultat",
+      },
+      {
+        type: "list",
+        items: [
+          "relier le bulletin au numéro de lot du produit ;",
+          "identifier la matrice analysée et la date de l'essai ;",
+          "lire la légende propre au laboratoire ;",
+          "repérer la LOD et la LOQ de chaque composé concerné ;",
+          "confirmer l'unité et la base de calcul ;",
+          "distinguer une case vide, un paramètre non testé et un résultat ND ;",
+          "éviter toute conversion lorsque les informations nécessaires manquent.",
+        ],
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Cette méthode permet de décrire fidèlement le document sans lui
+            faire dire davantage. Pour une lecture complète, il faut aussi
+            vérifier l'identité du laboratoire, les références de l'échantillon
+            et la cohérence entre l'étiquette et le bulletin.
+          </>
+        ),
+      },
+      {
+        type: "links",
+        title: "Compléter la lecture de l'analyse",
+        links: [
+          {
+            to: "/blog/pourcentage-mg-g-ppm-analyse-cbd",
+            label: "Comparer les unités d'analyse",
+          },
+          {
+            to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+            label: "Relier le document au bon lot",
+          },
+          {
+            to: "/qualite-conformite",
+            label: "Consulter la démarche qualité Verdanza",
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "isolat-spectre-large-complet-cbd",
     title: "Isolat, spectre large ou complet : comprendre les mentions CBD",
     seoTitle: "Isolat et spectres CBD : comprendre les mentions | Verdanza",
