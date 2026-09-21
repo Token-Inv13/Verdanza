@@ -129,7 +129,13 @@
     "cleanup:test-data": "node --import tsx scripts/cleanupProductionTestData.ts",
     "cleanup:orders": "node --import tsx scripts/cleanupCancelledFinishedOrders.ts",
     "reconcile:launch-stock": "node --import tsx scripts/reconcileLaunchStock.ts",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:stripe-test": "node --import tsx scripts/stripeTestServer.ts",
+    "test:stripe-test": "node --import tsx scripts/testStripeTestCheckout.ts",
+    "typecheck:stripe-test": "tsc --noEmit --moduleResolution NodeNext --module NodeNext --target ES2022 --esModuleInterop --skipLibCheck --strict --types node api/_server/stripeTestConfig.ts api/_server/stripeTestCheckout.ts api/_server/stripeTestHttp.ts scripts/stripeTestServer.ts scripts/stripeTestCatalog.ts scripts/testStripeTestCheckout.ts scripts/testStripeTestHttpMock.ts && tsc --noEmit -p tsconfig.stripe-test-client.json --incremental false",
+    "test:stripe-test:adapters": "node --import tsx scripts/testCheckoutAdapters.ts",
+    "test:stripe-test:http": "node --import tsx scripts/testStripeTestHttpMock.ts",
+    "test:stripe-test:ui": "node --import tsx scripts/testStripeTestInterface.tsx"
   },
   "dependencies": {
     "@napi-rs/canvas": "0.1.100",
@@ -140,7 +146,8 @@
     "pdfjs-dist": "^4.10.38",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^7.1.1"
+    "react-router-dom": "^7.1.1",
+    "stripe": "22.6.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

@@ -71,7 +71,7 @@ const CartPage = lazy(() =>
   import("./pages/CartPage").then((module) => ({ default: module.CartPage })),
 );
 const CheckoutPage = lazy(() =>
-  import("./pages/CheckoutPage").then((module) => ({ default: module.CheckoutPage })),
+  import("./checkout/ManualCheckoutPage").then((module) => ({ default: module.CheckoutPage })),
 );
 const CheckoutCancelPage = lazy(() =>
   import("./pages/CheckoutCancelPage").then((module) => ({

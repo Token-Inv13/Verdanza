@@ -1,36 +1,18 @@
+import type { CheckoutCart, CheckoutIdentity, CheckoutDependencies, CheckoutOutcome } from "../checkout/checkoutDependencies";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ContactActions } from "../components/ContactActions";
+import { Link } from "react-router-dom";
 import { AddressAutocomplete } from "../components/AddressAutocomplete";
-import { PromoBannerSlot } from "../components/PromoBannerSlot";
 import { GiftPromotionChooser } from "../components/GiftPromotionChooser";
 import { Seo } from "../components/Seo";
 import { CagnotteCheckoutPanel, CheckoutAttemptNotice } from "../components/cagnotte/CagnotteCheckoutPanel";
-import { useCart } from "../context/CartContext";
-import { useAuth } from "../context/AuthContext";
-import { deliveryZones as fallbackDeliveryZones } from "../data/deliveryZones";
-import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
 import type { Address, DeliveryMethod, DeliveryZone, PreferredPaymentMethod } from "../types";
 import type { AddressSuggestion } from "../services/addressAutocompleteService";
-import {
-  trackAddPaymentInfo,
-  trackAddShippingInfo,
-  trackContactClick,
-  trackBeginCheckout,
-  getGa4MeasurementContext,
-  trackLocalDeliveryZoneSelected,
-  trackOrderSubmitted,
-  trackPaymentMethodSelected,
-} from "../lib/analytics";
-import { rememberPendingOrderAnalyticsRevocation } from "../lib/orderAnalyticsRevocation";
 import { getCartStockIssues } from "../lib/cartStock";
 import { formatLocalDeliveryEstimate } from "../lib/deliveryEstimate";
 import { fixedPriceCartLineLabel } from "../lib/fixedPriceOptions";
-import { formatEuro, quoteOrder, type OrderQuote } from "../services/quoteService";
-import { createCheckoutOrder, type CheckoutOrderResult, type CreateCheckoutOrderInput } from "../services/ordersService";
-import { useCagnotteCheckout, useCheckoutAttempt } from "../hooks/useCagnotteCheckout";
-import { clearCagnottePreference } from "../services/cagnotteCheckoutService";
-import { CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED } from "../config/cagnotteFeatures";
+import type { OrderQuote } from "../services/quoteService";
+import { formatEuro } from "../lib/formatEuro";
+import type { CreateCheckoutOrderInput } from "../services/ordersService";
 import {
   effectiveLocalDeliveryMinimum,
   isPostalShippingFree,
@@ -43,7 +25,6 @@ import {
   POSTAL_DELIVERY_ZONE_ID,
   POSTAL_FREE_SHIPPING_THRESHOLD,
 } from "../config/deliveryRules";
-import { publicSubmissionSecurityContext } from "../lib/publicSubmissionSecurity";
 import { invalidateAddressVerification } from "../lib/checkoutAddress";
 import {
   type DeliveryEligibilityReason,
@@ -52,12 +33,8 @@ import {
   isAutomaticRadiusZone,
 } from "../lib/deliveryEligibility";
 
-const contactEmail =
-  (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
-  "contact@verdanza.fr";
 const checkoutErrorMessage =
   "Impossible de valider la commande pour le moment. Veuillez réessayer ou contacter Verdanza par email.";
-const promoStorageKey = "verdanza-coupon-code";
 
 type CheckoutSelectablePaymentMethod = Exclude<
   PreferredPaymentMethod,
@@ -70,7 +47,14 @@ const paymentMethodLabels: Record<CheckoutSelectablePaymentMethod, string> = {
   bank_transfer: "Virement bancaire",
 };
 
-export function CheckoutPage() {
+export function CheckoutPage({ cart, identity, dependencies }: {
+  cart: CheckoutCart; identity: CheckoutIdentity; dependencies: CheckoutDependencies;
+}) {
+  const { quoteOrder, storage, analytics, loadDeliveryZones, useCagnotteCheckout,
+    useCheckoutAttempt, createAddressSearch, ContactActions, PromoBannerSlot, contactEmail } = dependencies;
+  const { trackAddPaymentInfo, trackAddShippingInfo, trackContactClick, trackBeginCheckout,
+    getGa4MeasurementContext, trackLocalDeliveryZoneSelected, trackOrderSubmitted,
+    trackPaymentMethodSelected } = analytics;
   const {
     itemCount,
     subtotal,
@@ -80,26 +64,25 @@ export function CheckoutPage() {
     hasBlockingCartIssues,
     promotionSelections,
     setPromotionSelection,
-  } = useCart();
+  } = cart;
   const beginCheckoutSignature = useRef("");
   const shippingSignature = useRef("");
   const paymentSignature = useRef("");
   const formSubmissionLock = useRef(false);
   const formStartedAt = useRef(Date.now());
-  const { user, customerProfile } = useAuth();
-  const navigate = useNavigate();
-  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>(fallbackDeliveryZones);
+  const { user, customerProfile } = identity;
+  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>(dependencies.initialDeliveryZones);
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("postal");
   const [deliveryZone, setDeliveryZone] = useState("");
-  const [addressInput, setAddressInput] = useState("");
+  const [addressInput, setAddressInput] = useState(dependencies.initialCustomer?.line1 || "");
   const [selectedAddress, setSelectedAddress] = useState<
     (AddressSuggestion & { verifiedAt: string }) | null
   >(null);
   const [couponCode, setCouponCode] = useState(() =>
-    window.localStorage.getItem(promoStorageKey) || "",
+    storage.readCoupon(),
   );
   const [appliedCouponCode, setAppliedCouponCode] = useState(() =>
-    window.localStorage.getItem(promoStorageKey) || "",
+    storage.readCoupon(),
   );
   const [quote, setQuote] = useState<OrderQuote | null>(null);
   const [automaticQuote, setAutomaticQuote] = useState<OrderQuote | null>(null);
@@ -115,7 +98,7 @@ export function CheckoutPage() {
   const [error, setError] = useState("");
   const [serverQuoteError, setServerQuoteError] = useState("");
   const [company, setCompany] = useState("");
-  const [customer, setCustomer] = useState({
+  const [customer, setCustomer] = useState(dependencies.initialCustomer ?? {
     email: "",
     phone: "",
     firstName: "",
@@ -250,7 +233,7 @@ export function CheckoutPage() {
   const checkoutIdentityKey = user?.uid ?? "guest";
   const cagnotteContextKey = `${quoteContextKey}|coupon:${hasManualPromo ? normalizedAppliedCouponCode : ""}`;
   const cagnotte = useCagnotteCheckout({
-    enabled: CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED,
+    enabled: dependencies.cagnotteEnabled,
     identityKey: user?.uid ?? null,
     contextKey: cagnotteContextKey,
   });
@@ -262,7 +245,7 @@ export function CheckoutPage() {
   const cagnotteAcceptanceRequired = cagnotte.state.selectionEnabled && !cagnotte.state.acceptance;
   const fallbackAcceptanceRequired = cagnotte.state.fallbackPhase === "ready" && !cagnotte.state.fallbackAccepted;
   const acceptedPayableCents = cagnotte.state.acceptance?.acceptedPayableCents;
-  const serverQuoteReady = CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED && cagnotte.state.selectionEnabled
+  const serverQuoteReady = dependencies.cagnotteEnabled && cagnotte.state.selectionEnabled
     ? Boolean(cagnotte.state.proposal)
     : Boolean(cagnotte.state.fallbackQuote) || ordinaryServerQuoteReady;
 
@@ -296,7 +279,7 @@ export function CheckoutPage() {
     if (!signature || beginCheckoutSignature.current === signature) return;
     beginCheckoutSignature.current = signature;
     trackBeginCheckout(lines, estimatedTotal);
-  }, [estimatedTotal, lines]);
+  }, [estimatedTotal, lines, trackBeginCheckout]);
 
   useEffect(() => {
     if (!lines.length) return;
@@ -313,7 +296,7 @@ export function CheckoutPage() {
     if (isLocalDelivery && selectedZone) {
       trackLocalDeliveryZoneSelected(selectedZone.id, selectedZone.name);
     }
-  }, [deliveryMethod, estimatedTotal, isLocalDelivery, lines, selectedZone]);
+  }, [deliveryMethod, estimatedTotal, isLocalDelivery, lines, selectedZone, trackAddShippingInfo, trackLocalDeliveryZoneSelected]);
 
   useEffect(() => {
     if (!lines.length) return;
@@ -322,17 +305,17 @@ export function CheckoutPage() {
     paymentSignature.current = signature;
     trackAddPaymentInfo(lines, estimatedTotal, preferredPaymentMethod, deliveryMethod);
     trackPaymentMethodSelected(lines, estimatedTotal, preferredPaymentMethod, deliveryMethod);
-  }, [deliveryMethod, estimatedTotal, lines, preferredPaymentMethod]);
+  }, [deliveryMethod, estimatedTotal, lines, preferredPaymentMethod, trackAddPaymentInfo, trackPaymentMethodSelected]);
 
   useEffect(() => {
     let cancelled = false;
-    getDeliveryZonesWithFallback().then((result) => {
+    loadDeliveryZones().then((result) => {
       if (!cancelled) setDeliveryZones(result.zones);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadDeliveryZones]);
 
   useEffect(() => {
     if (automaticRadiusZones.length) {
@@ -360,13 +343,13 @@ export function CheckoutPage() {
 
   useEffect(() => {
     if (!couponCode.trim()) {
-      window.localStorage.removeItem(promoStorageKey);
+      storage.removeCoupon();
       setAppliedCouponCode("");
       setQuote(null);
       setManualQuoteContextKey("");
       setPromoMessage("");
     }
-  }, [couponCode]);
+  }, [couponCode, storage]);
 
   useEffect(() => {
     if (
@@ -415,6 +398,8 @@ export function CheckoutPage() {
       cancelled = true;
     };
   }, [
+    quoteOrder,
+    storage,
     customer.email,
     deliveryMethod,
     quoteDeliveryAddress,
@@ -472,13 +457,15 @@ export function CheckoutPage() {
         setAppliedCouponCode("");
         setQuote(null);
         setManualQuoteContextKey("");
-        window.localStorage.removeItem(promoStorageKey);
+        storage.removeCoupon();
       });
     return () => {
       cancelled = true;
     };
   }, [
     appliedCouponCode,
+    quoteOrder,
+    storage,
     customer.email,
     deliveryMethod,
     quoteDeliveryAddress,
@@ -586,13 +573,13 @@ export function CheckoutPage() {
       setQuote(nextQuote);
       setManualQuoteContextKey(requestContextKey);
       setAppliedCouponCode(nextQuote.couponCode || code);
-      window.localStorage.setItem(promoStorageKey, code);
+      storage.saveCoupon(code);
       if (showSuccess) setPromoMessage("Code promo appliqué.");
       return nextQuote;
     } catch (error) {
       setAppliedCouponCode("");
       setManualQuoteContextKey("");
-      window.localStorage.removeItem(promoStorageKey);
+      storage.removeCoupon();
       const message =
         error instanceof Error ? error.message : "Ce code promo n'est pas valide.";
       setPromoMessage(message);
@@ -609,7 +596,7 @@ export function CheckoutPage() {
       setAppliedCouponCode("");
       setQuote(null);
       setManualQuoteContextKey("");
-      window.localStorage.removeItem(promoStorageKey);
+      storage.removeCoupon();
     }
   }
 
@@ -654,7 +641,7 @@ export function CheckoutPage() {
       }
       let finalQuote: OrderQuote;
       let cagnotteUse: CreateCheckoutOrderInput["cagnotteUse"];
-      if (CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED && cagnotte.state.selectionEnabled) {
+      if (dependencies.cagnotteEnabled && cagnotte.state.selectionEnabled) {
         if (!cagnotte.state.acceptance) {
           throw new Error("Validez le montant de cagnotte et le reste à régler avant de créer la commande.");
         }
@@ -685,7 +672,7 @@ export function CheckoutPage() {
         preferredPaymentMethod,
         complianceAccepted,
         company,
-        submissionSecurity: publicSubmissionSecurityContext(formStartedAt.current),
+        submissionSecurity: dependencies.submissionSecurity(formStartedAt.current),
         customer: {
           email: customer.email,
           phone: customer.phone,
@@ -695,7 +682,7 @@ export function CheckoutPage() {
         },
         ...(cagnotteUse ? { cagnotteUse } : {}),
       };
-      const result = await checkoutAttempt.submit(orderRequest, createCheckoutOrder);
+      const result = await checkoutAttempt.submit(orderRequest);
       if (!result) return;
       completeSuccessfulCheckout(result, finalQuote);
     } catch (checkoutError) {
@@ -731,7 +718,7 @@ export function CheckoutPage() {
     formSubmissionLock.current = true;
     setIsSubmitting(true);
     try {
-      const result = await checkoutAttempt.retry(createCheckoutOrder);
+      const result = await checkoutAttempt.retry();
       if (result) completeSuccessfulCheckout(result, cagnotte.state.proposal || activeQuote);
     } finally {
       formSubmissionLock.current = false;
@@ -739,8 +726,13 @@ export function CheckoutPage() {
     }
   }
 
-  function completeSuccessfulCheckout(result: CheckoutOrderResult, displayedQuote: OrderQuote | null) {
-    rememberPendingOrderAnalyticsRevocation(result.orderId, result.analyticsRevocationToken);
+  function completeSuccessfulCheckout(result: CheckoutOutcome, displayedQuote: OrderQuote | null) {
+    if ("redirectUrl" in result) {
+      if (!dependencies.redirectToPayment) throw new Error(checkoutErrorMessage);
+      dependencies.redirectToPayment(result.redirectUrl);
+      return;
+    }
+    dependencies.rememberOrderAnalytics(result.orderId, result.analyticsRevocationToken);
     trackOrderSubmitted({
       transactionId: result.orderId,
       lines,
@@ -758,7 +750,7 @@ export function CheckoutPage() {
         : `${item.quantity} g`,
       total: Number(item.lineTotal ?? item.fixedPriceTotal ?? item.unitPrice * item.quantity),
     }));
-    window.sessionStorage.setItem("verdanza:lastOrderSummary", JSON.stringify({
+    storage.saveOrderSummary({
       orderId: result.orderId,
       orderType: "order",
       items: summaryItems,
@@ -779,9 +771,9 @@ export function CheckoutPage() {
       paymentStatus: result.paymentStatus,
       orderStatus: result.orderStatus,
       cagnotteUse: result.cagnotteUse,
-    }));
-    clearCagnottePreference(user?.uid ?? null);
-    navigate(`/checkout/success?order_id=${encodeURIComponent(result.orderId)}`);
+    });
+    dependencies.clearCagnottePreference(user?.uid ?? null);
+    dependencies.navigateSuccess(result.orderId);
   }
 
   return (
@@ -828,7 +820,7 @@ export function CheckoutPage() {
 
       <PromoBannerSlot placement="checkout" type="checkout_notice" className="mt-6 grid gap-3" />
 
-      {!user && itemCount > 0 && (
+      {dependencies.showAccountLinks && !user && itemCount > 0 && (
         <section className="mt-8 rounded-lg border border-champagne/30 bg-cream p-5">
           <p className="text-sm leading-6 text-forest">
             Connectez-vous pour suivre votre commande et retrouver votre historique.
@@ -854,7 +846,7 @@ export function CheckoutPage() {
       {itemCount === 0 ? (
         <section className="mt-10 rounded-lg border border-forest/10 bg-cream p-8">
           <p>Votre panier est vide.</p>
-          <Link to="/boutique" className="btn-primary mt-6 inline-flex">
+          <Link to={dependencies.catalogPath ?? "/boutique"} className="btn-primary mt-6 inline-flex">
             Voir la boutique
           </Link>
         </section>
@@ -904,6 +896,7 @@ export function CheckoutPage() {
               <h2 className="font-display text-3xl text-forest">Livraison</h2>
               <div className="mt-5 grid min-w-0 gap-4 md:grid-cols-2">
                 <AddressAutocomplete
+                  createSearch={createAddressSearch}
                   value={addressInput}
                   selectedAddress={selectedAddress}
                   eligibility={addressEligibilityState}
@@ -995,7 +988,7 @@ export function CheckoutPage() {
                     {localDeliveryEstimate}
                   </p>
                   <Link
-                    to="/livraison-locale"
+                    to={dependencies.localDeliveryInfoPath ?? "/livraison-locale"}
                     className="mt-2 inline-flex text-sm font-medium text-forest underline decoration-champagne underline-offset-4"
                   >
                     En savoir plus sur la livraison locale
@@ -1056,7 +1049,7 @@ export function CheckoutPage() {
                   <option value="bank_transfer" disabled>
                     {paymentMethodLabels.bank_transfer}
                   </option>
-                  {isLocalDelivery && (
+                  {isLocalDelivery && dependencies.allowCashOnDelivery !== false && (
                     <option value="cash_on_delivery">
                       {paymentMethodLabels.cash_on_delivery}
                     </option>
@@ -1181,7 +1174,7 @@ export function CheckoutPage() {
                 />
               )}
               <CagnotteCheckoutPanel
-                enabled={CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED}
+                enabled={dependencies.cagnotteEnabled}
                 mode="checkout"
                 state={cagnotte.state}
                 authenticated={Boolean(user)}

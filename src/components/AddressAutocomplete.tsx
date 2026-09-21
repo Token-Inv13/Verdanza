@@ -7,7 +7,11 @@ import {
 } from "../services/addressAutocompleteService";
 import type { DeliveryEligibilityReason } from "../lib/deliveryEligibility";
 
+type AddressSearch = Pick<AddressAutocompleteCoordinator, "search" | "dispose">;
+const createDefaultSearch = () => new AddressAutocompleteCoordinator();
+
 type AddressAutocompleteProps = {
+  createSearch?: () => AddressSearch;
   value: string;
   selectedAddress?: AddressSuggestion | null;
   eligibility: DeliveryEligibilityReason;
@@ -23,23 +27,21 @@ export function AddressAutocomplete({
   eligibleMessage,
   onChange,
   onSelect,
+  createSearch = createDefaultSearch,
 }: AddressAutocompleteProps) {
   const listboxId = useId();
-  const coordinatorRef = useRef<AddressAutocompleteCoordinator>();
+  const coordinatorRef = useRef<AddressSearch>();
   const [status, setStatus] = useState<AddressSearchStatus>("idle");
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
 
-  if (!coordinatorRef.current) {
-    coordinatorRef.current = new AddressAutocompleteCoordinator();
-  }
-
   useEffect(() => {
-    const coordinator = coordinatorRef.current;
-    return () => coordinator?.dispose();
-  }, []);
+    const coordinator = createSearch();
+    coordinatorRef.current = coordinator;
+    return () => coordinator.dispose();
+  }, [createSearch]);
 
   useEffect(() => {
     const coordinator = coordinatorRef.current;
@@ -77,7 +79,7 @@ export function AddressAutocomplete({
       cancelled = true;
       window.clearTimeout(debounce);
     };
-  }, [selectedAddress?.label, value]);
+  }, [createSearch, selectedAddress?.label, value]);
 
   function selectSuggestion(suggestion: AddressSuggestion) {
     setSuggestions([]);

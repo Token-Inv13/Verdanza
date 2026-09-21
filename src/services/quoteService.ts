@@ -95,6 +95,4 @@ export async function quoteOrder(input: {
   return payload as OrderQuote;
 }
 
-export function formatEuro(value: number) {
-  return `${value.toFixed(2).replace(".", ",")} EUR`;
-}
+export { formatEuro } from "../lib/formatEuro";

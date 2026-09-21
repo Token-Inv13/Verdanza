@@ -1,0 +1,7 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Only the local Admin server reads/writes this emulator. No client writes.
+    match /{document=**} { allow read, write: if false; }
+  }
+}
