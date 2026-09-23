@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, ty
 import { ArrowDownToLine, ArrowUpRight, Check, ChevronDown, FileText, Pencil, Plus, Search, X } from "lucide-react";
 import { Seo } from "../../components/Seo";
 import { getFirestoreProducts } from "../../services/productsService";
+import { catalogPublicationMissing } from "../../lib/selectionCatalog";
 import {
   costPerGram, emptySelection, normalizeSelection, publicationMissing,
   selectionAromaFamilies, selectionCategories, selectionIntensities, selectionPriorities,
@@ -9,7 +10,7 @@ import {
 } from "../../types/selection";
 import {
   downloadSelectionImage, downloadSelectionPdf, extractSelection, importSelections, listSelections,
-  publishSelection, saveSelection, unpublishSelection, uploadSelectionImage,
+  publishSelection, publishSelectionToCatalog, saveSelection, unpublishSelection, uploadSelectionImage,
 } from "../../services/selectionService";
 
 const money = (value: string | number) => {
@@ -24,6 +25,7 @@ const dedupe = (item: ProductSelection) => item.url
 const selectionTabs = ["Tous", ...selectionStatuses] as const;
 type SelectionTab = typeof selectionTabs[number];
 type SelectionSort = "name" | "recent" | "priority";
+type CatalogDraft = { id: string; price: string; stock: string; description: string };
 const stageDescriptions: Record<SelectionTab, string> = {
   Tous: "Toutes vos références, du premier repérage à la boutique.",
   "À explorer": "Les pistes à examiner avant de passer commande.",
@@ -50,9 +52,10 @@ export function AdminSelectionPage() {
   const [link, setLink] = useState("");
   const [detailId, setDetailId] = useState("");
   const [draft, setDraft] = useState<ProductSelection | null>(null);
+  const [catalogDraft, setCatalogDraft] = useState<CatalogDraft | null>(null);
   const [pendingImport, setPendingImport] = useState<ProductSelection[]>([]);
   const [compareIds, setCompareIds] = useState<string[]>([]);
-  const [catalogProducts, setCatalogProducts] = useState<Array<{ id: string; name: string; isActive: boolean }>>([]);
+  const [catalogProducts, setCatalogProducts] = useState<Array<{ id: string; name: string; slug: string; category: string; price: number; stock: number; isActive: boolean }>>([]);
   const fileInput = useRef<HTMLInputElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const tabButtons = useRef<Array<HTMLButtonElement | null>>([]);
@@ -69,13 +72,19 @@ export function AdminSelectionPage() {
     }
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
-  useEffect(() => {
-    void getFirestoreProducts(false).then((products) => setCatalogProducts(products.map((product) => ({
-      id: product.id, name: product.name, isActive: product.isActive !== false,
-    })))).catch(() => { /* Selection remains usable if the commercial catalogue is unavailable. */ });
+  const refreshCatalog = useCallback(async () => {
+    const products = await getFirestoreProducts(false);
+    setCatalogProducts(products.map((product) => ({
+      id: product.id, name: product.name, slug: product.slug, category: product.category,
+      price: product.price, stock: product.stock, isActive: product.isActive !== false,
+    })));
   }, []);
+  useEffect(() => {
+    void refreshCatalog().catch(() => { /* Selection remains usable if the commercial catalogue is unavailable. */ });
+  }, [refreshCatalog]);
 
   const detail = items.find((item) => item.id === detailId) || null;
+  const linkedCatalog = catalogProducts.find((product) => product.id === detail?.catalogProductId);
   const detailImage = useSelectionImage(detail?.id || "", detail?.imagePath || "");
   const draftImage = useSelectionImage(draft?.id || "", draft?.imagePath || "");
   const compared = compareIds.map((id) => items.find((item) => item.id === id)).filter((item): item is ProductSelection => Boolean(item));
@@ -104,11 +113,11 @@ export function AdminSelectionPage() {
     if (!detail && !draft) return;
     closeButton.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { setDetailId(""); setDraft(null); }
+      if (event.key === "Escape") { setCatalogDraft(null); setDetailId(""); setDraft(null); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [detail, draft]);
+  }, [detail, draft, catalogDraft]);
 
   const action = async (run: () => Promise<void>) => {
     setBusy(true); setError(""); setMessage("");
@@ -146,24 +155,24 @@ export function AdminSelectionPage() {
     event.preventDefault();
     if (!draft) return;
     const previous = items.find((item) => item.id === draft.id);
-    if (previous?.publishedSlug && draft.status !== "En boutique" &&
-      !window.confirm("Quitter l'étape En boutique retirera immédiatement la fiche de la page publique. Continuer ?")) return;
+    if (previous?.status === "En boutique" && draft.status !== "En boutique" &&
+      !window.confirm("Quitter En boutique retirera la fiche publique et désactivera le produit marchand créé depuis cette sélection. Continuer ?")) return;
     void action(async () => {
       const result = await saveSelection(draft);
       setDraft(null);
       setDetailId(result.selection.id);
       setMessage("Sélection enregistrée.");
-      await refresh();
+      await Promise.all([refresh(), refreshCatalog()]);
     });
   };
 
   const changeStatus = (item: ProductSelection, next: ProductSelection["status"]) => {
-    if (item.publishedSlug && next !== "En boutique" &&
-      !window.confirm("Quitter l'étape En boutique retirera immédiatement la fiche de la page publique. Continuer ?")) return;
+    if (item.status === "En boutique" && next !== "En boutique" &&
+      !window.confirm("Quitter En boutique retirera la fiche publique et désactivera le produit marchand créé depuis cette sélection. Continuer ?")) return;
     void action(async () => {
       await saveSelection({ ...item, status: next });
       setMessage("Étape mise à jour.");
-      await refresh();
+      await Promise.all([refresh(), refreshCatalog()]);
     });
   };
 
@@ -195,6 +204,21 @@ export function AdminSelectionPage() {
       await unpublishSelection(item.id);
       setMessage("Fiche retirée de la page publique.");
       await refresh();
+    });
+  };
+
+  const submitCatalog = (event: FormEvent) => {
+    event.preventDefault();
+    if (!catalogDraft) return;
+    const price = Number(catalogDraft.price.replace(",", "."));
+    const stock = Number(catalogDraft.stock);
+    void action(async () => {
+      const result = await publishSelectionToCatalog(catalogDraft.id, {
+        price, stock, description: catalogDraft.description.trim(),
+      });
+      setCatalogDraft(null);
+      setMessage(`Produit mis en boutique dans ${result.category === "flowers" ? "Fleurs CBD" : "Résines CBD"}.`);
+      await Promise.all([refresh(), refreshCatalog()]);
     });
   };
 
@@ -363,7 +387,11 @@ export function AdminSelectionPage() {
               <aside className="space-y-4"><div className="rounded-xl border border-forest/10 bg-cream p-4"><h3 className="text-xs font-bold uppercase tracking-[0.14em]">Votre sélection</h3><p className="mt-3 text-sm">Étape : <strong>{detail.status}</strong></p><p className="mt-2 text-sm">Intérêt : <strong>{detail.priority}</strong></p><p className="mt-2 text-sm">Note : <strong>{detail.rating || "Pas encore noté"}</strong></p></div>
                 <div className="rounded-xl border border-forest/10 p-4"><h3 className="text-xs font-bold uppercase tracking-[0.14em]">Notes privées</h3><p className="mt-3 whitespace-pre-wrap text-sm text-ink/70">{detail.notes || "Aucune note pour le moment."}</p></div>
                 <div className="rounded-xl border border-forest/10 p-4"><h3 className="text-xs font-bold uppercase tracking-[0.14em]">Publication</h3><p className="mt-2 text-sm">{detail.publishedSlug ? detail.updatedAt > detail.publishedAt ? "Fiche modifiée depuis sa publication : mettez-la à jour" : "Fiche en ligne" : publicationMissing(detail).length ? `À compléter : ${publicationMissing(detail).join(", ")}` : "Prête à publier"}</p>{detail.publishedSlug && <a className="mt-2 inline-block text-sm underline" href="/fiches-produits" target="_blank" rel="noreferrer">Voir les fiches publiques ↗</a>}</div>
-                <div className="rounded-xl border border-forest/10 p-4"><h3 className="text-xs font-bold uppercase tracking-[0.14em]">Catalogue marchand</h3><p className="mt-2 text-sm">{detail.catalogProductId ? catalogProducts.find((product) => product.id === detail.catalogProductId)?.name || detail.catalogProductId : "Aucun produit lié"}</p><a className="mt-2 inline-block text-sm underline" href="/admin/produits">Gérer les produits ↗</a></div>
+                <div className="rounded-xl border border-forest/10 bg-[#f8faf6] p-4"><h3 className="text-xs font-bold uppercase tracking-[0.14em]">Boutique en ligne</h3>
+                  {linkedCatalog ? <><p className="mt-2 text-sm font-semibold">{linkedCatalog.name}</p><p className="mt-1 text-xs text-ink/60">{linkedCatalog.category === "flowers" ? "Fleurs CBD" : "Résines CBD"} · {money(linkedCatalog.price)} / g · {linkedCatalog.stock} g en stock</p><p className={`mt-2 text-xs font-semibold ${linkedCatalog.isActive ? "text-forest" : "text-amber-800"}`}>{linkedCatalog.isActive ? "En ligne" : "Inactif"}</p>{linkedCatalog.isActive && <a className="mt-2 inline-block text-sm underline" href={`/produits/${linkedCatalog.slug}`} target="_blank" rel="noreferrer">Voir dans la boutique ↗</a>}</> : <p className="mt-2 text-sm text-ink/60">{detail.catalogProductId ? "Produit lié indisponible : vérifiez le catalogue." : "Pas encore publié dans la boutique."}</p>}
+                  {!linkedCatalog?.isActive && catalogPublicationMissing(detail).length > 0 && <p className="mt-2 text-xs text-amber-800">À compléter pour la boutique : {catalogPublicationMissing(detail).join(", ")}.</p>}
+                  <a className="mt-2 inline-block text-xs underline" href="/admin/produits">Gérer les produits ↗</a>
+                </div>
                 {detail.url && <a href={detail.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm underline">Fiche fournisseur <ArrowUpRight size={15} /></a>}
               </aside>
             </div>
@@ -372,8 +400,23 @@ export function AdminSelectionPage() {
             {detail.publishedSlug && <button type="button" className="btn-secondary" disabled={busy} onClick={() => unpublish(detail)}>Dépublier</button>}
             <button type="button" className="btn-secondary" disabled={busy || publicationMissing(detail).length > 0} onClick={() => publish(detail)}>{detail.publishedSlug ? "Mettre à jour la fiche" : "Publier la fiche"}</button>
             <button type="button" className="btn-secondary inline-flex items-center gap-2" disabled={busy || !detail.imagePath} onClick={() => downloadPdf(detail)}><FileText size={16} /> Créer le PDF</button>
+            {(!detail.catalogProductId || detail.catalogProductId === `selection-${detail.id}`) && !linkedCatalog?.isActive && <button type="button" className="btn-primary" disabled={busy || catalogPublicationMissing(detail).length > 0} title={catalogPublicationMissing(detail).length ? `À compléter : ${catalogPublicationMissing(detail).join(", ")}` : undefined} onClick={() => setCatalogDraft({ id: detail.id, price: linkedCatalog?.price ? String(linkedCatalog.price).replace(".", ",") : "", stock: linkedCatalog?.stock ? String(linkedCatalog.stock) : "", description: detail.description || "" })}>{linkedCatalog ? "Remettre en boutique" : "Mettre en boutique"}</button>}
             <button type="button" className="btn-primary inline-flex items-center gap-2" onClick={() => setDraft({ ...detail })}><Pencil size={16} /> Modifier</button>
           </div>
+        </section>
+      </div>}
+
+      {catalogDraft && detail && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-forest/75 p-3" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setCatalogDraft(null); }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="selection-catalog-title" className="w-full max-w-xl overflow-hidden rounded-2xl bg-ivory shadow-2xl">
+          <div className="bg-forest px-6 py-5 text-ivory"><p className="text-xs font-bold uppercase tracking-[0.18em] text-champagne">Publication marchande</p><h2 id="selection-catalog-title" className="mt-1 font-display text-3xl">{linkedCatalog ? "Remettre en boutique" : "Mettre en boutique"}</h2><p className="mt-2 text-sm text-ivory/75">{selectionPublicName(detail)} · {detail.category === "Fleur" ? "Fleurs CBD" : "Résines CBD"}</p></div>
+          <form className="space-y-4 p-6" onSubmit={submitCatalog}>
+            {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+            <p className="text-sm leading-6 text-ink/70">Le prix ci-dessous est le prix de vente au gramme. Les prix fournisseur ne sont jamais transférés au catalogue. La boutique utilisera le panier et les modes de paiement actuellement configurés sur le site.</p>
+            <div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold">Prix de vente / g (€)<input className="input-field mt-1 w-full" value={catalogDraft.price} inputMode="decimal" required placeholder="9,90" onChange={(event) => setCatalogDraft({ ...catalogDraft, price: event.target.value })} /></label><label className="text-xs font-semibold">Stock disponible (g)<input className="input-field mt-1 w-full" type="number" min="1" step="1" required value={catalogDraft.stock} onChange={(event) => setCatalogDraft({ ...catalogDraft, stock: event.target.value })} /></label></div>
+            <label className="block text-xs font-semibold">Description visible par les clients<textarea className="input-field mt-1 min-h-28 w-full" minLength={30} maxLength={1000} required value={catalogDraft.description} onChange={(event) => setCatalogDraft({ ...catalogDraft, description: event.target.value })} /></label>
+            <p className="rounded-lg border border-forest/10 bg-cream p-3 text-xs leading-5 text-ink/70">La fiche utilisera l’image Verdanza, les arômes, la provenance et le profil renseignés dans la sélection. Vous pourrez ensuite la modifier dans Admin → Produits. Les formats promotionnels ne sont pas activés automatiquement.</p>
+            <div className="flex justify-end gap-2 border-t border-forest/10 pt-4"><button type="button" className="btn-secondary" disabled={busy} onClick={() => setCatalogDraft(null)}>Annuler</button><button type="submit" className="btn-primary" disabled={busy}>{busy ? "Publication…" : "Confirmer la mise en boutique"}</button></div>
+          </form>
         </section>
       </div>}
 

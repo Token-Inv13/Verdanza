@@ -1,11 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { PDFDocument } from "pdf-lib";
+import { FieldValue } from "firebase-admin/firestore";
 import { assertAdminUser } from "./adminAuth.js";
 import { getAdminDb, getAdminStorageBucket } from "./firebaseAdmin.js";
 import { sendJson, type VercelRequestLike, type VercelResponseLike } from "./http.js";
 import { createSelectionPdf } from "./selectionPdf.js";
 import { publicSelectionEntry, publicSelectionView, type PublishedSelectionSheet } from "../../src/lib/selectionPublication.js";
 import { productSheets } from "../../src/data/productSheets.js";
+import { buildCatalogProduct, catalogProductId, catalogPublicationMissing, normalizeCatalogInput } from "../../src/lib/selectionCatalog.js";
+import { reserveProductInternalReference } from "./productReferences.js";
 import {
   normalizeSelection, publicationMissing, selectionPublicName, selectionSlug,
   type ProductSelection,
@@ -30,6 +33,23 @@ export async function handleSelection(request: VercelRequestLike, response: Verc
     }
     if (request.method === "GET" && action === "asset") {
       await sendPublicAsset(response, query.get("slug") || "", query.get("kind") || "");
+      return;
+    }
+    if (request.method === "GET" && action === "catalogImage") {
+      const id = safeId(query.get("id"));
+      const selection = await getAdminDb().collection(PRIVATE_COLLECTION).doc(id).get();
+      if (!selection.exists) throw new SelectionError("Image introuvable.", 404);
+      const item = normalizeSelection({ ...selection.data(), id });
+      if (item.status !== "En boutique" || item.catalogProductId !== catalogProductId(id) || !item.imagePath) {
+        throw new SelectionError("Image introuvable.", 404);
+      }
+      const product = await getAdminDb().collection("products").doc(item.catalogProductId).get();
+      if (!product.exists || product.data()?.sourceSelectionId !== id) {
+        throw new SelectionError("Image introuvable.", 404);
+      }
+      response.setHeader("Content-Type", "image/jpeg");
+      response.setHeader("Cache-Control", "public, max-age=300");
+      response.end(await readImage(item.imagePath));
       return;
     }
     const token = bearerToken(request);
@@ -92,7 +112,12 @@ export async function handleSelection(request: VercelRequestLike, response: Verc
         const latest = await transaction.get(ref);
         const catalogRef = input.catalogProductId ? db.collection("products").doc(safeCatalogId(input.catalogProductId)) : null;
         const catalog = catalogRef ? await transaction.get(catalogRef) : null;
+        const previousCatalogRef = existing?.catalogProductId ? db.collection("products").doc(safeCatalogId(existing.catalogProductId)) : null;
+        const previousCatalog = previousCatalogRef && previousCatalogRef.id !== catalogRef?.id ? await transaction.get(previousCatalogRef) : catalog;
         if (catalog && !catalog.exists) throw new SelectionError("Produit marchand lié introuvable.", 400);
+        if (previousCatalog?.data()?.sourceSelectionId === id && existing?.catalogProductId !== input.catalogProductId) {
+          throw new SelectionError("Ce produit a été créé depuis la sélection. Conservez son lien boutique.", 409);
+        }
         if (latest.exists && latest.data()?.updatedAt !== input.updatedAt) {
           throw new SelectionError("Cette fiche a été modifiée ailleurs. Rechargez-la avant d'enregistrer.", 409);
         }
@@ -101,6 +126,9 @@ export async function handleSelection(request: VercelRequestLike, response: Verc
           transaction.delete(db.collection(PUBLIC_COLLECTION).doc(existing.publishedSlug));
           item.publishedAt = "";
           item.publishedSlug = "";
+        }
+        if (item.status !== "En boutique" && previousCatalog?.data()?.sourceSelectionId === id && previousCatalogRef) {
+          transaction.update(previousCatalogRef, { isActive: false, updatedAt: FieldValue.serverTimestamp() });
         }
         transaction.set(ref, { ...item, updatedBy: admin.uid });
       });
@@ -156,6 +184,53 @@ export async function handleSelection(request: VercelRequestLike, response: Verc
       const updatedAt = new Date().toISOString();
       await ref.update({ imagePath: path, updatedAt, updatedBy: admin.uid });
       sendJson(response, { imagePath: path, updatedAt });
+      return;
+    }
+    if (postAction === "publishCatalog") {
+      const id = safeId(body.id);
+      const selectionRef = db.collection(PRIVATE_COLLECTION).doc(id);
+      const snapshot = await selectionRef.get();
+      if (!snapshot.exists) throw new SelectionError("Sélection introuvable.", 404);
+      const item = normalizeSelection({ ...snapshot.data(), id });
+      const missing = catalogPublicationMissing(item);
+      if (missing.length) throw new SelectionError(`Complétez avant la mise en boutique : ${missing.join(", ")}.`);
+      const input = normalizeCatalogInput(body.catalog);
+      await readImage(item.imagePath);
+      const product = buildCatalogProduct(item, input);
+      if (item.catalogProductId && item.catalogProductId !== product.id) {
+        throw new SelectionError("Un autre produit marchand est déjà lié. Gérez-le dans Produits.", 409);
+      }
+      const productRef = db.collection("products").doc(product.id);
+      const now = new Date().toISOString();
+      await db.runTransaction(async (transaction) => {
+        const latest = await transaction.get(selectionRef);
+        const currentProduct = await transaction.get(productRef);
+        if (!latest.exists || latest.data()?.updatedAt !== item.updatedAt || latest.data()?.status !== "En boutique") {
+          throw new SelectionError("La sélection a changé. Rechargez et recommencez.", 409);
+        }
+        if (currentProduct.exists && currentProduct.data()?.sourceSelectionId !== id) {
+          throw new SelectionError("Identifiant boutique déjà utilisé.", 409);
+        }
+        if (currentProduct.data()?.isActive === true) {
+          throw new SelectionError("Ce produit est déjà en ligne. Modifiez-le dans Produits.", 409);
+        }
+        if (currentProduct.exists) {
+          transaction.update(productRef, {
+            isActive: true, price: input.price, stock: input.stock,
+            shortDescription: product.shortDescription, longDescription: product.longDescription,
+            seoDescription: product.seoDescription, updatedAt: FieldValue.serverTimestamp(),
+          });
+        } else {
+          const internalReference = await reserveProductInternalReference({
+            db, transaction, productId: product.id, category: product.category,
+          });
+          transaction.create(productRef, { ...product, internalReference,
+            createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+        transaction.update(selectionRef, { catalogProductId: product.id, updatedAt: now, updatedBy: admin.uid });
+      });
+      sendJson(response, { productId: product.id, slug: product.slug, category: product.category });
       return;
     }
     if (postAction === "publish") {

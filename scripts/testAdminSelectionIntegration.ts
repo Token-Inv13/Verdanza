@@ -6,6 +6,9 @@ import { createSelectionPdf } from "../api/_server/selectionPdf";
 import { handleSelection, parseSupplierHtml } from "../api/_server/selectionRoute";
 import type { VercelRequestLike, VercelResponseLike } from "../api/_server/http";
 import { publicSelectionEntry, publicSelectionView } from "../src/lib/selectionPublication";
+import { buildCatalogProduct, catalogPublicationMissing, normalizeCatalogInput } from "../src/lib/selectionCatalog";
+import { isProductOrderable } from "../src/lib/cartStock";
+import { resolveProductPurchaseOptions } from "../src/lib/productPurchaseOptions";
 import {
   costPerGram, emptySelection, normalizeSelection, publicationMissing,
 } from "../src/types/selection";
@@ -40,6 +43,23 @@ assert.equal("notes" in entry, false);
 assert.equal("prices" in entry, false);
 assert.equal("supplier" in view, false);
 assert.equal("attributes" in entry, false);
+
+const catalogInput = normalizeCatalogInput({ price: 9.99, stock: 25, description: "Une fleur aux notes fruitées et à l'intensité moyenne." });
+const catalogProduct = buildCatalogProduct({ ...ready, origin: "France" }, catalogInput);
+assert.deepEqual(catalogPublicationMissing({ ...ready, origin: "France" }), []);
+assert.equal(catalogProduct.category, "flowers");
+assert.equal(catalogProduct.price, 9.99);
+assert.equal(catalogProduct.stock, 25);
+assert.equal(catalogProduct.fixedPriceMode, "disabled");
+assert.equal(catalogProduct.sourceSelectionId, ready.id);
+assert.equal(isProductOrderable(catalogProduct), true);
+assert.equal(resolveProductPurchaseOptions(catalogProduct)[0].totalPrice, 9.99);
+assert.equal(JSON.stringify(catalogProduct).includes("Coût privé"), false);
+assert.equal(JSON.stringify(catalogProduct).includes("27.00"), false);
+assert.equal(JSON.stringify(catalogProduct).includes("originecbd.fr"), false);
+assert.throws(() => normalizeCatalogInput({ price: 0, stock: 25, description: catalogInput.description }), /prix de vente/);
+assert.throws(() => normalizeCatalogInput({ price: 9.99, stock: 0, description: catalogInput.description }), /stock/);
+assert.ok(catalogPublicationMissing({ ...ready, origin: "France", status: "Retenu" }).includes("étape En boutique"));
 
 const extracted = parseSupplierHtml(`
   <h1>Fleur exemple THC-X 30 %</h1>

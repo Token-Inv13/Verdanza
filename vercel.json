@@ -124,6 +124,10 @@
   ],
   "rewrites": [
     {
+      "source": "/produits/:slug",
+      "destination": "/"
+    },
+    {
       "source": "/api/public-promo-banners",
       "destination": "/api/quote-order?publicPromoBanners=1"
     }

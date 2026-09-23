@@ -38,6 +38,12 @@ export async function publishSelection(id: string) {
   return selectionRequest<{ slug: string; pdfUrl: string }>({ action: "publish", id });
 }
 
+export async function publishSelectionToCatalog(id: string, catalog: { price: number; stock: number; description: string }) {
+  return selectionRequest<{ productId: string; slug: string; category: "flowers" | "resins" }>(
+    { action: "publishCatalog", id, catalog },
+  );
+}
+
 export async function unpublishSelection(id: string) {
   return selectionRequest<{ ok: boolean }>({ action: "unpublish", id });
 }

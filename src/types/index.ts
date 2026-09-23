@@ -20,6 +20,7 @@ export type ProductionFixtureMarker = Readonly<{
 
 export type Product = {
   id: string;
+  sourceSelectionId?: string;
   internalReference?: string;
   legacyInternalReferences?: string[];
   slug: string;
