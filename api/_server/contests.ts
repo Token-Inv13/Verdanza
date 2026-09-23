@@ -893,10 +893,10 @@ export async function rotateContestPrizeClaimToken(
   contestId: string,
   prizeId: string,
   actor: Actor,
+  now?: Date,
 ) {
-  const claimToken = crypto.randomBytes(32).toString("base64url");
-  const claimTokenHash = contestClaimTokenHash(claimToken);
   const prizeRef = db.collection(contestCollections.prizes).doc(prizeId);
+  let claimToken = "";
   let rotatedPrize: ContestPrize | null = null;
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(prizeRef);
@@ -906,9 +906,11 @@ export async function rotateContestPrizeClaimToken(
     if (!["issued", "claimed"].includes(prize.status)) {
       throw new ContestError("L'invitation de ce gain ne peut plus etre renvoyee.", 409);
     }
-    if (Date.parse(prize.expiresAt) <= Date.now()) {
+    if (Date.parse(prize.expiresAt) <= (now?.getTime() ?? Date.now())) {
       throw new ContestError("Le gain est expire.", 409, "contest_prize_expired");
     }
+    claimToken = crypto.randomBytes(32).toString("base64url");
+    const claimTokenHash = contestClaimTokenHash(claimToken);
     const invitationVersion = Number(prize.invitationVersion || 1) + 1;
     rotatedPrize = {
       ...prize,

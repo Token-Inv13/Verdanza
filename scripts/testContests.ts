@@ -187,6 +187,7 @@ async function testPrizeLifecycle() {
     contest.id,
     issued.prize.id,
     adminActor(),
+    now,
   );
   assert.equal(rotated.prize.invitationVersion, 2);
   assert.notEqual(rotated.prize.claimTokenHash, issued.prize.claimTokenHash);
@@ -241,6 +242,28 @@ async function testPrizeLifecycle() {
     expiresAt: "2026-08-21T12:00:00.000Z",
   };
   db.seed(contestCollections.prizes, expiredPrize.id, expiredPrize);
+  const beforeExpiredRotation = db.get(contestCollections.prizes, expiredPrize.id) as ContestPrize;
+  const couponBeforeExpiredRotation = db.get("coupons", expiredPrize.couponId);
+  const auditCountBeforeExpiredRotation = db.map(contestCollections.audits).size;
+  await assert.rejects(
+    rotateContestPrizeClaimToken(
+      db.asFirestore(),
+      contest.id,
+      expiredPrize.id,
+      adminActor(),
+      new Date(Date.parse(expiredPrize.expiresAt) + 1),
+    ),
+    (error: unknown) => error instanceof ContestError &&
+      error.code === "contest_prize_expired" && error.statusCode === 409,
+    "an expired prize must not receive a new invitation token",
+  );
+  const afterExpiredRotation = db.get(contestCollections.prizes, expiredPrize.id) as ContestPrize;
+  assert.deepEqual(afterExpiredRotation, beforeExpiredRotation);
+  assert.equal(afterExpiredRotation.claimTokenHash, beforeExpiredRotation.claimTokenHash);
+  assert.equal(afterExpiredRotation.invitationVersion, beforeExpiredRotation.invitationVersion);
+  assert.equal(afterExpiredRotation.expiresAt, beforeExpiredRotation.expiresAt);
+  assert.deepEqual(db.get("coupons", expiredPrize.couponId), couponBeforeExpiredRotation);
+  assert.equal(db.map(contestCollections.audits).size, auditCountBeforeExpiredRotation);
   const view = await getContestPrizeByToken(db.asFirestore(), token, now);
   assert.equal(view.prize.status, "expired");
   assert.equal((db.get(contestCollections.prizes, expiredPrize.id) as ContestPrize).status, "expired");
