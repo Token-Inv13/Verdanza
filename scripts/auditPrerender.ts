@@ -9,6 +9,7 @@ import {
   type SeoRoute,
 } from "./seoRoutes";
 import { startAuditStaticServer } from "./auditStaticServer";
+import "./testAccountAdvantagesDeepLink";
 
 const distDir = resolve("dist");
 const sitemap = new Set(sitemapUrls());
@@ -16,6 +17,13 @@ const rows = [];
 const fallbackRoutes = prerenderFallbackSeoRoutes();
 const prerenderRoutes = prerenderSeoRoutes();
 const requiredAdminDeepLinks = ["/admin/analytics", "/admin/comptabilite", "/admin/selection"];
+const requiredAccountDeepLinks = [
+  "/compte",
+  "/compte/commandes",
+  "/compte/favoris",
+  "/compte/profil",
+  "/compte/avantages",
+];
 const server = await startAuditStaticServer({
   notFoundPaths: fallbackRoutes.map((route) => route.path),
 });
@@ -25,6 +33,12 @@ try {
     const route = prerenderRoutes.find((candidate) => candidate.path === path);
     if (!route || route.kind !== "admin" || route.indexable) {
       throw new Error(`Required private Admin prerender route is missing or invalid: ${path}`);
+    }
+  }
+  for (const path of requiredAccountDeepLinks) {
+    const route = prerenderRoutes.find((candidate) => candidate.path === path);
+    if (!route || route.kind !== "private" || route.indexable) {
+      throw new Error(`Required private Account prerender route is missing or invalid: ${path}`);
     }
   }
   for (const route of prerenderRoutes) {
@@ -120,6 +134,11 @@ async function auditRoute(
   if (h1Count !== 1) failures.push(`h1 count ${h1Count}`);
   if (mainTextLength < 20) failures.push("main content too short");
   if (containsPrivateData(html)) failures.push("private data marker");
+  if (requiredAccountDeepLinks.includes(route.path)) {
+    const heading = stripTags(firstMatch(mainHtml, /<h1[^>]*>([\s\S]*?)<\/h1>/i)).trim();
+    if (heading !== "Connexion") failures.push("anonymous account gate did not render login");
+    if (stripTags(mainHtml).includes("Mes avantages")) failures.push("wallet content in anonymous HTML");
+  }
 
   return {
     path: requestPath,

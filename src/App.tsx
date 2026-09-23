@@ -55,13 +55,11 @@ const AccountFavoritesPage = lazy(() =>
     default: module.AccountFavoritesPage,
   })),
 );
-const AccountAdvantagesPage = CAGNOTTE_READ_DISPLAY_ENABLED
-  ? lazy(() =>
-      import("./pages/account/AccountAdvantagesPage").then((module) => ({
-        default: module.AccountAdvantagesPage,
-      })),
-    )
-  : null;
+const AccountAdvantagesPage = lazy(() =>
+  import("./pages/account/AccountAdvantagesPage").then((module) => ({
+    default: module.AccountAdvantagesPage,
+  })),
+);
 const AuthPage = lazy(() =>
   import("./pages/AuthPage").then((module) => ({ default: module.AuthPage })),
 );
@@ -147,9 +145,14 @@ export function App() {
               <Route path="commandes" element={<AccountOrdersPage />} />
               <Route path="favoris" element={<AccountFavoritesPage />} />
               <Route path="profil" element={<AccountProfilePage />} />
-              {AccountAdvantagesPage && (
-                <Route path="avantages" element={<AccountAdvantagesPage />} />
-              )}
+              <Route
+                path="avantages"
+                element={
+                  CAGNOTTE_READ_DISPLAY_ENABLED
+                    ? <AccountAdvantagesPage />
+                    : <Navigate to="/compte" replace />
+                }
+              />
             </Route>
           </Route>
           <Route
