@@ -1,9 +1,30 @@
+import { useEffect, useState } from "react";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 import { ProductProfileSelector } from "../components/product-sheets/ProductProfileSelector";
 import { ProductSheetBrowser } from "../components/product-sheets/ProductSheetBrowser";
+import { productSheets, type ProductSheet } from "../data/productSheets";
 
 export function ProductSheetsPage() {
+  const [sheets, setSheets] = useState<ProductSheet[]>(productSheets);
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/selection?action=library", { signal: controller.signal })
+      .then(async (response) => response.ok ? response.json() as Promise<{ sheets?: ProductSheet[] }> : { sheets: [] })
+      .then((result) => {
+        if (!Array.isArray(result.sheets)) return;
+        const seen = new Set(productSheets.map((sheet) => sheet.slug));
+        const additions = result.sheets.filter((sheet) => {
+          if (!sheet || typeof sheet.slug !== "string" || seen.has(sheet.slug) ||
+            !["flower", "resin"].includes(sheet.selectionProfile?.category) ||
+            !["douce", "moyenne", "forte"].includes(sheet.selectionProfile?.intensity)) return false;
+          seen.add(sheet.slug);
+          return true;
+        });
+        setSheets([...productSheets, ...additions]);
+      }).catch(() => { /* Keep the validated static library when the API is unavailable. */ });
+    return () => controller.abort();
+  }, []);
   return (
     <main className="overflow-x-clip pb-20">
       <Seo
@@ -35,7 +56,7 @@ export function ProductSheetsPage() {
       </header>
 
       <div className="container-page pt-6 sm:pt-10 lg:pt-12">
-        <ProductProfileSelector />
+        <ProductProfileSelector sheets={sheets} />
 
         <section
           id="all-product-sheets"
@@ -57,7 +78,7 @@ export function ProductSheetsPage() {
             </p>
           </div>
 
-          <ProductSheetBrowser />
+          <ProductSheetBrowser library={sheets} />
         </section>
       </div>
     </main>

@@ -4,6 +4,9 @@
   "devCommand": "npm run dev -- --host 127.0.0.1",
   "outputDirectory": "dist",
   "functions": {
+    "api/selection.ts": {
+      "includeFiles": "public/brand/verdanza-v1/email/verdanza-logo-horizontal-compact-full-color-512.png"
+    },
     "api/analyze-supplier-invoice.ts": {
       "includeFiles": "node_modules/{@napi-rs/canvas/**,@napi-rs/canvas-linux-x64-gnu/**,pdfjs-dist/legacy/build/pdf.worker.mjs}"
     }

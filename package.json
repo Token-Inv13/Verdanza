@@ -37,6 +37,8 @@
     "test:fixed-price-formats": "node --import tsx scripts/testFixedPriceFormats.ts",
     "test:product-purchase-options": "node --import tsx scripts/testProductPurchaseOptions.ts",
     "test:product-sheets": "node --import tsx scripts/testProductSheets.ts",
+    "test:admin-selection": "tsc --noEmit --moduleResolution NodeNext --module NodeNext --target ES2022 --esModuleInterop --skipLibCheck --strict --types node api/selection.ts api/_server/selectionRoute.ts api/_server/selectionPdf.ts && node --import tsx scripts/testAdminSelectionIntegration.ts",
+    "test:selection-public-library": "node --import tsx scripts/testSelectionPublicLibrary.ts",
     "test:product-sheet-selector": "node --import tsx scripts/testProductSheetSelector.ts",
     "test:product-sheets-ui-v2": "node --import tsx scripts/testProductSheetsUiV2.ts",
     "test:cagnotte": "node --import tsx scripts/testCagnotteCalculations.ts",

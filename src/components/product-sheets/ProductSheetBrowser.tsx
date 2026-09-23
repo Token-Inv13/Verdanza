@@ -13,15 +13,15 @@ const categoryOptions: Array<{ category: ProductSheetCategory; label: string }> 
   { category: "resin", label: "Résines" },
 ];
 
-export function ProductSheetBrowser() {
+export function ProductSheetBrowser({ library = productSheets }: { library?: ProductSheet[] }) {
   const [category, setCategory] = useState<ProductSheetCategory>("flower");
   const [activeIndex, setActiveIndex] = useState(0);
   const carouselRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<number | null>(null);
   const lastTrackedIndexRef = useRef(0);
   const sheets = useMemo(
-    () => productSheets.filter((sheet) => sheet.selectionProfile.category === category),
-    [category],
+    () => library.filter((sheet) => sheet.selectionProfile.category === category),
+    [category, library],
   );
 
   useEffect(() => {

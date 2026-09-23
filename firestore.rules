@@ -36,6 +36,17 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // The atelier is exclusively served by the authenticated server API.
+    // Supplier prices, test notes and drafts never reach a public Firestore query.
+    match /productSelections/{selectionId} {
+      allow read, write: if false;
+    }
+
+    // Public sheets are projected by /api/selection after a boutique-stage check.
+    match /productSelectionSheets/{sheetId} {
+      allow read, write: if false;
+    }
+
     match /productReferences/{referenceId} {
       allow read: if isAdmin();
       allow create, update, delete: if false;

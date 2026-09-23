@@ -19,6 +19,9 @@ import { CAGNOTTE_READ_DISPLAY_ENABLED } from "./config/cagnotteFeatures";
 const AdminLayout = lazy(() =>
   import("./layouts/AdminLayout").then((module) => ({ default: module.AdminLayout })),
 );
+const AdminSelectionPage = lazy(() =>
+  import("./pages/admin/AdminSelectionPage").then((module) => ({ default: module.AdminSelectionPage })),
+);
 const AdminPage = lazy(() =>
   import("./pages/admin/AdminPage").then((module) => ({ default: module.AdminPage })),
 );
@@ -165,6 +168,7 @@ export function App() {
             <Route index element={<AdminPage section="Dashboard" />} />
             <Route path="analytics" element={<AdminPage section="Analytics" />} />
             <Route path="produits" element={<AdminPage section="Produits" />} />
+            <Route path="selection" element={<AdminSelectionPage />} />
             <Route path="stocks" element={<AdminPage section="Stocks" />} />
             <Route path="commandes" element={<AdminPage section="Commandes" />} />
             <Route

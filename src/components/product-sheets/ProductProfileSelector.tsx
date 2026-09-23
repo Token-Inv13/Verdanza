@@ -4,6 +4,8 @@ import {
   productSheetAromaFamilyLabels,
   productSheetCategoryLabels,
   productSheetIntensityLabels,
+  productSheets,
+  type ProductSheet,
   type ProductSheetAromaFamily,
   type ProductSheetCategory,
   type ProductSheetIntensity,
@@ -35,7 +37,7 @@ const aromaOptions = Object.entries(productSheetAromaFamilyLabels) as Array<
   [ProductSheetAromaFamily, string]
 >;
 
-export function ProductProfileSelector() {
+export function ProductProfileSelector({ sheets = productSheets }: { sheets?: ProductSheet[] }) {
   const [choices, setChoices] = useState<ProductSelectorChoices>(
     createInitialProductSelectorChoices,
   );
@@ -44,10 +46,10 @@ export function ProductProfileSelector() {
   const [showStickySummary, setShowStickySummary] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
   const startedRef = useRef(false);
-  const matches = useMemo(() => rankProductSheets(choices), [choices]);
+  const matches = useMemo(() => rankProductSheets(choices, sheets), [choices, sheets]);
   const availableIntensities = useMemo(
-    () => getAvailableProductSheetIntensities(choices.category),
-    [choices.category],
+    () => getAvailableProductSheetIntensities(choices.category, sheets),
+    [choices.category, sheets],
   );
   const selectionKey = [choices.category, choices.intensity, choices.aroma].join(":");
   const hasSelection = Boolean(choices.category || choices.intensity || choices.aroma);
@@ -75,7 +77,7 @@ export function ProductProfileSelector() {
 
   const selectCategory = (category: ProductSheetCategory) => {
     startSelector();
-    const nextChoices = changeProductSelectorCategory(choices, category);
+    const nextChoices = changeProductSelectorCategory(choices, category, sheets);
     setChoices(nextChoices);
     setSelectorExpanded(true);
     setOpenStep(nextChoices.intensity ? 3 : 2);
