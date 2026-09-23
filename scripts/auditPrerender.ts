@@ -15,7 +15,7 @@ const sitemap = new Set(sitemapUrls());
 const rows = [];
 const fallbackRoutes = prerenderFallbackSeoRoutes();
 const prerenderRoutes = prerenderSeoRoutes();
-const requiredAdminDeepLinks = ["/admin/analytics", "/admin/comptabilite"];
+const requiredAdminDeepLinks = ["/admin/analytics", "/admin/comptabilite", "/admin/selection"];
 const server = await startAuditStaticServer({
   notFoundPaths: fallbackRoutes.map((route) => route.path),
 });
