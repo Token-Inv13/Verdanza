@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import { ArrowDownToLine, ArrowUpRight, Check, FileText, Pencil, Plus, Search, X } from "lucide-react";
+import { ArrowDownToLine, ArrowUpRight, Check, ChevronDown, FileText, Pencil, Plus, Search, X } from "lucide-react";
 import { Seo } from "../../components/Seo";
 import { getFirestoreProducts } from "../../services/productsService";
 import {
@@ -21,6 +21,19 @@ const money = (value: string | number) => {
 const dedupe = (item: ProductSelection) => item.url
   ? `url:${item.url.replace(/\/$/, "").toLowerCase()}`
   : `name:${item.name.toLowerCase()}:${item.supplier.toLowerCase()}`;
+const selectionTabs = ["Tous", ...selectionStatuses] as const;
+type SelectionTab = typeof selectionTabs[number];
+type SelectionSort = "name" | "recent" | "priority";
+const stageDescriptions: Record<SelectionTab, string> = {
+  Tous: "Toutes vos références, du premier repérage à la boutique.",
+  "À explorer": "Les pistes à examiner avant de passer commande.",
+  "À commander": "Les références prévues pour une prochaine commande.",
+  "À tester": "Les produits à découvrir et à évaluer.",
+  Testé: "Vos essais réalisés, en attente d'une décision.",
+  Retenu: "Les références qui ont gagné leur place dans votre sélection.",
+  "En boutique": "Les produits sélectionnés pour votre boutique.",
+  Écarté: "Les références mises de côté, conservées pour mémoire.",
+};
 
 export function AdminSelectionPage() {
   const [items, setItems] = useState<ProductSelection[]>([]);
@@ -29,8 +42,11 @@ export function AdminSelectionPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("Tous");
+  const [status, setStatus] = useState<SelectionTab>("Tous");
   const [category, setCategory] = useState("Tous");
+  const [priorityFilter, setPriorityFilter] = useState("Tous");
+  const [sort, setSort] = useState<SelectionSort>("name");
+  const [showImportTools, setShowImportTools] = useState(false);
   const [link, setLink] = useState("");
   const [detailId, setDetailId] = useState("");
   const [draft, setDraft] = useState<ProductSelection | null>(null);
@@ -39,6 +55,7 @@ export function AdminSelectionPage() {
   const [catalogProducts, setCatalogProducts] = useState<Array<{ id: string; name: string; isActive: boolean }>>([]);
   const fileInput = useRef<HTMLInputElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
+  const tabButtons = useRef<Array<HTMLButtonElement | null>>([]);
 
   const refresh = useCallback(async () => {
     try {
@@ -62,13 +79,22 @@ export function AdminSelectionPage() {
   const detailImage = useSelectionImage(detail?.id || "", detail?.imagePath || "");
   const draftImage = useSelectionImage(draft?.id || "", draft?.imagePath || "");
   const compared = compareIds.map((id) => items.find((item) => item.id === id)).filter((item): item is ProductSelection => Boolean(item));
+  const stageCounts = useMemo(() => Object.fromEntries(selectionStatuses.map((stage) => [
+    stage, items.filter((item) => item.status === stage).length,
+  ])) as Record<ProductSelection["status"], number>, [items]);
   const filtered = useMemo(() => items.filter((item) => {
-    const needle = query.toLocaleLowerCase("fr");
+    const needle = query.trim().toLocaleLowerCase("fr");
     return (status === "Tous" || item.status === status)
       && (category === "Tous" || item.category === category)
+      && (priorityFilter === "Tous" || item.priority === priorityFilter)
       && (!needle || [item.name, item.supplier, item.molecule, item.origin, item.aromas]
         .join(" ").toLocaleLowerCase("fr").includes(needle));
-  }), [items, query, status, category]);
+  }).sort((a, b) => {
+    if (sort === "recent") return b.updatedAt.localeCompare(a.updatedAt) || a.name.localeCompare(b.name, "fr");
+    if (sort === "priority") return selectionPriorities.indexOf(a.priority) - selectionPriorities.indexOf(b.priority)
+      || a.name.localeCompare(b.name, "fr");
+    return a.name.localeCompare(b.name, "fr");
+  }), [items, query, status, category, priorityFilter, sort]);
   const importDuplicates = useMemo(() => {
     const existing = new Set(items.map(dedupe));
     return pendingImport.filter((item) => existing.has(dedupe(item))).length;
@@ -111,6 +137,7 @@ export function AdminSelectionPage() {
         parsed && typeof parsed === "object" && "products" in parsed ? (parsed as { products: unknown }).products : null;
       if (!Array.isArray(rows) || !rows.length || rows.length > 100) throw new Error("Fichier JSON attendu : tableau de 1 à 100 produits.");
       setPendingImport(rows.map(normalizeSelection));
+      setShowImportTools(true);
       setError("");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Fichier JSON invalide."); }
   };
@@ -174,86 +201,133 @@ export function AdminSelectionPage() {
   const toggleCompare = (id: string) => setCompareIds((current) => current.includes(id)
     ? current.filter((entry) => entry !== id) : [...current.slice(-2), id]);
 
+  const handleTabKey = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let next = index;
+    if (event.key === "ArrowRight") next = (index + 1) % selectionTabs.length;
+    else if (event.key === "ArrowLeft") next = (index - 1 + selectionTabs.length) % selectionTabs.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = selectionTabs.length - 1;
+    else return;
+    event.preventDefault();
+    setStatus(selectionTabs[next]);
+    tabButtons.current[next]?.focus();
+  };
+
   return (
     <div className="min-h-screen bg-[#f6f3ec] px-4 py-7 text-forest sm:px-7 lg:px-10">
       <Seo title="Atelier de sélection - Admin Verdanza" description="Sélections privées Verdanza." path="/admin/selection" noindex />
-      <header className="flex flex-wrap items-end justify-between gap-5">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-champagne">Produits & fournisseurs</p>
-          <h1 className="mt-2 font-display text-4xl sm:text-5xl">Atelier de sélection</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-ink/65">Du repérage à la fiche client : gardez vos coûts et notes dans l'espace privé.</p>
+      <header className="relative overflow-hidden rounded-[1.75rem] bg-forest px-6 py-7 text-ivory shadow-sm sm:px-8 lg:px-10">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-40 h-80 w-80 rounded-full border border-champagne/20 sm:right-16" />
+        <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-24 h-80 w-80 rounded-full border border-champagne/10 sm:right-28" />
+        <div className="relative flex flex-wrap items-start justify-between gap-6">
+          <div>
+            <p className="text-[0.7rem] font-bold uppercase tracking-[0.22em] text-champagne">Produits & fournisseurs · espace privé</p>
+            <h1 className="mt-2 font-display text-4xl leading-tight sm:text-5xl">Atelier de sélection</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-ivory/75">Suivez chaque référence, comparez vos choix et préparez les fiches destinées à la boutique.</p>
+          </div>
+          <button type="button" className="relative inline-flex min-h-12 items-center gap-2 rounded-lg bg-ivory px-5 py-3 text-sm font-semibold text-forest shadow-sm transition hover:bg-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-champagne" onClick={() => setDraft(emptySelection())}>
+            <Plus size={17} /> Ajouter un produit
+          </button>
         </div>
-        <button type="button" className="btn-primary inline-flex items-center gap-2" onClick={() => setDraft(emptySelection())}>
-          <Plus size={17} /> Ajouter un produit
-        </button>
+        <div className="relative mt-6 flex flex-wrap gap-x-8 gap-y-3 border-t border-ivory/15 pt-5 text-sm">
+          <span><strong className="mr-2 font-display text-2xl leading-none">{items.length}</strong><span className="text-ivory/70">produits suivis</span></span>
+          <span><strong className="mr-2 font-display text-2xl leading-none">{stageCounts["À tester"]}</strong><span className="text-ivory/70">à tester</span></span>
+          <span><strong className="mr-2 font-display text-2xl leading-none">{stageCounts.Retenu}</strong><span className="text-ivory/70">retenus</span></span>
+          <span><strong className="mr-2 font-display text-2xl leading-none">{stageCounts["En boutique"]}</strong><span className="text-ivory/70">en boutique</span></span>
+        </div>
       </header>
 
-      <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          ["Produits suivis", items.length], ["À tester", items.filter((item) => item.status === "À tester").length],
-          ["Retenus", items.filter((item) => item.status === "Retenu").length],
-          ["En boutique", items.filter((item) => item.status === "En boutique").length],
-        ].map(([label, count]) => <div key={label} className="rounded-xl border border-forest/10 bg-ivory p-5 shadow-sm">
-          <p className="text-[0.7rem] font-bold uppercase tracking-[0.14em] text-forest/60">{label}</p>
-          <p className="mt-2 font-display text-3xl">{count}</p>
-        </div>)}
-      </div>
-
-      <section className="mt-6 rounded-xl border border-forest/10 bg-ivory p-5 shadow-sm" aria-label="Importer des produits">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h2 className="font-display text-2xl">Ajouter depuis un fournisseur</h2>
-            <p className="mt-1 text-xs text-ink/60">L'import par lien propose des données à vérifier. Le fichier JSON permet de reprendre l'atelier local.</p></div>
-          <button type="button" className="btn-secondary inline-flex items-center gap-2" onClick={() => fileInput.current?.click()}>
-            <ArrowDownToLine size={16} /> Importer JSON
-          </button>
-          <button type="button" className="btn-secondary" disabled={!items.length} onClick={() => downloadJson(items)}>Exporter JSON</button>
-          <input ref={fileInput} className="sr-only" type="file" accept="application/json,.json" onChange={(event) => void handleFile(event)} />
-        </div>
-        <form className="mt-4 flex flex-col gap-2 sm:flex-row" onSubmit={handleExtract}>
-          <label className="sr-only" htmlFor="selection-url">Lien de fiche fournisseur</label>
-          <input id="selection-url" className="input-field min-w-0 flex-1" type="url" required placeholder="https://originecbd.fr/…" value={link} onChange={(event) => setLink(event.target.value)} />
-          <button className="btn-primary" disabled={busy}>Importer le lien</button>
-        </form>
-        {pendingImport.length > 0 && <div className="mt-4 rounded-lg border border-champagne/40 bg-cream p-4 text-sm">
-          <strong>{pendingImport.length} références dans le fichier</strong> · {importDuplicates} doublon{importDuplicates > 1 ? "s" : ""} détecté{importDuplicates > 1 ? "s" : ""}.
-          <p className="mt-1 text-ink/65">Les doublons seront ignorés. Aucune fiche publique ne sera créée par cet import.</p>
-          <div className="mt-3 max-h-32 overflow-y-auto text-xs text-ink/70">{pendingImport.map((item, index) => <p key={`${item.name}-${index}`}>{item.name} · {item.supplier || "Fournisseur à renseigner"}</p>)}</div>
-          <div className="mt-3 flex gap-2"><button type="button" className="btn-primary" disabled={busy} onClick={() => void action(async () => {
-            const result = await importSelections(pendingImport); setPendingImport([]);
-            setMessage(`${result.imported} produits importés, ${result.skipped} ignorés.`); await refresh();
-          })}>Confirmer l'import</button>
-          <button type="button" className="btn-secondary" onClick={() => setPendingImport([])}>Annuler</button></div>
+      <section className="mt-5 overflow-hidden rounded-2xl border border-forest/10 bg-ivory shadow-sm" aria-label="Importer et exporter des produits">
+        <button type="button" className="flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-cream/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-champagne sm:px-6" aria-expanded={showImportTools} aria-controls="selection-import-tools" onClick={() => setShowImportTools((open) => !open)}>
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-cream text-forest"><ArrowDownToLine size={19} /></span>
+          <span className="min-w-0 flex-1"><span className="block font-semibold">Ajouter depuis un fournisseur</span><span className="mt-0.5 block text-xs text-ink/60">Importer un lien, reprendre un fichier JSON ou exporter une sauvegarde.</span></span>
+          <ChevronDown size={18} className={`shrink-0 text-forest/60 transition-transform ${showImportTools ? "rotate-180" : ""}`} />
+        </button>
+        {showImportTools && <div id="selection-import-tools" className="border-t border-forest/10 px-5 pb-5 pt-4 sm:px-6">
+          <form className="flex flex-col gap-2 sm:flex-row" onSubmit={handleExtract}>
+            <label className="sr-only" htmlFor="selection-url">Lien de fiche fournisseur</label>
+            <input id="selection-url" className="input-field min-w-0 flex-1" type="url" required placeholder="Collez le lien de la fiche fournisseur…" value={link} onChange={(event) => setLink(event.target.value)} />
+            <button className="btn-primary" disabled={busy}>Importer le lien</button>
+          </form>
+          <p className="mt-2 text-xs text-ink/55">Les informations proposées par le fournisseur restent à vérifier avant enregistrement.</p>
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-forest/10 pt-4">
+            <button type="button" className="btn-secondary inline-flex items-center gap-2" onClick={() => fileInput.current?.click()}><ArrowDownToLine size={16} /> Importer JSON</button>
+            <button type="button" className="btn-secondary" disabled={!items.length} onClick={() => downloadJson(items)}>Exporter JSON</button>
+            <input ref={fileInput} className="sr-only" type="file" accept="application/json,.json" onChange={(event) => void handleFile(event)} />
+          </div>
+          {pendingImport.length > 0 && <div className="mt-4 rounded-lg border border-champagne/40 bg-cream p-4 text-sm">
+            <strong>{pendingImport.length} références dans le fichier</strong> · {importDuplicates} doublon{importDuplicates > 1 ? "s" : ""} détecté{importDuplicates > 1 ? "s" : ""}.
+            <p className="mt-1 text-ink/65">Les doublons seront ignorés. Aucune fiche publique ne sera créée par cet import.</p>
+            <div className="mt-3 max-h-32 overflow-y-auto text-xs text-ink/70">{pendingImport.map((item, index) => <p key={`${item.name}-${index}`}>{item.name} · {item.supplier || "Fournisseur à renseigner"}</p>)}</div>
+            <div className="mt-3 flex flex-wrap gap-2"><button type="button" className="btn-primary" disabled={busy} onClick={() => void action(async () => {
+              const result = await importSelections(pendingImport); setPendingImport([]);
+              setMessage(`${result.imported} produits importés, ${result.skipped} ignorés.`); await refresh();
+            })}>Confirmer l'import</button>
+            <button type="button" className="btn-secondary" onClick={() => setPendingImport([])}>Annuler</button></div>
+          </div>}
         </div>}
       </section>
 
       {(error || message) && <div role={error ? "alert" : "status"} className={`mt-4 rounded-lg px-4 py-3 text-sm ${error ? "bg-red-50 text-red-800" : "bg-[#eaf2e8] text-forest"}`}>{error || message}</div>}
 
-      <section className="mt-6 rounded-xl border border-forest/10 bg-ivory p-4 shadow-sm sm:p-6" aria-label="Catalogue de sélection">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><p className="text-[0.7rem] font-bold uppercase tracking-[0.18em] text-champagne">Votre catalogue de travail</p>
-            <h2 className="font-display text-3xl">Toutes les sélections</h2></div>
-          <span className="text-sm text-ink/55">{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span>
+      <section className="mt-5 overflow-hidden rounded-2xl border border-forest/10 bg-ivory shadow-sm" aria-label="Catalogue de sélection">
+        <div className="px-5 pb-4 pt-6 sm:px-7">
+          <p className="text-[0.7rem] font-bold uppercase tracking-[0.18em] text-champagne">Votre catalogue de travail</p>
+          <h2 className="mt-1 font-display text-3xl sm:text-4xl">Parcours des produits</h2>
         </div>
-        <div className="mt-5 grid gap-2 sm:grid-cols-[minmax(12rem,1fr)_auto_auto]">
-          <label className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-forest/50" size={16} />
-            <span className="sr-only">Rechercher</span><input className="input-field w-full pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Produit, molécule, fournisseur…" /></label>
-          <label className="sr-only" htmlFor="selection-stage">Étape</label><select id="selection-stage" className="input-field" value={status} onChange={(event) => setStatus(event.target.value)}><option>Tous</option>{selectionStatuses.map((entry) => <option key={entry}>{entry}</option>)}</select>
-          <label className="sr-only" htmlFor="selection-category">Type</label><select id="selection-category" className="input-field" value={category} onChange={(event) => setCategory(event.target.value)}><option>Tous</option>{selectionCategories.map((entry) => <option key={entry}>{entry}</option>)}</select>
+        <div className="border-y border-forest/10 bg-[#eef1ea] px-3 py-2 sm:px-5">
+          <div role="tablist" aria-label="Étapes des sélections" className="flex gap-1 overflow-x-auto pb-1" style={{ scrollbarWidth: "thin" }}>
+            {selectionTabs.map((entry, index) => <button key={entry} ref={(node) => { tabButtons.current[index] = node; }} id={`selection-tab-${index}`} type="button" role="tab" aria-selected={status === entry} aria-controls="selection-results" tabIndex={status === entry ? 0 : -1} onClick={() => setStatus(entry)} onKeyDown={(event) => handleTabKey(event, index)} className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-champagne ${status === entry ? "bg-forest text-ivory shadow-sm" : "text-forest/75 hover:bg-ivory hover:text-forest"}`}>
+              <span>{entry === "Tous" ? "Toutes" : entry}</span><span className={`rounded-full px-2 py-0.5 text-[0.7rem] font-bold ${status === entry ? "bg-ivory/15 text-ivory" : "bg-forest/10 text-forest/70"}`}>{entry === "Tous" ? items.length : stageCounts[entry]}</span>
+            </button>)}
+          </div>
         </div>
-        {loading ? <p className="py-10 text-center text-ink/60">Chargement des sélections…</p> :
-          filtered.length === 0 ? <p className="py-10 text-center text-ink/60">Aucun produit pour ces critères.</p> :
-            <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[780px] border-collapse text-left text-sm">
-              <thead><tr className="border-b border-forest/15 text-[0.7rem] uppercase tracking-[0.14em] text-forest/60">
-                <th className="py-3 pr-3">Comparer</th><th className="py-3 pr-3">Produit</th><th className="py-3 pr-3">Type / molécule</th><th className="py-3 pr-3">Fournisseur</th><th className="py-3 pr-3">Premier prix</th><th className="py-3 pr-3">Étape</th><th className="py-3">Fiche</th>
-              </tr></thead><tbody>{filtered.map((item) => <tr key={item.id} className="border-b border-forest/10 hover:bg-cream/70">
-                <td className="py-3 pr-3"><input type="checkbox" checked={compareIds.includes(item.id)} onChange={() => toggleCompare(item.id)} aria-label={`Comparer ${item.name}`} /></td>
-                <td className="py-3 pr-3"><button type="button" className="text-left font-semibold hover:underline" onClick={() => setDetailId(item.id)}>{item.name}</button><p className="text-xs text-ink/55">{item.rate || "Taux à vérifier"} · {item.origin || "Provenance à renseigner"}</p></td>
-                <td className="py-3 pr-3">{item.category}<p className="text-xs text-ink/55">{item.molecule || "—"}</p></td>
-                <td className="py-3 pr-3">{item.supplier || "—"}</td>
-                <td className="py-3 pr-3">{item.prices[0] ? money(item.prices[0].price) : "—"}<p className="text-xs text-ink/55">{item.prices[0]?.format || "Aucun format"}</p></td>
-                <td className="py-3 pr-3"><select className="rounded-md border border-forest/15 bg-ivory px-2 py-2 text-xs" value={item.status} disabled={busy} aria-label={`Étape de ${item.name}`} onChange={(event) => changeStatus(item, event.target.value as ProductSelection["status"])}>{selectionStatuses.map((entry) => <option key={entry}>{entry}</option>)}</select></td>
-                <td className="py-3"><button type="button" className="rounded-md border border-forest/15 p-2 hover:bg-cream" aria-label={`Ouvrir la fiche ${item.name}`} onClick={() => setDetailId(item.id)}><ArrowUpRight size={17} /></button></td>
-              </tr>)}</tbody></table></div>}
+        <div id="selection-results" role="tabpanel" aria-labelledby={`selection-tab-${selectionTabs.indexOf(status)}`} tabIndex={0} className="px-5 pb-6 pt-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-champagne sm:px-7">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div><h3 className="font-display text-2xl">{status === "Tous" ? "Toutes les sélections" : status}</h3><p className="mt-1 text-sm text-ink/60">{stageDescriptions[status]}</p></div>
+            <span className="rounded-full bg-cream px-3 py-1.5 text-xs font-semibold text-forest/80">{filtered.length} résultat{filtered.length === 1 ? "" : "s"}</span>
+          </div>
+          <div className="mt-5 grid gap-3 rounded-xl border border-forest/10 bg-[#faf9f5] p-3 sm:grid-cols-2 xl:grid-cols-[minmax(14rem,1fr)_minmax(9rem,auto)_minmax(9rem,auto)_minmax(11rem,auto)] sm:p-4">
+            <label className="block text-[0.7rem] font-bold uppercase tracking-[0.12em] text-forest/60 sm:col-span-2 xl:col-span-1">Rechercher
+              <span className="relative mt-1 block"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-forest/45" size={16} /><input className="input-field w-full pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Produit, molécule, fournisseur…" /></span>
+            </label>
+            <label className="block text-[0.7rem] font-bold uppercase tracking-[0.12em] text-forest/60">Type de produit
+              <select id="selection-category" className="input-field mt-1" value={category} onChange={(event) => setCategory(event.target.value)}><option value="Tous">Tous les types</option>{selectionCategories.map((entry) => <option key={entry}>{entry}</option>)}</select>
+            </label>
+            <label className="block text-[0.7rem] font-bold uppercase tracking-[0.12em] text-forest/60">Niveau d'intérêt
+              <select className="input-field mt-1" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}><option value="Tous">Tous les niveaux</option>{selectionPriorities.map((entry) => <option key={entry}>{entry}</option>)}</select>
+            </label>
+            <label className="block text-[0.7rem] font-bold uppercase tracking-[0.12em] text-forest/60 sm:col-span-2 xl:col-span-1">Trier par
+              <select className="input-field mt-1" value={sort} onChange={(event) => setSort(event.target.value as SelectionSort)}><option value="name">Nom A–Z</option><option value="recent">Modification récente</option><option value="priority">Intérêt prioritaire</option></select>
+            </label>
+          </div>
+          {(query || category !== "Tous" || priorityFilter !== "Tous") && <button type="button" className="mt-3 text-xs font-semibold text-forest underline decoration-champagne underline-offset-4" onClick={() => { setQuery(""); setCategory("Tous"); setPriorityFilter("Tous"); }}>Effacer les filtres</button>}
+          {loading ? <p className="py-12 text-center text-ink/60">Chargement des sélections…</p> :
+            filtered.length === 0 ? <div className="mt-5 rounded-xl border border-dashed border-forest/20 bg-cream/50 px-5 py-12 text-center">
+              <p className="font-display text-2xl">Aucune référence ici pour le moment</p><p className="mx-auto mt-2 max-w-md text-sm text-ink/60">{query || category !== "Tous" || priorityFilter !== "Tous" ? "Essayez une autre recherche ou effacez les filtres." : stageDescriptions[status]}</p>
+              {query || category !== "Tous" || priorityFilter !== "Tous" ? <button type="button" className="btn-secondary mt-5" onClick={() => { setQuery(""); setCategory("Tous"); setPriorityFilter("Tous"); }}>Effacer les filtres</button> : <button type="button" className="btn-secondary mt-5" onClick={() => setDraft(emptySelection())}><Plus size={16} /> Ajouter un produit</button>}
+            </div> : <>
+              <div className="mt-5 grid gap-3 xl:hidden">{filtered.map((item) => <article key={item.id} className="rounded-xl border border-forest/10 bg-ivory p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3"><div className="flex flex-wrap gap-2"><CategoryBadge category={item.category} /><PriorityBadge priority={item.priority} /></div><button type="button" className="rounded-lg border border-forest/15 p-2 hover:bg-cream" aria-label={`Ouvrir la fiche ${item.name}`} onClick={() => setDetailId(item.id)}><ArrowUpRight size={17} /></button></div>
+                <button type="button" className="mt-3 block text-left text-base font-semibold leading-snug hover:underline" onClick={() => setDetailId(item.id)}>{item.name}</button>
+                <p className="mt-1 text-xs text-ink/55">{[item.molecule, item.rate, item.origin].filter(Boolean).join(" · ") || "Caractéristiques à vérifier"}</p>
+                <div className="mt-4 space-y-2 border-t border-forest/10 pt-3 text-sm"><div className="flex items-start justify-between gap-4"><span className="shrink-0 text-xs text-ink/50">Fournisseur</span><span className="min-w-0 text-right text-xs font-medium [overflow-wrap:anywhere]">{item.supplier || "À renseigner"}</span></div><div className="flex items-start justify-between gap-4"><span className="shrink-0 text-xs text-ink/50">Premier prix</span><span className="min-w-0 text-right"><strong>{item.prices[0] ? money(item.prices[0].price) : "—"}</strong><small className="block text-xs text-ink/50">{item.prices[0]?.format || "Aucun format"}</small></span></div></div>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-forest/10 pt-3"><label className="inline-flex items-center gap-2 text-xs text-ink/65"><input type="checkbox" checked={compareIds.includes(item.id)} onChange={() => toggleCompare(item.id)} /> Comparer</label><select className="rounded-lg border border-forest/15 bg-ivory px-3 py-2 text-xs" value={item.status} disabled={busy} aria-label={`Étape de ${item.name}`} onChange={(event) => changeStatus(item, event.target.value as ProductSelection["status"])}>{selectionStatuses.map((entry) => <option key={entry}>{entry}</option>)}</select></div>
+              </article>)}</div>
+              <div className="mt-5 hidden overflow-x-auto xl:block"><table className="w-full min-w-[950px] border-collapse text-left text-sm">
+                <thead><tr className="border-b border-forest/15 text-[0.65rem] uppercase tracking-[0.14em] text-forest/55">
+                  <th className="w-20 py-3 pr-3">Comparer</th><th className="w-[31%] py-3 pr-3">Produit</th><th className="py-3 pr-3">Profil</th><th className="py-3 pr-3">Fournisseur</th><th className="py-3 pr-3">Premier prix</th><th className="py-3 pr-3">Étape</th><th className="py-3">Fiche</th>
+                </tr></thead><tbody>{filtered.map((item) => <tr key={item.id} className="border-b border-forest/10 transition-colors last:border-0 hover:bg-cream/70">
+                  <td className="py-4 pr-3"><input type="checkbox" checked={compareIds.includes(item.id)} onChange={() => toggleCompare(item.id)} aria-label={`Comparer ${item.name}`} /></td>
+                  <td className="py-4 pr-4"><button type="button" className="text-left font-semibold leading-snug hover:underline" onClick={() => setDetailId(item.id)}>{item.name}</button><p className="mt-1 text-xs text-ink/55">{item.origin || "Provenance à renseigner"}</p></td>
+                  <td className="py-4 pr-3"><div className="flex flex-wrap gap-1.5"><CategoryBadge category={item.category} /><PriorityBadge priority={item.priority} /></div><p className="mt-1.5 text-xs text-ink/55">{[item.molecule, item.rate].filter(Boolean).join(" · ") || "Profil à vérifier"}</p></td>
+                  <td className="py-4 pr-3 text-ink/75">{item.supplier || "—"}</td>
+                  <td className="py-4 pr-3"><span className="font-semibold">{item.prices[0] ? money(item.prices[0].price) : "—"}</span><p className="mt-1 text-xs text-ink/55">{item.prices[0]?.format || "Aucun format"}</p></td>
+                  <td className="py-4 pr-3"><select className="rounded-lg border border-forest/15 bg-ivory px-2 py-2 text-xs" value={item.status} disabled={busy} aria-label={`Étape de ${item.name}`} onChange={(event) => changeStatus(item, event.target.value as ProductSelection["status"])}>{selectionStatuses.map((entry) => <option key={entry}>{entry}</option>)}</select></td>
+                  <td className="py-4"><button type="button" className="rounded-lg border border-forest/15 p-2 hover:bg-cream" aria-label={`Ouvrir la fiche ${item.name}`} onClick={() => setDetailId(item.id)}><ArrowUpRight size={17} /></button></td>
+                </tr>)}</tbody></table></div>
+            </>}
+        </div>
       </section>
 
       {compared.length > 0 && <section className="mt-6 rounded-xl border border-forest/10 bg-ivory p-5 shadow-sm" aria-label="Comparaison des produits">
@@ -354,6 +428,18 @@ export function AdminSelectionPage() {
 
 function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
   return <section className="space-y-2 text-sm leading-6 text-ink/75"><h3 className="border-b border-forest/10 pb-2 font-display text-2xl text-forest">{title}</h3>{children}</section>;
+}
+
+function CategoryBadge({ category }: { category: ProductSelection["category"] }) {
+  const tone = category === "Fleur" ? "bg-[#e8f0e6] text-[#285b40]" : category === "Résine"
+    ? "bg-[#f3eadb] text-[#795730]" : "bg-[#f1efeb] text-ink/65";
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-[0.7rem] font-semibold ${tone}`}>{category === "Autre" ? "Type à préciser" : category}</span>;
+}
+
+function PriorityBadge({ priority }: { priority: ProductSelection["priority"] }) {
+  const tone = priority === "Haute" ? "bg-[#f8ecdc] text-[#875d23]" : priority === "Moyenne"
+    ? "bg-[#eef1e9] text-forest/75" : "bg-[#f1efeb] text-ink/60";
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-[0.7rem] font-semibold ${tone}`}>Intérêt {priority.toLowerCase()}</span>;
 }
 
 function Field({ label, value, onChange, wide, required, type = "text" }: {
