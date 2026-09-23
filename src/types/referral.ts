@@ -31,6 +31,8 @@ export type ReferralRelation = {
   deliveredOrderId: string | null;
   paymentConfirmed: boolean;
   deliveryConfirmed: boolean;
+  /** Terminal commercial fact for a paid qualifying order; absent on earlier V1 relations means false. */
+  qualifyingOrderCancelled?: boolean;
   rewardCompartment: "none" | "pending" | "available";
   cumulativeReturnedProductsCents: number;
   processedRefunds: Readonly<Record<string, number>>;

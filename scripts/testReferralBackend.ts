@@ -102,14 +102,34 @@ await test("lien, claim, replay, changement avant paiement et projection privée
 const snapshot = createReferralOrderSnapshot({ refereeUid: user.uid, createdAtEpochMs: 2000,
   lines: [{ lineId: "line", eligibleBeforeReferralCents: 6000, referralDiscountCents: 500 }] });
 const order = { id: "referral-order-a", customerId: user.uid, paymentStatus: "to_confirm", orderStatus: "contact_required", referral: snapshot } as Order;
-const transition = (source: Order, event: "payment" | "payment_and_delivery" | "delivery" | "refund" | "correction", refundId?: string, returned = 0) =>
+const transition = (source: Order, event: "payment" | "payment_and_delivery" | "delivery" | "cancel" | "refund" | "correction", refundId?: string, returned = 0, mode = program) =>
   db.runTransaction(async (transaction) => {
-    const plan = await prepareReferralTransition({ db, transaction, order: source, program, event, recordedAtEpochMs: nowEpochMs,
+    const plan = await prepareReferralTransition({ db, transaction, order: source, program: mode, event, recordedAtEpochMs: nowEpochMs,
       ...(refundId ? { refundId, cumulativeReturnedProductsCents: returned } : {}) });
     plan?.write(); return plan?.status;
   });
 const relation = async () => (await db.collection("referrals").doc(user.uid).get()).data() as ReferralRelation;
 const wallet = async (uid: string) => (await db.collection("cagnotteWallets").doc(uid).get()).data()!;
+const routeActor = { uid: "fixture-admin", email: "fixture-admin@example.test" };
+const routeTransition = (orderId: string, body: Omit<Parameters<typeof commitOrderStatusTransition>[0]["body"], "orderId">, mode = program) =>
+  commitOrderStatusTransition({ db, body: { orderId, ...body }, admin: routeActor, referralProgram: mode,
+    now: () => "2000-01-03T00:00:00.000Z" });
+const routeRelation = async (uid: string) => (await db.collection("referrals").doc(uid).get()).data() as ReferralRelation;
+const routeMovements = async (orderId: string) => (await db.collection("cagnotteMovements").where("orderId", "==", orderId).get()).docs;
+async function createRouteCandidate(orderId: string, uid: string) {
+  const child = { uid, email: `${uid}@example.test`, emailVerified: true };
+  await linkReferral({ db, user: child, code: codeB, secret, program, nowEpochMs, getSponsorEmail: async () => "b@example.test" });
+  const productId = `product-${orderId}`;
+  await db.collection("products").doc(productId).set({ stock: 10 });
+  await db.collection("orders").doc(orderId).set({ id: orderId, customerId: uid, customerName: "Synthetic", customerEmail: child.email,
+    orderStatus: "confirmed", paymentStatus: "to_confirm", deliveryMethod: "postal", deliveryFee: 0,
+    subtotal: 60, total: 55, discountAmount: 5, promotionDiscountTotal: 5,
+    createdAt: "2000-01-01T00:00:00.000Z", updatedAt: "2000-01-01T00:00:00.000Z",
+    items: [{ lineId: "line", productId, name: "Synthetic", quantity: 1, unitPrice: 60, lineTotal: 60 }],
+    referral: createReferralOrderSnapshot({ refereeUid: uid, createdAtEpochMs: 2000,
+      lines: [{ lineId: "line", eligibleBeforeReferralCents: 6000, referralDiscountCents: 500 }] }) });
+  return child;
+}
 
 await test("paiement, replay, livraison et wallet partagé", async () => {
   equal(await transition(order, "payment"), "applied");
@@ -248,10 +268,157 @@ await test("transition de commande appelle paiement et livraison parrainage dans
   equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
   equal((await db.collection("referrals").doc(child.uid).get()).data()?.state, "pending");
   equal((await wallet("sponsor-b")).pendingCents, before + 1000);
+  const pendingRelation = await routeRelation(child.uid);
+  const pendingWallet = await wallet("sponsor-b");
+  const pendingMovements = (await routeMovements(id)).length;
+  await routeTransition(id, { paymentStatus: "paid" });
+  deepStrictEqual(await routeRelation(child.uid), pendingRelation);
+  deepStrictEqual(await wallet("sponsor-b"), pendingWallet);
+  equal((await routeMovements(id)).length, pendingMovements);
   await commitOrderStatusTransition({ db, body: { orderId: id, orderStatus: "delivered" }, admin: actor, referralProgram: drain,
     now: () => "2000-01-03T00:00:00.000Z" });
   equal((await db.collection("orders").doc(id).get()).data()?.orderStatus, "delivered");
   equal((await db.collection("referrals").doc(child.uid).get()).data()?.state, "rewarded");
   equal((await wallet("sponsor-b")).pendingCents, before);
+  equal((await routeMovements(id)).length, pendingMovements + 1);
+  await routeTransition(id, { orderStatus: "delivered" });
+  equal((await routeMovements(id)).length, pendingMovements + 1);
+});
+await test("replay paid avec livraison réelle libère le gain une seule fois", async () => {
+  const id = "referral-order-paid-and-delivered-route";
+  const child = await createRouteCandidate(id, "referee-paid-and-delivered-route");
+  await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+  const before = await wallet("sponsor-b");
+  await routeTransition(id, { paymentStatus: "paid", orderStatus: "delivered" });
+  equal((await routeRelation(child.uid)).state, "rewarded");
+  equal((await wallet("sponsor-b")).pendingCents, before.pendingCents - 1000);
+  equal((await wallet("sponsor-b")).availableCents, before.availableCents + 1000);
+  equal((await routeMovements(id)).length, 2);
+  await routeTransition(id, { paymentStatus: "paid", orderStatus: "delivered" });
+  equal((await routeMovements(id)).length, 2);
+});
+await test("annulation pending en drain contrepassée sans remboursement et idempotente", async () => {
+  const id = "referral-order-cancel-pending-route";
+  const child = await createRouteCandidate(id, "referee-cancel-pending-route");
+  await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+  const before = await wallet("sponsor-b");
+  await routeTransition(id, { orderStatus: "cancelled" }, drain);
+  const after = await routeRelation(child.uid);
+  equal(after.state, "cancelled");
+  equal(after.qualifyingOrderCancelled, true);
+  equal(after.paymentConfirmed, true);
+  equal(after.deliveryConfirmed, false);
+  equal(after.qualifyingOrderId, id);
+  equal((await wallet("sponsor-b")).pendingCents, before.pendingCents - 1000);
+  equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "cancelled");
+  equal((await db.collection("products").doc(`product-${id}`).get()).data()?.stock, 11);
+  const movements = await routeMovements(id);
+  equal(movements.length, 2);
+  const cancellation = movements.find((doc) => doc.data().businessEvent === "referral_reward_cancelled");
+  ok(cancellation);
+  equal(cancellation.data().pendingDeltaCents, -1000);
+  equal(JSON.parse(cancellation.data().payload).cause, "order_cancellation");
+  equal((await db.collection("cagnotteRefunds").where("orderId", "==", id).get()).size, 0);
+  equal((await db.collection("orders").doc(id).get()).data()?.refundSummary, undefined);
+  await routeTransition(id, { orderStatus: "cancelled" }, drain);
+  deepStrictEqual(await routeRelation(child.uid), after);
+  equal((await routeMovements(id)).length, 2);
+  await rejects(routeTransition(id, { orderStatus: "delivered" }, drain));
+  equal(await transition({ id, customerId: child.uid, referral: (await db.collection("orders").doc(id).get()).data()?.referral } as Order, "delivery", undefined, 0, drain), "already_applied");
+  equal(await transition({ id, customerId: child.uid, referral: (await db.collection("orders").doc(id).get()).data()?.referral } as Order, "correction", "cancelled-correction", 0, drain), "applied");
+  equal((await routeRelation(child.uid)).state, "cancelled");
+  equal((await routeMovements(id)).length, 2);
+});
+await test("annulation rewarded retire 1000 disponibles sans régularisation quand le solde suffit", async () => {
+  const id = "referral-order-cancel-rewarded-full-route";
+  const child = await createRouteCandidate(id, "referee-cancel-rewarded-full-route");
+  await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link", orderStatus: "delivered" });
+  const before = await wallet("sponsor-b");
+  ok(before.availableCents >= 1000);
+  await routeTransition(id, { orderStatus: "cancelled" });
+  const after = await routeRelation(child.uid);
+  equal(after.state, "reversed");
+  equal(after.qualifyingOrderCancelled, true);
+  equal((await wallet("sponsor-b")).availableCents, before.availableCents - 1000);
+  equal((await wallet("sponsor-b")).regularizationCents, before.regularizationCents);
+  const reversal = (await routeMovements(id)).find((doc) => doc.data().businessEvent === "referral_reward_reversed");
+  ok(reversal);
+  equal(reversal.data().availableDeltaCents, -1000);
+  equal(reversal.data().regularizationDeltaCents, 0);
+  const cancelledOrder = (await db.collection("orders").doc(id).get()).data()!;
+  for (const event of ["payment", "delivery", "payment_and_delivery", "cancel"] as const)
+    equal(await transition(cancelledOrder as Order, event), "already_applied");
+  equal((await routeMovements(id)).length, 3);
+});
+await test("annulation rewarded contrepassée avec régularisation si available insuffisant", async () => {
+  const id = "referral-order-cancel-rewarded-route";
+  const child = await createRouteCandidate(id, "referee-cancel-rewarded-route");
+  await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link", orderStatus: "delivered" });
+  const reward = await routeRelation(child.uid);
+  equal(reward.state, "rewarded");
+  const before = await wallet("sponsor-b");
+  await db.collection("cagnotteWallets").doc("sponsor-b").update({ availableCents: 100 });
+  const beforeCancellation = await wallet("sponsor-b");
+  await routeTransition(id, { orderStatus: "cancelled" });
+  const after = await routeRelation(child.uid);
+  equal(after.state, "reversed");
+  equal(after.qualifyingOrderCancelled, true);
+  equal(after.deliveryConfirmed, true);
+  equal((await wallet("sponsor-b")).availableCents, 0);
+  equal((await wallet("sponsor-b")).regularizationCents, beforeCancellation.regularizationCents + 900);
+  const movements = await routeMovements(id);
+  equal(movements.length, 3);
+  const reversal = movements.find((doc) => doc.data().businessEvent === "referral_reward_reversed");
+  ok(reversal);
+  equal(reversal.data().availableDeltaCents, -100);
+  equal(reversal.data().regularizationDeltaCents, 900);
+  equal(JSON.parse(reversal.data().payload).cause, "order_cancellation");
+  equal((await db.collection("cagnotteRefunds").where("orderId", "==", id).get()).size, 0);
+  await routeTransition(id, { orderStatus: "cancelled" });
+  deepStrictEqual(await routeRelation(child.uid), after);
+  equal((await routeMovements(id)).length, 3);
+  equal((await wallet("sponsor-b")).regularizationCents, beforeCancellation.regularizationCents + 900);
+  ok(before.availableCents >= 1000);
+});
+await test("livraison avant paiement via commande conserve le fait puis rend le gain disponible", async () => {
+  const id = "referral-order-inverse-route";
+  const child = await createRouteCandidate(id, "referee-inverse-route");
+  const before = await wallet("sponsor-b");
+  await routeTransition(id, { orderStatus: "delivered" });
+  const delivered = await routeRelation(child.uid);
+  equal(delivered.state, "linked");
+  equal(delivered.deliveryConfirmed, true);
+  equal((await routeMovements(id)).length, 0);
+  await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+  equal((await routeRelation(child.uid)).state, "rewarded");
+  const compensation = Math.min(before.regularizationCents, 1000);
+  equal((await wallet("sponsor-b")).availableCents, before.availableCents + 1000 - compensation);
+  equal((await wallet("sponsor-b")).regularizationCents, before.regularizationCents - compensation);
+  equal((await routeMovements(id)).length, 2);
+});
+await test("commande sans snapshot referral fonctionne avec programme off", async () => {
+  const id = "non-referral-order-route";
+  await db.collection("orders").doc(id).set({ id, customerId: "non-referral-buyer", customerName: "Synthetic",
+    customerEmail: "non-referral@example.test", orderStatus: "confirmed", paymentStatus: "to_confirm",
+    deliveryMethod: "postal", deliveryFee: 0, subtotal: 60, total: 60,
+    items: [], createdAt: "2000-01-01T00:00:00.000Z", updatedAt: "2000-01-01T00:00:00.000Z" });
+  await routeTransition(id, { orderStatus: "delivered" }, REFERRAL_CLOSED_RUNTIME);
+  equal((await db.collection("orders").doc(id).get()).data()?.orderStatus, "delivered");
+  equal((await routeMovements(id)).length, 0);
+});
+await test("annulation avant paiement ne consomme pas le droit du filleul", async () => {
+  const id = "referral-order-cancel-unpaid-route";
+  const child = await createRouteCandidate(id, "referee-cancel-unpaid-route");
+  await routeTransition(id, { orderStatus: "cancelled" });
+  const linked = await routeRelation(child.uid);
+  equal(linked.state, "linked");
+  equal(linked.qualifyingOrderId, null);
+  equal(linked.paymentConfirmed, false);
+  equal((await routeMovements(id)).length, 0);
+  const replacementId = "referral-order-after-unpaid-cancellation";
+  await createRouteCandidate(replacementId, child.uid);
+  await routeTransition(replacementId, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+  equal((await routeRelation(child.uid)).state, "pending");
+  equal((await routeRelation(child.uid)).qualifyingOrderId, replacementId);
 });
 console.log(`Referral backend: ${passed} checks.`);

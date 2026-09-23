@@ -281,11 +281,15 @@ export async function commitOrderStatusTransition({
       nextPaymentStatus: (update.paymentStatus as PaymentStatus | undefined) ?? order.paymentStatus,
       paymentConfirmationRequested: body.paymentStatus === "paid",
     });
-    const referralPlan = !order.referral || linkOnly || (body.paymentStatus !== "paid" && body.orderStatus !== "delivered") ? null : await prepareReferralTransition({
+    const paymentTransition = body.paymentStatus === "paid" && order.paymentStatus !== "paid";
+    const deliveryTransition = body.orderStatus === "delivered" && order.orderStatus !== "delivered";
+    const cancellationTransition = body.orderStatus === "cancelled" && order.orderStatus !== "cancelled";
+    const referralEvent = cancellationTransition ? "cancel"
+      : paymentTransition ? nextStatus === "delivered" ? "payment_and_delivery" : "payment"
+      : deliveryTransition ? "delivery" : null;
+    const referralPlan = !order.referral || linkOnly || !referralEvent ? null : await prepareReferralTransition({
       db, transaction, order, program: referralProgram ?? getReferralRuntime(), recordedAtEpochMs: Date.parse(operationTime),
-      event: body.paymentStatus === "paid" && order.paymentStatus !== "paid"
-        ? nextStatus === "delivered" ? "payment_and_delivery" : "payment"
-        : "delivery",
+      event: referralEvent,
     });
     if (body.paymentStatus === "paid" && order.paymentStatus !== "paid" && order.cagnotte?.snapshot.appliedCagnotteCents) {
       if (!cagnottePlan || !("reservation" in cagnottePlan) || !("ledger" in cagnottePlan) ||
