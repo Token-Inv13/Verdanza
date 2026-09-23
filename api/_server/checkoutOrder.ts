@@ -3,6 +3,7 @@ import { orderPayload, priceCheckout, type CheckoutRequestBody, type PricedCheck
 import { CheckoutRequestConflictError, cagnotteProductionFixtureSideEffectsDocument, checkoutRequestDocument, checkoutRequestsCollection, orderSideEffectsCollection, orderSideEffectsDocument, validateCheckoutRequestId } from "./orderSideEffects.js";
 import { fixedPriceEffectiveUnitPrice, fixedPriceLineTotal, resolveFixedPriceOptions } from "../../src/lib/fixedPriceOptions.js";
 import type { Order, Product } from "../../src/types/index.js";
+import { calculateExternalPaymentCents, exactEuroCents } from "../../src/lib/orderFinancing.js";
 import { promotionAvailability } from "../../src/lib/promotionDates.js";
 import { normalizeGiftTiers, qualifyingGiftSubtotal } from "../../src/lib/tieredProductGifts.js";
 import { assertContestPrizeRedeemable, contestCollections } from "./contests.js";
@@ -278,7 +279,10 @@ export async function commitCheckoutOrder(input: {
     if (enrollment) payload.cagnotte = enrollment;
     if (reservationIntent && reservationIntent.amountCents > 0) {
       payload.cagnotteReservationIntent = reservationIntent;
-      payload.paymentAmount = reservationIntent.order.snapshot.productsPaidCents / 100 + committedPrice.deliveryFee;
+      payload.paymentAmount = calculateExternalPaymentCents(
+        reservationIntent.order.snapshot.productsPaidCents,
+        exactEuroCents(committedPrice.deliveryFee),
+      ) / 100;
     }
 
     const stockWrites: (() => void)[] = [];

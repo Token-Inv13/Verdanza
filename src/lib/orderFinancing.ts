@@ -70,6 +70,16 @@ export function exactEuroCents(value: unknown): number {
   return result;
 }
 
+/** Integer cents only: products paid outside cagnotte plus all charged delivery. */
+export function calculateExternalPaymentCents(productsPaidCents: number, deliveryChargedCents: number): number {
+  if (!nonNegativeCents(productsPaidCents) || !nonNegativeCents(deliveryChargedCents)) {
+    throw new Error("Centimes de paiement externe invalides.");
+  }
+  const total = BigInt(productsPaidCents) + BigInt(deliveryChargedCents);
+  if (total > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("Centimes de paiement externe non sûrs.");
+  return Number(total);
+}
+
 /** E + F and E + F - R from the persisted order snapshot only. */
 export function deriveOrderFinancingAmounts(
   order: OrderFinancingSource,
@@ -89,7 +99,7 @@ export function deriveOrderFinancingAmounts(
     snapshot.productsPaidCents + snapshot.appliedCagnotteCents !== snapshot.eligibleCents) {
     throw new Error("Montants de commande cagnotte incohérents.");
   }
-  const paymentCents = snapshot.productsPaidCents + deliveryCents;
+  const paymentCents = calculateExternalPaymentCents(snapshot.productsPaidCents, deliveryCents);
   if (order.paymentAmount !== undefined && exactEuroCents(order.paymentAmount) !== paymentCents) {
     throw new Error("Montant à régler incohérent.");
   }

@@ -96,6 +96,19 @@ jobs:
       - name: Verify
         run: npm run verify
 
+      - name: Qualify cagnotte checkout handoff
+        run: |
+          npm run test:cagnotte-checkout-use
+          npm run test:cagnotte-checkout-client
+          npm run test:cagnotte-checkout-ui
+          npm run test:cagnotte-security
+
+      - name: Verify shared checkout and Stripe Test isolation
+        run: |
+          npm run typecheck:stripe-test
+          npm run test:stripe-test:adapters
+          npm run test:stripe-test:ui
+
       - name: Upload sanitized interactive diagnostics
         if: ${{ always() }}
         uses: actions/upload-artifact@v4

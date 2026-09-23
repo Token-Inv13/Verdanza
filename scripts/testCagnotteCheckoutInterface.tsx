@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { exerciseCagnotteSharedCheckout } from "./testCagnotteCheckoutPage.js";
 import { build } from "esbuild";
 import { chromium } from "playwright";
 import React from "react";
@@ -234,6 +235,7 @@ assert.equal(createBody.authToken, "fresh-token");
 assert.equal(createBody.checkoutRequestId, request.checkoutRequestId);
 
 await exerciseRealDomInteractions();
+await exerciseCagnotteSharedCheckout();
 assert.ok(controllerStates.length > 5);
 console.log("Cagnotte checkout interface tests passed: controller, static rendering and real DOM interactions");
 
