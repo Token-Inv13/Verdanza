@@ -16,6 +16,7 @@ import type {
 import type { CagnotteAccrualProgram } from "./cagnotteLedgerTypes.js";
 import { cagnotteCalculationForPricedCheckout } from "./cagnotteOrders.js";
 import type { CagnotteCheckoutQuote } from "../../src/types/cagnotte.js";
+import { calculateExternalPaymentCents } from "../../src/lib/orderFinancing.js";
 
 export const CAGNOTTE_CHECKOUT_QUOTE_VERSION = "cagnotte-checkout-quote-v1" as const;
 
@@ -86,8 +87,7 @@ export function prepareCagnotteCheckoutQuote(input: {
     requestedCagnotteCents: requestedCents,
     proposedCagnotteCents: snapshot.appliedCagnotteCents,
     cagnotteCapCents: snapshot.cagnotteCapCents,
-    payableCents:
-      snapshot.productsPaidCents + eurosToExactCents(input.priced.deliveryFee),
+    payableCents: calculateExternalPaymentCents(snapshot.productsPaidCents, eurosToExactCents(input.priced.deliveryFee)),
     estimatedLoyaltyCents: snapshot.loyaltyCents,
     loyaltyAccrualStatus: input.accrualProgram?.newAccrualsEnabled === true ? "estimated" as const : "suspended" as const,
     limitationReasons: snapshot.limitationReasons,
@@ -115,6 +115,8 @@ export function assertAcceptedCagnotteQuote(
     );
   }
   if (
+    quote.proposedCagnotteCents <= 0 ||
+    quote.compatibility.status !== "allowed" ||
     acceptance.quoteVersion !== quote.quoteVersion ||
     acceptance.quoteFingerprint !== quote.quoteFingerprint ||
     acceptance.acceptedCagnotteCents !== quote.proposedCagnotteCents ||

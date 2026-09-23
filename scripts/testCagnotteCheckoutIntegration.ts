@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import "./testCagnotteStripeHandoff.js";
 import { randomUUID } from "node:crypto";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { createOrderHandler } from "../api/create-order.js";
@@ -70,6 +71,36 @@ try {
     assert.equal((await orders()).length, 0);
     assert.equal(CAGNOTTE_RESERVATION_PROGRAM, null);
   });
+
+  for (const scenario of [{ name: "A", wallet: 2000, used: 2000, external: 8000, gain: 400 },
+    { name: "B", wallet: 500, used: 500, external: 9500, gain: 475 }]) {
+    await test("Matrice 20 %", `cas ${scenario.name} : snapshot et montant serveur persistés`, async () => {
+      await seed(); await fund("customer-a", `fund-matrix-${scenario.name}`, scenario.wallet * 20);
+      const response = await quote(quoteBody(3000), program, "customer-a");
+      assert.equal(response.status, 200);
+      const proposal = record(record(response.body).cagnotteUse);
+      assert.equal(proposal.proposedCagnotteCents, scenario.used);
+      const request = { ...acceptedCheckout(proposal, randomUUID(), 3000), paymentAmount: 0.01, total: 0.01 };
+      const created = await create(request, program, "customer-a");
+      assert.equal(created.status, 200);
+      const orderId = String(record(created.body).orderId);
+      const stored = await order(orderId);
+      assert.equal(stored.paymentAmount, scenario.external / 100);
+      assert.equal(record(created.body).paymentAmount, stored.paymentAmount);
+      assert.equal(stored.cagnotte?.beneficiaryId, "customer-a");
+      assert.equal(stored.cagnotte?.programVersion, program.programVersion);
+      assert.equal(stored.cagnotte?.calculationVersion, program.calculationVersion);
+      assert.equal(stored.cagnotte?.snapshot.productsPaidCents, scenario.external);
+      assert.equal(stored.cagnotte?.snapshot.loyaltyCents, scenario.gain);
+      assert.equal(stored.cagnotteReservationIntent?.amountCents, scenario.used);
+      assertWallet(await wallet("customer-a"), [0, scenario.wallet - scenario.used, scenario.used, 0]);
+      assert.equal((await status(orderId, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program)).status, 200);
+      assertWallet(await wallet("customer-a"), [scenario.gain, scenario.wallet - scenario.used, 0, 0]);
+      assert.equal((await status(orderId, { orderStatus: "delivered" }, program)).status, 200);
+      assertWallet(await wallet("customer-a"), [0, scenario.wallet - scenario.used + scenario.gain, 0, 0]);
+      await assertWalletJournal(rawDb, "customer-a");
+    });
+  }
 
   await test("Parcours HTTP", "100 EUR, devis 8 EUR, création, lien 92 EUR, paiement, livraison", async () => {
     await seed(); await fund("customer-a", "fund-main");
@@ -513,6 +544,11 @@ try {
     assert.equal(proposal.proposedCagnotteCents, 0);
     assert.equal(record(proposal.compatibility).status, "blocked");
     assert.ok((proposal.limitationReasons as string[]).includes("compatibility_blocked"));
+    const before = await businessSnapshot();
+    const attempted = { ...acceptedCheckout(proposal), couponCode: "TEST5" };
+    assert.equal((await create(attempted, program, "customer-a")).status, 409,
+      "une demande positive incompatible ne devient pas une commande à plein tarif via une acceptation zéro");
+    assertBusinessUnchanged(before, await businessSnapshot());
   });
 
   console.table(Object.fromEntries(counts));
@@ -749,14 +785,14 @@ function checkedDatabase(getDepth: () => number, setDepth: (value: number) => vo
   }) as Firestore;
 }
 
-async function fund(beneficiaryId: string, orderId: string) {
+async function fund(beneficiaryId: string, orderId: string, initialCents = 40_000) {
   const source: CagnotteInternalOrder = {
     orderId,
     beneficiaryId,
     programVersion: program.programVersion,
     createdAtEpochMs: 2_000,
     snapshot: calculateCagnotte({
-      lines: [{ lineId: "source", initialCents: 40_000 }],
+      lines: [{ lineId: "source", initialCents }],
       discounts: [], requestedCagnotteCents: 0, availableCagnotteCents: 0,
     }),
   };

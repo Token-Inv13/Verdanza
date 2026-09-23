@@ -161,6 +161,12 @@ export const staticSeoRoutes: SeoRoute[] = [
     indexable: false,
   },
   {
+    path: "/compte/avantages",
+    kind: "private",
+    component: "AccountAdvantagesPage",
+    indexable: false,
+  },
+  {
     path: "/compte/profil",
     kind: "private",
     component: "AccountProfilePage",
