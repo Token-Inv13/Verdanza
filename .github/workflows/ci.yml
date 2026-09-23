@@ -14,6 +14,77 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  stripe-test-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Setup Java for Stripe Test
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: 'temurin'
+          java-version: '21.0.12'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare Firestore emulator
+        run: npm run prepare:cagnotte-firestore-emulator
+
+      - name: Verify Stripe Test backend with owned emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Refuse an occupied port; never adopt or stop another process.
+          node -e 'const s=require("node:net").createServer();s.on("error",e=>{console.error("Stripe emulator port unavailable",e.message);process.exit(1)});s.listen(18087,"127.0.0.1",()=>s.close());'
+          java -jar node_modules/.cache/cagnotte/cloud-firestore-emulator-v1.22.0.jar \
+            --host 127.0.0.1 --port 18087 --project_id demo-verdanza-stripe \
+            --single_project_mode true --single_project_mode_error true \
+            --rules firestore.stripe-test.rules > stripe-emulator.log 2>&1 &
+          emulator_pid=$!
+          cleanup() {
+            result=$?
+            trap - EXIT
+            if kill -0 "$emulator_pid" 2>/dev/null; then
+              kill "$emulator_pid"
+            fi
+            wait "$emulator_pid" 2>/dev/null || true
+            exit "$result"
+          }
+          trap cleanup EXIT
+          ready=false
+          for attempt in {1..60}; do
+            if ! kill -0 "$emulator_pid" 2>/dev/null; then
+              cat stripe-emulator.log
+              echo "Stripe emulator exited before readiness" >&2
+              exit 1
+            fi
+            if node -e 'const s=require("node:net").connect(18087,"127.0.0.1");s.setTimeout(500);s.on("connect",()=>{s.destroy();process.exit(0)});s.on("error",()=>process.exit(1));s.on("timeout",()=>{s.destroy();process.exit(1)});'; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            cat stripe-emulator.log
+            echo "Stripe emulator 127.0.0.1:18087 not ready after 60 attempts" >&2
+            exit 1
+          fi
+          npm run test:stripe-test
+          npm run test:stripe-test:http
+
   windows-owned-process:
     runs-on: windows-latest
     timeout-minutes: 10

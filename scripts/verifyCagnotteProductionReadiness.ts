@@ -44,7 +44,7 @@ import {
 } from "./cagnotteProductionReadinessAssertions.js";
 
 const baseMain = "322f65895fb0a75479c92bc4a3054caa4073d2f8";
-const expectedRulesHash = "d2ed755c2da2b9990e45766fd626e7794dd998c10098dccc5028cd66dd4165c3";
+const expectedRulesHash = "3a2cf2680969ba797da668e82ff075d3a436c04f4084623411df69a919d214d5";
 const expectedEndpoints = [
   "admin-contests.ts",
   "admin-payment-links.ts",
@@ -62,6 +62,7 @@ const expectedEndpoints = [
   "retry-order-emails.ts",
   "retry-order-purchase-analytics.ts",
   "revoke-order-analytics.ts",
+  "selection.ts",
   "send-payment-link.ts",
   "update-order-status.ts",
 ];
@@ -424,7 +425,7 @@ await check("configuration runtime invalide refusée avant Firebase, Auth et lec
   assert.equal(dependencyCalls, 0);
 });
 
-await check("18 fonctions API et deux ajouts fidélité seulement", () => {
+await check("19 fonctions API attendues, deux endpoints fidélité et selection.ts connu", () => {
   const endpoints = readdirSync(resolve("api"), { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
     .map((entry) => entry.name)
@@ -436,7 +437,19 @@ await check("18 fonctions API et deux ajouts fidélité seulement", () => {
     .filter((file) => file.endsWith(".ts"))
     .sort();
   assert.equal(mainEndpoints.length, 16);
-  assert.deepEqual(endpoints.filter((file) => !mainEndpoints.includes(file)), ["cagnotte.ts", "order-refunds.ts"]);
+  const addedEndpoints = endpoints.filter((file) => !mainEndpoints.includes(file));
+  const fidelityEndpoints = ["cagnotte.ts", "order-refunds.ts"];
+  const independentEndpoints = ["selection.ts"];
+  assert.equal(endpoints.length, 19);
+  assert.deepEqual(addedEndpoints, [...fidelityEndpoints, ...independentEndpoints].sort());
+  assert.deepEqual(addedEndpoints.filter((file) => !independentEndpoints.includes(file)), fidelityEndpoints);
+});
+
+await check("CI exécute les deux suites backend Stripe Test distinctes des adapters/UI", () => {
+  const workflow = read(".github/workflows/ci.yml");
+  // Match complete command lines: :adapters, :ui and comments cannot satisfy this gate.
+  assert.match(workflow, /^[ \t]+npm run test:stripe-test[ \t]*\r?$/m);
+  assert.match(workflow, /^[ \t]+npm run test:stripe-test:http[ \t]*\r?$/m);
 });
 
 await check("packaging statique des endpoints cagnotte sans dépendance de test", () => {
