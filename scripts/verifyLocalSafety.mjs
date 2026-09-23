@@ -51,7 +51,7 @@ const fullAudits = [
 
 expectScript(
   "verify",
-  "npm run verify:local-safety && npm run lint && npm run typecheck && npm run typecheck:cagnotte-interactive && npm run typecheck:api && npm run test:firebase-admin-compatibility && npm run test:cagnotte-runtime-config && npm run verify:cagnotte-interactive-isolation && npm run test:cagnotte-interactive-reliability && npm run test:cagnotte-interactive-diagnostics && npm run test:cagnotte-runtime-diagnostics && npm run test:cagnotte-rate-limit-windows && npm run test:cagnotte-interactive && npm run test:cagnotte-admin-storage && npm run test:cagnotte-admin-ui && npm run test:cagnotte-emulator-diagnostics && npm run test:order-refunds && npm run test:cagnotte-v1-recipe && npm run verify:cagnotte-production-readiness && npm run test:core && npm run build:local && npm run audit:local-essential",
+  "npm run verify:local-safety && npm run lint && npm run typecheck && npm run typecheck:cagnotte-interactive && npm run typecheck:api && npm run test:firebase-admin-compatibility && npm run test:cagnotte-runtime-config && npm run verify:cagnotte-interactive-isolation && npm run test:cagnotte-interactive-reliability && npm run test:cagnotte-interactive-diagnostics && npm run test:cagnotte-runtime-diagnostics && npm run test:cagnotte-rate-limit-windows && npm run test:cagnotte-interactive && npm run test:cagnotte-admin-storage && npm run test:cagnotte-admin-ui && npm run test:cagnotte-emulator-diagnostics && npm run test:order-refunds && npm run test:referral-backend && npm run test:cagnotte-v1-recipe && npm run verify:cagnotte-production-readiness && npm run test:core && npm run build:local && npm run audit:local-essential",
 );
 expectScript(
   "verify:full",
@@ -94,6 +94,7 @@ expectScript(
   "node --import tsx scripts/runCagnotteLedgerTests.ts --v1-recipe-only && node --import tsx scripts/captureCagnotteV1Recipe.ts",
 );
 expectOrderRefundPreparedEmulator(scripts["test:order-refunds"]);
+expectScript("test:referral-backend", "node --import tsx scripts/runCagnotteLedgerTests.ts --referral-only");
 requireValue(
   [
     "npm run prepare:cagnotte-firestore-emulator && node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",

@@ -196,6 +196,19 @@ try {
   assert.equal(reservationLabels.history.items[2].amountCents, 100, "la restitution expose le brut avant compensation");
 
   await clear();
+  await seedWallet("referral-labels", 0, 0, 0);
+  const referralVersion = { programVersion: "referral-commercial-policy-v1", sponsorUid: "private-sponsor", email: "private@example.test", code: "PRIVATE" };
+  await seedMovement("referral-pending", "referral-labels", 500, "referral_reward_pending", 1000, 0, 0, referralVersion);
+  await seedMovement("referral-available", "referral-labels", 400, "referral_reward_available", -1000, 1000, 0, referralVersion);
+  await seedMovement("referral-reversed", "referral-labels", 300, "referral_reward_reversed", 0, -100, 900, referralVersion);
+  await seedMovement("referral-restored", "referral-labels", 200, "referral_reward_restored", 1000, 0, 0, referralVersion);
+  await seedMovement("referral-cancelled", "referral-labels", 100, "referral_reward_cancelled", -1000, 0, 0, referralVersion);
+  const referralHistory = (await readCagnotte({ db, beneficiaryId: "referral-labels", scope: "self", cursorSecret })).history.items;
+  assert.deepEqual(referralHistory.map((item) => item.label), ["Récompense de parrainage en attente", "Récompense de parrainage disponible", "Récompense de parrainage corrigée", "Récompense de parrainage en attente", "Récompense de parrainage annulée"]);
+  assert.deepEqual(referralHistory.map((item) => item.amountCents), [1000, 1000, -1000, 1000, -1000]);
+  for (const sensitive of ["private-sponsor", "private@example.test", "PRIVATE", "referral-pending"]) assert.ok(!JSON.stringify(referralHistory).includes(sensitive));
+
+  await clear();
   await seedWallet("old-history", 50, 0, 0);
   await seedMovement("old-undated", "old-history", 100, "payment_confirmed", 50, 0, 0);
   const oldUndated = (await db.collection("cagnotteMovements").doc("old-undated").get()).data()!;

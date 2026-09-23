@@ -21,6 +21,9 @@ import {
   type CagnotteProductionFixtureCapability,
 } from "./cagnotteProductionFixture.js";
 import { validateCagnotteProductionFixtureState } from "./cagnotteProductionFixtureState.js";
+import { getReferralRuntime } from "./referralRuntimeConfig.js";
+import type { ReferralRuntime } from "./referralRuntimeConfig.js";
+import { prepareReferralTransition } from "./referralLedger.js";
 
 export type OrderStatusChange = {
   orderId: string; orderStatus?: OrderStatus; paymentStatus?: PaymentStatus;
@@ -36,6 +39,7 @@ export async function commitOrderStatusTransition({
   db, body, admin, accrualProgram = CAGNOTTE_SERVER_PROGRAM,
   reservationProgram = CAGNOTTE_RESERVATION_PROGRAM, firebaseProjectId,
   productionFixtureCapability,
+  referralProgram,
   now = () => new Date().toISOString(),
 }: {
   db: Firestore; body: OrderStatusChange; admin: {uid:string; email:string | null};
@@ -43,6 +47,7 @@ export async function commitOrderStatusTransition({
   reservationProgram?: CagnotteReservationProgram | null;
   firebaseProjectId?: string | null;
   productionFixtureCapability?: CagnotteProductionFixtureCapability;
+  referralProgram?: ReferralRuntime;
   now?: ()=>string;
 }): Promise<{ updatedOrder: Order | null; previousStatus: OrderStatus | null; purchaseAnalyticsQueued: boolean; missingPromotionIds: string[]; unpaidReviewContext: Awaited<ReturnType<typeof prepareUnpaidReviewControl>>["context"] | null }> {
   const operationTime=now();
@@ -78,7 +83,7 @@ export async function commitOrderStatusTransition({
         expectedTransition,
       });
     }
-    if (hasCagnotteEnrollment(order) && (order.orderStatus === "cancelled" || order.cancelledAt) &&
+    if ((hasCagnotteEnrollment(order) || Object.prototype.hasOwnProperty.call(order, "referral")) && (order.orderStatus === "cancelled" || order.cancelledAt) &&
       ((body.orderStatus && body.orderStatus !== "cancelled") || (body.paymentStatus && body.paymentStatus !== "cancelled"))) {
       throw new CagnotteReservationError("CONFLICT", "Une commande inscrite annulée ne peut pas être réactivée.");
     }
@@ -276,6 +281,12 @@ export async function commitOrderStatusTransition({
       nextPaymentStatus: (update.paymentStatus as PaymentStatus | undefined) ?? order.paymentStatus,
       paymentConfirmationRequested: body.paymentStatus === "paid",
     });
+    const referralPlan = !order.referral || linkOnly || (body.paymentStatus !== "paid" && body.orderStatus !== "delivered") ? null : await prepareReferralTransition({
+      db, transaction, order, program: referralProgram ?? getReferralRuntime(), recordedAtEpochMs: Date.parse(operationTime),
+      event: body.paymentStatus === "paid" && order.paymentStatus !== "paid"
+        ? nextStatus === "delivered" ? "payment_and_delivery" : "payment"
+        : "delivery",
+    });
     if (body.paymentStatus === "paid" && order.paymentStatus !== "paid" && order.cagnotte?.snapshot.appliedCagnotteCents) {
       if (!cagnottePlan || !("reservation" in cagnottePlan) || !("ledger" in cagnottePlan) ||
         !["consumed", "already_consumed"].includes(cagnottePlan.reservation.status)) {
@@ -300,6 +311,7 @@ export async function commitOrderStatusTransition({
     cancellationPlan?.write();
     writePaymentLinkEvent?.();
     cagnottePlan?.write();
+    referralPlan?.write();
     if (body.paymentStatus === "paid" && !productionFixture) {
       purchaseAnalyticsQueued = await enqueuePurchaseAnalyticsForPaidTransition({
         db,

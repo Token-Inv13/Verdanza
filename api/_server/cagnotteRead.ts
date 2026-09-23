@@ -144,7 +144,7 @@ function publicMovement(document: QueryDocumentSnapshot, beneficiaryId: string):
     ? Math.abs(reserved)
     : event === "payment_confirmed"
     ? pending
-    : event === "made_available"
+    : event === "made_available" || event === "referral_reward_available"
       ? -pending
       : -correction;
   const details: CagnotteHistoryDetail[] = [];
@@ -161,6 +161,10 @@ function publicMovement(document: QueryDocumentSnapshot, beneficiaryId: string):
 }
 
 function historyLabel(event: string, pending: number, available: number, regularization: number): CagnotteHistoryLabel {
+  if (event === "referral_reward_pending" || event === "referral_reward_restored") return "Récompense de parrainage en attente";
+  if (event === "referral_reward_available") return "Récompense de parrainage disponible";
+  if (event === "referral_reward_cancelled") return "Récompense de parrainage annulée";
+  if (event === "referral_reward_reversed") return "Récompense de parrainage corrigée";
   if (event === "payment_confirmed") return "Gain en attente";
   if (event === "made_available") {
     return available === 0 && regularization < 0
@@ -183,7 +187,7 @@ function validateMovement(value: Record<string, unknown>, documentId: string, be
   const legacy = schemaVersion === 1;
   const regularization = value.regularizationDeltaCents ?? 0;
   const reserved = value.reservedDeltaCents ?? 0;
-  const knownEvent = ["payment_confirmed", "delivery_confirmed", "cancelled", "refund_confirmed", "made_available", "credit_reserved", "credit_consumed", "credit_released", "credit_refunded_after_return", "refund_declaration_corrected", "credit_refund_corrected"].includes(String(value.businessEvent));
+  const knownEvent = ["payment_confirmed", "delivery_confirmed", "cancelled", "refund_confirmed", "made_available", "credit_reserved", "credit_consumed", "credit_released", "credit_refunded_after_return", "refund_declaration_corrected", "credit_refund_corrected", "referral_reward_pending", "referral_reward_available", "referral_reward_cancelled", "referral_reward_reversed", "referral_reward_restored"].includes(String(value.businessEvent));
   if ((legacy && (regularization !== 0 || hasOwn(value, "regularizationVersion") || reserved !== 0 || hasOwn(value, "reservationVersion"))) ||
     (schemaVersion === 2 && (value.regularizationVersion !== CAGNOTTE_REGULARIZATION_VERSION || reserved !== 0 || hasOwn(value, "reservationVersion"))) ||
     (schemaVersion !== 1 && schemaVersion !== 2 && (schemaVersion !== 3 || value.regularizationVersion !== CAGNOTTE_REGULARIZATION_VERSION || value.reservationVersion !== CAGNOTTE_RESERVATION_VERSION)) ||
@@ -217,7 +221,13 @@ function validateMovement(value: Record<string, unknown>, documentId: string, be
   const invalidCreditCorrection = event === "credit_refund_corrected" &&
     (pending !== 0 || held !== 0 || deficit > 0 || (available < 0 && deficit !== 0) || (available === 0 && deficit === 0));
   const correctedEvent = event === "refund_declaration_corrected" || event === "credit_refund_corrected";
-  if ((!reservationEvent && !correctedEvent && held !== 0) || invalidPayment || invalidDelivery || invalidRelease || invalidCorrection || invalidReserve || invalidConsume || invalidReservationRelease || invalidRefundRestitution || invalidAdministrativeCorrection || invalidCreditCorrection) {
+  const referralEvent = event.startsWith("referral_reward_");
+  const invalidReferral = referralEvent && (value.programVersion !== "referral-commercial-policy-v1" || held !== 0 ||
+    ((event === "referral_reward_pending" || event === "referral_reward_restored") && (pending !== 1000 || available !== 0 || deficit !== 0)) ||
+    (event === "referral_reward_available" && (pending !== -1000 || available < 0 || deficit > 0 || BigInt(pending) + BigInt(available) - BigInt(deficit) !== 0n)) ||
+    (event === "referral_reward_cancelled" && (pending !== -1000 || available !== 0 || deficit !== 0)) ||
+    (event === "referral_reward_reversed" && (pending !== 0 || available > 0 || deficit < 0 || -available + deficit !== 1000)));
+  if ((!reservationEvent && !correctedEvent && held !== 0) || invalidPayment || invalidDelivery || invalidRelease || invalidCorrection || invalidReserve || invalidConsume || invalidReservationRelease || invalidRefundRestitution || invalidAdministrativeCorrection || invalidCreditCorrection || invalidReferral) {
     throw new CagnotteReadError("inconsistent_data", "Variations de mouvement incompatibles.");
   }
 }

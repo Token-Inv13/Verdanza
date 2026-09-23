@@ -593,6 +593,7 @@ export type OrderAlerts = {
 };
 
 export type Order = {
+  referral?: import("./referral.js").ReferralOrderSnapshot;
   cagnotte?: import("./cagnotte.js").CagnotteOrderEnrollment;
   cagnotteReservationIntent?: import("./cagnotte.js").CagnotteOrderReservationIntent;
   cagnottePaymentEvidence?: import("./cagnotte.js").CagnottePaymentEvidence;
