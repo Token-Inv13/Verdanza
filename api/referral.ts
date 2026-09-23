@@ -1,10 +1,10 @@
-import { getAuth } from "firebase-admin/auth";
 import { verifyFirebaseIdToken } from "./_server/adminAuth.js";
 import { getAdminDb } from "./_server/firebaseAdmin.js";
 import { sendJson, type VercelRequestLike, type VercelResponseLike } from "./_server/http.js";
 import { getReferralRuntime, ReferralConfigurationError } from "./_server/referralRuntimeConfig.js";
 import { ensureReferralCode, linkReferral, readReferralSelf, ReferralError } from "./_server/referralService.js";
 import { assertReferralEmailSecret } from "./_server/referralIdentity.js";
+import { getReferralSponsorEmail } from "./_server/referralSponsorIdentity.js";
 
 export function createReferralHandler(dependencies: {
   runtime: typeof getReferralRuntime;
@@ -59,7 +59,7 @@ export default createReferralHandler({
   runtime: getReferralRuntime,
   verify: verifyFirebaseIdToken,
   db: getAdminDb,
-  sponsorEmail: async (uid) => (await getAuth().getUser(uid)).email ?? null,
+  sponsorEmail: getReferralSponsorEmail,
   secret: () => process.env.REFERRAL_EMAIL_HMAC_SECRET ?? "",
   now: Date.now,
 });

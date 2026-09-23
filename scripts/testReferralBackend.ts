@@ -1,6 +1,7 @@
 import { deepStrictEqual, equal, ok, rejects, throws } from "node:assert/strict";
 import { CAGNOTTE_DEMO, connectCagnotteEmulator } from "./cagnotteEmulator.js";
 import { createReferralHandler } from "../api/referral.js";
+import { lookupReferralSponsorEmail } from "../api/_server/referralSponsorIdentity.js";
 import { newReferralCode, normalizeReferralEmail, referralEmailClaimId } from "../api/_server/referralIdentity.js";
 import { resolveReferralRuntime, REFERRAL_CLOSED_RUNTIME } from "../api/_server/referralRuntimeConfig.js";
 import { ensureReferralCode, linkReferral, readReferralSelf } from "../api/_server/referralService.js";
@@ -41,6 +42,18 @@ await test("normalisation et HMAC stable sans email clair", () => {
   ok(!referralEmailClaimId(secret, user.email!).includes("example"));
   throws(() => referralEmailClaimId("short", "x@example.test"));
   equal(newReferralCode(() => Buffer.alloc(16)), "A".repeat(26));
+});
+await test("lookup Auth Admin du parrain: projet, UID et échec fermés", async () => {
+  const requests: Array<{ url: string; authorization: string; body: unknown }> = [];
+  const fetchImpl = async (url: string | URL | Request, init?: RequestInit) => {
+    requests.push({ url: String(url), authorization: String(new Headers(init?.headers).get("authorization")), body: JSON.parse(String(init?.body)) });
+    return new Response(JSON.stringify({ users: [{ localId: sponsor.uid, email: sponsor.email }] }), { status: 200 });
+  };
+  equal(await lookupReferralSponsorEmail({ uid: sponsor.uid, projectId: "verdanza-1f621", accessToken: "fixture-token", fetchImpl: fetchImpl as typeof fetch }), sponsor.email);
+  deepStrictEqual(requests, [{ url: "https://identitytoolkit.googleapis.com/v1/projects/verdanza-1f621/accounts:lookup", authorization: "Bearer fixture-token", body: { localId: [sponsor.uid] } }]);
+  await rejects(lookupReferralSponsorEmail({ uid: sponsor.uid, projectId: "wrong-project", accessToken: "fixture-token", fetchImpl: fetchImpl as typeof fetch }));
+  equal(requests.length, 1);
+  await rejects(lookupReferralSponsorEmail({ uid: sponsor.uid, projectId: "verdanza-1f621", accessToken: "fixture-token", fetchImpl: (async () => new Response(JSON.stringify({ users: [{ localId: "other", email: sponsor.email }] }), { status: 200 })) as typeof fetch }));
 });
 await test("API fermée avant Auth, Firestore et secret", async () => {
   let calls = 0; let status = 0; let body: unknown;

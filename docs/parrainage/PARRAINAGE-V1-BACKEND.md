@@ -8,6 +8,8 @@ Sans configuration, `GET/POST /api/referral` renvoie `503 referral_program_disab
 
 `REFERRAL_EMAIL_HMAC_SECRET` est lu seulement pour l’action `link`, après le garde actif. Il doit contenir au moins 32 octets UTF-8. Le claim est `HMAC-SHA256(secret, trim(lowercase(email)))`, avec `keyVersion=referral-email-hmac-v1`. Le secret, le HMAC et l’email ne sont jamais envoyés dans la projection `GET self` ni loggés. La projection ne révèle que le code appartenant au demandeur, l’état de sa propre relation et les faits paiement/livraison ; elle ne révèle aucun UID tiers. Les trois collections sont interdites au SDK client par les règles candidates ; leur déploiement relève d’un gate distinct.
 
+Avant un lien, l’email du parrain est relu par l’API Auth Admin `projects.accounts:lookup` avec le jeton OAuth du credential Firebase Admin déjà initialisé. Cette lecture ciblée par UID a lieu hors transaction Firestore et échoue fermée si le projet, l’UID ou la réponse ne correspondent pas.
+
 ## Documents
 
 - `referralCodes/owner_<uid>` et `referralCodes/code_<BASE32>` contiennent le même mapping versionné. Le code comporte 128 bits aléatoires encodés sur 26 caractères Base32 majuscules. Collision et unicité du propriétaire sont vérifiées dans une transaction ; le code existant est conservé.
