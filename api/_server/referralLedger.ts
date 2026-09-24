@@ -5,7 +5,7 @@ import { REFERRAL_MINIMUM_PRODUCTS_CENTS, REFERRAL_PROGRAM_VERSION, REFERRAL_SPO
 import type { Order } from "../../src/types/index.js";
 import { applyCagnotteWalletDeltas, prepareCagnotteWalletMutation, writeCagnotteWalletMutation } from "./cagnotteLedger.js";
 import { CAGNOTTE_REGULARIZATION_VERSION, CAGNOTTE_RESERVATION_VERSION, type CagnotteMovement } from "./cagnotteLedgerTypes.js";
-import { ReferralError, sponsorHasDeliveredPaidOrder } from "./referralService.js";
+import { findPriorPaidProductOrder, ReferralError, sponsorHasDeliveredPaidOrder } from "./referralService.js";
 import { canonicalReferralJson, referralSnapshotFingerprint } from "./referralSnapshot.js";
 
 type Event = "payment" | "payment_and_delivery" | "delivery" | "refund" | "correction";
@@ -109,7 +109,7 @@ export async function prepareReferralTransition(input: Input) {
     (before.state === "rewarded" && (!before.paymentConfirmed || !before.deliveryConfirmed || before.rewardCompartment !== "available")) ||
     (before.state === "cancelled" && (!before.paymentConfirmed || before.rewardCompartment !== "none")) ||
     (before.state === "reversed" && (!before.paymentConfirmed || !before.deliveryConfirmed || before.rewardCompartment !== "none")) ||
-    (before.rewardIneligibilityReason !== undefined && !["sponsor_no_longer_eligible", "sponsor_account_disabled", "sponsor_identity_unavailable", "first_paid_order_without_referral_discount", "referee_identity_unavailable", "referee_email_unverified", "referee_email_claimed", "self_referral_at_payment", "referral_identity_changed"].includes(before.rewardIneligibilityReason)) ||
+    (before.rewardIneligibilityReason !== undefined && !["sponsor_no_longer_eligible", "sponsor_account_disabled", "sponsor_identity_unavailable", "first_paid_order_without_referral_discount", "prior_paid_order_detected", "referral_history_inconclusive", "referee_identity_unavailable", "referee_email_unverified", "referee_email_claimed", "self_referral_at_payment", "referral_identity_changed"].includes(before.rewardIneligibilityReason)) ||
     (before.rewardIneligibilityReason !== undefined && (!before.paymentConfirmed || before.rewardCompartment !== "none")))
     throw new ReferralError("referral_relation_corrupt");
   // Only the first paid order claims the relation. Other snapshot-bearing orders
@@ -126,6 +126,21 @@ export async function prepareReferralTransition(input: Input) {
     if (before.paymentConfirmed && (input.event === "payment" || before.deliveryConfirmed)) return { status: "already_applied" as const, write() {} };
     if (!before.paymentConfirmed) {
       const evidence = input.paymentEvidence;
+      const history = await findPriorPaidProductOrder(input.transaction, input.db, before.refereeUid, input.order.id,
+        evidence?.refereeAccount === "active" && typeof input.order.customerEmail === "string" &&
+          input.order.customerEmail.trim().toLowerCase() === evidence.refereeEmail ? input.order.customerEmail.trim() : undefined,
+        evidence?.refereeAccount === "active" ? evidence.refereeEmail : undefined);
+      if (history.kind !== "none") {
+        const claim = await prepareCurrentRefereeClaim({ db: input.db, transaction: input.transaction, before,
+          evidence, recordedAtEpochMs: input.recordedAtEpochMs });
+        const consumed: ReferralRelation = { ...before, state: "cancelled", paymentConfirmed: true,
+          qualifyingOrderId: history.kind === "found" ? history.orderId : input.order.id,
+          rewardIneligibilityReason: history.kind === "found" ? "prior_paid_order_detected" : "referral_history_inconclusive" };
+        return { status: "applied" as const, write() {
+          input.transaction.set(relationRef, consumed);
+          if (claim.newClaim) input.transaction.create(claim.newClaim.ref, claim.newClaim.value);
+        } };
+      }
       if (!evidence || evidence.referralId !== snapshot.referralId || evidence.refereeUid !== before.refereeUid ||
           evidence.sponsorUid !== before.sponsorUid || evidence.linkedAtEpochMs !== before.linkedAtEpochMs)
         next.rewardIneligibilityReason = "referral_identity_changed";

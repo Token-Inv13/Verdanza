@@ -38,20 +38,32 @@ export async function sponsorHasDeliveredPaidOrder(tx: Transaction, db: Firestor
   return orders.docs.some((doc) => productOrder(doc.data()) && doc.data().orderStatus !== "cancelled");
 }
 
-async function assertRefereeFirstPaidOrder(tx: Transaction, db: Firestore, refereeUid: string, rawEmail: string, normalizedEmail: string) {
-  const searches = [db.collection("orders").where("customerId", "==", refereeUid).limit(HISTORY_LIMIT),
-    ...[...new Set([rawEmail, normalizedEmail])].map((email) => db.collection("orders").where("customerEmail", "==", email).limit(HISTORY_LIMIT))];
+/** Bounded, transactional historical check. An inconclusive result must never authorize a reward. */
+export async function findPriorPaidProductOrder(tx: Transaction, db: Firestore, refereeUid: string, currentOrderId: string | null,
+  rawEmail?: string, normalizedEmail?: string): Promise<{ kind: "found"; orderId: string } | { kind: "none" | "inconclusive" }> {
+  const emails = [...new Set([rawEmail, normalizedEmail].filter((email): email is string => Boolean(email)))];
+  const searches = [db.collection("orders").where("customerId", "==", uid(refereeUid)).limit(HISTORY_LIMIT),
+    ...emails.map((email) => db.collection("orders").where("customerEmail", "==", email).limit(HISTORY_LIMIT))];
+  let inconclusive = false;
   for (const query of searches) {
     const result = await tx.get(query);
-    if (result.size >= HISTORY_LIMIT) throw new ReferralError("referral_history_inconclusive");
+    if (result.size >= HISTORY_LIMIT) inconclusive = true;
     for (const doc of result.docs) {
+      if (doc.id === currentOrderId) continue;
       const value = doc.data();
       if (value.orderType === "preorder" || value.productionFixture) continue;
-      if (hasHistoricalPaymentEvidence(value)) throw new ReferralError("referee_already_paid");
+      if (hasHistoricalPaymentEvidence(value)) return { kind: "found", orderId: doc.id };
       if (!productOrder(value, true) && (value.paymentStatus === "paid" || validInstant(value.paymentConfirmedAt) || validInstant(value.paidAt)))
-        throw new ReferralError("referral_history_inconclusive");
+        inconclusive = true;
     }
   }
+  return { kind: inconclusive ? "inconclusive" : "none" };
+}
+
+async function assertRefereeFirstPaidOrder(tx: Transaction, db: Firestore, refereeUid: string, rawEmail: string, normalizedEmail: string) {
+  const history = await findPriorPaidProductOrder(tx, db, refereeUid, null, rawEmail, normalizedEmail);
+  if (history.kind === "found") throw new ReferralError("referee_already_paid");
+  if (history.kind === "inconclusive") throw new ReferralError("referral_history_inconclusive");
 }
 
 export async function ensureReferralCode(input: { db: Firestore; user: VerifiedUser; program: Program; nowEpochMs: number; codeFactory?: () => string;

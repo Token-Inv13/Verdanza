@@ -35,7 +35,7 @@ export type ReferralRelation = {
   paymentConfirmed: boolean;
   deliveryConfirmed: boolean;
   /** A paid order can consume the right without creating a sponsor reward. */
-  rewardIneligibilityReason?: "sponsor_no_longer_eligible" | "sponsor_account_disabled" | "sponsor_identity_unavailable" | "first_paid_order_without_referral_discount" | "referee_identity_unavailable" | "referee_email_unverified" | "referee_email_claimed" | "self_referral_at_payment" | "referral_identity_changed";
+  rewardIneligibilityReason?: "sponsor_no_longer_eligible" | "sponsor_account_disabled" | "sponsor_identity_unavailable" | "first_paid_order_without_referral_discount" | "prior_paid_order_detected" | "referral_history_inconclusive" | "referee_identity_unavailable" | "referee_email_unverified" | "referee_email_claimed" | "self_referral_at_payment" | "referral_identity_changed";
   rewardCompartment: "none" | "pending" | "available";
   cumulativeReturnedProductsCents: number;
   processedRefunds: Readonly<Record<string, number>>;

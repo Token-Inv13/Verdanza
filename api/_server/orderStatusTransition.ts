@@ -36,6 +36,12 @@ export type OrderStatusChange = {
   unpaidReview?: UnpaidReviewRequest;
 };
 
+/** A referral discount cannot share an order with a positive cagnotte reservation or spend. */
+export function hasPositiveCagnotteFinancing(order: Order): boolean {
+  return (typeof order.cagnotteReservationIntent?.amountCents === "number" && order.cagnotteReservationIntent.amountCents > 0) ||
+    (typeof order.cagnotte?.snapshot.appliedCagnotteCents === "number" && order.cagnotte.snapshot.appliedCagnotteCents > 0);
+}
+
 /** Actual endpoint transaction; admin is already verified by its unchanged HTTP boundary. */
 export async function commitOrderStatusTransition({
   db, body, admin, accrualProgram = CAGNOTTE_SERVER_PROGRAM,
@@ -143,6 +149,9 @@ export async function commitOrderStatusTransition({
     if ((hasCagnotteEnrollment(order) || Object.prototype.hasOwnProperty.call(order, "referral")) && (order.orderStatus === "cancelled" || order.cancelledAt) &&
       ((body.orderStatus && body.orderStatus !== "cancelled") || (body.paymentStatus && body.paymentStatus !== "cancelled"))) {
       throw new CagnotteReservationError("CONFLICT", "Une commande inscrite annulée ne peut pas être réactivée.");
+    }
+    if (body.paymentStatus === "paid" && order.paymentStatus !== "paid" && order.referral && hasPositiveCagnotteFinancing(order)) {
+      throw new CagnotteReservationError("CONFLICT", "Parrainage et cagnotte incompatibles sur cette commande.");
     }
     previousStatus = order.orderStatus;
     if (body.deleteCancelled) {
@@ -342,11 +351,12 @@ export async function commitOrderStatusTransition({
     const deliveryTransition = body.orderStatus === "delivered" && order.orderStatus !== "delivered";
     const referralEvent = paymentTransition ? nextStatus === "delivered" ? "payment_and_delivery" : "payment"
       : deliveryTransition ? "delivery" : null;
-    const referralPlan = linkOnly || !referralEvent ? null : order.referral ? await prepareReferralTransition({
-      db, transaction, order, program: resolvedReferralProgram ?? getReferralRuntime(), recordedAtEpochMs: Date.parse(operationTime),
-      event: referralEvent, paymentEvidence,
+    const transitionReferralProgram = linkOnly || !referralEvent ? null : resolvedReferralProgram ?? getReferralRuntime();
+    const referralPlan = !transitionReferralProgram || !transitionReferralProgram.operational || transitionReferralProgram.mode === "off" ? null : order.referral ? await prepareReferralTransition({
+      db, transaction, order, program: transitionReferralProgram, recordedAtEpochMs: Date.parse(operationTime),
+      event: referralEvent!, paymentEvidence,
     }) : paymentTransition ? await prepareFirstPaymentWithoutReferral({ db, transaction, order,
-      program: resolvedReferralProgram ?? getReferralRuntime(), paymentEvidence, recordedAtEpochMs: Date.parse(operationTime) }) : null;
+      program: transitionReferralProgram, paymentEvidence, recordedAtEpochMs: Date.parse(operationTime) }) : null;
     if (body.paymentStatus === "paid" && order.paymentStatus !== "paid" && order.cagnotte?.snapshot.appliedCagnotteCents) {
       if (!cagnottePlan || !("reservation" in cagnottePlan) || !("ledger" in cagnottePlan) ||
         !["consumed", "already_consumed"].includes(cagnottePlan.reservation.status)) {
