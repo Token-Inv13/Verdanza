@@ -5,13 +5,14 @@ import { REFERRAL_MINIMUM_PRODUCTS_CENTS, REFERRAL_PROGRAM_VERSION, REFERRAL_SPO
 import type { Order } from "../../src/types/index.js";
 import { applyCagnotteWalletDeltas, prepareCagnotteWalletMutation, writeCagnotteWalletMutation } from "./cagnotteLedger.js";
 import { CAGNOTTE_REGULARIZATION_VERSION, CAGNOTTE_RESERVATION_VERSION, type CagnotteMovement } from "./cagnotteLedgerTypes.js";
-import { ReferralError } from "./referralService.js";
+import { ReferralError, sponsorHasDeliveredPaidOrder } from "./referralService.js";
 import { canonicalReferralJson, referralSnapshotFingerprint } from "./referralSnapshot.js";
 
-type Event = "payment" | "payment_and_delivery" | "delivery" | "cancel" | "refund" | "correction";
+type Event = "payment" | "payment_and_delivery" | "delivery" | "cancel_unpaid_candidate" | "refund" | "correction";
 type Program = { mode: "off" | "drain" | "active"; startsAtEpochMs: number | null; operational: boolean };
+export type SponsorQualificationEvidence = { referralId: string; sponsorUid: string; account: "active" | "disabled" | "unavailable" };
 type Input = { db: Firestore; transaction: Transaction; order: Order; program: Program; event: Event; recordedAtEpochMs: number;
-  refundId?: string; cumulativeReturnedProductsCents?: number };
+  refundId?: string; cumulativeReturnedProductsCents?: number; sponsorEvidence?: SponsorQualificationEvidence };
 const cents = (value: number) => Number.isSafeInteger(value) && value >= 0;
 const key = (orderId: string, event: string) => createHash("sha256").update(`referral-v1\0${orderId}\0${event}`).digest("hex");
 
@@ -59,28 +60,35 @@ export async function prepareReferralTransition(input: Input) {
     (before.state === "rewarded" && (!before.paymentConfirmed || !before.deliveryConfirmed || before.rewardCompartment !== "available")) ||
     (before.state === "cancelled" && (!before.paymentConfirmed || before.rewardCompartment !== "none")) ||
     (before.state === "reversed" && (!before.paymentConfirmed || !before.deliveryConfirmed || before.rewardCompartment !== "none")) ||
-    (before.qualifyingOrderCancelled !== undefined && typeof before.qualifyingOrderCancelled !== "boolean") ||
-    (before.qualifyingOrderCancelled === true && (!before.paymentConfirmed || before.rewardCompartment !== "none")))
+    (before.rewardIneligibilityReason !== undefined && !["sponsor_no_longer_eligible", "sponsor_account_disabled", "sponsor_identity_unavailable"].includes(before.rewardIneligibilityReason)) ||
+    (before.rewardIneligibilityReason !== undefined && (!before.paymentConfirmed || before.rewardCompartment !== "none")))
     throw new ReferralError("referral_relation_corrupt");
   const next = structuredClone(before);
   const normalEvent = input.event === "payment" || input.event === "payment_and_delivery" || input.event === "delivery";
-  if (before.qualifyingOrderCancelled === true && (normalEvent || input.event === "cancel"))
-    return { status: "already_applied" as const, write() {} };
   if (input.event === "payment" || input.event === "payment_and_delivery") {
     if (before.paymentConfirmed && (input.event === "payment" || before.deliveryConfirmed)) return { status: "already_applied" as const, write() {} };
+    if (!before.paymentConfirmed) {
+      const evidence = input.sponsorEvidence;
+      if (!evidence || evidence.referralId !== snapshot.referralId || evidence.sponsorUid !== before.sponsorUid)
+        throw new ReferralError("referral_sponsor_evidence_conflict");
+      if (evidence.account === "active") {
+        if (!await sponsorHasDeliveredPaidOrder(input.transaction, input.db, before.sponsorUid))
+          next.rewardIneligibilityReason = "sponsor_no_longer_eligible";
+      } else if (evidence.account === "disabled") next.rewardIneligibilityReason = "sponsor_account_disabled";
+      else if (evidence.account === "unavailable") next.rewardIneligibilityReason = "sponsor_identity_unavailable";
+      else throw new ReferralError("referral_sponsor_evidence_conflict");
+    }
     next.paymentConfirmed = true;
     if (input.event === "payment_and_delivery") next.deliveryConfirmed = true;
   } else if (input.event === "delivery") {
     if (before.deliveryConfirmed) return { status: "already_applied" as const, write() {} };
     next.deliveryConfirmed = true;
     next.deliveredOrderId = input.order.id;
-  } else if (input.event === "cancel") {
-    // An unpaid candidate has not consumed the referee's right or credited a sponsor.
-    if (!before.paymentConfirmed) {
-      if (!before.deliveryConfirmed) return { status: "already_applied" as const, write() {} };
-      next.deliveryConfirmed = false;
-      next.deliveredOrderId = null;
-    } else next.qualifyingOrderCancelled = true;
+  } else if (input.event === "cancel_unpaid_candidate") {
+    if (before.paymentConfirmed) throw new ReferralError("referral_payment_already_confirmed");
+    if (!before.deliveryConfirmed) return { status: "already_applied" as const, write() {} };
+    next.deliveryConfirmed = false;
+    next.deliveredOrderId = null;
   } else {
     if (!before.paymentConfirmed) throw new ReferralError("referral_payment_required");
     if (!input.refundId || !/^[A-Za-z0-9._:@+-]{1,128}$/.test(input.refundId) || !cents(input.cumulativeReturnedProductsCents!)) throw new ReferralError("referral_refund_invalid");
@@ -98,16 +106,16 @@ export async function prepareReferralTransition(input: Input) {
   if (next.qualifyingOrderId !== input.order.id && next.qualifyingOrderId !== null) throw new ReferralError("referral_order_conflict");
   if (next.cumulativeReturnedProductsCents > snapshot.eligibleProductsBeforeReferralCents) throw new ReferralError("referral_refund_invalid");
   const retained = snapshot.eligibleProductsBeforeReferralCents - next.cumulativeReturnedProductsCents;
-  const shouldReward = next.paymentConfirmed && next.qualifyingOrderCancelled !== true && retained >= REFERRAL_MINIMUM_PRODUCTS_CENTS;
+  const shouldReward = next.paymentConfirmed && !next.rewardIneligibilityReason && retained >= REFERRAL_MINIMUM_PRODUCTS_CENTS;
   const desired: ReferralRelation["rewardCompartment"] = shouldReward ? next.deliveryConfirmed ? "available" : "pending" : "none";
   if (normalEvent && (before.state === "cancelled" || before.state === "reversed") && desired !== "none")
     throw new ReferralError("referral_restore_requires_correction");
   const movements: Array<{ event: CagnotteMovement["businessEvent"]; pending: number; available: number; regularization: number; id: string }> = [];
   const move = (event: CagnotteMovement["businessEvent"], suffix: string, pending: number, available: number, regularization = 0) => movements.push({ event, pending, available, regularization, id: key(input.order.id, suffix) });
   if (next.rewardCompartment === "none" && desired !== "none") move(before.state === "reversed" || before.state === "cancelled" ? "referral_reward_restored" : "referral_reward_pending", input.event === "correction" ? `restore:${input.refundId}` : "pending", REFERRAL_SPONSOR_REWARD_CENTS, 0);
-  if (next.rewardCompartment === "pending" && desired === "none") move("referral_reward_cancelled", input.event === "cancel" ? "order_cancelled:pending" : `cancel:${input.refundId}`, -REFERRAL_SPONSOR_REWARD_CENTS, 0);
+  if (next.rewardCompartment === "pending" && desired === "none") move("referral_reward_cancelled", `cancel:${input.refundId}`, -REFERRAL_SPONSOR_REWARD_CENTS, 0);
   if (next.rewardCompartment === "pending" && desired === "available") move("referral_reward_available", "available", -REFERRAL_SPONSOR_REWARD_CENTS, REFERRAL_SPONSOR_REWARD_CENTS);
-  if (next.rewardCompartment === "available" && desired === "none") move("referral_reward_reversed", input.event === "cancel" ? "order_cancelled:reversed" : `reverse:${input.refundId}`, 0, -REFERRAL_SPONSOR_REWARD_CENTS);
+  if (next.rewardCompartment === "available" && desired === "none") move("referral_reward_reversed", `reverse:${input.refundId}`, 0, -REFERRAL_SPONSOR_REWARD_CENTS);
   // Delivery preceding payment records the fact, then payment emits both movements atomically.
   if (next.rewardCompartment === "none" && desired === "available") move("referral_reward_available", before.state === "reversed" || before.state === "cancelled" ? `available:restore:${input.refundId}` : "available", -REFERRAL_SPONSOR_REWARD_CENTS, REFERRAL_SPONSOR_REWARD_CENTS);
   const movementRefs = movements.map((entry) => input.db.collection("cagnotteMovements").doc(entry.id));
@@ -126,7 +134,7 @@ export async function prepareReferralTransition(input: Input) {
       calculationVersion: CAGNOTTE_CALCULATION_VERSION, programVersion: REFERRAL_PROGRAM_VERSION, currency: "EUR", origin: "internal_server",
       orderId: input.order.id, beneficiaryId: before.sponsorUid, businessEvent: entry.event, eventKey: entry.id,
       payload: canonicalReferralJson({ event: entry.event, referralId: snapshot.referralId, orderId: input.order.id, refundId: input.refundId ?? null,
-        ...(input.event === "cancel" ? { cause: "order_cancellation" } : input.event === "refund" ? { cause: "refund" } : input.event === "correction" ? { cause: "refund_correction" } : {}),
+        ...(input.event === "refund" ? { cause: "refund" } : input.event === "correction" ? { cause: "refund_correction" } : {}),
         cumulativeReturnedProductsCents: next.cumulativeReturnedProductsCents }), pendingDeltaCents: entry.pending, availableDeltaCents: available,
       reservedDeltaCents: 0, regularizationDeltaCents: regularization, recordedAtEpochMs: input.recordedAtEpochMs });
   }

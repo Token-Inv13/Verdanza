@@ -1,6 +1,7 @@
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { REFERRAL_EMAIL_KEY_VERSION, REFERRAL_PROGRAM_VERSION, type ReferralCode, type ReferralEmailClaim, type ReferralRelation } from "../../src/types/referral.js";
 import { newReferralCode, normalizeReferralEmail, referralEmailClaimId } from "./referralIdentity.js";
+import type { ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
 
 export class ReferralError extends Error {
   constructor(readonly code: string, readonly status = 409) { super(code); }
@@ -12,12 +13,24 @@ const CODE = /^[A-Z2-7]{26}$/;
 const HISTORY_LIMIT = 100;
 function uid(value: string) { if (!ID.test(value)) throw new ReferralError("referral_identity_invalid", 400); return value; }
 function active(program: Program, now: number) { if (program.mode !== "active" || now < program.startsAtEpochMs) throw new ReferralError("referral_program_disabled", 503); }
-function productOrder(value: FirebaseFirestore.DocumentData) {
-  return value.orderType !== "preorder" && !value.deletedAt && !value.productionFixture &&
+function productOrder(value: FirebaseFirestore.DocumentData, includeDeleted = false) {
+  return value.orderType !== "preorder" && (includeDeleted || !value.deletedAt) && !value.productionFixture &&
     Array.isArray(value.items) && value.items.length > 0 && value.items.every((item: unknown) =>
       item !== null && typeof item === "object" && typeof (item as { productId?: unknown }).productId === "string" &&
       Number.isSafeInteger((item as { quantity?: unknown }).quantity) && Number((item as { quantity: number }).quantity) > 0) &&
     typeof value.total === "number" && Number.isFinite(value.total) && value.total > 0;
+}
+function validInstant(value: unknown) {
+  if (typeof value !== "string") return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (!match || !Number.isFinite(Date.parse(value))) return false;
+  const [year, month, day, hour, minute, second] = match.slice(1).map(Number);
+  const calendar = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  return calendar.getUTCFullYear() === year && calendar.getUTCMonth() + 1 === month && calendar.getUTCDate() === day &&
+    calendar.getUTCHours() === hour && calendar.getUTCMinutes() === minute && calendar.getUTCSeconds() === second;
+}
+export function hasHistoricalPaymentEvidence(value: FirebaseFirestore.DocumentData) {
+  return productOrder(value, true) && (value.paymentStatus === "paid" || validInstant(value.paymentConfirmedAt) || validInstant(value.paidAt));
 }
 
 export async function sponsorHasDeliveredPaidOrder(tx: Transaction, db: Firestore, sponsorUid: string) {
@@ -26,23 +39,27 @@ export async function sponsorHasDeliveredPaidOrder(tx: Transaction, db: Firestor
 }
 
 async function assertRefereeFirstPaidOrder(tx: Transaction, db: Firestore, refereeUid: string, rawEmail: string, normalizedEmail: string) {
-  const searches = [db.collection("orders").where("customerId", "==", refereeUid).where("paymentStatus", "==", "paid").limit(HISTORY_LIMIT),
-    ...[...new Set([rawEmail, normalizedEmail])].map((email) => db.collection("orders").where("customerEmail", "==", email).where("paymentStatus", "==", "paid").limit(HISTORY_LIMIT))];
+  const searches = [db.collection("orders").where("customerId", "==", refereeUid).limit(HISTORY_LIMIT),
+    ...[...new Set([rawEmail, normalizedEmail])].map((email) => db.collection("orders").where("customerEmail", "==", email).limit(HISTORY_LIMIT))];
   for (const query of searches) {
     const result = await tx.get(query);
     if (result.size >= HISTORY_LIMIT) throw new ReferralError("referral_history_inconclusive");
     for (const doc of result.docs) {
       const value = doc.data();
       if (value.orderType === "preorder" || value.productionFixture) continue;
-      if (productOrder(value)) throw new ReferralError("referee_already_paid");
-      throw new ReferralError("referral_history_inconclusive");
+      if (hasHistoricalPaymentEvidence(value)) throw new ReferralError("referee_already_paid");
+      if (!productOrder(value, true) && (value.paymentStatus === "paid" || validInstant(value.paymentConfirmedAt) || validInstant(value.paidAt)))
+        throw new ReferralError("referral_history_inconclusive");
     }
   }
 }
 
-export async function ensureReferralCode(input: { db: Firestore; user: VerifiedUser; program: Program; nowEpochMs: number; codeFactory?: () => string }) {
+export async function ensureReferralCode(input: { db: Firestore; user: VerifiedUser; program: Program; nowEpochMs: number; codeFactory?: () => string;
+  getSponsorIdentity: (uid: string) => Promise<ReferralSponsorIdentity> }) {
   active(input.program, input.nowEpochMs);
   const ownerUid = uid(input.user.uid);
+  const ownerIdentity = await input.getSponsorIdentity(ownerUid);
+  if (ownerIdentity.uid !== ownerUid || ownerIdentity.disabled) throw new ReferralError("sponsor_ineligible", 403);
   const ownerRef = input.db.collection("referralCodes").doc(`owner_${ownerUid}`);
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = (input.codeFactory ?? newReferralCode)();
@@ -69,7 +86,8 @@ export async function ensureReferralCode(input: { db: Firestore; user: VerifiedU
 }
 
 /** The only relation-creation operation. The secret is passed after the active gate. */
-export async function linkReferral(input: { db: Firestore; user: VerifiedUser; code: string; secret: string; program: Program; nowEpochMs: number; getSponsorEmail: (uid: string) => Promise<string | null> }) {
+export async function linkReferral(input: { db: Firestore; user: VerifiedUser; code: string; secret: string; program: Program; nowEpochMs: number;
+  getSponsorIdentity: (uid: string) => Promise<ReferralSponsorIdentity> }) {
   active(input.program, input.nowEpochMs);
   const refereeUid = uid(input.user.uid);
   if (!input.user.email || input.user.emailVerified !== true) throw new ReferralError("referee_email_unverified", 403);
@@ -84,8 +102,9 @@ export async function linkReferral(input: { db: Firestore; user: VerifiedUser; c
   const sponsorUid = uid(mapping.ownerUid);
   if (mapping.schemaVersion !== 1 || mapping.code !== input.code || mapping.programVersion !== REFERRAL_PROGRAM_VERSION) throw new ReferralError("referral_code_corrupt");
   if (sponsorUid === refereeUid) throw new ReferralError("self_referral", 403);
-  const sponsorEmail = await input.getSponsorEmail(sponsorUid);
-  if (!sponsorEmail || normalizeReferralEmail(sponsorEmail) === normalizedEmail) throw new ReferralError("self_referral", 403);
+  const sponsorIdentity = await input.getSponsorIdentity(sponsorUid);
+  if (sponsorIdentity.uid !== sponsorUid || sponsorIdentity.disabled) throw new ReferralError("sponsor_ineligible", 403);
+  if (normalizeReferralEmail(sponsorIdentity.email) === normalizedEmail) throw new ReferralError("self_referral", 403);
   const relationRef = input.db.collection("referrals").doc(refereeUid);
   const claimRef = input.db.collection("referralEmailClaims").doc(claimId);
   return input.db.runTransaction(async (tx) => {

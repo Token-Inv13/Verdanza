@@ -4,13 +4,13 @@ import { sendJson, type VercelRequestLike, type VercelResponseLike } from "./_se
 import { getReferralRuntime, ReferralConfigurationError } from "./_server/referralRuntimeConfig.js";
 import { ensureReferralCode, linkReferral, readReferralSelf, ReferralError } from "./_server/referralService.js";
 import { assertReferralEmailSecret } from "./_server/referralIdentity.js";
-import { getReferralSponsorEmail } from "./_server/referralSponsorIdentity.js";
+import { getReferralSponsorIdentity, type ReferralSponsorIdentity } from "./_server/referralSponsorIdentity.js";
 
 export function createReferralHandler(dependencies: {
   runtime: typeof getReferralRuntime;
   verify: typeof verifyFirebaseIdToken;
   db: typeof getAdminDb;
-  sponsorEmail: (uid: string) => Promise<string | null>;
+  sponsorIdentity: (uid: string) => Promise<ReferralSponsorIdentity>;
   secret: () => string;
   now: () => number;
 }) {
@@ -42,11 +42,11 @@ export function createReferralHandler(dependencies: {
       const user = await dependencies.verify(authorization.slice(7).trim());
       const db = dependencies.db();
       if (action === "self") return sendJson(response, await readReferralSelf(db, user.uid));
-      if (action === "ensure_code") return sendJson(response, await ensureReferralCode({ db, user, program: runtime as { mode: "active"; startsAtEpochMs: number }, nowEpochMs }));
+      if (action === "ensure_code") return sendJson(response, await ensureReferralCode({ db, user, program: runtime as { mode: "active"; startsAtEpochMs: number }, nowEpochMs, getSponsorIdentity: dependencies.sponsorIdentity }));
       const code = (request.body as { code?: unknown } | null)?.code;
       if (typeof code !== "string") return sendJson(response, { code: "referral_code_invalid" }, 400);
       return sendJson(response, await linkReferral({ db, user, code, program: runtime as { mode: "active"; startsAtEpochMs: number },
-        nowEpochMs, secret: emailSecret!, getSponsorEmail: dependencies.sponsorEmail }));
+        nowEpochMs, secret: emailSecret!, getSponsorIdentity: dependencies.sponsorIdentity }));
     } catch (error) {
       if (error instanceof ReferralError) return sendJson(response, { code: error.code }, error.status);
       if (error instanceof Error && error.message === "referral_email_secret_invalid") return sendJson(response, { code: "referral_configuration_invalid" }, 503);
@@ -59,7 +59,7 @@ export default createReferralHandler({
   runtime: getReferralRuntime,
   verify: verifyFirebaseIdToken,
   db: getAdminDb,
-  sponsorEmail: getReferralSponsorEmail,
+  sponsorIdentity: getReferralSponsorIdentity,
   secret: () => process.env.REFERRAL_EMAIL_HMAC_SECRET ?? "",
   now: Date.now,
 });

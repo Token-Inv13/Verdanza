@@ -1,10 +1,10 @@
 import { deepStrictEqual, equal, ok, rejects, throws } from "node:assert/strict";
 import { CAGNOTTE_DEMO, connectCagnotteEmulator } from "./cagnotteEmulator.js";
 import { createReferralHandler } from "../api/referral.js";
-import { lookupReferralSponsorEmail } from "../api/_server/referralSponsorIdentity.js";
+import { lookupReferralSponsorIdentity } from "../api/_server/referralSponsorIdentity.js";
 import { newReferralCode, normalizeReferralEmail, referralEmailClaimId } from "../api/_server/referralIdentity.js";
 import { resolveReferralRuntime, REFERRAL_CLOSED_RUNTIME } from "../api/_server/referralRuntimeConfig.js";
-import { ensureReferralCode, linkReferral, readReferralSelf } from "../api/_server/referralService.js";
+import { ensureReferralCode, hasHistoricalPaymentEvidence, linkReferral, readReferralSelf } from "../api/_server/referralService.js";
 import { createReferralOrderSnapshot, referralReturnedProductsCents, referralSnapshotFingerprint } from "../api/_server/referralSnapshot.js";
 import { prepareReferralTransition, validateReferralOrderSnapshot } from "../api/_server/referralLedger.js";
 import { applyCagnotteLedgerOperation } from "../api/_server/cagnotteLedger.js";
@@ -25,6 +25,7 @@ const sponsor = { uid: "sponsor-a", email: "Sponsor-A@Example.Test", emailVerifi
 const codeA = "A".repeat(26);
 const codeB = "B".repeat(26);
 const nowEpochMs = 2000;
+const activeIdentity = async (uid: string) => ({ uid, email: uid === sponsor.uid ? sponsor.email! : "b@example.test", disabled: false });
 
 await test("runtime absent et off ne consultent pas Firebase", () => {
   const fail = () => { throw new Error("unexpected_project_read"); };
@@ -74,21 +75,25 @@ await test("lookup Auth Admin du parrain: projet, UID et échec fermés", async 
     requests.push({ url: String(url), authorization: String(new Headers(init?.headers).get("authorization")), body: JSON.parse(String(init?.body)) });
     return new Response(JSON.stringify({ users: [{ localId: sponsor.uid, email: sponsor.email }] }), { status: 200 });
   };
-  equal(await lookupReferralSponsorEmail({ uid: sponsor.uid, projectId: "verdanza-1f621", accessToken: "fixture-token", fetchImpl: fetchImpl as typeof fetch }), sponsor.email);
+  deepStrictEqual(await lookupReferralSponsorIdentity({ uid: sponsor.uid, projectId: "verdanza-1f621", accessToken: "fixture-token", fetchImpl: fetchImpl as typeof fetch }),
+    { uid: sponsor.uid, email: sponsor.email, disabled: false });
   deepStrictEqual(requests, [{ url: "https://identitytoolkit.googleapis.com/v1/projects/verdanza-1f621/accounts:lookup", authorization: "Bearer fixture-token", body: { localId: [sponsor.uid] } }]);
-  await rejects(lookupReferralSponsorEmail({ uid: sponsor.uid, projectId: "wrong-project", accessToken: "fixture-token", fetchImpl: fetchImpl as typeof fetch }));
+  await rejects(lookupReferralSponsorIdentity({ uid: sponsor.uid, projectId: "wrong-project", accessToken: "fixture-token", fetchImpl: fetchImpl as typeof fetch }));
   equal(requests.length, 1);
-  await rejects(lookupReferralSponsorEmail({ uid: sponsor.uid, projectId: "verdanza-1f621", accessToken: "fixture-token", fetchImpl: (async () => new Response(JSON.stringify({ users: [{ localId: "other", email: sponsor.email }] }), { status: 200 })) as typeof fetch }));
+  await rejects(lookupReferralSponsorIdentity({ uid: sponsor.uid, projectId: "verdanza-1f621", accessToken: "fixture-token", fetchImpl: (async () => new Response(JSON.stringify({ users: [{ localId: "other", email: sponsor.email }] }), { status: 200 })) as typeof fetch }));
+  deepStrictEqual(await lookupReferralSponsorIdentity({ uid: sponsor.uid, projectId: "verdanza-1f621", accessToken: "fixture-token",
+    fetchImpl: (async () => new Response(JSON.stringify({ users: [{ localId: sponsor.uid, email: sponsor.email, disabled: true }] }), { status: 200 })) as typeof fetch }),
+    { uid: sponsor.uid, email: sponsor.email, disabled: true });
 });
 await test("API fermée avant Auth, Firestore et secret", async () => {
   let calls = 0; let status = 0; let body: unknown;
   const handler = createReferralHandler({ runtime: () => REFERRAL_CLOSED_RUNTIME, verify: async () => { calls++; throw new Error(); },
-    db: () => { calls++; throw new Error(); }, sponsorEmail: async () => { calls++; throw new Error(); }, secret: () => { calls++; throw new Error(); }, now: Date.now });
+    db: () => { calls++; throw new Error(); }, sponsorIdentity: async () => { calls++; throw new Error(); }, secret: () => { calls++; throw new Error(); }, now: Date.now });
   const response = { setHeader() {}, status(value: number) { status = value; return this; }, json(value: unknown) { body = value; } } as unknown as VercelResponseLike;
   await handler({ method: "GET", headers: {} } as VercelRequestLike, response);
   equal(status, 503); deepStrictEqual(body, { code: "referral_program_disabled" }); equal(calls, 0);
   const missingSecret = createReferralHandler({ runtime: () => program, verify: async () => { calls++; throw new Error(); },
-    db: () => { calls++; throw new Error(); }, sponsorEmail: async () => { calls++; throw new Error(); }, secret: () => "short", now: Date.now });
+    db: () => { calls++; throw new Error(); }, sponsorIdentity: async () => { calls++; throw new Error(); }, secret: () => "short", now: Date.now });
   await missingSecret({ method: "POST", headers: {}, body: { action: "link", code: codeA } } as VercelRequestLike, response);
   equal(status, 503); deepStrictEqual(body, { code: "referral_configuration_invalid" }); equal(calls, 0);
 });
@@ -98,22 +103,36 @@ const sponsorOrder = (id: string, uid: string, status = "delivered") => db.colle
   items: [{ productId: "fixture-product", quantity: 1, lineTotal: 60 }] });
 await sponsorOrder("referral-sponsor-a", sponsor.uid);
 await test("parrain éligible, code stable et collision transactionnelle", async () => {
-  const first = await ensureReferralCode({ db, user: sponsor, program, nowEpochMs, codeFactory: () => codeA });
+  const first = await ensureReferralCode({ db, user: sponsor, program, nowEpochMs, codeFactory: () => codeA, getSponsorIdentity: activeIdentity });
   deepStrictEqual(first, { code: codeA, created: true });
-  deepStrictEqual(await ensureReferralCode({ db, user: sponsor, program, nowEpochMs, codeFactory: () => codeB }), { code: codeA, created: false });
+  deepStrictEqual(await ensureReferralCode({ db, user: sponsor, program, nowEpochMs, codeFactory: () => codeB, getSponsorIdentity: activeIdentity }), { code: codeA, created: false });
   await sponsorOrder("referral-sponsor-b", "sponsor-b");
   let count = 0;
-  const collision = await ensureReferralCode({ db, user: { uid: "sponsor-b", email: "b@example.test" }, program, nowEpochMs, codeFactory: () => ++count === 1 ? codeA : codeB });
+  const collision = await ensureReferralCode({ db, user: { uid: "sponsor-b", email: "b@example.test" }, program, nowEpochMs, codeFactory: () => ++count === 1 ? codeA : codeB, getSponsorIdentity: activeIdentity });
   equal(collision.code, codeB);
-  await rejects(ensureReferralCode({ db, user: { uid: "no-orders", email: "none@example.test" }, program, nowEpochMs, codeFactory: () => "C".repeat(26) }));
+  await rejects(ensureReferralCode({ db, user: { uid: "no-orders", email: "none@example.test" }, program, nowEpochMs, codeFactory: () => "C".repeat(26), getSponsorIdentity: activeIdentity }));
+});
+await test("compte parrain désactivé ne crée ni ne récupère un code et ne crée aucun lien", async () => {
+  const disabledIdentity = async (uid: string) => ({ uid, email: uid === sponsor.uid ? sponsor.email! : "b@example.test", disabled: true });
+  await rejects(ensureReferralCode({ db, user: sponsor, program, nowEpochMs, codeFactory: () => codeA,
+    getSponsorIdentity: disabledIdentity }), { code: "sponsor_ineligible" });
+  await sponsorOrder("referral-sponsor-disabled-new", "sponsor-disabled-new");
+  await rejects(ensureReferralCode({ db, user: { uid: "sponsor-disabled-new", email: "disabled@example.test" }, program, nowEpochMs,
+    codeFactory: () => "D".repeat(26), getSponsorIdentity: disabledIdentity }), { code: "sponsor_ineligible" });
+  equal((await db.collection("referralCodes").doc("owner_sponsor-disabled-new").get()).exists, false);
+  const child = { uid: "referee-disabled-link", email: "disabled-link@example.test", emailVerified: true };
+  await rejects(linkReferral({ db, user: child, code: codeB, secret, program, nowEpochMs, getSponsorIdentity: disabledIdentity }),
+    { code: "sponsor_ineligible" });
+  equal((await db.collection("referrals").doc(child.uid).get()).exists, false);
+  equal((await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, child.email)).get()).exists, false);
 });
 await test("lien, claim, replay, changement avant paiement et projection privée", async () => {
-  const args = { db, user, code: codeA, secret, program, nowEpochMs, getSponsorEmail: async () => sponsor.email };
+  const args = { db, user, code: codeA, secret, program, nowEpochMs, getSponsorIdentity: activeIdentity };
   deepStrictEqual(await linkReferral(args), { state: "linked", changed: true });
   deepStrictEqual(await linkReferral(args), { state: "linked", changed: false });
   const claim = await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, user.email!)).get();
   equal(claim.data()?.refereeUid, user.uid); ok(!JSON.stringify(claim.data()).includes("example.test"));
-  const changed = await linkReferral({ ...args, code: codeB, getSponsorEmail: async () => "b@example.test" });
+  const changed = await linkReferral({ ...args, code: codeB, getSponsorIdentity: activeIdentity });
   equal(changed.changed, true);
   const self = await readReferralSelf(db, user.uid);
   deepStrictEqual(self, { code: null, relation: { state: "linked", paymentConfirmed: false, deliveryConfirmed: false } });
@@ -127,23 +146,31 @@ await test("lien, claim, replay, changement avant paiement et projection privée
 const snapshot = createReferralOrderSnapshot({ refereeUid: user.uid, createdAtEpochMs: 2000,
   lines: [{ lineId: "line", eligibleBeforeReferralCents: 6000, referralDiscountCents: 500 }] });
 const order = { id: "referral-order-a", customerId: user.uid, paymentStatus: "to_confirm", orderStatus: "contact_required", referral: snapshot } as Order;
-const transition = (source: Order, event: "payment" | "payment_and_delivery" | "delivery" | "cancel" | "refund" | "correction", refundId?: string, returned = 0, mode = program) =>
-  db.runTransaction(async (transaction) => {
+const transition = async (source: Order, event: "payment" | "payment_and_delivery" | "delivery" | "cancel_unpaid_candidate" | "refund" | "correction", refundId?: string, returned = 0, mode = program) => {
+  const relationBefore = event === "payment" || event === "payment_and_delivery"
+    ? (await db.collection("referrals").doc(source.referral!.referralId).get()).data() as ReferralRelation : null;
+  const sponsorEvidence = relationBefore ? { referralId: source.referral!.referralId, sponsorUid: relationBefore.sponsorUid, account: "active" as const } : undefined;
+  return db.runTransaction(async (transaction) => {
     const plan = await prepareReferralTransition({ db, transaction, order: source, program: mode, event, recordedAtEpochMs: nowEpochMs,
-      ...(refundId ? { refundId, cumulativeReturnedProductsCents: returned } : {}) });
+      sponsorEvidence, ...(refundId ? { refundId, cumulativeReturnedProductsCents: returned } : {}) });
     plan?.write(); return plan?.status;
   });
+};
 const relation = async () => (await db.collection("referrals").doc(user.uid).get()).data() as ReferralRelation;
 const wallet = async (uid: string) => (await db.collection("cagnotteWallets").doc(uid).get()).data()!;
 const routeActor = { uid: "fixture-admin", email: "fixture-admin@example.test" };
-const routeTransition = (orderId: string, body: Omit<Parameters<typeof commitOrderStatusTransition>[0]["body"], "orderId">, mode = program) =>
+const routeTransition = (orderId: string, body: Omit<Parameters<typeof commitOrderStatusTransition>[0]["body"], "orderId">, mode = program,
+  getSponsorIdentity = activeIdentity) =>
   commitOrderStatusTransition({ db, body: { orderId, ...body }, admin: routeActor, referralProgram: mode,
+    getSponsorIdentity,
     now: () => "2000-01-03T00:00:00.000Z" });
 const routeRelation = async (uid: string) => (await db.collection("referrals").doc(uid).get()).data() as ReferralRelation;
 const routeMovements = async (orderId: string) => (await db.collection("cagnotteMovements").where("orderId", "==", orderId).get()).docs;
-async function createRouteCandidate(orderId: string, uid: string) {
+const routeReferralMovements = async (orderId: string) => (await routeMovements(orderId)).filter((doc) =>
+  String(doc.data().businessEvent).startsWith("referral_"));
+async function createRouteCandidate(orderId: string, uid: string, code = codeB) {
   const child = { uid, email: `${uid}@example.test`, emailVerified: true };
-  await linkReferral({ db, user: child, code: codeB, secret, program, nowEpochMs, getSponsorEmail: async () => "b@example.test" });
+  await linkReferral({ db, user: child, code, secret, program, nowEpochMs, getSponsorIdentity: activeIdentity });
   const productId = `product-${orderId}`;
   await db.collection("products").doc(productId).set({ stock: 10 });
   await db.collection("orders").doc(orderId).set({ id: orderId, customerId: uid, customerName: "Synthetic", customerEmail: child.email,
@@ -187,7 +214,7 @@ await test("correction restaure le droit sans doubler le ledger", async () => {
 });
 await test("remboursement et correction convertissent deux lignes à net positif", async () => {
   const child = { uid: "referee-multiline-refund", email: "multiline-refund@example.test", emailVerified: true };
-  await linkReferral({ db, user: child, code: codeB, secret, program, nowEpochMs, getSponsorEmail: async () => "b@example.test" });
+  await linkReferral({ db, user: child, code: codeB, secret, program, nowEpochMs, getSponsorIdentity: activeIdentity });
   const referral = createReferralOrderSnapshot({ refereeUid: child.uid, createdAtEpochMs: 2000,
     lines: [{ lineId: "small", eligibleBeforeReferralCents: 500, referralDiscountCents: 499 },
       { lineId: "large", eligibleBeforeReferralCents: 4500, referralDiscountCents: 1 }] });
@@ -209,14 +236,54 @@ await test("conversion des retours figée avant remise", () => {
 await test("filleul déjà payé refusé par UID ou email historique", async () => {
   const historical = { uid: "referee-old", email: "old@example.test", emailVerified: true };
   await sponsorOrder("referral-prior-uid", historical.uid);
-  await rejects(linkReferral({ db, user: historical, code: codeB, secret, program, nowEpochMs, getSponsorEmail: async () => "b@example.test" }));
+  await rejects(linkReferral({ db, user: historical, code: codeB, secret, program, nowEpochMs, getSponsorIdentity: activeIdentity }));
   await db.collection("orders").doc("referral-prior-email").set({ customerId: "legacy-id", customerEmail: "legacy@example.test", paymentStatus: "paid", orderStatus: "delivered", orderType: "order", total: 60,
     items: [{ productId: "fixture-product", quantity: 1, lineTotal: 60 }] });
-  await rejects(linkReferral({ db, user: { uid: "referee-legacy", email: "legacy@example.test", emailVerified: true }, code: codeB, secret, program, nowEpochMs, getSponsorEmail: async () => "b@example.test" }));
+  await rejects(linkReferral({ db, user: { uid: "referee-legacy", email: "legacy@example.test", emailVerified: true }, code: codeB, secret, program, nowEpochMs, getSponsorIdentity: activeIdentity }));
+});
+await test("paiement historique survit à annulation et remboursement, y compris par email legacy", async () => {
+  const base = { orderType: "order", total: 60, items: [{ productId: "fixture-product", quantity: 1, lineTotal: 60 }] };
+  const paidAt = "2000-01-02T00:00:00.000Z";
+  ok(hasHistoricalPaymentEvidence({ ...base, paymentStatus: "cancelled", orderStatus: "cancelled", paidAt, deletedAt: paidAt }));
+  ok(!hasHistoricalPaymentEvidence({ ...base, paymentStatus: "payment_link_sent", paidAt: "invalid" }));
+  ok(!hasHistoricalPaymentEvidence({ ...base, paymentStatus: "payment_link_sent", paidAt: "2000-02-31T00:00:00.000Z" }));
+  ok(!hasHistoricalPaymentEvidence({ ...base, paymentStatus: "pending", paymentReference: "reference-only" }));
+  const cancelled = { uid: "referee-paid-cancelled", email: "paid-cancelled@example.test", emailVerified: true };
+  await db.collection("orders").doc("referral-history-paid-cancelled").set({ ...base, customerId: cancelled.uid,
+    paymentStatus: "cancelled", orderStatus: "cancelled", paidAt, paymentConfirmedAt: paidAt, cancelledAt: paidAt, deletedAt: paidAt });
+  await rejects(linkReferral({ db, user: cancelled, code: codeB, secret, program, nowEpochMs, getSponsorIdentity: activeIdentity }),
+    { code: "referee_already_paid" });
+  const refunded = { uid: "referee-paid-refunded", email: "paid-refunded@example.test", emailVerified: true };
+  await db.collection("orders").doc("referral-history-paid-refunded").set({ ...base, customerId: refunded.uid,
+    paymentStatus: "cancelled", orderStatus: "cancelled", paymentConfirmedAt: paidAt, refundSummary: { refundedCents: 5500 } });
+  await rejects(linkReferral({ db, user: refunded, code: codeB, secret, program, nowEpochMs, getSponsorIdentity: activeIdentity }),
+    { code: "referee_already_paid" });
+  const legacy = { uid: "referee-paid-legacy", email: "paid-legacy@example.test", emailVerified: true };
+  await db.collection("orders").doc("referral-history-paid-legacy").set({ ...base, customerId: "old-legacy-uid",
+    customerEmail: legacy.email, paymentStatus: "cancelled", orderStatus: "cancelled", paidAt });
+  await rejects(linkReferral({ db, user: legacy, code: codeB, secret, program, nowEpochMs, getSponsorIdentity: activeIdentity }),
+    { code: "referee_already_paid" });
+});
+await test("annulation impayée et lien envoyé ne disqualifient pas; historique borné refuse l'ambiguïté", async () => {
+  const base = { orderType: "order", total: 60, items: [{ productId: "fixture-product", quantity: 1, lineTotal: 60 }] };
+  const child = { uid: "referee-unpaid-history", email: "unpaid-history@example.test", emailVerified: true };
+  await db.collection("orders").doc("referral-history-unpaid-cancelled").set({ ...base, customerId: child.uid,
+    paymentStatus: "cancelled", orderStatus: "cancelled", cancelledAt: "2000-01-02T00:00:00.000Z" });
+  await db.collection("orders").doc("referral-history-link-sent").set({ ...base, customerId: child.uid,
+    paymentStatus: "payment_link_sent", orderStatus: "confirmed", paymentReference: "reference-only" });
+  deepStrictEqual(await linkReferral({ db, user: child, code: codeB, secret, program, nowEpochMs, getSponsorIdentity: activeIdentity }),
+    { state: "linked", changed: true });
+  const crowded = { uid: "referee-crowded-history", email: "crowded-history@example.test", emailVerified: true };
+  const batch = db.batch();
+  for (let index = 0; index < 100; index++) batch.set(db.collection("orders").doc(`referral-history-crowded-${index}`), {
+    ...base, customerId: crowded.uid, paymentStatus: "to_confirm", orderStatus: "confirmed" });
+  await batch.commit();
+  await rejects(linkReferral({ db, user: crowded, code: codeB, secret, program, nowEpochMs, getSponsorIdentity: activeIdentity }),
+    { code: "referral_history_inconclusive" });
 });
 await test("livraison avant paiement aboutit au même droit", async () => {
   const child = { uid: "referee-inverse", email: "inverse@example.test", emailVerified: true };
-  await linkReferral({ db, user: child, code: codeB, secret, program, nowEpochMs, getSponsorEmail: async () => "b@example.test" });
+  await linkReferral({ db, user: child, code: codeB, secret, program, nowEpochMs, getSponsorIdentity: activeIdentity });
   const own = { ...order, id: "referral-order-inverse", customerId: child.uid,
     referral: createReferralOrderSnapshot({ refereeUid: child.uid, createdAtEpochMs: 2000, lines: [{ lineId: "line", eligibleBeforeReferralCents: 6000, referralDiscountCents: 500 }] }) } as Order;
   equal(await transition(own, "delivery"), "applied");
@@ -227,7 +294,7 @@ await test("livraison avant paiement aboutit au même droit", async () => {
 });
 await test("paiement concurrent avec gain fidélité personnel partage le wallet", async () => {
   const child = { uid: "referee-concurrent", email: "concurrent@example.test", emailVerified: true };
-  await linkReferral({ db, user: child, code: codeB, secret, program, nowEpochMs, getSponsorEmail: async () => "b@example.test" });
+  await linkReferral({ db, user: child, code: codeB, secret, program, nowEpochMs, getSponsorIdentity: activeIdentity });
   const own = { ...order, id: "referral-order-concurrent", customerId: child.uid,
     referral: createReferralOrderSnapshot({ refereeUid: child.uid, createdAtEpochMs: 2000, lines: [{ lineId: "line", eligibleBeforeReferralCents: 6000, referralDiscountCents: 500 }] }) } as Order;
   const previousPending = (await wallet("sponsor-b")).pendingCents;
@@ -248,7 +315,7 @@ await test("paiement concurrent avec gain fidélité personnel partage le wallet
 });
 await test("remboursement administratif compose atomiquement fidélité et parrainage", async () => {
   const child = { uid: "referee-admin-refund", email: "admin-refund@example.test", emailVerified: true };
-  await linkReferral({ db, user: child, code: codeB, secret, program, nowEpochMs, getSponsorEmail: async () => "b@example.test" });
+  await linkReferral({ db, user: child, code: codeB, secret, program, nowEpochMs, getSponsorIdentity: activeIdentity });
   const id = "referral-order-admin-refund";
   const referral = createReferralOrderSnapshot({ refereeUid: child.uid, createdAtEpochMs: 2000,
     lines: [{ lineId: "line", eligibleBeforeReferralCents: 6000, referralDiscountCents: 500 }] });
@@ -291,9 +358,50 @@ await test("remboursement administratif compose atomiquement fidélité et parra
   equal((await db.collection("referrals").doc(child.uid).get()).data()?.state, "rewarded");
   equal((await db.collection("referrals").doc(child.uid).get()).data()?.cumulativeReturnedProductsCents, 0);
 });
+await test("remboursement confirmé après annulation statutaire contrepasse seulement alors le parrainage", async () => {
+  const child = { uid: "referee-refund-after-status-cancel", email: "refund-after-status-cancel@example.test", emailVerified: true };
+  await linkReferral({ db, user: child, code: codeB, secret, program, nowEpochMs, getSponsorIdentity: activeIdentity });
+  const id = "referral-order-refund-after-status-cancel";
+  const cagnotte = calculateCagnotte({ lines: [{ lineId: "line", initialCents: 6000 }],
+    discounts: [{ discountId: "referral", amountCents: 500, kind: "referral_discount", lineIds: ["line"] }],
+    requestedCagnotteCents: 0, availableCagnotteCents: 0, advantages: ["referral_discount"] });
+  const loyaltyProgram = { mode: "local_test" as const, programVersion: "fixture-referral-loyalty-v1", calculationVersion: "cagnotte-math-v1" as const,
+    startsAtEpochMs: 1000, newAccrualsEnabled: true };
+  await db.collection("products").doc(`product-${id}`).set({ stock: 10 });
+  const data = { id, customerId: child.uid, customerName: "Synthetic", customerEmail: child.email,
+    orderStatus: "delivered", paymentStatus: "paid", deliveryMethod: "postal", deliveryFee: 0,
+    subtotal: 60, total: 55, discountAmount: 5, promotionDiscountTotal: 5,
+    createdAt: "2000-01-01T00:00:00.000Z", updatedAt: "2000-01-02T00:00:00.000Z", paidAt: "2000-01-02T00:00:00.000Z",
+    paymentConfirmedAt: "2000-01-02T00:00:00.000Z", paymentConfirmedBy: "fixture-admin@example.test", finalPaymentMethod: "card_payment_link",
+    items: [{ lineId: "line", productId: `product-${id}`, name: "Synthetic", quantity: 1, unitPrice: 60, lineTotal: 60 }],
+    cagnotte: { schemaVersion: 1, beneficiaryId: child.uid, programVersion: loyaltyProgram.programVersion,
+      calculationVersion: "cagnotte-math-v1", createdAtEpochMs: 2000, snapshot: cagnotte },
+    referral: createReferralOrderSnapshot({ refereeUid: child.uid, createdAtEpochMs: 2000,
+      lines: [{ lineId: "line", eligibleBeforeReferralCents: 6000, referralDiscountCents: 500 }] }) } as const;
+  await db.collection("orders").doc(id).set(data);
+  await applyCagnotteLedgerOperation({ db, program: loyaltyProgram, command: { event: "payment_and_delivery_confirmed",
+    order: { orderId: id, beneficiaryId: child.uid, programVersion: loyaltyProgram.programVersion, createdAtEpochMs: 2000, snapshot: cagnotte } }, recordedAtEpochMs: 2000 });
+  await transition(data as unknown as Order, "payment_and_delivery");
+  const before = await wallet("sponsor-b");
+  await routeTransition(id, { orderStatus: "cancelled" });
+  equal((await routeRelation(child.uid)).state, "rewarded");
+  deepStrictEqual(await wallet("sponsor-b"), before);
+  equal((await routeReferralMovements(id)).length, 2);
+  const request = { action: "preview" as const, orderId: id, currency: "EUR" as const,
+    additionalReturns: [{ lineId: "line", additionalNetCents: 1100 }], deliveryRefundCents: 0 };
+  const common = { db, actor: routeActor, now: () => "2000-01-04T00:00:00.000Z", referralProgram: program };
+  const preview = await executeOrderRefund({ ...common, request });
+  equal(preview.kind, "refund_preview");
+  const confirmed = await executeOrderRefund({ ...common, request: { ...request, action: "record_confirmed", source: "admin",
+    reference: "refund-after-status-cancel", declaredFinancialCents: preview.totalFinancialCents, reason: "product_return",
+    confirmedAt: "2000-01-03T00:00:00.000Z", expectedPreviewVersion: preview.previewVersion } });
+  equal(confirmed.kind, "administrative_refund_recorded");
+  equal((await routeRelation(child.uid)).state, "reversed");
+  equal((await routeReferralMovements(id)).length, 3);
+});
 await test("transition de commande appelle paiement et livraison parrainage dans la même transaction", async () => {
   const child = { uid: "referee-order-route", email: "order-route@example.test", emailVerified: true };
-  await linkReferral({ db, user: child, code: codeB, secret, program, nowEpochMs, getSponsorEmail: async () => "b@example.test" });
+  await linkReferral({ db, user: child, code: codeB, secret, program, nowEpochMs, getSponsorIdentity: activeIdentity });
   const id = "referral-order-route";
   await db.collection("orders").doc(id).set({ id, customerId: child.uid, customerName: "Synthetic", customerEmail: child.email,
     orderStatus: "confirmed", paymentStatus: "to_confirm", deliveryMethod: "postal", deliveryFee: 0,
@@ -305,7 +413,7 @@ await test("transition de commande appelle paiement et livraison parrainage dans
   const actor = { uid: "fixture-admin", email: "fixture-admin@example.test" };
   const before = (await wallet("sponsor-b")).pendingCents;
   await commitOrderStatusTransition({ db, body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" },
-    admin: actor, referralProgram: program, now: () => "2000-01-02T00:00:00.000Z" });
+    admin: actor, referralProgram: program, getSponsorIdentity: activeIdentity, now: () => "2000-01-02T00:00:00.000Z" });
   equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
   equal((await db.collection("referrals").doc(child.uid).get()).data()?.state, "pending");
   equal((await wallet("sponsor-b")).pendingCents, before + 1000);
@@ -316,7 +424,7 @@ await test("transition de commande appelle paiement et livraison parrainage dans
   deepStrictEqual(await routeRelation(child.uid), pendingRelation);
   deepStrictEqual(await wallet("sponsor-b"), pendingWallet);
   equal((await routeMovements(id)).length, pendingMovements);
-  await commitOrderStatusTransition({ db, body: { orderId: id, orderStatus: "delivered" }, admin: actor, referralProgram: drain,
+  await commitOrderStatusTransition({ db, body: { orderId: id, orderStatus: "delivered" }, admin: actor, referralProgram: drain, getSponsorIdentity: activeIdentity,
     now: () => "2000-01-03T00:00:00.000Z" });
   equal((await db.collection("orders").doc(id).get()).data()?.orderStatus, "delivered");
   equal((await db.collection("referrals").doc(child.uid).get()).data()?.state, "rewarded");
@@ -338,39 +446,107 @@ await test("replay paid avec livraison réelle libère le gain une seule fois", 
   await routeTransition(id, { paymentStatus: "paid", orderStatus: "delivered" });
   equal((await routeMovements(id)).length, 2);
 });
-await test("annulation pending en drain contrepassée sans remboursement et idempotente", async () => {
+await test("commande parrain non éligible au paiement filleul ne reçoit aucun gain", async () => {
+  const sponsorUid = "sponsor-no-longer-eligible";
+  const sponsorOrderId = "referral-sponsor-no-longer-eligible";
+  const code = "C".repeat(26);
+  await sponsorOrder(sponsorOrderId, sponsorUid);
+  await ensureReferralCode({ db, user: { uid: sponsorUid, email: "former@example.test" }, program, nowEpochMs,
+    codeFactory: () => code, getSponsorIdentity: activeIdentity });
+  const id = "referral-order-sponsor-no-longer-eligible";
+  const child = await createRouteCandidate(id, "referee-sponsor-no-longer-eligible", code);
+  await db.collection("orders").doc(sponsorOrderId).update({ paymentStatus: "cancelled", orderStatus: "cancelled",
+    paidAt: "2000-01-02T00:00:00.000Z", paymentConfirmedAt: "2000-01-02T00:00:00.000Z" });
+  await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+  equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
+  const relation = await routeRelation(child.uid);
+  equal(relation.state, "cancelled");
+  equal(relation.paymentConfirmed, true);
+  equal(relation.qualifyingOrderId, id);
+  equal(relation.rewardIneligibilityReason, "sponsor_no_longer_eligible");
+  equal((await db.collection("cagnotteWallets").doc(sponsorUid).get()).exists, false);
+  equal((await routeMovements(id)).length, 0);
+  await routeTransition(id, { orderStatus: "delivered" });
+  equal((await routeRelation(child.uid)).state, "cancelled");
+  equal((await routeMovements(id)).length, 0);
+});
+await test("désactivation et indisponibilité Auth au paiement ne créent aucun gain", async () => {
+  const disabledIdentity = async (uid: string) => ({ uid, email: "b@example.test", disabled: true });
+  const before = await wallet("sponsor-b");
+  const disabledId = "referral-order-disabled-at-payment";
+  const disabledChild = await createRouteCandidate(disabledId, "referee-disabled-at-payment");
+  await routeTransition(disabledId, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program, disabledIdentity);
+  equal((await db.collection("orders").doc(disabledId).get()).data()?.paymentStatus, "paid");
+  equal((await routeRelation(disabledChild.uid)).rewardIneligibilityReason, "sponsor_account_disabled");
+  equal((await routeRelation(disabledChild.uid)).state, "cancelled");
+  deepStrictEqual(await wallet("sponsor-b"), before);
+  equal((await routeMovements(disabledId)).length, 0);
+  await routeTransition(disabledId, { orderStatus: "delivered" });
+  equal((await routeMovements(disabledId)).length, 0);
+  const outageId = "referral-order-auth-outage";
+  const outageChild = await createRouteCandidate(outageId, "referee-auth-outage");
+  await routeTransition(outageId, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
+    async () => { throw new Error("fixture_auth_unavailable"); });
+  equal((await db.collection("orders").doc(outageId).get()).data()?.paymentStatus, "paid");
+  equal((await routeRelation(outageChild.uid)).rewardIneligibilityReason, "sponsor_identity_unavailable");
+  equal((await routeMovements(outageId)).length, 0);
+  deepStrictEqual(await wallet("sponsor-b"), before);
+});
+await test("désactivation après gain pending ne retire pas le droit à la livraison", async () => {
+  const id = "referral-order-disabled-after-pending";
+  const child = await createRouteCandidate(id, "referee-disabled-after-pending");
+  const before = await wallet("sponsor-b");
+  await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+  equal((await routeRelation(child.uid)).state, "pending");
+  await routeTransition(id, { orderStatus: "delivered" }, program,
+    async () => { throw new Error("auth_must_not_be_called_for_delivery"); });
+  equal((await routeRelation(child.uid)).state, "rewarded");
+  equal((await wallet("sponsor-b")).availableCents, before.availableCents + 1000);
+  equal((await routeMovements(id)).length, 2);
+});
+await test("préflight Auth lié à la relation refuse un changement concurrent de parrain", async () => {
+  const id = "referral-order-sponsor-race";
+  const child = await createRouteCandidate(id, "referee-sponsor-race");
+  await rejects(routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
+    async (uid) => {
+      await db.collection("referrals").doc(child.uid).update({ sponsorUid: sponsor.uid });
+      return activeIdentity(uid);
+    }), { code: "referral_sponsor_evidence_conflict" });
+  equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "to_confirm");
+  equal((await routeMovements(id)).length, 0);
+});
+await test("annulation statutaire pending conserve le gain puis refund confirmé l'annule", async () => {
   const id = "referral-order-cancel-pending-route";
   const child = await createRouteCandidate(id, "referee-cancel-pending-route");
   await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
   const before = await wallet("sponsor-b");
   await routeTransition(id, { orderStatus: "cancelled" }, drain);
   const after = await routeRelation(child.uid);
-  equal(after.state, "cancelled");
-  equal(after.qualifyingOrderCancelled, true);
+  equal(after.state, "pending");
   equal(after.paymentConfirmed, true);
   equal(after.deliveryConfirmed, false);
   equal(after.qualifyingOrderId, id);
-  equal((await wallet("sponsor-b")).pendingCents, before.pendingCents - 1000);
+  deepStrictEqual(await wallet("sponsor-b"), before);
   equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "cancelled");
   equal((await db.collection("products").doc(`product-${id}`).get()).data()?.stock, 11);
   const movements = await routeMovements(id);
-  equal(movements.length, 2);
-  const cancellation = movements.find((doc) => doc.data().businessEvent === "referral_reward_cancelled");
-  ok(cancellation);
-  equal(cancellation.data().pendingDeltaCents, -1000);
-  equal(JSON.parse(cancellation.data().payload).cause, "order_cancellation");
+  equal(movements.length, 1);
   equal((await db.collection("cagnotteRefunds").where("orderId", "==", id).get()).size, 0);
   equal((await db.collection("orders").doc(id).get()).data()?.refundSummary, undefined);
   await routeTransition(id, { orderStatus: "cancelled" }, drain);
   deepStrictEqual(await routeRelation(child.uid), after);
-  equal((await routeMovements(id)).length, 2);
+  equal((await routeMovements(id)).length, 1);
   await rejects(routeTransition(id, { orderStatus: "delivered" }, drain));
-  equal(await transition({ id, customerId: child.uid, referral: (await db.collection("orders").doc(id).get()).data()?.referral } as Order, "delivery", undefined, 0, drain), "already_applied");
-  equal(await transition({ id, customerId: child.uid, referral: (await db.collection("orders").doc(id).get()).data()?.referral } as Order, "correction", "cancelled-correction", 0, drain), "applied");
+  const cancelledOrder = (await db.collection("orders").doc(id).get()).data() as Order;
+  equal(await transition(cancelledOrder, "refund", "pending-cancelled-refund", 1500, drain), "applied");
   equal((await routeRelation(child.uid)).state, "cancelled");
   equal((await routeMovements(id)).length, 2);
+  equal((await wallet("sponsor-b")).pendingCents, before.pendingCents - 1000);
+  equal(await transition(cancelledOrder, "refund", "pending-cancelled-refund", 1500, drain), "already_applied");
+  equal(await transition(cancelledOrder, "correction", "pending-cancelled-correction", 0, drain), "applied");
+  equal((await routeRelation(child.uid)).state, "pending");
 });
-await test("annulation rewarded retire 1000 disponibles sans régularisation quand le solde suffit", async () => {
+await test("annulation statutaire rewarded conserve le gain puis refund confirmé le contrepasse", async () => {
   const id = "referral-order-cancel-rewarded-full-route";
   const child = await createRouteCandidate(id, "referee-cancel-rewarded-full-route");
   await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link", orderStatus: "delivered" });
@@ -378,20 +554,17 @@ await test("annulation rewarded retire 1000 disponibles sans régularisation qua
   ok(before.availableCents >= 1000);
   await routeTransition(id, { orderStatus: "cancelled" });
   const after = await routeRelation(child.uid);
-  equal(after.state, "reversed");
-  equal(after.qualifyingOrderCancelled, true);
+  equal(after.state, "rewarded");
+  deepStrictEqual(await wallet("sponsor-b"), before);
+  const cancelledOrder = (await db.collection("orders").doc(id).get()).data()!;
+  equal((await routeMovements(id)).length, 2);
+  equal(await transition(cancelledOrder as Order, "refund", "rewarded-cancelled-refund", 1500), "applied");
+  equal((await routeRelation(child.uid)).state, "reversed");
   equal((await wallet("sponsor-b")).availableCents, before.availableCents - 1000);
   equal((await wallet("sponsor-b")).regularizationCents, before.regularizationCents);
-  const reversal = (await routeMovements(id)).find((doc) => doc.data().businessEvent === "referral_reward_reversed");
-  ok(reversal);
-  equal(reversal.data().availableDeltaCents, -1000);
-  equal(reversal.data().regularizationDeltaCents, 0);
-  const cancelledOrder = (await db.collection("orders").doc(id).get()).data()!;
-  for (const event of ["payment", "delivery", "payment_and_delivery", "cancel"] as const)
-    equal(await transition(cancelledOrder as Order, event), "already_applied");
   equal((await routeMovements(id)).length, 3);
 });
-await test("annulation rewarded contrepassée avec régularisation si available insuffisant", async () => {
+await test("refund après annulation statutaire rewarded applique la régularisation", async () => {
   const id = "referral-order-cancel-rewarded-route";
   const child = await createRouteCandidate(id, "referee-cancel-rewarded-route");
   await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link", orderStatus: "delivered" });
@@ -402,9 +575,13 @@ await test("annulation rewarded contrepassée avec régularisation si available 
   const beforeCancellation = await wallet("sponsor-b");
   await routeTransition(id, { orderStatus: "cancelled" });
   const after = await routeRelation(child.uid);
-  equal(after.state, "reversed");
-  equal(after.qualifyingOrderCancelled, true);
+  equal(after.state, "rewarded");
   equal(after.deliveryConfirmed, true);
+  deepStrictEqual(await wallet("sponsor-b"), beforeCancellation);
+  equal((await routeMovements(id)).length, 2);
+  const cancelledOrder = (await db.collection("orders").doc(id).get()).data() as Order;
+  equal(await transition(cancelledOrder, "refund", "rewarded-regularization-refund", 1500), "applied");
+  equal((await routeRelation(child.uid)).state, "reversed");
   equal((await wallet("sponsor-b")).availableCents, 0);
   equal((await wallet("sponsor-b")).regularizationCents, beforeCancellation.regularizationCents + 900);
   const movements = await routeMovements(id);
@@ -413,10 +590,10 @@ await test("annulation rewarded contrepassée avec régularisation si available 
   ok(reversal);
   equal(reversal.data().availableDeltaCents, -100);
   equal(reversal.data().regularizationDeltaCents, 900);
-  equal(JSON.parse(reversal.data().payload).cause, "order_cancellation");
+  equal(JSON.parse(reversal.data().payload).cause, "refund");
   equal((await db.collection("cagnotteRefunds").where("orderId", "==", id).get()).size, 0);
   await routeTransition(id, { orderStatus: "cancelled" });
-  deepStrictEqual(await routeRelation(child.uid), after);
+  equal((await routeRelation(child.uid)).state, "reversed");
   equal((await routeMovements(id)).length, 3);
   equal((await wallet("sponsor-b")).regularizationCents, beforeCancellation.regularizationCents + 900);
   ok(before.availableCents >= 1000);
@@ -482,7 +659,7 @@ await test("livraison puis annulation impayée libère la relation pour une autr
   equal(cancelled.deliveryConfirmed, false);
   equal(cancelled.deliveredOrderId, null);
   equal(cancelled.rewardCompartment, "none");
-  equal(cancelled.qualifyingOrderCancelled, undefined);
+  equal(cancelled.rewardIneligibilityReason, undefined);
   equal(cancelled.cumulativeReturnedProductsCents, delivered.cumulativeReturnedProductsCents);
   deepStrictEqual(cancelled.processedRefunds, delivered.processedRefunds);
   deepStrictEqual(await wallet("sponsor-b"), walletBefore);
@@ -490,7 +667,7 @@ await test("livraison puis annulation impayée libère la relation pour une autr
   await routeTransition(firstId, { orderStatus: "cancelled" }, drain);
   deepStrictEqual(await routeRelation(child.uid), cancelled);
   const firstOrder = (await db.collection("orders").doc(firstId).get()).data() as Order;
-  equal(await transition(firstOrder, "cancel", undefined, 0, drain), "already_applied");
+  equal(await transition(firstOrder, "cancel_unpaid_candidate", undefined, 0, drain), "already_applied");
   const replacementId = "referral-order-after-delivered-unpaid-cancellation";
   await createRouteCandidate(replacementId, child.uid);
   await routeTransition(replacementId, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });

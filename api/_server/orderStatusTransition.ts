@@ -23,7 +23,9 @@ import {
 import { validateCagnotteProductionFixtureState } from "./cagnotteProductionFixtureState.js";
 import { getReferralRuntime } from "./referralRuntimeConfig.js";
 import type { ReferralRuntime } from "./referralRuntimeConfig.js";
-import { prepareReferralTransition } from "./referralLedger.js";
+import { prepareReferralTransition, validateReferralOrderSnapshot, type SponsorQualificationEvidence } from "./referralLedger.js";
+import { hasHistoricalPaymentEvidence } from "./referralService.js";
+import { getReferralSponsorIdentity, type ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
 
 export type OrderStatusChange = {
   orderId: string; orderStatus?: OrderStatus; paymentStatus?: PaymentStatus;
@@ -40,6 +42,7 @@ export async function commitOrderStatusTransition({
   reservationProgram = CAGNOTTE_RESERVATION_PROGRAM, firebaseProjectId,
   productionFixtureCapability,
   referralProgram,
+  getSponsorIdentity = getReferralSponsorIdentity,
   now = () => new Date().toISOString(),
 }: {
   db: Firestore; body: OrderStatusChange; admin: {uid:string; email:string | null};
@@ -48,6 +51,7 @@ export async function commitOrderStatusTransition({
   firebaseProjectId?: string | null;
   productionFixtureCapability?: CagnotteProductionFixtureCapability;
   referralProgram?: ReferralRuntime;
+  getSponsorIdentity?: (uid: string) => Promise<ReferralSponsorIdentity>;
   now?: ()=>string;
 }): Promise<{ updatedOrder: Order | null; previousStatus: OrderStatus | null; purchaseAnalyticsQueued: boolean; missingPromotionIds: string[]; unpaidReviewContext: Awaited<ReturnType<typeof prepareUnpaidReviewControl>>["context"] | null }> {
   const operationTime=now();
@@ -56,6 +60,29 @@ export async function commitOrderStatusTransition({
   let purchaseAnalyticsQueued = false;
   let missingPromotionIds: string[] = [];
   let unpaidReviewContext: Awaited<ReturnType<typeof prepareUnpaidReviewControl>>["context"] | null = null;
+  let resolvedReferralProgram = referralProgram;
+  let sponsorEvidence: SponsorQualificationEvidence | undefined;
+  if (body.paymentStatus === "paid") {
+    const candidateSnapshot = await db.collection("orders").doc(body.orderId).get();
+    if (candidateSnapshot.exists) {
+      const candidate = orderFromSnapshot(candidateSnapshot);
+      if (candidate.referral && candidate.paymentStatus !== "paid" && candidate.orderStatus !== "cancelled" && !candidate.cancelledAt) {
+        resolvedReferralProgram ??= getReferralRuntime();
+        if (resolvedReferralProgram.operational) {
+          const referral = validateReferralOrderSnapshot(candidate);
+          const relationDoc = await db.collection("referrals").doc(referral.referralId).get();
+          const sponsorUid = relationDoc.data()?.sponsorUid;
+          if (typeof sponsorUid !== "string" || !sponsorUid) throw new Error("referral_relation_missing");
+          let account: SponsorQualificationEvidence["account"] = "unavailable";
+          try {
+            const identity = await getSponsorIdentity(sponsorUid);
+            if (identity.uid === sponsorUid) account = identity.disabled ? "disabled" : "active";
+          } catch { /* A payment may proceed, but an unverified sponsor earns no reward. */ }
+          sponsorEvidence = { referralId: referral.referralId, sponsorUid, account };
+        }
+      }
+    }
+  }
   await db.runTransaction(async (transaction) => {
     updatedOrder = null; previousStatus = null; purchaseAnalyticsQueued = false; missingPromotionIds = []; unpaidReviewContext = null;
     let cancellationPlan: Awaited<ReturnType<typeof prepareOrderCancellationInTransaction>> | null = null;
@@ -284,12 +311,12 @@ export async function commitOrderStatusTransition({
     const paymentTransition = body.paymentStatus === "paid" && order.paymentStatus !== "paid";
     const deliveryTransition = body.orderStatus === "delivered" && order.orderStatus !== "delivered";
     const cancellationTransition = body.orderStatus === "cancelled" && order.orderStatus !== "cancelled";
-    const referralEvent = cancellationTransition ? "cancel"
+    const referralEvent = cancellationTransition ? hasHistoricalPaymentEvidence(order) ? null : "cancel_unpaid_candidate"
       : paymentTransition ? nextStatus === "delivered" ? "payment_and_delivery" : "payment"
       : deliveryTransition ? "delivery" : null;
     const referralPlan = !order.referral || linkOnly || !referralEvent ? null : await prepareReferralTransition({
-      db, transaction, order, program: referralProgram ?? getReferralRuntime(), recordedAtEpochMs: Date.parse(operationTime),
-      event: referralEvent,
+      db, transaction, order, program: resolvedReferralProgram ?? getReferralRuntime(), recordedAtEpochMs: Date.parse(operationTime),
+      event: referralEvent, sponsorEvidence,
     });
     if (body.paymentStatus === "paid" && order.paymentStatus !== "paid" && order.cagnotte?.snapshot.appliedCagnotteCents) {
       if (!cagnottePlan || !("reservation" in cagnottePlan) || !("ledger" in cagnottePlan) ||

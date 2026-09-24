@@ -31,8 +31,8 @@ export type ReferralRelation = {
   deliveredOrderId: string | null;
   paymentConfirmed: boolean;
   deliveryConfirmed: boolean;
-  /** Terminal commercial fact for a paid qualifying order; absent on earlier V1 relations means false. */
-  qualifyingOrderCancelled?: boolean;
+  /** A paid order can consume the right without creating a sponsor reward. */
+  rewardIneligibilityReason?: "sponsor_no_longer_eligible" | "sponsor_account_disabled" | "sponsor_identity_unavailable";
   rewardCompartment: "none" | "pending" | "available";
   cumulativeReturnedProductsCents: number;
   processedRefunds: Readonly<Record<string, number>>;
