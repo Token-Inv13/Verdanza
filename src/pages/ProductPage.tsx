@@ -443,6 +443,7 @@ export function ProductPage() {
         <div
           className="fixed inset-x-0 bottom-0 z-30 border-t border-champagne/35 bg-[#fbfaf5] px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 shadow-[0_-12px_35px_rgba(11,61,46,0.12)]"
           data-product-sticky-purchase
+          data-floating-help-suppress
         >
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
             <div className="min-w-0">

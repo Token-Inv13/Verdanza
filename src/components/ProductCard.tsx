@@ -160,7 +160,7 @@ export function ProductCard({
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col p-4">
+      <div className="flex flex-1 flex-col p-4" data-floating-help-suppress>
         <div className="flex items-end justify-between gap-3">
           <div>
             <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-ink/45">

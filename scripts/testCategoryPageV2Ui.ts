@@ -177,10 +177,13 @@ try {
       );
     }
 
-    await page.locator("[data-category-page] aside").scrollIntoViewIfNeeded();
+    // On this short category page, purchase controls remain in view even at
+    // the bottom. A route without protected controls must restore help.
+    await gotoDomReady(page, `${server.baseUrl}/livraison`);
     const restoredHelp = page.locator('[data-testid="floating-contact-trigger"]');
     await restoredHelp.waitFor();
     assert.equal(await restoredHelp.getAttribute("aria-label"), "Besoin d'aide ?");
+    await gotoDomReady(page, `${server.baseUrl}/resines-cbd`);
     await page.locator("[data-category-product-filter]").scrollIntoViewIfNeeded();
     await restoredHelp.waitFor({ state: "detached" });
 

@@ -119,13 +119,14 @@ try {
       assert.equal(layout.imageAnimation, "none", "reduced motion must disable hero entry animation");
     }
 
-    await page.locator("[data-home-selection]").scrollIntoViewIfNeeded();
+    // ProductCard purchase controls also suppress help inside the selection.
+    await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" }));
     const restoredHelp = page.locator('[data-testid="floating-contact-trigger"]');
     await restoredHelp.waitFor();
     assert.equal(
       await restoredHelp.getAttribute("aria-label"),
       "Besoin d'aide ?",
-      `${width}px: floating help must return with its accessible label after the finder leaves`,
+      `${width}px: floating help must return with its accessible label after all protected controls leave`,
     );
     await page.locator("[data-home-product-finder]").scrollIntoViewIfNeeded();
     await restoredHelp.waitFor({ state: "detached" });

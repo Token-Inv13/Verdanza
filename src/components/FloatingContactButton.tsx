@@ -35,11 +35,10 @@ export function FloatingContactButton({ suppressed = false }: { suppressed?: boo
   const isSuppressed = suppressed || hiddenByConsent || hiddenByInteractiveSurface;
 
   useEffect(() => {
-    const selectors = interactiveSurfaceSelectorsByPath[location.pathname] ?? [];
-    if (selectors.length === 0) {
-      setHiddenByInteractiveSurface(false);
-      return;
-    }
+    const selectors = [
+      "[data-floating-help-suppress]",
+      ...(interactiveSurfaceSelectorsByPath[location.pathname] ?? []),
+    ];
 
     const visibleTargets = new Map<Element, boolean>();
     const observedTargets = new Set<HTMLElement>();

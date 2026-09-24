@@ -112,6 +112,7 @@ export function ShopProductSelector({
         aria-labelledby="shop-selection-title"
         data-shop-product-selector
         data-shop-selector-mode="compact"
+        data-floating-help-suppress
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
           <div className="min-w-0">
@@ -170,6 +171,7 @@ export function ShopProductSelector({
       aria-label="Affiner les produits"
       data-shop-product-selector
       data-shop-selector-mode="full"
+      data-floating-help-suppress
     >
       <div id="shop-product-selector-controls" className="space-y-2.5">
         <SelectorStep
