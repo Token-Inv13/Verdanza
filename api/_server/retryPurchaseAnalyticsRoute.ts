@@ -1,4 +1,4 @@
-import { assertAdminUser } from "./adminAuth.js";
+import { assertAdminUser, firebaseAuthHttpFailure } from "./adminAuth.js";
 import { getAdminDb } from "./firebaseAdmin.js";
 import {
   assertMethod,
@@ -40,6 +40,11 @@ export async function handleRetryPurchaseAnalytics(
     const analyticsPurchase = await processPurchaseAnalyticsOutbox(db, order.id);
     sendJson(response, { ok: true, analyticsPurchase });
   } catch (error) {
+    const authFailure = firebaseAuthHttpFailure(error);
+    if (authFailure) return sendJson(response, {
+      code: authFailure.code,
+      error: authFailure.status === 401 ? "Token admin invalide." : "Authentification indisponible.",
+    }, authFailure.status);
     const message =
       error instanceof Error ? error.message : "Relance analytics purchase impossible.";
     sendJson(response, { error: message }, message === "Acces admin requis." ? 403 : 400);

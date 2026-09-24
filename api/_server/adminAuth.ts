@@ -10,6 +10,13 @@ export class FirebaseIdTokenVerificationError extends Error {
   constructor(readonly category: "authentication" | "configuration" | "unavailable") { super(`firebase_token_${category}`); }
 }
 
+export function firebaseAuthHttpFailure(error: unknown): { status: 401 | 503; code: "authentication_required" | "authentication_unavailable" } | null {
+  if (!(error instanceof FirebaseIdTokenVerificationError)) return null;
+  return error.category === "authentication"
+    ? { status: 401, code: "authentication_required" }
+    : { status: 503, code: "authentication_unavailable" };
+}
+
 export async function verifyFirebaseIdToken(
   idToken: string,
 ): Promise<VerifiedFirebaseUser> {

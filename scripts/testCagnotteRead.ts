@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { FirebaseIdTokenVerificationError } from "../api/_server/adminAuth.js";
 import { readFile } from "node:fs/promises";
 import { CAGNOTTE_SERVER_PROGRAM } from "../api/_server/cagnotteProgram.js";
 import { CAGNOTTE_READ_MAX_LIMIT, CagnotteReadError, readCagnotte } from "../api/_server/cagnotteRead.js";
@@ -48,7 +49,8 @@ try {
   const handler = createCagnotteReadHandler({ enabled: true, getDb: () => db,
     verifyToken: async (token) => {
       verifyCalls += 1;
-      if (token === "expired") throw new Error("TOKEN_EXPIRED");
+      if (token === "expired") throw new FirebaseIdTokenVerificationError("authentication");
+      if (token === "auth-config" || token === "auth-down") throw new FirebaseIdTokenVerificationError(token === "auth-config" ? "configuration" : "unavailable");
       return token === "admin" ? { uid: "admin-1", email: "admin@example.test", emailVerified: true }
         : { uid: "self", email: "self@example.test", emailVerified: true };
     },
@@ -66,6 +68,13 @@ try {
   await handler(request("GET", "/api/cagnotte?scope=self", "expired"), expired as never);
   assert.equal(expired.statusCode, 401);
   assert.equal(readCalls, beforeExpiredRead, "un jeton refusé ne joint pas le service métier");
+  for (const token of ["auth-config", "auth-down"]) {
+    const rejected = new FakeResponse();
+    await handler(request("GET", "/api/cagnotte?scope=self", token), rejected as never);
+    assert.equal(rejected.statusCode, 503);
+    assert.deepEqual(rejected.body, { code: "authentication_unavailable", error: "Authentification indisponible." });
+    assert.equal(readCalls, beforeExpiredRead);
+  }
 
   const foreign = new FakeResponse();
   const beforeForeignVerify = verifyCalls;

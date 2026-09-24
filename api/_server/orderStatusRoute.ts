@@ -1,5 +1,5 @@
 import { commitOrderStatusTransition, processOrderStatusTransitionEffects } from "./orderStatusTransition.js";
-import { assertAdminUser, type verifyFirebaseIdToken } from "./adminAuth.js";
+import { assertAdminUser, firebaseAuthHttpFailure, type verifyFirebaseIdToken } from "./adminAuth.js";
 import {
   assertMethod,
   sendJson,
@@ -112,6 +112,11 @@ return async function handler(
 
     sendJson(response, { ok: true, analyticsPurchase: purchaseAnalyticsResult, unpaidReview: committed.unpaidReviewContext });
   } catch (error) {
+    const authFailure = firebaseAuthHttpFailure(error);
+    if (authFailure) return sendJson(response, {
+      code: authFailure.code,
+      error: authFailure.status === 401 ? "Session expirée." : "Authentification indisponible.",
+    }, authFailure.status);
     if (error instanceof CagnotteRuntimeConfigurationError) {
       console.error("update-order-status cagnotte configuration invalid");
       return sendJson(response, {

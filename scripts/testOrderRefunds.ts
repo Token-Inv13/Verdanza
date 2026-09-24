@@ -4,6 +4,7 @@ import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { connectCagnotteEmulator, CAGNOTTE_DEMO } from "./cagnotteEmulator.js";
 import { createOrderRefundHandler, handleOrderRefund } from "../api/_server/orderRefundRoute.js";
+import { FirebaseIdTokenVerificationError } from "../api/_server/adminAuth.js";
 import type { OrderRefundOperationalLog } from "../api/_server/orderRefunds.js";
 import { CAGNOTTE_SERVER_PROGRAM } from "../api/_server/cagnotteProgram.js";
 import { CAGNOTTE_CLOSED_RUNTIME_CONFIGURATION } from "../api/_server/cagnotteRuntimeConfig.js";
@@ -841,11 +842,17 @@ try {
     const b = await record(f, 7500, "spent-75"); eq(await balance(f), [0, 0, 500]); equal(b.result.after.totalFinancialCents, 10000); await assertWalletJournal(db, f.uid);
   });
   for (const [name, identity, noToken, code] of [
-    ["visiteur", actor, true, "admin_token_required"], ["jeton invalide", new Error("Token Firebase invalide."), false, "admin_token_invalid"],
+    ["visiteur", actor, true, "admin_token_required"], ["jeton invalide", new FirebaseIdTokenVerificationError("authentication"), false, "admin_token_invalid"],
+    ["config auth", new FirebaseIdTokenVerificationError("configuration"), false, "authentication_unavailable"],
+    ["auth indisponible", new FirebaseIdTokenVerificationError("unavailable"), false, "authentication_unavailable"],
     ["client", { uid: "ordinary", email: "ordinary@example.test", emailVerified: true }, false, "admin_required"],
     ["email non verifie", { uid: "unverified", email: "fallback-refund@example.test", emailVerified: false }, false, "admin_required"],
     ["UID inactif prioritaire", { uid: "inactive-refund", email: "fallback-refund@example.test", emailVerified: true }, false, "admin_required"],
-  ] as const) await test(`autorisation ${name}`, async () => { const f = await fixture(); const r = await refused(selection(f), code, { identity, noToken }); equal(r.stats.transactions, 0); });
+  ] as const) await test(`autorisation ${name}`, async () => {
+    const f = await fixture(); const r = await refused(selection(f), code, { identity, noToken });
+    equal(r.status, code === "authentication_unavailable" ? 503 : code === "admin_required" ? 403 : 401);
+    equal(r.stats.transactions, 0);
+  });
   await test("administrateur reconnu via email verifie", async () => {
     const f = await fixture(); equal((await call(selection(f), { identity: { uid: "fallback", email: "fallback-refund@example.test", emailVerified: true } })).status, 200);
   });

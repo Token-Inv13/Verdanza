@@ -1,5 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
-import { verifyFirebaseIdToken } from "./_server/adminAuth.js";
+import { firebaseAuthHttpFailure, verifyFirebaseIdToken } from "./_server/adminAuth.js";
 import { getAdminDb } from "./_server/firebaseAdmin.js";
 import {
   assertMethod,
@@ -64,9 +64,14 @@ export default async function handler(
 
     sendJson(response, { reviewId }, 201);
   } catch (error) {
+    const authFailure = firebaseAuthHttpFailure(error);
+    if (authFailure) return sendJson(response, {
+      code: authFailure.code,
+      error: authFailure.status === 401 ? "Connexion requise." : "Authentification indisponible.",
+    }, authFailure.status);
     const message =
       error instanceof Error ? error.message : "Impossible d’enregistrer cet avis.";
-    sendJson(response, { error: safeMessage(message) }, 400);
+    sendJson(response, { error: safeMessage(message) }, message === "Connexion requise." ? 401 : 400);
   }
 }
 
