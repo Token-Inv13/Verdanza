@@ -72,6 +72,7 @@ export async function ensureReferralCode(input: { db: Firestore; user: VerifiedU
         if (existing.schemaVersion !== 1 || existing.ownerUid !== ownerUid || existing.programVersion !== REFERRAL_PROGRAM_VERSION || !CODE.test(existing.code)) throw new ReferralError("referral_code_corrupt");
         const ownedMapping = await tx.get(input.db.collection("referralCodes").doc(`code_${existing.code}`));
         if (!ownedMapping.exists || ownedMapping.data()?.ownerUid !== ownerUid || ownedMapping.data()?.code !== existing.code) throw new ReferralError("referral_code_corrupt");
+        if (!await sponsorHasDeliveredPaidOrder(tx, input.db, ownerUid)) throw new ReferralError("sponsor_ineligible", 403);
         return { status: "existing" as const, code: existing.code };
       }
       if (codeDoc.exists) return { status: "collision" as const };

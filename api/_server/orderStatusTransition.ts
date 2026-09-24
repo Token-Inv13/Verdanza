@@ -24,7 +24,6 @@ import { validateCagnotteProductionFixtureState } from "./cagnotteProductionFixt
 import { getReferralRuntime } from "./referralRuntimeConfig.js";
 import type { ReferralRuntime } from "./referralRuntimeConfig.js";
 import { prepareReferralTransition, validateReferralOrderSnapshot, type SponsorQualificationEvidence } from "./referralLedger.js";
-import { hasHistoricalPaymentEvidence } from "./referralService.js";
 import { getReferralSponsorIdentity, type ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
 
 export type OrderStatusChange = {
@@ -71,14 +70,19 @@ export async function commitOrderStatusTransition({
         if (resolvedReferralProgram.operational) {
           const referral = validateReferralOrderSnapshot(candidate);
           const relationDoc = await db.collection("referrals").doc(referral.referralId).get();
-          const sponsorUid = relationDoc.data()?.sponsorUid;
-          if (typeof sponsorUid !== "string" || !sponsorUid) throw new Error("referral_relation_missing");
-          let account: SponsorQualificationEvidence["account"] = "unavailable";
-          try {
-            const identity = await getSponsorIdentity(sponsorUid);
-            if (identity.uid === sponsorUid) account = identity.disabled ? "disabled" : "active";
-          } catch { /* A payment may proceed, but an unverified sponsor earns no reward. */ }
-          sponsorEvidence = { referralId: referral.referralId, sponsorUid, account };
+          const relation = relationDoc.data();
+          if (!relation) throw new Error("referral_relation_missing");
+          // Auth evidence is needed only while the first paid order can claim the relation.
+          if (relation.qualifyingOrderId === null) {
+            const sponsorUid = relation.sponsorUid;
+            if (typeof sponsorUid !== "string" || !sponsorUid) throw new Error("referral_relation_missing");
+            let account: SponsorQualificationEvidence["account"] = "unavailable";
+            try {
+              const identity = await getSponsorIdentity(sponsorUid);
+              if (identity.uid === sponsorUid) account = identity.disabled ? "disabled" : "active";
+            } catch { /* A payment may proceed, but an unverified sponsor earns no reward. */ }
+            sponsorEvidence = { referralId: referral.referralId, sponsorUid, account };
+          }
         }
       }
     }
@@ -310,9 +314,7 @@ export async function commitOrderStatusTransition({
     });
     const paymentTransition = body.paymentStatus === "paid" && order.paymentStatus !== "paid";
     const deliveryTransition = body.orderStatus === "delivered" && order.orderStatus !== "delivered";
-    const cancellationTransition = body.orderStatus === "cancelled" && order.orderStatus !== "cancelled";
-    const referralEvent = cancellationTransition ? hasHistoricalPaymentEvidence(order) ? null : "cancel_unpaid_candidate"
-      : paymentTransition ? nextStatus === "delivered" ? "payment_and_delivery" : "payment"
+    const referralEvent = paymentTransition ? nextStatus === "delivered" ? "payment_and_delivery" : "payment"
       : deliveryTransition ? "delivery" : null;
     const referralPlan = !order.referral || linkOnly || !referralEvent ? null : await prepareReferralTransition({
       db, transaction, order, program: resolvedReferralProgram ?? getReferralRuntime(), recordedAtEpochMs: Date.parse(operationTime),

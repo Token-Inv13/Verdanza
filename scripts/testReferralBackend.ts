@@ -112,6 +112,29 @@ await test("parrain éligible, code stable et collision transactionnelle", async
   equal(collision.code, codeB);
   await rejects(ensureReferralCode({ db, user: { uid: "no-orders", email: "none@example.test" }, program, nowEpochMs, codeFactory: () => "C".repeat(26), getSponsorIdentity: activeIdentity }));
 });
+await test("code existant refusé pendant l'inéligibilité puis récupéré sans rotation", async () => {
+  const owner = { uid: "sponsor-reeligible", email: "reeligible@example.test", emailVerified: true };
+  const firstOrderId = "referral-sponsor-reeligible-first";
+  const stableCode = "E".repeat(26);
+  await sponsorOrder(firstOrderId, owner.uid);
+  deepStrictEqual(await ensureReferralCode({ db, user: owner, program, nowEpochMs, codeFactory: () => stableCode,
+    getSponsorIdentity: activeIdentity }), { code: stableCode, created: true });
+  const ownerRef = db.collection("referralCodes").doc(`owner_${owner.uid}`);
+  const codeRef = db.collection("referralCodes").doc(`code_${stableCode}`);
+  const originalOwner = (await ownerRef.get()).data();
+  const originalCode = (await codeRef.get()).data();
+  await db.collection("orders").doc(firstOrderId).update({ orderStatus: "cancelled" });
+  await rejects(ensureReferralCode({ db, user: owner, program, nowEpochMs, codeFactory: () => "F".repeat(26),
+    getSponsorIdentity: activeIdentity }), { code: "sponsor_ineligible", status: 403 });
+  deepStrictEqual((await ownerRef.get()).data(), originalOwner);
+  deepStrictEqual((await codeRef.get()).data(), originalCode);
+  equal((await db.collection("referralCodes").doc(`code_${"F".repeat(26)}`).get()).exists, false);
+  await sponsorOrder("referral-sponsor-reeligible-second", owner.uid);
+  deepStrictEqual(await ensureReferralCode({ db, user: owner, program, nowEpochMs, codeFactory: () => "G".repeat(26),
+    getSponsorIdentity: activeIdentity }), { code: stableCode, created: false });
+  deepStrictEqual((await ownerRef.get()).data(), originalOwner);
+  deepStrictEqual((await codeRef.get()).data(), originalCode);
+});
 await test("compte parrain désactivé ne crée ni ne récupère un code et ne crée aucun lien", async () => {
   const disabledIdentity = async (uid: string) => ({ uid, email: uid === sponsor.uid ? sponsor.email! : "b@example.test", disabled: true });
   await rejects(ensureReferralCode({ db, user: sponsor, program, nowEpochMs, codeFactory: () => codeA,
@@ -146,7 +169,7 @@ await test("lien, claim, replay, changement avant paiement et projection privée
 const snapshot = createReferralOrderSnapshot({ refereeUid: user.uid, createdAtEpochMs: 2000,
   lines: [{ lineId: "line", eligibleBeforeReferralCents: 6000, referralDiscountCents: 500 }] });
 const order = { id: "referral-order-a", customerId: user.uid, paymentStatus: "to_confirm", orderStatus: "contact_required", referral: snapshot } as Order;
-const transition = async (source: Order, event: "payment" | "payment_and_delivery" | "delivery" | "cancel_unpaid_candidate" | "refund" | "correction", refundId?: string, returned = 0, mode = program) => {
+const transition = async (source: Order, event: "payment" | "payment_and_delivery" | "delivery" | "refund" | "correction", refundId?: string, returned = 0, mode = program) => {
   const relationBefore = event === "payment" || event === "payment_and_delivery"
     ? (await db.collection("referrals").doc(source.referral!.referralId).get()).data() as ReferralRelation : null;
   const sponsorEvidence = relationBefore ? { referralId: source.referral!.referralId, sponsorUid: relationBefore.sponsorUid, account: "active" as const } : undefined;
@@ -286,10 +309,12 @@ await test("livraison avant paiement aboutit au même droit", async () => {
   await linkReferral({ db, user: child, code: codeB, secret, program, nowEpochMs, getSponsorIdentity: activeIdentity });
   const own = { ...order, id: "referral-order-inverse", customerId: child.uid,
     referral: createReferralOrderSnapshot({ refereeUid: child.uid, createdAtEpochMs: 2000, lines: [{ lineId: "line", eligibleBeforeReferralCents: 6000, referralDiscountCents: 500 }] }) } as Order;
-  equal(await transition(own, "delivery"), "applied");
-  equal((await db.collection("referrals").doc(child.uid).get()).data()?.deliveryConfirmed, true);
-  equal(await transition(own, "payment"), "applied");
+  const linked = (await db.collection("referrals").doc(child.uid).get()).data();
+  equal(await transition(own, "delivery"), "already_applied");
+  deepStrictEqual((await db.collection("referrals").doc(child.uid).get()).data(), linked);
+  equal(await transition(own, "payment_and_delivery"), "applied");
   equal((await db.collection("referrals").doc(child.uid).get()).data()?.state, "rewarded");
+  equal((await db.collection("referrals").doc(child.uid).get()).data()?.deliveredOrderId, own.id);
   equal(await transition(own, "payment"), "already_applied");
 });
 await test("paiement concurrent avec gain fidélité personnel partage le wallet", async () => {
@@ -598,17 +623,23 @@ await test("refund après annulation statutaire rewarded applique la régularisa
   equal((await wallet("sponsor-b")).regularizationCents, beforeCancellation.regularizationCents + 900);
   ok(before.availableCents >= 1000);
 });
-await test("livraison avant paiement via commande conserve le fait puis rend le gain disponible", async () => {
+await test("livraison prépaiement reste sur la commande puis le paiement qualifie et rend disponible", async () => {
   const id = "referral-order-inverse-route";
   const child = await createRouteCandidate(id, "referee-inverse-route");
   const before = await wallet("sponsor-b");
   await routeTransition(id, { orderStatus: "delivered" });
   const delivered = await routeRelation(child.uid);
   equal(delivered.state, "linked");
-  equal(delivered.deliveryConfirmed, true);
+  equal(delivered.deliveryConfirmed, false);
+  equal(delivered.deliveredOrderId, null);
+  equal(delivered.qualifyingOrderId, null);
+  equal((await db.collection("orders").doc(id).get()).data()?.orderStatus, "delivered");
   equal((await routeMovements(id)).length, 0);
   await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
-  equal((await routeRelation(child.uid)).state, "rewarded");
+  const rewarded = await routeRelation(child.uid);
+  equal(rewarded.state, "rewarded");
+  equal(rewarded.qualifyingOrderId, id);
+  equal(rewarded.deliveredOrderId, id);
   const compensation = Math.min(before.regularizationCents, 1000);
   equal((await wallet("sponsor-b")).availableCents, before.availableCents + 1000 - compensation);
   equal((await wallet("sponsor-b")).regularizationCents, before.regularizationCents - compensation);
@@ -639,7 +670,7 @@ await test("annulation avant paiement ne consomme pas le droit du filleul", asyn
   equal((await routeRelation(child.uid)).state, "pending");
   equal((await routeRelation(child.uid)).qualifyingOrderId, replacementId);
 });
-await test("livraison puis annulation impayée libère la relation pour une autre commande", async () => {
+await test("livraison puis annulation impayée ne réservent jamais la relation", async () => {
   const firstId = "referral-order-delivered-unpaid-cancelled";
   const child = await createRouteCandidate(firstId, "referee-delivered-unpaid-cancelled");
   const walletBefore = await wallet("sponsor-b");
@@ -647,27 +678,18 @@ await test("livraison puis annulation impayée libère la relation pour une autr
   const delivered = await routeRelation(child.uid);
   equal(delivered.state, "linked");
   equal(delivered.paymentConfirmed, false);
-  equal(delivered.deliveryConfirmed, true);
-  equal(delivered.deliveredOrderId, firstId);
+  equal(delivered.deliveryConfirmed, false);
+  equal(delivered.deliveredOrderId, null);
+  equal(delivered.qualifyingOrderId, null);
   deepStrictEqual(await wallet("sponsor-b"), walletBefore);
   equal((await routeMovements(firstId)).length, 0);
   await routeTransition(firstId, { orderStatus: "cancelled" }, drain);
   const cancelled = await routeRelation(child.uid);
-  equal(cancelled.state, "linked");
-  equal(cancelled.qualifyingOrderId, null);
-  equal(cancelled.paymentConfirmed, false);
-  equal(cancelled.deliveryConfirmed, false);
-  equal(cancelled.deliveredOrderId, null);
-  equal(cancelled.rewardCompartment, "none");
-  equal(cancelled.rewardIneligibilityReason, undefined);
-  equal(cancelled.cumulativeReturnedProductsCents, delivered.cumulativeReturnedProductsCents);
-  deepStrictEqual(cancelled.processedRefunds, delivered.processedRefunds);
+  deepStrictEqual(cancelled, delivered);
   deepStrictEqual(await wallet("sponsor-b"), walletBefore);
   equal((await routeMovements(firstId)).length, 0);
   await routeTransition(firstId, { orderStatus: "cancelled" }, drain);
   deepStrictEqual(await routeRelation(child.uid), cancelled);
-  const firstOrder = (await db.collection("orders").doc(firstId).get()).data() as Order;
-  equal(await transition(firstOrder, "cancel_unpaid_candidate", undefined, 0, drain), "already_applied");
   const replacementId = "referral-order-after-delivered-unpaid-cancellation";
   await createRouteCandidate(replacementId, child.uid);
   await routeTransition(replacementId, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
@@ -677,5 +699,108 @@ await test("livraison puis annulation impayée libère la relation pour une autr
   equal(replacement.deliveryConfirmed, false);
   equal((await wallet("sponsor-b")).pendingCents, walletBefore.pendingCents + 1000);
   equal((await routeMovements(replacementId)).length, 1);
+});
+await test("A livrée impayée n'empêche pas B de réclamer la première commande payée", async () => {
+  const a = "referral-candidate-a-delivered";
+  const b = "referral-candidate-b-first-paid";
+  const child = await createRouteCandidate(a, "referee-multiple-candidates");
+  await createRouteCandidate(b, child.uid);
+  const linked = await routeRelation(child.uid);
+  const walletBefore = await wallet("sponsor-b");
+  await routeTransition(a, { orderStatus: "delivered" });
+  deepStrictEqual(await routeRelation(child.uid), linked);
+  equal((await db.collection("orders").doc(a).get()).data()?.orderStatus, "delivered");
+  equal((await routeReferralMovements(a)).length, 0);
+  await routeTransition(b, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+  const pending = await routeRelation(child.uid);
+  equal(pending.qualifyingOrderId, b);
+  equal(pending.deliveredOrderId, null);
+  equal(pending.paymentConfirmed, true);
+  equal(pending.deliveryConfirmed, false);
+  equal(pending.state, "pending");
+  equal((await wallet("sponsor-b")).pendingCents, walletBefore.pendingCents + 1000);
+  let authCalls = 0;
+  await routeTransition(a, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program, async (uid) => {
+    authCalls++;
+    return activeIdentity(uid);
+  });
+  equal(authCalls, 0);
+  equal((await db.collection("orders").doc(a).get()).data()?.paymentStatus, "paid");
+  deepStrictEqual(await routeRelation(child.uid), pending);
+  equal((await routeReferralMovements(a)).length, 0);
+  const nonqualifying = (await db.collection("orders").doc(a).get()).data() as Order;
+  const walletAfter = await wallet("sponsor-b");
+  equal(await transition(nonqualifying, "refund", "nonqualifying-refund", 6000), "already_applied");
+  equal(await transition(nonqualifying, "correction", "nonqualifying-correction", 0), "already_applied");
+  deepStrictEqual(await routeRelation(child.uid), pending);
+  deepStrictEqual(await wallet("sponsor-b"), walletAfter);
+  equal((await routeReferralMovements(a)).length, 0);
+  // A refund still commits its own financial journal even though A is not the qualifying order.
+  const cagnotte = calculateCagnotte({ lines: [{ lineId: "line", initialCents: 6000 }],
+    discounts: [{ discountId: "referral", amountCents: 500, kind: "referral_discount", lineIds: ["line"] }],
+    requestedCagnotteCents: 0, availableCagnotteCents: 0, advantages: ["referral_discount"] });
+  const loyaltyProgram = { mode: "local_test" as const, programVersion: "fixture-nonqualifying-loyalty-v1",
+    calculationVersion: "cagnotte-math-v1" as const, startsAtEpochMs: 1000, newAccrualsEnabled: true };
+  await db.collection("orders").doc(a).update({ cagnotte: { schemaVersion: 1, beneficiaryId: child.uid,
+    programVersion: loyaltyProgram.programVersion, calculationVersion: "cagnotte-math-v1", createdAtEpochMs: 2000, snapshot: cagnotte } });
+  await applyCagnotteLedgerOperation({ db, program: loyaltyProgram, command: { event: "payment_and_delivery_confirmed",
+    order: { orderId: a, beneficiaryId: child.uid, programVersion: loyaltyProgram.programVersion, createdAtEpochMs: 2000, snapshot: cagnotte } },
+    recordedAtEpochMs: 2000 });
+  const refundRequest = { action: "preview" as const, orderId: a, currency: "EUR" as const,
+    additionalReturns: [{ lineId: "line", additionalNetCents: 1100 }], deliveryRefundCents: 0 };
+  const refundContext = { db, actor: routeActor, now: () => "2000-01-04T00:00:00.000Z", referralProgram: program };
+  const refundPreview = await executeOrderRefund({ ...refundContext, request: refundRequest });
+  const refund = await executeOrderRefund({ ...refundContext, request: { ...refundRequest, action: "record_confirmed",
+    source: "admin", reference: "nonqualifying-refund-1", declaredFinancialCents: refundPreview.totalFinancialCents,
+    reason: "product_return", confirmedAt: "2000-01-04T00:00:00.000Z", expectedPreviewVersion: refundPreview.previewVersion } });
+  equal(refund.kind, "administrative_refund_recorded");
+  equal((await db.collection("cagnotteRefunds").where("orderId", "==", a).get()).size, 1);
+  deepStrictEqual(await routeRelation(child.uid), pending);
+  deepStrictEqual(await wallet("sponsor-b"), walletAfter);
+  equal((await routeReferralMovements(a)).length, 0);
+  await routeTransition(b, { orderStatus: "delivered" });
+  const rewarded = await routeRelation(child.uid);
+  equal(rewarded.qualifyingOrderId, b);
+  equal(rewarded.deliveredOrderId, b);
+  equal(rewarded.state, "rewarded");
+  equal((await routeReferralMovements(b)).length, 2);
+});
+await test("candidates non qualifiantes livrées ou annulées laissent B intacte", async () => {
+  const a = "referral-other-delivered";
+  const b = "referral-other-qualifying";
+  const c = "referral-other-cancelled";
+  const child = await createRouteCandidate(a, "referee-other-candidates");
+  await createRouteCandidate(b, child.uid);
+  await createRouteCandidate(c, child.uid);
+  await routeTransition(b, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+  const relationBefore = await routeRelation(child.uid);
+  const walletBefore = await wallet("sponsor-b");
+  await routeTransition(a, { orderStatus: "delivered" });
+  await routeTransition(c, { orderStatus: "cancelled" });
+  await routeTransition(a, { orderStatus: "cancelled" });
+  deepStrictEqual(await routeRelation(child.uid), relationBefore);
+  deepStrictEqual(await wallet("sponsor-b"), walletBefore);
+  equal((await routeReferralMovements(a)).length, 0);
+  equal((await routeReferralMovements(c)).length, 0);
+  equal((await db.collection("orders").doc(a).get()).data()?.orderStatus, "cancelled");
+  equal((await db.collection("orders").doc(c).get()).data()?.orderStatus, "cancelled");
+});
+await test("deux paiements concurrents réclament une seule relation et un seul gain", async () => {
+  const a = "referral-race-paid-a";
+  const b = "referral-race-paid-b";
+  const child = await createRouteCandidate(a, "referee-racing-candidates");
+  await createRouteCandidate(b, child.uid);
+  const walletBefore = await wallet("sponsor-b");
+  await Promise.all([
+    routeTransition(a, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }),
+    routeTransition(b, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }),
+  ]);
+  const relationAfter = await routeRelation(child.uid);
+  ok(relationAfter.qualifyingOrderId === a || relationAfter.qualifyingOrderId === b);
+  equal(relationAfter.state, "pending");
+  equal((await db.collection("orders").doc(a).get()).data()?.paymentStatus, "paid");
+  equal((await db.collection("orders").doc(b).get()).data()?.paymentStatus, "paid");
+  equal((await routeReferralMovements(a)).length + (await routeReferralMovements(b)).length, 1);
+  equal((await wallet("sponsor-b")).pendingCents, walletBefore.pendingCents + 1000);
 });
 console.log(`Referral backend: ${passed} checks.`);

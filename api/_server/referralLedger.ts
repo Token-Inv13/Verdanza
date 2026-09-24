@@ -8,7 +8,7 @@ import { CAGNOTTE_REGULARIZATION_VERSION, CAGNOTTE_RESERVATION_VERSION, type Cag
 import { ReferralError, sponsorHasDeliveredPaidOrder } from "./referralService.js";
 import { canonicalReferralJson, referralSnapshotFingerprint } from "./referralSnapshot.js";
 
-type Event = "payment" | "payment_and_delivery" | "delivery" | "cancel_unpaid_candidate" | "refund" | "correction";
+type Event = "payment" | "payment_and_delivery" | "delivery" | "refund" | "correction";
 type Program = { mode: "off" | "drain" | "active"; startsAtEpochMs: number | null; operational: boolean };
 export type SponsorQualificationEvidence = { referralId: string; sponsorUid: string; account: "active" | "disabled" | "unavailable" };
 type Input = { db: Firestore; transaction: Transaction; order: Order; program: Program; event: Event; recordedAtEpochMs: number;
@@ -48,14 +48,14 @@ export async function prepareReferralTransition(input: Input) {
   if (!relationDoc.exists) throw new ReferralError("referral_relation_missing");
   const before = relationDoc.data() as ReferralRelation;
   if (before.schemaVersion !== 1 || before.programVersion !== REFERRAL_PROGRAM_VERSION || before.refereeUid !== snapshot.referralId ||
-    before.sponsorUid === before.refereeUid || !["linked", "pending", "rewarded", "cancelled", "reversed"].includes(before.state) ||
-    (before.qualifyingOrderId !== null && before.qualifyingOrderId !== input.order.id) ||
-    (before.deliveredOrderId !== null && before.deliveredOrderId !== input.order.id)) throw new ReferralError("referral_relation_conflict");
-  if (!cents(before.cumulativeReturnedProductsCents) || before.cumulativeReturnedProductsCents > snapshot.eligibleProductsBeforeReferralCents ||
+    typeof before.sponsorUid !== "string" || !before.sponsorUid || before.sponsorUid === before.refereeUid ||
+    !["linked", "pending", "rewarded", "cancelled", "reversed"].includes(before.state)) throw new ReferralError("referral_relation_conflict");
+  if (!cents(before.cumulativeReturnedProductsCents) ||
     !before.processedRefunds || typeof before.processedRefunds !== "object" || Array.isArray(before.processedRefunds) ||
     Object.values(before.processedRefunds).some((value) => !cents(value)) ||
     before.paymentConfirmed !== (before.qualifyingOrderId !== null) || before.deliveryConfirmed !== (before.deliveredOrderId !== null) ||
-    (before.state === "linked" && (before.paymentConfirmed || before.rewardCompartment !== "none")) ||
+    (before.deliveredOrderId !== null && (before.qualifyingOrderId === null || before.deliveredOrderId !== before.qualifyingOrderId)) ||
+    (before.state === "linked" && (before.paymentConfirmed || before.deliveryConfirmed || before.rewardCompartment !== "none")) ||
     (before.state === "pending" && (!before.paymentConfirmed || before.deliveryConfirmed || before.rewardCompartment !== "pending")) ||
     (before.state === "rewarded" && (!before.paymentConfirmed || !before.deliveryConfirmed || before.rewardCompartment !== "available")) ||
     (before.state === "cancelled" && (!before.paymentConfirmed || before.rewardCompartment !== "none")) ||
@@ -63,6 +63,13 @@ export async function prepareReferralTransition(input: Input) {
     (before.rewardIneligibilityReason !== undefined && !["sponsor_no_longer_eligible", "sponsor_account_disabled", "sponsor_identity_unavailable"].includes(before.rewardIneligibilityReason)) ||
     (before.rewardIneligibilityReason !== undefined && (!before.paymentConfirmed || before.rewardCompartment !== "none")))
     throw new ReferralError("referral_relation_corrupt");
+  // Only the first paid order claims the relation. Other snapshot-bearing orders
+  // must be free to continue their own payment, delivery and refund workflows.
+  if (before.qualifyingOrderId !== null && before.qualifyingOrderId !== input.order.id)
+    return { status: "already_applied" as const, write() {} };
+  if (before.qualifyingOrderId === null && input.event !== "payment" && input.event !== "payment_and_delivery")
+    return { status: "already_applied" as const, write() {} };
+  if (before.cumulativeReturnedProductsCents > snapshot.eligibleProductsBeforeReferralCents) throw new ReferralError("referral_relation_corrupt");
   const next = structuredClone(before);
   const normalEvent = input.event === "payment" || input.event === "payment_and_delivery" || input.event === "delivery";
   if (input.event === "payment" || input.event === "payment_and_delivery") {
@@ -79,16 +86,15 @@ export async function prepareReferralTransition(input: Input) {
       else throw new ReferralError("referral_sponsor_evidence_conflict");
     }
     next.paymentConfirmed = true;
-    if (input.event === "payment_and_delivery") next.deliveryConfirmed = true;
+    next.qualifyingOrderId = input.order.id;
+    if (input.event === "payment_and_delivery") {
+      next.deliveryConfirmed = true;
+      next.deliveredOrderId = input.order.id;
+    }
   } else if (input.event === "delivery") {
     if (before.deliveryConfirmed) return { status: "already_applied" as const, write() {} };
     next.deliveryConfirmed = true;
     next.deliveredOrderId = input.order.id;
-  } else if (input.event === "cancel_unpaid_candidate") {
-    if (before.paymentConfirmed) throw new ReferralError("referral_payment_already_confirmed");
-    if (!before.deliveryConfirmed) return { status: "already_applied" as const, write() {} };
-    next.deliveryConfirmed = false;
-    next.deliveredOrderId = null;
   } else {
     if (!before.paymentConfirmed) throw new ReferralError("referral_payment_required");
     if (!input.refundId || !/^[A-Za-z0-9._:@+-]{1,128}$/.test(input.refundId) || !cents(input.cumulativeReturnedProductsCents!)) throw new ReferralError("referral_refund_invalid");
@@ -101,9 +107,6 @@ export async function prepareReferralTransition(input: Input) {
     next.processedRefunds = { ...next.processedRefunds, [input.refundId]: input.cumulativeReturnedProductsCents! };
     next.cumulativeReturnedProductsCents = input.cumulativeReturnedProductsCents!;
   }
-  if (next.deliveryConfirmed && !next.deliveredOrderId) next.deliveredOrderId = input.order.id;
-  if (!next.qualifyingOrderId && next.paymentConfirmed) next.qualifyingOrderId = input.order.id;
-  if (next.qualifyingOrderId !== input.order.id && next.qualifyingOrderId !== null) throw new ReferralError("referral_order_conflict");
   if (next.cumulativeReturnedProductsCents > snapshot.eligibleProductsBeforeReferralCents) throw new ReferralError("referral_refund_invalid");
   const retained = snapshot.eligibleProductsBeforeReferralCents - next.cumulativeReturnedProductsCents;
   const shouldReward = next.paymentConfirmed && !next.rewardIneligibilityReason && retained >= REFERRAL_MINIMUM_PRODUCTS_CENTS;
@@ -116,7 +119,7 @@ export async function prepareReferralTransition(input: Input) {
   if (next.rewardCompartment === "pending" && desired === "none") move("referral_reward_cancelled", `cancel:${input.refundId}`, -REFERRAL_SPONSOR_REWARD_CENTS, 0);
   if (next.rewardCompartment === "pending" && desired === "available") move("referral_reward_available", "available", -REFERRAL_SPONSOR_REWARD_CENTS, REFERRAL_SPONSOR_REWARD_CENTS);
   if (next.rewardCompartment === "available" && desired === "none") move("referral_reward_reversed", `reverse:${input.refundId}`, 0, -REFERRAL_SPONSOR_REWARD_CENTS);
-  // Delivery preceding payment records the fact, then payment emits both movements atomically.
+  // Payment of an already delivered order emits both movements atomically.
   if (next.rewardCompartment === "none" && desired === "available") move("referral_reward_available", before.state === "reversed" || before.state === "cancelled" ? `available:restore:${input.refundId}` : "available", -REFERRAL_SPONSOR_REWARD_CENTS, REFERRAL_SPONSOR_REWARD_CENTS);
   const movementRefs = movements.map((entry) => input.db.collection("cagnotteMovements").doc(entry.id));
   const movementDocs = movementRefs.length ? await input.transaction.getAll(...movementRefs) : [];

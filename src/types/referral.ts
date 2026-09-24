@@ -27,7 +27,9 @@ export type ReferralRelation = {
   state: ReferralState;
   createdAtEpochMs: number;
   linkedAtEpochMs: number;
+  /** Claimed only by the first confirmed paid order, never by delivery alone. */
   qualifyingOrderId: string | null;
+  /** Delivery of qualifyingOrderId only; null until that paid order is delivered. */
   deliveredOrderId: string | null;
   paymentConfirmed: boolean;
   deliveryConfirmed: boolean;
