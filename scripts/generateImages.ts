@@ -57,8 +57,12 @@ const staticTargets = [
 ];
 const blogImageSources: Record<
   string,
-  { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" }
+  { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" | "packaging" }
 > = {
+  "emballage-cbd-contenant-fermeture": {
+    label: "Emballage CBD : contenant et fermeture",
+    kind: "packaging",
+  },
   "analyse-cbd-nd-lod-loq": {
     label: "Analyse CBD : ND, LOD et LOQ",
     kind: "analysis",
@@ -299,6 +303,13 @@ for (const article of blogArticles) {
             width: ratio.width,
             height: ratio.height,
           })
+        : sourceSet.kind === "packaging"
+          ? await generatePackagingBlogImage({
+              outputUrl,
+              label: sourceSet.label,
+              width: ratio.width,
+              height: ratio.height,
+            })
         : sourceSet.kind === "driving"
           ? await generateDrivingBlogImage({
               outputUrl,
@@ -579,6 +590,66 @@ async function generateAnalysisBlogImage({
     height,
     bytes: output.length,
   };
+}
+
+async function generatePackagingBlogImage({
+  outputUrl,
+  label,
+  width,
+  height,
+}: {
+  outputUrl: string;
+  label: string;
+  width: number;
+  height: number;
+}): Promise<GeneratedVariant> {
+  const outputFile = publicPath(outputUrl);
+  mkdirSync(dirname(outputFile), { recursive: true });
+
+  const jarX = Math.round(width * 0.47);
+  const jarY = Math.round(height * 0.30);
+  const jarWidth = Math.round(width * 0.22);
+  const jarHeight = Math.round(height * 0.43);
+  const svg = Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg-packaging" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8f3e9"/>
+      <stop offset="100%" stop-color="#ece2d3"/>
+    </linearGradient>
+    <linearGradient id="glass-packaging" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#42685b" stop-opacity="0.78"/>
+      <stop offset="100%" stop-color="#0d3b2e" stop-opacity="0.96"/>
+    </linearGradient>
+    <filter id="shadow-packaging" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="${Math.round(height * 0.02)}" stdDeviation="${Math.round(height * 0.018)}" flood-color="#0d3b2e" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+  <rect width="${width}" height="${height}" fill="url(#bg-packaging)"/>
+  <rect width="${Math.round(width * 0.27)}" height="${height}" fill="#0d3b2e"/>
+  <circle cx="${Math.round(width * 0.18)}" cy="${Math.round(height * 0.18)}" r="${Math.round(Math.min(width, height) * 0.16)}" fill="#c9a45c" opacity="0.18"/>
+  <text x="${Math.round(width * 0.33)}" y="${Math.round(height * 0.11)}" fill="#0d3b2e" font-family="Arial, sans-serif" font-size="${Math.round(height * 0.04)}" font-weight="700">${escapeSvg(label)}</text>
+  <rect x="${jarX}" y="${jarY}" width="${jarWidth}" height="${jarHeight}" rx="${Math.round(width * 0.025)}" fill="url(#glass-packaging)" filter="url(#shadow-packaging)"/>
+  <rect x="${jarX - Math.round(width * 0.012)}" y="${jarY - Math.round(height * 0.07)}" width="${jarWidth + Math.round(width * 0.024)}" height="${Math.round(height * 0.10)}" rx="${Math.round(height * 0.025)}" fill="#c9a45c"/>
+  <line x1="${jarX}" y1="${jarY - Math.round(height * 0.035)}" x2="${jarX + jarWidth}" y2="${jarY - Math.round(height * 0.035)}" stroke="#fffaf1" stroke-width="${Math.max(4, Math.round(width * 0.004))}" stroke-dasharray="${Math.round(width * 0.012)} ${Math.round(width * 0.008)}" opacity="0.9"/>
+  <rect x="${jarX + Math.round(jarWidth * 0.16)}" y="${jarY + Math.round(jarHeight * 0.28)}" width="${Math.round(jarWidth * 0.68)}" height="${Math.round(jarHeight * 0.36)}" rx="${Math.round(width * 0.012)}" fill="#fffaf1"/>
+  <rect x="${jarX + Math.round(jarWidth * 0.26)}" y="${jarY + Math.round(jarHeight * 0.38)}" width="${Math.round(jarWidth * 0.48)}" height="${Math.round(height * 0.018)}" rx="8" fill="#0d3b2e"/>
+  <rect x="${jarX + Math.round(jarWidth * 0.32)}" y="${jarY + Math.round(jarHeight * 0.48)}" width="${Math.round(jarWidth * 0.36)}" height="${Math.round(height * 0.012)}" rx="8" fill="#c9a45c"/>
+  <path d="M ${Math.round(width * 0.72)} ${Math.round(height * 0.31)} L ${Math.round(width * 0.87)} ${Math.round(height * 0.31)} L ${Math.round(width * 0.90)} ${Math.round(height * 0.73)} L ${Math.round(width * 0.69)} ${Math.round(height * 0.73)} Z" fill="#fffaf1" stroke="#0d3b2e" stroke-width="${Math.max(5, Math.round(width * 0.005))}" filter="url(#shadow-packaging)"/>
+  <line x1="${Math.round(width * 0.715)}" y1="${Math.round(height * 0.37)}" x2="${Math.round(width * 0.875)}" y2="${Math.round(height * 0.37)}" stroke="#c9a45c" stroke-width="${Math.max(7, Math.round(width * 0.007))}" stroke-linecap="round"/>
+  <path d="M ${Math.round(width * 0.76)} ${Math.round(height * 0.52)} C ${Math.round(width * 0.77)} ${Math.round(height * 0.43)}, ${Math.round(width * 0.84)} ${Math.round(height * 0.43)}, ${Math.round(width * 0.85)} ${Math.round(height * 0.52)} C ${Math.round(width * 0.85)} ${Math.round(height * 0.61)}, ${Math.round(width * 0.80)} ${Math.round(height * 0.64)}, ${Math.round(width * 0.80)} ${Math.round(height * 0.64)} C ${Math.round(width * 0.80)} ${Math.round(height * 0.64)}, ${Math.round(width * 0.75)} ${Math.round(height * 0.61)}, ${Math.round(width * 0.76)} ${Math.round(height * 0.52)} Z" fill="#73906f"/>
+  <circle cx="${Math.round(width * 0.38)}" cy="${Math.round(height * 0.34)}" r="${Math.round(Math.min(width, height) * 0.045)}" fill="#c9a45c"/>
+  <circle cx="${Math.round(width * 0.36)}" cy="${Math.round(height * 0.55)}" r="${Math.round(Math.min(width, height) * 0.045)}" fill="#fffaf1" stroke="#0d3b2e" stroke-width="${Math.max(4, Math.round(width * 0.004))}"/>
+  <circle cx="${Math.round(width * 0.40)}" cy="${Math.round(height * 0.74)}" r="${Math.round(Math.min(width, height) * 0.045)}" fill="#73906f"/>
+  <line x1="${Math.round(width * 0.41)}" y1="${Math.round(height * 0.34)}" x2="${Math.round(width * 0.47)}" y2="${Math.round(height * 0.39)}" stroke="#0d3b2e" stroke-width="${Math.max(4, Math.round(width * 0.004))}" stroke-linecap="round"/>
+  <line x1="${Math.round(width * 0.39)}" y1="${Math.round(height * 0.55)}" x2="${Math.round(width * 0.47)}" y2="${Math.round(height * 0.55)}" stroke="#0d3b2e" stroke-width="${Math.max(4, Math.round(width * 0.004))}" stroke-linecap="round"/>
+  <line x1="${Math.round(width * 0.43)}" y1="${Math.round(height * 0.74)}" x2="${Math.round(width * 0.49)}" y2="${Math.round(height * 0.68)}" stroke="#0d3b2e" stroke-width="${Math.max(4, Math.round(width * 0.004))}" stroke-linecap="round"/>
+  <text x="${Math.round(width * 0.33)}" y="${Math.round(height * 0.93)}" fill="#0d3b2e" font-family="Arial, sans-serif" font-size="${Math.round(height * 0.026)}" font-weight="600" opacity="0.72">Contenant, fermeture et protection du produit</text>
+</svg>`);
+
+  const output = await sharp(svg).webp({ quality: 82, effort: 6 }).toBuffer();
+  writeIfChanged(outputFile, output);
+  return { src: outputUrl, width, height, bytes: output.length };
 }
 
 async function generateDrivingBlogImage({

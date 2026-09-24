@@ -6,6 +6,263 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "emballage-cbd-contenant-fermeture",
+    title: "Emballage CBD : comprendre le rôle du contenant et de la fermeture",
+    seoTitle: "Emballage CBD : contenant et fermeture | Verdanza",
+    description:
+      "Pot, sachet, fermeture et opercule : comprenez le rôle de l'emballage CBD, les points à vérifier et les limites de ce qu'il peut garantir.",
+    excerpt:
+      "Un emballage limite les échanges avec l'air, la lumière et l'humidité, mais son efficacité dépend du matériau, de la fermeture et de son état réel.",
+    category: "Guide qualité",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-09-24T09:03:00+02:00",
+    dateModified: "2026-09-24T09:03:00+02:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/emballage-cbd-contenant-fermeture-1x1.webp",
+      landscape: "/images/blog/emballage-cbd-contenant-fermeture-4x3.webp",
+      wide: "/images/blog/emballage-cbd-contenant-fermeture-16x9.webp",
+    },
+    relatedSlugs: [
+      "conserver-fleurs-resines-cbd",
+      "reception-commande-cbd-verifications",
+      "etiquette-numero-lot-cbd-tracabilite",
+    ],
+    links: [
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/conserver-fleurs-resines-cbd",
+        label: "Conserver fleurs et résines CBD",
+      },
+      {
+        to: "/blog/reception-commande-cbd-verifications",
+        label: "Vérifier une commande à la réception",
+      },
+      {
+        to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+        label: "Lire l'étiquette et le numéro de lot",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            L'emballage d'une fleur ou d'une résine CBD ne sert pas seulement à
+            présenter le produit. Il crée une barrière entre son contenu et son
+            environnement. Le matériau du contenant, sa fermeture et son état
+            participent ensemble à cette protection.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Un contenant soigné ne prouve à lui seul ni la composition, ni la
+            conformité, ni la qualité du lot. Ces informations se vérifient avec
+            l'étiquette, la traçabilité et, lorsqu'elle est disponible, l'analyse
+            correspondant au lot.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "fonctions-emballage",
+        text: "Les fonctions principales d'un emballage CBD",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Un emballage adapté cherche d'abord à limiter les variations subies
+            par le produit pendant le transport et le stockage. Il protège aussi
+            des contacts directs et porte les informations qui permettent
+            d'identifier le contenu.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Ce que les différentes parties de l'emballage peuvent limiter.",
+          headers: ["Élément", "Rôle utile", "Point à vérifier"],
+          rows: [
+            [
+              "Paroi du contenant",
+              "Limite les contacts, les chocs légers et, selon le matériau, le passage de la lumière ou de l'humidité.",
+              "Absence de fissure, trou, déformation ou zone décollée.",
+            ],
+            [
+              "Fermeture",
+              "Réduit les échanges d'air lorsque le couvercle, le zip ou le sertissage ferme correctement.",
+              "Fermeture complète, propre et sans jeu anormal.",
+            ],
+            [
+              "Opercule ou témoin d'ouverture",
+              "Signale parfois une première ouverture ou complète la fermeture initiale.",
+              "État cohérent avec un emballage neuf, sans déchirure inexpliquée.",
+            ],
+            [
+              "Étiquette",
+              "Identifie le produit, le lot et les informations prévues par le vendeur.",
+              "Lisibilité, cohérence et correspondance avec la commande.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "materiaux",
+        text: "Pot, sachet ou boîte : le matériau ne suffit pas",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Un pot rigide résiste bien à l'écrasement, tandis qu'un sachet prend
+            moins de place et peut intégrer plusieurs couches barrières. Un verre
+            transparent laisse davantage passer la lumière qu'un contenant
+            opaque. Ces différences comptent, mais la qualité de fermeture et les
+            conditions de stockage restent tout aussi importantes.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La seule apparence du matériau ne permet pas d'évaluer précisément sa
+            perméabilité. Deux sachets visuellement proches peuvent avoir des
+            structures différentes. Il vaut donc mieux observer l'ensemble :
+            paroi, soudures, zip, couvercle et usage prévu.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "air-lumiere-humidite",
+        text: "Air, lumière et humidité : trois facteurs à distinguer",
+      },
+      {
+        type: "list",
+        items: [
+          "l'air circule plus facilement lorsque la fermeture est incomplète ou souvent ouverte ;",
+          "la lumière atteint davantage le contenu à travers une paroi claire laissée dans un endroit exposé ;",
+          "l'humidité peut varier si l'emballage est ouvert dans une pièce humide ou si sa barrière est endommagée ;",
+          "la chaleur n'est pas bloquée par un simple contenant : l'emplacement de stockage reste déterminant.",
+        ],
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            L'emballage ralentit certains échanges, sans créer un environnement
+            immuable. Le guide sur la {" "}
+            <Link to="/blog/conserver-fleurs-resines-cbd">
+              conservation des fleurs et résines CBD
+            </Link>{" "}
+            détaille les précautions liées au lieu de stockage.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "espace-vide",
+        text: "L'espace vide dans le contenant n'est pas un défaut automatique",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le volume d'un produit varie selon sa densité, sa structure et son
+            calibre. Une même masse peut donc occuper plus ou moins d'espace. Un
+            pot partiellement rempli ne permet pas, à lui seul, de conclure à une
+            quantité incorrecte. La vérification repose sur la quantité annoncée
+            et non sur le niveau visuel dans le contenant.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "ouvertures-repetees",
+        text: "Les ouvertures répétées changent les conditions de protection",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            À chaque ouverture, l'air intérieur est renouvelé et le produit est
+            exposé aux conditions de la pièce. Refermer rapidement et correctement
+            le contenant aide à conserver le rôle de barrière prévu. Transvaser
+            sans nécessité ajoute aussi des manipulations et peut faire perdre le
+            lien direct avec l'étiquette d'origine.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "reception",
+        text: "Les contrôles utiles à la réception",
+      },
+      {
+        type: "list",
+        items: [
+          "vérifier que le contenant correspond au produit commandé ;",
+          "observer les parois, les angles et les soudures ;",
+          "contrôler que la fermeture tient et se referme normalement ;",
+          "repérer un éventuel opercule ou témoin d'ouverture endommagé ;",
+          "lire l'étiquette avant de séparer le produit de son emballage ;",
+          "conserver les références de lot utiles en cas de question ;",
+          "signaler rapidement au vendeur une fuite, une ouverture ou une détérioration visible.",
+        ],
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Une odeur perceptible autour d'un colis ne suffit pas à localiser une
+            fuite. Il faut examiner l'emballage intérieur sans conclure avant
+            d'avoir identifié son état réel.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "limites",
+        text: "Ce que l'emballage ne permet pas de conclure",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Un design premium, un pot lourd ou un sachet opaque ne remplacent pas
+            les informations de traçabilité. À l'inverse, un emballage simple
+            n'indique pas automatiquement un produit de moindre qualité. Pour une
+            lecture cohérente, il faut rapprocher l'état du contenant, le numéro
+            de lot, l'étiquette et les documents disponibles.
+          </>
+        ),
+      },
+      {
+        type: "links",
+        title: "Poursuivre les vérifications",
+        links: [
+          { to: "/qualite-conformite", label: "Qualité et conformité" },
+          {
+            to: "/blog/reception-commande-cbd-verifications",
+            label: "Contrôler une commande à la réception",
+          },
+          {
+            to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+            label: "Comprendre l'étiquette et le lot",
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "analyse-cbd-nd-lod-loq",
     title: "Analyse CBD : comprendre ND, LOD et LOQ",
     seoTitle: "Analyse CBD : comprendre ND, LOD et LOQ | Verdanza",

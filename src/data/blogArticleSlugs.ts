@@ -1,4 +1,5 @@
 export const publishedBlogArticleSlugs = [
+  "emballage-cbd-contenant-fermeture",
   "analyse-cbd-nd-lod-loq",
   "isolat-spectre-large-complet-cbd",
   "reception-commande-cbd-verifications",
