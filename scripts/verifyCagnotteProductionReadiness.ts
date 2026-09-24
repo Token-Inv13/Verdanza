@@ -44,7 +44,7 @@ import {
 } from "./cagnotteProductionReadinessAssertions.js";
 
 const baseMain = "322f65895fb0a75479c92bc4a3054caa4073d2f8";
-const expectedRulesHash = "714b64e48aaae22018488a3deac519c14ee4419d7e6e8927c09873a016a12c5c";
+const expectedRulesHash = "2cd941d4d42f2da5878fc31e1364faa25c1358b5d94b4ef6f2c95604dd292be4";
 const expectedEndpoints = [
   "admin-contests.ts",
   "admin-payment-links.ts",
@@ -88,7 +88,7 @@ const sensitiveEnvironmentTemplateKeys = new Set([
   "FIREBASE_PRIVATE_KEY",
   "FIREBASE_SERVICE_ACCOUNT_BASE64",
   "CAGNOTTE_READ_CURSOR_SECRET",
-  "REFERRAL_EMAIL_HMAC_SECRET",
+  "REFERRAL_EMAIL_HMAC_KEYRING_JSON",
   "BOOTSTRAP_ADMIN_EMAIL",
   "BOOTSTRAP_ADMIN_UID",
   "BOOTSTRAP_ADMIN_TEMP_PASSWORD",

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { CAGNOTTE_CALCULATION_VERSION } from "../../src/lib/cagnotteCalculations.js";
-import { REFERRAL_MINIMUM_PRODUCTS_CENTS, REFERRAL_PROGRAM_VERSION, REFERRAL_SPONSOR_REWARD_CENTS, type ReferralOrderSnapshot, type ReferralRelation } from "../../src/types/referral.js";
+import { REFERRAL_MINIMUM_PRODUCTS_CENTS, REFERRAL_PROGRAM_VERSION, REFERRAL_SPONSOR_REWARD_CENTS, type ReferralEmailClaim, type ReferralOrderSnapshot, type ReferralRelation } from "../../src/types/referral.js";
 import type { Order } from "../../src/types/index.js";
 import { applyCagnotteWalletDeltas, prepareCagnotteWalletMutation, writeCagnotteWalletMutation } from "./cagnotteLedger.js";
 import { CAGNOTTE_REGULARIZATION_VERSION, CAGNOTTE_RESERVATION_VERSION, type CagnotteMovement } from "./cagnotteLedgerTypes.js";
@@ -10,11 +10,60 @@ import { canonicalReferralJson, referralSnapshotFingerprint } from "./referralSn
 
 type Event = "payment" | "payment_and_delivery" | "delivery" | "refund" | "correction";
 type Program = { mode: "off" | "drain" | "active"; startsAtEpochMs: number | null; operational: boolean };
-export type SponsorQualificationEvidence = { referralId: string; sponsorUid: string; account: "active" | "disabled" | "unavailable" };
+export type ReferralPaymentEvidence = { referralId: string; sponsorUid: string; refereeUid: string; linkedAtEpochMs: number;
+  sponsorAccount: "active" | "disabled" | "unavailable"; refereeAccount: "active" | "disabled" | "unverified" | "unavailable";
+  sponsorEmail?: string; refereeEmail?: string; activeKeyVersion?: string; claimAliases?: readonly { version: string; id: string }[] };
+type IneligibilityReason = NonNullable<ReferralRelation["rewardIneligibilityReason"]>;
+type PreparedClaim = { reason?: IneligibilityReason; newClaim?: { ref: FirebaseFirestore.DocumentReference; value: ReferralEmailClaim } };
+async function prepareCurrentRefereeClaim(input: { db: Firestore; transaction: Transaction; before: ReferralRelation;
+  evidence?: ReferralPaymentEvidence; recordedAtEpochMs: number }): Promise<PreparedClaim> {
+  const { db, transaction: tx, before, evidence } = input;
+  if (!evidence || evidence.referralId !== before.refereeUid || evidence.refereeUid !== before.refereeUid ||
+      evidence.sponsorUid !== before.sponsorUid || evidence.linkedAtEpochMs !== before.linkedAtEpochMs)
+    return { reason: "referral_identity_changed" };
+  if (evidence.refereeAccount === "disabled" || evidence.refereeAccount === "unverified") return { reason: "referee_email_unverified" };
+  if (evidence.refereeAccount !== "active" || !evidence.refereeEmail || !evidence.activeKeyVersion || !evidence.claimAliases?.length)
+    return { reason: "referee_identity_unavailable" };
+  if (evidence.sponsorEmail && evidence.refereeEmail === evidence.sponsorEmail) return { reason: "self_referral_at_payment" };
+  const aliases = evidence.claimAliases;
+  const refs = aliases.map((alias) => db.collection("referralEmailClaims").doc(alias.id));
+  const docs = await tx.getAll(...refs);
+  if (docs.some((doc, index) => doc.exists && (doc.data()?.refereeUid !== before.refereeUid || doc.data()?.referralId !== before.refereeUid ||
+      doc.data()?.schemaVersion !== 1 || doc.data()?.programVersion !== REFERRAL_PROGRAM_VERSION || doc.data()?.keyVersion !== aliases[index].version)))
+    return { reason: "referee_email_claimed" };
+  const activeIndex = aliases.findIndex((alias) => alias.version === evidence.activeKeyVersion);
+  if (activeIndex < 0) return { reason: "referee_identity_unavailable" };
+  return docs[activeIndex].exists ? {} : { newClaim: { ref: refs[activeIndex], value: { schemaVersion: 1,
+    programVersion: REFERRAL_PROGRAM_VERSION, keyVersion: evidence.activeKeyVersion, refereeUid: before.refereeUid,
+    referralId: before.refereeUid, createdAtEpochMs: input.recordedAtEpochMs } } };
+}
 type Input = { db: Firestore; transaction: Transaction; order: Order; program: Program; event: Event; recordedAtEpochMs: number;
-  refundId?: string; cumulativeReturnedProductsCents?: number; sponsorEvidence?: SponsorQualificationEvidence };
+  refundId?: string; cumulativeReturnedProductsCents?: number; paymentEvidence?: ReferralPaymentEvidence };
 const cents = (value: number) => Number.isSafeInteger(value) && value >= 0;
 const key = (orderId: string, event: string) => createHash("sha256").update(`referral-v1\0${orderId}\0${event}`).digest("hex");
+
+/** A first paid product order closes an unconsumed link even when checkout applied no referral discount. */
+export async function prepareFirstPaymentWithoutReferral(input: { db: Firestore; transaction: Transaction; order: Order; program: Program;
+  paymentEvidence?: ReferralPaymentEvidence; recordedAtEpochMs: number }) {
+  if (!input.program.operational || input.program.mode === "off" || input.order.referral ||
+      input.order.orderType === "preorder" || input.order.productionFixture || !input.order.customerId ||
+      !Array.isArray(input.order.items) || input.order.items.length === 0 ||
+      input.order.items.some((item) => typeof item.productId !== "string" || !item.productId || !Number.isSafeInteger(item.quantity) || item.quantity <= 0)) return null;
+  const relationRef = input.db.collection("referrals").doc(input.order.customerId);
+  const doc = await input.transaction.get(relationRef);
+  if (!doc.exists) return null;
+  const before = doc.data() as ReferralRelation;
+  if (before.refereeUid !== input.order.customerId || before.schemaVersion !== 1 || before.programVersion !== REFERRAL_PROGRAM_VERSION)
+    throw new ReferralError("referral_relation_corrupt");
+  if (before.state !== "linked" || before.qualifyingOrderId !== null) return null;
+  if (before.paymentConfirmed || before.rewardCompartment !== "none") throw new ReferralError("referral_relation_corrupt");
+  const claim = await prepareCurrentRefereeClaim({ db: input.db, transaction: input.transaction, before,
+    evidence: input.paymentEvidence, recordedAtEpochMs: input.recordedAtEpochMs });
+  return { status: "applied" as const, write() { input.transaction.set(relationRef, { ...before, state: "cancelled", paymentConfirmed: true,
+    qualifyingOrderId: input.order.id, rewardIneligibilityReason: claim.reason ?? "first_paid_order_without_referral_discount" } satisfies ReferralRelation);
+    if (claim.newClaim) input.transaction.create(claim.newClaim.ref, claim.newClaim.value);
+  } };
+}
 
 export function validateReferralOrderSnapshot(order: Order): ReferralOrderSnapshot {
   const snapshot = order.referral;
@@ -60,7 +109,7 @@ export async function prepareReferralTransition(input: Input) {
     (before.state === "rewarded" && (!before.paymentConfirmed || !before.deliveryConfirmed || before.rewardCompartment !== "available")) ||
     (before.state === "cancelled" && (!before.paymentConfirmed || before.rewardCompartment !== "none")) ||
     (before.state === "reversed" && (!before.paymentConfirmed || !before.deliveryConfirmed || before.rewardCompartment !== "none")) ||
-    (before.rewardIneligibilityReason !== undefined && !["sponsor_no_longer_eligible", "sponsor_account_disabled", "sponsor_identity_unavailable"].includes(before.rewardIneligibilityReason)) ||
+    (before.rewardIneligibilityReason !== undefined && !["sponsor_no_longer_eligible", "sponsor_account_disabled", "sponsor_identity_unavailable", "first_paid_order_without_referral_discount", "referee_identity_unavailable", "referee_email_unverified", "referee_email_claimed", "self_referral_at_payment", "referral_identity_changed"].includes(before.rewardIneligibilityReason)) ||
     (before.rewardIneligibilityReason !== undefined && (!before.paymentConfirmed || before.rewardCompartment !== "none")))
     throw new ReferralError("referral_relation_corrupt");
   // Only the first paid order claims the relation. Other snapshot-bearing orders
@@ -71,19 +120,26 @@ export async function prepareReferralTransition(input: Input) {
     return { status: "already_applied" as const, write() {} };
   if (before.cumulativeReturnedProductsCents > snapshot.eligibleProductsBeforeReferralCents) throw new ReferralError("referral_relation_corrupt");
   const next = structuredClone(before);
+  let newClaim: { ref: FirebaseFirestore.DocumentReference; value: ReferralEmailClaim } | null = null;
   const normalEvent = input.event === "payment" || input.event === "payment_and_delivery" || input.event === "delivery";
   if (input.event === "payment" || input.event === "payment_and_delivery") {
     if (before.paymentConfirmed && (input.event === "payment" || before.deliveryConfirmed)) return { status: "already_applied" as const, write() {} };
     if (!before.paymentConfirmed) {
-      const evidence = input.sponsorEvidence;
-      if (!evidence || evidence.referralId !== snapshot.referralId || evidence.sponsorUid !== before.sponsorUid)
-        throw new ReferralError("referral_sponsor_evidence_conflict");
-      if (evidence.account === "active") {
+      const evidence = input.paymentEvidence;
+      if (!evidence || evidence.referralId !== snapshot.referralId || evidence.refereeUid !== before.refereeUid ||
+          evidence.sponsorUid !== before.sponsorUid || evidence.linkedAtEpochMs !== before.linkedAtEpochMs)
+        next.rewardIneligibilityReason = "referral_identity_changed";
+      else if (evidence.sponsorAccount === "active") {
         if (!await sponsorHasDeliveredPaidOrder(input.transaction, input.db, before.sponsorUid))
           next.rewardIneligibilityReason = "sponsor_no_longer_eligible";
-      } else if (evidence.account === "disabled") next.rewardIneligibilityReason = "sponsor_account_disabled";
-      else if (evidence.account === "unavailable") next.rewardIneligibilityReason = "sponsor_identity_unavailable";
-      else throw new ReferralError("referral_sponsor_evidence_conflict");
+      } else if (evidence.sponsorAccount === "disabled") next.rewardIneligibilityReason = "sponsor_account_disabled";
+      else next.rewardIneligibilityReason = "sponsor_identity_unavailable";
+      if (!next.rewardIneligibilityReason) {
+        const claim = await prepareCurrentRefereeClaim({ db: input.db, transaction: input.transaction, before,
+          evidence, recordedAtEpochMs: input.recordedAtEpochMs });
+        if (claim.reason) next.rewardIneligibilityReason = claim.reason;
+        newClaim = claim.newClaim ?? null;
+      }
     }
     next.paymentConfirmed = true;
     next.qualifyingOrderId = input.order.id;
@@ -147,6 +203,7 @@ export async function prepareReferralTransition(input: Input) {
   return { status: "applied" as const, write() {
     if (written) throw new ReferralError("referral_plan_reused"); written = true;
     input.transaction.set(relationRef, next);
+    if (newClaim) input.transaction.create(newClaim.ref, newClaim.value);
     if (wallet) writeCagnotteWalletMutation(wallet);
     for (const movement of output) input.transaction.create(input.db.collection("cagnotteMovements").doc(movement.eventKey), movement);
   } };

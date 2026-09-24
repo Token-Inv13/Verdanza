@@ -6,9 +6,37 @@ export function normalizeReferralEmail(value: string) {
   return email;
 }
 
-export function referralEmailClaimId(secret: string, normalizedEmail: string) {
+export type ReferralEmailKeyring = Readonly<{ activeVersion: string; keys: Readonly<Record<string, string>> }>;
+const VERSION = /^v[1-9][0-9]{0,2}$/;
+export function parseReferralEmailKeyring(raw: string): ReferralEmailKeyring {
+  let value: unknown;
+  try { value = JSON.parse(raw); } catch { throw new Error("referral_email_keyring_invalid"); }
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+      Object.keys(value).sort().join(",") !== "activeVersion,keys") throw new Error("referral_email_keyring_invalid");
+  const input = value as { activeVersion?: unknown; keys?: unknown };
+  if (typeof input.activeVersion !== "string" || !VERSION.test(input.activeVersion) ||
+      !input.keys || typeof input.keys !== "object" || Array.isArray(input.keys)) throw new Error("referral_email_keyring_invalid");
+  const keys = input.keys as Record<string, unknown>;
+  const versions = Object.keys(keys);
+  if (versions.length < 1 || versions.length > 4 || !versions.includes(input.activeVersion)) throw new Error("referral_email_keyring_invalid");
+  for (const version of versions) {
+    if (!VERSION.test(version) || typeof keys[version] !== "string") throw new Error("referral_email_keyring_invalid");
+    assertReferralEmailSecret(keys[version]);
+  }
+  if (new Set(Object.values(keys)).size !== versions.length) throw new Error("referral_email_keyring_invalid");
+  return { activeVersion: input.activeVersion, keys: keys as Record<string, string> };
+}
+export function referralEmailClaimId(secret: string, normalizedEmail: string, version = "v1") {
   assertReferralEmailSecret(secret);
-  return createHmac("sha256", secret).update(normalizeReferralEmail(normalizedEmail)).digest("hex");
+  if (!VERSION.test(version)) throw new Error("referral_email_keyring_invalid");
+  return createHmac("sha256", secret).update(`referral-email-claim\0${version}\0${normalizeReferralEmail(normalizedEmail)}`).digest("hex");
+}
+export function referralEmailClaimAliases(keyring: ReferralEmailKeyring, normalizedEmail: string) {
+  const aliases = Object.entries(keyring.keys).sort(([a], [b]) => a.localeCompare(b))
+    .map(([version, secret]) => ({ version, id: referralEmailClaimId(secret, normalizedEmail, version) }));
+  // The old single-secret implementation used an unversioned ID. Keep it addressable during v1 rotation.
+  if (keyring.keys.v1) aliases.push({ version: "referral-email-hmac-v1", id: createHmac("sha256", keyring.keys.v1).update(normalizeReferralEmail(normalizedEmail)).digest("hex") });
+  return aliases;
 }
 export function assertReferralEmailSecret(secret: string) {
   if (typeof secret !== "string" || Buffer.byteLength(secret, "utf8") < 32) throw new Error("referral_email_secret_invalid");

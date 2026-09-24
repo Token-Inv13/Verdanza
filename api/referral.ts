@@ -1,9 +1,9 @@
-import { verifyFirebaseIdToken } from "./_server/adminAuth.js";
+import { verifyFirebaseIdToken, FirebaseIdTokenVerificationError } from "./_server/adminAuth.js";
 import { getAdminDb } from "./_server/firebaseAdmin.js";
 import { sendJson, type VercelRequestLike, type VercelResponseLike } from "./_server/http.js";
 import { getReferralRuntime, ReferralConfigurationError } from "./_server/referralRuntimeConfig.js";
 import { ensureReferralCode, linkReferral, readReferralSelf, ReferralError } from "./_server/referralService.js";
-import { assertReferralEmailSecret } from "./_server/referralIdentity.js";
+import { parseReferralEmailKeyring } from "./_server/referralIdentity.js";
 import { getReferralSponsorIdentity, type ReferralSponsorIdentity } from "./_server/referralSponsorIdentity.js";
 
 export function createReferralHandler(dependencies: {
@@ -31,9 +31,9 @@ export function createReferralHandler(dependencies: {
     const action = request.method === "GET" ? "self" : (request.body as { action?: unknown } | null)?.action;
     if (runtime.mode === "drain" && action !== "self") return sendJson(response, { code: "referral_program_draining" }, 503);
     if (action !== "self" && action !== "ensure_code" && action !== "link") return sendJson(response, { code: "referral_action_invalid" }, 400);
-    let emailSecret: string | null = null;
+    let keyring: ReturnType<typeof parseReferralEmailKeyring> | null = null;
     if (action === "link") {
-      try { emailSecret = dependencies.secret(); assertReferralEmailSecret(emailSecret); }
+      try { keyring = parseReferralEmailKeyring(dependencies.secret()); }
       catch { return sendJson(response, { code: "referral_configuration_invalid" }, 503); }
     }
     const authorization = request.headers.authorization;
@@ -46,10 +46,12 @@ export function createReferralHandler(dependencies: {
       const code = (request.body as { code?: unknown } | null)?.code;
       if (typeof code !== "string") return sendJson(response, { code: "referral_code_invalid" }, 400);
       return sendJson(response, await linkReferral({ db, user, code, program: runtime as { mode: "active"; startsAtEpochMs: number },
-        nowEpochMs, secret: emailSecret!, getSponsorIdentity: dependencies.sponsorIdentity }));
+        nowEpochMs, keyring: keyring!, getSponsorIdentity: dependencies.sponsorIdentity }));
     } catch (error) {
       if (error instanceof ReferralError) return sendJson(response, { code: error.code }, error.status);
-      if (error instanceof Error && error.message === "referral_email_secret_invalid") return sendJson(response, { code: "referral_configuration_invalid" }, 503);
+      if (error instanceof FirebaseIdTokenVerificationError) return sendJson(response,
+        { code: error.category === "authentication" ? "authentication_required" : error.category === "configuration" ? "referral_configuration_invalid" : "referral_unavailable" },
+        error.category === "authentication" ? 401 : 503);
       return sendJson(response, { code: "referral_unavailable" }, 500);
     }
   };
@@ -60,6 +62,6 @@ export default createReferralHandler({
   verify: verifyFirebaseIdToken,
   db: getAdminDb,
   sponsorIdentity: getReferralSponsorIdentity,
-  secret: () => process.env.REFERRAL_EMAIL_HMAC_SECRET ?? "",
+  secret: () => process.env.REFERRAL_EMAIL_HMAC_KEYRING_JSON ?? "",
   now: Date.now,
 });

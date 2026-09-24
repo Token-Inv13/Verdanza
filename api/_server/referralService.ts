@@ -1,6 +1,6 @@
 import type { Firestore, Transaction } from "firebase-admin/firestore";
-import { REFERRAL_EMAIL_KEY_VERSION, REFERRAL_PROGRAM_VERSION, type ReferralCode, type ReferralEmailClaim, type ReferralRelation } from "../../src/types/referral.js";
-import { newReferralCode, normalizeReferralEmail, referralEmailClaimId } from "./referralIdentity.js";
+import { REFERRAL_PROGRAM_VERSION, type ReferralCode, type ReferralEmailClaim, type ReferralRelation, type ReferralRelinkEvent } from "../../src/types/referral.js";
+import { newReferralCode, normalizeReferralEmail, referralEmailClaimAliases, type ReferralEmailKeyring } from "./referralIdentity.js";
 import type { ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
 
 export class ReferralError extends Error {
@@ -87,14 +87,15 @@ export async function ensureReferralCode(input: { db: Firestore; user: VerifiedU
 }
 
 /** The only relation-creation operation. The secret is passed after the active gate. */
-export async function linkReferral(input: { db: Firestore; user: VerifiedUser; code: string; secret: string; program: Program; nowEpochMs: number;
+export async function linkReferral(input: { db: Firestore; user: VerifiedUser; code: string; keyring: ReferralEmailKeyring; program: Program; nowEpochMs: number;
   getSponsorIdentity: (uid: string) => Promise<ReferralSponsorIdentity> }) {
   active(input.program, input.nowEpochMs);
   const refereeUid = uid(input.user.uid);
   if (!input.user.email || input.user.emailVerified !== true) throw new ReferralError("referee_email_unverified", 403);
   if (!CODE.test(input.code)) throw new ReferralError("referral_code_invalid", 400);
   const normalizedEmail = normalizeReferralEmail(input.user.email);
-  const claimId = referralEmailClaimId(input.secret, normalizedEmail);
+  const aliases = referralEmailClaimAliases(input.keyring, normalizedEmail);
+  const activeAlias = aliases.find((alias) => alias.version === input.keyring.activeVersion)!;
   const codeRef = input.db.collection("referralCodes").doc(`code_${input.code}`);
   const ownerRef = input.db.collection("referralCodes");
   const codeDoc = await codeRef.get();
@@ -107,41 +108,46 @@ export async function linkReferral(input: { db: Firestore; user: VerifiedUser; c
   if (sponsorIdentity.uid !== sponsorUid || sponsorIdentity.disabled) throw new ReferralError("sponsor_ineligible", 403);
   if (normalizeReferralEmail(sponsorIdentity.email) === normalizedEmail) throw new ReferralError("self_referral", 403);
   const relationRef = input.db.collection("referrals").doc(refereeUid);
-  const claimRef = input.db.collection("referralEmailClaims").doc(claimId);
+  const claimRefs = aliases.map((alias) => input.db.collection("referralEmailClaims").doc(alias.id));
   return input.db.runTransaction(async (tx) => {
-    const [freshCode, freshOwner, relationDoc, claimDoc] = await tx.getAll(codeRef, ownerRef.doc(`owner_${sponsorUid}`), relationRef, claimRef);
+    const [freshCode, freshOwner, relationDoc, ...claimDocs] = await tx.getAll(codeRef, ownerRef.doc(`owner_${sponsorUid}`), relationRef, ...claimRefs);
     if (!freshCode.exists || freshCode.data()?.ownerUid !== sponsorUid || !freshOwner.exists || freshOwner.data()?.code !== input.code) throw new ReferralError("referral_code_conflict");
     if (!await sponsorHasDeliveredPaidOrder(tx, input.db, sponsorUid)) throw new ReferralError("sponsor_ineligible", 403);
     await assertRefereeFirstPaidOrder(tx, input.db, refereeUid, input.user.email!.trim(), normalizedEmail);
     const existing = relationDoc.exists ? relationDoc.data() as ReferralRelation : null;
-    if (claimDoc.exists && (claimDoc.data()?.refereeUid !== refereeUid || claimDoc.data()?.referralId !== refereeUid ||
-      claimDoc.data()?.schemaVersion !== 1 || claimDoc.data()?.programVersion !== REFERRAL_PROGRAM_VERSION ||
-      claimDoc.data()?.keyVersion !== REFERRAL_EMAIL_KEY_VERSION)) throw new ReferralError("referral_email_claimed");
+    for (const [index, claimDoc] of claimDocs.entries()) if (claimDoc.exists &&
+      (claimDoc.data()?.refereeUid !== refereeUid || claimDoc.data()?.referralId !== refereeUid ||
+       claimDoc.data()?.schemaVersion !== 1 || claimDoc.data()?.programVersion !== REFERRAL_PROGRAM_VERSION ||
+       claimDoc.data()?.keyVersion !== aliases[index].version)) throw new ReferralError("referral_email_claimed");
     if (existing && (existing.refereeUid !== refereeUid || existing.programVersion !== REFERRAL_PROGRAM_VERSION || existing.state !== "linked" || existing.qualifyingOrderId !== null)) throw new ReferralError("referral_relation_consumed");
-    if (existing?.sponsorUid === sponsorUid && claimDoc.exists) return { state: "linked" as const, changed: false };
-    const relation: ReferralRelation = existing ? { ...existing, sponsorUid, linkedAtEpochMs: input.nowEpochMs } : {
+    const activeClaimExists = claimDocs[aliases.indexOf(activeAlias)].exists;
+    if (existing?.sponsorUid === sponsorUid && activeClaimExists) return { state: "linked" as const, changed: false };
+    const revision = (existing?.relinkRevision ?? 0) + (existing && existing.sponsorUid !== sponsorUid ? 1 : 0);
+    if (!Number.isSafeInteger(revision)) throw new ReferralError("referral_relation_corrupt");
+    const relation: ReferralRelation = existing ? { ...existing, sponsorUid, linkedAtEpochMs: existing.sponsorUid === sponsorUid ? existing.linkedAtEpochMs : input.nowEpochMs, relinkRevision: revision } : {
       schemaVersion: 1, programVersion: REFERRAL_PROGRAM_VERSION, sponsorUid, refereeUid, state: "linked",
-      createdAtEpochMs: input.nowEpochMs, linkedAtEpochMs: input.nowEpochMs, qualifyingOrderId: null,
+      createdAtEpochMs: input.nowEpochMs, linkedAtEpochMs: input.nowEpochMs, relinkRevision: 0, qualifyingOrderId: null,
       deliveredOrderId: null,
       paymentConfirmed: false, deliveryConfirmed: false, rewardCompartment: "none", cumulativeReturnedProductsCents: 0, processedRefunds: {},
     };
-    const claim: ReferralEmailClaim = { schemaVersion: 1, programVersion: REFERRAL_PROGRAM_VERSION, keyVersion: REFERRAL_EMAIL_KEY_VERSION, refereeUid, referralId: refereeUid, createdAtEpochMs: input.nowEpochMs };
+    const claim: ReferralEmailClaim = { schemaVersion: 1, programVersion: REFERRAL_PROGRAM_VERSION, keyVersion: input.keyring.activeVersion, refereeUid, referralId: refereeUid, createdAtEpochMs: input.nowEpochMs };
     if (existing) tx.set(relationRef, relation); else tx.create(relationRef, relation);
-    if (!claimDoc.exists) tx.create(claimRef, claim);
+    if (!activeClaimExists) tx.create(claimRefs[aliases.indexOf(activeAlias)], claim);
+    if (existing && existing.sponsorUid !== sponsorUid) {
+      const event: ReferralRelinkEvent = { schemaVersion: 1, programVersion: REFERRAL_PROGRAM_VERSION, type: "sponsor_relinked",
+        refereeUid, previousSponsorUid: existing.sponsorUid, nextSponsorUid: sponsorUid, previousLinkedAtEpochMs: existing.linkedAtEpochMs,
+        changedAtEpochMs: input.nowEpochMs, revision };
+      tx.create(relationRef.collection("events").doc(`sponsor_change_${revision}`), event);
+    }
     return { state: "linked" as const, changed: true };
   });
 }
 
 export async function readReferralSelf(db: Firestore, refereeUid: string) {
   const id = uid(refereeUid);
-  const [doc, owner] = await Promise.all([
-    db.collection("referrals").doc(id).get(),
-    db.collection("referralCodes").doc(`owner_${id}`).get(),
-  ]);
-  const code = owner.exists && owner.data()?.schemaVersion === 1 && owner.data()?.programVersion === REFERRAL_PROGRAM_VERSION &&
-    owner.data()?.ownerUid === id && CODE.test(owner.data()?.code) ? owner.data()!.code as string : null;
-  if (!doc.exists) return { code, relation: null };
+  const doc = await db.collection("referrals").doc(id).get();
+  if (!doc.exists) return { code: null, relation: null };
   const relation = doc.data() as ReferralRelation;
   if (relation.refereeUid !== id) throw new ReferralError("referral_relation_corrupt");
-  return { code, relation: { state: relation.state, paymentConfirmed: relation.paymentConfirmed, deliveryConfirmed: relation.deliveryConfirmed } };
+  return { code: null, relation: { state: relation.state, paymentConfirmed: relation.paymentConfirmed, deliveryConfirmed: relation.deliveryConfirmed } };
 }

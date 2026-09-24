@@ -76,6 +76,7 @@ service cloud.firestore {
     match /cagnotteReservations/{document=**} { allow read, write: if false; }
     match /referralCodes/{document=**} { allow read, write: if false; }
     match /referrals/{document=**} { allow read, write: if false; }
+    match /referrals/{refereeUid}/events/{document=**} { allow read, write: if false; }
     match /referralEmailClaims/{document=**} { allow read, write: if false; }
 
     match /customers/{customerId} {
