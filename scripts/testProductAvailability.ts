@@ -10,6 +10,7 @@ import { formatLocalDeliveryEstimate } from "../src/lib/deliveryEstimate.js";
 import { products } from "../src/data/products.js";
 import { productSeoRoutes } from "./seoRoutes.js";
 import { getLocalProducts, normalizeProduct } from "../src/services/productsService.js";
+import { resolveProductCardPresentation } from "../src/lib/productPresentation.js";
 import { priceCheckout, type CheckoutRequestBody } from "../api/_server/checkout.js";
 import type { Product } from "../src/types/index.js";
 
@@ -131,6 +132,87 @@ test("inactive product is unavailable and not orderable", () => {
   expect(productAvailability(normalized) === "https://schema.org/OutOfStock", "expected OutOfStock JSON-LD");
 });
 
+test("local static fixture exposes the seven products required for SEO and prerender", () => {
+  const activeProducts = getLocalProducts();
+  const expectedActiveIds = [
+    "flower-cookie-kush-indoor",
+    "flower-harlequin-greenhouse",
+    "flower-mandarine-cbd",
+    "flower-mango-haze-cbd",
+    "flower-petites-tetes-og-kush",
+    "resin-golden-static",
+    "resin-supreme-50-cbd",
+  ];
+
+  expect(activeProducts.length === 7, `expected 7 active static products, got ${activeProducts.length}`);
+  expect(
+    activeProducts.filter((entry) => entry.category === "flowers").length === 5,
+    "expected 5 active static flowers",
+  );
+  expect(
+    activeProducts.filter((entry) => entry.category === "resins").length === 2,
+    "expected 2 active fallback resins",
+  );
+  expect(
+    JSON.stringify(activeProducts.map((entry) => entry.id).sort()) ===
+      JSON.stringify(expectedActiveIds.sort()),
+    "static active product ids do not match the verified catalogue representation",
+  );
+  expect(
+    activeProducts.some((entry) => entry.slug === "mandarine-cbd" && entry.name === "Mandarine"),
+    "Mandarine must be active in the static catalogue representation",
+  );
+});
+
+test("product card presentation reuses aromas, category and product aspect", () => {
+  const strong = resolveProductCardPresentation(
+    product({
+      category: "flowers",
+      aromas: ["Menthe fraîche", "Agrumes", "Intense"],
+      texture: "Compacte, résineuse, soignée",
+    }),
+  );
+  const soft = resolveProductCardPresentation(
+    product({ category: "resins", aromas: ["Floral", "Délicat", "Léger"] }),
+  );
+  const medium = resolveProductCardPresentation(
+    product({ category: "flowers", aromas: ["Herbacé", "Végétal", "Authentique"] }),
+  );
+
+  expect(strong.categoryLabel === "Fleur CBD", "expected existing category taxonomy label");
+  expect(strong.intensity === "fort", "expected strong aroma signal to resolve as fort");
+  expect(
+    JSON.stringify(strong.aromaProfile) === JSON.stringify(["Menthe fraîche", "Agrumes"]),
+    "expected intensity adjectives to stay out of the concise aroma profile",
+  );
+  expect(
+    JSON.stringify(strong.appearance) === JSON.stringify(["Compacte", "résineuse"]),
+    "expected product texture to provide at most two appearance details",
+  );
+  expect(soft.categoryLabel === "Résine CBD", "expected resin category label");
+  expect(soft.intensity === "doux", "expected soft aroma signals to resolve as doux");
+  expect(medium.intensity === "moyen", "expected neutral aroma profile to resolve as moyen");
+
+  const presentations = [soft, medium, strong];
+  const allowedIntensityLabels = new Set(["Doux", "Moyen", "Fort"]);
+  const forbiddenIntensityLabels = new Set(["Modérée", "Soutenue", "Intense"]);
+  for (const presentation of presentations) {
+    expect(
+      allowedIntensityLabels.has(presentation.intensityLabel),
+      `unexpected ProductCard intensity label: ${presentation.intensityLabel}`,
+    );
+    expect(
+      !forbiddenIntensityLabels.has(presentation.intensityLabel),
+      `legacy ProductCard intensity label still exposed: ${presentation.intensityLabel}`,
+    );
+  }
+  expect(
+    JSON.stringify(presentations.map((entry) => entry.intensityLabel)) ===
+      JSON.stringify(["Doux", "Moyen", "Fort"]),
+    "ProductCard intensity labels must exclusively use the shared Doux/Moyen/Fort scale",
+  );
+});
+
 test("Suprême 50 % CBD is public only with validated commercial data", () => {
   const supreme = products.find((entry) => entry.id === "resin-supreme-50-cbd");
 
@@ -140,7 +222,7 @@ test("Suprême 50 % CBD is public only with validated commercial data", () => {
   expect(supreme?.isActive === true, "expected Suprême to be active after commercial validation");
   expect(supreme?.isFeatured === false, "expected Suprême not to be featured");
   expect(supreme?.price === 6, "expected Suprême sale price to be 6 EUR/g");
-  expect(supreme?.stock === 22, "expected Suprême stock to be 22 g");
+  expect(supreme?.stock === 0, "expected defensive static Suprême stock to be 0 g");
   expect(supreme?.lowStockThreshold === 10, "expected Suprême low-stock threshold to match active resins");
   expect(supreme?.image === "/Fiche produit/Supreme/supreme-50-cbd.webp", "expected validated Suprême photo");
   expect(
@@ -167,14 +249,14 @@ test("Suprême 50 % CBD is public only with validated commercial data", () => {
   );
   expect(
     getLocalProducts().some((entry) => entry.id === supreme?.id),
-    "active Suprême must be included in public local fallback products",
+    "active Suprême must be included in the static editorial products",
   );
   expect(
     productSeoRoutes().some((route) => route.path === "/produits/supreme-50-cbd"),
     "active Suprême must be prerendered and indexed",
   );
-  expect(isProductOrderable(supreme), "active Suprême with stock must be orderable");
-  expect(publicProductStockLabel(supreme) === "Disponible", "expected available Suprême stock label");
+  expect(!isProductOrderable(supreme), "static Suprême with zero stock must not be orderable");
+  expect(publicProductStockLabel(supreme) === "Rupture de stock", "expected Suprême rupture label");
 });
 
 test("admin refresh updates product availability without stale local state", () => {

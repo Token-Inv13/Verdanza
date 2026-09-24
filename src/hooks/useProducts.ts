@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
-import { getLocalProducts, getProductsWithFallback } from "../services/productsService";
-import type { Product } from "../types";
+import {
+  getEditorialFallbackProducts,
+  getProductsWithFallback,
+  type PublicProductCatalogResult,
+} from "../services/productsService";
 
 export function useProducts() {
-  const [products, setProducts] = useState<Product[]>(() => getLocalProducts());
-  const [source, setSource] = useState<"firestore" | "local">("local");
+  const [catalog, setCatalog] = useState<PublicProductCatalogResult>(() => ({
+    products: getEditorialFallbackProducts(),
+    source: "local",
+    status: "degraded",
+    commerceAvailable: false,
+  }));
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -12,8 +19,7 @@ export function useProducts() {
     getProductsWithFallback()
       .then((result) => {
         if (!isMounted) return;
-        setProducts(result.products);
-        setSource(result.source);
+        setCatalog(result);
       })
       .finally(() => {
         if (isMounted) setIsLoading(false);
@@ -23,5 +29,9 @@ export function useProducts() {
     };
   }, []);
 
-  return { products, source, isLoading };
+  return {
+    ...catalog,
+    commerceUnavailable: !catalog.commerceAvailable,
+    isLoading,
+  };
 }

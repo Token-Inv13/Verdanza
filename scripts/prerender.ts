@@ -33,6 +33,10 @@ try {
     javaScriptEnabled: true,
     serviceWorkers: "block",
   });
+  await context.addInitScript(() => {
+    (window as Window & { __VERDANZA_PRODUCT_CATALOG_PRERENDER__?: boolean })
+      .__VERDANZA_PRODUCT_CATALOG_PRERENDER__ = true;
+  });
   await blockExternalServices(context);
 
   for (const route of prerenderSeoRoutes()) {

@@ -22,7 +22,7 @@ export function isRecoverableFirestoreConnectionError(error: unknown) {
 }
 
 export function logFirestoreFallback(message: string, error: unknown) {
-  if (import.meta.env.DEV) {
+  if (import.meta.env?.DEV) {
     console.warn(message, error);
     return;
   }

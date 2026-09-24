@@ -38,6 +38,7 @@ assert.deepEqual(publicationMissing(ready), []);
 const entry = publicSelectionEntry(ready, "fleur-test-verdanza", "selection-sheets/fleur-test-verdanza/12345678-1234-1234-1234-123456789012.pdf", "2026-09-23T00:00:00Z");
 const view = publicSelectionView(entry);
 assert.equal(view.selectionProfile.category, "flower");
+assert.equal(view.selectionProfile.intensity, "moyen");
 assert.equal(view.pdfUrl.includes("kind=pdf"), true);
 assert.equal("notes" in entry, false);
 assert.equal("prices" in entry, false);

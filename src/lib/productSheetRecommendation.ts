@@ -5,6 +5,7 @@ import {
   type ProductSheetCategory,
   type ProductSheetIntensity,
 } from "../data/productSheets";
+import { hasAnyProductAromaFamily } from "./productTaxonomy";
 
 export type ProductSheetAromaChoice = ProductSheetAromaFamily | "any";
 
@@ -72,7 +73,9 @@ export function matchesSelectedAroma(
   aroma: ProductSheetAromaChoice | null,
 ) {
   return Boolean(
-    aroma && aroma !== "any" && sheet.selectionProfile.aromaFamilies.includes(aroma),
+    aroma &&
+      aroma !== "any" &&
+      hasAnyProductAromaFamily(sheet.selectionProfile.aromaFamilies, [aroma]),
   );
 }
 

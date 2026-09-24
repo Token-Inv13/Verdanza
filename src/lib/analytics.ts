@@ -55,11 +55,21 @@ export type AnalyticsEventName =
   | "product_selector_type_selected"
   | "product_selector_intensity_selected"
   | "product_selector_aroma_selected"
+  | "product_selector_reset"
   | "product_selector_result_viewed"
   | "product_sheet_opened_from_selector"
   | "product_sheet_category_selected"
   | "product_sheet_carousel_navigated"
   | "product_sheet_card_opened"
+  | "home_product_finder_start"
+  | "home_product_finder_type"
+  | "home_product_finder_intensity"
+  | "home_product_finder_aroma"
+  | "home_product_finder_result"
+  | "home_product_finder_open_shop"
+  | "category_filter_intensity"
+  | "category_filter_aroma"
+  | "category_filter_reset"
   | "generate_lead";
 
 export type ContactHelpSource =
