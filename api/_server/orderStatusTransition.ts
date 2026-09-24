@@ -42,6 +42,16 @@ export function hasPositiveCagnotteFinancing(order: Order): boolean {
     (typeof order.cagnotte?.snapshot.appliedCagnotteCents === "number" && order.cagnotte.snapshot.appliedCagnotteCents > 0);
 }
 
+/** Only persisted, actually applied commercial advantages conflict with a referral discount. */
+export function hasAppliedReferralPriority(order: Order): boolean {
+  const present = (value: unknown) => typeof value === "string" && value.trim().length > 0;
+  return present(order.couponCode) || present(order.promoCode) || present(order.promoId) ||
+    present(order.contestPrizeId) || order.promoApplied === true ||
+    (typeof order.promotionDiscountTotal === "number" && order.promotionDiscountTotal > 0) ||
+    (Array.isArray(order.appliedPromotions) && order.appliedPromotions.length > 0) ||
+    (Array.isArray(order.items) && order.items.some((item) => item.isGift === true || present(item.promotionId)));
+}
+
 /** Actual endpoint transaction; admin is already verified by its unchanged HTTP boundary. */
 export async function commitOrderStatusTransition({
   db, body, admin, accrualProgram = CAGNOTTE_SERVER_PROGRAM,
@@ -152,6 +162,9 @@ export async function commitOrderStatusTransition({
     }
     if (body.paymentStatus === "paid" && order.paymentStatus !== "paid" && order.referral && hasPositiveCagnotteFinancing(order)) {
       throw new CagnotteReservationError("CONFLICT", "Parrainage et cagnotte incompatibles sur cette commande.");
+    }
+    if (body.paymentStatus === "paid" && order.paymentStatus !== "paid" && order.referral && hasAppliedReferralPriority(order)) {
+      throw new CagnotteReservationError("CONFLICT", "Parrainage et avantage prioritaire incompatibles sur cette commande.");
     }
     previousStatus = order.orderStatus;
     if (body.deleteCancelled) {

@@ -112,10 +112,13 @@ export async function prepareReferralTransition(input: Input) {
     (before.rewardIneligibilityReason !== undefined && !["sponsor_no_longer_eligible", "sponsor_account_disabled", "sponsor_identity_unavailable", "first_paid_order_without_referral_discount", "prior_paid_order_detected", "referral_history_inconclusive", "referee_identity_unavailable", "referee_email_unverified", "referee_email_claimed", "self_referral_at_payment", "referral_identity_changed"].includes(before.rewardIneligibilityReason)) ||
     (before.rewardIneligibilityReason !== undefined && (!before.paymentConfirmed || before.rewardCompartment !== "none")))
     throw new ReferralError("referral_relation_corrupt");
-  // Only the first paid order claims the relation. Other snapshot-bearing orders
-  // must be free to continue their own payment, delivery and refund workflows.
-  if (before.qualifyingOrderId !== null && before.qualifyingOrderId !== input.order.id)
+  // A second discounted order cannot become paid after another order consumed the right.
+  // Its delivery, cancellation and refund workflows remain independent.
+  if (before.qualifyingOrderId !== null && before.qualifyingOrderId !== input.order.id) {
+    if (input.event === "payment" || input.event === "payment_and_delivery")
+      throw new ReferralError("referral_discount_already_consumed");
     return { status: "already_applied" as const, write() {} };
+  }
   if (before.qualifyingOrderId === null && input.event !== "payment" && input.event !== "payment_and_delivery")
     return { status: "already_applied" as const, write() {} };
   if (before.cumulativeReturnedProductsCents > snapshot.eligibleProductsBeforeReferralCents) throw new ReferralError("referral_relation_corrupt");
@@ -130,12 +133,12 @@ export async function prepareReferralTransition(input: Input) {
         evidence?.refereeAccount === "active" && typeof input.order.customerEmail === "string" &&
           input.order.customerEmail.trim().toLowerCase() === evidence.refereeEmail ? input.order.customerEmail.trim() : undefined,
         evidence?.refereeAccount === "active" ? evidence.refereeEmail : undefined);
+      if (history.kind === "found") throw new ReferralError("referral_discount_already_consumed");
       if (history.kind !== "none") {
         const claim = await prepareCurrentRefereeClaim({ db: input.db, transaction: input.transaction, before,
           evidence, recordedAtEpochMs: input.recordedAtEpochMs });
         const consumed: ReferralRelation = { ...before, state: "cancelled", paymentConfirmed: true,
-          qualifyingOrderId: history.kind === "found" ? history.orderId : input.order.id,
-          rewardIneligibilityReason: history.kind === "found" ? "prior_paid_order_detected" : "referral_history_inconclusive" };
+          qualifyingOrderId: input.order.id, rewardIneligibilityReason: "referral_history_inconclusive" };
         return { status: "applied" as const, write() {
           input.transaction.set(relationRef, consumed);
           if (claim.newClaim) input.transaction.create(claim.newClaim.ref, claim.newClaim.value);
