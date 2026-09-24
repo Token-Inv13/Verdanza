@@ -203,7 +203,7 @@ try {
       `${width}px: intensity step must open after type`,
     );
     await page.getByRole("button", { name: "Fort", exact: true }).click();
-    await page.locator('[data-product-selector-results][data-result-category="flower"][data-result-intensity="forte"]').waitFor();
+    await page.locator('[data-product-selector-results][data-result-category="flower"][data-result-intensity="fort"]').waitFor();
     assert.equal(
       await page.locator("[data-selector-alternative]").count() <= 2,
       true,
@@ -229,8 +229,8 @@ try {
     await page.getByRole("button", { name: "Peu importe", exact: true }).click();
     await page.locator('[data-selector-step="1"] > button').click();
     await page.locator('[data-selector-option="category:resin"]').click();
-    await page.locator('[data-product-selector-results][data-result-category="resin"][data-result-intensity="forte"]').waitFor();
-    const unavailableSoftIntensity = page.locator('[data-selector-option="intensity:douce"]');
+    await page.locator('[data-product-selector-results][data-result-category="resin"][data-result-intensity="fort"]').waitFor();
+    const unavailableSoftIntensity = page.locator('[data-selector-option="intensity:doux"]');
     assert.equal(
       await unavailableSoftIntensity.isDisabled(),
       true,

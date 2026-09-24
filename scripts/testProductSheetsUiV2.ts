@@ -47,13 +47,13 @@ try {
     await page.locator('[data-selector-option="category:flower"]').click();
     assert.equal(await page.locator("[data-product-selector-results]").count(), 0, `${width}px: type alone must not reveal results`);
     assert.equal(await page.locator('[data-selector-step="2"] > button').getAttribute("aria-expanded"), "true", `${width}px: intensity must open after type`);
-    await page.locator('[data-selector-option="intensity:forte"]').click();
+    await page.locator('[data-selector-option="intensity:fort"]').click();
     assert.equal(await page.locator("[data-product-selector-results]").count(), 0, `${width}px: type and intensity must not reveal results`);
     assert.equal(await selector.getAttribute("data-selector-collapsed"), "false", `${width}px: selector must stay expanded before aroma confirmation`);
     assert.equal(await page.locator('[data-selector-step="3"] > button').getAttribute("aria-expanded"), "true", `${width}px: aroma must open after intensity`);
     assert.equal(await page.locator('[data-selector-summary]').count(), 0, `${width}px: no compact or sticky summary may appear before the third choice`);
     await page.locator('[data-selector-option="aroma:fruite"]').click();
-    await page.locator('[data-product-selector-results][data-result-category="flower"][data-result-intensity="forte"]').waitFor();
+    await page.locator('[data-product-selector-results][data-result-category="flower"][data-result-intensity="fort"]').waitFor();
     assert.equal(await selector.getAttribute("data-selector-collapsed"), "true", `${width}px: selector must collapse after all three choices`);
     assert.match(await page.locator('[data-selector-summary][data-sticky="false"]').innerText(), /Fleurs\s*·\s*Fort\s*·\s*Fruité/i, `${width}px: compact summary is incomplete`);
     assert.deepEqual(
@@ -116,7 +116,7 @@ try {
     assert.equal(await page.locator('[data-selector-step="3"] > button').getAttribute("aria-expanded"), "true", `${width}px: compatible intensity may remain but aroma must be confirmed again`);
     assert.equal(await page.locator('[data-selector-option="aroma:any"]').getAttribute("aria-pressed"), "false", `${width}px: changing type must clear the previous aroma choice`);
     await page.locator('[data-selector-option="aroma:any"]').click();
-    await page.locator('[data-product-selector-results][data-result-category="resin"][data-result-intensity="forte"]').waitFor();
+    await page.locator('[data-product-selector-results][data-result-category="resin"][data-result-intensity="fort"]').waitFor();
     assert.deepEqual(
       await page.locator("[data-selector-result-card]").allTextContents(),
       ["Le mousseux", "Kief", "Libanais"],
@@ -124,7 +124,7 @@ try {
     );
     await page.locator('[data-selector-summary][data-sticky="false"] [data-selector-edit]').click();
     await page.locator('[data-selector-step="2"] > button').click();
-    const unavailableSoft = page.locator('[data-selector-option="intensity:douce"]');
+    const unavailableSoft = page.locator('[data-selector-option="intensity:doux"]');
     assert.equal(await unavailableSoft.isDisabled(), true, `${width}px: resin soft must be visibly disabled`);
     assert.match(await unavailableSoft.innerText(), /Doux\s+Aucun produit actuellement/i, `${width}px: disabled option needs an explanation`);
 

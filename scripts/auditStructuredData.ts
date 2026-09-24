@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { blogArticlePath, publishedBlogArticles } from "../src/data/blogArticles";
 import { products } from "../src/data/products";
+import { asEditorialFallbackProducts } from "../src/services/productsService";
 import type { Product } from "../src/types";
 import { verdanzaPublicContact } from "../src/config/publicContact";
 import {
@@ -23,7 +24,10 @@ import {
 
 const distDir = resolve("dist");
 const productByPath = new Map(
-  products.filter((product) => product.isActive).map((product) => [productPath(product), product]),
+  asEditorialFallbackProducts(products.filter((product) => product.isActive)).map((product) => [
+    productPath(product),
+    product,
+  ]),
 );
 const articleByPath = new Map(
   publishedBlogArticles.map((article) => [blogArticlePath(article), article]),

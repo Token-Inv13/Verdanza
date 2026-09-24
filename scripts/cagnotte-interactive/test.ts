@@ -1804,9 +1804,9 @@ async function createOrderThroughUi(
   assertPageActive(page);
   await goto(page, "/boutique");
   assertPageActive(page);
-  await page.getByRole("heading", { name: "Boutique CBD" }).waitFor();
+  await page.getByRole("heading", { name: "Trouvez votre sélection", exact: true }).waitFor();
   assertPageActive(page);
-  await page.getByRole("button", { name: "Ajouter 1 g — 100,00 €" }).click();
+  await page.getByRole("button", { name: `Ajouter 1 g de ${RECIPE_PRODUCT.name} au panier`, exact: true }).click();
   assertPageActive(page);
   await page.waitForFunction((productId) => {
     try {

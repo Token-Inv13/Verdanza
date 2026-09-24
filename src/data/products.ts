@@ -57,7 +57,7 @@ export const products: Product[] = [
       "Pour les amateurs de résines premium au profil herbacé, végétal et plus technique.",
     experienceDescription:
       "Une référence moderne et complète, à positionner pour les clients qui souhaitent découvrir une résine marquée par la présence de plusieurs cannabinoïdes annoncés.",
-    stock: 25,
+    stock: 26,
     lowStockThreshold: 10,
     isActive: true,
     isFeatured: true,
@@ -95,8 +95,8 @@ export const products: Product[] = [
       "Une résine au caractère affirmé, pensée pour apporter une alternative plus fruitée dans la gamme premium Verdanza lorsque le stock est disponible.",
     stock: 0,
     lowStockThreshold: 10,
-    isActive: true,
-    isFeatured: true,
+    isActive: false,
+    isFeatured: false,
     seoTitle: "Suprême Purple - Résine CBD française premium | Verdanza",
     seoDescription:
       "Suprême Purple Verdanza, résine CBD française à 50 % de CBD, texture compacte et profil terreux, végétal, fruité et épicé.",
@@ -151,7 +151,7 @@ export const products: Product[] = [
       "Pour les amateurs de résines premium françaises au profil floral léger et raffiné.",
     experienceDescription:
       "Une résine française au caractère fin et élégant, destinée aux clients qui recherchent une forte concentration en CBD et une identité aromatique légère.",
-    stock: 22,
+    stock: 0,
     lowStockThreshold: 10,
     isActive: true,
     isFeatured: false,
@@ -225,7 +225,7 @@ export const products: Product[] = [
   {
     id: "flower-petites-tetes-og-kush",
     slug: "petites-tetes-og-kush",
-    name: "Petites Têtes OG Kush",
+    name: "OG Kush",
     category: "flowers",
     price: 4,
     fixedPriceMode: "manual",
@@ -379,7 +379,7 @@ export const products: Product[] = [
       "Un profil simple, équilibré et qualitatif, utile pour découvrir une résine française à base de trichomes sans aller vers une référence plus technique ou plus concentrée.",
     stock: 60,
     lowStockThreshold: 10,
-    isActive: true,
+    isActive: false,
     isFeatured: false,
     seoTitle: "La Mousse - Mousse CBD française | Verdanza",
     seoDescription:
@@ -478,7 +478,7 @@ export const products: Product[] = [
       "À proposer comme résine connaisseur, avec une identité plus classique, boisée et épicée. Elle complète parfaitement les profils plus crémeux ou fruités comme Creamy Piatella et Suprême Purple.",
     stock: 18,
     lowStockThreshold: 10,
-    isActive: true,
+    isActive: false,
     isFeatured: false,
     seoTitle: "Le Beldia CBN + CBD - Résine sélectionnée Verdanza",
     seoDescription:
@@ -519,7 +519,7 @@ export const products: Product[] = [
       "À proposer aux clients qui recherchent une résine haut de gamme, visuellement qualitative, facile à présenter et plus raffinée qu'une résine classique.",
     stock: 22,
     lowStockThreshold: 10,
-    isActive: true,
+    isActive: false,
     isFeatured: false,
     seoTitle: "Creamy Piatella CBD - Résine travaillée Verdanza",
     seoDescription:
@@ -528,7 +528,7 @@ export const products: Product[] = [
   {
     id: "flower-mango-haze-cbd",
     slug: "mango-haze-cbd",
-    name: "Mango Haze CBD",
+    name: "Mango Haze",
     category: "flowers",
     price: 6,
     fixedPriceMode: "manual",
@@ -584,7 +584,7 @@ export const products: Product[] = [
   {
     id: "flower-mandarine-cbd",
     slug: "mandarine-cbd",
-    name: "Mandarine CBD",
+    name: "Mandarine",
     category: "flowers",
     price: 6,
     fixedPriceMode: "manual",
@@ -687,7 +687,7 @@ export const products: Product[] = [
       "L'Amnesia CBD est une valeur sûre pour les clients qui connaissent déjà les fleurs CBD et recherchent un profil plus classique, profond et aromatique. Elle sert de référence sélectionnée incontournable dans une sélection Verdanza cohérente.",
     stock: 22,
     lowStockThreshold: 10,
-    isActive: true,
+    isActive: false,
     isFeatured: false,
     seoTitle: "Amnesia CBD hydroponique - Verdanza",
     seoDescription:
@@ -742,7 +742,7 @@ export const products: Product[] = [
       "La Blue Dream est une fleur sélectionnée polyvalente : fraîche, fruitée, mais moins sucrée que Mango Haze. Elle convient bien aux clients qui veulent une fleur aromatique, propre et équilibrée, sans profil trop lourd.",
     stock: 22,
     lowStockThreshold: 10,
-    isActive: true,
+    isActive: false,
     isFeatured: false,
     seoTitle: "Blue Dream CBD hydroponique - Verdanza",
     seoDescription:

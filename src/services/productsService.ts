@@ -28,6 +28,19 @@ import type { Product } from "../types";
 
 export type ProductInput = Omit<Product, "id"> & { id?: string };
 
+export type PublicProductCatalogResult = {
+  products: Product[];
+  source: "firestore" | "local";
+  status: "authoritative" | "degraded";
+  commerceAvailable: boolean;
+};
+
+type PublicProductLoader = () => Promise<Product[]>;
+
+type ProductCatalogPrerenderWindow = Window & {
+  __VERDANZA_PRODUCT_CATALOG_PRERENDER__?: boolean;
+};
+
 const legacyComingSoonLabelPattern = new RegExp(
   `(?:^|\\s+)${["En arrivage", "chez Verdanza"].join("\\s+")}\\s*[.!?]?`,
   "g",
@@ -36,6 +49,35 @@ const legacyComingSoonLabelPattern = new RegExp(
 export function getLocalProducts(activeOnly = true) {
   const products = localProducts.map(normalizeProduct);
   return activeOnly ? products.filter((product) => product.isActive !== false) : products;
+}
+
+export function asEditorialFallbackProducts(products: Product[]) {
+  return products.map((product) => ({
+    ...product,
+    // Static stock is useful as editorial fixture data, never as a runtime
+    // commercial authority when Firestore cannot be reached.
+    stock: 0,
+  }));
+}
+
+export function getEditorialFallbackProducts() {
+  return asEditorialFallbackProducts(getLocalProducts());
+}
+
+function getEditorialFallbackResult(): PublicProductCatalogResult {
+  return {
+    products: getEditorialFallbackProducts(),
+    source: "local",
+    status: "degraded",
+    commerceAvailable: false,
+  };
+}
+
+function isProductCatalogPrerender() {
+  return (
+    typeof window !== "undefined" &&
+    (window as ProductCatalogPrerenderWindow).__VERDANZA_PRODUCT_CATALOG_PRERENDER__ === true
+  );
 }
 
 export function normalizeProduct(product: Product): Product {
@@ -106,7 +148,7 @@ function removeLegacyAvailabilityText(value: string) {
 }
 
 export async function getFirestoreProducts(activeOnly = true) {
-  if (!db) return [];
+  if (!db) throw new Error("Firebase is not configured.");
   const productsQuery = activeOnly
     ? query(
         collection(db, collections.products),
@@ -145,16 +187,22 @@ export async function getAdminProductsWithFallback() {
   }
 }
 
-export async function getProductsWithFallback() {
+export async function getProductsWithFallback(
+  loadFirestoreProducts: PublicProductLoader = getFirestoreProducts,
+): Promise<PublicProductCatalogResult> {
+  if (isProductCatalogPrerender()) return getEditorialFallbackResult();
+
   try {
-    const firestoreProducts = await getFirestoreProducts();
+    const firestoreProducts = await loadFirestoreProducts();
     return {
-      products: firestoreProducts.length ? firestoreProducts : getLocalProducts(),
-      source: firestoreProducts.length ? ("firestore" as const) : ("local" as const),
+      products: firestoreProducts,
+      source: "firestore",
+      status: "authoritative",
+      commerceAvailable: true,
     };
   } catch (error) {
-    logFirestoreFallback("Falling back to local products", error);
-    return { products: getLocalProducts(), source: "local" as const };
+    logFirestoreFallback("Using non-commercial local product fallback", error);
+    return getEditorialFallbackResult();
   }
 }
 

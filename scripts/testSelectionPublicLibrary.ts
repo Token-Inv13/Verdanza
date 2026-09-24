@@ -28,8 +28,8 @@ try {
   await page.locator('[data-product-sheet-card="resine-ajoutee"]').waitFor();
   assert.equal(await page.locator('[data-product-sheet-card="resine-ajoutee"] a[href*="kind=pdf"]').count(), 1);
   await page.locator('[data-selector-option="category:resin"]').click();
-  assert.equal(await page.locator('[data-selector-option="intensity:douce"]').isDisabled(), false);
-  await page.locator('[data-selector-option="intensity:douce"]').click();
+  assert.equal(await page.locator('[data-selector-option="intensity:doux"]').isDisabled(), false);
+  await page.locator('[data-selector-option="intensity:doux"]').click();
   await page.locator('[data-selector-option="aroma:sucre"]').click();
   await page.locator('[data-selector-result-card="resine-ajoutee"]').waitFor();
   assert.deepEqual(errors, []);

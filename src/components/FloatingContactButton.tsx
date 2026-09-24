@@ -5,9 +5,19 @@ import { ContactActions } from "./ContactActions";
 import { useConsent } from "../context/ConsentContext";
 import { trackContactHelpAction } from "../lib/analytics";
 
+const interactiveSurfaceSelectorsByPath: Record<string, string[]> = {
+  "/": ["[data-home-product-finder]"],
+  "/fleurs-cbd": ["[data-category-product-filter]"],
+  "/resines-cbd": ["[data-category-product-filter]"],
+  "/fiches-produits": [
+    "[data-product-selector-results]",
+    "[data-product-sheet-category]",
+  ],
+};
+
 export function FloatingContactButton({ suppressed = false }: { suppressed?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [hiddenByProductSheetCards, setHiddenByProductSheetCards] = useState(false);
+  const [hiddenByInteractiveSurface, setHiddenByInteractiveSurface] = useState(false);
   const consent = useConsent();
   const panelId = useId();
   const location = useLocation();
@@ -22,43 +32,63 @@ export function FloatingContactButton({ suppressed = false }: { suppressed?: boo
   }, [location.pathname]);
 
   const hiddenByConsent = !consent.hasDecision || consent.preferencesOpen;
-  const isSuppressed = suppressed || hiddenByConsent || hiddenByProductSheetCards;
+  const isSuppressed = suppressed || hiddenByConsent || hiddenByInteractiveSurface;
 
   useEffect(() => {
-    if (location.pathname !== "/fiches-produits") {
-      setHiddenByProductSheetCards(false);
-      return;
-    }
+    const selectors = [
+      "[data-floating-help-suppress]",
+      ...(interactiveSurfaceSelectorsByPath[location.pathname] ?? []),
+    ];
 
-    let frame: number | null = null;
-    const update = () => {
-      frame = null;
-      const interactiveSections = [
-        ...document.querySelectorAll<HTMLElement>(
-          "[data-product-selector-results], [data-product-sheet-category]",
-        ),
-      ];
-      setHiddenByProductSheetCards(
-        interactiveSections.some((section) => {
-          const rect = section.getBoundingClientRect();
-          return rect.bottom > 80 && rect.top < window.innerHeight;
-        }),
+    const visibleTargets = new Map<Element, boolean>();
+    const observedTargets = new Set<HTMLElement>();
+    const updateSuppression = () => {
+      setHiddenByInteractiveSurface([...visibleTargets.values()].some(Boolean));
+    };
+
+    const intersectionObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          visibleTargets.set(entry.target, entry.isIntersecting);
+        }
+        updateSuppression();
+      },
+      {
+        rootMargin: "-80px 0px 0px 0px",
+        threshold: 0,
+      },
+    );
+
+    const syncTargets = () => {
+      const currentTargets = new Set(
+        document.querySelectorAll<HTMLElement>(selectors.join(", ")),
       );
+
+      for (const target of observedTargets) {
+        if (currentTargets.has(target)) continue;
+        intersectionObserver.unobserve(target);
+        observedTargets.delete(target);
+        visibleTargets.delete(target);
+      }
+
+      for (const target of currentTargets) {
+        if (observedTargets.has(target)) continue;
+        const rect = target.getBoundingClientRect();
+        visibleTargets.set(target, rect.bottom > 80 && rect.top < window.innerHeight);
+        observedTargets.add(target);
+        intersectionObserver.observe(target);
+      }
+
+      updateSuppression();
     };
-    const scheduleUpdate = () => {
-      if (frame === null) frame = window.requestAnimationFrame(update);
-    };
-    const observer = new MutationObserver(scheduleUpdate);
-    observer.observe(document.body, { childList: true, subtree: true });
-    window.addEventListener("scroll", scheduleUpdate, { passive: true });
-    window.addEventListener("resize", scheduleUpdate);
-    update();
+
+    const mutationObserver = new MutationObserver(syncTargets);
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
+    syncTargets();
 
     return () => {
-      observer.disconnect();
-      window.removeEventListener("scroll", scheduleUpdate);
-      window.removeEventListener("resize", scheduleUpdate);
-      if (frame !== null) window.cancelAnimationFrame(frame);
+      mutationObserver.disconnect();
+      intersectionObserver.disconnect();
     };
   }, [location.pathname]);
 

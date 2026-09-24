@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
-import { Check, ChevronDown, Flower2, Layers2, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { Check, Flower2, Layers2, RotateCcw, SlidersHorizontal } from "lucide-react";
+import {
+  ChoiceOption,
+  OptionGrid,
+  SelectorStep,
+  type SelectorStepNumber,
+} from "../product-discovery/DiscoverySelectorControls";
 import {
   productSheetAromaFamilyLabels,
   productSheetCategoryLabels,
@@ -19,20 +25,8 @@ import {
   type ProductSheetAromaChoice,
   type ProductSelectorChoices,
 } from "../../lib/productSheetRecommendation";
+import { productIntensityValues } from "../../lib/productTaxonomy";
 import { ProductRecommendation } from "./ProductRecommendation";
-
-type SelectorStepNumber = 1 | 2 | 3;
-
-const intensityOptions: Array<[ProductSheetIntensity, string]> = [
-  ["douce", "Doux"],
-  ["moyenne", "Moyen"],
-  ["forte", "Fort"],
-];
-const intensitySummaryLabels: Record<ProductSheetIntensity, string> = {
-  douce: "Doux",
-  moyenne: "Moyen",
-  forte: "Fort",
-};
 const aromaOptions = Object.entries(productSheetAromaFamilyLabels) as Array<
   [ProductSheetAromaFamily, string]
 >;
@@ -115,6 +109,7 @@ export function ProductProfileSelector({ sheets = productSheets }: { sheets?: Pr
     setSelectorExpanded(true);
     setShowStickySummary(false);
     startedRef.current = false;
+    trackEvent("product_selector_reset", { selector_location: "product_sheets" });
   };
 
   const completedSteps = [
@@ -205,10 +200,10 @@ export function ProductProfileSelector({ sheets = productSheets }: { sheets?: Pr
                 onToggle={() => setOpenStep((current) => (current === 2 ? null : 2))}
               >
                 <OptionGrid>
-                  {intensityOptions.map(([value, label]) => (
+                  {productIntensityValues.map((value) => (
                     <ChoiceOption
                       key={value}
-                      label={label}
+                      label={productSheetIntensityLabels[value]}
                       description={choices.category && !availableIntensities.has(value) ? "Aucun produit actuellement" : undefined}
                       disabled={Boolean(choices.category && !availableIntensities.has(value))}
                       selected={availableIntensities.has(value) && choices.intensity === value}
@@ -263,7 +258,7 @@ function SelectionSummary({
 }) {
   const labels = [
     choices.category ? `${productSheetCategoryLabels[choices.category]}s` : null,
-    choices.intensity ? intensitySummaryLabels[choices.intensity] : null,
+    choices.intensity ? productSheetIntensityLabels[choices.intensity] : null,
     choices.aroma === "any"
       ? "Peu importe"
       : choices.aroma
@@ -290,43 +285,11 @@ function SelectionSummary({
   );
 }
 
-function SelectorStep({ number, title, summary, open, completed, locked = false, optional = false, onToggle, children }: { number: SelectorStepNumber; title: string; summary: string; open: boolean; completed: boolean; locked?: boolean; optional?: boolean; onToggle: () => void; children: ReactNode }) {
-  const panelId = `product-selector-step-${number}-panel`;
-  return (
-    <div className={`selector-step rounded-lg border bg-ivory transition ${open ? "border-champagne/55 shadow-sm" : "border-forest/10"} ${locked ? "opacity-55" : ""}`} data-selector-step={number} data-state={open ? "open" : completed ? "complete" : locked ? "locked" : "closed"}>
-      <button type="button" className="grid min-h-14 w-full grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg px-3 py-2 text-left text-forest focus:outline-none focus:ring-2 focus:ring-inset focus:ring-champagne sm:px-4" onClick={onToggle} disabled={locked} aria-expanded={open} aria-controls={panelId}>
-        <span className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold ${completed ? "border-forest bg-forest text-ivory" : "border-champagne/55 bg-cream text-forest"}`} aria-hidden="true">{completed ? <Check size={13} /> : number}</span>
-        <span className="min-w-0">
-          <span className="flex flex-wrap items-center gap-2 text-sm font-semibold">{title}{optional && <span className="text-[0.62rem] font-medium uppercase tracking-[0.1em] text-forest/45">Facultatif</span>}</span>
-          <span className="mt-0.5 block truncate text-xs font-medium text-ink/50">{summary}</span>
-        </span>
-        <ChevronDown aria-hidden="true" size={17} className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
-      </button>
-      <fieldset id={panelId} className={`selector-step-content m-0 min-w-0 border-0 p-0 ${open ? "is-open" : ""}`} aria-hidden={!open} disabled={!open}>
-        <div><div className="border-t border-forest/10 px-3 pb-4 pt-3 sm:px-4">{children}</div></div>
-      </fieldset>
-    </div>
-  );
-}
-
 function TypeOption({ category, title, description, selected, onSelect, icon }: { category: ProductSheetCategory; title: string; description: string; selected: boolean; onSelect: (category: ProductSheetCategory) => void; icon: ReactNode }) {
   return (
     <button type="button" className={`group flex min-h-20 items-center gap-3 rounded-lg border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-champagne focus:ring-offset-2 ${selected ? "border-forest bg-forest text-ivory" : "border-forest/15 bg-cream/55 text-forest hover:border-champagne"}`} onClick={() => onSelect(category)} aria-pressed={selected} data-selector-option={`category:${category}`}>
       <span className="shrink-0 text-champagne">{icon}</span>
       <span className="min-w-0"><span className="block text-sm font-semibold uppercase tracking-[0.13em]">{title}</span><span className={`mt-1 block text-xs leading-4 ${selected ? "text-ivory/70" : "text-ink/55"}`}>{description}</span></span>
-    </button>
-  );
-}
-
-function OptionGrid({ children }: { children: ReactNode }) {
-  return <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{children}</div>;
-}
-
-function ChoiceOption({ label, description, disabled = false, selected, onSelect, dataValue }: { label: string; description?: string; disabled?: boolean; selected: boolean; onSelect: () => void; dataValue: string }) {
-  return (
-    <button type="button" className={`min-h-11 rounded-md border px-3 py-2 text-sm font-semibold uppercase tracking-[0.06em] transition focus:outline-none focus:ring-2 focus:ring-champagne focus:ring-offset-2 ${disabled ? "cursor-not-allowed border-forest/10 bg-forest/[0.035] text-forest/35" : selected ? "border-forest bg-forest text-ivory" : "border-forest/15 bg-cream/45 text-forest hover:border-champagne hover:bg-cream"}`} onClick={onSelect} disabled={disabled} aria-pressed={selected} data-selector-option={dataValue} data-available={disabled ? "false" : "true"}>
-      <span className="block">{label}</span>
-      {description && <span className="mt-0.5 block text-[0.62rem] font-medium normal-case tracking-normal">{description}</span>}
     </button>
   );
 }
