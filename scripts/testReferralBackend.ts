@@ -5,8 +5,8 @@ import { lookupReferralSponsorEmail } from "../api/_server/referralSponsorIdenti
 import { newReferralCode, normalizeReferralEmail, referralEmailClaimId } from "../api/_server/referralIdentity.js";
 import { resolveReferralRuntime, REFERRAL_CLOSED_RUNTIME } from "../api/_server/referralRuntimeConfig.js";
 import { ensureReferralCode, linkReferral, readReferralSelf } from "../api/_server/referralService.js";
-import { createReferralOrderSnapshot, referralReturnedProductsCents } from "../api/_server/referralSnapshot.js";
-import { prepareReferralTransition } from "../api/_server/referralLedger.js";
+import { createReferralOrderSnapshot, referralReturnedProductsCents, referralSnapshotFingerprint } from "../api/_server/referralSnapshot.js";
+import { prepareReferralTransition, validateReferralOrderSnapshot } from "../api/_server/referralLedger.js";
 import { applyCagnotteLedgerOperation } from "../api/_server/cagnotteLedger.js";
 import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
 import { executeOrderRefund } from "../api/_server/orderRefunds.js";
@@ -42,6 +42,31 @@ await test("normalisation et HMAC stable sans email clair", () => {
   ok(!referralEmailClaimId(secret, user.email!).includes("example"));
   throws(() => referralEmailClaimId("short", "x@example.test"));
   equal(newReferralCode(() => Buffer.alloc(16)), "A".repeat(26));
+});
+await test("snapshot refuse les lignes nettes nulles et valide la frontière à un centime", () => {
+  const make = (lines: { lineId: string; eligibleBeforeReferralCents: number; referralDiscountCents: number }[]) =>
+    createReferralOrderSnapshot({ refereeUid: "referee-snapshot", createdAtEpochMs: 2000, lines });
+  throws(() => make([{ lineId: "small", eligibleBeforeReferralCents: 500, referralDiscountCents: 500 },
+    { lineId: "large", eligibleBeforeReferralCents: 4500, referralDiscountCents: 0 }]), /referral_snapshot_invalid/);
+  throws(() => make([{ lineId: "zero", eligibleBeforeReferralCents: 0, referralDiscountCents: 0 },
+    { lineId: "large", eligibleBeforeReferralCents: 5000, referralDiscountCents: 500 }]), /referral_snapshot_invalid/);
+  throws(() => make([{ lineId: "small", eligibleBeforeReferralCents: 500, referralDiscountCents: 501 },
+    { lineId: "large", eligibleBeforeReferralCents: 4500, referralDiscountCents: 0 }]), /referral_snapshot_invalid/);
+  const boundary = make([{ lineId: "small", eligibleBeforeReferralCents: 500, referralDiscountCents: 499 },
+    { lineId: "large", eligibleBeforeReferralCents: 4500, referralDiscountCents: 1 }]);
+  const withNoDiscountLine = make([{ lineId: "discounted", eligibleBeforeReferralCents: 5000, referralDiscountCents: 500 },
+    { lineId: "plain", eligibleBeforeReferralCents: 100, referralDiscountCents: 0 }]);
+  equal(validateReferralOrderSnapshot({ customerId: "referee-snapshot", referral: boundary } as Order).fingerprint, boundary.fingerprint);
+  equal(validateReferralOrderSnapshot({ customerId: "referee-snapshot", referral: withNoDiscountLine } as Order).fingerprint, withNoDiscountLine.fingerprint);
+  const { fingerprint, ...facts } = boundary;
+  ok(fingerprint);
+  const forgedFacts = { ...facts, lines: [{ lineId: "small", eligibleBeforeReferralCents: 500, referralDiscountCents: 500 },
+    { lineId: "large", eligibleBeforeReferralCents: 4500, referralDiscountCents: 0 }] };
+  const forged = { ...forgedFacts, fingerprint: referralSnapshotFingerprint(forgedFacts) };
+  throws(() => validateReferralOrderSnapshot({ customerId: "referee-snapshot", referral: forged } as Order), /referral_snapshot_invalid/);
+  const cagnotte = { lines: [{ lineId: "small", netCents: 1 }, { lineId: "large", netCents: 4499 }] } as never;
+  equal(referralReturnedProductsCents(boundary, cagnotte, []), 0);
+  equal(referralReturnedProductsCents(boundary, cagnotte, [{ lineId: "small", returnedNetCents: 1 }]), 500);
 });
 await test("lookup Auth Admin du parrain: projet, UID et échec fermés", async () => {
   const requests: Array<{ url: string; authorization: string; body: unknown }> = [];
@@ -159,6 +184,22 @@ await test("correction restaure le droit sans doubler le ledger", async () => {
   equal(await transition(order, "correction", "correction-1", 500), "already_applied");
   const movements = await db.collection("cagnotteMovements").where("orderId", "==", order.id).get();
   equal(movements.size, 5);
+});
+await test("remboursement et correction convertissent deux lignes à net positif", async () => {
+  const child = { uid: "referee-multiline-refund", email: "multiline-refund@example.test", emailVerified: true };
+  await linkReferral({ db, user: child, code: codeB, secret, program, nowEpochMs, getSponsorEmail: async () => "b@example.test" });
+  const referral = createReferralOrderSnapshot({ refereeUid: child.uid, createdAtEpochMs: 2000,
+    lines: [{ lineId: "small", eligibleBeforeReferralCents: 500, referralDiscountCents: 499 },
+      { lineId: "large", eligibleBeforeReferralCents: 4500, referralDiscountCents: 1 }] });
+  const own = { id: "referral-order-multiline-refund", customerId: child.uid, paymentStatus: "paid", orderStatus: "delivered", referral } as Order;
+  const cagnotte = { lines: [{ lineId: "small", netCents: 1 }, { lineId: "large", netCents: 4499 }] } as never;
+  equal(await transition(own, "payment_and_delivery"), "applied");
+  const returned = referralReturnedProductsCents(referral, cagnotte, [{ lineId: "small", returnedNetCents: 1 }]);
+  equal(returned, 500);
+  equal(await transition(own, "refund", "multiline-refund", returned), "applied");
+  equal((await db.collection("referrals").doc(child.uid).get()).data()?.state, "reversed");
+  equal(await transition(own, "correction", "multiline-correction", referralReturnedProductsCents(referral, cagnotte, [])), "applied");
+  equal((await db.collection("referrals").doc(child.uid).get()).data()?.state, "rewarded");
 });
 await test("conversion des retours figée avant remise", () => {
   const cagnotte = { lines: [{ lineId: "line", netCents: 5500 }] } as never;
@@ -420,5 +461,44 @@ await test("annulation avant paiement ne consomme pas le droit du filleul", asyn
   await routeTransition(replacementId, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
   equal((await routeRelation(child.uid)).state, "pending");
   equal((await routeRelation(child.uid)).qualifyingOrderId, replacementId);
+});
+await test("livraison puis annulation impayée libère la relation pour une autre commande", async () => {
+  const firstId = "referral-order-delivered-unpaid-cancelled";
+  const child = await createRouteCandidate(firstId, "referee-delivered-unpaid-cancelled");
+  const walletBefore = await wallet("sponsor-b");
+  await routeTransition(firstId, { orderStatus: "delivered" });
+  const delivered = await routeRelation(child.uid);
+  equal(delivered.state, "linked");
+  equal(delivered.paymentConfirmed, false);
+  equal(delivered.deliveryConfirmed, true);
+  equal(delivered.deliveredOrderId, firstId);
+  deepStrictEqual(await wallet("sponsor-b"), walletBefore);
+  equal((await routeMovements(firstId)).length, 0);
+  await routeTransition(firstId, { orderStatus: "cancelled" }, drain);
+  const cancelled = await routeRelation(child.uid);
+  equal(cancelled.state, "linked");
+  equal(cancelled.qualifyingOrderId, null);
+  equal(cancelled.paymentConfirmed, false);
+  equal(cancelled.deliveryConfirmed, false);
+  equal(cancelled.deliveredOrderId, null);
+  equal(cancelled.rewardCompartment, "none");
+  equal(cancelled.qualifyingOrderCancelled, undefined);
+  equal(cancelled.cumulativeReturnedProductsCents, delivered.cumulativeReturnedProductsCents);
+  deepStrictEqual(cancelled.processedRefunds, delivered.processedRefunds);
+  deepStrictEqual(await wallet("sponsor-b"), walletBefore);
+  equal((await routeMovements(firstId)).length, 0);
+  await routeTransition(firstId, { orderStatus: "cancelled" }, drain);
+  deepStrictEqual(await routeRelation(child.uid), cancelled);
+  const firstOrder = (await db.collection("orders").doc(firstId).get()).data() as Order;
+  equal(await transition(firstOrder, "cancel", undefined, 0, drain), "already_applied");
+  const replacementId = "referral-order-after-delivered-unpaid-cancellation";
+  await createRouteCandidate(replacementId, child.uid);
+  await routeTransition(replacementId, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+  const replacement = await routeRelation(child.uid);
+  equal(replacement.state, "pending");
+  equal(replacement.qualifyingOrderId, replacementId);
+  equal(replacement.deliveryConfirmed, false);
+  equal((await wallet("sponsor-b")).pendingCents, walletBefore.pendingCents + 1000);
+  equal((await routeMovements(replacementId)).length, 1);
 });
 console.log(`Referral backend: ${passed} checks.`);

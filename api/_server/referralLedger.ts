@@ -25,7 +25,8 @@ export function validateReferralOrderSnapshot(order: Order): ReferralOrderSnapsh
   const ids = new Set<string>(); let total = 0; let discount = 0;
   for (const line of snapshot.lines) {
     if (typeof line.lineId !== "string" || !line.lineId || ids.has(line.lineId) || !cents(line.eligibleBeforeReferralCents) ||
-      !cents(line.referralDiscountCents) || line.referralDiscountCents > line.eligibleBeforeReferralCents) throw new ReferralError("referral_snapshot_invalid");
+      line.eligibleBeforeReferralCents === 0 || !cents(line.referralDiscountCents) ||
+      line.referralDiscountCents >= line.eligibleBeforeReferralCents) throw new ReferralError("referral_snapshot_invalid");
     ids.add(line.lineId); total += line.eligibleBeforeReferralCents; discount += line.referralDiscountCents;
   }
   const { fingerprint, ...facts } = snapshot;
@@ -75,8 +76,11 @@ export async function prepareReferralTransition(input: Input) {
     next.deliveredOrderId = input.order.id;
   } else if (input.event === "cancel") {
     // An unpaid candidate has not consumed the referee's right or credited a sponsor.
-    if (!before.paymentConfirmed) return { status: "already_applied" as const, write() {} };
-    next.qualifyingOrderCancelled = true;
+    if (!before.paymentConfirmed) {
+      if (!before.deliveryConfirmed) return { status: "already_applied" as const, write() {} };
+      next.deliveryConfirmed = false;
+      next.deliveredOrderId = null;
+    } else next.qualifyingOrderCancelled = true;
   } else {
     if (!before.paymentConfirmed) throw new ReferralError("referral_payment_required");
     if (!input.refundId || !/^[A-Za-z0-9._:@+-]{1,128}$/.test(input.refundId) || !cents(input.cumulativeReturnedProductsCents!)) throw new ReferralError("referral_refund_invalid");

@@ -16,7 +16,7 @@ export function referralSnapshotFingerprint(value: Omit<ReferralOrderSnapshot, "
 export function createReferralOrderSnapshot(input: { refereeUid: string; createdAtEpochMs: number; lines: readonly { lineId: string; eligibleBeforeReferralCents: number; referralDiscountCents: number }[] }): ReferralOrderSnapshot {
   const base = input.lines.reduce((sum, line) => sum + line.eligibleBeforeReferralCents, 0);
   const discount = input.lines.reduce((sum, line) => sum + line.referralDiscountCents, 0);
-  if (!input.refereeUid || !integer(input.createdAtEpochMs) || !input.lines.length || !input.lines.every((line) => line.lineId && integer(line.eligibleBeforeReferralCents) && integer(line.referralDiscountCents) && line.referralDiscountCents <= line.eligibleBeforeReferralCents) ||
+  if (!input.refereeUid || !integer(input.createdAtEpochMs) || !input.lines.length || !input.lines.every((line) => line.lineId && integer(line.eligibleBeforeReferralCents) && line.eligibleBeforeReferralCents > 0 && integer(line.referralDiscountCents) && line.referralDiscountCents < line.eligibleBeforeReferralCents) ||
     !integer(base) || base < REFERRAL_MINIMUM_PRODUCTS_CENTS || discount !== REFERRAL_REFEREE_DISCOUNT_CENTS || new Set(input.lines.map((line) => line.lineId)).size !== input.lines.length) throw new Error("referral_snapshot_invalid");
   const snapshot = { schemaVersion: 1, programVersion: REFERRAL_PROGRAM_VERSION, referralId: input.refereeUid,
     createdAtEpochMs: input.createdAtEpochMs, thresholdCents: REFERRAL_MINIMUM_PRODUCTS_CENTS,
