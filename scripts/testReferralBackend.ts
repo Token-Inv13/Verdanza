@@ -6,7 +6,7 @@ import { FirebaseIdTokenVerificationError, verifyFirebaseIdToken } from "../api/
 import { lookupReferralSponsorIdentity } from "../api/_server/referralSponsorIdentity.js";
 import { newReferralCode, normalizeReferralEmail, referralEmailClaimId, parseReferralEmailKeyring, referralEmailClaimAliases } from "../api/_server/referralIdentity.js";
 import { resolveReferralRuntime, REFERRAL_CLOSED_RUNTIME } from "../api/_server/referralRuntimeConfig.js";
-import { ensureReferralCode, hasHistoricalPaymentEvidence, linkReferral, readReferralSelf, ReferralError } from "../api/_server/referralService.js";
+import { ensureReferralCode, findPriorPaidProductOrder, hasHistoricalPaymentEvidence, isValidHistoricalPaymentInstant, linkReferral, readReferralSelf, ReferralError } from "../api/_server/referralService.js";
 import { createReferralOrderSnapshot, referralReturnedProductsCents, referralSnapshotFingerprint } from "../api/_server/referralSnapshot.js";
 import { prepareReferralTransition, validateReferralOrderSnapshot, type ReferralPaymentEvidence } from "../api/_server/referralLedger.js";
 import { applyCagnotteLedgerOperation } from "../api/_server/cagnotteLedger.js";
@@ -382,6 +382,48 @@ await test("paiement historique survit à annulation et remboursement, y compris
   await rejects(linkReferral({ db, user: legacy, code: codeB, keyring, program, nowEpochMs, getSponsorIdentity: activeIdentity }),
     { code: "referee_already_paid" });
 });
+await test("preuves historiques ISO avec offset gardent un calendrier civil strict", async () => {
+  for (const value of ["2026-09-24T10:00:00+02:00", "2026-09-24T08:00:00Z",
+    "2026-09-24T10:00:00-05:30", "2026-09-24T10:00:00.123+02:00", "2024-02-29T23:59:59+01:00",
+    "2026-09-24T10:00:00.1Z", "2026-09-24T10:00:00.12Z"])
+    equal(isValidHistoricalPaymentInstant(value), true, value);
+  for (const value of ["2026-02-29T10:00:00+02:00", "2026-04-31T10:00:00+02:00",
+    "2026-13-01T10:00:00+02:00", "2026-00-01T10:00:00+02:00", "2026-09-24T24:01:00+02:00",
+    "2026-09-24T10:60:00+02:00", "2026-09-24T10:00:60+02:00", "2026-09-24T10:00:00+02:60",
+    "2026-09-24T10:00:00+2:00", "2026-09-24T10:00:00+24:00", "2000-02-31T00:00:00.000Z",
+    "2026-09-24T10:00:00.1234Z", "2026-09-24 10:00:00Z"])
+    equal(isValidHistoricalPaymentInstant(value), false, value);
+  const base = { orderType: "order", total: 60, items: [{ productId: "fixture-product", quantity: 1 }] };
+  ok(hasHistoricalPaymentEvidence({ ...base, paymentStatus: "cancelled", orderStatus: "cancelled",
+    paidAt: "2026-09-24T10:00:00+02:00" }));
+  const uid = "referee-offset-history-uid";
+  const uidOrderId = "referral-offset-history-uid";
+  await db.collection("orders").doc(uidOrderId).set({ ...base, customerId: uid,
+    paymentStatus: "cancelled", orderStatus: "cancelled", paidAt: "2026-09-24T10:00:00+02:00" });
+  equal((await db.runTransaction((tx) => findPriorPaidProductOrder(tx, db, uid, "candidate-offset-uid"))).kind, "found");
+  await rejects(linkReferral({ db, user: { uid, email: "offset-uid@example.test", emailVerified: true }, code: codeB,
+    keyring, program, nowEpochMs, getSponsorIdentity: activeIdentity }), { code: "referee_already_paid" });
+  const email = "offset-legacy@example.test";
+  const emailOrderId = "referral-offset-history-email";
+  await db.collection("orders").doc(emailOrderId).set({ ...base, customerId: "historical-offset-legacy-uid",
+    customerEmail: email, paymentStatus: "cancelled", orderStatus: "cancelled",
+    paymentConfirmedAt: "2026-09-24T10:00:00-05:30" });
+  const emailHistory = await db.runTransaction((tx) => findPriorPaidProductOrder(tx, db, "new-offset-legacy-uid", "candidate-offset-email", email, email));
+  deepStrictEqual(emailHistory, { kind: "found", orderId: emailOrderId });
+  await rejects(linkReferral({ db, user: { uid: "new-offset-legacy-uid", email, emailVerified: true }, code: codeB,
+    keyring, program, nowEpochMs, getSponsorIdentity: activeIdentity }), { code: "referee_already_paid" });
+  const candidateId = "referral-offset-second-candidate";
+  const candidate = await createRouteCandidate(candidateId, "referee-offset-second-candidate");
+  await db.collection("orders").doc("referral-offset-first-paid").set({ ...base, customerId: candidate.uid,
+    paymentStatus: "cancelled", orderStatus: "cancelled", paidAt: "2026-09-24T10:00:00+02:00" });
+  const beforeWallet = await wallet("sponsor-b");
+  await rejects(routeTransition(candidateId, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }),
+    (error: unknown) => error instanceof ReferralError && error.code === "referral_discount_already_consumed");
+  equal((await db.collection("orders").doc(candidateId).get()).data()?.paymentStatus, "to_confirm");
+  equal((await routeRelation(candidate.uid)).state, "linked");
+  equal((await routeReferralMovements(candidateId)).length, 0);
+  deepStrictEqual(await wallet("sponsor-b"), beforeWallet);
+});
 await test("annulation impayée et lien envoyé ne disqualifient pas; historique borné refuse l'ambiguïté", async () => {
   const base = { orderType: "order", total: 60, items: [{ productId: "fixture-product", quantity: 1, lineTotal: 60 }] };
   const child = { uid: "referee-unpaid-history", email: "unpaid-history@example.test", emailVerified: true };
@@ -576,15 +618,18 @@ await test("commande parrain non éligible au paiement filleul ne reçoit aucun 
     codeFactory: () => code, getSponsorIdentity: activeIdentity });
   const id = "referral-order-sponsor-no-longer-eligible";
   const child = await createRouteCandidate(id, "referee-sponsor-no-longer-eligible", code);
+  const currentEmail = "changed-sponsor-ineligible@example.test";
   await db.collection("orders").doc(sponsorOrderId).update({ paymentStatus: "cancelled", orderStatus: "cancelled",
     paidAt: "2000-01-02T00:00:00.000Z", paymentConfirmedAt: "2000-01-02T00:00:00.000Z" });
-  await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+  await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
+    async (uid) => uid === child.uid ? { uid, email: currentEmail, emailVerified: true, disabled: false } : activeIdentity(uid));
   equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
   const relation = await routeRelation(child.uid);
   equal(relation.state, "cancelled");
   equal(relation.paymentConfirmed, true);
   equal(relation.qualifyingOrderId, id);
   equal(relation.rewardIneligibilityReason, "sponsor_no_longer_eligible");
+  equal((await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, currentEmail)).get()).data()?.refereeUid, child.uid);
   equal((await db.collection("cagnotteWallets").doc(sponsorUid).get()).exists, false);
   equal((await routeMovements(id)).length, 0);
   await routeTransition(id, { orderStatus: "delivered" });
@@ -592,7 +637,10 @@ await test("commande parrain non éligible au paiement filleul ne reçoit aucun 
   equal((await routeMovements(id)).length, 0);
 });
 await test("désactivation et indisponibilité Auth au paiement ne créent aucun gain", async () => {
-  const disabledIdentity = async (uid: string) => ({ uid, email: "b@example.test", disabled: true });
+  const disabledEmail = "changed-disabled-sponsor@example.test";
+  const disabledIdentity = async (uid: string) => uid === "sponsor-b"
+    ? { uid, email: "b@example.test", emailVerified: true, disabled: true }
+    : { uid, email: disabledEmail, emailVerified: true, disabled: false };
   const before = await wallet("sponsor-b");
   const disabledId = "referral-order-disabled-at-payment";
   const disabledChild = await createRouteCandidate(disabledId, "referee-disabled-at-payment");
@@ -600,16 +648,35 @@ await test("désactivation et indisponibilité Auth au paiement ne créent aucun
   equal((await db.collection("orders").doc(disabledId).get()).data()?.paymentStatus, "paid");
   equal((await routeRelation(disabledChild.uid)).rewardIneligibilityReason, "sponsor_account_disabled");
   equal((await routeRelation(disabledChild.uid)).state, "cancelled");
+  equal((await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, disabledEmail)).get()).data()?.refereeUid, disabledChild.uid);
+  await rejects(linkReferral({ db, user: { uid: "second-uid-disabled-email", email: disabledEmail, emailVerified: true },
+    code: codeB, keyring, program, nowEpochMs, getSponsorIdentity: activeIdentity }), { code: "referral_email_claimed" });
   deepStrictEqual(await wallet("sponsor-b"), before);
   equal((await routeMovements(disabledId)).length, 0);
   await routeTransition(disabledId, { orderStatus: "delivered" });
   equal((await routeMovements(disabledId)).length, 0);
+  const conflictId = "referral-order-disabled-claim-conflict";
+  const conflictChild = await createRouteCandidate(conflictId, "referee-disabled-claim-conflict");
+  const conflictEmail = "changed-disabled-conflict@example.test";
+  const conflictRef = db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, conflictEmail));
+  await conflictRef.set({ schemaVersion: 1, programVersion: "referral-commercial-policy-v1", keyVersion: "v1",
+    refereeUid: "other-referee", referralId: "other-referee", createdAtEpochMs: 1000 });
+  await routeTransition(conflictId, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
+    async (uid) => uid === conflictChild.uid ? { uid, email: conflictEmail, emailVerified: true, disabled: false } : disabledIdentity(uid));
+  equal((await routeRelation(conflictChild.uid)).rewardIneligibilityReason, "referee_email_claimed");
+  equal((await conflictRef.get()).data()?.refereeUid, "other-referee");
+  equal((await routeReferralMovements(conflictId)).length, 0);
   const outageId = "referral-order-auth-outage";
   const outageChild = await createRouteCandidate(outageId, "referee-auth-outage");
+  const outageEmail = "changed-auth-outage@example.test";
   await routeTransition(outageId, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
-    async () => { throw new Error("fixture_auth_unavailable"); });
+    async (uid) => {
+      if (uid === "sponsor-b") throw new Error("fixture_auth_unavailable");
+      return { uid, email: outageEmail, emailVerified: true, disabled: false };
+    });
   equal((await db.collection("orders").doc(outageId).get()).data()?.paymentStatus, "paid");
   equal((await routeRelation(outageChild.uid)).rewardIneligibilityReason, "sponsor_identity_unavailable");
+  equal((await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, outageEmail)).get()).data()?.refereeUid, outageChild.uid);
   equal((await routeMovements(outageId)).length, 0);
   deepStrictEqual(await wallet("sponsor-b"), before);
 });
@@ -628,13 +695,15 @@ await test("désactivation après gain pending ne retire pas le droit à la livr
 await test("préflight Auth lié à la relation consomme sans gain un changement concurrent de parrain", async () => {
   const id = "referral-order-sponsor-race";
   const child = await createRouteCandidate(id, "referee-sponsor-race");
+  const changedEmail = "race-current-referee@example.test";
   await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
     async (uid) => {
       await db.collection("referrals").doc(child.uid).update({ sponsorUid: sponsor.uid });
-      return activeIdentity(uid);
+      return uid === child.uid ? { uid, email: changedEmail, emailVerified: true, disabled: false } : activeIdentity(uid);
     });
   equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
   equal((await routeRelation(child.uid)).rewardIneligibilityReason, "referral_identity_changed");
+  equal((await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, changedEmail)).get()).exists, false);
   equal((await routeMovements(id)).length, 0);
 });
 await test("annulation statutaire pending conserve le gain puis refund confirmé l'annule", async () => {
@@ -1046,6 +1115,8 @@ await test("email non vérifié, compte désactivé et auto-parrainage au paieme
       async (uid) => uid === child.uid ? { uid, ...identity } : activeIdentity(uid));
     equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
     equal((await routeRelation(child.uid)).rewardIneligibilityReason, reason);
+    if (suffix === "self")
+      equal((await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, "b@example.test")).get()).data()?.refereeUid, child.uid);
     equal((await routeReferralMovements(id)).length, 0);
   }
 });
@@ -1060,6 +1131,28 @@ await test("paiement après rotation lit v1 et crée le claim v2", async () => {
   equal((await routeRelation(child.uid)).state, "pending");
   equal((await db.collection("referralEmailClaims").doc(referralEmailClaimId(secondSecret, child.email, "v2")).get()).data()?.refereeUid, child.uid);
   equal((await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, child.email, "v1")).get()).data()?.refereeUid, child.uid);
+});
+await test("rotation HMAC migre le claim actif même sans gain parrain", async () => {
+  const id = "referral-payment-key-rotation-disabled";
+  const child = await createRouteCandidate(id, "referee-payment-key-rotation-disabled");
+  const changedEmail = "changed-rotation-disabled@example.test";
+  const secondSecret = "fixture-disabled-rotation-secret-at-least-32-bytes";
+  const rotatedJson = JSON.stringify({ activeVersion: "v2", keys: { v1: secret, v2: secondSecret } });
+  const oldRef = db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, changedEmail, "v1"));
+  await oldRef.set({ schemaVersion: 1, programVersion: "referral-commercial-policy-v1", keyVersion: "v1",
+    refereeUid: child.uid, referralId: child.uid, createdAtEpochMs: 1000 });
+  const sponsorBefore = await wallet("sponsor-b");
+  await commitOrderStatusTransition({ db, body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" },
+    admin: routeActor, referralProgram: program, referralEmailKeyring: () => rotatedJson,
+    getSponsorIdentity: async (uid) => uid === "sponsor-b"
+      ? { uid, email: "b@example.test", emailVerified: true, disabled: true }
+      : { uid, email: changedEmail, emailVerified: true, disabled: false },
+    now: () => "2000-01-03T00:00:00.000Z" });
+  equal((await routeRelation(child.uid)).rewardIneligibilityReason, "sponsor_account_disabled");
+  equal((await oldRef.get()).data()?.refereeUid, child.uid);
+  equal((await db.collection("referralEmailClaims").doc(referralEmailClaimId(secondSecret, changedEmail, "v2")).get()).data()?.refereeUid, child.uid);
+  equal((await routeReferralMovements(id)).length, 0);
+  deepStrictEqual(await wallet("sponsor-b"), sponsorBefore);
 });
 await test("GET self ne divulgue pas le code d'un parrain devenu inéligible", async () => {
   const codeOwner = sponsor.uid;

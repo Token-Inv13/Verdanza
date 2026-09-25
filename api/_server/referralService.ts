@@ -20,17 +20,19 @@ function productOrder(value: FirebaseFirestore.DocumentData, includeDeleted = fa
       Number.isSafeInteger((item as { quantity?: unknown }).quantity) && Number((item as { quantity: number }).quantity) > 0) &&
     typeof value.total === "number" && Number.isFinite(value.total) && value.total > 0;
 }
-function validInstant(value: unknown) {
+export function isValidHistoricalPaymentInstant(value: unknown) {
   if (typeof value !== "string") return false;
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.exec(value);
-  if (!match || !Number.isFinite(Date.parse(value))) return false;
-  const [year, month, day, hour, minute, second] = match.slice(1).map(Number);
-  const calendar = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
-  return calendar.getUTCFullYear() === year && calendar.getUTCMonth() + 1 === month && calendar.getUTCDate() === day &&
-    calendar.getUTCHours() === hour && calendar.getUTCMinutes() === minute && calendar.getUTCSeconds() === second;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|[+-]\d{2}:(\d{2}))$/.exec(value);
+  if (!match) return false;
+  const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number);
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return month >= 1 && month <= 12 && day >= 1 && day <= daysInMonth[month - 1] &&
+    hour <= 23 && minute <= 59 && second <= 59 && (match[7] === undefined || Number(match[7]) <= 59) &&
+    Number.isFinite(Date.parse(value));
 }
 export function hasHistoricalPaymentEvidence(value: FirebaseFirestore.DocumentData) {
-  return productOrder(value, true) && (value.paymentStatus === "paid" || validInstant(value.paymentConfirmedAt) || validInstant(value.paidAt));
+  return productOrder(value, true) && (value.paymentStatus === "paid" || isValidHistoricalPaymentInstant(value.paymentConfirmedAt) || isValidHistoricalPaymentInstant(value.paidAt));
 }
 
 export async function sponsorHasDeliveredPaidOrder(tx: Transaction, db: Firestore, sponsorUid: string) {
@@ -53,7 +55,7 @@ export async function findPriorPaidProductOrder(tx: Transaction, db: Firestore, 
       const value = doc.data();
       if (value.orderType === "preorder" || value.productionFixture) continue;
       if (hasHistoricalPaymentEvidence(value)) return { kind: "found", orderId: doc.id };
-      if (!productOrder(value, true) && (value.paymentStatus === "paid" || validInstant(value.paymentConfirmedAt) || validInstant(value.paidAt)))
+      if (!productOrder(value, true) && (value.paymentStatus === "paid" || isValidHistoricalPaymentInstant(value.paymentConfirmedAt) || isValidHistoricalPaymentInstant(value.paidAt)))
         inconclusive = true;
     }
   }

@@ -24,7 +24,6 @@ async function prepareCurrentRefereeClaim(input: { db: Firestore; transaction: T
   if (evidence.refereeAccount === "disabled" || evidence.refereeAccount === "unverified") return { reason: "referee_email_unverified" };
   if (evidence.refereeAccount !== "active" || !evidence.refereeEmail || !evidence.activeKeyVersion || !evidence.claimAliases?.length)
     return { reason: "referee_identity_unavailable" };
-  if (evidence.sponsorEmail && evidence.refereeEmail === evidence.sponsorEmail) return { reason: "self_referral_at_payment" };
   const aliases = evidence.claimAliases;
   const refs = aliases.map((alias) => db.collection("referralEmailClaims").doc(alias.id));
   const docs = await tx.getAll(...refs);
@@ -144,20 +143,17 @@ export async function prepareReferralTransition(input: Input) {
           if (claim.newClaim) input.transaction.create(claim.newClaim.ref, claim.newClaim.value);
         } };
       }
-      if (!evidence || evidence.referralId !== snapshot.referralId || evidence.refereeUid !== before.refereeUid ||
-          evidence.sponsorUid !== before.sponsorUid || evidence.linkedAtEpochMs !== before.linkedAtEpochMs)
-        next.rewardIneligibilityReason = "referral_identity_changed";
-      else if (evidence.sponsorAccount === "active") {
+      const claim = await prepareCurrentRefereeClaim({ db: input.db, transaction: input.transaction, before,
+        evidence, recordedAtEpochMs: input.recordedAtEpochMs });
+      newClaim = claim.newClaim ?? null;
+      if (claim.reason) next.rewardIneligibilityReason = claim.reason;
+      else if (evidence?.sponsorEmail && evidence.refereeEmail === evidence.sponsorEmail)
+        next.rewardIneligibilityReason = "self_referral_at_payment";
+      else if (evidence?.sponsorAccount === "active") {
         if (!await sponsorHasDeliveredPaidOrder(input.transaction, input.db, before.sponsorUid))
           next.rewardIneligibilityReason = "sponsor_no_longer_eligible";
-      } else if (evidence.sponsorAccount === "disabled") next.rewardIneligibilityReason = "sponsor_account_disabled";
+      } else if (evidence?.sponsorAccount === "disabled") next.rewardIneligibilityReason = "sponsor_account_disabled";
       else next.rewardIneligibilityReason = "sponsor_identity_unavailable";
-      if (!next.rewardIneligibilityReason) {
-        const claim = await prepareCurrentRefereeClaim({ db: input.db, transaction: input.transaction, before,
-          evidence, recordedAtEpochMs: input.recordedAtEpochMs });
-        if (claim.reason) next.rewardIneligibilityReason = claim.reason;
-        newClaim = claim.newClaim ?? null;
-      }
     }
     next.paymentConfirmed = true;
     next.qualifyingOrderId = input.order.id;
