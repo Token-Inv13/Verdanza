@@ -5,7 +5,7 @@ import { createReferralHandler } from "../api/referral.js";
 import { FirebaseIdTokenVerificationError, verifyFirebaseIdToken } from "../api/_server/adminAuth.js";
 import { lookupReferralSponsorIdentity } from "../api/_server/referralSponsorIdentity.js";
 import { newReferralCode, normalizeReferralEmail, referralEmailClaimId, parseReferralEmailKeyring, referralEmailClaimAliases } from "../api/_server/referralIdentity.js";
-import { resolveReferralRuntime, REFERRAL_CLOSED_RUNTIME } from "../api/_server/referralRuntimeConfig.js";
+import { resolveReferralRuntime, REFERRAL_CLOSED_RUNTIME, ReferralConfigurationError } from "../api/_server/referralRuntimeConfig.js";
 import { ensureReferralCode, findPriorPaidProductOrder, hasHistoricalPaymentEvidence, isValidHistoricalPaymentInstant, linkReferral, readReferralSelf, ReferralError, sponsorHasDeliveredPaidOrder } from "../api/_server/referralService.js";
 import { createReferralOrderSnapshot, referralReturnedProductsCents, referralSnapshotFingerprint } from "../api/_server/referralSnapshot.js";
 import { prepareReferralTransition, validateReferralOrderSnapshot, type ReferralPaymentEvidence } from "../api/_server/referralLedger.js";
@@ -15,6 +15,7 @@ import { CAGNOTTE_RESERVATION_VERSION } from "../api/_server/cagnotteLedgerTypes
 import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
 import { executeOrderRefund } from "../api/_server/orderRefunds.js";
 import { commitOrderStatusTransition, hasPositiveCagnotteFinancing, hasAppliedReferralPriority } from "../api/_server/orderStatusTransition.js";
+import { createOrderStatusHandler } from "../api/_server/orderStatusRoute.js";
 import { readUnpaidOrderContext } from "../api/_server/unpaidOrderReview.js";
 import type { Order } from "../src/types/index.js";
 import type { ReferralRelation } from "../src/types/referral.js";
@@ -1642,5 +1643,174 @@ await test("historique inconclusif refuse le paiement remisé et son replay sans
   equal((await wallet(child.uid)).pendingCents, 275);
   equal((await routeReferralMovements(id)).length, 1);
   equal((await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, currentEmail, "v1")).get()).data()?.refereeUid, child.uid);
+});
+const noReferralDb = new Proxy(db, { get(target, property) {
+  if (property === "collection") return (name: string) => {
+    if (["referralCodes", "referrals", "referralEmailClaims"].includes(name)) throw new Error("unexpected_referral_access");
+    return target.collection(name);
+  };
+  const value = Reflect.get(target, property, target);
+  return typeof value === "function" ? value.bind(target) : value;
+} });
+const captureReferralState = async () => Promise.all(["referralCodes", "referrals", "referralEmailClaims", "cagnotteWallets",
+  "cagnotteMovements"].map(async (name) => (await db.collection(name).get()).docs.map((doc) =>
+    ({ id: doc.id, data: doc.data(), updatedAt: doc.updateTime.toMillis() }))));
+async function createUnrelatedOrder(id: string, customerId?: string) {
+  await db.collection("orders").doc(id).set({ id, ...(customerId ? { customerId } : {}),
+    customerName: "Synthetic", customerEmail: `${id}@example.test`, orderType: "order",
+    orderStatus: "confirmed", paymentStatus: "to_confirm", deliveryMethod: "postal", deliveryFee: 0,
+    subtotal: 60, total: 60, items: [{ productId: "fixture-product", quantity: 1, unitPrice: 60, lineTotal: 60 }],
+    createdAt: "2000-01-01T00:00:00.000Z", updatedAt: "2000-01-01T00:00:00.000Z" });
+}
+function closedTransitionDependencies() {
+  const calls = { runtime: 0, auth: 0, keyring: 0 };
+  return { calls, dependencies: {
+    db: noReferralDb, admin: routeActor, accrualProgram: null, reservationProgram: null,
+    resolveReferralRuntime: () => { calls.runtime++; throw new ReferralConfigurationError(); },
+    getSponsorIdentity: async () => { calls.auth++; throw new Error("unexpected_referral_auth"); },
+    referralEmailKeyring: () => { calls.keyring++; throw new Error("unexpected_referral_keyring"); },
+    now: () => "2000-01-03T00:00:00.000Z",
+  } };
+}
+for (const action of ["payment", "delivery"] as const) {
+  await test(`commande anonyme ${action} ne résout jamais le runtime malformé ni ne lit Referral`, async () => {
+    const id = `referral-runtime-anonymous-${action}`;
+    await createUnrelatedOrder(id);
+    const before = await captureReferralState();
+    const { calls, dependencies } = closedTransitionDependencies();
+    const result = await commitOrderStatusTransition({ ...dependencies, body: { orderId: id,
+      ...(action === "payment" ? { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" } : { orderStatus: "delivered" }) } });
+    equal(action === "payment" ? result.updatedOrder?.paymentStatus : result.updatedOrder?.orderStatus,
+      action === "payment" ? "paid" : "delivered");
+    deepStrictEqual(calls, { runtime: 0, auth: 0, keyring: 0 });
+    deepStrictEqual(await captureReferralState(), before);
+  });
+}
+await test("livraison sans snapshot avec customerId ne résout jamais le runtime", async () => {
+  const id = "referral-runtime-plain-delivery";
+  const child = await createPlainRouteCandidate(id, "referee-runtime-plain-delivery");
+  const before = await captureReferralState();
+  const { calls, dependencies } = closedTransitionDependencies();
+  await commitOrderStatusTransition({ ...dependencies, body: { orderId: id, orderStatus: "delivered" } });
+  deepStrictEqual(calls, { runtime: 0, auth: 0, keyring: 0 });
+  equal((await routeRelation(child.uid)).state, "linked");
+  deepStrictEqual(await captureReferralState(), before);
+});
+await test("paiement customerId sans relation avec runtime invalide continue sans lecture Referral", async () => {
+  const id = "referral-runtime-plain-no-relation";
+  await createUnrelatedOrder(id, "referee-runtime-no-relation");
+  const before = await captureReferralState();
+  const { calls, dependencies } = closedTransitionDependencies();
+  await commitOrderStatusTransition({ ...dependencies, body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" } });
+  equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
+  deepStrictEqual(calls, { runtime: 1, auth: 0, keyring: 0 });
+  deepStrictEqual(await captureReferralState(), before);
+});
+await test("runtime invalide laisse un lien intact au paiement plain mais l'historique interdit une remise à la reprise", async () => {
+  const first = "referral-runtime-linked-plain";
+  const later = "referral-runtime-linked-later-discount";
+  const child = await createPlainRouteCandidate(first, "referee-runtime-linked-plain");
+  await createRouteCandidate(later, child.uid);
+  const before = await captureReferralState();
+  const { calls, dependencies } = closedTransitionDependencies();
+  await commitOrderStatusTransition({ ...dependencies, body: { orderId: first, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" } });
+  deepStrictEqual(calls, { runtime: 1, auth: 0, keyring: 0 });
+  deepStrictEqual(await captureReferralState(), before);
+  equal((await routeRelation(child.uid)).state, "linked");
+  equal((await db.collection("orders").doc(first).get()).data()?.paymentStatus, "paid");
+  const afterPayment = await capturePaymentState();
+  await rejects(routeTransition(later, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }),
+    (error: unknown) => error instanceof ReferralError && error.code === "referral_discount_already_consumed");
+  deepStrictEqual(await capturePaymentState(), afterPayment);
+});
+for (const action of ["payment", "delivery"] as const) {
+  await test(`handler snapshot + runtime invalide ${action} renvoie 503 sans aucune mutation`, async () => {
+    const id = `referral-runtime-invalid-snapshot-${action}`;
+    await createRouteCandidate(id, `referee-runtime-invalid-snapshot-${action}`);
+    if (action === "delivery") await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+    await db.collection("adminUsers").doc(routeActor.uid).set({ isActive: true });
+    const before = await capturePaymentState();
+    let runtimeCalls = 0; let effectCalls = 0; let status = 0; let payload: unknown;
+    const handler = createOrderStatusHandler({ getDb: () => noReferralDb, verifyToken: async () => routeActor,
+      accrualProgram: null, reservationProgram: null,
+      resolveReferralRuntime: () => { runtimeCalls++; throw new ReferralConfigurationError(); },
+      sendStatusEmail: async () => { effectCalls++; throw new Error("unexpected_email_effect"); },
+      processAnalytics: async () => { effectCalls++; throw new Error("unexpected_analytics_effect"); },
+      now: () => "2000-01-03T00:00:00.000Z" });
+    const response = { status(value: number) { status = value; return this; }, json(value: unknown) { payload = value; } } as unknown as VercelResponseLike;
+    await handler({ method: "POST", headers: { authorization: "Bearer fixture-token" }, body: { orderId: id,
+      ...(action === "payment" ? { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" } : { orderStatus: "delivered" }) } } as VercelRequestLike, response);
+    equal(status, 503); deepStrictEqual(payload, { code: "referral_configuration_invalid", error: "Configuration parrainage indisponible." });
+    equal(runtimeCalls, 1); equal(effectCalls, 0);
+    deepStrictEqual(await capturePaymentState(), before);
+  });
+}
+await test("runtime off injecté paie un snapshot sans résolution environnementale ni mutation Referral", async () => {
+  const id = "referral-runtime-injected-off";
+  await createRouteCandidate(id, "referee-runtime-injected-off");
+  const before = await captureReferralState();
+  const { calls, dependencies } = closedTransitionDependencies();
+  await commitOrderStatusTransition({ ...dependencies, referralProgram: REFERRAL_CLOSED_RUNTIME,
+    body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" } });
+  deepStrictEqual(calls, { runtime: 0, auth: 0, keyring: 0 });
+  equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
+  deepStrictEqual(await captureReferralState(), before);
+});
+await test("runtime actif injecté qualifie puis livre sans résolution environnementale", async () => {
+  const id = "referral-runtime-injected-active";
+  const child = await createRouteCandidate(id, "referee-runtime-injected-active");
+  let calls = 0;
+  const dependencies = { db, admin: routeActor, referralProgram: program, getSponsorIdentity: activeIdentity,
+    referralEmailKeyring: () => keyringJson, resolveReferralRuntime: () => { calls++; throw new ReferralConfigurationError(); },
+    now: () => "2000-01-03T00:00:00.000Z" };
+  await commitOrderStatusTransition({ ...dependencies, body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" } });
+  equal((await routeRelation(child.uid)).state, "pending");
+  await commitOrderStatusTransition({ ...dependencies, body: { orderId: id, orderStatus: "delivered" } });
+  equal((await routeRelation(child.uid)).state, "rewarded"); equal(calls, 0);
+  equal((await routeReferralMovements(id)).length, 2);
+});
+for (const runtime of [program, drain]) {
+  await test(`runtime ${runtime.mode} résolu une fois consomme toujours le lien plain puis ignore le replay`, async () => {
+    const id = `referral-runtime-resolved-plain-${runtime.mode}`;
+    const child = await createPlainRouteCandidate(id, `referee-runtime-resolved-plain-${runtime.mode}`);
+    let calls = 0;
+    const dependencies = { db, admin: routeActor, getSponsorIdentity: activeIdentity, referralEmailKeyring: () => keyringJson,
+      resolveReferralRuntime: () => { calls++; return runtime; }, now: () => "2000-01-03T00:00:00.000Z" };
+    await commitOrderStatusTransition({ ...dependencies, body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" } });
+    equal(calls, 1); equal((await routeRelation(child.uid)).state, "cancelled");
+    equal((await routeRelation(child.uid)).qualifyingOrderId, id);
+    equal((await routeReferralMovements(id)).length, 0);
+    await commitOrderStatusTransition({ ...dependencies, body: { orderId: id, paymentStatus: "paid" } });
+    equal(calls, 1);
+  });
+}
+await test("erreur inattendue du resolver reste visible sur une commande plain", async () => {
+  const id = "referral-runtime-unexpected-error";
+  await createUnrelatedOrder(id, "referee-runtime-unexpected-error");
+  const before = await capturePaymentState();
+  await rejects(commitOrderStatusTransition({ db: noReferralDb, admin: routeActor,
+    resolveReferralRuntime: () => { throw new Error("unexpected_resolver_failure"); },
+    body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" } }), /unexpected_resolver_failure/);
+  deepStrictEqual(await capturePaymentState(), before);
+});
+await test("snapshot ajouté entre préflight plain et transaction reste strict après résolution invalide", async () => {
+  const id = "referral-runtime-snapshot-race";
+  const child = await createPlainRouteCandidate(id, "referee-runtime-snapshot-race");
+  const snapshot = createReferralOrderSnapshot({ refereeUid: child.uid, createdAtEpochMs: 2000,
+    lines: [{ lineId: "line", eligibleBeforeReferralCents: 6000, referralDiscountCents: 500 }] });
+  let before: Awaited<ReturnType<typeof capturePaymentState>> | undefined;
+  const raceDb = new Proxy(noReferralDb, { get(target, property) {
+    if (property === "runTransaction") return async (callback: Parameters<typeof db.runTransaction>[0]) => {
+      await db.collection("orders").doc(id).update({ referral: snapshot, subtotal: 60, total: 55, discountAmount: 5 });
+      before = await capturePaymentState();
+      return db.runTransaction(callback);
+    };
+    return Reflect.get(target, property, target);
+  } });
+  const { calls, dependencies } = closedTransitionDependencies();
+  await rejects(commitOrderStatusTransition({ ...dependencies, db: raceDb,
+    body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" } }), ReferralConfigurationError);
+  ok(before); deepStrictEqual(await capturePaymentState(), before);
+  deepStrictEqual(calls, { runtime: 1, auth: 0, keyring: 0 });
 });
 console.log(`Referral backend: ${passed} checks.`);

@@ -15,6 +15,7 @@ import type {
 import { CagnotteLedgerError } from "./cagnotteLedger.js";
 import { CagnotteReservationError } from "./cagnotteReservations.js";
 import { ReferralError } from "./referralService.js";
+import { ReferralConfigurationError } from "./referralRuntimeConfig.js";
 import { UnpaidReviewError, type UnpaidReviewRequest } from "./unpaidOrderReview.js";
 import {
   CagnotteRuntimeConfigurationError,
@@ -56,6 +57,7 @@ export function createOrderStatusHandler(dependencies: {
   reservationProgram?: Parameters<typeof commitOrderStatusTransition>[0]["reservationProgram"];
   getFirebaseProjectId?: () => string | null;
   getRuntimeConfiguration?: () => CagnotteRuntimeConfiguration;
+  resolveReferralRuntime?: Parameters<typeof commitOrderStatusTransition>[0]["resolveReferralRuntime"];
   now?: Parameters<typeof commitOrderStatusTransition>[0]["now"];
 }) {
 return async function handler(
@@ -96,6 +98,7 @@ return async function handler(
         accrualProgram,
         reservationProgram,
         firebaseProjectId,
+        resolveReferralRuntime: dependencies.resolveReferralRuntime,
         now: dependencies.now,
       });
 
@@ -123,6 +126,13 @@ return async function handler(
       return sendJson(response, {
         code: "cagnotte_configuration_invalid",
         error: "Configuration cagnotte indisponible.",
+      }, 503);
+    }
+    if (error instanceof ReferralConfigurationError) {
+      console.error("update-order-status referral configuration invalid");
+      return sendJson(response, {
+        code: "referral_configuration_invalid",
+        error: "Configuration parrainage indisponible.",
       }, 503);
     }
     console.error("update-order-status failed", error);

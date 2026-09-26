@@ -21,7 +21,7 @@ import {
   type CagnotteProductionFixtureCapability,
 } from "./cagnotteProductionFixture.js";
 import { validateCagnotteProductionFixtureState } from "./cagnotteProductionFixtureState.js";
-import { getReferralRuntime } from "./referralRuntimeConfig.js";
+import { getReferralRuntime, ReferralConfigurationError, REFERRAL_CLOSED_RUNTIME } from "./referralRuntimeConfig.js";
 import type { ReferralRuntime } from "./referralRuntimeConfig.js";
 import { prepareFirstPaymentWithoutReferral, prepareReferralTransition, validateReferralOrderSnapshot, type ReferralPaymentEvidence } from "./referralLedger.js";
 import { getReferralSponsorIdentity, type ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
@@ -58,6 +58,7 @@ export async function commitOrderStatusTransition({
   reservationProgram = CAGNOTTE_RESERVATION_PROGRAM, firebaseProjectId,
   productionFixtureCapability,
   referralProgram,
+  resolveReferralRuntime = getReferralRuntime,
   getSponsorIdentity = getReferralSponsorIdentity,
   referralEmailKeyring = () => process.env.REFERRAL_EMAIL_HMAC_KEYRING_JSON ?? "",
   now = () => new Date().toISOString(),
@@ -68,6 +69,7 @@ export async function commitOrderStatusTransition({
   firebaseProjectId?: string | null;
   productionFixtureCapability?: CagnotteProductionFixtureCapability;
   referralProgram?: ReferralRuntime;
+  resolveReferralRuntime?: () => ReferralRuntime;
   getSponsorIdentity?: (uid: string) => Promise<ReferralSponsorIdentity>;
   referralEmailKeyring?: () => string;
   now?: ()=>string;
@@ -79,14 +81,32 @@ export async function commitOrderStatusTransition({
   let missingPromotionIds: string[] = [];
   let unpaidReviewContext: Awaited<ReturnType<typeof prepareUnpaidReviewControl>>["context"] | null = null;
   let resolvedReferralProgram = referralProgram;
+  let referralConfigurationError: ReferralConfigurationError | undefined;
+  // Both the preflight and transaction use the same relevance and failure policy.
+  // Retain an invalid resolution so a later snapshot cannot reuse a lenient closure.
+  const resolveReferralRuntimeForTransition = (order: Order, payment: boolean, delivery: boolean): ReferralRuntime | null => {
+    if (!(order.referral && (payment || delivery)) && !(payment && order.customerId)) return null;
+    if (!resolvedReferralProgram && !referralConfigurationError) {
+      try { resolvedReferralProgram = resolveReferralRuntime(); }
+      catch (error) {
+        if (!(error instanceof ReferralConfigurationError)) throw error;
+        referralConfigurationError = error;
+      }
+    }
+    if (referralConfigurationError) {
+      if (order.referral) throw referralConfigurationError;
+      return REFERRAL_CLOSED_RUNTIME;
+    }
+    return resolvedReferralProgram!;
+  };
   let paymentEvidence: ReferralPaymentEvidence | undefined;
   if (body.paymentStatus === "paid") {
     const candidateSnapshot = await db.collection("orders").doc(body.orderId).get();
     if (candidateSnapshot.exists) {
       const candidate = orderFromSnapshot(candidateSnapshot);
       if (candidate.paymentStatus !== "paid" && candidate.orderStatus !== "cancelled" && !candidate.cancelledAt) {
-        resolvedReferralProgram ??= getReferralRuntime();
-        if (resolvedReferralProgram.operational && (candidate.referral || candidate.customerId)) {
+        const candidateReferralProgram = resolveReferralRuntimeForTransition(candidate, true, false);
+        if (candidateReferralProgram?.operational) {
           const referralId = candidate.referral ? validateReferralOrderSnapshot(candidate).referralId : candidate.customerId!;
           const relationDoc = await db.collection("referrals").doc(referralId).get();
           const relation = relationDoc.data();
@@ -364,7 +384,8 @@ export async function commitOrderStatusTransition({
     const deliveryTransition = body.orderStatus === "delivered" && order.orderStatus !== "delivered";
     const referralEvent = paymentTransition ? nextStatus === "delivered" ? "payment_and_delivery" : "payment"
       : deliveryTransition ? "delivery" : null;
-    const transitionReferralProgram = linkOnly || !referralEvent ? null : resolvedReferralProgram ?? getReferralRuntime();
+    const transitionReferralProgram = linkOnly || !referralEvent ? null :
+      resolveReferralRuntimeForTransition(order, paymentTransition, deliveryTransition);
     const referralPlan = !transitionReferralProgram || !transitionReferralProgram.operational || transitionReferralProgram.mode === "off" ? null : order.referral ? await prepareReferralTransition({
       db, transaction, order, program: transitionReferralProgram, recordedAtEpochMs: Date.parse(operationTime),
       event: referralEvent!, paymentEvidence,
