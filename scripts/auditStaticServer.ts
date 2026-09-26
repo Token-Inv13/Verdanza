@@ -24,7 +24,7 @@ export async function startAuditStaticServer(options: AuditStaticServerOptions =
   const server = createServer((request, response) => {
     try {
       const url = new URL(request.url || "/", "http://127.0.0.1");
-      const pathname = normalizePathname(decodeURIComponent(url.pathname));
+      const pathname = normalizePathname(url.pathname);
       const routeFile = resolveRouteFile(root, pathname);
       const isNotFound = notFoundPaths.has(pathname) || !routeFile;
       const file = routeFile || fallbackFile;
@@ -87,7 +87,9 @@ function existingFile(root: string, candidate: string) {
 }
 
 function normalizePathname(path: string) {
-  const pathname = new URL(path, "https://verdanza.fr").pathname;
+  // Normalize the URL before decoding: URL.pathname re-encodes spaces, which
+  // must not become literal %20 characters in the filesystem lookup.
+  const pathname = decodeURIComponent(new URL(path, "https://verdanza.fr").pathname);
   if (pathname === "/") return pathname;
   return pathname.replace(/\/+$/, "") || "/";
 }

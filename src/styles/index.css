@@ -699,8 +699,8 @@ html.age-gate-pending .font-display {
 
 .home-hero-flow {
   background:
-    radial-gradient(circle at 86% 14%, rgba(201, 164, 92, 0.13), transparent 24rem),
-    linear-gradient(145deg, #faf8f2 0%, #f4efe4 100%);
+    radial-gradient(circle at 86% 14%, rgba(201, 164, 92, 0.055), transparent 24rem),
+    #faf8f2;
 }
 
 .home-hero-v2 {
@@ -709,6 +709,7 @@ html.age-gate-pending .font-display {
 }
 
 .home-hero-v2__layout {
+  position: relative;
   display: grid;
   gap: 1.25rem;
   padding-bottom: 5.25rem;
@@ -716,6 +717,8 @@ html.age-gate-pending .font-display {
 }
 
 .home-hero-v2__content {
+  position: relative;
+  z-index: 1;
   align-self: center;
   max-width: 38rem;
   animation: home-hero-v2-in 240ms ease-out both;
@@ -769,29 +772,35 @@ html.age-gate-pending .font-display {
 
 .home-hero-v2__media {
   position: relative;
-  height: 11.5rem;
   min-height: 0;
-  overflow: hidden;
-  border: 1px solid rgba(201, 164, 92, 0.42);
-  border-radius: 0.3rem;
-  background: #eee7d9;
-  box-shadow: 0 1.4rem 3.5rem rgba(11, 61, 46, 0.09);
-  animation: home-hero-v2-in 280ms 40ms ease-out both;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  animation: home-hero-media-in 280ms ease-out both;
 }
 
-.home-hero-v2__media::after {
+.home-hero-v2__picture {
+  position: relative;
+  display: block;
+}
+
+.home-hero-v2__picture::after {
   position: absolute;
   inset: 0;
   content: "";
   pointer-events: none;
-  background: linear-gradient(115deg, rgba(250, 248, 242, 0.12), transparent 42%, rgba(11, 61, 46, 0.08));
+  background:
+    linear-gradient(0deg, #faf8f2, transparent 8%, transparent 94%, #faf8f2),
+    linear-gradient(90deg, #faf8f2, transparent 12%, transparent 98%, #faf8f2);
 }
 
 .home-hero-v2__image {
+  display: block;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: 62% center;
+  height: auto;
+  object-fit: contain;
+  object-position: right center;
   filter: none;
 }
 
@@ -949,10 +958,6 @@ html.age-gate-pending .font-display {
     padding-top: 3.25rem;
   }
 
-  .home-hero-v2__media {
-    height: 18rem;
-  }
-
   .home-section-heading-v2 {
     flex-direction: row;
     align-items: flex-end;
@@ -977,7 +982,7 @@ html.age-gate-pending .font-display {
 
 @media (min-width: 768px) {
   .home-hero-v2__layout {
-    grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+    grid-template-columns: minmax(0, 1fr);
     align-items: center;
     gap: 2rem;
     padding-bottom: 5.75rem;
@@ -988,8 +993,18 @@ html.age-gate-pending .font-display {
     font-size: 3.25rem;
   }
 
-  .home-hero-v2__media {
-    height: 19rem;
+  .home-hero-v2__content {
+    max-width: 40rem;
+  }
+
+  .home-hero-v2__title {
+    max-width: 19ch;
+  }
+
+  .home-hero-v2__picture::after {
+    background:
+      linear-gradient(0deg, #faf8f2, transparent 8%, transparent 94%, #faf8f2),
+      linear-gradient(90deg, #faf8f2, transparent 10%, transparent 98%, #faf8f2);
   }
 
   .home-reassurance-v2 {
@@ -1015,22 +1030,47 @@ html.age-gate-pending .font-display {
   }
 }
 
+@media (min-width: 900px) {
+  .home-hero-v2__layout {
+    display: block;
+    min-height: 32rem;
+    padding-top: 3.5rem;
+    padding-bottom: 6rem;
+  }
+
+  .home-hero-v2__content {
+    width: 43%;
+    max-width: 35rem;
+  }
+
+  .home-hero-v2__title { max-width: 12ch; }
+
+  .home-hero-v2__media {
+    position: absolute;
+    inset: 0 0 0 auto;
+    display: grid;
+    align-items: center;
+    width: 55%;
+    padding-bottom: 2rem;
+  }
+
+  .home-hero-v2__picture::after {
+    background:
+      linear-gradient(90deg, #faf8f2 0%, #faf8f2 14%, rgba(250, 248, 242, 0.7) 28%, transparent 42%),
+      linear-gradient(0deg, #faf8f2, transparent 8%, transparent 94%, #faf8f2),
+      linear-gradient(270deg, #faf8f2, transparent 3%);
+  }
+}
+
 @media (min-width: 1024px) {
   .home-hero-v2__layout {
     min-height: 35rem;
-    grid-template-columns: minmax(0, 0.83fr) minmax(0, 1.17fr);
-    align-items: center;
-    gap: clamp(2.5rem, 5vw, 5rem);
     padding-bottom: 7.25rem;
     padding-top: 4.5rem;
   }
 
   .home-hero-v2__title {
     font-size: clamp(3.75rem, 5.8vw, 4.7rem);
-  }
-
-  .home-hero-v2__media {
-    height: 26rem;
   }
 
   .home-selection-v2__grid > :last-child:nth-child(odd) {
@@ -1043,6 +1083,11 @@ html.age-gate-pending .font-display {
   }
 }
 
+@keyframes home-hero-media-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 @keyframes home-hero-v2-in {
   from {
     opacity: 0;
@@ -1052,6 +1097,123 @@ html.age-gate-pending .font-display {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Local express information, distinct from promotional/system notices. No blur. */
+.express-delivery-banner {
+  position: relative;
+  display: grid;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
+  padding: 1.125rem 1.25rem;
+  border: 1px solid rgb(201 164 92 / 30%);
+  border-radius: 0.5rem;
+  background: linear-gradient(110deg, rgb(250 248 242 / 96%), rgb(245 239 225 / 74%));
+  box-shadow: 0 0.6rem 2rem rgb(11 61 46 / 4%);
+  color: #0b3d2e;
+}
+
+.express-delivery-banner__heading {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  min-width: 0;
+}
+
+.express-delivery-banner__pin {
+  width: 1.375rem;
+  height: 1.375rem;
+  flex-shrink: 0;
+  color: #a57c35;
+  stroke-width: 1.4;
+}
+
+.express-delivery-banner__eyebrow {
+  margin: 0 0 0.25rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.express-delivery-banner__title {
+  margin: 0;
+  font-family: "Cormorant Garamond", "Playfair Display", Georgia, serif;
+  font-size: clamp(1.125rem, 2vw, 1.375rem);
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.express-delivery-banner__details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+}
+
+.express-delivery-banner__details li {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  white-space: nowrap;
+}
+
+.express-delivery-banner__details svg,
+.express-delivery-banner__link svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  stroke-width: 1.5;
+}
+
+.express-delivery-banner__details svg { color: #a57c35; }
+
+.express-delivery-banner__link {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 0.375rem;
+  min-height: 2.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: rgb(165 124 53 / 65%);
+  text-underline-offset: 0.3rem;
+}
+
+.express-delivery-banner__link:hover { text-decoration-color: currentColor; }
+.express-delivery-banner__link:focus-visible,
+.express-delivery-banner__dismiss:focus-visible {
+  outline: 2px solid #0b3d2e;
+  outline-offset: 4px;
+}
+
+.express-delivery-banner:has(.express-delivery-banner__dismiss) { padding-right: 3.75rem; }
+.express-delivery-banner__dismiss {
+  position: absolute;
+  right: 0.375rem;
+  top: 0.375rem;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+}
+.express-delivery-banner__dismiss svg { width: 1.125rem; height: 1.125rem; }
+
+@media (min-width: 640px) {
+  .express-delivery-banner { grid-template-columns: minmax(0, 1fr) auto; }
+  .express-delivery-banner__details { grid-column: 1 / -1; grid-row: 2; }
+  .express-delivery-banner__link { grid-column: 2; grid-row: 1; }
+}
+
+@media (min-width: 1024px) {
+  .express-delivery-banner { grid-template-columns: minmax(0, 1fr) auto auto; padding: 1.25rem 1.5rem; }
+  .express-delivery-banner__details { grid-column: 2; grid-row: 1; }
+  .express-delivery-banner__link { grid-column: 3; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1070,4 +1232,182 @@ html.age-gate-pending .font-display {
   .home-guide-card-v2:hover {
     transform: none;
   }
+}
+
+/* Public advantages hub and its header disclosure. No global background changes. */
+.advantages-hub {
+  padding-top: 2.5rem;
+  padding-bottom: 4rem;
+}
+
+.advantages-hub__intro { max-width: 48rem; margin-bottom: 2.5rem; }
+.advantages-hub__eyebrow,
+.advantage-surface__eyebrow {
+  margin: 0;
+  color: #856229;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.advantages-hub h1,
+.advantage-surface h2 {
+  color: #0b3d2e;
+  font-family: "Cormorant Garamond", "Playfair Display", Georgia, serif;
+  font-weight: 400;
+  line-height: 1.06;
+}
+.advantages-hub h1 { margin: 1rem 0; font-size: clamp(2.75rem, 5.5vw, 4.5rem); }
+.advantages-hub__description {
+  max-width: 39rem;
+  margin: 0;
+  color: rgb(30 39 34 / 72%);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+.advantages-hub__entries { display: grid; gap: 1rem; }
+
+.advantage-surface {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 1.5rem;
+  border: 1px solid rgb(201 164 92 / 32%);
+  border-radius: 0.5rem;
+  background: #f8f5ed;
+}
+.advantage-surface--contest {
+  min-height: 20rem;
+  background: linear-gradient(140deg, #faf8f2, #f3eddf);
+}
+.advantage-surface--referral { background: transparent; border-color: rgb(11 61 46 / 13%); }
+.advantage-surface__meta { display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%; }
+.advantage-surface__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #4a6559;
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
+.advantage-surface__status > span { width: 0.3rem; height: 0.3rem; border-radius: 50%; background: currentColor; }
+.advantage-surface__status--soon { color: #75613f; }
+.advantage-surface__icon { width: 1.75rem; height: 1.75rem; margin-top: 1.5rem; color: #a57c35; stroke-width: 1.25; }
+.advantage-surface--contest .advantage-surface__icon { width: 2.5rem; height: 2.5rem; margin-top: 2rem; }
+.advantage-surface h2 { margin: 1rem 0 0; font-size: 2rem; }
+.advantage-surface--contest h2 { font-size: clamp(2.5rem, 3.5vw, 3.5rem); max-width: 12ch; }
+.advantage-surface__description { max-width: 32ch; margin: 0.875rem 0 0; color: rgb(30 39 34 / 72%); font-size: 0.9375rem; line-height: 1.7; }
+.advantage-surface__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  margin-top: 1.25rem;
+  color: #0b3d2e;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: #c9a45c;
+  text-underline-offset: 0.35rem;
+}
+.advantage-surface--contest .advantage-surface__link { margin-top: auto; padding-top: 1.5rem; }
+.advantage-surface__link:hover { text-decoration-color: currentColor; }
+.advantage-surface__link:focus-visible,
+.advantages-navigation a:focus-visible,
+.advantages-navigation__toggle:focus-visible {
+  outline: 2px solid #0b3d2e;
+  outline-offset: 4px;
+  border-radius: 0.125rem;
+}
+
+.advantages-navigation { position: relative; display: inline-flex; align-items: center; }
+.advantages-navigation__link { display: inline-flex; align-items: center; min-height: 2.75rem; }
+.advantages-navigation__link.is-active { color: #0b3d2e; text-decoration: underline; text-decoration-color: #c9a45c; }
+.advantages-navigation__toggle { display: grid; place-items: center; min-width: 2.75rem; min-height: 2.75rem; color: #0b3d2e; }
+.advantages-navigation__toggle[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.advantages-navigation__panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 1;
+  width: 17rem;
+  padding: 0.5rem;
+  border: 1px solid rgb(201 164 92 / 35%);
+  border-radius: 0.5rem;
+  background: #faf8f2;
+  box-shadow: 0 0.75rem 2rem rgb(11 61 46 / 8%);
+}
+.advantages-navigation__panel[hidden] { display: none; }
+.advantages-navigation__panel ul { margin: 0; padding: 0; list-style: none; }
+.advantages-navigation__panel a,
+.advantages-navigation__soon { display: flex; align-items: center; min-height: 2.75rem; padding: 0.5rem 0.75rem; }
+.advantages-navigation__panel a:hover { background: #f3eddf; }
+.advantages-navigation__soon { justify-content: space-between; gap: 0.75rem; color: #576c61; }
+.advantages-navigation__soon small { color: #75613f; font-size: 0.6875rem; }
+
+@media (min-width: 640px) {
+  .advantages-hub { padding-top: 3rem; padding-bottom: 5rem; }
+  .advantages-hub__entries { gap: 1.5rem; }
+  .advantage-surface { padding: 2rem; }
+}
+@media (min-width: 768px) {
+  .advantages-hub__intro { margin-bottom: 3rem; }
+  .advantages-hub__entries { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+  .advantage-surface--contest { grid-row: span 2; }
+}
+@media (min-width: 1280px) {
+  .advantages-hub { padding-top: 4rem; padding-bottom: 6rem; }
+  .advantage-surface--contest { padding: 2.5rem; }
+}
+
+/* Phase 6D: atmosphere behind the existing public surfaces, never their content. */
+.public-atmosphere {
+  position: relative;
+  isolation: isolate;
+  /* clip does not create a scroll container: sticky/fixed UI keeps its behavior. */
+  overflow: clip;
+}
+.public-atmosphere::before,
+.public-atmosphere::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+}
+.public-atmosphere::before {
+  top: 0;
+  left: 0;
+  width: 100%;
+  /* Only the bounded top light can move, not a texture as tall as a long page. */
+  height: min(84rem, 100%);
+  background: radial-gradient(ellipse 42rem 34rem at 95% 12rem, rgb(201 164 92 / 3.5%), transparent 76%);
+  opacity: 0.75;
+  animation: none;
+  transform: none;
+}
+.public-atmosphere::after {
+  inset: 0;
+  background: radial-gradient(ellipse 46rem 38rem at 0% 55%, rgb(145 163 140 / 2.5%), transparent 78%);
+}
+@media (min-width: 1024px) {
+  .public-atmosphere::before {
+    background: radial-gradient(ellipse 72rem 44rem at 96% 15rem, rgb(201 164 92 / 6.5%), transparent 76%);
+    animation: public-atmosphere-drift 36s ease-in-out infinite alternate;
+  }
+  .public-atmosphere::after {
+    background: radial-gradient(ellipse 68rem 44rem at 0% 55%, rgb(145 163 140 / 5%), transparent 78%);
+  }
+}
+@keyframes public-atmosphere-drift {
+  from { transform: translate(0, 0) scale(1); opacity: 0.75; }
+  to { transform: translate(0.6%, 0.4%) scale(1.008); opacity: 0.85; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .public-atmosphere::before { animation: none; transform: none; }
+}
+/* Older engines without clip retain a static, strictly in-bounds atmosphere. */
+@supports not (overflow: clip) {
+  .public-atmosphere::before { animation: none; transform: none; }
 }

@@ -3,12 +3,26 @@ import { dirname, relative, resolve } from "node:path";
 import sharp from "sharp";
 import { blogArticles } from "../src/data/blogArticles";
 import { products } from "../src/data/products";
+import { productCardMediaBySlug } from "../src/lib/productCardMedia";
 
 type Variant = {
   name: string;
   width: number;
   quality: number;
+  effort?: number;
 };
+
+type ImageCrop = { left: number; top: number; width: number; height: number };
+
+// The whole Golden Static resin is already framed horizontally. Removing only
+// excess white above and below makes it readable inside the 4:3 card viewport.
+const goldenStaticCardCrop: ImageCrop = { left: 0, top: 67, width: 713, height: 615 };
+
+// Home art direction: full useful width when stacked, 55% of the capped
+// 1280px container from 900px. These declarations describe the actual img box.
+const homeHeroDesktopSizes = "(min-width: 1280px) 704px, (min-width: 900px) 55vw, calc(100vw - 48px)";
+const homeHeroTabletSizes = "calc(100vw - 48px)";
+const homeHeroMobileSizes = "(min-width: 640px) calc(100vw - 48px), calc(100vw - 32px)";
 
 type GeneratedVariant = {
   src: string;
@@ -29,6 +43,14 @@ type ProductReport = {
   hasAlpha?: boolean;
   card: GeneratedVariant[];
   detail: GeneratedVariant[];
+  dedicatedCard?: {
+    sourceUrl: string;
+    sourceBytes: number;
+    sourceWidth: number;
+    sourceHeight: number;
+    crop?: ImageCrop;
+    variants: GeneratedVariant[];
+  };
 };
 
 const publicDir = resolve("public");
@@ -42,7 +64,10 @@ const productCardVariants: Variant[] = [
   { name: "card-640", width: 640, quality: 80 },
 ];
 const productDetailVariants: Variant[] = [{ name: "detail", width: 713, quality: 82 }];
-const staticTargets = [
+const staticTargets: {
+  key: string; sourceUrl: string; outputBase: string; variants: Variant[];
+  sizes: string; crop?: ImageCrop;
+}[] = [
   {
     key: "/images/verdanza-hero-premium.webp",
     sourceUrl: "/images/verdanza-hero-premium.webp",
@@ -53,6 +78,42 @@ const staticTargets = [
       { name: "1672", width: 1672, quality: 82 },
     ],
     sizes: "100vw",
+  },
+  {
+    key: "/images/hero-editorial-desktop.webp",
+    sourceUrl: "/images/hero-editorial-desktop.webp",
+    outputBase: "/images/hero-editorial-desktop",
+    // Remove only negative space on the left, preserving every product contour.
+    crop: { left: 740, top: 0, width: 1034, height: 438 },
+    variants: [
+      { name: "560", width: 560, quality: 76, effort: 6 },
+      { name: "704", width: 704, quality: 70, effort: 6 },
+      { name: "1034", width: 1034, quality: 78, effort: 6 },
+    ],
+    sizes: homeHeroDesktopSizes,
+  },
+  {
+    key: "home-hero-editorial-tablet",
+    sourceUrl: "/images/hero-editorial-desktop.webp",
+    outputBase: "/images/hero-editorial-tablet",
+    variants: [
+      { name: "768", width: 768, quality: 76 },
+      { name: "1024", width: 1024, quality: 74, effort: 6 },
+      { name: "1280", width: 1280, quality: 66, effort: 6 },
+    ],
+    sizes: homeHeroTabletSizes,
+  },
+  {
+    key: "/images/hero-editorial-mobile.webp",
+    sourceUrl: "/images/hero-editorial-mobile.webp",
+    outputBase: "/images/hero-editorial-mobile",
+    variants: [
+      { name: "400", width: 400, quality: 76 },
+      { name: "800", width: 800, quality: 78 },
+      { name: "1280", width: 1280, quality: 80 },
+      { name: "1774", width: 1774, quality: 80 },
+    ],
+    sizes: homeHeroMobileSizes,
   },
 ];
 const blogImageSources: Record<
@@ -201,6 +262,7 @@ mkdirSync(dirname(reportPath), { recursive: true });
 
 const productReports: ProductReport[] = [];
 const productManifestEntries: string[] = [];
+const productCardManifestEntries: string[] = [];
 
 for (const product of products) {
   const sourceFile = publicPath(product.image);
@@ -213,6 +275,44 @@ for (const product of products) {
   const sourceBytes = sourceBuffer.length;
   const card = await generateProductVariants(product.slug, sourceBuffer, sourceWidth, sourceHeight, productCardVariants);
   const detail = await generateProductVariants(product.slug, sourceBuffer, sourceWidth, sourceHeight, productDetailVariants);
+  const cardMedia = productCardMediaBySlug[product.slug];
+  let dedicatedCard: ProductReport["dedicatedCard"];
+  if (cardMedia && cardMedia.src !== product.image) {
+    const cardSourceFile = publicPath(cardMedia.src);
+    if (!existsSync(cardSourceFile)) throw new Error(`Missing card image for ${product.slug}: ${cardMedia.src}`);
+    const cardSourceBuffer = readFileSync(cardSourceFile);
+    const cardSourceMetadata = await sharp(cardSourceBuffer).metadata();
+    const cardSourceWidth = cardSourceMetadata.width || 0;
+    const cardSourceHeight = cardSourceMetadata.height || 0;
+    const crop = product.slug === "golden-static" ? goldenStaticCardCrop : undefined;
+    if (crop && (cardSourceWidth !== 713 || cardSourceHeight !== 713)) {
+      throw new Error(`Golden Static card source dimensions changed: ${cardSourceWidth}x${cardSourceHeight}`);
+    }
+    const variants = await generateProductVariants(
+      `${product.slug}-editorial`,
+      cardSourceBuffer,
+      cardSourceWidth,
+      cardSourceHeight,
+      productCardVariants,
+      crop,
+    );
+    dedicatedCard = {
+      sourceUrl: cardMedia.src,
+      sourceBytes: cardSourceBuffer.length,
+      sourceWidth: cardSourceWidth,
+      sourceHeight: cardSourceHeight,
+      crop,
+      variants,
+    };
+    const largest = variants[variants.length - 1];
+    productCardManifestEntries.push(`  ${JSON.stringify(cardMedia.src)}: {
+    src: ${JSON.stringify(largest.src)},
+    srcSet: ${JSON.stringify(srcSet(variants))},
+    sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
+    width: ${largest.width},
+    height: ${largest.height},
+  }`);
+  }
 
   productReports.push({
     productId: product.id,
@@ -226,6 +326,7 @@ for (const product of products) {
     hasAlpha: Boolean(sourceMetadata.hasAlpha),
     card,
     detail,
+    dedicatedCard,
   });
 
   const cardLargest = card[card.length - 1];
@@ -263,6 +364,7 @@ for (const target of staticTargets) {
         sourceMetadata.height || variant.width,
         `${target.outputBase}-${variant.name}.webp`,
         variant,
+        target.crop,
       ),
     ),
   );
@@ -275,6 +377,7 @@ for (const target of staticTargets) {
     sourceHeight: sourceMetadata.height || 0,
     format: sourceMetadata.format,
     hasAlpha: Boolean(sourceMetadata.hasAlpha),
+    crop: target.crop,
     variants: generated,
   });
   staticManifestEntries.set(target.key, `  ${JSON.stringify(target.key)}: {
@@ -356,6 +459,7 @@ const report = {
   totals: {
     productSourceBytes: sum(productReports.map((item) => item.sourceBytes)),
     productCardLargestBytes: sum(productReports.map((item) => item.card.at(-1)?.bytes || 0)),
+    productCardSelectedLargestBytes: sum(productReports.map((item) => item.dedicatedCard?.variants.at(-1)?.bytes || item.card.at(-1)?.bytes || 0)),
     productDetailBytes: sum(productReports.map((item) => item.detail.at(-1)?.bytes || 0)),
     staticSourceBytes: sum(staticReport.map((item) => item.sourceBytes)),
     staticLargestBytes: sum(staticReport.map((item) => item.variants.at(-1)?.bytes || 0)),
@@ -383,8 +487,24 @@ export const productImageVariants: Record<string, ProductImageVariantSet> = {
 ${productManifestEntries.join(",\n")}
 };
 
+export const productCardImageVariants: Record<string, ResponsiveImageVariant> = {
+${productCardManifestEntries.join(",\n")}
+};
+
 export const staticImageVariants: Record<string, ResponsiveImageVariant> = {
 ${[...staticManifestEntries.values()].join(",\n")}
+};
+
+export const homeHeroImageVariant: ResponsiveImageVariant = {
+  ...staticImageVariants["/images/hero-editorial-desktop.webp"],
+};
+
+export const homeHeroTabletImageVariant: ResponsiveImageVariant = {
+  ...staticImageVariants["home-hero-editorial-tablet"],
+};
+
+export const homeHeroMobileImageVariant: ResponsiveImageVariant = {
+  ...staticImageVariants["/images/hero-editorial-mobile.webp"],
 };
 `,
 );
@@ -395,6 +515,7 @@ console.table(
     product: item.productName,
     sourceKB: kb(item.sourceBytes),
     card640KB: kb(item.card.at(-1)?.bytes || 0),
+    selectedCard640KB: kb(item.dedicatedCard?.variants.at(-1)?.bytes || item.card.at(-1)?.bytes || 0),
     detailKB: kb(item.detail.at(-1)?.bytes || 0),
     reductionCard: percent(item.sourceBytes, item.card.at(-1)?.bytes || 0),
     reductionDetail: percent(item.sourceBytes, item.detail.at(-1)?.bytes || 0),
@@ -424,6 +545,7 @@ async function generateProductVariants(
   sourceWidth: number,
   sourceHeight: number,
   variants: Variant[],
+  crop?: ImageCrop,
 ) {
   return Promise.all(
     variants.map((variant) =>
@@ -433,6 +555,7 @@ async function generateProductVariants(
         sourceHeight,
         `/images/products/${slug}-${variant.name}.webp`,
         variant,
+        crop,
       ),
     ),
   );
@@ -444,14 +567,18 @@ async function generateVariant(
   sourceHeight: number,
   outputUrl: string,
   variant: Variant,
+  crop?: ImageCrop,
 ): Promise<GeneratedVariant> {
-  const width = Math.min(variant.width, sourceWidth);
-  const height = Math.round((sourceHeight / sourceWidth) * width);
+  const effectiveWidth = crop?.width || sourceWidth;
+  const effectiveHeight = crop?.height || sourceHeight;
+  const width = Math.min(variant.width, effectiveWidth);
+  const height = Math.round((effectiveHeight / effectiveWidth) * width);
   const outputFile = publicPath(outputUrl);
   mkdirSync(dirname(outputFile), { recursive: true });
-  const output = await sharp(sourceBuffer)
+  const image = sharp(sourceBuffer);
+  const output = await (crop ? image.extract(crop) : image)
     .resize({ width, withoutEnlargement: true })
-    .webp({ quality: variant.quality, effort: 5 })
+    .webp({ quality: variant.quality, effort: variant.effort || 5 })
     .toBuffer();
   writeIfChanged(outputFile, output);
   return {

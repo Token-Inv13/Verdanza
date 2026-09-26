@@ -8,7 +8,10 @@ import { JsonLd } from "../components/JsonLd";
 import { Seo } from "../components/Seo";
 import { blogArticlePath, publishedBlogArticles } from "../data/blogArticles";
 import { useProducts } from "../hooks/useProducts";
-import { staticImageVariants } from "../lib/generatedImageVariants";
+import {
+  homeHeroImageVariant, homeHeroTabletImageVariant, homeHeroMobileImageVariant,
+  staticImageVariants,
+} from "../lib/generatedImageVariants";
 import { buildHomeJsonLd } from "../lib/structuredData";
 import { trackCtaClick, trackViewItemList } from "../lib/analytics";
 import { DEFAULT_LOCAL_DELIVERY_ESTIMATE_LABEL } from "../lib/deliveryEstimate";
@@ -51,7 +54,9 @@ export function HomePage() {
   const featuredProducts = products.filter((product) => product.isFeatured);
   const trackedListSignature = useRef("");
   const [isAgeConfirmed, setIsAgeConfirmed] = useState(isAgeConfirmedLocally);
-  const heroImage = staticImageVariants["/images/verdanza-hero-premium.webp"];
+  const heroImage = homeHeroImageVariant;
+  const heroTabletImage = homeHeroTabletImageVariant;
+  const heroMobileImage = homeHeroMobileImageVariant;
   const contactEmail =
     (import.meta.env.VITE_CONTACT_EMAIL as string | undefined) ||
     "contact@verdanza.fr";
@@ -148,17 +153,33 @@ export function HomePage() {
 
               <div className="home-hero-v2__media" aria-hidden={!isAgeConfirmed}>
                 {isAgeConfirmed && (
-                  <img
-                    src={heroImage?.src || "/images/verdanza-hero-premium.webp"}
-                    srcSet={heroImage?.srcSet}
-                    sizes="(min-width: 1024px) 52vw, 100vw"
-                    alt="Fleur et résine CBD de la sélection Verdanza"
-                    width={heroImage?.width || 1672}
-                    height={heroImage?.height || 941}
-                    fetchPriority="high"
-                    decoding="async"
-                    className="home-hero-v2__image"
-                  />
+                  <picture className="home-hero-v2__picture" data-home-hero-picture>
+                    <source
+                      media="(min-width: 900px)"
+                      srcSet={heroImage.srcSet}
+                      sizes={heroImage.sizes}
+                      width={heroImage.width}
+                      height={heroImage.height}
+                    />
+                    <source
+                      media="(min-width: 768px)"
+                      srcSet={heroTabletImage.srcSet}
+                      sizes={heroTabletImage.sizes}
+                      width={heroTabletImage.width}
+                      height={heroTabletImage.height}
+                    />
+                    <img
+                      src={heroMobileImage.src}
+                      srcSet={heroMobileImage.srcSet}
+                      sizes={heroMobileImage.sizes}
+                      alt="Fleurs et résine CBD dans un décor botanique clair"
+                      width={heroMobileImage.width}
+                      height={heroMobileImage.height}
+                      fetchPriority="high"
+                      decoding="async"
+                      className="home-hero-v2__image"
+                    />
+                  </picture>
                 )}
               </div>
             </div>

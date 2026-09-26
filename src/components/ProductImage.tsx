@@ -1,4 +1,4 @@
-import { productImageVariants } from "../lib/generatedImageVariants";
+import { productCardImageVariants, productImageVariants } from "../lib/generatedImageVariants";
 
 type ProductImageProps = {
   src: string;
@@ -22,7 +22,9 @@ export function ProductImage({
   loading = "lazy",
   fetchPriority = "auto",
 }: ProductImageProps) {
-  const optimized = productImageVariants[src]?.[variant];
+  const optimized = variant === "card"
+    ? productCardImageVariants[src] || productImageVariants[src]?.card
+    : productImageVariants[src]?.detail;
   const fallback = fallbackDimensions[variant];
 
   return (

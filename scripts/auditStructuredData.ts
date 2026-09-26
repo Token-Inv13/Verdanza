@@ -423,6 +423,10 @@ function expectedBreadcrumbItems(path: string, product?: Product) {
       { name: "Accueil", path: "/" },
       { name: "Contact", path: "/contact" },
     ],
+    "/avantages": [
+      { name: "Accueil", path: "/" },
+      { name: "Avantages", path: "/avantages" },
+    ],
     "/concours": [
       { name: "Accueil", path: "/" },
       { name: "Jeu-concours", path: "/concours" },

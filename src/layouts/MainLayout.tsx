@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Menu, ShoppingBag, UserRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useCart } from "../context/CartContext";
@@ -12,6 +12,8 @@ import { BrandLogo } from "../components/BrandLogo";
 import { useConsent } from "../context/ConsentContext";
 import { trackContactClick, trackCtaClick } from "../lib/analytics";
 import { getActiveSocialLinks } from "../lib/socialLinks";
+import { AdvantagesNavigation } from "../components/AdvantagesNavigation";
+import { CAGNOTTE_READ_DISPLAY_ENABLED } from "../config/cagnotteFeatures";
 
 const navItems = [
   { label: "Accueil", to: "/" },
@@ -19,7 +21,7 @@ const navItems = [
   { label: "Fleurs CBD", to: "/fleurs-cbd" },
   { label: "Résines CBD", to: "/resines-cbd" },
   { label: "Guides", to: "/blog" },
-  { label: "Concours", to: "/concours" },
+  { label: "Avantages", to: "/avantages" },
   { label: "Livraison", to: "/livraison" },
   { label: "Qualité", to: "/qualite-conformite" },
 ];
@@ -44,6 +46,7 @@ function ctaIdForPath(prefix: string, path: string) {
 }
 
 export function MainLayout() {
+  const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const { itemCount } = useCart();
@@ -68,7 +71,7 @@ export function MainLayout() {
   }, [open]);
 
   return (
-    <div className="min-h-screen bg-ivory text-ink">
+    <div className="public-atmosphere min-h-screen bg-ivory text-ink" data-public-atmosphere>
       <PromoBannersProvider>
         <AgeGate />
         <header className="sticky top-0 z-40 border-b border-forest/10 bg-ivory/95 backdrop-blur">
@@ -83,8 +86,14 @@ export function MainLayout() {
               className="hidden h-auto w-[112px] min-[360px]:block min-[390px]:w-[128px] sm:w-[184px] xl:w-[200px]"
             />
           </NavLink>
-          <nav className="hidden items-center gap-6 text-sm text-forest/80 lg:flex">
-            {navItems.map((item) => (
+          <nav aria-label="Navigation principale" className="hidden items-center gap-4 text-sm text-forest/80 lg:flex xl:gap-6">
+            {navItems.map((item) => item.to === "/avantages" ? (
+              <AdvantagesNavigation key={`advantages-${pathname}`} loyaltyEnabled={CAGNOTTE_READ_DISPLAY_ENABLED}
+                onNavigate={(path) => trackCtaClick({
+                  ctaId: ctaIdForPath("header_nav", path), ctaLocation: "header",
+                  destinationPath: path, ctaCategory: ctaCategoryForPath(path),
+                })} />
+            ) : (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -135,6 +144,7 @@ export function MainLayout() {
         {open && (
           <nav
             id={mobileMenuId}
+            aria-label="Navigation mobile"
             className="container-page grid gap-3 border-t border-forest/10 pb-5 pt-2 text-sm text-forest lg:hidden"
           >
             {navItems.map((item) => (
@@ -164,7 +174,7 @@ export function MainLayout() {
         <Outlet />
         <ComplianceNote />
       </PromoBannersProvider>
-      <footer className="bg-cream py-12">
+      <footer className="bg-cream py-12" data-floating-help-suppress="footer">
         <div className="container-page grid gap-8 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
             <BrandLogo

@@ -11,6 +11,9 @@ import type {
   PromoBannerVariant,
 } from "../types";
 import { TopPromoShowcase } from "./TopPromoShowcase";
+import { ExpressDeliveryBanner } from "./ExpressDeliveryBanner";
+import { expressDeliverySummary } from "../lib/expressDeliveryBanner";
+import { trackCtaClick } from "../lib/analytics";
 
 type PromoBannersState = { banners: PromoBanner[]; loaded: boolean };
 
@@ -90,9 +93,20 @@ export function PromoBannerSlot({
 
   return (
     <div className={className}>
-      {visibleBanners.map((banner) => (
-        <PublicPromoBanner key={banner.id} banner={banner} onDismiss={dismissBanner} />
-      ))}
+      {visibleBanners.map((banner) => {
+        const summary = expressDeliverySummary(banner);
+        return summary ? (
+          <ExpressDeliveryBanner key={banner.id} banner={banner} summary={summary}
+            onConditionsClick={() => trackCtaClick({
+              ctaId: "express_banner_conditions",
+              ctaLocation: `promo_banner_${currentPlacement}`,
+              destinationPath: "/livraison-locale",
+              ctaCategory: "delivery",
+            })} onDismiss={dismissBanner} />
+        ) : (
+          <PublicPromoBanner key={banner.id} banner={banner} onDismiss={dismissBanner} />
+        );
+      })}
     </div>
   );
 }

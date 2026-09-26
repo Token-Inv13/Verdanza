@@ -57,6 +57,7 @@ export function ProductGallery({
           className="mt-3 grid grid-cols-3 gap-3"
           aria-label={`Choisir un visuel de ${product.name}`}
           data-product-thumbnails
+          data-floating-help-suppress="product-gallery"
         >
           {images.map((image) => {
             const selected = image.id === selectedImage?.id;

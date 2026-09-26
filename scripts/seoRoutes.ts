@@ -94,6 +94,12 @@ export const staticSeoRoutes: SeoRoute[] = [
     indexable: true,
   },
   {
+    path: "/avantages",
+    kind: "public-indexable",
+    component: "AdvantagesPage",
+    indexable: true,
+  },
+  {
     path: "/concours",
     kind: "public-indexable",
     component: "ContestPage",
