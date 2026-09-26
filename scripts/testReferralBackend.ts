@@ -1510,20 +1510,73 @@ await test("paiement off détecté par email legacy à la reprise", async () => 
   equal((await routeReferralMovements(secondId)).length, 0);
 });
 
-await test("historique saturé ferme le gain sans bloquer le paiement", async () => {
+await test("historique saturé sans remise laisse le paiement consommer le lien sans gain", async () => {
   const id = "referral-history-saturated-candidate";
-  const child = await createRouteCandidate(id, "referee-history-saturated-candidate");
+  const child = await createPlainRouteCandidate(id, "referee-history-saturated-candidate");
   const batch = db.batch();
   for (let index = 0; index < 100; index++) batch.set(db.collection("orders").doc(`referral-history-saturated-${index}`),
     { customerId: child.uid, orderType: "order", paymentStatus: "to_confirm", total: 60,
       items: [{ productId: "fixture-product", quantity: 1 }] });
   await batch.commit();
+  deepStrictEqual(await db.runTransaction((tx) => findPriorPaidProductOrder(tx, db, child.uid, id)), { kind: "inconclusive" });
   const sponsorBefore = await wallet("sponsor-b");
   await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
   equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
   equal((await routeRelation(child.uid)).state, "cancelled");
-  equal((await routeRelation(child.uid)).rewardIneligibilityReason, "referral_history_inconclusive");
+  equal((await routeRelation(child.uid)).rewardIneligibilityReason, "first_paid_order_without_referral_discount");
+  equal((await routeRelation(child.uid)).qualifyingOrderId, id);
   equal((await routeReferralMovements(id)).length, 0);
   deepStrictEqual(await wallet("sponsor-b"), sponsorBefore);
+});
+await test("historique inconclusif refuse le paiement remisé et son replay sans mutation puis qualifie après résolution", async () => {
+  const id = "referral-history-inconclusive-discount";
+  const child = await createRouteCandidate(id, "referee-history-inconclusive-discount");
+  const loyaltyProgram = { mode: "local_test" as const, programVersion: "fixture-referral-inconclusive-v1",
+    calculationVersion: "cagnotte-math-v1" as const, startsAtEpochMs: 1000, newAccrualsEnabled: true };
+  const loyaltySnapshot = calculateCagnotte({ lines: [{ lineId: "line", initialCents: 6000 }],
+    discounts: [{ discountId: "referral", amountCents: 500, kind: "referral_discount", lineIds: ["line"] }],
+    requestedCagnotteCents: 0, availableCagnotteCents: 0, advantages: ["referral_discount"] });
+  await db.collection("orders").doc(id).update({ cagnotte: { schemaVersion: 1, beneficiaryId: child.uid,
+    programVersion: loyaltyProgram.programVersion, calculationVersion: "cagnotte-math-v1", createdAtEpochMs: 2000,
+    snapshot: loyaltySnapshot } });
+  const historyRefs = Array.from({ length: 100 }, (_, index) => db.collection("orders").doc(`referral-inconclusive-history-${index}`));
+  const batch = db.batch();
+  for (const ref of historyRefs) batch.set(ref, { customerId: child.uid, orderType: "order", paymentStatus: "to_confirm",
+    total: 60, items: [{ productId: "fixture-product", quantity: 1 }] });
+  await batch.commit();
+  deepStrictEqual(await db.runTransaction((tx) => findPriorPaidProductOrder(tx, db, child.uid, id)), { kind: "inconclusive" });
+  const collections = ["orders", "referrals", "referralEmailClaims", "cagnotteWallets", "cagnotteReservations",
+    "cagnotteMovements", "analyticsOutbox", "analyticsOperationalEvents", "products"];
+  const capture = async () => Promise.all(collections.map(async (name) => (await db.collection(name).get())
+    .docs.map((doc) => ({ id: doc.id, data: doc.data(), updatedAt: doc.updateTime.toMillis() }))));
+  const before = await capture();
+  const currentEmail = "referee-inconclusive-current@example.test";
+  const pay = () => commitOrderStatusTransition({ db, body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" },
+    admin: routeActor, referralProgram: program, accrualProgram: loyaltyProgram,
+    getSponsorIdentity: async (uid) => uid === child.uid ? { uid, email: currentEmail, emailVerified: true, disabled: false } : activeIdentity(uid),
+    referralEmailKeyring: () => keyringJson, now: () => "2000-01-03T00:00:00.000Z" });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await rejects(pay(), (error: unknown) => error instanceof ReferralError && error.code === "referral_history_inconclusive" && error.status === 409);
+    deepStrictEqual(await capture(), before);
+    equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "to_confirm");
+    equal((await routeRelation(child.uid)).state, "linked");
+    equal((await routeRelation(child.uid)).qualifyingOrderId, null);
+    equal((await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, currentEmail, "v1")).get()).exists, false);
+    equal((await routeMovements(id)).length, 0);
+  }
+  // Only synthetic unpaid history is reduced; the candidate and its relation remain untouched.
+  const reduction = db.batch();
+  for (const ref of historyRefs.slice(0, 10)) reduction.delete(ref);
+  await reduction.commit();
+  deepStrictEqual(await db.runTransaction((tx) => findPriorPaidProductOrder(tx, db, child.uid, id)), { kind: "none" });
+  const sponsorBefore = await wallet("sponsor-b");
+  await pay();
+  equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
+  equal((await routeRelation(child.uid)).state, "pending");
+  equal((await routeRelation(child.uid)).qualifyingOrderId, id);
+  equal((await wallet("sponsor-b")).pendingCents, sponsorBefore.pendingCents + 1000);
+  equal((await wallet(child.uid)).pendingCents, 275);
+  equal((await routeReferralMovements(id)).length, 1);
+  equal((await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, currentEmail, "v1")).get()).data()?.refereeUid, child.uid);
 });
 console.log(`Referral backend: ${passed} checks.`);

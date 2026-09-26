@@ -133,16 +133,7 @@ export async function prepareReferralTransition(input: Input) {
           input.order.customerEmail.trim().toLowerCase() === evidence.refereeEmail ? input.order.customerEmail.trim() : undefined,
         evidence?.refereeAccount === "active" ? evidence.refereeEmail : undefined);
       if (history.kind === "found") throw new ReferralError("referral_discount_already_consumed");
-      if (history.kind !== "none") {
-        const claim = await prepareCurrentRefereeClaim({ db: input.db, transaction: input.transaction, before,
-          evidence, recordedAtEpochMs: input.recordedAtEpochMs });
-        const consumed: ReferralRelation = { ...before, state: "cancelled", paymentConfirmed: true,
-          qualifyingOrderId: input.order.id, rewardIneligibilityReason: "referral_history_inconclusive" };
-        return { status: "applied" as const, write() {
-          input.transaction.set(relationRef, consumed);
-          if (claim.newClaim) input.transaction.create(claim.newClaim.ref, claim.newClaim.value);
-        } };
-      }
+      if (history.kind === "inconclusive") throw new ReferralError("referral_history_inconclusive");
       const claim = await prepareCurrentRefereeClaim({ db: input.db, transaction: input.transaction, before,
         evidence, recordedAtEpochMs: input.recordedAtEpochMs });
       newClaim = claim.newClaim ?? null;
