@@ -136,11 +136,11 @@ export async function prepareReferralTransition(input: Input) {
       if (history.kind === "inconclusive") throw new ReferralError("referral_history_inconclusive");
       const claim = await prepareCurrentRefereeClaim({ db: input.db, transaction: input.transaction, before,
         evidence, recordedAtEpochMs: input.recordedAtEpochMs });
+      if (claim.reason) throw new ReferralError(claim.reason);
+      if (evidence?.sponsorEmail && evidence.refereeEmail === evidence.sponsorEmail)
+        throw new ReferralError("self_referral_at_payment");
       newClaim = claim.newClaim ?? null;
-      if (claim.reason) next.rewardIneligibilityReason = claim.reason;
-      else if (evidence?.sponsorEmail && evidence.refereeEmail === evidence.sponsorEmail)
-        next.rewardIneligibilityReason = "self_referral_at_payment";
-      else if (evidence?.sponsorAccount === "active") {
+      if (evidence?.sponsorAccount === "active") {
         if (!await sponsorHasDeliveredPaidOrder(input.transaction, input.db, before.sponsorUid))
           next.rewardIneligibilityReason = "sponsor_no_longer_eligible";
       } else if (evidence?.sponsorAccount === "disabled") next.rewardIneligibilityReason = "sponsor_account_disabled";

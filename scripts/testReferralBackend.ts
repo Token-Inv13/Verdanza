@@ -310,6 +310,9 @@ const routeRelation = async (uid: string) => (await db.collection("referrals").d
 const routeMovements = async (orderId: string) => (await db.collection("cagnotteMovements").where("orderId", "==", orderId).get()).docs;
 const routeReferralMovements = async (orderId: string) => (await routeMovements(orderId)).filter((doc) =>
   String(doc.data().businessEvent).startsWith("referral_"));
+const capturePaymentState = async () => Promise.all(["orders", "referrals", "referralEmailClaims", "cagnotteWallets",
+  "cagnotteReservations", "cagnotteMovements", "analyticsOutbox", "analyticsOperationalEvents", "products"].map(async (name) =>
+  (await db.collection(name).get()).docs.map((doc) => ({ id: doc.id, data: doc.data(), updatedAt: doc.updateTime.toMillis() }))));
 async function createRouteCandidate(orderId: string, uid: string, code = codeB) {
   const child = { uid, email: `${uid}@example.test`, emailVerified: true };
   await linkReferral({ db, user: child, code, keyring, program, nowEpochMs, getSponsorIdentity: activeIdentity });
@@ -729,9 +732,11 @@ await test("désactivation et indisponibilité Auth au paiement ne créent aucun
   const conflictRef = db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, conflictEmail));
   await conflictRef.set({ schemaVersion: 1, programVersion: "referral-commercial-policy-v1", keyVersion: "v1",
     refereeUid: "other-referee", referralId: "other-referee", createdAtEpochMs: 1000 });
-  await routeTransition(conflictId, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
-    async (uid) => uid === conflictChild.uid ? { uid, email: conflictEmail, emailVerified: true, disabled: false } : disabledIdentity(uid));
-  equal((await routeRelation(conflictChild.uid)).rewardIneligibilityReason, "referee_email_claimed");
+  const conflictBefore = await capturePaymentState();
+  await rejects(routeTransition(conflictId, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
+    async (uid) => uid === conflictChild.uid ? { uid, email: conflictEmail, emailVerified: true, disabled: false } : disabledIdentity(uid)),
+  (error: unknown) => error instanceof ReferralError && error.status === 409 && error.code === "referee_email_claimed");
+  deepStrictEqual(await capturePaymentState(), conflictBefore);
   equal((await conflictRef.get()).data()?.refereeUid, "other-referee");
   equal((await routeReferralMovements(conflictId)).length, 0);
   const outageId = "referral-order-auth-outage";
@@ -760,17 +765,25 @@ await test("désactivation après gain pending ne retire pas le droit à la livr
   equal((await wallet("sponsor-b")).availableCents, before.availableCents + 1000);
   equal((await routeMovements(id)).length, 2);
 });
-await test("préflight Auth lié à la relation consomme sans gain un changement concurrent de parrain", async () => {
+await test("préflight Auth lié à la relation refuse un changement concurrent de parrain sans mutation de paiement", async () => {
   const id = "referral-order-sponsor-race";
   const child = await createRouteCandidate(id, "referee-sponsor-race");
   const changedEmail = "race-current-referee@example.test";
-  await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
+  let beforePayment: Awaited<ReturnType<typeof capturePaymentState>> | undefined;
+  await rejects(routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
     async (uid) => {
-      await db.collection("referrals").doc(child.uid).update({ sponsorUid: sponsor.uid });
+      if (uid === "sponsor-b") {
+        await db.collection("referrals").doc(child.uid).update({ sponsorUid: sponsor.uid });
+        beforePayment = await capturePaymentState();
+      }
       return uid === child.uid ? { uid, email: changedEmail, emailVerified: true, disabled: false } : activeIdentity(uid);
-    });
-  equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
-  equal((await routeRelation(child.uid)).rewardIneligibilityReason, "referral_identity_changed");
+    }), (error: unknown) => error instanceof ReferralError && error.status === 409 && error.code === "referral_identity_changed");
+  ok(beforePayment);
+  deepStrictEqual(await capturePaymentState(), beforePayment);
+  equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "to_confirm");
+  equal((await routeRelation(child.uid)).sponsorUid, sponsor.uid);
+  equal((await routeRelation(child.uid)).qualifyingOrderId, null);
+  equal((await routeRelation(child.uid)).paymentConfirmed, false);
   equal((await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, changedEmail)).get()).exists, false);
   equal((await routeMovements(id)).length, 0);
 });
@@ -1238,20 +1251,25 @@ await test("email filleul modifié et vérifié crée un nouveau claim au paieme
   equal((await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, newEmail)).get()).data()?.refereeUid, child.uid);
   equal((await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, child.email)).get()).data()?.refereeUid, child.uid);
 });
-await test("email filleul déjà revendiqué consomme le droit sans gain", async () => {
+await test("email filleul déjà revendiqué refuse le paiement et son replay sans mutation", async () => {
   const id = "referral-referee-email-changed-claimed";
   const child = await createRouteCandidate(id, "referee-email-changed-claimed");
   const claimedEmail = "claimed-at-payment@example.test";
   await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, claimedEmail)).set({ schemaVersion: 1,
     programVersion: "referral-commercial-policy-v1", keyVersion: "v1", refereeUid: "another-referee", referralId: "another-referee", createdAtEpochMs: 1000 });
-  await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
-    async (uid) => uid === child.uid ? { uid, email: claimedEmail, emailVerified: true, disabled: false } : activeIdentity(uid));
-  equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
-  equal((await routeRelation(child.uid)).rewardIneligibilityReason, "referee_email_claimed");
-  equal((await routeRelation(child.uid)).state, "cancelled");
+  const before = await capturePaymentState();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await rejects(routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
+      async (uid) => uid === child.uid ? { uid, email: claimedEmail, emailVerified: true, disabled: false } : activeIdentity(uid)),
+    (error: unknown) => error instanceof ReferralError && error.status === 409 && error.code === "referee_email_claimed");
+    deepStrictEqual(await capturePaymentState(), before);
+  }
+  equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "to_confirm");
+  equal((await routeRelation(child.uid)).state, "linked");
+  equal((await routeRelation(child.uid)).qualifyingOrderId, null);
   equal((await routeReferralMovements(id)).length, 0);
 });
-await test("email non vérifié, compte désactivé et auto-parrainage au paiement ferment le gain", async () => {
+await test("email non vérifié, compte désactivé et auto-parrainage refusent le paiement sans mutation", async () => {
   for (const [suffix, identity, reason] of [
     ["unverified", { email: "unverified@example.test", emailVerified: false, disabled: false }, "referee_email_unverified"],
     ["disabled", { email: "disabled@example.test", emailVerified: true, disabled: true }, "referee_email_unverified"],
@@ -1259,13 +1277,59 @@ await test("email non vérifié, compte désactivé et auto-parrainage au paieme
   ] as const) {
     const id = `referral-referee-${suffix}-at-payment`;
     const child = await createRouteCandidate(id, `referee-identity-${suffix}-at-payment`);
-    await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
-      async (uid) => uid === child.uid ? { uid, ...identity } : activeIdentity(uid));
-    equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
-    equal((await routeRelation(child.uid)).rewardIneligibilityReason, reason);
-    if (suffix === "self")
-      equal((await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, "b@example.test")).get()).data()?.refereeUid, child.uid);
+    const before = await capturePaymentState();
+    await rejects(routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
+      async (uid) => uid === child.uid ? { uid, ...identity } : activeIdentity(uid)),
+    (error: unknown) => error instanceof ReferralError && error.status === 409 && error.code === reason);
+    deepStrictEqual(await capturePaymentState(), before);
+    equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "to_confirm");
+    equal((await routeRelation(child.uid)).state, "linked");
     equal((await routeReferralMovements(id)).length, 0);
+  }
+});
+await test("identité Auth filleul indisponible refuse la remise sans mutation", async () => {
+  const id = "referral-referee-auth-unavailable";
+  const child = await createRouteCandidate(id, "referee-auth-unavailable-at-payment");
+  const before = await capturePaymentState();
+  await rejects(routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
+    async (uid) => { if (uid === child.uid) throw new Error("fixture_referee_auth_unavailable"); return activeIdentity(uid); }),
+  (error: unknown) => error instanceof ReferralError && error.status === 409 && error.code === "referee_identity_unavailable");
+  deepStrictEqual(await capturePaymentState(), before);
+});
+await test("keyring invalide ou indisponible refuse la remise sans mutation", async () => {
+  for (const [suffix, readKeyring] of [
+    ["invalid", () => "{}"], ["unavailable", () => { throw new Error("fixture_keyring_unavailable"); }],
+  ] as const) {
+    const id = `referral-referee-keyring-${suffix}`;
+    await createRouteCandidate(id, `referee-keyring-${suffix}`);
+    const before = await capturePaymentState();
+    await rejects(commitOrderStatusTransition({ db, body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" },
+      admin: routeActor, referralProgram: program, getSponsorIdentity: activeIdentity, referralEmailKeyring: readKeyring,
+      now: () => "2000-01-03T00:00:00.000Z" }),
+    (error: unknown) => error instanceof ReferralError && error.status === 409 && error.code === "referee_identity_unavailable");
+    deepStrictEqual(await capturePaymentState(), before);
+  }
+});
+await test("evidence absente ou aliases incomplets refuse la remise avant toute écriture", async () => {
+  const id = "referral-referee-evidence-incomplete";
+  const child = await createRouteCandidate(id, "referee-evidence-incomplete");
+  const source = (await db.collection("orders").doc(id).get()).data() as Order;
+  const relation = await routeRelation(child.uid);
+  const valid: ReferralPaymentEvidence = { referralId: child.uid, refereeUid: child.uid, sponsorUid: relation.sponsorUid,
+    linkedAtEpochMs: relation.linkedAtEpochMs, sponsorAccount: "active", refereeAccount: "active", refereeEmail: child.email,
+    sponsorEmail: "b@example.test", activeKeyVersion: "v1", claimAliases: referralEmailClaimAliases(keyring, child.email) };
+  const before = await capturePaymentState();
+  for (const [evidence, code] of [
+    [undefined, "referral_identity_changed"],
+    [{ ...valid, activeKeyVersion: undefined }, "referee_identity_unavailable"],
+    [{ ...valid, claimAliases: undefined }, "referee_identity_unavailable"],
+  ] as const) {
+    await rejects(db.runTransaction(async (transaction) => {
+      const plan = await prepareReferralTransition({ db, transaction, order: source, program, event: "payment",
+        recordedAtEpochMs: 2000, paymentEvidence: evidence });
+      plan?.write();
+    }), (error: unknown) => error instanceof ReferralError && error.status === 409 && error.code === code);
+    deepStrictEqual(await capturePaymentState(), before);
   }
 });
 await test("paiement après rotation lit v1 et crée le claim v2", async () => {
