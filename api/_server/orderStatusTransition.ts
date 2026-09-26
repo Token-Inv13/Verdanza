@@ -26,7 +26,9 @@ import type { ReferralRuntime } from "./referralRuntimeConfig.js";
 import { prepareFirstPaymentWithoutReferral, prepareReferralTransition, validateReferralOrderSnapshot, type ReferralPaymentEvidence } from "./referralLedger.js";
 import { getReferralSponsorIdentity, type ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
 import { normalizeReferralEmail, parseReferralEmailKeyring, referralEmailClaimAliases } from "./referralIdentity.js";
-import { canonicalOrderEmail } from "./orderEmailIdentity.js";
+import { usableOrderEmail } from "./orderEmailIdentity.js";
+import { productOrder } from "./referralService.js";
+import { prepareReferralOrderEmailHistoryInvalidation } from "./referralOrderEmailHistory.js";
 
 export type OrderStatusChange = {
   orderId: string; orderStatus?: OrderStatus; paymentStatus?: PaymentStatus;
@@ -154,6 +156,7 @@ export async function commitOrderStatusTransition({
     updatedOrder = null; previousStatus = null; purchaseAnalyticsQueued = false; missingPromotionIds = []; unpaidReviewContext = null;
     let cancellationPlan: Awaited<ReturnType<typeof prepareOrderCancellationInTransaction>> | null = null;
     let writePaymentLinkEvent: (() => void) | null = null;
+    let emailHistoryInvalidationPlan: Awaited<ReturnType<typeof prepareReferralOrderEmailHistoryInvalidation>> | null = null;
     const orderRef = db.collection("orders").doc(body.orderId);
     const snapshot = await transaction.get(orderRef);
     if (!snapshot.exists) throw new Error("Commande introuvable.");
@@ -262,8 +265,13 @@ export async function commitOrderStatusTransition({
       }
       update.paymentStatus = body.paymentStatus;
       if (body.paymentStatus === "paid" && order.paymentStatus !== "paid") {
-        if (typeof order.customerEmail === "string" && order.customerEmailNormalized !== canonicalOrderEmail(order.customerEmail)) {
-          update.customerEmailNormalized = canonicalOrderEmail(order.customerEmail);
+        const normalizedEmail = usableOrderEmail(order.customerEmail);
+        if (normalizedEmail !== null) {
+          if (order.customerEmailNormalized !== normalizedEmail) update.customerEmailNormalized = normalizedEmail;
+        } else if (productOrder(order, true)) {
+          emailHistoryInvalidationPlan = await prepareReferralOrderEmailHistoryInvalidation(
+            transaction, db, Date.parse(operationTime),
+          );
         }
         const paidAt = operationTime;
         update.paidAt = paidAt;
@@ -416,6 +424,7 @@ export async function commitOrderStatusTransition({
       };
     }
     // All reads and business checks are complete. Only writes from this point on.
+    emailHistoryInvalidationPlan?.write();
     cancellationPlan?.write();
     writePaymentLinkEvent?.();
     cagnottePlan?.write();

@@ -6,7 +6,8 @@ import { FirebaseIdTokenVerificationError, verifyFirebaseIdToken } from "../api/
 import { lookupReferralSponsorIdentity } from "../api/_server/referralSponsorIdentity.js";
 import { newReferralCode, normalizeReferralEmail, referralEmailClaimId, parseReferralEmailKeyring, referralEmailClaimAliases } from "../api/_server/referralIdentity.js";
 import { resolveReferralRuntime, REFERRAL_CLOSED_RUNTIME, ReferralConfigurationError, REFERRAL_RUNTIME_KEYS } from "../api/_server/referralRuntimeConfig.js";
-import { ensureReferralCode, findPriorPaidProductOrder, hasHistoricalPaymentEvidence, isValidHistoricalPaymentInstant, linkReferral, readReferralSelf, ReferralError, sponsorHasDeliveredPaidOrder } from "../api/_server/referralService.js";
+import { ensureReferralCode, findPriorPaidProductOrder, hasHistoricalPaymentEvidence, isValidHistoricalPaymentInstant, linkReferral, productOrder, readReferralSelf, ReferralError, sponsorHasDeliveredPaidOrder } from "../api/_server/referralService.js";
+import { FieldValue } from "firebase-admin/firestore";
 import { createReferralOrderSnapshot, referralReturnedProductsCents, referralSnapshotFingerprint } from "../api/_server/referralSnapshot.js";
 import { prepareReferralTransition, validateReferralOrderSnapshot, type ReferralPaymentEvidence } from "../api/_server/referralLedger.js";
 import { applyCagnotteLedgerOperation } from "../api/_server/cagnotteLedger.js";
@@ -2144,6 +2145,195 @@ await test("settlement off refund/correction ignore le marker absent", async () 
     equal((await routeRelation(child.uid)).state, "rewarded");
   } finally { await historyMarker.set(completeHistoryMarker); }
 });
+// Certificate maintenance is permitted even while every commercial referral access is forbidden.
+const noCommercialReferralDb = new Proxy(db, { get(target, property) {
+  if (property === "collection") return (name: string) => {
+    if (["referralCodes", "referrals", "referralEmailClaims", "cagnotteWallets", "cagnotteMovements"].includes(name))
+      throw new Error("unexpected_commercial_referral_access");
+    return target.collection(name);
+  };
+  const value = Reflect.get(target, property, target);
+  return typeof value === "function" ? value.bind(target) : value;
+} });
+const payLegacy = (id: string, overrides: Partial<Parameters<typeof commitOrderStatusTransition>[0]> = {}) =>
+  commitOrderStatusTransition({ db: noCommercialReferralDb, admin: routeActor, accrualProgram: null, reservationProgram: null,
+    referralProgram: REFERRAL_CLOSED_RUNTIME, getSponsorIdentity: async () => { throw new Error("unexpected_auth"); },
+    referralEmailKeyring: () => { throw new Error("unexpected_keyring"); }, now: () => "2000-01-03T00:00:00.000Z",
+    body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, ...overrides });
+async function createBadEmailOrder(id: string, patch: FirebaseFirestore.DocumentData = {}) {
+  await createUnrelatedOrder(id, `old-${id}`);
+  await db.collection("orders").doc(id).update({ customerEmail: FieldValue.delete(), ...patch });
+}
+await test("premier paiement legacy email inexploitable: paid et certificat incomplete atomiques, aucun gain", async () => {
+  const discountedId = "certificate-discounted-after-invalidation";
+  await createRouteCandidate(discountedId, "referee-certificate-discounted");
+  const beforeRights = await captureReferralState();
+  for (const [index, email] of [undefined, "", "   ", "bad", "bad@", "bad\n@example.test"].entries()) {
+    await historyMarker.set(completeHistoryMarker);
+    const id = `certificate-invalid-${index}`;
+    await createBadEmailOrder(id, email === undefined ? {} : { customerEmail: email });
+    await payLegacy(id);
+    const stored = (await db.collection("orders").doc(id).get()).data()!;
+    equal(stored.paymentStatus, "paid"); equal(stored.paidAt, "2000-01-03T00:00:00.000Z"); equal(stored.paymentConfirmedAt, stored.paidAt);
+    equal(stored.customerEmailNormalized, undefined);
+    const marker = (await historyMarker.get()).data()!;
+    deepStrictEqual(marker, { ...completeHistoryMarker, status: "incomplete", invalidationRevision: 1,
+      invalidatedAtEpochMs: Date.parse(stored.paidAt), invalidationReason: "paid_order_email_unusable" });
+    ok(!JSON.stringify(marker).includes(id));
+    const beforeReplay = await historyMarker.get();
+    await payLegacy(id); const afterReplay = await historyMarker.get();
+    deepStrictEqual(afterReplay.data(), beforeReplay.data()); ok(afterReplay.updateTime!.isEqual(beforeReplay.updateTime!));
+  }
+  deepStrictEqual(await captureReferralState(), beforeRights);
+  const beforeRejected = await capturePaymentState();
+  await rejects(linkReferral({ db, user: { uid: "recreated-after-invalidation", email: "new-certificate@example.test", emailVerified: true },
+    code: codeB, keyring, program, nowEpochMs, getSponsorIdentity: activeIdentity }), { code: "referral_history_inconclusive" });
+  await rejects(routeTransition(discountedId, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }),
+    { code: "referral_history_inconclusive", status: 409 });
+  deepStrictEqual(await capturePaymentState(), beforeRejected);
+  await historyMarker.set(completeHistoryMarker);
+});
+await test("échec dans la phase write: commande et certificat restent inchangés", async () => {
+  await historyMarker.set(completeHistoryMarker);
+  const id = "certificate-atomic-abort"; await createBadEmailOrder(id);
+  const before = await capturePaymentState();
+  const abortDb = new Proxy(noCommercialReferralDb, { get(target, property) {
+    if (property === "runTransaction") return (callback: Parameters<typeof db.runTransaction>[0]) => db.runTransaction(async (tx) => {
+      await callback(tx); throw new Error("fixture_abort_after_prepared_writes");
+    });
+    return Reflect.get(target, property, target);
+  } });
+  await rejects(payLegacy(id, { db: abortDb }), /fixture_abort_after_prepared_writes/);
+  deepStrictEqual(await capturePaymentState(), before);
+});
+await test("marker absent: paiement accepté, aucun certificat créé", async () => {
+  await historyMarker.delete();
+  const id = "certificate-absent-payment"; await createBadEmailOrder(id);
+  await payLegacy(id);
+  equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
+  equal((await historyMarker.get()).exists, false);
+  await historyMarker.set(completeHistoryMarker);
+});
+await test("marker incomplete revision 4: paiement bump 5 et invalide la précondition de certification", async () => {
+  await historyMarker.set({ ...completeHistoryMarker, status: "incomplete", invalidationRevision: 4 });
+  const stale = await historyMarker.get();
+  const id = "certificate-incomplete-payment"; await createBadEmailOrder(id); await payLegacy(id);
+  const current = await historyMarker.get();
+  equal(current.data()?.status, "incomplete"); equal(current.data()?.invalidationRevision, 5);
+  ok(!current.updateTime!.isEqual(stale.updateTime!));
+  await rejects(historyMarker.update({ status: "complete" }, { lastUpdateTime: stale.updateTime! }),
+    (error: unknown) => typeof error === "object" && error !== null && Reflect.get(error, "code") === 9);
+  equal((await historyMarker.get()).data()?.status, "incomplete");
+  await historyMarker.set(completeHistoryMarker);
+});
+await test("deux paiements ambigus concurrents sérialisent les révisions du certificat", async () => {
+  await historyMarker.set(completeHistoryMarker);
+  const ids = ["certificate-concurrent-a", "certificate-concurrent-b"];
+  for (const id of ids) await createBadEmailOrder(id);
+  await Promise.all(ids.map((id) => payLegacy(id)));
+  equal((await historyMarker.get()).data()?.invalidationRevision, 2);
+  for (const id of ids) equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
+  await historyMarker.set(completeHistoryMarker);
+});
+await test("marker créé entre tentatives: retry Firestore reconstruit le plan et invalide le nouveau certificat", async () => {
+  const id = "certificate-absent-retry"; await createBadEmailOrder(id); await historyMarker.delete();
+  let attempts = 0;
+  let creation: Promise<unknown> | undefined;
+  const retryDb = new Proxy(noCommercialReferralDb, { get(target, property) {
+    if (property === "runTransaction") return (callback: Parameters<typeof db.runTransaction>[0]) => db.runTransaction(async (tx) => {
+      attempts++;
+      if (creation) await creation;
+      await callback(tx);
+      if (attempts === 1) {
+        equal((await historyMarker.get()).exists, false);
+        // Inject ABORTED after preparing the absent-marker attempt. The real SDK
+        // discards its writes and retries; creation races only with the discarded attempt.
+        creation = historyMarker.create(completeHistoryMarker);
+        throw Object.assign(new Error("fixture_transaction_conflict"), { code: 10 });
+      }
+    });
+    return Reflect.get(target, property, target);
+  } });
+  await payLegacy(id, { db: retryDb });
+  ok(attempts >= 2); equal((await historyMarker.get()).data()?.status, "incomplete");
+  equal((await historyMarker.get()).data()?.invalidationRevision, 1);
+  equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
+  await historyMarker.set(completeHistoryMarker);
+});
+await test("marker corrompu ou revision invalide: schéma réparé fermé sans PII ajoutée", async () => {
+  for (const [index, revision] of [undefined, -1, 1.5, Number.MAX_SAFE_INTEGER].entries()) {
+    await historyMarker.set({ schemaVersion: 9, version: "corrupt", status: "corrupt", ...(revision === undefined ? {} : { invalidationRevision: revision }) });
+    const id = `certificate-corrupt-${index}`; await createBadEmailOrder(id); await payLegacy(id);
+    deepStrictEqual((await historyMarker.get()).data(), { schemaVersion: 1, version: ORDER_EMAIL_NORMALIZATION_VERSION, status: "incomplete",
+      invalidationRevision: 1, invalidatedAtEpochMs: Date.parse("2000-01-03T00:00:00.000Z"), invalidationReason: "paid_order_email_unusable" });
+  }
+  await historyMarker.set(completeHistoryMarker);
+});
+await test("raw invalide même avec normalized plausible: certificat invalidé, normalized non inventé", async () => {
+  const id = "certificate-invalid-raw-plausible-normalized";
+  await createBadEmailOrder(id, { customerEmail: "bad", customerEmailNormalized: "plausible@example.test" });
+  await payLegacy(id);
+  equal((await db.collection("orders").doc(id).get()).data()?.customerEmailNormalized, "plausible@example.test");
+  equal((await historyMarker.get()).data()?.status, "incomplete");
+  await historyMarker.set(completeHistoryMarker);
+});
+await test("emails legacy exploitables: normalized absent ou faux réparé, certificat strictement inchangé", async () => {
+  for (const [index, normalized] of [undefined, "wrong@example.test"].entries()) {
+    const before = await historyMarker.get();
+    const id = `certificate-valid-${index}`;
+    await createBadEmailOrder(id, { customerEmail: " Alice@Example.test ", ...(normalized ? { customerEmailNormalized: normalized } : {}) });
+    await payLegacy(id);
+    equal((await db.collection("orders").doc(id).get()).data()?.customerEmailNormalized, "alice@example.test");
+    const after = await historyMarker.get(); deepStrictEqual(after.data(), before.data()); ok(after.updateTime!.isEqual(before.updateTime!));
+  }
+});
+await test("précommande bad-email: invalidation et preuve historique UID conservée", async () => {
+  const id = "certificate-preorder"; await createBadEmailOrder(id, { orderType: "preorder" }); await payLegacy(id);
+  equal((await historyMarker.get()).data()?.status, "incomplete");
+  deepStrictEqual(await db.runTransaction((tx) => findPriorPaidProductOrder(tx, db, `old-${id}`, null)), { kind: "found", orderId: id });
+  await historyMarker.set(completeHistoryMarker);
+});
+await test("non-produit ne lit aucun certificat; fixture exclue du même prédicat historique", async () => {
+  for (const [index, patch] of [{ items: [] }, { total: 0 }].entries()) {
+    const before = await historyMarker.get();
+    const id = `certificate-non-product-${index}`; await createBadEmailOrder(id, patch);
+    await payLegacy(id, { db: noReferralDb });
+    equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
+    const after = await historyMarker.get(); ok(after.updateTime!.isEqual(before.updateTime!));
+  }
+  const fixture = { productionFixture: true, paymentStatus: "paid", total: 60, items: [{ productId: "fixture-product", quantity: 1 }] };
+  equal(productOrder(fixture, true), false); equal(hasHistoricalPaymentEvidence(fixture), false);
+  // A malformed fixture also stays protected by the existing status boundary.
+  const id = "certificate-protected-fixture"; await createBadEmailOrder(id, { productionFixture: true });
+  const before = await capturePaymentState();
+  await rejects(payLegacy(id, { db: noReferralDb }), /production_fixture_marker_invalid/);
+  deepStrictEqual(await capturePaymentState(), before);
+});
+for (const mode of ["absent", "off", "malformed"] as const) {
+  await test(`certificat technique invalidé avec runtime ${mode}, paiement sans activité commerciale`, async () => {
+    await historyMarker.set(completeHistoryMarker);
+    const id = `certificate-runtime-${mode}`; await createBadEmailOrder(id);
+    let resolutions = 0;
+    const before = await captureReferralState();
+    await payLegacy(id, { referralProgram: undefined, resolveReferralRuntime: () => {
+      resolutions++;
+      if (mode === "malformed") throw new ReferralConfigurationError();
+      return resolveReferralRuntime({ environment: mode === "off" ? { REFERRAL_PROGRAM_MODE: "off" } : {},
+        getProjectId: () => { throw new Error("unexpected_project_lookup"); } });
+    } });
+    equal(resolutions, 1); equal((await historyMarker.get()).data()?.status, "incomplete");
+    equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
+    deepStrictEqual(await captureReferralState(), before);
+  });
+  await historyMarker.set(completeHistoryMarker);
+}
+await test("invalidation anonyme ne résout jamais le runtime uniquement pour le certificat", async () => {
+  const id = "certificate-anonymous-payment"; await createBadEmailOrder(id);
+  await db.collection("orders").doc(id).update({ customerId: FieldValue.delete() });
+  await payLegacy(id, { referralProgram: undefined, resolveReferralRuntime: () => { throw new Error("unexpected_runtime_resolution"); } });
+  equal((await historyMarker.get()).data()?.status, "incomplete");
+  await historyMarker.set(completeHistoryMarker);
+});
 await test("migration cible exacte et apply explicite, pas de fallback distant", () => {
   throws(() => assertOrderEmailMigrationTarget({ projectId: "wrong-project", apply: true, confirmation: ORDER_EMAIL_NORMALIZATION_VERSION }));
   throws(() => assertOrderEmailMigrationTarget({ projectId: "verdanza-1f621", apply: true }));
@@ -2254,5 +2444,53 @@ await test("champ normalized non projeté vers mouvements, analytics et rapports
   const report = JSON.stringify(await runMigration());
   for (const fixture of migrationFixtures) ok(!report.includes(fixture.customerEmail));
   ok(!report.includes("migration-old-uid"));
+});
+await test("migration après paiement ambigu: refuse recertification puis récupère après réparation admin locale", async () => {
+  const id = "migration-legacy-payment-after-certificate";
+  await createBadEmailOrder(id);
+  // The unpaid legacy anomaly is allowed at certification time.
+  equal((await runMigration(true)).markerComplete, true);
+  await payLegacy(id);
+  equal((await historyMarker.get()).data()?.status, "incomplete");
+  const beforeRights = await captureReferralState();
+  const refused = await runMigration(true);
+  equal(refused.initial.anomalies, 1); equal(refused.markerComplete, false);
+  equal((await historyMarker.get()).data()?.status, "incomplete");
+  await db.collection("orders").doc(id).update({ customerEmail: " Repaired@Example.test " });
+  const recovered = await runMigration(true);
+  equal(recovered.applied?.changedOrders, 1); equal(recovered.verification?.anomalies, 0);
+  equal(recovered.verification?.changesRequired, 0); equal(recovered.markerComplete, true);
+  equal((await db.collection("orders").doc(id).get()).data()?.customerEmailNormalized, "repaired@example.test");
+  equal((await historyMarker.get()).data()?.status, "complete"); deepStrictEqual(await captureReferralState(), beforeRights);
+});
+await test("vrai apply migration: paiement après scan final fait échouer sa précondition complete", async () => {
+  const id = "migration-concurrent-legacy-payment"; await createBadEmailOrder(id);
+  await historyMarker.set({ ...completeHistoryMarker, status: "incomplete", invalidationRevision: 4 });
+  let injected = false;
+  const racingDb = new Proxy(db, { get(target, property) {
+    if (property === "batch") return () => {
+      const batch = target.batch(); let certifying = false;
+      return new Proxy(batch, { get(batchTarget, batchProperty) {
+        if (batchProperty === "update") return (...args: Parameters<typeof batch.update>) => {
+          if (args[0].path === historyMarker.path && Reflect.get(args[1], "status") === "complete") certifying = true;
+          return batchTarget.update(...args);
+        };
+        if (batchProperty === "commit") return async () => {
+          if (certifying && !injected) { injected = true; await payLegacy(id); }
+          return batchTarget.commit();
+        };
+        const value = Reflect.get(batchTarget, batchProperty, batchTarget);
+        return typeof value === "function" ? value.bind(batchTarget) : value;
+      } });
+    };
+    const value = Reflect.get(target, property, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  } });
+  await rejects(migrateOrderEmailNormalization({ db: racingDb, projectId: CAGNOTTE_DEMO.projectId, apply: true,
+    confirmation: ORDER_EMAIL_NORMALIZATION_VERSION, pageSize: 2, now: () => 5000 }),
+    (error: unknown) => typeof error === "object" && error !== null && Reflect.get(error, "code") === 9);
+  equal(injected, true); equal((await historyMarker.get()).data()?.invalidationRevision, 5);
+  equal((await historyMarker.get()).data()?.status, "incomplete");
+  equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
 });
 console.log(`Referral backend: ${passed} checks.`);

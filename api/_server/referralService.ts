@@ -15,7 +15,7 @@ const CODE = /^[A-Z2-7]{26}$/;
 const HISTORY_LIMIT = 100;
 function uid(value: string) { if (!ID.test(value)) throw new ReferralError("referral_identity_invalid", 400); return value; }
 function active(program: Program, now: number) { if (program.mode !== "active" || now < program.startsAtEpochMs) throw new ReferralError("referral_program_disabled", 503); }
-function productOrder(value: FirebaseFirestore.DocumentData, includeDeleted = false) {
+export function productOrder(value: FirebaseFirestore.DocumentData, includeDeleted = false) {
   return (includeDeleted || !value.deletedAt) && !value.productionFixture &&
     Array.isArray(value.items) && value.items.length > 0 && value.items.every((item: unknown) =>
       item !== null && typeof item === "object" && typeof (item as { productId?: unknown }).productId === "string" &&

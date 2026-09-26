@@ -16,3 +16,25 @@ export async function readReferralOrderEmailHistoryReady(tx: Transaction, db: Fi
   const marker = await tx.get(db.collection(ORDER_EMAIL_MIGRATION_COLLECTION).doc(ORDER_EMAIL_NORMALIZATION_VERSION));
   return isReferralOrderEmailHistoryReady(marker.data());
 }
+
+/** Technical safety maintenance only: never creates a certificate or grants a right.
+ * Reading an absent marker also participates in transaction conflict detection. */
+export async function prepareReferralOrderEmailHistoryInvalidation(
+  tx: Transaction, db: Firestore, invalidatedAtEpochMs: number,
+): Promise<{ write: () => void }> {
+  const ref = db.collection(ORDER_EMAIL_MIGRATION_COLLECTION).doc(ORDER_EMAIL_NORMALIZATION_VERSION);
+  const marker = await tx.get(ref);
+  if (!marker.exists) return { write: () => {} };
+  const previous = marker.data()?.invalidationRevision;
+  // A corrupt or exhausted revision restarts safely; the write still changes the document version.
+  const invalidationRevision = Number.isSafeInteger(previous) && previous >= 1 && previous < Number.MAX_SAFE_INTEGER
+    ? previous + 1 : 1;
+  return { write: () => { tx.update(ref, {
+    schemaVersion: 1,
+    version: ORDER_EMAIL_NORMALIZATION_VERSION,
+    status: "incomplete",
+    invalidatedAtEpochMs,
+    invalidationRevision,
+    invalidationReason: "paid_order_email_unusable",
+  }); } };
+}
