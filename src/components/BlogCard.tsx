@@ -27,7 +27,7 @@ export function BlogCard({ article }: { article: BlogArticle }) {
           className="aspect-[4/3] w-full object-cover transition hover:scale-[1.02]"
         />
       </Link>
-      <div className="space-y-4 p-5" data-floating-help-suppress="blog-editorial">
+      <div className="space-y-4 p-5">
         <div className="flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-[0.14em] text-champagne">
           <span>{article.category}</span>
           <span className="inline-flex items-center gap-1 text-forest/65">
@@ -38,12 +38,13 @@ export function BlogCard({ article }: { article: BlogArticle }) {
           </span>
         </div>
         <h2 className="font-display text-3xl leading-tight text-forest">
-          <Link to={blogArticlePath(article)}>{article.title}</Link>
+          <Link to={blogArticlePath(article)} data-floating-help-suppress="blog-editorial">{article.title}</Link>
         </h2>
         <p className="text-sm leading-6 text-ink/70">{article.excerpt}</p>
         <Link
           to={blogArticlePath(article)}
           className="inline-flex text-sm font-semibold text-forest underline decoration-champagne underline-offset-4"
+          data-floating-help-suppress="blog-editorial"
         >
           Lire le guide
         </Link>

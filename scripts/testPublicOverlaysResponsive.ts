@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { chromium, type BrowserContext, type Page } from "playwright";
 import { createServer } from "vite";
+import { blockExternalServices } from "./auditPageReady";
 
 const host = "127.0.0.1";
 const port = 4182;
@@ -92,7 +93,7 @@ try {
       assert.ok(helpBox.width >= 48 && helpBox.width <= 52, `${viewport.width}px: mobile help trigger must stay circular`);
       assert.ok(helpBox.height >= 48 && helpBox.height <= 52, `${viewport.width}px: mobile help trigger must keep its touch target`);
       await page.getByRole("button", { name: "Ouvrir le menu mobile" }).click();
-      assert.equal(await help.count(), 0, `${viewport.width}px: help trigger must hide while the mobile menu is open`);
+      assert.equal(await help.isVisible(), false, `${viewport.width}px: help trigger must hide while the mobile menu is open`);
       await page.getByRole("button", { name: "Fermer le menu mobile" }).click();
     } else {
       assert.ok(helpBox.width > 52, `${viewport.width}px: tablet and desktop help trigger should retain its label`);
@@ -143,7 +144,7 @@ try {
   await preferencesPage.locator('[data-testid="cookie-consent-banner"]').waitFor();
   await preferencesPage.getByRole("button", { name: "Personnaliser" }).click();
   await preferencesPage.getByRole("dialog", { name: "Préférences cookies" }).waitFor();
-  assert.equal(await preferencesPage.locator('[data-testid="floating-contact-trigger"]').count(), 0, "help trigger must stay hidden behind cookie preferences");
+  assert.equal(await preferencesPage.locator('[data-testid="floating-contact-trigger"]').isVisible(), false, "help trigger must stay hidden behind cookie preferences");
   assert.equal(await preferencesPage.getByRole("button", { name: "Tout accepter" }).count(), 1, "preferences must preserve accept all");
   assert.equal(await preferencesPage.getByRole("button", { name: "Tout refuser" }).count(), 1, "preferences must preserve reject all");
   assert.equal(await preferencesPage.getByRole("button", { name: "Enregistrer" }).count(), 1, "preferences must preserve custom saving");
@@ -156,6 +157,7 @@ try {
 console.log("Public overlays responsive tests passed");
 
 async function preparedPage(context: BrowserContext) {
+  await blockExternalServices(context);
   await context.addInitScript(() => {
     window.localStorage.setItem("verdanza-age-confirmed", "true");
     window.localStorage.removeItem("verdanza-consent-v1");

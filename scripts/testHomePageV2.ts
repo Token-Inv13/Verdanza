@@ -84,13 +84,14 @@ assert.match(
   /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.home-hero-v2__content,[\s\S]*?animation: none;/,
 );
 
-assert.match(floatingContactSource, /"\/": \["\[data-home-product-finder\]"\]/);
-assert.match(floatingContactSource, /new IntersectionObserver/);
-assert.doesNotMatch(
+assert.match(floatingContactSource, /"\/": \["\[data-home-product-finder\] button", "\[data-home-product-finder\] a"\]/);
+assert.match(floatingContactSource, /new ResizeObserver/);
+assert.match(
   floatingContactSource,
-  /window\.addEventListener\("scroll"/,
-  "contextual floating-help suppression must not add a scroll listener",
+  /window\.requestAnimationFrame\(measureCollision\)/,
+  "collision measurements must be frame-batched rather than React work per scroll event",
 );
+assert.match(floatingContactSource, /passive: true, capture: true/);
 assert.match(floatingContactSource, /"\/fiches-produits"/);
 
 console.log(

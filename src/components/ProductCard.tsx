@@ -138,7 +138,7 @@ export function ProductCard({
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col p-4" data-floating-help-suppress>
+      <div className="flex flex-1 flex-col p-4">
         <div className="flex items-end justify-between gap-3">
           <div>
             <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-ink/45">
@@ -178,6 +178,7 @@ export function ProductCard({
               onChange={(event) => setSelectedPurchaseOptionId(event.target.value)}
               className="mt-1 min-h-11 w-full rounded-md border border-forest/15 bg-ivory px-3 text-sm text-forest outline-none transition focus:border-champagne focus:ring-2 focus:ring-champagne/30"
               aria-label={`Choisir le format de ${product.name}`}
+              data-floating-help-suppress="product-format"
             >
               {!selectedPurchaseOption && <option value="" disabled>Aucun format disponible</option>}
               {purchaseOptions.map((option) => (
@@ -198,6 +199,7 @@ export function ProductCard({
               ? `Ajouter ${selectedPurchaseOption.quantityGrams} g de ${product.name} au panier`
               : `${product.name} : ${purchaseAvailabilityLabel}`}
             disabled={!selectedPurchaseOption}
+            data-floating-help-suppress="product-cart"
             onClick={handleAddToCart}
           >
             <ShoppingBag size={17} />

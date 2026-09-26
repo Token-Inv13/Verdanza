@@ -63,9 +63,8 @@ try {
     );
     assert.equal(await page.locator("[data-category-aroma-toggle]").count(), 1);
     assert.equal(await page.locator("[data-category-result-count]").innerText(), "5 produits");
-    await page.waitForFunction(
-      () => !document.querySelector('[data-testid="floating-contact-trigger"]'),
-    );
+    assert.equal(await page.locator('[data-floating-help-footprint]').count(), 1,
+      "help stays measurable; the availability matrix asserts collision-only visibility");
 
     const layout = await page.evaluate(() => {
       const buttons = document.querySelectorAll<HTMLElement>(
@@ -185,7 +184,12 @@ try {
     assert.equal(await restoredHelp.getAttribute("aria-label"), "Besoin d'aide ?");
     await gotoDomReady(page, `${server.baseUrl}/resines-cbd`);
     await page.locator("[data-category-product-filter]").scrollIntoViewIfNeeded();
-    await restoredHelp.waitFor({ state: "detached" });
+    await page.waitForFunction(() => {
+      const wrapper = document.querySelector('[data-floating-help-footprint]');
+      const button = wrapper?.querySelector('[data-testid="floating-contact-trigger"]');
+      return Boolean(wrapper && button && (getComputedStyle(button).visibility === "hidden") ===
+        (wrapper.getAttribute("data-floating-help-collision") === "true"));
+    });
 
     if (width === 390) {
       await gotoDomReady(page, `${server.baseUrl}/fleurs-cbd`);

@@ -44,14 +44,10 @@ try {
       "/livraison-postale",
     );
     assert.equal(await page.locator("[data-home-product-finder]").count(), 1);
-    await page.waitForFunction(
-      () => !document.querySelector('[data-testid="floating-contact-trigger"]'),
-    );
-    assert.equal(
-      await page.locator('[data-testid="floating-contact-trigger"]').count(),
-      0,
-      `${width}px: floating help must hide while the finder is visible`,
-    );
+    // Visibility alone no longer suppresses help. The exact six-viewport
+    // collision matrix covers both Finder intersections and non-intersections.
+    assert.equal(await page.locator('[data-floating-help-footprint]').count(), 1,
+      `${width}px: retain a measurable help footprint`);
     assert.equal(await page.locator("[data-home-reassurance-item]").count(), 3);
     assert.equal(await page.locator("[data-home-selection] .product-card-v2").count(), 3);
     assert.equal(await page.locator("[data-home-guide-card]").count(), 2);
@@ -129,7 +125,7 @@ try {
     // The interactive footer now suppresses help too; it is not a restoration zone.
     await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" }));
     const restoredHelp = page.locator('[data-testid="floating-contact-trigger"]');
-    await restoredHelp.waitFor({ state: "detached" });
+    await restoredHelp.waitFor({ state: "hidden" });
     await gotoDomReady(page, `${server.baseUrl}/livraison`);
     await restoredHelp.waitFor();
     assert.equal(
@@ -139,7 +135,13 @@ try {
     );
     await gotoDomReady(page, `${server.baseUrl}/`);
     await page.locator("[data-home-product-finder]").scrollIntoViewIfNeeded();
-    await restoredHelp.waitFor({ state: "detached" });
+    await page.waitForFunction(() => {
+      const wrapper = document.querySelector('[data-floating-help-footprint]');
+      const button = wrapper?.querySelector('[data-testid="floating-contact-trigger"]');
+      return Boolean(wrapper && button &&
+        (getComputedStyle(button).visibility === "hidden") ===
+          (wrapper.getAttribute("data-floating-help-collision") === "true"));
+    });
 
     assert.match(rawHtml, /data-home-page-v2/);
     assert.match(rawHtml, /Une sélection CBD pensée pour vous\./);

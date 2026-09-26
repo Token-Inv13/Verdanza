@@ -112,7 +112,6 @@ export function ShopProductSelector({
         aria-labelledby="shop-selection-title"
         data-shop-product-selector
         data-shop-selector-mode="compact"
-        data-floating-help-suppress
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
           <div className="min-w-0">
@@ -147,6 +146,7 @@ export function ShopProductSelector({
               aria-expanded="false"
               aria-controls="shop-product-selector-controls"
               data-shop-selector-edit
+              data-floating-help-suppress="selector-edit"
             >
               Modifier
             </button>
@@ -155,6 +155,7 @@ export function ShopProductSelector({
               className="min-h-11 rounded-md px-1 text-sm font-medium text-forest/65 underline decoration-champagne/65 underline-offset-4 focus:outline-none focus:ring-2 focus:ring-champagne focus:ring-offset-2"
               onClick={resetSelection}
               data-shop-selector-reset
+              data-floating-help-suppress="selector-reset"
             >
               Réinitialiser
             </button>
@@ -171,7 +172,6 @@ export function ShopProductSelector({
       aria-label="Affiner les produits"
       data-shop-product-selector
       data-shop-selector-mode="full"
-      data-floating-help-suppress
     >
       <div id="shop-product-selector-controls" className="space-y-2.5">
         <SelectorStep
@@ -181,6 +181,7 @@ export function ShopProductSelector({
           open={openStep === 1}
           completed={criteria.category !== "all"}
           autoFocus={focusFirstStep}
+          floatingHelpProtected
           onToggle={() => setOpenStep((current) => (current === 1 ? null : 1))}
         >
           <OptionGrid>
@@ -191,6 +192,7 @@ export function ShopProductSelector({
                 selected={criteria.category === value}
                 onSelect={() => selectCategory(value)}
                 dataValue={`shop-category:${value}`}
+                floatingHelpProtected={openStep === 1}
               />
             ))}
           </OptionGrid>
@@ -203,6 +205,7 @@ export function ShopProductSelector({
           open={openStep === 2}
           completed={Boolean(criteria.intensity)}
           optional
+          floatingHelpProtected
           onToggle={() => setOpenStep((current) => (current === 2 ? null : 2))}
         >
           <OptionGrid>
@@ -213,6 +216,7 @@ export function ShopProductSelector({
                 selected={criteria.intensity === value}
                 onSelect={() => selectIntensity(value)}
                 dataValue={`shop-intensity:${value}`}
+                floatingHelpProtected={openStep === 2}
               />
             ))}
           </OptionGrid>
@@ -229,6 +233,7 @@ export function ShopProductSelector({
           open={openStep === 3}
           completed={criteria.aromas.length > 0}
           optional
+          floatingHelpProtected
           onToggle={() => setOpenStep((current) => (current === 3 ? null : 3))}
         >
           <OptionGrid>
@@ -239,6 +244,7 @@ export function ShopProductSelector({
                 selected={criteria.aromas.includes(value)}
                 onSelect={() => toggleAroma(value)}
                 dataValue={`shop-aroma:${value}`}
+                floatingHelpProtected={openStep === 3}
               />
             ))}
           </OptionGrid>
@@ -258,6 +264,7 @@ export function ShopProductSelector({
           onClick={resetSelection}
           disabled={!hasCriteria}
           data-shop-selector-reset
+          data-floating-help-suppress="selector-reset"
         >
           <RotateCcw aria-hidden="true" size={15} />
           Réinitialiser

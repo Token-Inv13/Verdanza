@@ -74,11 +74,18 @@ try {
 
       await gotoDomReady(page, `${server.baseUrl}${testCase.path}`);
       await page.evaluate(() => document.fonts.ready);
+      if (!baseline) {
+        // The mounted footprint is measurable even while hidden. Measure it
+        // on this page after font loading rather than using a stale reference.
+        const current = await page.locator(helpSelector).boundingBox();
+        assert.ok(current, `${label}: mounted help footprint must be measurable`);
+        Object.assign(reference, current);
+      }
       const target = page.locator(testCase.target);
       assert.equal(await target.count(), 1, `${label}: regression target must be unique`);
       await target.waitFor();
       await positionAtFormerHelp(page, testCase.target, reference);
-      if (!baseline) await page.locator(helpSelector).waitFor({ state: "detached" });
+      if (!baseline) await page.locator(helpSelector).waitFor({ state: "hidden" });
 
       const metrics = await target.evaluate((element, options) => {
         const protectedSurface = element.closest(
@@ -88,7 +95,7 @@ try {
         if (!surface) throw new Error("Regression surface missing");
         const rect = surface.getBoundingClientRect();
         const help = document.querySelector<HTMLElement>('[data-testid="floating-contact-trigger"]');
-        const helpRect = help?.getBoundingClientRect();
+        const helpRect = help && getComputedStyle(help).visibility !== "hidden" ? help.getBoundingClientRect() : null;
         const area = helpRect
           ? Math.max(0, Math.min(rect.right, helpRect.right) - Math.max(rect.left, helpRect.left)) *
             Math.max(0, Math.min(rect.bottom, helpRect.bottom) - Math.max(rect.top, helpRect.top))
@@ -137,7 +144,8 @@ try {
           const states: boolean[] = [];
           for (let index = 0; index < 12; index += 1) {
             await new Promise<void>((resolveFrame) => requestAnimationFrame(() => resolveFrame()));
-            states.push(Boolean(document.querySelector('[data-testid="floating-contact-trigger"]')));
+            const help = document.querySelector('[data-testid="floating-contact-trigger"]');
+            states.push(Boolean(help && getComputedStyle(help).visibility !== "hidden"));
           }
           return states;
         });
