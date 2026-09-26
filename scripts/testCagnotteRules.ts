@@ -27,7 +27,7 @@ async function test(category: string, name: string, run: () => Promise<unknown>)
 // A connection failure/timeout is NEVER accepted as a permission denial.
 const denied = (operation: Promise<unknown>) => rejects(operation, (error: unknown) =>
   Boolean(error && typeof error === "object" && "code" in error && error.code === "permission-denied"));
-const internal = ["cagnotteWallets", "cagnotteMovements", "cagnotteAccruals", "cagnotteReservations", "cagnotteRefunds", "referralCodes", "referrals", "referralEmailClaims"];
+const internal = ["cagnotteWallets", "cagnotteMovements", "cagnotteAccruals", "cagnotteReservations", "cagnotteRefunds", "referralCodes", "referrals", "referralEmailClaims", "referralMigrations"];
 const values = [{ beneficiaryId: "client-a", snapshot: { loyaltyCents: 500 } }, null, {}, "invalid", false];
 const ordinary = { customerId: "client-a", orderStatus: "contact_required", paymentStatus: "to_confirm", total: 100 };
 const profiles = [

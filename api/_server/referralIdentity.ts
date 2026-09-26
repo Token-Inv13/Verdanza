@@ -1,8 +1,9 @@
 import { createHmac, randomBytes } from "node:crypto";
+import { usableOrderEmail } from "./orderEmailIdentity.js";
 
 export function normalizeReferralEmail(value: string) {
-  const email = value.trim().toLowerCase();
-  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("referral_email_invalid");
+  const email = usableOrderEmail(value);
+  if (email === null) throw new Error("referral_email_invalid");
   return email;
 }
 

@@ -603,6 +603,7 @@ export type Order = {
   orderType?: OrderType;
   customerId?: string;
   customerEmail: string;
+  customerEmailNormalized?: string;
   customerPhone: string;
   customerName?: string;
   items: OrderItem[];

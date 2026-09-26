@@ -44,7 +44,7 @@ import {
 } from "./cagnotteProductionReadinessAssertions.js";
 
 const baseMain = "322f65895fb0a75479c92bc4a3054caa4073d2f8";
-const expectedRulesHash = "2cd941d4d42f2da5878fc31e1364faa25c1358b5d94b4ef6f2c95604dd292be4";
+const expectedRulesHash = "b3583f787c75cffe8d2f05aded3b3026e3478bda4f63b8630f1f99f76ef0b725";
 const expectedEndpoints = [
   "admin-contests.ts",
   "admin-payment-links.ts",
@@ -546,6 +546,7 @@ await check("règles Firestore candidates et protections commandes", () => {
     "referralCodes",
     "referrals",
     "referralEmailClaims",
+    "referralMigrations",
   ]) {
     assert.match(rules, new RegExp(`match /${collection}/\\{document=\\*\\*\\} \\{ allow read, write: if false; \\}`));
   }

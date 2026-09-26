@@ -20,6 +20,9 @@ import { readUnpaidOrderContext } from "../api/_server/unpaidOrderReview.js";
 import type { Order } from "../src/types/index.js";
 import type { ReferralRelation } from "../src/types/referral.js";
 import type { VercelRequestLike, VercelResponseLike } from "../api/_server/http.js";
+import { canonicalOrderEmail } from "../api/_server/orderEmailIdentity.js";
+import { ORDER_EMAIL_NORMALIZATION_VERSION, readReferralOrderEmailHistoryReady } from "../api/_server/referralOrderEmailHistory.js";
+import { assertOrderEmailMigrationTarget, migrateOrderEmailNormalization } from "./orderEmailNormalizationMigration.js";
 
 let passed = 0;
 async function test(name: string, run: () => Promise<void> | void) { await run(); console.log(`OK ${++passed} - ${name}`); }
@@ -157,6 +160,10 @@ await test("API mappe les catégories de token sans lecture Firestore", async ()
 });
 
 const db = await connectCagnotteEmulator(CAGNOTTE_DEMO);
+const historyMarker = db.collection("referralMigrations").doc(ORDER_EMAIL_NORMALIZATION_VERSION);
+const completeHistoryMarker = { schemaVersion: 1, version: ORDER_EMAIL_NORMALIZATION_VERSION, status: "complete",
+  completedAtEpochMs: 1000, verifiedOrders: 0, verifiedPaidProductOrders: 0 };
+await historyMarker.set(completeHistoryMarker);
 const sponsorOrder = (id: string, uid: string, status = "delivered") => db.collection("orders").doc(id).set({ customerId: uid, paymentStatus: "paid", orderStatus: status, orderType: "order", total: 60,
   items: [{ productId: "fixture-product", quantity: 1, lineTotal: 60 }] });
 await sponsorOrder("referral-sponsor-a", sponsor.uid);
@@ -312,7 +319,7 @@ const routeRelation = async (uid: string) => (await db.collection("referrals").d
 const routeMovements = async (orderId: string) => (await db.collection("cagnotteMovements").where("orderId", "==", orderId).get()).docs;
 const routeReferralMovements = async (orderId: string) => (await routeMovements(orderId)).filter((doc) =>
   String(doc.data().businessEvent).startsWith("referral_"));
-const capturePaymentState = async () => Promise.all(["orders", "referrals", "referralEmailClaims", "cagnotteWallets",
+const capturePaymentState = async () => Promise.all(["orders", "referrals", "referralEmailClaims", "referralMigrations", "cagnotteWallets",
   "cagnotteReservations", "cagnotteMovements", "analyticsOutbox", "analyticsOperationalEvents", "products"].map(async (name) =>
   (await db.collection(name).get()).docs.map((doc) => ({ id: doc.id, data: doc.data(), updatedAt: doc.updateTime.toMillis() }))));
 async function createRouteCandidate(orderId: string, uid: string, code = codeB) {
@@ -1647,7 +1654,15 @@ await test("historique inconclusif refuse le paiement remisé et son replay sans
 });
 const noReferralDb = new Proxy(db, { get(target, property) {
   if (property === "collection") return (name: string) => {
-    if (["referralCodes", "referrals", "referralEmailClaims"].includes(name)) throw new Error("unexpected_referral_access");
+    if (["referralCodes", "referrals", "referralEmailClaims", "referralMigrations"].includes(name)) throw new Error("unexpected_referral_access");
+    return target.collection(name);
+  };
+  const value = Reflect.get(target, property, target);
+  return typeof value === "function" ? value.bind(target) : value;
+} });
+const noMigrationDb = new Proxy(db, { get(target, property) {
+  if (property === "collection") return (name: string) => {
+    if (name === "referralMigrations") throw new Error("unexpected_migration_marker_read");
     return target.collection(name);
   };
   const value = Reflect.get(target, property, target);
@@ -1989,5 +2004,255 @@ await test("livraison absorbe intégralement le reward dans la régularisation s
   deepStrictEqual(await captureCodesAndClaims(), claimsBeforeReplay);
   deepStrictEqual((await routeReferralMovements(id)).map((doc) => ({ id: doc.id, data: doc.data() })), movementsBeforeReplay);
   equal((await routeReferralMovements(id)).length, 2);
+});
+await test("canonisation commandes et normalisation Referral convergent", () => {
+  for (const email of [" Alice@Example.test ", "ALICE@example.test", "alice@example.test"]) {
+    equal(canonicalOrderEmail(email), "alice@example.test");
+    equal(normalizeReferralEmail(email), canonicalOrderEmail(email));
+  }
+});
+await test("paiement legacy répare normalized absent ou faux dans la transaction, email brut conservé", async () => {
+  for (const wrong of [undefined, "wrong@example.test"]) {
+    const id = wrong ? "email-legacy-wrong" : "email-legacy-absent";
+    await createUnrelatedOrder(id);
+    await db.collection("orders").doc(id).update({ customerEmail: " Alice@Example.test ", ...(wrong ? { customerEmailNormalized: wrong } : {}) });
+    await commitOrderStatusTransition({ db: noReferralDb, body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" },
+      admin: routeActor, now: () => "2000-01-03T00:00:00.000Z" });
+    const stored = (await db.collection("orders").doc(id).get()).data()!;
+    equal(stored.customerEmail, " Alice@Example.test "); equal(stored.customerEmailNormalized, "alice@example.test"); equal(stored.paymentStatus, "paid");
+  }
+});
+await test("P1 nouvel UID et casse différente: lookup normalized refuse aussi une précommande payée", async () => {
+  const oldEmail = "Alice-Identity@Example.test";
+  const newEmail = "ALICE-IDENTITY@example.test";
+  const normalized = canonicalOrderEmail(newEmail);
+  const ref = db.collection("orders").doc("historical-mixed-case-preorder");
+  await ref.set({ customerId: "old-firebase-uid", customerEmail: oldEmail, customerEmailNormalized: normalized,
+    orderType: "preorder", paymentStatus: "cancelled", orderStatus: "cancelled", paidAt: "2000-01-01T00:00:00Z",
+    total: 60, items: [{ productId: "fixture-product", quantity: 1 }] });
+  for (const email of [newEmail, normalized]) equal((await db.collection("orders").where("customerEmail", "==", email).get()).size, 0);
+  const before = await captureReferralState();
+  await rejects(linkReferral({ db, user: { uid: "recreated-firebase-uid", email: newEmail, emailVerified: true }, code: codeB,
+    keyring, program, nowEpochMs, getSponsorIdentity: activeIdentity }), { code: "referee_already_paid" });
+  deepStrictEqual(await captureReferralState(), before);
+});
+await test("marqueur absent: link et ensure_code nouveau ou existant refusés sans mutation", async () => {
+  await historyMarker.delete();
+  try {
+    const before = await captureReferralState();
+    await rejects(linkReferral({ db, user: { uid: "email-marker-missing", email: "missing-marker@example.test", emailVerified: true },
+      code: codeB, keyring, program, nowEpochMs, getSponsorIdentity: activeIdentity }), { code: "referral_history_inconclusive" });
+    await rejects(ensureReferralCode({ db, user: sponsor, program, nowEpochMs, getSponsorIdentity: activeIdentity }), { code: "referral_history_inconclusive" });
+    await rejects(ensureReferralCode({ db, user: { uid: "new-sponsor-marker", email: "new-sponsor@example.test" }, program, nowEpochMs,
+      getSponsorIdentity: activeIdentity }), { code: "referral_history_inconclusive" });
+    deepStrictEqual(await captureReferralState(), before);
+  } finally { await historyMarker.set(completeHistoryMarker); }
+});
+await test("snapshot remisé et marker absent: HTTP 409, zéro mutation de paiement", async () => {
+  const id = "email-discount-marker-missing";
+  await createRouteCandidate(id, "referee-discount-marker-missing");
+  await db.collection("adminUsers").doc(routeActor.uid).set({ isActive: true });
+  await historyMarker.delete();
+  try {
+    const before = await capturePaymentState();
+    let status = 0; let responseBody: unknown;
+    const handler = createOrderStatusHandler({ verifyToken: async () => routeActor, getDb: () => db,
+      accrualProgram: null, reservationProgram: null, resolveReferralRuntime: () => program,
+      now: () => "2000-01-03T00:00:00.000Z",
+      sendStatusEmail: async () => { throw new Error("unexpected_email"); }, processAnalytics: async () => { throw new Error("unexpected_analytics"); } });
+    const res = { setHeader() {}, status(value: number) { status = value; return this; }, json(value: unknown) { responseBody = value; } } as unknown as VercelResponseLike;
+    await handler({ method: "POST", headers: { authorization: "Bearer fixture-token" }, body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" } } as VercelRequestLike, res);
+    equal(status, 409); deepStrictEqual(responseBody, { error: "referral_history_inconclusive", code: "referral_history_inconclusive" });
+    deepStrictEqual(await capturePaymentState(), before);
+  } finally { await historyMarker.set(completeHistoryMarker); }
+});
+await test("marker exact complet permet lien puis qualification normalement", async () => {
+  const id = "email-marker-complete";
+  const child = await createRouteCandidate(id, "referee-marker-complete");
+  await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+  equal((await routeRelation(child.uid)).state, "pending");
+});
+for (const [name, patch] of [ ["version", { version: "other-version" }], ["schema", { schemaVersion: 2 }],
+  ["status", { status: "incomplete" }], ["instant", { completedAtEpochMs: 0 }], ["counts", { verifiedPaidProductOrders: -1 }] ] as const) {
+  await test(`marqueur corrompu ${name}: histoire vide inconclusive et code fermé`, async () => {
+    await historyMarker.set({ ...completeHistoryMarker, ...patch });
+    try {
+      const before = await captureReferralState();
+      const history = await db.runTransaction((tx) => findPriorPaidProductOrder(tx, db, `marker-corrupt-${name}`, null, "empty@example.test", "empty@example.test"));
+      equal(history.kind, "inconclusive");
+      await rejects(linkReferral({ db, user: { uid: `marker-corrupt-${name}`, email: "empty@example.test", emailVerified: true },
+        code: codeB, keyring, program, nowEpochMs, getSponsorIdentity: activeIdentity }), { code: "referral_history_inconclusive" });
+      await rejects(ensureReferralCode({ db, user: sponsor, program, nowEpochMs, getSponsorIdentity: activeIdentity }), { code: "referral_history_inconclusive" });
+      deepStrictEqual(await captureReferralState(), before);
+    } finally { await historyMarker.set(completeHistoryMarker); }
+  });
+}
+await test("preuve payée UID ou normalized reste found sans marker", async () => {
+  await historyMarker.delete();
+  try {
+    const byUid = await db.runTransaction((tx) => findPriorPaidProductOrder(tx, db, "old-firebase-uid", null));
+    equal(byUid.kind, "found");
+    const byEmail = await db.runTransaction((tx) => findPriorPaidProductOrder(tx, db, "new-again-uid", null,
+      "ALICE-IDENTITY@example.test", "alice-identity@example.test"));
+    equal(byEmail.kind, "found");
+    await rejects(linkReferral({ db, user: { uid: "new-again-uid", email: "ALICE-IDENTITY@example.test", emailVerified: true }, code: codeB,
+      keyring, program, nowEpochMs, getSponsorIdentity: activeIdentity }), { code: "referee_already_paid" });
+  } finally { await historyMarker.set(completeHistoryMarker); }
+});
+await test("paiement plain consomme linked même sans marker, sans remise ni reward", async () => {
+  const id = "email-plain-marker-missing";
+  const child = await createPlainRouteCandidate(id, "referee-plain-marker-missing");
+  await historyMarker.delete();
+  try {
+    await commitOrderStatusTransition({ db: noMigrationDb, body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" },
+      admin: routeActor, referralProgram: program, getSponsorIdentity: activeIdentity, referralEmailKeyring: () => keyringJson,
+      now: () => "2000-01-03T00:00:00.000Z" });
+    equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
+    equal((await routeRelation(child.uid)).state, "cancelled"); equal((await routeRelation(child.uid)).qualifyingOrderId, id);
+    equal((await routeReferralMovements(id)).length, 0);
+  } finally { await historyMarker.set(completeHistoryMarker); }
+});
+await test("GET self reste disponible sans marker et projection sans normalized ni PII", async () => {
+  await historyMarker.delete();
+  try {
+    const before = await capturePaymentState();
+    const self = await readReferralSelf(noMigrationDb, "referee-marker-complete");
+    deepStrictEqual(self, { code: null, relation: { state: "pending", paymentConfirmed: true, deliveryConfirmed: false } });
+    ok(!JSON.stringify(self).includes("email"));
+    let status = 0; let payload: unknown;
+    const handler = createReferralHandler({ runtime: () => program, verify: async () => ({ uid: "referee-marker-complete", email: "synthetic@example.test" }),
+      db: () => noMigrationDb, sponsorIdentity: async () => { throw new Error("unexpected_auth"); }, secret: () => { throw new Error("unexpected_secret"); }, now: () => nowEpochMs });
+    const response = { setHeader() {}, status(value: number) { status = value; return this; }, json(value: unknown) { payload = value; } } as unknown as VercelResponseLike;
+    await handler({ method: "GET", headers: { authorization: "Bearer fixture-token" } } as VercelRequestLike, response);
+    equal(status, 200); deepStrictEqual(payload, self);
+    deepStrictEqual(await capturePaymentState(), before);
+  } finally { await historyMarker.set(completeHistoryMarker); }
+});
+await test("settlement off refund/correction ignore le marker absent", async () => {
+  const id = "email-settlement-marker-missing";
+  const child = await createSettlementCandidate(id, true);
+  const source = (await db.collection("orders").doc(id).get()).data() as Order;
+  await historyMarker.delete();
+  try {
+    for (const [event, returned] of [["refund", 1200], ["correction", 0]] as const) {
+      await noMigrationDb.runTransaction(async (transaction) => {
+        const plan = await prepareReferralTransition({ db: noMigrationDb, transaction, order: source, program: REFERRAL_CLOSED_RUNTIME,
+          event, refundId: `markerless-${event}`, cumulativeReturnedProductsCents: returned, recordedAtEpochMs: nowEpochMs });
+        plan?.write();
+      });
+    }
+    equal((await routeRelation(child.uid)).state, "rewarded");
+  } finally { await historyMarker.set(completeHistoryMarker); }
+});
+await test("migration cible exacte et apply explicite, pas de fallback distant", () => {
+  throws(() => assertOrderEmailMigrationTarget({ projectId: "wrong-project", apply: true, confirmation: ORDER_EMAIL_NORMALIZATION_VERSION }));
+  throws(() => assertOrderEmailMigrationTarget({ projectId: "verdanza-1f621", apply: true }));
+  throws(() => assertOrderEmailMigrationTarget({ projectId: "verdanza-1f621", emulatorHost: "127.0.0.1:18085" }));
+  throws(() => assertOrderEmailMigrationTarget({ projectId: CAGNOTTE_DEMO.projectId, emulatorHost: "remote:18085" }));
+  assertOrderEmailMigrationTarget({ projectId: "verdanza-1f621", apply: true, confirmation: ORDER_EMAIL_NORMALIZATION_VERSION });
+});
+
+// Dedicated emulator only: reset orders after all commercial tests, so the exhaustive
+// migration sees a precisely known dataset (including the deliberately invalid cases below).
+await db.recursiveDelete(db.collection("orders"));
+await historyMarker.delete();
+const migrationPaidOrder = { customerId: "migration-old-uid", orderType: "order", paymentStatus: "paid", total: 60,
+  items: [{ productId: "fixture-product", quantity: 1 }] };
+const migrationFixtures = [
+  { ...migrationPaidOrder, customerEmail: "Alice@Example.test" },
+  { ...migrationPaidOrder, customerEmail: "bob@example.test", customerEmailNormalized: "bob@example.test" },
+  { ...migrationPaidOrder, customerEmail: " CAROL@Example.test ", customerEmailNormalized: "wrong@example.test" },
+  { ...migrationPaidOrder, orderType: "preorder", paymentStatus: "cancelled", orderStatus: "cancelled", paidAt: "2000-01-01T00:00:00Z", customerEmail: "Preorder@Example.test" },
+  { ...migrationPaidOrder, paymentStatus: "to_confirm", customerEmail: "unpaid@example.test" },
+];
+for (const [index, fixture] of migrationFixtures.entries()) await db.collection("orders").doc(`migration-${index}`).set(fixture);
+const runMigration = (apply = false) => migrateOrderEmailNormalization({ db, projectId: CAGNOTTE_DEMO.projectId, apply,
+  ...(apply ? { confirmation: ORDER_EMAIL_NORMALIZATION_VERSION } : {}), pageSize: 2, now: () => 3000 });
+await test("migration dry-run paginée: compteurs exacts, zéro écriture", async () => {
+  const before = await capturePaymentState();
+  const report = await runMigration();
+  deepStrictEqual(report.initial, { scannedOrders: 5, usableEmails: 5, alreadyNormalized: 1, changesRequired: 4,
+    paidProductOrders: 4, anomalies: 0, changedOrders: 0 });
+  equal(report.verification, null); equal(report.markerWritten, false); equal((await historyMarker.get()).exists, false);
+  deepStrictEqual(await capturePaymentState(), before);
+});
+await test("migration apply émulateur: champs corrigés, passe exhaustive puis marker complet", async () => {
+  const rightsBefore = await captureReferralState();
+  const report = await runMigration(true);
+  equal(report.applied?.changedOrders, 4); equal(report.verification?.changesRequired, 0); equal(report.verification?.anomalies, 0);
+  equal(report.markerWritten, true); equal(report.markerComplete, true);
+  for (const [index, fixture] of migrationFixtures.entries()) {
+    const order = (await db.collection("orders").doc(`migration-${index}`).get()).data()!;
+    equal(order.customerEmail, fixture.customerEmail); equal(order.customerEmailNormalized, canonicalOrderEmail(fixture.customerEmail));
+  }
+  equal(await db.runTransaction((tx) => readReferralOrderEmailHistoryReady(tx, db)), true);
+  const preorderHistory = await db.runTransaction((tx) => findPriorPaidProductOrder(tx, db, "recreated-preorder-uid", null,
+    "PREORDER@example.test", canonicalOrderEmail("PREORDER@example.test")));
+  deepStrictEqual(preorderHistory, { kind: "found", orderId: "migration-3" });
+  deepStrictEqual(await captureReferralState(), rightsBefore);
+});
+await test("migration deuxième apply: documents et certificat inchangés, vérification refaite", async () => {
+  const before = await capturePaymentState(); const markerBefore = await historyMarker.get();
+  const report = await runMigration(true);
+  equal(report.applied?.changedOrders, 0); equal(report.markerWritten, false); equal(report.verification?.scannedOrders, 5);
+  deepStrictEqual(await capturePaymentState(), before);
+  const after = await historyMarker.get(); deepStrictEqual(after.data(), markerBefore.data()); ok(after.updateTime!.isEqual(markerBefore.updateTime!));
+});
+await test("migration email payé absent ou inexploitable: anomalie ferme aussi un ancien certificat", async () => {
+  for (const patch of [{}, { customerEmail: "not-an-email" }, { total: 0 }, { items: [] }]) {
+    const ref = db.collection("orders").doc("migration-anomaly");
+    await ref.set({ ...migrationPaidOrder, ...patch });
+    const dryBefore = await capturePaymentState();
+    const dry = await runMigration(); equal(dry.initial.anomalies, 1); deepStrictEqual(await capturePaymentState(), dryBefore);
+    const report = await runMigration(true); equal(report.initial.anomalies, 1); equal(report.markerComplete, false);
+    equal(await db.runTransaction((tx) => readReferralOrderEmailHistoryReady(tx, db)), false);
+    equal((await historyMarker.get()).data()?.status, "incomplete");
+    await ref.delete(); await runMigration(true);
+  }
+});
+await test("migration: anomalie apparue après update détectée par passe finale, aucun complete prématuré", async () => {
+  await db.collection("orders").doc("migration-0").update({ customerEmailNormalized: "wrong-again@example.test" });
+  let injected = false;
+  const observedDb = new Proxy(db, { get(target, property) {
+    if (property === "batch") return () => {
+      const batch = target.batch();
+      let writesOrder = false;
+      return new Proxy(batch, { get(batchTarget, batchProperty) {
+        if (batchProperty === "update") return (...args: Parameters<typeof batch.update>) => {
+          if (args[0].parent.id === "orders") writesOrder = true;
+          return batchTarget.update(...args);
+        };
+        if (batchProperty === "commit") return async () => {
+          if (writesOrder) equal((await historyMarker.get()).data()?.status, "incomplete");
+          const result = await batchTarget.commit();
+          if (writesOrder && !injected) {
+            injected = true;
+            // Its ID precedes the pagination cursor: only a fresh pass can discover it.
+            await target.collection("orders").doc("000-final-verification-anomaly").set(migrationPaidOrder);
+          }
+          return result;
+        };
+        const value = Reflect.get(batchTarget, batchProperty, batchTarget);
+        return typeof value === "function" ? value.bind(batchTarget) : value;
+      } });
+    };
+    const value = Reflect.get(target, property, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  } });
+  const report = await migrateOrderEmailNormalization({ db: observedDb, projectId: CAGNOTTE_DEMO.projectId, apply: true,
+    confirmation: ORDER_EMAIL_NORMALIZATION_VERSION, pageSize: 2, now: () => 4000 });
+  equal(injected, true); equal(report.initial.anomalies, 0); equal(report.verification?.anomalies, 1);
+  equal(report.markerComplete, false); equal((await historyMarker.get()).data()?.status, "incomplete");
+  await db.collection("orders").doc("000-final-verification-anomaly").delete();
+  await runMigration(true);
+});
+await test("champ normalized non projeté vers mouvements, analytics et rapports de migration", async () => {
+  for (const name of ["cagnotteMovements", "analyticsOutbox", "analyticsOperationalEvents"]) {
+    const docs = await db.collection(name).get();
+    for (const doc of docs.docs) ok(!JSON.stringify(doc.data()).includes("customerEmailNormalized"));
+  }
+  const report = JSON.stringify(await runMigration());
+  for (const fixture of migrationFixtures) ok(!report.includes(fixture.customerEmail));
+  ok(!report.includes("migration-old-uid"));
 });
 console.log(`Referral backend: ${passed} checks.`);

@@ -2,6 +2,8 @@ import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { REFERRAL_PROGRAM_VERSION, type ReferralCode, type ReferralEmailClaim, type ReferralRelation, type ReferralRelinkEvent } from "../../src/types/referral.js";
 import { newReferralCode, normalizeReferralEmail, referralEmailClaimAliases, type ReferralEmailKeyring } from "./referralIdentity.js";
 import type { ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
+import { canonicalOrderEmail } from "./orderEmailIdentity.js";
+import { readReferralOrderEmailHistoryReady } from "./referralOrderEmailHistory.js";
 
 export class ReferralError extends Error {
   constructor(readonly code: string, readonly status = 409) { super(code); }
@@ -45,6 +47,7 @@ export async function findPriorPaidProductOrder(tx: Transaction, db: Firestore, 
   rawEmail?: string, normalizedEmail?: string): Promise<{ kind: "found"; orderId: string } | { kind: "none" | "inconclusive" }> {
   const emails = [...new Set([rawEmail, normalizedEmail].filter((email): email is string => Boolean(email)))];
   const searches = [db.collection("orders").where("customerId", "==", uid(refereeUid)).limit(HISTORY_LIMIT),
+    ...(normalizedEmail ? [db.collection("orders").where("customerEmailNormalized", "==", canonicalOrderEmail(normalizedEmail)).limit(HISTORY_LIMIT)] : []),
     ...emails.map((email) => db.collection("orders").where("customerEmail", "==", email).limit(HISTORY_LIMIT))];
   let inconclusive = false;
   for (const query of searches) {
@@ -59,6 +62,8 @@ export async function findPriorPaidProductOrder(tx: Transaction, db: Firestore, 
         inconclusive = true;
     }
   }
+  // Exact legacy strings are useful positive evidence, but cannot prove absence.
+  if (!await readReferralOrderEmailHistoryReady(tx, db)) inconclusive = true;
   return { kind: inconclusive ? "inconclusive" : "none" };
 }
 
@@ -80,6 +85,7 @@ export async function ensureReferralCode(input: { db: Firestore; user: VerifiedU
     if (!CODE.test(code)) throw new ReferralError("referral_code_invalid", 400);
     const codeRef = input.db.collection("referralCodes").doc(`code_${code}`);
     const outcome = await input.db.runTransaction(async (tx) => {
+      if (!await readReferralOrderEmailHistoryReady(tx, input.db)) throw new ReferralError("referral_history_inconclusive");
       const [ownerDoc, codeDoc] = await tx.getAll(ownerRef, codeRef);
       if (ownerDoc.exists) {
         const existing = ownerDoc.data() as ReferralCode;

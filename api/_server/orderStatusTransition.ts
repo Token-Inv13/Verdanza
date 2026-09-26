@@ -26,6 +26,7 @@ import type { ReferralRuntime } from "./referralRuntimeConfig.js";
 import { prepareFirstPaymentWithoutReferral, prepareReferralTransition, validateReferralOrderSnapshot, type ReferralPaymentEvidence } from "./referralLedger.js";
 import { getReferralSponsorIdentity, type ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
 import { normalizeReferralEmail, parseReferralEmailKeyring, referralEmailClaimAliases } from "./referralIdentity.js";
+import { canonicalOrderEmail } from "./orderEmailIdentity.js";
 
 export type OrderStatusChange = {
   orderId: string; orderStatus?: OrderStatus; paymentStatus?: PaymentStatus;
@@ -261,6 +262,9 @@ export async function commitOrderStatusTransition({
       }
       update.paymentStatus = body.paymentStatus;
       if (body.paymentStatus === "paid" && order.paymentStatus !== "paid") {
+        if (typeof order.customerEmail === "string" && order.customerEmailNormalized !== canonicalOrderEmail(order.customerEmail)) {
+          update.customerEmailNormalized = canonicalOrderEmail(order.customerEmail);
+        }
         const paidAt = operationTime;
         update.paidAt = paidAt;
         update.paymentConfirmedAt = paidAt;

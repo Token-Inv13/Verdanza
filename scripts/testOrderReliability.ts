@@ -272,6 +272,19 @@ function test(name: string, run: () => void | Promise<void>) {
   tests.push({ name, run });
 }
 
+test("commande mixed-case conserve email brut et écrit email canonique au payload et au commit", async () => {
+  const mixedBody: CheckoutRequestBody = { ...body, customer: { ...body.customer, email: "Alice@Example.test" } };
+  const payload = orderPayload(mixedBody, priced);
+  assert.equal(payload.customerEmail, "Alice@Example.test");
+  assert.equal(payload.customerEmailNormalized, "alice@example.test");
+  const db = seededDatabase();
+  const created = await commitCheckoutOrder({ db: db as unknown as FirebaseFirestore.Firestore, body: mixedBody, priced,
+    checkoutRequestId, payloadFingerprint: checkoutPayloadFingerprint(mixedBody), orderId: "order-mixed-email" });
+  const stored = db.documents.get(`orders/${created.orderId}`)!;
+  assert.equal(stored.customerEmail, "Alice@Example.test");
+  assert.equal(stored.customerEmailNormalized, "alice@example.test");
+});
+
 test("les metadonnees anti-abus ne modifient pas l'idempotence commerciale", () => {
   const fingerprint = checkoutPayloadFingerprint(body);
   const protectedBody: CheckoutRequestBody = {
