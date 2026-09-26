@@ -12,6 +12,7 @@ export function SelectorStep({
   locked = false,
   optional = false,
   autoFocus = false,
+  floatingHelpProtected = false,
   onToggle,
   children,
 }: {
@@ -23,6 +24,7 @@ export function SelectorStep({
   locked?: boolean;
   optional?: boolean;
   autoFocus?: boolean;
+  floatingHelpProtected?: boolean;
   onToggle: () => void;
   children: ReactNode;
 }) {
@@ -44,6 +46,7 @@ export function SelectorStep({
         aria-expanded={open}
         aria-controls={panelId}
         autoFocus={autoFocus}
+        data-floating-help-suppress={floatingHelpProtected ? "selector-toggle" : undefined}
       >
         <span
           className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold ${
@@ -101,6 +104,7 @@ export function ChoiceOption({
   selected,
   onSelect,
   dataValue,
+  floatingHelpProtected = false,
 }: {
   label: string;
   description?: string;
@@ -108,6 +112,7 @@ export function ChoiceOption({
   selected: boolean;
   onSelect: () => void;
   dataValue: string;
+  floatingHelpProtected?: boolean;
 }) {
   return (
     <button
@@ -124,6 +129,7 @@ export function ChoiceOption({
       aria-pressed={selected}
       data-selector-option={dataValue}
       data-available={disabled ? "false" : "true"}
+      data-floating-help-suppress={floatingHelpProtected ? "selector-choice" : undefined}
     >
       <span className="block">{label}</span>
       {description && (

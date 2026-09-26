@@ -116,8 +116,8 @@ assert.match(filterSource, /aria-pressed=\{criteria\.intensity === intensity\}/)
 assert.match(filterSource, /aria-expanded=\{aromasOpen\}/);
 assert.match(filterSource, /aria-live="polite"/);
 assert.match(filterSource, /Plusieurs choix correspondent à au moins une famille sélectionnée/);
-assert.match(floatingHelpSource, /"\/fleurs-cbd": \["\[data-category-product-filter\]"\]/);
-assert.match(floatingHelpSource, /"\/resines-cbd": \["\[data-category-product-filter\]"\]/);
+assert.match(floatingHelpSource, /"\/fleurs-cbd": \["\[data-category-product-filter\] button"\]/);
+assert.match(floatingHelpSource, /"\/resines-cbd": \["\[data-category-product-filter\] button"\]/);
 assert.match(analyticsSource, /"category_filter_intensity"/);
 assert.match(analyticsSource, /"category_filter_aroma"/);
 assert.match(analyticsSource, /"category_filter_reset"/);

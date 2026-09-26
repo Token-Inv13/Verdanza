@@ -47,8 +47,8 @@ try {
       );
       await page.locator('[data-shop-selector-mode="compact"]').waitFor();
       await assertControl(page, '[data-shop-selector-edit]', `${label} Boutique modifier`);
-      await assertControl(page, '.product-card-v2 [data-floating-help-suppress] select', `${label} carte format`);
-      await assertControl(page, '.product-card-v2 [data-floating-help-suppress] button', `${label} carte achat`);
+      await assertControl(page, '.product-card-v2 select[data-floating-help-suppress]', `${label} carte format`);
+      await assertControl(page, '.product-card-v2 button[data-floating-help-suppress]', `${label} carte achat`);
     }
 
     await gotoDomReady(page, `${server.baseUrl}/produits/mandarine-cbd`);
@@ -97,15 +97,14 @@ async function assertControl(page: Page, selector: string, label: string) {
     (targetSelector) => {
       const element = document.querySelector(targetSelector);
       const rect = element?.getBoundingClientRect();
-      return !document.querySelector('[data-testid="floating-contact-trigger"]') &&
-        Boolean(rect && rect.top >= 0 && rect.bottom <= innerHeight);
+      return Boolean(rect && rect.top >= 0 && rect.bottom <= innerHeight);
     },
     selector,
   );
   const metrics = await control.evaluate((element) => {
     const rect = element.getBoundingClientRect();
     const help = document.querySelector<HTMLElement>('[data-testid="floating-contact-trigger"]');
-    const helpRect = help?.getBoundingClientRect();
+    const helpRect = help && getComputedStyle(help).visibility !== "hidden" ? help.getBoundingClientRect() : null;
     const area = helpRect
       ? Math.max(0, Math.min(rect.right, helpRect.right) - Math.max(rect.left, helpRect.left)) *
         Math.max(0, Math.min(rect.bottom, helpRect.bottom) - Math.max(rect.top, helpRect.top))

@@ -57,7 +57,6 @@ export function ProductGallery({
           className="mt-3 grid grid-cols-3 gap-3"
           aria-label={`Choisir un visuel de ${product.name}`}
           data-product-thumbnails
-          data-floating-help-suppress="product-gallery"
         >
           {images.map((image) => {
             const selected = image.id === selectedImage?.id;
@@ -73,6 +72,7 @@ export function ProductGallery({
                 aria-label={`Afficher ${image.alt}`}
                 aria-pressed={selected}
                 data-product-thumbnail
+                data-floating-help-suppress="product-gallery"
                 onClick={() => onSelectImage(image.id)}
               >
                 <ProductImage
@@ -118,7 +118,6 @@ export function ProductPurchasePanel({
       ref={purchaseBlockRef}
       className="rounded-[0.9rem] border border-champagne/40 bg-ivory p-5 shadow-[0_14px_38px_rgba(11,61,46,0.07)] sm:p-6"
       data-product-purchase
-      data-floating-help-suppress
     >
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-champagne/25 pb-4">
         <div>
@@ -163,6 +162,7 @@ export function ProductPurchasePanel({
                   aria-pressed={selected}
                   disabled={!option.available}
                   data-purchase-option={option.id}
+                  data-floating-help-suppress="purchase-format"
                   data-purchase-option-available={option.available ? "true" : "false"}
                   onClick={() => onSelectPurchaseOption(option.id)}
                 >
@@ -205,6 +205,7 @@ export function ProductPurchasePanel({
         className="btn-primary mt-5 min-h-11 w-full disabled:cursor-not-allowed disabled:bg-forest/45 disabled:text-ivory/80"
         disabled={!selectedPurchaseOption}
         onClick={onAddToCart}
+        data-floating-help-suppress="purchase-cart"
       >
         <ShoppingBag size={18} aria-hidden="true" />
         {selectedPurchaseOption

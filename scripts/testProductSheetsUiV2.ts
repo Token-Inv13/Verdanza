@@ -176,7 +176,7 @@ try {
       const carouselElement = document.querySelector<HTMLElement>("[data-product-sheet-carousel]");
       const tabs = [...document.querySelectorAll<HTMLElement>("[data-product-sheet-tabs] button")];
       const visibleSelectorButtons = [...document.querySelectorAll<HTMLButtonElement>("[data-product-selector] button")].filter(isVisible);
-      const help = document.querySelector<HTMLElement>('[data-testid="floating-contact-trigger"]');
+      const help = document.querySelector<HTMLElement>('[data-floating-help-footprint]:not([aria-hidden="true"]) [data-testid="floating-contact-trigger"]');
       const activeCta = document.querySelector<HTMLElement>('[data-product-sheet-card][data-active="true"] a');
       const activeCard = document.querySelector<HTMLElement>('[data-product-sheet-card][data-active="true"]');
       return {
