@@ -45,7 +45,7 @@ const key = (orderId: string, event: string) => createHash("sha256").update(`ref
 export async function prepareFirstPaymentWithoutReferral(input: { db: Firestore; transaction: Transaction; order: Order; program: Program;
   paymentEvidence?: ReferralPaymentEvidence; recordedAtEpochMs: number }) {
   if (!input.program.operational || input.program.mode === "off" || input.order.referral ||
-      input.order.orderType === "preorder" || input.order.productionFixture || !input.order.customerId ||
+      input.order.productionFixture || !input.order.customerId ||
       !Array.isArray(input.order.items) || input.order.items.length === 0 ||
       input.order.items.some((item) => typeof item.productId !== "string" || !item.productId || !Number.isSafeInteger(item.quantity) || item.quantity <= 0)) return null;
   const relationRef = input.db.collection("referrals").doc(input.order.customerId);

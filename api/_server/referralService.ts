@@ -14,7 +14,7 @@ const HISTORY_LIMIT = 100;
 function uid(value: string) { if (!ID.test(value)) throw new ReferralError("referral_identity_invalid", 400); return value; }
 function active(program: Program, now: number) { if (program.mode !== "active" || now < program.startsAtEpochMs) throw new ReferralError("referral_program_disabled", 503); }
 function productOrder(value: FirebaseFirestore.DocumentData, includeDeleted = false) {
-  return value.orderType !== "preorder" && (includeDeleted || !value.deletedAt) && !value.productionFixture &&
+  return (includeDeleted || !value.deletedAt) && !value.productionFixture &&
     Array.isArray(value.items) && value.items.length > 0 && value.items.every((item: unknown) =>
       item !== null && typeof item === "object" && typeof (item as { productId?: unknown }).productId === "string" &&
       Number.isSafeInteger((item as { quantity?: unknown }).quantity) && Number((item as { quantity: number }).quantity) > 0) &&
@@ -53,7 +53,7 @@ export async function findPriorPaidProductOrder(tx: Transaction, db: Firestore, 
     for (const doc of result.docs) {
       if (doc.id === currentOrderId) continue;
       const value = doc.data();
-      if (value.orderType === "preorder" || value.productionFixture) continue;
+      if (value.productionFixture) continue;
       if (hasHistoricalPaymentEvidence(value)) return { kind: "found", orderId: doc.id };
       if (!productOrder(value, true) && (value.paymentStatus === "paid" || isValidHistoricalPaymentInstant(value.paymentConfirmedAt) || isValidHistoricalPaymentInstant(value.paidAt)))
         inconclusive = true;
