@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { getLocalProducts } from "../src/services/productsService";
+import { homeHeroImageVariant, homeHeroTabletImageVariant, homeHeroMobileImageVariant,
+  staticImageVariants } from "../src/lib/generatedImageVariants";
 
 const pageSource = readFileSync("src/pages/HomePage.tsx", "utf8");
 const styleSource = readFileSync("src/styles/index.css", "utf8");
@@ -31,11 +33,23 @@ assert.match(pageSource, /ctaId: "home_hero_postal_delivery"/);
 assert.match(pageSource, /ctaId: "home_hero_local_delivery"/);
 
 assert.match(pageSource, /\/images\/verdanza-hero-premium\.webp/);
-assert.match(pageSource, /srcSet=\{heroImage\?\.srcSet\}/);
-assert.match(pageSource, /sizes="\(min-width: 1024px\) 52vw, 100vw"/);
+assert.match(pageSource, /<picture /);
+assert.match(pageSource, /media="\(min-width: 900px\)"/);
+assert.match(pageSource, /media="\(min-width: 768px\)"/);
+assert.match(pageSource, /srcSet=\{heroImage\.srcSet\}/);
+assert.match(pageSource, /srcSet=\{heroTabletImage\.srcSet\}/);
+assert.match(pageSource, /srcSet=\{heroMobileImage\.srcSet\}/);
+assert.match(pageSource, /sizes=\{heroImage\.sizes\}/);
+assert.match(pageSource, /const heroImage = homeHeroImageVariant;/);
+assert.match(homeHeroImageVariant.sizes, /\(min-width: 900px\) 55vw/);
+assert.equal(staticImageVariants["/images/verdanza-hero-premium.webp"].sizes, "100vw",
+  "the shared full-width flyer image must retain its own sizes");
+assert.match(homeHeroImageVariant.srcSet, /hero-editorial-desktop/);
+assert.match(homeHeroTabletImageVariant.srcSet, /hero-editorial-tablet/);
+assert.match(homeHeroMobileImageVariant.srcSet, /hero-editorial-mobile/);
 assert.match(pageSource, /fetchPriority="high"/);
-assert.match(pageSource, /width=\{heroImage\?\.width \|\| 1672\}/);
-assert.match(pageSource, /height=\{heroImage\?\.height \|\| 941\}/);
+assert.match(pageSource, /width=\{heroMobileImage\.width\}/);
+assert.match(pageSource, /height=\{heroMobileImage\.height\}/);
 
 assert.equal(
   occurrences(pageSource, "<HomeProductFinder"),
@@ -63,7 +77,8 @@ assert.match(pageSource, /to="\/blog"/);
 
 assert.match(styleSource, /\.home-hero-v2__image\s*\{[\s\S]*?filter: none;/);
 assert.match(styleSource, /home-hero-v2-in 240ms/);
-assert.match(styleSource, /home-hero-v2-in 280ms 40ms/);
+assert.match(styleSource, /home-hero-media-in 280ms/);
+assert.match(styleSource, /@keyframes home-hero-media-in\s*\{\s*from \{ opacity: 0; \}\s*to \{ opacity: 1; \}/);
 assert.match(
   styleSource,
   /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.home-hero-v2__content,[\s\S]*?animation: none;/,

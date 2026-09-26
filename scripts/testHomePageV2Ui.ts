@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { chromium } from "playwright";
 import { blockExternalServices, gotoDomReady } from "./auditPageReady";
 import { startAuditStaticServer } from "./auditStaticServer";
+import { homeHeroImageVariant, homeHeroMobileImageVariant, homeHeroTabletImageVariant } from "../src/lib/generatedImageVariants";
 
-const widths = [390, 430, 768, 1280] as const;
+const widths = [390, 430, 768, 1024, 1280, 1600] as const;
 const server = await startAuditStaticServer();
 const browser = await chromium.launch({ headless: true });
 
@@ -63,6 +64,9 @@ try {
     const layout = await page.evaluate(() => {
       const hero = document.querySelector<HTMLElement>("[data-home-hero-v2]");
       const image = document.querySelector<HTMLImageElement>(".home-hero-v2__image");
+      const matched = [...(image?.closest("picture")?.querySelectorAll("source") || [])]
+        .find((source) => matchMedia(source.media).matches);
+      const selectedImage = matched || image;
       const finder = document.querySelector<HTMLElement>("[data-home-product-finder]");
       const reassurance = document.querySelector<HTMLElement>("[data-home-reassurance]");
       const selection = document.querySelector<HTMLElement>("[data-home-selection]");
@@ -89,8 +93,8 @@ try {
         imageAnimation: image
           ? getComputedStyle(image.closest<HTMLElement>(".home-hero-v2__media") || image).animationName
           : "missing",
-        imageSrcSet: image?.getAttribute("srcset") ?? "",
-        imageSizes: image?.getAttribute("sizes") ?? "",
+        imageSrcSet: selectedImage?.getAttribute("srcset") ?? "",
+        imageSizes: selectedImage?.getAttribute("sizes") ?? "",
         imageFetchPriority: image?.getAttribute("fetchpriority") ?? "",
         imageWidth: image?.getAttribute("width") ?? "",
         imageHeight: image?.getAttribute("height") ?? "",
@@ -104,9 +108,11 @@ try {
     assert.ok(layout.overflow <= 1, `${width}px: horizontal overflow detected`);
     assert.ok(layout.shortestHeroTarget >= 44, `${width}px: hero CTAs must remain touch friendly`);
     assert.equal(layout.imageFilter, "none", `${width}px: hero image must stay crisp`);
-    assert.equal(layout.imageObjectFit, "cover", `${width}px: hero image framing must stay controlled`);
-    assert.match(layout.imageSrcSet, /768w/);
-    assert.equal(layout.imageSizes, "(min-width: 1024px) 52vw, 100vw");
+    assert.equal(layout.imageObjectFit, "contain", `${width}px: hero must preserve every product contour`);
+    const expectedImage = width >= 900 ? homeHeroImageVariant : width >= 768
+      ? homeHeroTabletImageVariant : homeHeroMobileImageVariant;
+    assert.equal(layout.imageSrcSet, expectedImage.srcSet);
+    assert.equal(layout.imageSizes, expectedImage.sizes);
     assert.equal(layout.imageFetchPriority, "high");
     assert.ok(Number(layout.imageWidth) > 0 && Number(layout.imageHeight) > 0);
     if (width <= 430) {
@@ -119,19 +125,22 @@ try {
       assert.equal(layout.imageAnimation, "none", "reduced motion must disable hero entry animation");
     }
 
-    // ProductCard purchase controls also suppress help inside the selection.
+    const rawHtml = (await response?.text()) ?? "";
+    // The interactive footer now suppresses help too; it is not a restoration zone.
     await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" }));
     const restoredHelp = page.locator('[data-testid="floating-contact-trigger"]');
+    await restoredHelp.waitFor({ state: "detached" });
+    await gotoDomReady(page, `${server.baseUrl}/livraison`);
     await restoredHelp.waitFor();
     assert.equal(
       await restoredHelp.getAttribute("aria-label"),
       "Besoin d'aide ?",
       `${width}px: floating help must return with its accessible label after all protected controls leave`,
     );
+    await gotoDomReady(page, `${server.baseUrl}/`);
     await page.locator("[data-home-product-finder]").scrollIntoViewIfNeeded();
     await restoredHelp.waitFor({ state: "detached" });
 
-    const rawHtml = (await response?.text()) ?? "";
     assert.match(rawHtml, /data-home-page-v2/);
     assert.match(rawHtml, /Une sélection CBD pensée pour vous\./);
     assert.match(rawHtml, /data-jsonld-id="jsonld-site-identity"/);
@@ -144,5 +153,5 @@ try {
 }
 
 console.log(
-  "Homepage V2 UI tests passed at 390px, 430px, 768px and 1280px: hierarchy, responsive hero, finder overlap, contextual floating-help suppression/restoration, section order, three cards, two guides, SEO, LCP image, reduced motion and no overflow.",
+  "Homepage V2 UI tests passed at 390, 430, 768, 1024, 1280, 1600px: hierarchy, art-directed hero, finder overlap, contextual help, section order, cards, guides, SEO, LCP priority, reduced motion and no overflow.",
 );

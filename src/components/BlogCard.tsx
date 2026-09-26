@@ -27,7 +27,7 @@ export function BlogCard({ article }: { article: BlogArticle }) {
           className="aspect-[4/3] w-full object-cover transition hover:scale-[1.02]"
         />
       </Link>
-      <div className="space-y-4 p-5">
+      <div className="space-y-4 p-5" data-floating-help-suppress="blog-editorial">
         <div className="flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-[0.14em] text-champagne">
           <span>{article.category}</span>
           <span className="inline-flex items-center gap-1 text-forest/65">

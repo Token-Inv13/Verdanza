@@ -3,7 +3,8 @@ import { join, relative, resolve } from "node:path";
 import { chromium } from "playwright";
 import { publishedBlogArticles } from "../src/data/blogArticles";
 import { products } from "../src/data/products";
-import { productImageVariants, staticImageVariants } from "../src/lib/generatedImageVariants";
+import { homeHeroImageVariant, homeHeroMobileImageVariant, homeHeroTabletImageVariant,
+  productImageVariants, staticImageVariants } from "../src/lib/generatedImageVariants";
 import { blockExternalServices, gotoDomReady } from "./auditPageReady";
 import { startAuditStaticServer } from "./auditStaticServer";
 
@@ -27,6 +28,8 @@ const blogImageUrls = publishedBlogArticles.flatMap((article) => [
 ]);
 const staticImageUrls = new Set([
   "/images/verdanza-hero-premium.webp",
+  "/images/hero-editorial-desktop.webp",
+  "/images/hero-editorial-mobile.webp",
   ...blogImageUrls,
 ]);
 const brandAssetUrls = new Set([
@@ -41,7 +44,7 @@ const brandAssetUrls = new Set([
   "/brand/verdanza-v1/structured-data/verdanza-seal-full-color-512.png",
   "/brand/verdanza-v1/social/verdanza-default-og-1200x630.png",
 ]);
-const generatedPrefixes = ["/images/products/", "/images/blog/", "/images/verdanza-hero-premium-"];
+const generatedPrefixes = ["/images/products/", "/images/blog/", "/images/verdanza-hero-premium-", "/images/hero-editorial-"];
 const referencedUrls = new Set([...productImageUrls, ...staticImageUrls, ...brandAssetUrls]);
 const publicImages = listPublicImages(publicDir);
 
@@ -151,12 +154,15 @@ function auditVariantSet(label: string, variant: { src: string; srcSet: string; 
 }
 
 async function auditRenderedImages() {
-  const heroVariants = staticImageVariants["/images/verdanza-hero-premium.webp"];
+  const heroVariants = homeHeroImageVariant;
   if (!heroVariants) {
     failures.push("home hero optimized variants missing");
   } else {
     auditBuiltVariantSet("home hero", heroVariants, 160 * 1024);
-    await auditRuntimeHero(heroVariants);
+    auditVariantSet("home hero tablet", homeHeroTabletImageVariant, 160 * 1024);
+    auditBuiltVariantSet("home hero tablet", homeHeroTabletImageVariant, 160 * 1024);
+    auditBuiltVariantSet("home hero mobile", homeHeroMobileImageVariant, 160 * 1024);
+    await auditRuntimeHero();
   }
 
   const productHtml = readDistHtml("produits/golden-static.html");
@@ -209,75 +215,89 @@ function auditBuiltVariantSet(
   }
 }
 
-async function auditRuntimeHero(variant: {
-  src: string;
-  srcSet: string;
-  sizes: string;
-  width: number;
-  height: number;
-}) {
+async function auditRuntimeHero() {
   const server = await startAuditStaticServer();
   const browser = await chromium.launch();
-  const context = await browser.newContext({ serviceWorkers: "block" });
-  const consoleErrors: string[] = [];
-
   try {
-    await context.addInitScript(() => {
-      window.localStorage.setItem("verdanza-age-confirmed", "true");
-    });
-    await blockExternalServices(context);
-    await context.route("**/api/public-promo-banners", (route) => route.abort());
-    const page = await context.newPage();
-    page.on("console", (message) => {
-      if (message.type() === "error" && message.text() !== "Failed to load resource: net::ERR_FAILED") {
-        consoleErrors.push(`${message.text()} @ ${message.location().url || "unknown"}`);
+    for (const width of [390, 430, 768, 1024, 1280, 1600]) {
+      const variant = width >= 900 ? homeHeroImageVariant : width >= 768
+        ? homeHeroTabletImageVariant : homeHeroMobileImageVariant;
+      const context = await browser.newContext({ viewport: { width, height: 1000 }, serviceWorkers: "block" });
+      const consoleErrors: string[] = [];
+      const requests: string[] = [];
+      await context.addInitScript(() => {
+        window.localStorage.setItem("verdanza-age-confirmed", "true");
+      });
+      await blockExternalServices(context);
+      await context.route("**/api/public-promo-banners", (route) => route.abort());
+      const page = await context.newPage();
+      page.on("request", (request) => {
+        if (request.url().includes("/images/hero-editorial-")) requests.push(new URL(request.url()).pathname);
+      });
+      page.on("console", (message) => {
+        if (message.type() === "error" && message.text() !== "Failed to load resource: net::ERR_FAILED") {
+          consoleErrors.push(`${message.text()} @ ${message.location().url || "unknown"}`);
+        }
+      });
+      page.on("pageerror", (error) => consoleErrors.push(error.message));
+
+      await gotoDomReady(page, `${server.baseUrl}/`);
+      const hero = page.locator(".home-hero-v2__image");
+      if ((await hero.count()) !== 1) {
+        failures.push(`home hero runtime count ${await hero.count()}`);
+        await context.close();
+        return;
       }
-    });
-    page.on("pageerror", (error) => consoleErrors.push(error.message));
+      await hero.waitFor({ state: "visible", timeout: 10000 });
+      await page.waitForFunction(
+        () => {
+          const image = document.querySelector<HTMLImageElement>(
+            ".home-hero-v2__image",
+          );
+          return Boolean(image?.complete && image.naturalWidth > 0);
+        },
+        undefined,
+        { timeout: 10000 },
+      );
+      const rendered = await hero.evaluate((image: HTMLImageElement) => {
+        const matched = [...(image.closest("picture")?.querySelectorAll("source") || [])]
+          .find((source) => matchMedia(source.media).matches);
+        const selected = matched || image;
+        return {
+          src: image.getAttribute("src") || "",
+          currentSrc: new URL(image.currentSrc).pathname,
+          srcSet: selected.getAttribute("srcset") || "",
+          sizes: selected.getAttribute("sizes") || "",
+          fetchPriority: image.getAttribute("fetchpriority") || "",
+          loading: image.getAttribute("loading") || "",
+          width: selected.getAttribute("width") || "",
+          height: selected.getAttribute("height") || "",
+          naturalWidth: image.naturalWidth,
+          naturalHeight: image.naturalHeight,
+        };
+      });
 
-    await gotoDomReady(page, `${server.baseUrl}/`);
-    const hero = page.locator('img[src*="verdanza-hero-premium"]');
-    if ((await hero.count()) !== 1) {
-      failures.push(`home hero runtime count ${await hero.count()}`);
-      return;
-    }
-    await hero.waitFor({ state: "visible", timeout: 10000 });
-    await page.waitForFunction(
-      () => {
-        const image = document.querySelector<HTMLImageElement>(
-          'img[src*="verdanza-hero-premium"]',
-        );
-        return Boolean(image?.complete && image.naturalWidth > 0);
-      },
-      undefined,
-      { timeout: 10000 },
-    );
-    const rendered = await hero.evaluate((image: HTMLImageElement) => ({
-      src: image.getAttribute("src") || "",
-      srcSet: image.getAttribute("srcset") || "",
-      sizes: image.getAttribute("sizes") || "",
-      fetchPriority: image.getAttribute("fetchpriority") || "",
-      loading: image.getAttribute("loading") || "",
-      width: image.getAttribute("width") || "",
-      height: image.getAttribute("height") || "",
-      naturalWidth: image.naturalWidth,
-      naturalHeight: image.naturalHeight,
-    }));
-
-    if (rendered.src !== variant.src) failures.push(`home hero runtime src mismatch: ${rendered.src}`);
-    if (rendered.srcSet !== variant.srcSet) failures.push("home hero runtime srcSet mismatch");
-    if (rendered.sizes !== variant.sizes) failures.push("home hero runtime sizes mismatch");
-    if (rendered.fetchPriority !== "high") failures.push("home hero runtime fetchpriority high missing");
-    if (rendered.loading === "lazy") failures.push("home hero is lazy loaded at runtime");
-    if (Number(rendered.width) !== variant.width || Number(rendered.height) !== variant.height) {
-      failures.push("home hero runtime dimensions mismatch");
-    }
-    if (!rendered.naturalWidth || !rendered.naturalHeight) failures.push("home hero runtime image not loaded");
-    if (consoleErrors.length) {
-      failures.push(`home hero runtime console errors: ${consoleErrors.join(" | ")}`);
+      if (rendered.src !== homeHeroMobileImageVariant.src) failures.push(`home hero fallback src mismatch: ${rendered.src}`);
+      if (!parseSrcSet(variant.srcSet).some((candidate) => candidate.src === rendered.currentSrc)) {
+        failures.push(`home hero art direction mismatch at ${width}px: ${rendered.currentSrc}`);
+      }
+      if (requests.length !== 1 || requests[0] !== rendered.currentSrc) {
+        failures.push(`home hero expected one matching image request at ${width}px: ${requests.join(", ")}`);
+      }
+      if (rendered.srcSet !== variant.srcSet) failures.push("home hero runtime srcSet mismatch");
+      if (rendered.sizes !== variant.sizes) failures.push("home hero runtime sizes mismatch");
+      if (rendered.fetchPriority !== "high") failures.push("home hero runtime fetchpriority high missing");
+      if (rendered.loading === "lazy") failures.push("home hero is lazy loaded at runtime");
+      if (Number(rendered.width) !== variant.width || Number(rendered.height) !== variant.height) {
+        failures.push("home hero runtime dimensions mismatch");
+      }
+      if (!rendered.naturalWidth || !rendered.naturalHeight) failures.push("home hero runtime image not loaded");
+      if (consoleErrors.length) {
+        failures.push(`home hero runtime console errors: ${consoleErrors.join(" | ")}`);
+      }
+      await context.close();
     }
   } finally {
-    await context.close();
     await browser.close();
     await server.close();
   }

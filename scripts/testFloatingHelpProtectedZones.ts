@@ -61,7 +61,9 @@ try {
       // The static editorial fallback is deliberately out of stock, so the real
       // sticky purchase bar cannot render. Exercise its shared marker with a
       // fixed local fixture; the live Preview covers the in-stock component.
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      // The footer is protected too. Use an unprotected reading surface to
+      // exercise dynamic sticky-bar insertion and restoration independently.
+      await gotoDomReady(page, `${server.baseUrl}/livraison`);
       await page.locator('[data-testid="floating-contact-trigger"]').waitFor({ state: "visible" });
       await page.evaluate(() => {
         const bar = document.createElement("div");

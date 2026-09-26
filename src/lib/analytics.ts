@@ -70,6 +70,9 @@ export type AnalyticsEventName =
   | "category_filter_intensity"
   | "category_filter_aroma"
   | "category_filter_reset"
+  | "advantages_view"
+  | "advantages_contest_click"
+  | "advantages_loyalty_click"
   | "generate_lead";
 
 export type ContactHelpSource =

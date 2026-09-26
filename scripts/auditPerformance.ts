@@ -40,24 +40,26 @@ if (publicInitialText.includes("pdf-lib")) failures.push("pdf-lib found in publi
 if (!hasChunkMatch(/Admin|adminUsers|invoice|coupon/i)) failures.push("admin chunk not detected");
 if (!hasChunkMatch(/Account|customerProfile|favorites/i)) failures.push("account chunk not detected");
 if (!hasChunkMatch(/Checkout|lastOrderSummary|quote-order|payment/i)) failures.push("checkout chunk not detected");
-const heroPattern = /verdanza-hero-premium(?:-\d+)?\.webp/;
+const heroPattern = /data-home-hero-picture/;
 const homeHeroDefinition = `${homeHtml}\n${homePageSource}`;
 if (!heroPattern.test(homeHeroDefinition)) failures.push("home hero image missing");
 if (!/fetchpriority="high"|fetchPriority="high"/i.test(homeHeroDefinition)) {
   failures.push("home LCP image is not high priority");
 }
-if (/verdanza-hero-premium(?:-\d+)?\.webp[\s\S]{0,250}loading="lazy"/i.test(homeHeroDefinition)) {
+if (/home-hero-v2__image[\s\S]{0,250}loading="lazy"|loading="lazy"[\s\S]{0,500}home-hero-v2__image/i.test(homeHeroDefinition)) {
   failures.push("home LCP image is lazy loaded");
 }
 if (
-  !/verdanza-hero-premium(?:-\d+)?\.webp[\s\S]{0,300}width="1672"/i.test(homeHtml) &&
-  !/width=\{heroImage\?\.width \|\| 1672\}/i.test(homePageSource)
+  !/width=\{heroMobileImage\.width\}/i.test(homePageSource) ||
+  !/width=\{heroImage\.width\}/i.test(homePageSource) ||
+  !/width=\{heroTabletImage\.width\}/i.test(homePageSource)
 ) {
   failures.push("home LCP image width missing");
 }
 if (
-  !/verdanza-hero-premium(?:-\d+)?\.webp[\s\S]{0,350}height="941"/i.test(homeHtml) &&
-  !/height=\{heroImage\?\.height \|\| 941\}/i.test(homePageSource)
+  !/height=\{heroMobileImage\.height\}/i.test(homePageSource) ||
+  !/height=\{heroImage\.height\}/i.test(homePageSource) ||
+  !/height=\{heroTabletImage\.height\}/i.test(homePageSource)
 ) {
   failures.push("home LCP image height missing");
 }

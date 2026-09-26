@@ -8,18 +8,12 @@ import {
   productPurchaseOptionLabel,
   resolveProductPurchaseOptions,
 } from "../lib/productPurchaseOptions";
+import { resolveProductCardMedia } from "../lib/productCardMedia";
 import { resolveProductCardPresentation } from "../lib/productPresentation";
 import type { Product } from "../types";
 import { trackAddToCart, trackSelectItem } from "../lib/analytics";
 import { FavoriteButton } from "./FavoriteButton";
 import { ProductImage } from "./ProductImage";
-import { QualityBadge } from "./QualityBadge";
-
-function productImageAlt(product: Product) {
-  return product.imageAlt || `${product.name} - ${
-    product.category === "flowers" ? "Fleur CBD" : "Résine CBD"
-  } Verdanza`;
-}
 
 export function ProductCard({
   product,
@@ -38,6 +32,7 @@ export function ProductCard({
   const [selectedPurchaseOptionId, setSelectedPurchaseOptionId] = useState("gram");
   const stockLabel = publicProductStockLabel(product);
   const presentation = resolveProductCardPresentation(product);
+  const cardMedia = resolveProductCardMedia(product);
   const purchaseOptions = resolveProductPurchaseOptions(product, items);
   const selectedPurchaseOption =
     purchaseOptions.find(
@@ -74,7 +69,7 @@ export function ProductCard({
       aria-labelledby={titleId}
       onClick={handleCardClick}
     >
-      <div className="relative border-b border-champagne/35 bg-gradient-to-b from-ivory to-cream/35 px-5 pb-4 pt-5">
+      <div className="relative border-b border-champagne/30 bg-gradient-to-b from-ivory to-cream/25 px-5 pb-3 pt-4">
         <span className="block text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-forest/60">
           {presentation.categoryLabel}
         </span>
@@ -86,7 +81,7 @@ export function ProductCard({
         >
           {product.name}
         </Link>
-        <div className="relative mt-3 aspect-[4/3] overflow-hidden rounded-[0.7rem] border border-forest/[0.08] bg-[#fcfbf7]">
+        <div className="relative mt-3 aspect-[4/3] overflow-hidden rounded-[0.7rem] border border-forest/[0.06] bg-[#fcfbf7]">
           <Link
             to={productUrl}
             className="block h-full w-full px-4 py-3"
@@ -94,19 +89,13 @@ export function ProductCard({
           >
             <ProductImage
               variant="card"
-              src={product.image}
-              alt={productImageAlt(product)}
+              src={cardMedia.src}
+              alt={cardMedia.alt}
               loading={priorityImage ? "eager" : "lazy"}
               fetchPriority={priorityImage ? "high" : "auto"}
               className="product-card-v2__image mx-auto h-full w-full object-contain"
             />
           </Link>
-          {product.qualitySealEnabled && (
-            <QualityBadge
-              variant="compact"
-              className="pointer-events-none absolute left-2.5 top-2.5 z-10 bg-forest"
-            />
-          )}
           <FavoriteButton product={product} className="absolute right-2.5 top-2.5 z-20" />
         </div>
         <ul
@@ -120,7 +109,7 @@ export function ProductCard({
             </li>
           ))}
         </ul>
-        <div className="mt-3 border-t border-champagne/30 pt-3">
+        <div className="mt-2.5">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-baseline gap-2">
               <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-ink/45">
@@ -146,17 +135,6 @@ export function ProductCard({
               ))}
             </span>
           </div>
-          {presentation.appearance.length > 0 && (
-            <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[0.68rem] leading-5 text-forest/65">
-              {presentation.appearance.map((value, index) => (
-                <div key={value} className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-champagne" aria-hidden="true" />
-                  <dt className="sr-only">{index === 0 ? "Aspect" : "Détail"}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
-          )}
         </div>
       </div>
 
@@ -179,7 +157,7 @@ export function ProductCard({
           </div>
           <span
             className={`text-right text-xs font-semibold ${
-              selectedPurchaseOption ? "text-forest/65" : "text-red-700"
+              selectedPurchaseOption ? "text-forest/45" : "text-red-700"
             }`}
           >
             {purchaseAvailabilityLabel}

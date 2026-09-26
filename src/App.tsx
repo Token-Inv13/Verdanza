@@ -90,6 +90,9 @@ const LegalPage = lazy(() =>
 const ContestPage = lazy(() =>
   import("./pages/ContestPage").then((module) => ({ default: module.ContestPage })),
 );
+const AdvantagesPage = lazy(() =>
+  import("./pages/AdvantagesPage").then((module) => ({ default: module.AdvantagesPage })),
+);
 const ContestPrizePage = lazy(() =>
   import("./pages/ContestPrizePage").then((module) => ({
     default: module.ContestPrizePage,
@@ -131,6 +134,7 @@ export function App() {
           <Route path="a-propos" element={<ContentPage variant="about" />} />
           <Route path="faq" element={<ContentPage variant="faq" />} />
           <Route path="contact" element={<ContentPage variant="contact" />} />
+          <Route path="/avantages" element={<AdvantagesPage />} />
           <Route path="concours" element={<ContestPage />} />
           <Route path="concours/gain/:token" element={<ContestPrizePage />} />
           <Route path="panier" element={<CartPage />} />

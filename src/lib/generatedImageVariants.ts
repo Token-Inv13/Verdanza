@@ -254,6 +254,51 @@ export const productImageVariants: Record<string, ProductImageVariantSet> = {
   }
 };
 
+export const productCardImageVariants: Record<string, ResponsiveImageVariant> = {
+  "/Fiche produit/Golden static/Composition-ezgif.com-resize.webp": {
+    src: "/images/products/golden-static-editorial-card-640.webp",
+    srcSet: "/images/products/golden-static-editorial-card-320.webp 320w, /images/products/golden-static-editorial-card-640.webp 640w",
+    sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
+    width: 640,
+    height: 552,
+  },
+  "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-pile.webp": {
+    src: "/images/products/cookie-kush-indoor-editorial-card-640.webp",
+    srcSet: "/images/products/cookie-kush-indoor-editorial-card-320.webp 320w, /images/products/cookie-kush-indoor-editorial-card-640.webp 640w",
+    sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
+    width: 640,
+    height: 640,
+  },
+  "/Fiche produit/Petite tetes OG Kush ( sous serre)/PTOGKush_pile.webp": {
+    src: "/images/products/petites-tetes-og-kush-editorial-card-640.webp",
+    srcSet: "/images/products/petites-tetes-og-kush-editorial-card-320.webp 320w, /images/products/petites-tetes-og-kush-editorial-card-640.webp 640w",
+    sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
+    width: 640,
+    height: 639,
+  },
+  "/Fiche produit/Harlequin (sous-serre)/harlequin_pile.webp": {
+    src: "/images/products/harlequin-greenhouse-editorial-card-640.webp",
+    srcSet: "/images/products/harlequin-greenhouse-editorial-card-320.webp 320w, /images/products/harlequin-greenhouse-editorial-card-640.webp 640w",
+    sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
+    width: 640,
+    height: 640,
+  },
+  "/Fiche produit/Mango%20Haze/mango.webp": {
+    src: "/images/products/mango-haze-cbd-editorial-card-640.webp",
+    srcSet: "/images/products/mango-haze-cbd-editorial-card-320.webp 320w, /images/products/mango-haze-cbd-editorial-card-640.webp 640w",
+    sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
+    width: 640,
+    height: 640,
+  },
+  "/Fiche produit/Mandarine/Mandarine_pile.webp": {
+    src: "/images/products/mandarine-cbd-editorial-card-640.webp",
+    srcSet: "/images/products/mandarine-cbd-editorial-card-320.webp 320w, /images/products/mandarine-cbd-editorial-card-640.webp 640w",
+    sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
+    width: 640,
+    height: 640,
+  }
+};
+
 export const staticImageVariants: Record<string, ResponsiveImageVariant> = {
   "/images/verdanza-hero-premium.webp": {
     src: "/images/verdanza-hero-premium-1672.webp",
@@ -261,6 +306,27 @@ export const staticImageVariants: Record<string, ResponsiveImageVariant> = {
     sizes: "100vw",
     width: 1672,
     height: 941,
+  },
+  "/images/hero-editorial-desktop.webp": {
+    src: "/images/hero-editorial-desktop-1034.webp",
+    srcSet: "/images/hero-editorial-desktop-560.webp 560w, /images/hero-editorial-desktop-704.webp 704w, /images/hero-editorial-desktop-1034.webp 1034w",
+    sizes: "(min-width: 1280px) 704px, (min-width: 900px) 55vw, calc(100vw - 48px)",
+    width: 1034,
+    height: 438,
+  },
+  "home-hero-editorial-tablet": {
+    src: "/images/hero-editorial-tablet-1280.webp",
+    srcSet: "/images/hero-editorial-tablet-768.webp 768w, /images/hero-editorial-tablet-1024.webp 1024w, /images/hero-editorial-tablet-1280.webp 1280w",
+    sizes: "calc(100vw - 48px)",
+    width: 1280,
+    height: 316,
+  },
+  "/images/hero-editorial-mobile.webp": {
+    src: "/images/hero-editorial-mobile-1774.webp",
+    srcSet: "/images/hero-editorial-mobile-400.webp 400w, /images/hero-editorial-mobile-800.webp 800w, /images/hero-editorial-mobile-1280.webp 1280w, /images/hero-editorial-mobile-1774.webp 1774w",
+    sizes: "(min-width: 640px) calc(100vw - 48px), calc(100vw - 32px)",
+    width: 1774,
+    height: 440,
   },
   "/images/blog/emballage-cbd-contenant-fermeture-1x1.webp": {
     src: "/images/blog/emballage-cbd-contenant-fermeture-1x1.webp",
@@ -703,4 +769,16 @@ export const staticImageVariants: Record<string, ResponsiveImageVariant> = {
     width: 1600,
     height: 900,
   }
+};
+
+export const homeHeroImageVariant: ResponsiveImageVariant = {
+  ...staticImageVariants["/images/hero-editorial-desktop.webp"],
+};
+
+export const homeHeroTabletImageVariant: ResponsiveImageVariant = {
+  ...staticImageVariants["home-hero-editorial-tablet"],
+};
+
+export const homeHeroMobileImageVariant: ResponsiveImageVariant = {
+  ...staticImageVariants["/images/hero-editorial-mobile.webp"],
 };
