@@ -15,6 +15,7 @@ export type CagnotteHistoryLabel =
   | "Restitution corrigée après rectification administrative"
   | "Récompense de parrainage en attente"
   | "Récompense de parrainage disponible"
+  | "Récompense de parrainage affectée à une régularisation"
   | "Récompense de parrainage annulée"
   | "Récompense de parrainage corrigée";
 

@@ -5,7 +5,7 @@ import { createReferralHandler } from "../api/referral.js";
 import { FirebaseIdTokenVerificationError, verifyFirebaseIdToken } from "../api/_server/adminAuth.js";
 import { lookupReferralSponsorIdentity } from "../api/_server/referralSponsorIdentity.js";
 import { newReferralCode, normalizeReferralEmail, referralEmailClaimId, parseReferralEmailKeyring, referralEmailClaimAliases } from "../api/_server/referralIdentity.js";
-import { resolveReferralRuntime, REFERRAL_CLOSED_RUNTIME, ReferralConfigurationError } from "../api/_server/referralRuntimeConfig.js";
+import { resolveReferralRuntime, REFERRAL_CLOSED_RUNTIME, ReferralConfigurationError, REFERRAL_RUNTIME_KEYS } from "../api/_server/referralRuntimeConfig.js";
 import { ensureReferralCode, findPriorPaidProductOrder, hasHistoricalPaymentEvidence, isValidHistoricalPaymentInstant, linkReferral, readReferralSelf, ReferralError, sponsorHasDeliveredPaidOrder } from "../api/_server/referralService.js";
 import { createReferralOrderSnapshot, referralReturnedProductsCents, referralSnapshotFingerprint } from "../api/_server/referralSnapshot.js";
 import { prepareReferralTransition, validateReferralOrderSnapshot, type ReferralPaymentEvidence } from "../api/_server/referralLedger.js";
@@ -285,7 +285,8 @@ await test("rotation HMAC lit v1 et legacy, crée v2 et conserve l'unicité", as
 const snapshot = createReferralOrderSnapshot({ refereeUid: user.uid, createdAtEpochMs: 2000,
   lines: [{ lineId: "line", eligibleBeforeReferralCents: 6000, referralDiscountCents: 500 }] });
 const order = { id: "referral-order-a", customerId: user.uid, paymentStatus: "to_confirm", orderStatus: "contact_required", referral: snapshot } as Order;
-const transition = async (source: Order, event: "payment" | "payment_and_delivery" | "delivery" | "refund" | "correction", refundId?: string, returned = 0, mode = program) => {
+const transition = async (source: Order, event: "payment" | "payment_and_delivery" | "delivery" | "refund" | "correction", refundId?: string, returned = 0,
+  mode: Parameters<typeof prepareReferralTransition>[0]["program"] = program) => {
   const relationBefore = event === "payment" || event === "payment_and_delivery"
     ? (await db.collection("referrals").doc(source.referral!.referralId).get()).data() as ReferralRelation : null;
   const paymentEvidence: ReferralPaymentEvidence | undefined = relationBefore ? { referralId: source.referral!.referralId,
@@ -1812,5 +1813,181 @@ await test("snapshot ajouté entre préflight plain et transaction reste strict 
     body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" } }), ReferralConfigurationError);
   ok(before); deepStrictEqual(await capturePaymentState(), before);
   deepStrictEqual(calls, { runtime: 1, auth: 0, keyring: 0 });
+});
+async function createSettlementCandidate(id: string, delivered: boolean) {
+  const child = await createRouteCandidate(id, `referee-${id}`);
+  const loyaltyProgram = { mode: "local_test" as const, programVersion: "fixture-referral-settlement-v1",
+    calculationVersion: "cagnotte-math-v1" as const, startsAtEpochMs: 1000, newAccrualsEnabled: true };
+  const snapshot = calculateCagnotte({ lines: [{ lineId: "line", initialCents: 6000 }],
+    discounts: [{ discountId: "referral", amountCents: 500, kind: "referral_discount", lineIds: ["line"] }],
+    requestedCagnotteCents: 0, availableCagnotteCents: 0, advantages: ["referral_discount"] });
+  await db.collection("orders").doc(id).update({ cagnotte: { schemaVersion: 1, beneficiaryId: child.uid,
+    programVersion: loyaltyProgram.programVersion, calculationVersion: "cagnotte-math-v1", createdAtEpochMs: 2000, snapshot } });
+  await commitOrderStatusTransition({ db, admin: routeActor, referralProgram: program, accrualProgram: loyaltyProgram,
+    getSponsorIdentity: activeIdentity, referralEmailKeyring: () => keyringJson,
+    now: () => "2000-01-03T00:00:00.000Z", body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link",
+      ...(delivered ? { orderStatus: "delivered" } : {}) } });
+  return child;
+}
+const captureSettlementState = async () => ({ payment: await capturePaymentState(),
+  financial: await Promise.all(["cagnotteRefunds", "cagnotteAccruals"].map(async (name) =>
+    (await db.collection(name).get()).docs.map((doc) => ({ id: doc.id, data: doc.data(), updatedAt: doc.updateTime.toMillis() })))) });
+const captureCodesAndClaims = async () => Promise.all(["referralCodes", "referralEmailClaims"].map(async (name) =>
+  (await db.collection(name).get()).docs.map((doc) => ({ id: doc.id, data: doc.data(), updatedAt: doc.updateTime.toMillis() }))));
+for (const environment of ["absent", "off", "malformed"] as const) {
+  for (const delivered of [false, true]) {
+    await test(`refund et correction ${delivered ? "rewarded" : "pending"} avec runtime ${environment} sans injection restent écrits et idempotents`, async () => {
+      const id = `referral-settlement-${environment}-${delivered ? "rewarded" : "pending"}`;
+      const child = await createSettlementCandidate(id, delivered);
+      if (delivered) await db.collection("cagnotteWallets").doc("sponsor-b").update({ availableCents: 100 });
+      const beforeWallet = await wallet("sponsor-b");
+      const claimsBefore = await captureCodesAndClaims();
+      const orderBefore = (await db.collection("orders").doc(id).get()).data()!;
+      const saved = REFERRAL_RUNTIME_KEYS.map((key) => [key, process.env[key]] as const);
+      try {
+        for (const key of REFERRAL_RUNTIME_KEYS) delete process.env[key];
+        if (environment !== "absent") process.env.REFERRAL_PROGRAM_MODE = environment === "off" ? "off" : "not-a-mode";
+        if (environment === "malformed") throws(() => resolveReferralRuntime({ environment: process.env, getProjectId: () => { throw new Error("unexpected_project_read"); } }), ReferralConfigurationError);
+        // Deliberately no referralProgram: the real refund entrypoint must not resolve the environment.
+        const common = { db, actor: routeActor, now: () => "2000-01-04T00:00:00.000Z", log: () => undefined };
+        const selection = { action: "preview" as const, orderId: id, currency: "EUR" as const,
+          additionalReturns: [{ lineId: "line", additionalNetCents: 1100 }], deliveryRefundCents: 0 };
+        const beforePreview = await captureSettlementState();
+        const preview = await executeOrderRefund({ ...common, request: selection });
+        equal(preview.kind, "refund_preview"); deepStrictEqual(await captureSettlementState(), beforePreview);
+        const request = { ...selection, action: "record_confirmed" as const, source: "admin" as const, reference: `refund-${id}`,
+          declaredFinancialCents: preview.totalFinancialCents, reason: "product_return" as const,
+          confirmedAt: "2000-01-04T00:00:00.000Z", expectedPreviewVersion: preview.previewVersion };
+        const confirmed = await executeOrderRefund({ ...common, request });
+        equal(confirmed.kind, "administrative_refund_recorded");
+        const relation = await routeRelation(child.uid);
+        equal(relation.state, delivered ? "reversed" : "cancelled"); equal(relation.cumulativeReturnedProductsCents, 1200);
+        equal(relation.qualifyingOrderId, id); equal(relation.paymentConfirmed, true);
+        equal(relation.deliveredOrderId, delivered ? id : null);
+        equal((await db.collection("orders").doc(id).get()).data()?.refundSummary.returnedProductNetCents, 1100);
+        const events = await db.collection("cagnotteRefunds").where("orderId", "==", id).get(); equal(events.size, 1);
+        const sponsorAfter = await wallet("sponsor-b");
+        if (delivered) {
+          equal(sponsorAfter.availableCents, 0); equal(sponsorAfter.regularizationCents, beforeWallet.regularizationCents + 900);
+          equal(sponsorAfter.pendingCents, beforeWallet.pendingCents);
+        } else {
+          equal(sponsorAfter.pendingCents, beforeWallet.pendingCents - 1000);
+          equal(sponsorAfter.availableCents, beforeWallet.availableCents); equal(sponsorAfter.regularizationCents, beforeWallet.regularizationCents);
+        }
+        const movement = (await routeReferralMovements(id)).find((doc) => doc.data().businessEvent === (delivered ? "referral_reward_reversed" : "referral_reward_cancelled")); ok(movement);
+        const refundState = await captureSettlementState();
+        await executeOrderRefund({ ...common, request }); deepStrictEqual(await captureSettlementState(), refundState);
+        const correction = { action: "preview_correction" as const, orderId: id, currency: "EUR" as const,
+          targetEventId: events.docs[0].id, expectedRevision: 0, replacementReturns: [], deliveryRefundCents: 0, declaredFinancialCents: 0,
+          correctionReason: "Rectification externe vérifiée", externalVerificationConfirmed: true };
+        const correctionPreview = await executeOrderRefund({ ...common, request: correction });
+        equal(correctionPreview.kind, "refund_correction_preview"); deepStrictEqual(await captureSettlementState(), refundState);
+        const correctionRequest = { ...correction, action: "record_correction" as const, correctionReference: `correction-${id}`,
+          expectedPreviewVersion: correctionPreview.previewVersion };
+        const corrected = await executeOrderRefund({ ...common, request: correctionRequest });
+        equal(corrected.kind, "administrative_refund_correction_recorded");
+        const restored = await routeRelation(child.uid);
+        equal(restored.state, delivered ? "rewarded" : "pending"); equal(restored.cumulativeReturnedProductsCents, 0);
+        equal(restored.qualifyingOrderId, id); equal(restored.sponsorUid, relation.sponsorUid);
+        equal((await db.collection("cagnotteRefunds").where("orderId", "==", id).get()).size, 2);
+        equal((await routeReferralMovements(id)).filter((doc) => doc.data().businessEvent === "referral_reward_restored").length, 1);
+        const afterRestore = await wallet("sponsor-b");
+        if (delivered) {
+          const compensation = Math.min(sponsorAfter.regularizationCents, 1000);
+          equal(afterRestore.availableCents, 1000 - compensation);
+          equal(afterRestore.regularizationCents, sponsorAfter.regularizationCents - compensation);
+        } else equal(afterRestore.pendingCents, sponsorAfter.pendingCents + 1000);
+        deepStrictEqual(await captureCodesAndClaims(), claimsBefore);
+        deepStrictEqual((await db.collection("orders").doc(id).get()).data()?.referral, orderBefore.referral);
+        const correctionState = await captureSettlementState();
+        await executeOrderRefund({ ...common, request: correctionRequest }); deepStrictEqual(await captureSettlementState(), correctionState);
+      } finally {
+        for (const [key, value] of saved) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+      }
+    });
+  }
+}
+await test("settlement off conserve les refus snapshot relation refund et wallet corrompus sans écriture", async () => {
+  const id = "referral-settlement-strict";
+  const child = await createSettlementCandidate(id, false);
+  const source = (await db.collection("orders").doc(id).get()).data() as Order;
+  const relationRef = db.collection("referrals").doc(child.uid);
+  const original = (await relationRef.get()).data()!;
+  const settle = (order = source, refundId = "strict-refund", returned = 1200) => transition(order, "refund", refundId, returned, REFERRAL_CLOSED_RUNTIME);
+  const before = await captureSettlementState();
+  await rejects(settle({ ...source, referral: { ...source.referral!, programVersion: "unknown-version" as never } }), { code: "referral_snapshot_invalid" });
+  await rejects(settle(source, "", 1200), { code: "referral_refund_invalid" });
+  await rejects(settle(source, "strict-refund", 6001), { code: "referral_refund_invalid" });
+  deepStrictEqual(await captureSettlementState(), before);
+  for (const patch of [{ schemaVersion: 2 }, { programVersion: "wrong-version" }, { refereeUid: "another-referee" },
+    { sponsorUid: child.uid }, { paymentConfirmed: false }, { deliveredOrderId: "another-order" },
+    { processedRefunds: { corrupt: -1 } }, { cumulativeReturnedProductsCents: 6001 }]) {
+    await relationRef.set({ ...original, ...patch });
+    const corruptState = await captureSettlementState();
+    await rejects(settle(), (error: unknown) => error instanceof ReferralError);
+    deepStrictEqual(await captureSettlementState(), corruptState);
+  }
+  await relationRef.set(original);
+  const walletRef = db.collection("cagnotteWallets").doc("sponsor-b");
+  const originalWallet = (await walletRef.get()).data()!;
+  await walletRef.update({ pendingCents: -1 });
+  const corruptWalletState = await captureSettlementState();
+  await rejects(settle()); deepStrictEqual(await captureSettlementState(), corruptWalletState);
+  await walletRef.set(originalWallet);
+});
+await test("settlement off refuse une relation jamais qualifiée et ne rouvre aucune activité normale", async () => {
+  const id = "referral-settlement-unqualified";
+  await createRouteCandidate(id, "referee-settlement-unqualified");
+  const source = (await db.collection("orders").doc(id).get()).data() as Order;
+  const before = await captureSettlementState();
+  for (const event of ["refund", "correction"] as const) await rejects(transition(source, event, `unqualified-${event}`, 0, REFERRAL_CLOSED_RUNTIME), { code: "referral_payment_required" });
+  for (const event of ["payment", "payment_and_delivery", "delivery"] as const) await rejects(transition(source, event, undefined, 0, REFERRAL_CLOSED_RUNTIME), { code: "referral_program_disabled" });
+  deepStrictEqual(await captureSettlementState(), before);
+});
+await test("refund et correction sans snapshot ignorent une configuration Referral malformée", async () => {
+  const id = "referral-settlement-unrelated";
+  const child = await createSettlementCandidate(id, false);
+  const source = (await db.collection("orders").doc(id).get()).data()!; delete source.referral;
+  await db.collection("orders").doc(id).set(source);
+  const beforeRelation = await routeRelation(child.uid);
+  const beforeSponsor = await wallet("sponsor-b");
+  const saved = process.env.REFERRAL_PROGRAM_MODE;
+  try {
+    process.env.REFERRAL_PROGRAM_MODE = "invalid-mode";
+    const common = { db: noReferralDb, actor: routeActor, now: () => "2000-01-04T00:00:00.000Z", log: () => undefined };
+    const selection = { action: "preview" as const, orderId: id, currency: "EUR" as const, additionalReturns: [{ lineId: "line", additionalNetCents: 1100 }], deliveryRefundCents: 0 };
+    const preview = await executeOrderRefund({ ...common, request: selection });
+    await executeOrderRefund({ ...common, request: { ...selection, action: "record_confirmed", source: "admin", reference: `refund-${id}`,
+      declaredFinancialCents: preview.totalFinancialCents, reason: "product_return", confirmedAt: "2000-01-04T00:00:00.000Z", expectedPreviewVersion: preview.previewVersion } });
+    const events = await db.collection("cagnotteRefunds").where("orderId", "==", id).get(); equal(events.size, 1);
+    const correction = { action: "preview_correction" as const, orderId: id, currency: "EUR" as const, targetEventId: events.docs[0].id,
+      expectedRevision: 0, replacementReturns: [], deliveryRefundCents: 0, declaredFinancialCents: 0,
+      correctionReason: "Rectification externe vérifiée", externalVerificationConfirmed: true };
+    const previewCorrection = await executeOrderRefund({ ...common, request: correction });
+    await executeOrderRefund({ ...common, request: { ...correction, action: "record_correction", correctionReference: `correction-${id}`,
+      expectedPreviewVersion: previewCorrection.previewVersion } });
+    equal((await db.collection("cagnotteRefunds").where("orderId", "==", id).get()).size, 2);
+    deepStrictEqual(await routeRelation(child.uid), beforeRelation); deepStrictEqual(await wallet("sponsor-b"), beforeSponsor);
+  } finally { if (saved === undefined) delete process.env.REFERRAL_PROGRAM_MODE; else process.env.REFERRAL_PROGRAM_MODE = saved; }
+});
+await test("livraison absorbe intégralement le reward dans la régularisation sans disponible supplémentaire", async () => {
+  const id = "referral-full-compensation-ledger";
+  await createRouteCandidate(id, "referee-full-compensation-ledger");
+  await db.collection("cagnotteWallets").doc("sponsor-b").update({ availableCents: 0, regularizationCents: 1500 });
+  const before = await wallet("sponsor-b");
+  await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+  equal((await wallet("sponsor-b")).pendingCents, before.pendingCents + 1000);
+  await routeTransition(id, { orderStatus: "delivered" });
+  const after = await wallet("sponsor-b");
+  equal(after.availableCents, before.availableCents); equal(after.pendingCents, before.pendingCents); equal(after.regularizationCents, 500);
+  const movement = (await routeReferralMovements(id)).find((doc) => doc.data().businessEvent === "referral_reward_available"); ok(movement);
+  equal(movement.data().pendingDeltaCents, -1000); equal(movement.data().availableDeltaCents, 0); equal(movement.data().regularizationDeltaCents, -1000);
+  const claimsBeforeReplay = await captureCodesAndClaims();
+  const movementsBeforeReplay = (await routeReferralMovements(id)).map((doc) => ({ id: doc.id, data: doc.data() }));
+  await routeTransition(id, { orderStatus: "delivered" });
+  deepStrictEqual(await wallet("sponsor-b"), after);
+  deepStrictEqual(await captureCodesAndClaims(), claimsBeforeReplay);
+  deepStrictEqual((await routeReferralMovements(id)).map((doc) => ({ id: doc.id, data: doc.data() })), movementsBeforeReplay);
+  equal((await routeReferralMovements(id)).length, 2);
 });
 console.log(`Referral backend: ${passed} checks.`);

@@ -88,8 +88,10 @@ export function validateReferralOrderSnapshot(order: Order): ReferralOrderSnapsh
 export async function prepareReferralTransition(input: Input) {
   if (!input.order.referral) return null;
   const snapshot = validateReferralOrderSnapshot(input.order);
-  if (!input.program.operational || input.program.mode === "off" || input.program.startsAtEpochMs === null ||
-    snapshot.createdAtEpochMs < input.program.startsAtEpochMs) throw new ReferralError("referral_program_disabled", 503);
+  const settlementEvent = input.event === "refund" || input.event === "correction";
+  // Persisted, version-frozen rights remain correctable after commercial rollback.
+  if (!settlementEvent && (!input.program.operational || input.program.mode === "off" || input.program.startsAtEpochMs === null ||
+    snapshot.createdAtEpochMs < input.program.startsAtEpochMs)) throw new ReferralError("referral_program_disabled", 503);
   if (!cents(input.recordedAtEpochMs)) throw new ReferralError("referral_event_invalid");
   const relationRef = input.db.collection("referrals").doc(snapshot.referralId);
   const relationDoc = await input.transaction.get(relationRef);
@@ -118,6 +120,7 @@ export async function prepareReferralTransition(input: Input) {
       throw new ReferralError("referral_discount_already_consumed");
     return { status: "already_applied" as const, write() {} };
   }
+  if (before.qualifyingOrderId === null && settlementEvent) throw new ReferralError("referral_payment_required");
   if (before.qualifyingOrderId === null && input.event !== "payment" && input.event !== "payment_and_delivery")
     return { status: "already_applied" as const, write() {} };
   if (before.cumulativeReturnedProductsCents > snapshot.eligibleProductsBeforeReferralCents) throw new ReferralError("referral_relation_corrupt");

@@ -218,6 +218,24 @@ try {
   for (const sensitive of ["private-sponsor", "private@example.test", "PRIVATE", "referral-pending"]) assert.ok(!JSON.stringify(referralHistory).includes(sensitive));
 
   await clear();
+  await seedWallet("referral-compensation", 1400, 0, 0);
+  await seedMovement("referral-full-compensation", "referral-compensation", 300, "referral_reward_available", -1000, 0, -1000, referralVersion);
+  await seedMovement("referral-normal-availability", "referral-compensation", 200, "referral_reward_available", -1000, 1000, 0, referralVersion);
+  await seedMovement("referral-partial-compensation", "referral-compensation", 100, "referral_reward_available", -1000, 400, -600, referralVersion);
+  const compensationBefore = await snapshot();
+  const compensationHistory = (await readCagnotte({ db, beneficiaryId: "referral-compensation", scope: "self", cursorSecret })).history.items;
+  assert.deepEqual(compensationHistory, [
+    { occurredAt: new Date(300).toISOString(), label: "Récompense de parrainage affectée à une régularisation", amountCents: 1000,
+      details: [{ compartment: "pending", deltaCents: -1000 }, { compartment: "regularization", deltaCents: -1000 }] },
+    { occurredAt: new Date(200).toISOString(), label: "Récompense de parrainage disponible", amountCents: 1000,
+      details: [{ compartment: "pending", deltaCents: -1000 }, { compartment: "available", deltaCents: 1000 }] },
+    { occurredAt: new Date(100).toISOString(), label: "Récompense de parrainage disponible", amountCents: 1000,
+      details: [{ compartment: "pending", deltaCents: -1000 }, { compartment: "available", deltaCents: 400 },
+        { compartment: "regularization", deltaCents: -600 }] },
+  ]);
+  assert.deepEqual(await snapshot(), compensationBefore, "les libellés n'altèrent pas le ledger financier");
+
+  await clear();
   await seedWallet("old-history", 50, 0, 0);
   await seedMovement("old-undated", "old-history", 100, "payment_confirmed", 50, 0, 0);
   const oldUndated = (await db.collection("cagnotteMovements").doc("old-undated").get()).data()!;

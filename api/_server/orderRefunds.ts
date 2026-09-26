@@ -25,7 +25,7 @@ import { CAGNOTTE_REGULARIZATION_VERSION, CAGNOTTE_RESERVATION_VERSION, type Cag
 import { prepareCagnotteRefundComposition, readCagnotteConsumedRefundBasis, readCagnotteReservationBasis } from "./cagnotteReservations.js";
 import { readUnpaidOrderContext } from "./unpaidOrderReview.js";
 import { hasPersistedCagnotteProductionFixtureMarker } from "./cagnotteProductionFixture.js";
-import { getReferralRuntime, type ReferralRuntime } from "./referralRuntimeConfig.js";
+import { REFERRAL_CLOSED_RUNTIME, type ReferralRuntime } from "./referralRuntimeConfig.js";
 import { prepareReferralTransition } from "./referralLedger.js";
 import { referralReturnedProductsCents } from "./referralSnapshot.js";
 
@@ -497,7 +497,7 @@ export async function executeOrderRefund(input: {
       regularizationVersion: CAGNOTTE_REGULARIZATION_VERSION,
     };
     const referralPlan = order.referral ? await prepareReferralTransition({
-      db: input.db, transaction: tx, order, program: input.referralProgram ?? getReferralRuntime(), event: "refund",
+      db: input.db, transaction: tx, order, program: input.referralProgram ?? REFERRAL_CLOSED_RUNTIME, event: "refund",
       refundId, recordedAtEpochMs: Date.parse(recordedAt),
       cumulativeReturnedProductsCents: referralReturnedProductsCents(order.referral, enrollment.snapshot, result.after.lines),
     }) : null;
@@ -1371,7 +1371,7 @@ async function executeOrderRefundCorrection(input: {
     if (!confirmed || !correctionRef || !content || !correctionKey) return publicCorrectionResult(result);
 
     const referralPlan = order.referral ? await prepareReferralTransition({
-      db: input.db, transaction: tx, order, program: input.referralProgram ?? getReferralRuntime(), event: "correction",
+      db: input.db, transaction: tx, order, program: input.referralProgram ?? REFERRAL_CLOSED_RUNTIME, event: "correction",
       refundId: correctionKey, recordedAtEpochMs: Date.parse(recordedAt),
       cumulativeReturnedProductsCents: referralReturnedProductsCents(order.referral, enrollment.snapshot, effective.lines),
     }) : null;

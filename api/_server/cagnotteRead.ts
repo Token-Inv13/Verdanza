@@ -162,7 +162,11 @@ function publicMovement(document: QueryDocumentSnapshot, beneficiaryId: string):
 
 function historyLabel(event: string, pending: number, available: number, regularization: number): CagnotteHistoryLabel {
   if (event === "referral_reward_pending" || event === "referral_reward_restored") return "Récompense de parrainage en attente";
-  if (event === "referral_reward_available") return "Récompense de parrainage disponible";
+  if (event === "referral_reward_available") {
+    return available === 0 && regularization < 0
+      ? "Récompense de parrainage affectée à une régularisation"
+      : "Récompense de parrainage disponible";
+  }
   if (event === "referral_reward_cancelled") return "Récompense de parrainage annulée";
   if (event === "referral_reward_reversed") return "Récompense de parrainage corrigée";
   if (event === "payment_confirmed") return "Gain en attente";
