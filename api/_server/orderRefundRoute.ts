@@ -1,4 +1,4 @@
-import { assertAdminUser, verifyFirebaseIdToken } from "./adminAuth.js";
+import { assertAdminUser, firebaseAuthHttpFailure, verifyFirebaseIdToken } from "./adminAuth.js";
 import { getAdminDb } from "./firebaseAdmin.js";
 import { assertMethod, sendJson, type VercelRequestLike, type VercelResponseLike } from "./http.js";
 import { executeOrderRefund, parseOrderRefundRequest, OrderRefundError } from "./orderRefunds.js";
@@ -46,11 +46,16 @@ export function createOrderRefundHandler(dependencies: {
       const result = await executeOrderRefund({ db, actor: { uid: actor.uid, email: actor.email }, request: parseOrderRefundRequest(raw), now: dependencies.now, log: dependencies.log });
       sendJson(response, { ok: true, result, bankingOperationExecuted: false, bankingTransferVerified: false });
     } catch (error) {
+      const authFailure = firebaseAuthHttpFailure(error);
+      if (authFailure) return sendJson(response, {
+        code: authFailure.status === 401 ? "admin_token_invalid" : "authentication_unavailable",
+        error: "Demande d’enregistrement refusée.",
+        bankingOperationExecuted: false, bankingTransferVerified: false,
+      }, authFailure.status);
       const message = error instanceof Error ? error.message : "";
-      const auth = ["Token Firebase invalide.", "INVALID_ID_TOKEN", "TOKEN_EXPIRED", "USER_NOT_FOUND"].includes(message);
       const cagnotteConflict = error instanceof CagnotteLedgerError || error instanceof CagnotteReservationError;
-      const status = error instanceof OrderRefundError ? error.status : message === "Acces admin requis." ? 403 : auth ? 401 : cagnotteConflict ? 409 : error instanceof RangeError ? 400 : 500;
-      const code = error instanceof OrderRefundError ? error.code : message === "Acces admin requis." ? "admin_required" : auth ? "admin_token_invalid" : cagnotteConflict ? "refund_ledger_requires_verification" : error instanceof RangeError ? "refund_validation_failed" : "refund_registration_unavailable";
+      const status = error instanceof OrderRefundError ? error.status : message === "Acces admin requis." ? 403 : cagnotteConflict ? 409 : error instanceof RangeError ? 400 : 500;
+      const code = error instanceof OrderRefundError ? error.code : message === "Acces admin requis." ? "admin_required" : cagnotteConflict ? "refund_ledger_requires_verification" : error instanceof RangeError ? "refund_validation_failed" : "refund_registration_unavailable";
       sendJson(response, { code, error: status === 409 ? "Enregistrement non confirmé : vérification ou nouvelle prévisualisation nécessaire." : "Demande d’enregistrement refusée.",
         bankingOperationExecuted: false, bankingTransferVerified: false }, status);
     }

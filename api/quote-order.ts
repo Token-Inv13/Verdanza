@@ -11,7 +11,7 @@ import {
   type CheckoutRequestBody,
   type CheckoutRequestItem,
 } from "./_server/checkout.js";
-import { verifyFirebaseIdToken } from "./_server/adminAuth.js";
+import { firebaseAuthHttpFailure, verifyFirebaseIdToken } from "./_server/adminAuth.js";
 import {
   CagnotteCheckoutError,
   prepareCagnotteCheckoutQuote,
@@ -131,6 +131,11 @@ return async function handler(
       ...(cagnotteUse ? { cagnotteUse } : {}),
     });
   } catch (error) {
+    const authFailure = firebaseAuthHttpFailure(error);
+    if (authFailure) return sendJson(response, {
+      code: authFailure.status === 401 ? "AUTH_REQUIRED" : "authentication_unavailable",
+      error: authFailure.status === 401 ? "Authentification cagnotte invalide." : "Authentification indisponible.",
+    }, authFailure.status);
     if (error instanceof CagnotteRuntimeConfigurationError) {
       return sendJson(response, {
         code: "cagnotte_configuration_invalid",

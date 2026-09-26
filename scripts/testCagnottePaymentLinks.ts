@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { Transaction } from "firebase-admin/firestore";
 import { CAGNOTTE_DEMO, connectCagnotteEmulator } from "./cagnotteEmulator.js";
 import { createSendPaymentLinkHandler } from "../api/_server/sendPaymentLinkRoute.js";
+import { FirebaseIdTokenVerificationError } from "../api/_server/adminAuth.js";
 import { createOrderStatusHandler } from "../api/_server/orderStatusRoute.js";
 import { buildCagnotteOrderEnrollment } from "../api/_server/cagnotteOrders.js";
 import { CAGNOTTE_SERVER_PROGRAM } from "../api/_server/cagnotteProgram.js";
@@ -177,7 +178,9 @@ try {
     const start = sends; equal((await link(body(f.id))).status, 409); equal(sends, start);
   });
   for (const [name, identity, token, expected] of [
-    ["missing token", admin, "", 401], ["invalid token", new Error("Token Firebase invalide."), "synthetic", 401],
+    ["missing token", admin, "", 401], ["invalid token", new FirebaseIdTokenVerificationError("authentication"), "synthetic", 401],
+    ["auth configuration", new FirebaseIdTokenVerificationError("configuration"), "synthetic", 503],
+    ["auth unavailable", new FirebaseIdTokenVerificationError("unavailable"), "synthetic", 503],
     ["self declared admin", { uid: "not-admin", email: admin.email, emailVerified: false }, "synthetic", 403],
     ["inactive uid", { uid: "inactive-links", email: "fallback-links@example.test", emailVerified: true }, "synthetic", 403],
     ["unverified email", { uid: "absent-links", email: "fallback-links@example.test", emailVerified: false }, "synthetic", 403],
@@ -185,6 +188,7 @@ try {
     const f = await fixture(), start = sends;
     const r = await link(body(f.id, { authToken: token, role: "admin", uid: admin.uid, email: admin.email }), { identity });
     equal(r.status, expected); equal(sends, start); equal(r.stats.transactions, 0);
+    equal((await requests(f.id)).length, 0);
   });
   await test("email administrateur verifie en repli autorise", async () => {
     const f = await fixture(); equal((await link(body(f.id), { identity: { uid: "absent-links", email: "fallback-links@example.test", emailVerified: true } })).status, 200);

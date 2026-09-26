@@ -12,7 +12,12 @@ export type CagnotteHistoryLabel =
   | "Cagnotte libérée"
   | "Cagnotte restituée après retour"
   | "Gain corrigé après rectification administrative"
-  | "Restitution corrigée après rectification administrative";
+  | "Restitution corrigée après rectification administrative"
+  | "Récompense de parrainage en attente"
+  | "Récompense de parrainage disponible"
+  | "Récompense de parrainage affectée à une régularisation"
+  | "Récompense de parrainage annulée"
+  | "Récompense de parrainage corrigée";
 
 export type CagnotteHistoryDetail = {
   compartment: "pending" | "available" | "reserved" | "regularization";

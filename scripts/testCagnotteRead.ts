@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { FirebaseIdTokenVerificationError } from "../api/_server/adminAuth.js";
 import { readFile } from "node:fs/promises";
 import { CAGNOTTE_SERVER_PROGRAM } from "../api/_server/cagnotteProgram.js";
 import { CAGNOTTE_READ_MAX_LIMIT, CagnotteReadError, readCagnotte } from "../api/_server/cagnotteRead.js";
@@ -48,7 +49,8 @@ try {
   const handler = createCagnotteReadHandler({ enabled: true, getDb: () => db,
     verifyToken: async (token) => {
       verifyCalls += 1;
-      if (token === "expired") throw new Error("TOKEN_EXPIRED");
+      if (token === "expired") throw new FirebaseIdTokenVerificationError("authentication");
+      if (token === "auth-config" || token === "auth-down") throw new FirebaseIdTokenVerificationError(token === "auth-config" ? "configuration" : "unavailable");
       return token === "admin" ? { uid: "admin-1", email: "admin@example.test", emailVerified: true }
         : { uid: "self", email: "self@example.test", emailVerified: true };
     },
@@ -66,6 +68,13 @@ try {
   await handler(request("GET", "/api/cagnotte?scope=self", "expired"), expired as never);
   assert.equal(expired.statusCode, 401);
   assert.equal(readCalls, beforeExpiredRead, "un jeton refusé ne joint pas le service métier");
+  for (const token of ["auth-config", "auth-down"]) {
+    const rejected = new FakeResponse();
+    await handler(request("GET", "/api/cagnotte?scope=self", token), rejected as never);
+    assert.equal(rejected.statusCode, 503);
+    assert.deepEqual(rejected.body, { code: "authentication_unavailable", error: "Authentification indisponible." });
+    assert.equal(readCalls, beforeExpiredRead);
+  }
 
   const foreign = new FakeResponse();
   const beforeForeignVerify = verifyCalls;
@@ -194,6 +203,37 @@ try {
   assert.deepEqual(reservationLabels.history.items.map((item) => item.label), ["Cagnotte réservée", "Cagnotte libérée", "Cagnotte restituée après retour"]);
   assert.equal(reservationLabels.history.items[1].amountCents, 800, "la libération expose le brut sans le présenter comme un gain");
   assert.equal(reservationLabels.history.items[2].amountCents, 100, "la restitution expose le brut avant compensation");
+
+  await clear();
+  await seedWallet("referral-labels", 0, 0, 0);
+  const referralVersion = { programVersion: "referral-commercial-policy-v1", sponsorUid: "private-sponsor", email: "private@example.test", code: "PRIVATE" };
+  await seedMovement("referral-pending", "referral-labels", 500, "referral_reward_pending", 1000, 0, 0, referralVersion);
+  await seedMovement("referral-available", "referral-labels", 400, "referral_reward_available", -1000, 1000, 0, referralVersion);
+  await seedMovement("referral-reversed", "referral-labels", 300, "referral_reward_reversed", 0, -100, 900, referralVersion);
+  await seedMovement("referral-restored", "referral-labels", 200, "referral_reward_restored", 1000, 0, 0, referralVersion);
+  await seedMovement("referral-cancelled", "referral-labels", 100, "referral_reward_cancelled", -1000, 0, 0, referralVersion);
+  const referralHistory = (await readCagnotte({ db, beneficiaryId: "referral-labels", scope: "self", cursorSecret })).history.items;
+  assert.deepEqual(referralHistory.map((item) => item.label), ["Récompense de parrainage en attente", "Récompense de parrainage disponible", "Récompense de parrainage corrigée", "Récompense de parrainage en attente", "Récompense de parrainage annulée"]);
+  assert.deepEqual(referralHistory.map((item) => item.amountCents), [1000, 1000, -1000, 1000, -1000]);
+  for (const sensitive of ["private-sponsor", "private@example.test", "PRIVATE", "referral-pending"]) assert.ok(!JSON.stringify(referralHistory).includes(sensitive));
+
+  await clear();
+  await seedWallet("referral-compensation", 1400, 0, 0);
+  await seedMovement("referral-full-compensation", "referral-compensation", 300, "referral_reward_available", -1000, 0, -1000, referralVersion);
+  await seedMovement("referral-normal-availability", "referral-compensation", 200, "referral_reward_available", -1000, 1000, 0, referralVersion);
+  await seedMovement("referral-partial-compensation", "referral-compensation", 100, "referral_reward_available", -1000, 400, -600, referralVersion);
+  const compensationBefore = await snapshot();
+  const compensationHistory = (await readCagnotte({ db, beneficiaryId: "referral-compensation", scope: "self", cursorSecret })).history.items;
+  assert.deepEqual(compensationHistory, [
+    { occurredAt: new Date(300).toISOString(), label: "Récompense de parrainage affectée à une régularisation", amountCents: 1000,
+      details: [{ compartment: "pending", deltaCents: -1000 }, { compartment: "regularization", deltaCents: -1000 }] },
+    { occurredAt: new Date(200).toISOString(), label: "Récompense de parrainage disponible", amountCents: 1000,
+      details: [{ compartment: "pending", deltaCents: -1000 }, { compartment: "available", deltaCents: 1000 }] },
+    { occurredAt: new Date(100).toISOString(), label: "Récompense de parrainage disponible", amountCents: 1000,
+      details: [{ compartment: "pending", deltaCents: -1000 }, { compartment: "available", deltaCents: 400 },
+        { compartment: "regularization", deltaCents: -600 }] },
+  ]);
+  assert.deepEqual(await snapshot(), compensationBefore, "les libellés n'altèrent pas le ledger financier");
 
   await clear();
   await seedWallet("old-history", 50, 0, 0);

@@ -27,7 +27,7 @@ async function test(category: string, name: string, run: () => Promise<unknown>)
 // A connection failure/timeout is NEVER accepted as a permission denial.
 const denied = (operation: Promise<unknown>) => rejects(operation, (error: unknown) =>
   Boolean(error && typeof error === "object" && "code" in error && error.code === "permission-denied"));
-const internal = ["cagnotteWallets", "cagnotteMovements", "cagnotteAccruals", "cagnotteReservations", "cagnotteRefunds"];
+const internal = ["cagnotteWallets", "cagnotteMovements", "cagnotteAccruals", "cagnotteReservations", "cagnotteRefunds", "referralCodes", "referrals", "referralEmailClaims", "referralMigrations"];
 const values = [{ beneficiaryId: "client-a", snapshot: { loyaltyCents: 500 } }, null, {}, "invalid", false];
 const ordinary = { customerId: "client-a", orderStatus: "contact_required", paymentStatus: "to_confirm", total: 100 };
 const profiles = [
@@ -53,11 +53,20 @@ try {
     batch.set(doc(db, "orders/cancelled"), { ...ordinary, orderStatus: "cancelled", paymentStatus: "cancelled", cagnotte: values[0] });
     for (let i = 0; i < values.length; i++) batch.set(doc(db, `orders/enrolled-${i}`), { ...ordinary, cagnotte: values[i] });
     for (const name of internal) for (const path of [`${name}/client-a`, `${name}/client-a/children/entry`]) batch.set(doc(db, path), { beneficiaryId: "client-a", amountCents: 500 });
+    batch.set(doc(db, "referrals/client-a/events/sponsor_change_1"), { type: "sponsor_relinked" });
     await batch.commit();
   });
 
   for (const [profile, context] of profiles) {
     const db = context.firestore();
+    await test("Parrainage audit", `${profile} relink event deny all`, async () => {
+      const ref = doc(db, "referrals/client-a/events/sponsor_change_1");
+      await denied(getDoc(ref));
+      await denied(getDocs(ref.parent));
+      await denied(setDoc(doc(ref.parent, `forged-${profile}`), { type: "sponsor_relinked" }));
+      await denied(updateDoc(ref, { type: "forged" }));
+      await denied(deleteDoc(ref));
+    });
     for (const name of internal) for (const path of [`${name}/client-a`, `${name}/client-a/children/entry`]) {
       const ref = doc(db, path);
       const operations: [string, () => Promise<unknown>][] = [

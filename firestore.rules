@@ -61,11 +61,11 @@ service cloud.firestore {
       allow read: if isAdmin()
         || (signedIn() && resource.data.customerId == request.auth.uid);
       // Presence, including null/malformed values, protects both sides of a write.
-      allow create: if isAdmin() && !request.resource.data.keys().hasAny(["cagnotte"]);
+      allow create: if isAdmin() && !request.resource.data.keys().hasAny(["cagnotte", "referral"]);
       allow update: if isAdmin()
-        && !resource.data.keys().hasAny(["cagnotte"])
-        && !request.resource.data.keys().hasAny(["cagnotte"]);
-      allow delete: if isAdmin() && !resource.data.keys().hasAny(["cagnotte"]);
+        && !resource.data.keys().hasAny(["cagnotte", "referral"])
+        && !request.resource.data.keys().hasAny(["cagnotte", "referral"]);
+      allow delete: if isAdmin() && !resource.data.keys().hasAny(["cagnotte", "referral"]);
     }
 
     // Internal documents and every descendant: server Admin SDK only.
@@ -74,6 +74,11 @@ service cloud.firestore {
     match /cagnotteAccruals/{document=**} { allow read, write: if false; }
     match /cagnotteRefunds/{document=**} { allow read, write: if false; }
     match /cagnotteReservations/{document=**} { allow read, write: if false; }
+    match /referralCodes/{document=**} { allow read, write: if false; }
+    match /referralMigrations/{document=**} { allow read, write: if false; }
+    match /referrals/{document=**} { allow read, write: if false; }
+    match /referrals/{refereeUid}/events/{document=**} { allow read, write: if false; }
+    match /referralEmailClaims/{document=**} { allow read, write: if false; }
 
     match /customers/{customerId} {
       allow read: if isAdmin() || (signedIn() && customerId == request.auth.uid);

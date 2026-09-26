@@ -44,7 +44,7 @@ import {
 } from "./cagnotteProductionReadinessAssertions.js";
 
 const baseMain = "322f65895fb0a75479c92bc4a3054caa4073d2f8";
-const expectedRulesHash = "3a2cf2680969ba797da668e82ff075d3a436c04f4084623411df69a919d214d5";
+const expectedRulesHash = "b3583f787c75cffe8d2f05aded3b3026e3478bda4f63b8630f1f99f76ef0b725";
 const expectedEndpoints = [
   "admin-contests.ts",
   "admin-payment-links.ts",
@@ -59,6 +59,7 @@ const expectedEndpoints = [
   "invoices.ts",
   "order-refunds.ts",
   "quote-order.ts",
+  "referral.ts",
   "retry-order-emails.ts",
   "retry-order-purchase-analytics.ts",
   "revoke-order-analytics.ts",
@@ -87,6 +88,7 @@ const sensitiveEnvironmentTemplateKeys = new Set([
   "FIREBASE_PRIVATE_KEY",
   "FIREBASE_SERVICE_ACCOUNT_BASE64",
   "CAGNOTTE_READ_CURSOR_SECRET",
+  "REFERRAL_EMAIL_HMAC_KEYRING_JSON",
   "BOOTSTRAP_ADMIN_EMAIL",
   "BOOTSTRAP_ADMIN_UID",
   "BOOTSTRAP_ADMIN_TEMP_PASSWORD",
@@ -425,7 +427,7 @@ await check("configuration runtime invalide refusée avant Firebase, Auth et lec
   assert.equal(dependencyCalls, 0);
 });
 
-await check("19 fonctions API attendues, deux endpoints fidélité et selection.ts connu", () => {
+await check("20 fonctions API attendues, deux endpoints fidélité, referral.ts et selection.ts connus", () => {
   const endpoints = readdirSync(resolve("api"), { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
     .map((entry) => entry.name)
@@ -439,8 +441,8 @@ await check("19 fonctions API attendues, deux endpoints fidélité et selection.
   assert.equal(mainEndpoints.length, 16);
   const addedEndpoints = endpoints.filter((file) => !mainEndpoints.includes(file));
   const fidelityEndpoints = ["cagnotte.ts", "order-refunds.ts"];
-  const independentEndpoints = ["selection.ts"];
-  assert.equal(endpoints.length, 19);
+  const independentEndpoints = ["referral.ts", "selection.ts"];
+  assert.equal(endpoints.length, 20);
   assert.deepEqual(addedEndpoints, [...fidelityEndpoints, ...independentEndpoints].sort());
   assert.deepEqual(addedEndpoints.filter((file) => !independentEndpoints.includes(file)), fidelityEndpoints);
 });
@@ -452,9 +454,9 @@ await check("CI exécute les deux suites backend Stripe Test distinctes des adap
   assert.match(workflow, /^[ \t]+npm run test:stripe-test:http[ \t]*\r?$/m);
 });
 
-await check("packaging statique des endpoints cagnotte sans dépendance de test", () => {
+await check("packaging statique des endpoints cagnotte et parrainage sans dépendance de test", () => {
   const forbiddenPackages = new Set(["playwright", "@firebase/rules-unit-testing", "tsx", "vite", "firebase-tools"]);
-  for (const entry of ["api/cagnotte.ts", "api/order-refunds.ts"]) {
+  for (const entry of ["api/cagnotte.ts", "api/order-refunds.ts", "api/referral.ts"]) {
     const graph = dependencyGraph(entry);
     const forbiddenFiles = [...graph.files].filter((file) =>
       file.startsWith("scripts/") || /(?:^|\/)(?:test|tests|__tests__|recipe|demo)(?:\/|[A-Z_.-])/i.test(file),
@@ -541,6 +543,10 @@ await check("règles Firestore candidates et protections commandes", () => {
     "cagnotteAccruals",
     "cagnotteReservations",
     "cagnotteRefunds",
+    "referralCodes",
+    "referrals",
+    "referralEmailClaims",
+    "referralMigrations",
   ]) {
     assert.match(rules, new RegExp(`match /${collection}/\\{document=\\*\\*\\} \\{ allow read, write: if false; \\}`));
   }
@@ -548,9 +554,9 @@ await check("règles Firestore candidates et protections commandes", () => {
     rules,
     /match \/customers\/\{customerId\} \{[\s\S]*?allow create:[\s\S]*?!request\.resource\.data\.keys\(\)\.hasAny\(\["productionFixture"\]\)[\s\S]*?allow update:/,
   );
-  assert.match(rules, /allow create: if isAdmin\(\) && !request\.resource\.data\.keys\(\)\.hasAny\(\["cagnotte"\]\)/);
-  assert.match(rules, /!resource\.data\.keys\(\)\.hasAny\(\["cagnotte"\]\)[\s\S]*!request\.resource\.data\.keys\(\)\.hasAny\(\["cagnotte"\]\)/);
-  assert.match(rules, /allow delete: if isAdmin\(\) && !resource\.data\.keys\(\)\.hasAny\(\["cagnotte"\]\)/);
+  assert.match(rules, /allow create: if isAdmin\(\) && !request\.resource\.data\.keys\(\)\.hasAny\(\["cagnotte", "referral"\]\)/);
+  assert.match(rules, /!resource\.data\.keys\(\)\.hasAny\(\["cagnotte", "referral"\]\)[\s\S]*!request\.resource\.data\.keys\(\)\.hasAny\(\["cagnotte", "referral"\]\)/);
+  assert.match(rules, /allow delete: if isAdmin\(\) && !resource\.data\.keys\(\)\.hasAny\(\["cagnotte", "referral"\]\)/);
 });
 
 await check("index candidat exact raccordé localement dans firebase.json", () => {
@@ -563,6 +569,20 @@ await check("index candidat exact raccordé localement dans firebase.json", () =
         { fieldPath: "beneficiaryId", order: "ASCENDING" },
         { fieldPath: "recordedAtEpochMs", order: "DESCENDING" },
         { fieldPath: "__name__", order: "DESCENDING" },
+      ],
+    }, {
+      collectionGroup: "referrals", queryScope: "COLLECTION",
+      fields: [
+        { fieldPath: "sponsorUid", order: "ASCENDING" },
+        { fieldPath: "createdAtEpochMs", order: "DESCENDING" },
+        { fieldPath: "__name__", order: "DESCENDING" },
+      ],
+    }, {
+      collectionGroup: "orders", queryScope: "COLLECTION",
+      fields: [
+        { fieldPath: "customerId", order: "ASCENDING" },
+        { fieldPath: "paymentStatus", order: "ASCENDING" },
+        { fieldPath: "orderStatus", order: "ASCENDING" },
       ],
     }],
     fieldOverrides: [],

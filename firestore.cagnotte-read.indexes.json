@@ -8,6 +8,22 @@
         { "fieldPath": "recordedAtEpochMs", "order": "DESCENDING" },
         { "fieldPath": "__name__", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "referrals", "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sponsorUid", "order": "ASCENDING" },
+        { "fieldPath": "createdAtEpochMs", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "orders", "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customerId", "order": "ASCENDING" },
+        { "fieldPath": "paymentStatus", "order": "ASCENDING" },
+        { "fieldPath": "orderStatus", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

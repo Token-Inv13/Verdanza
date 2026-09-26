@@ -7,6 +7,9 @@ export function hasCagnotteEnrollment(value: object): boolean {
 }
 
 export function assertOrderDeletionAllowed(order: object) {
+  if (Object.prototype.hasOwnProperty.call(order, "referral")) {
+    throw new Error("Suppression refusee: commande parrainage conservee pour tracabilite.");
+  }
   if (hasCagnotteEnrollment(order)) {
     throw new Error("Suppression refusee: commande inscrite cagnotte conservee pour tracabilite.");
   }

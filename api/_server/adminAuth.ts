@@ -6,28 +6,47 @@ export type VerifiedFirebaseUser = {
   emailVerified?: boolean;
 };
 
+export class FirebaseIdTokenVerificationError extends Error {
+  constructor(readonly category: "authentication" | "configuration" | "unavailable") { super(`firebase_token_${category}`); }
+}
+
+export function firebaseAuthHttpFailure(error: unknown): { status: 401 | 503; code: "authentication_required" | "authentication_unavailable" } | null {
+  if (!(error instanceof FirebaseIdTokenVerificationError)) return null;
+  return error.category === "authentication"
+    ? { status: 401, code: "authentication_required" }
+    : { status: 503, code: "authentication_unavailable" };
+}
+
 export async function verifyFirebaseIdToken(
   idToken: string,
 ): Promise<VerifiedFirebaseUser> {
   const apiKey = process.env.VITE_FIREBASE_API_KEY;
-  if (!apiKey) throw new Error("Missing VITE_FIREBASE_API_KEY server variable.");
+  if (!apiKey) throw new FirebaseIdTokenVerificationError("configuration");
 
-  const response = await fetch(
+  if (!idToken?.trim()) throw new FirebaseIdTokenVerificationError("authentication");
+
+  let response: Response;
+  try { response = await fetch(
     `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ idToken }),
     },
-  );
-  const payload = (await response.json()) as {
+  ); } catch { throw new FirebaseIdTokenVerificationError("unavailable"); }
+  let payload: {
     users?: Array<{ localId?: string; email?: string; emailVerified?: boolean }>;
     error?: { message?: string };
   };
+  try { payload = await response.json() as typeof payload; }
+  catch { throw new FirebaseIdTokenVerificationError("unavailable"); }
 
   const user = payload.users?.[0];
   if (!response.ok || !user?.localId) {
-    throw new Error(payload.error?.message || "Token Firebase invalide.");
+    const code = payload.error?.message ?? "";
+    if (code === "API_KEY_INVALID" || code === "INVALID_API_KEY" || code === "PROJECT_NOT_FOUND") throw new FirebaseIdTokenVerificationError("configuration");
+    if (response.status >= 500 || response.status === 429) throw new FirebaseIdTokenVerificationError("unavailable");
+    throw new FirebaseIdTokenVerificationError("authentication");
   }
 
   return {
