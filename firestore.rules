@@ -79,6 +79,7 @@ service cloud.firestore {
     match /referrals/{document=**} { allow read, write: if false; }
     match /referrals/{refereeUid}/events/{document=**} { allow read, write: if false; }
     match /referralEmailClaims/{document=**} { allow read, write: if false; }
+    match /referralPaymentIdentities/{document=**} { allow read, write: if false; }
 
     match /customers/{customerId} {
       allow read: if isAdmin() || (signedIn() && customerId == request.auth.uid);

@@ -25,7 +25,8 @@ import { getReferralRuntime, ReferralConfigurationError, REFERRAL_CLOSED_RUNTIME
 import type { ReferralRuntime } from "./referralRuntimeConfig.js";
 import { prepareFirstPaymentWithoutReferral, prepareReferralTransition, validateReferralOrderSnapshot, type ReferralPaymentEvidence } from "./referralLedger.js";
 import { getReferralSponsorIdentity, type ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
-import { normalizeReferralEmail, parseReferralEmailKeyring, referralEmailClaimAliases } from "./referralIdentity.js";
+import { normalizeReferralEmail } from "./referralIdentity.js";
+import { prepareReferralPaymentIdentity, readCurrentPaymentIdentity, type CurrentPaymentIdentity } from "./referralPaymentIdentity.js";
 import { usableOrderEmail } from "./orderEmailIdentity.js";
 import { productOrder, hasHistoricalPaymentEvidence, isValidHistoricalPaymentInstant, ReferralError } from "./referralService.js";
 import { prepareReferralOrderEmailHistoryInvalidation } from "./referralOrderEmailHistory.js";
@@ -110,8 +111,9 @@ export async function commitOrderStatusTransition({
     if (!resolvedReferralProgram && !referralConfigurationError) {
       try { resolvedReferralProgram = resolveReferralRuntime(); }
       catch (error) {
-        if (!(error instanceof ReferralConfigurationError)) throw error;
-        referralConfigurationError = error;
+        // Referral runtime availability must never hold up an undiscounted business payment.
+        // Keep the closure cached so a snapshot introduced by a race remains strict (503).
+        referralConfigurationError = error instanceof ReferralConfigurationError ? error : new ReferralConfigurationError();
       }
     }
     if (referralConfigurationError) {
@@ -121,25 +123,25 @@ export async function commitOrderStatusTransition({
     return resolvedReferralProgram!;
   };
   let paymentEvidence: ReferralPaymentEvidence | undefined;
+  let currentPaymentIdentity: CurrentPaymentIdentity | undefined;
   if (body.paymentStatus === "paid") {
     const candidateSnapshot = await db.collection("orders").doc(body.orderId).get();
     if (candidateSnapshot.exists) {
       const candidate = orderFromSnapshot(candidateSnapshot);
-      if (candidate.paymentStatus !== "paid" && candidate.orderStatus !== "cancelled" && !candidate.cancelledAt) {
+      if (candidate.paymentStatus !== "paid" && !candidate.productionFixture && candidate.customerId && productOrder(candidate, true)) {
         const candidateReferralProgram = resolveReferralRuntimeForTransition(candidate, true, false);
-        if (candidateReferralProgram?.operational) {
+        if (candidateReferralProgram?.operational && candidateReferralProgram.mode !== "off") {
+          currentPaymentIdentity = await readCurrentPaymentIdentity(candidate.customerId, getSponsorIdentity, referralEmailKeyring);
           const referralId = candidate.referral ? validateReferralOrderSnapshot(candidate).referralId : candidate.customerId!;
           const relationDoc = await db.collection("referrals").doc(referralId).get();
           const relation = relationDoc.data();
           if (!relation && candidate.referral) throw new Error("referral_relation_missing");
-          // Auth evidence is needed only while the first paid order can claim the relation.
+          // Relation binding remains explicit; identity protection itself does not require a relation.
           if (relation?.qualifyingOrderId === null && relation.state === "linked") {
             const sponsorUid = relation.sponsorUid;
             if (typeof sponsorUid !== "string" || !sponsorUid) throw new Error("referral_relation_missing");
             let sponsorAccount: ReferralPaymentEvidence["sponsorAccount"] = "unavailable";
-            let refereeAccount: ReferralPaymentEvidence["refereeAccount"] = "unavailable";
             let sponsorEmail: string | undefined;
-            let refereeEmail: string | undefined;
             try {
               const identity = await getSponsorIdentity(sponsorUid);
               if (identity.uid === sponsorUid) {
@@ -147,24 +149,12 @@ export async function commitOrderStatusTransition({
                 sponsorEmail = normalizeReferralEmail(identity.email);
               }
             } catch { /* A payment may proceed, but an unverified sponsor earns no reward. */ }
-            try {
-              const identity = await getSponsorIdentity(referralId);
-              if (identity.uid === referralId) {
-                refereeAccount = identity.disabled ? "disabled" : identity.emailVerified === true ? "active" : "unverified";
-                refereeEmail = normalizeReferralEmail(identity.email);
-              }
-            } catch { /* Current referee identity cannot qualify a reward. */ }
-            let claimAliases: ReferralPaymentEvidence["claimAliases"];
-            let activeKeyVersion: string | undefined;
-            if (refereeAccount === "active" && refereeEmail) {
-              try {
-                const keyring = parseReferralEmailKeyring(referralEmailKeyring());
-                claimAliases = referralEmailClaimAliases(keyring, refereeEmail);
-                activeKeyVersion = keyring.activeVersion;
-              } catch { /* Missing or malformed keyring closes the reward path. */ }
-            }
+            const refereeAccount = currentPaymentIdentity.reason === "referee_email_unverified" ? "unverified" :
+              currentPaymentIdentity.reason === "auth_unavailable" || currentPaymentIdentity.reason === "identity_unavailable" ? "unavailable" : "active";
             paymentEvidence = { referralId, sponsorUid, refereeUid: referralId,
-              linkedAtEpochMs: relation.linkedAtEpochMs, sponsorAccount, refereeAccount, sponsorEmail, refereeEmail, claimAliases, activeKeyVersion };
+              linkedAtEpochMs: relation.linkedAtEpochMs, sponsorAccount, refereeAccount, sponsorEmail,
+              refereeEmail: currentPaymentIdentity.normalizedEmail, claimAliases: currentPaymentIdentity.aliases,
+              activeKeyVersion: currentPaymentIdentity.activeKeyVersion };
           }
         }
       }
@@ -433,17 +423,21 @@ export async function commitOrderStatusTransition({
       : referralDeliveryEvent ? "delivery" : null;
     const transitionReferralProgram = linkOnly || !referralEvent ? null :
       resolveReferralRuntimeForTransition(order, paymentTransition, referralDeliveryEvent);
-    if (paymentTransition && !productionFixture && order.customerId && productOrder(order, true) &&
-      (!transitionReferralProgram?.operational || transitionReferralProgram.mode === "off") && !emailHistoryInvalidationPlan) {
+    const paymentIdentityPlan = paymentTransition && !productionFixture && order.customerId && productOrder(order, true)
+      ? await prepareReferralPaymentIdentity({ db, transaction, orderId: order.id, customerUid: order.customerId,
+        operational: Boolean(transitionReferralProgram?.operational && transitionReferralProgram.mode !== "off"),
+        identity: currentPaymentIdentity, recordedAtEpochMs: Date.parse(operationTime) }) : null;
+    if (paymentIdentityPlan?.evidence.status === "unresolved" && !emailHistoryInvalidationPlan) {
       emailHistoryInvalidationPlan = await prepareReferralOrderEmailHistoryInvalidation(
-        transaction, db, Date.parse(operationTime), "payment_identity_unchecked_while_closed",
+        transaction, db, Date.parse(operationTime), "payment_identity_unresolved",
       );
     }
     const referralPlan = !transitionReferralProgram || !transitionReferralProgram.operational || transitionReferralProgram.mode === "off" ? null : order.referral ? await prepareReferralTransition({
       db, transaction, order, program: transitionReferralProgram, recordedAtEpochMs: Date.parse(operationTime),
-      event: referralEvent!, paymentEvidence,
+      event: referralEvent!, paymentEvidence, identityClaim: paymentIdentityPlan?.claim,
     }) : paymentTransition ? await prepareFirstPaymentWithoutReferral({ db, transaction, order,
-      program: transitionReferralProgram, paymentEvidence, recordedAtEpochMs: Date.parse(operationTime) }) : null;
+      program: transitionReferralProgram, paymentEvidence, identityClaim: paymentIdentityPlan?.claim,
+      identityHistoryInvalidationPrepared: Boolean(emailHistoryInvalidationPlan), recordedAtEpochMs: Date.parse(operationTime) }) : null;
     if (body.paymentStatus === "paid" && order.paymentStatus !== "paid" && order.cagnotte?.snapshot.appliedCagnotteCents) {
       if (!cagnottePlan || !("reservation" in cagnottePlan) || !("ledger" in cagnottePlan) ||
         !["consumed", "already_consumed"].includes(cagnottePlan.reservation.status)) {
@@ -466,6 +460,7 @@ export async function commitOrderStatusTransition({
     }
     // All reads and business checks are complete. Only writes from this point on.
     emailHistoryInvalidationPlan?.write();
+    paymentIdentityPlan?.write();
     cancellationPlan?.write();
     writePaymentLinkEvent?.();
     cagnottePlan?.write();

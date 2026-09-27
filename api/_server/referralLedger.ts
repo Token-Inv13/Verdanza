@@ -8,6 +8,7 @@ import { CAGNOTTE_REGULARIZATION_VERSION, CAGNOTTE_RESERVATION_VERSION, type Cag
 import { findPriorPaidProductOrder, ReferralError, sponsorHasDeliveredPaidOrder } from "./referralService.js";
 import { canonicalReferralJson, referralSnapshotFingerprint } from "./referralSnapshot.js";
 import { isUnresolvedReferralIdentityHistoryReason, prepareReferralOrderEmailHistoryInvalidation } from "./referralOrderEmailHistory.js";
+import { prepareReferralEmailIdentityClaim, type PreparedEmailIdentityClaim } from "./referralPaymentIdentity.js";
 
 type Event = "payment" | "payment_and_delivery" | "delivery" | "refund" | "correction";
 type Program = { mode: "off" | "drain" | "active"; startsAtEpochMs: number | null; operational: boolean };
@@ -17,34 +18,30 @@ export type ReferralPaymentEvidence = { referralId: string; sponsorUid: string; 
 type IneligibilityReason = NonNullable<ReferralRelation["rewardIneligibilityReason"]>;
 type PreparedClaim = { reason?: IneligibilityReason; newClaim?: { ref: FirebaseFirestore.DocumentReference; value: ReferralEmailClaim } };
 async function prepareCurrentRefereeClaim(input: { db: Firestore; transaction: Transaction; before: ReferralRelation;
-  evidence?: ReferralPaymentEvidence; recordedAtEpochMs: number }): Promise<PreparedClaim> {
+  evidence?: ReferralPaymentEvidence; identityClaim?: PreparedEmailIdentityClaim; recordedAtEpochMs: number }): Promise<PreparedClaim> {
   const { db, transaction: tx, before, evidence } = input;
   if (!evidence || evidence.referralId !== before.refereeUid || evidence.refereeUid !== before.refereeUid ||
       evidence.sponsorUid !== before.sponsorUid || evidence.linkedAtEpochMs !== before.linkedAtEpochMs)
     return { reason: "referral_identity_changed" };
-  if (evidence.refereeAccount === "disabled" || evidence.refereeAccount === "unverified") return { reason: "referee_email_unverified" };
-  if (evidence.refereeAccount !== "active" || !evidence.refereeEmail || !evidence.activeKeyVersion || !evidence.claimAliases?.length)
-    return { reason: "referee_identity_unavailable" };
-  const aliases = evidence.claimAliases;
-  const refs = aliases.map((alias) => db.collection("referralEmailClaims").doc(alias.id));
-  const docs = await tx.getAll(...refs);
-  if (docs.some((doc, index) => doc.exists && (doc.data()?.refereeUid !== before.refereeUid || doc.data()?.referralId !== before.refereeUid ||
-      doc.data()?.schemaVersion !== 1 || doc.data()?.programVersion !== REFERRAL_PROGRAM_VERSION || doc.data()?.keyVersion !== aliases[index].version)))
-    return { reason: "referee_email_claimed" };
-  const activeIndex = aliases.findIndex((alias) => alias.version === evidence.activeKeyVersion);
-  if (activeIndex < 0) return { reason: "referee_identity_unavailable" };
-  return docs[activeIndex].exists ? {} : { newClaim: { ref: refs[activeIndex], value: { schemaVersion: 1,
-    programVersion: REFERRAL_PROGRAM_VERSION, keyVersion: evidence.activeKeyVersion, refereeUid: before.refereeUid,
-    referralId: before.refereeUid, createdAtEpochMs: input.recordedAtEpochMs } } };
+  if (input.identityClaim && input.identityClaim.customerUid !== before.refereeUid) return { reason: "referral_identity_changed" };
+  const claim = input.identityClaim ?? await prepareReferralEmailIdentityClaim({ db, transaction: tx, customerUid: before.refereeUid,
+    recordedAtEpochMs: input.recordedAtEpochMs, identity: { customerUid: before.refereeUid,
+      normalizedEmail: evidence.refereeEmail, activeKeyVersion: evidence.activeKeyVersion, aliases: evidence.claimAliases,
+      ...(evidence.refereeAccount === "disabled" || evidence.refereeAccount === "unverified" ? { reason: "referee_email_unverified" as const }
+        : evidence.refereeAccount !== "active" ? { reason: "auth_unavailable" as const } : {}) } });
+  if (claim.status === "protected_by_existing_claim") return { reason: "referee_email_claimed" };
+  if (claim.status === "unresolved") return { reason: claim.reason === "referee_email_unverified" ? "referee_email_unverified" : "referee_identity_unavailable" };
+  // A shared payment identity plan owns the claim write; isolated ledger callers retain their own plan.
+  return input.identityClaim ? {} : { newClaim: claim.newClaim };
 }
 type Input = { db: Firestore; transaction: Transaction; order: Order; program: Program; event: Event; recordedAtEpochMs: number;
-  refundId?: string; cumulativeReturnedProductsCents?: number; paymentEvidence?: ReferralPaymentEvidence };
+  refundId?: string; cumulativeReturnedProductsCents?: number; paymentEvidence?: ReferralPaymentEvidence; identityClaim?: PreparedEmailIdentityClaim };
 const cents = (value: number) => Number.isSafeInteger(value) && value >= 0;
 const key = (orderId: string, event: string) => createHash("sha256").update(`referral-v1\0${orderId}\0${event}`).digest("hex");
 
 /** A first paid product order closes an unconsumed link even when checkout applied no referral discount. */
 export async function prepareFirstPaymentWithoutReferral(input: { db: Firestore; transaction: Transaction; order: Order; program: Program;
-  paymentEvidence?: ReferralPaymentEvidence; recordedAtEpochMs: number }) {
+  paymentEvidence?: ReferralPaymentEvidence; identityClaim?: PreparedEmailIdentityClaim; identityHistoryInvalidationPrepared?: boolean; recordedAtEpochMs: number }) {
   if (!input.program.operational || input.program.mode === "off" || input.order.referral ||
       input.order.productionFixture || !input.order.customerId ||
       !Array.isArray(input.order.items) || input.order.items.length === 0 ||
@@ -58,9 +55,9 @@ export async function prepareFirstPaymentWithoutReferral(input: { db: Firestore;
   if (before.state !== "linked" || before.qualifyingOrderId !== null) return null;
   if (before.paymentConfirmed || before.rewardCompartment !== "none") throw new ReferralError("referral_relation_corrupt");
   const claim = await prepareCurrentRefereeClaim({ db: input.db, transaction: input.transaction, before,
-    evidence: input.paymentEvidence, recordedAtEpochMs: input.recordedAtEpochMs });
-  const historyInvalidation = isUnresolvedReferralIdentityHistoryReason(claim.reason)
-    ? await prepareReferralOrderEmailHistoryInvalidation(input.transaction, input.db, input.recordedAtEpochMs, "plain_payment_identity_unresolved") : null;
+    evidence: input.paymentEvidence, identityClaim: input.identityClaim, recordedAtEpochMs: input.recordedAtEpochMs });
+  const historyInvalidation = !input.identityHistoryInvalidationPrepared && input.identityClaim?.status !== "unresolved" && isUnresolvedReferralIdentityHistoryReason(claim.reason)
+    ? await prepareReferralOrderEmailHistoryInvalidation(input.transaction, input.db, input.recordedAtEpochMs, "payment_identity_unresolved") : null;
   return { status: "applied" as const, write() { input.transaction.set(relationRef, { ...before, state: "cancelled", paymentConfirmed: true,
     qualifyingOrderId: input.order.id, rewardIneligibilityReason: claim.reason ?? "first_paid_order_without_referral_discount" } satisfies ReferralRelation);
     historyInvalidation?.write();
@@ -142,7 +139,7 @@ export async function prepareReferralTransition(input: Input) {
       if (history.kind === "found") throw new ReferralError("referral_discount_already_consumed");
       if (history.kind === "inconclusive") throw new ReferralError("referral_history_inconclusive");
       const claim = await prepareCurrentRefereeClaim({ db: input.db, transaction: input.transaction, before,
-        evidence, recordedAtEpochMs: input.recordedAtEpochMs });
+        evidence, identityClaim: input.identityClaim, recordedAtEpochMs: input.recordedAtEpochMs });
       if (claim.reason) throw new ReferralError(claim.reason);
       if (evidence?.sponsorEmail && evidence.refereeEmail === evidence.sponsorEmail)
         throw new ReferralError("self_referral_at_payment");

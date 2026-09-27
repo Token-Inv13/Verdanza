@@ -26,6 +26,8 @@ async function main() {
     // Counts and outcomes only: no email, UID, code, HMAC, token or credential material.
     console.log(JSON.stringify({ version: ORDER_EMAIL_NORMALIZATION_VERSION, ...report }));
     if (report.initial.anomalies > 0 || report.initial.unresolvedIdentityRelations > 0 || report.initial.corruptReferralRelations > 0 ||
+      report.initial.linkedRelationsWithPaidHistory > 0 || report.initial.missingPaymentIdentityEvidence > 0 ||
+      report.initial.unresolvedPaymentIdentityEvidence > 0 || report.initial.corruptPaymentIdentityEvidence > 0 ||
       (apply && !report.markerComplete)) process.exitCode = 1;
   } finally {
     try { await db.terminate(); } finally { await deleteApp(app); }

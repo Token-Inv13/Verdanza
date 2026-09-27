@@ -2,13 +2,18 @@ import { FieldPath, type Firestore, type QueryDocumentSnapshot } from "firebase-
 import { usableOrderEmail } from "../api/_server/orderEmailIdentity.js";
 import { hasHistoricalPaymentEvidence, isValidHistoricalPaymentInstant } from "../api/_server/referralService.js";
 import { isReferralOrderEmailHistoryReady, ORDER_EMAIL_MIGRATION_COLLECTION, ORDER_EMAIL_NORMALIZATION_VERSION, referralRelationIdentityHistoryStatus } from "../api/_server/referralOrderEmailHistory.js";
+import { paymentIdentityEvidenceShape, paymentIdentityClaimMatches, REFERRAL_PAYMENT_IDENTITIES_COLLECTION } from "../api/_server/referralPaymentIdentity.js";
+import type { ReferralPaymentIdentityEvidence } from "../src/types/referral.js";
 
 export const ORDER_EMAIL_MIGRATION_PROJECT = "verdanza-1f621";
 type Counts = { scannedOrders: number; usableEmails: number; alreadyNormalized: number; changesRequired: number; paidProductOrders: number; anomalies: number;
-  scannedReferralRelations: number; unresolvedIdentityRelations: number; corruptReferralRelations: number; linkedRelationsWithPaidHistory: number };
+  scannedReferralRelations: number; unresolvedIdentityRelations: number; corruptReferralRelations: number; linkedRelationsWithPaidHistory: number;
+  paymentIdentityEvidence: number; missingPaymentIdentityEvidence: number; unresolvedPaymentIdentityEvidence: number; corruptPaymentIdentityEvidence: number };
 const emptyCounts = (): Counts => ({ scannedOrders: 0, usableEmails: 0, alreadyNormalized: 0, changesRequired: 0, paidProductOrders: 0, anomalies: 0,
-  scannedReferralRelations: 0, unresolvedIdentityRelations: 0, corruptReferralRelations: 0, linkedRelationsWithPaidHistory: 0 });
-const blocked = (counts: Counts) => counts.anomalies > 0 || counts.unresolvedIdentityRelations > 0 || counts.corruptReferralRelations > 0 || counts.linkedRelationsWithPaidHistory > 0;
+  scannedReferralRelations: 0, unresolvedIdentityRelations: 0, corruptReferralRelations: 0, linkedRelationsWithPaidHistory: 0,
+  paymentIdentityEvidence: 0, missingPaymentIdentityEvidence: 0, unresolvedPaymentIdentityEvidence: 0, corruptPaymentIdentityEvidence: 0 });
+const blocked = (counts: Counts) => counts.anomalies > 0 || counts.unresolvedIdentityRelations > 0 || counts.corruptReferralRelations > 0 || counts.linkedRelationsWithPaidHistory > 0 ||
+  counts.missingPaymentIdentityEvidence > 0 || counts.unresolvedPaymentIdentityEvidence > 0 || counts.corruptPaymentIdentityEvidence > 0;
 
 /** Guard applies to the injected engine too; local tests cannot fall back to Production. */
 export function assertOrderEmailMigrationTarget(input: { projectId: string; emulatorHost?: string; apply?: boolean; confirmation?: string }) {
@@ -48,7 +53,22 @@ export async function migrateOrderEmailNormalization(input: {
         const paid = hasHistoricalPaymentEvidence(order);
         if (paid) {
           counts.paidProductOrders++;
-          if (typeof order.customerId === "string" && order.customerId) paidProductCustomerIds.add(order.customerId);
+          if (typeof order.customerId === "string" && order.customerId) {
+            paidProductCustomerIds.add(order.customerId);
+            const identityDoc = await input.db.collection(REFERRAL_PAYMENT_IDENTITIES_COLLECTION).doc(doc.id).get();
+            if (!identityDoc.exists) counts.missingPaymentIdentityEvidence++;
+            else {
+              const evidence = identityDoc.data();
+              const shape = paymentIdentityEvidenceShape(evidence, doc.id, order.customerId);
+              if (shape === "unresolved") counts.unresolvedPaymentIdentityEvidence++;
+              else if (shape === "corrupt") counts.corruptPaymentIdentityEvidence++;
+              else {
+                const claim = await input.db.collection("referralEmailClaims").doc(evidence!.claimId).get();
+                if (paymentIdentityClaimMatches(evidence as ReferralPaymentIdentityEvidence, claim.data())) counts.paymentIdentityEvidence++;
+                else counts.corruptPaymentIdentityEvidence++;
+              }
+            }
+          }
         }
         const email = usableOrderEmail(order.customerEmail);
         if (email === null) {
@@ -119,7 +139,8 @@ export async function migrateOrderEmailNormalization(input: {
   const markerWritten = !alreadyCertified || initial.changesRequired > 0 ||
     existingMarker.data()?.verifiedOrders !== verification.scannedOrders ||
     existingMarker.data()?.verifiedPaidProductOrders !== verification.paidProductOrders ||
-    existingMarker.data()?.verifiedReferralRelations !== verification.scannedReferralRelations;
+    existingMarker.data()?.verifiedReferralRelations !== verification.scannedReferralRelations ||
+    existingMarker.data()?.verifiedPaymentIdentityEvidence !== verification.paymentIdentityEvidence;
   if (markerWritten) {
     const completedAtEpochMs = now();
     if (!Number.isSafeInteger(completedAtEpochMs) || completedAtEpochMs <= 0) throw new Error("order_email_migration_instant_invalid");
@@ -127,7 +148,8 @@ export async function migrateOrderEmailNormalization(input: {
     batch.update(markerRef, { schemaVersion: 1, version: ORDER_EMAIL_NORMALIZATION_VERSION, status: "complete", completedAtEpochMs,
       verifiedOrders: verification.scannedOrders, verifiedPaidProductOrders: verification.paidProductOrders,
       verifiedReferralRelations: verification.scannedReferralRelations, verifiedUnresolvedIdentityRelations: 0,
-      verifiedLinkedRelationsWithPaidHistory: 0 }, { lastUpdateTime: markerPrecondition! });
+      verifiedLinkedRelationsWithPaidHistory: 0, verifiedPaymentIdentityEvidence: verification.paymentIdentityEvidence,
+      verifiedMissingPaymentIdentityEvidence: 0, verifiedUnresolvedPaymentIdentityEvidence: 0, verifiedCorruptPaymentIdentityEvidence: 0 }, { lastUpdateTime: markerPrecondition! });
     await batch.commit();
   } else {
     // A no-op replay must also reject an invalidation that raced with its scans.
