@@ -1,3 +1,4 @@
+import { assertReferralCagnotteAllocation } from "./referralSnapshot.js";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { isDeepStrictEqual } from "node:util";
 import { calculateCagnotte, CAGNOTTE_CALCULATION_VERSION, simulateCagnotteRefund } from "../../src/lib/cagnotteCalculations.js";
@@ -23,7 +24,7 @@ export const eurosToCagnotteCents = exactEuroCents;
 type CagnotteOrderSource = Pick<
   Order,
   "items" | "subtotal" | "deliveryFee" | "discountAmount" | "promotionDiscountTotal" |
-  "appliedPromotions" | "couponCode" | "contestPrizeId"
+  "appliedPromotions" | "couponCode" | "contestPrizeId" | "referral"
 >;
 
 /** Uses exactly the order payload to be persisted, not HTTP fields or recomputed unit prices. */
@@ -36,10 +37,11 @@ export function buildCagnotteOrderEnrollment(
   const order = payload as unknown as Order;
   if (order.customerId !== verifiedUid) throw new Error("Bénéficiaire serveur incohérent.");
   const snapshot = calculateCagnotte(cagnotteCalculationForOrder(order, 0, 0));
-  // discountAmount and promotionDiscountTotal can be aliases; compare, never add them.
+  if (order.referral) assertReferralCagnotteAllocation(order.referral, snapshot);
+  // Referral is distinct from promotions; the total discount also includes its frozen 500 cents.
   if (snapshot.subtotalCents !== eurosToCagnotteCents(order.subtotal) ||
     snapshot.discountCents !== eurosToCagnotteCents(order.discountAmount ?? 0) ||
-    snapshot.discountCents !== eurosToCagnotteCents(order.promotionDiscountTotal ?? 0) ||
+    snapshot.discountCents !== eurosToCagnotteCents(order.promotionDiscountTotal ?? 0) + (order.referral?.refereeDiscountCents ?? 0) ||
     BigInt(snapshot.productsPaidCents) + BigInt(eurosToCagnotteCents(order.deliveryFee)) !== BigInt(eurosToCagnotteCents(order.total))) {
     throw new Error("Instantané cagnotte incompatible avec les montants serveur retenus.");
   }
@@ -106,6 +108,13 @@ function cagnotteCalculationForOrder(
         !item.isGift && promotionCoversLine(entry, item) ? [lines[index].lineId] : [],
       ),
     }));
+  if (order.referral) {
+    if (requestedCagnotteCents > 0) throw new Error("REFERRAL_CAGNOTTE_CONFLICT");
+    for (const line of order.referral.lines) if (line.referralDiscountCents > 0) discounts.push({
+      discountId: `referral-discount:${line.lineId}`, kind: "referral_discount",
+      amountCents: line.referralDiscountCents, lineIds: [line.lineId],
+    });
+  }
   const advantages: CagnotteAdvantage[] = [];
   for (const entry of order.appliedPromotions || []) {
     if (entry.type === "tiered_product_gift") continue;

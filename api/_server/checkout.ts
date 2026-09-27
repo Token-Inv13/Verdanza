@@ -107,6 +107,9 @@ const fallbackDeliveryZones: DeliveryZone[] = [
   })),
 ];
 
+import type { ReferralUseRequest } from "../../src/types/referralCheckout.js";
+import { parseReferralUse } from "./referralCheckout.js";
+
 export type CheckoutRequestItem = {
   productId: string;
   quantity: number;
@@ -146,6 +149,7 @@ export type CheckoutRequestBody = {
   customer: CheckoutCustomerInput;
   promotionSelections?: PromotionSelection[];
   cagnotteUse?: CagnotteUseRequest;
+  referralUse?: ReferralUseRequest;
 };
 
 export type PricedCheckout = {
@@ -235,6 +239,7 @@ export function parseCheckoutBody(value: unknown): CheckoutRequestBody {
 
   const analyticsContext = parseAnalyticsContext(body.analyticsContext);
   const cagnotteUse = parseCagnotteUse(body.cagnotteUse);
+  const referralUse = parseReferralUse(body.referralUse);
   const promotionSelections = Array.isArray(body.promotionSelections)
     ? body.promotionSelections
         .map((selection) => ({
@@ -250,6 +255,7 @@ export function parseCheckoutBody(value: unknown): CheckoutRequestBody {
     analyticsContext,
     promotionSelections,
     cagnotteUse,
+    ...(referralUse ? { referralUse } : {}),
   };
 }
 

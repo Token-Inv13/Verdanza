@@ -44,6 +44,7 @@ const allowedOptions = new Set([
   "--security-only",
   "--read-only",
   "--referral-only",
+  "--referral-checkout-only",
   "--rate-limit-windows-only",
   "--isolated-fixture-only",
 ]);
@@ -213,6 +214,7 @@ try {
   }
   if (mode === "--read-only") await run("scripts/testCagnotteRead.ts");
   if (mode === "--referral-only") await run("scripts/testReferralBackend.ts");
+  if (mode === "--referral-checkout-only") await run("scripts/testReferralCheckout.ts");
   if (mode === "--rate-limit-windows-only") {
     await run("scripts/cagnotte-interactive/testRateLimitWindows.ts");
   }

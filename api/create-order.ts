@@ -1,3 +1,5 @@
+import { hasReferralCheckoutRequest, readReferralCheckoutContext, type ReferralCheckoutDependencies } from "./_server/referralCheckout.js";
+import { ReferralError } from "./_server/referralService.js";
 import { orderFromSnapshot } from "./_server/orderProtection.js";
 import { commitCheckoutOrder } from "./_server/checkoutOrder.js";
 export { commitCheckoutOrder, assertFixedPriceOrderItemStillMatchesProduct } from "./_server/checkoutOrder.js";
@@ -66,7 +68,7 @@ export function createOrderHandler(dependencies: {
   now?: () => number;
   processSideEffects?: typeof processOrderSideEffectsBestEffort;
   enforceRateLimit?: typeof enforcePublicSubmissionRateLimit;
-}) {
+} & ReferralCheckoutDependencies) {
 return async function handler(
   request: VercelRequestLike,
   response: VercelResponseLike,
@@ -74,7 +76,15 @@ return async function handler(
   if (assertMethod(request, response, "POST")) return;
 
   try {
-    const runtimeConfiguration = dependencies.getRuntimeConfiguration?.();
+    const referralRequested = hasReferralCheckoutRequest(request.body);
+    let runtimeConfiguration = referralRequested ? undefined : dependencies.getRuntimeConfiguration?.();
+    const requestBody =
+      typeof request.body === "string" ? JSON.parse(request.body) : request.body;
+    const body = parseCheckoutBody(requestBody);
+    const operationNowEpochMs = (dependencies.now ?? Date.now)();
+    if (body.referralUse) { response.setHeader("Cache-Control", "private, no-store"); response.setHeader("Vary", "Authorization"); }
+    const referralContext = await readReferralCheckoutContext(body, dependencies, dependencies.verifyToken, operationNowEpochMs);
+    if (referralRequested) runtimeConfiguration = dependencies.getRuntimeConfiguration?.();
     const accrualProgram = runtimeConfiguration
       ? runtimeConfiguration.accrualProgram
       : dependencies.accrualProgram ?? null;
@@ -86,10 +96,6 @@ return async function handler(
       : accrualProgram || reservationProgram
         ? dependencies.getFirebaseProjectId?.()
         : null;
-    const requestBody =
-      typeof request.body === "string" ? JSON.parse(request.body) : request.body;
-    const body = parseCheckoutBody(requestBody);
-    const operationNowEpochMs = (dependencies.now ?? Date.now)();
     const checkoutRequestId = validateCheckoutRequestId(body.checkoutRequestId);
     if (checkoutRequestId === CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID) {
       throw new Error("checkout_request_id_reserved");
@@ -109,8 +115,8 @@ return async function handler(
       return;
     }
     const requestedCagnotteCents = Number(body.cagnotteUse?.requestedCents || 0);
-    let verifiedCustomerId: string | undefined;
-    if (requestedCagnotteCents > 0) {
+    let verifiedCustomerId: string | undefined = referralContext?.uid;
+    if (requestedCagnotteCents > 0 && !referralContext) {
       verifiedCustomerId = await verifiedUid();
       if (!body.authToken || !verifiedCustomerId) {
         throw new CagnotteCheckoutError("AUTH_REQUIRED", "Authentification requise pour utiliser la cagnotte.");
@@ -205,6 +211,7 @@ return async function handler(
         await sendExistingOrderResponse(db, response, requestCreatedDuringPricing.orderId, verifiedUid);
         return;
       }
+      if (body.referralUse?.acceptance) throw new ReferralError("REFERRAL_QUOTE_CONFLICT");
       throw error;
     }
     const customerId = verifiedCustomerId ?? await verifiedUid();
@@ -220,6 +227,7 @@ return async function handler(
       body,
       priced,
       customerId,
+      referralContext,
       analyticsRevocationTokenHash,
       checkoutRequestId,
       payloadFingerprint,
@@ -245,6 +253,7 @@ return async function handler(
       },
     });
   } catch (error) {
+    if (error instanceof ReferralError) return sendJson(response, { code: error.code }, error.status);
     const authFailure = firebaseAuthHttpFailure(error);
     if (authFailure) return sendJson(response, {
       code: authFailure.status === 401 ? "AUTH_REQUIRED" : "authentication_unavailable",
@@ -391,6 +400,8 @@ async function sendExistingOrderResponse(
   if (order.cagnotte && (await verifyCustomer() !== order.cagnotte.beneficiaryId || order.customerId !== order.cagnotte.beneficiaryId)) {
     throw new CheckoutRequestConflictError();
   }
+  if (order.referral && (await verifyCustomer() !== order.referral.referralId || order.customerId !== order.referral.referralId)) throw new CheckoutRequestConflictError();
+  if (order.referral) { response.setHeader("Cache-Control", "private, no-store"); response.setHeader("Vary", "Authorization"); }
   const client = storedEmailResult(order.emails?.orderConfirmationStatus);
   const admin = storedEmailResult(order.emails?.adminNotificationStatus);
   sendJson(response, {

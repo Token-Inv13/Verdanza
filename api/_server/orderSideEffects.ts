@@ -83,6 +83,7 @@ export function checkoutPayloadFingerprint(body: CheckoutRequestBody) {
           acceptance: body.cagnotteUse.acceptance || null,
         }
       : null,
+    ...(body.referralUse ? { referralUse: body.referralUse } : {}),
     preferredPaymentMethod: body.preferredPaymentMethod || "",
     customerMessage: cleanText(body.customerMessage),
     customer: {
@@ -167,6 +168,9 @@ export async function findCheckoutRequest(
   if (!snapshot.exists) return null;
   const data = snapshot.data() || {};
   if (data.payloadFingerprint !== payloadFingerprint) {
+    throw new CheckoutRequestConflictError();
+  }
+  if (data.referralBeneficiaryId && (!verifyCustomer || await verifyCustomer() !== data.referralBeneficiaryId)) {
     throw new CheckoutRequestConflictError();
   }
   if (data.cagnotteBeneficiaryId && (!verifyCustomer || await verifyCustomer() !== data.cagnotteBeneficiaryId)) {
