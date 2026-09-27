@@ -16,6 +16,7 @@ import {
   type AccountingPeriodRange,
 } from "./accountingPeriods.js";
 import { orderItemLineTotal } from "./orderLineDisplay.js";
+import { allocateCents } from "./cagnotteCalculations.js";
 import {
   filterOrdinaryProducts,
   filterOrdinarySupplierPurchases,
@@ -149,14 +150,22 @@ export function buildAccountingSummary(
       (sum, item) => sum + orderItemLineTotal(item),
       0,
     );
+    const revenueCents = Math.round(orderProductRevenue * 100);
+    const bases = order.items.map((item, index) => ({ lineId: String(index), baseCents: Math.round(orderItemLineTotal(item) * 100) }));
+    const baseCents = bases.reduce((sum, line) => sum + line.baseCents, 0);
+    // Referral rows use the same proportional weights, with cent remainders preserved.
+    // Ordinary orders retain their historical allocation unchanged.
+    const referralLineRevenue = orderReferralDiscountAmount(order) > 0 && Number.isSafeInteger(revenueCents) && revenueCents >= 0 &&
+      Number.isSafeInteger(baseCents) && bases.every(line => Number.isSafeInteger(line.baseCents) && line.baseCents >= 0) && revenueCents <= baseCents
+      ? new Map(allocateCents(revenueCents, bases).map(line => [line.lineId, line.amountCents / 100])) : null;
 
-    order.items.forEach((item) => {
+    order.items.forEach((item, index) => {
       const quantity = Number(item.quantity || 0);
       const grossLineRevenue = orderItemLineTotal(item);
-      const lineProductNetRevenue =
+      const lineProductNetRevenue = referralLineRevenue?.get(String(index)) ?? (
         grossLinesTotal > 0
           ? orderProductRevenue * (grossLineRevenue / grossLinesTotal)
-          : 0;
+          : 0);
       const costResult = resolveOrderItemPurchaseCost(
         item,
         weightedSupplierCosts,
@@ -330,10 +339,17 @@ function orderDiscountAmount(order: AdminOrderRow) {
   return Number(order.discountAmount ?? order.promotionDiscountTotal ?? 0);
 }
 
+function orderReferralDiscountAmount(order: AdminOrderRow) {
+  const cents = order.referral?.refereeDiscountCents;
+  return typeof cents === "number" && Number.isSafeInteger(cents) && cents >= 0
+    ? cents / 100
+    : 0;
+}
+
 function orderProductNetRevenue(order: AdminOrderRow) {
   const subtotalAfterPromotion = Number(order.subtotalAfterPromotion);
   if (Number.isFinite(subtotalAfterPromotion) && subtotalAfterPromotion > 0) {
-    return subtotalAfterPromotion;
+    return Math.max(0, subtotalAfterPromotion - orderReferralDiscountAmount(order));
   }
   const subtotal = Number(
     order.subtotalBeforePromotion ??

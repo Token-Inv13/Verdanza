@@ -269,3 +269,42 @@ pure referralErrors.ts : checkout.ts n’importe plus le module métier complet 
 Admin dans le serveur de tests local. Le contrôle strict testCheckoutAdapters est conservé.
 Les tests de réservation/replay renforcent les 43 cas checkout initiaux, sans modification
 des timeouts, garde-fous, UI, Stripe, règles/index ou configuration Production.
+
+## Revenu comptable et propriété des demandes sans remise (PR #21)
+
+`subtotalAfterPromotion` conserve son sens : produits après promotions, avant Referral.
+La projection admin transmet le snapshot Referral persisté à Accounting. Le revenu
+produits soustrait uniquement `referral.refereeDiscountCents`, entier sûr non négatif,
+converti en euros et borné à zéro. Aucun barème courant ni montant hardcodé. Une valeur
+malformée est ignorée sans exception globale. Le fallback historique subtotal moins
+discountAmount reste inchangé : il inclut déjà Referral et ne la soustrait pas deux fois.
+La métrique discounts continue d'utiliser discountAmount ; la livraison est séparée.
+
+Exemple payé : 50 EUR produits, 500c Referral, 5,49 EUR livraison donnent 45 EUR de
+productNetRevenue, 5,49 EUR deliveryRevenue, 50,49 EUR collectedRevenue et 5 EUR de
+discounts. Marge et ratios utilisent les 45 EUR. Les lignes Referral gardent les mêmes
+poids proportionnels ; la répartition en centimes par plus fort reste préserve le total
+après arrondi, même sur trois lignes. Sans Referral, projection et allocation historiques
+restent inchangées. Les snapshots, calculs de fidélité et remboursements ne changent pas.
+
+Toute création réussie avec `body.referralUse` conserve le UID vérifié dans
+`checkoutRequests.referralBeneficiaryId`, même si applied=false (below_threshold,
+no_relation, priority_advantage ou right_reserved lorsque la commande normale est autorisée).
+Le champ serveur `referralApplied` distingue les deux cas. Un applied=true exige un
+snapshot order.referral dont referralId est ce UID ; applied=false exige son absence.
+Les deux exigent order.customerId égal au bénéficiaire. Les bindings cagnotte/Referral,
+lorsqu'ils coexistent, doivent viser le même UID. Un flag malformé/incohérent est refusé.
+
+Lookup initial, fallback de race et replay transactionnel transportent/valident les mêmes
+bindings jusqu'à la réponse. Même UID : état actuel sans runtime/identity/keyring/pricing/
+rate-limit/side-effect ; autre UID, token absent/invalide, ordre manquant ou owner corrompu :
+refus. authToken reste exclu du fingerprint commercial. Les anciennes requests bindées sans
+referralApplied restent compatibles : un snapshot présent est validé comme applied,
+sinon customerId/bénéficiaire suffisent. Une request ordinaire sans Referral garde son contrat.
+
+Tests : 78 checkout antérieurs conservés, cas applied=false sans acquisition ou avant son
+démarrage, replays early/transactionnels, compatibilité, corruption et concurrence ajoutés.
+Accounting couvre le montant gelé, livraison/marge/lignes, fallbacks, données malformées et
+promotions ordinaires ; son test complet est aussi exécuté en CI. Un checkout réel puis paid
+est projeté via adminOrderRow et Accounting, avec 45 EUR produits et 5,49 EUR livraison.
+Programme toujours fermé par défaut ; aucune opération/configuration Production ajoutée.

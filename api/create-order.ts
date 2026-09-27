@@ -37,6 +37,8 @@ import {
 } from "./_server/email.js";
 import { sendOrderCreationAlerts } from "./_server/orderAlerts.js";
 import {
+  assertCheckoutRequestOrderBindings,
+  type CheckoutRequestBindings,
   CheckoutRequestConflictError,
   checkoutPayloadFingerprint,
   claimOrderSideEffectTask,
@@ -99,7 +101,7 @@ return async function handler(
     const replayExisting = async () => {
       const existing = await findCheckoutRequest(db, checkoutRequestId, payloadFingerprint, verifiedUid);
       if (!existing) return false;
-      await sendExistingOrderResponse(db, response, existing.orderId, verifiedUid);
+      await sendExistingOrderResponse(db, response, existing.orderId, verifiedUid, existing);
       return true;
     };
     // A committed request recovers its current order without any new commercial qualification.
@@ -213,7 +215,7 @@ return async function handler(
         verifiedUid,
       );
       if (requestCreatedDuringPricing) {
-        await sendExistingOrderResponse(db, response, requestCreatedDuringPricing.orderId, verifiedUid);
+        await sendExistingOrderResponse(db, response, requestCreatedDuringPricing.orderId, verifiedUid, requestCreatedDuringPricing);
         return;
       }
       if (body.referralUse?.acceptance) throw new ReferralError("REFERRAL_QUOTE_CONFLICT");
@@ -242,7 +244,7 @@ return async function handler(
       nowEpochMs: operationNowEpochMs,
     });
     if (!creation.created) {
-      await sendExistingOrderResponse(db, response, creation.orderId, verifiedUid);
+      await sendExistingOrderResponse(db, response, creation.orderId, verifiedUid, creation);
       return;
     }
 
@@ -398,15 +400,19 @@ async function sendExistingOrderResponse(
   response: VercelResponseLike,
   orderId: string,
   verifyCustomer: () => Promise<string | undefined>,
+  bindings: CheckoutRequestBindings,
 ) {
   const snapshot = await db.collection("orders").doc(orderId).get();
   if (!snapshot.exists) throw new CheckoutRequestConflictError();
   const order = orderFromSnapshot(snapshot);
+  if (bindings.referralBeneficiaryId || bindings.cagnotteBeneficiaryId) {
+    assertCheckoutRequestOrderBindings(order, bindings, await verifyCustomer());
+  }
   if (order.cagnotte && (await verifyCustomer() !== order.cagnotte.beneficiaryId || order.customerId !== order.cagnotte.beneficiaryId)) {
     throw new CheckoutRequestConflictError();
   }
   if (order.referral && (await verifyCustomer() !== order.referral.referralId || order.customerId !== order.referral.referralId)) throw new CheckoutRequestConflictError();
-  if (order.referral) { response.setHeader("Cache-Control", "private, no-store"); response.setHeader("Vary", "Authorization"); }
+  if (order.referral || bindings.referralBeneficiaryId) { response.setHeader("Cache-Control", "private, no-store"); response.setHeader("Vary", "Authorization"); }
   const client = storedEmailResult(order.emails?.orderConfirmationStatus);
   const admin = storedEmailResult(order.emails?.adminNotificationStatus);
   sendJson(response, {

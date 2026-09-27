@@ -111,15 +111,54 @@ export function checkoutPayloadFingerprint(body: CheckoutRequestBody) {
 export function checkoutRequestDocument(
   orderId: string,
   payloadFingerprint: string,
-  cagnotteBeneficiaryId?: string,
+  bindings: CheckoutRequestBindings = {},
 ) {
   return {
     orderId,
     payloadFingerprint,
-    ...(cagnotteBeneficiaryId ? { cagnotteBeneficiaryId } : {}),
+    ...checkoutRequestBindings(bindings),
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
+}
+
+export type CheckoutRequestBindings = {
+  cagnotteBeneficiaryId?: string;
+  referralBeneficiaryId?: string;
+  referralApplied?: boolean;
+};
+
+/** Separate persisted ownership from the commercial fingerprint and current eligibility. */
+export function checkoutRequestBindings(value: FirebaseFirestore.DocumentData): CheckoutRequestBindings {
+  const bindings: CheckoutRequestBindings = {};
+  for (const key of ["cagnotteBeneficiaryId", "referralBeneficiaryId"] as const) {
+    if (value[key] === undefined) continue;
+    if (typeof value[key] !== "string" || !value[key]) throw new CheckoutRequestConflictError();
+    bindings[key] = value[key];
+  }
+  if (value.referralApplied !== undefined) {
+    if (typeof value.referralApplied !== "boolean" || !bindings.referralBeneficiaryId) throw new CheckoutRequestConflictError();
+    bindings.referralApplied = value.referralApplied;
+  }
+  if (bindings.referralBeneficiaryId && bindings.cagnotteBeneficiaryId &&
+      bindings.referralBeneficiaryId !== bindings.cagnotteBeneficiaryId) throw new CheckoutRequestConflictError();
+  return bindings;
+}
+
+/** The early lookup and transactional replay enforce the same order/owner/applied facts. */
+export function assertCheckoutRequestOrderBindings(
+  order: Pick<Order, "customerId" | "referral" | "cagnotte">,
+  bindings: CheckoutRequestBindings,
+  customerId: string | undefined,
+) {
+  if (bindings.cagnotteBeneficiaryId && (customerId !== bindings.cagnotteBeneficiaryId ||
+      order.customerId !== customerId || order.cagnotte?.beneficiaryId !== customerId)) throw new CheckoutRequestConflictError();
+  if (bindings.referralBeneficiaryId) {
+    if (customerId !== bindings.referralBeneficiaryId || order.customerId !== customerId) throw new CheckoutRequestConflictError();
+    const hasSnapshot = Object.prototype.hasOwnProperty.call(order, "referral") && order.referral !== undefined;
+    if (bindings.referralApplied === false ? hasSnapshot :
+        (bindings.referralApplied === true || hasSnapshot) && order.referral?.referralId !== customerId) throw new CheckoutRequestConflictError();
+  }
 }
 
 export function orderSideEffectsDocument(orderId: string) {
@@ -170,15 +209,15 @@ export async function findCheckoutRequest(
   if (data.payloadFingerprint !== payloadFingerprint) {
     throw new CheckoutRequestConflictError();
   }
-  if (data.referralBeneficiaryId && (!verifyCustomer || await verifyCustomer() !== data.referralBeneficiaryId)) {
-    throw new CheckoutRequestConflictError();
-  }
-  if (data.cagnotteBeneficiaryId && (!verifyCustomer || await verifyCustomer() !== data.cagnotteBeneficiaryId)) {
-    throw new CheckoutRequestConflictError();
+  const bindings = checkoutRequestBindings(data);
+  if (bindings.referralBeneficiaryId || bindings.cagnotteBeneficiaryId) {
+    const uid = verifyCustomer ? await verifyCustomer() : undefined;
+    if (!uid || (bindings.referralBeneficiaryId && uid !== bindings.referralBeneficiaryId) ||
+        (bindings.cagnotteBeneficiaryId && uid !== bindings.cagnotteBeneficiaryId)) throw new CheckoutRequestConflictError();
   }
   const orderId = typeof data.orderId === "string" ? data.orderId : "";
   if (!orderId) throw new CheckoutRequestConflictError();
-  return { orderId };
+  return { orderId, ...bindings };
 }
 
 export async function ensureOrderSideEffectsOutbox(

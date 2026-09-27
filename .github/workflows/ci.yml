@@ -167,6 +167,9 @@ jobs:
       - name: Verify
         run: npm run verify
 
+      - name: Verify accounting periods and frozen referral revenue
+        run: npm run test:accounting-periods
+
       - name: Qualify cagnotte checkout handoff
         run: |
           npm run test:cagnotte-checkout-use

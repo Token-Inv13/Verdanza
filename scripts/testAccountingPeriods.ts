@@ -12,6 +12,7 @@ import {
   supplierPurchaseAccountingDate,
 } from "../src/lib/accountingPeriods.js";
 import { buildAccountingSummary } from "../src/lib/accountingSummary.js";
+import { createReferralOrderSnapshot } from "../api/_server/referralSnapshot.js";
 import {
   computeWeightedSupplierCosts,
   type WeightedSupplierCost,
@@ -28,7 +29,7 @@ function check(actual: unknown, expected: unknown, message: string) {
 }
 
 function checkThrows(callback: () => unknown, message: string) {
-  assert.throws(callback, undefined, message);
+  assert.throws(callback, message);
   assertions += 1;
 }
 
@@ -359,7 +360,7 @@ const productionFixtureOrder = orderFixture({
     purchasePricePerGramSnapshot: 2.5,
     purchaseCostTotalSnapshot: 25,
     purchaseCostCapturedAt: "2026-08-11T08:00:00.000Z",
-    purchaseCostSource: "fixture",
+    purchaseCostSource: "manual_fallback",
   }],
   subtotalBeforePromotion: 100,
   subtotalAfterPromotion: 100,
@@ -434,6 +435,56 @@ check(legacySummary.paymentDateQualityCounts, { exact: 1, legacy_explicit: 1, le
 check(legacySummary.historicalPaymentDateIssues.map((issue) => issue.orderId), ["ESTIMATE", "FALLBACK", "MISSING"], "Historical warnings expose only abbreviated identifiers");
 check(legacySummary.paidOrdersCount, 4, "A missing date cannot be silently assigned to a period");
 
+const referralSnapshot = createReferralOrderSnapshot({ refereeUid: "accounting-referee", createdAtEpochMs: 1000,
+  lines: [{ lineId: "product-1", eligibleBeforeReferralCents: 5000, referralDiscountCents: 500 }] });
+const referralPaid = orderFixture({ id: "REFERRAL-PAID", paymentStatus: "paid", paymentConfirmedAt: "2026-08-02T10:00:00.000Z",
+  referral: referralSnapshot, subtotal: 50, subtotalBeforePromotion: 50, subtotalAfterPromotion: 50,
+  promotionDiscountTotal: 0, discountAmount: 5, deliveryFee: 5.49, total: "50,49 EUR",
+  items: [{ ...exactPaid.items[0], unitPrice: 5, lineTotal: 50 }] });
+const referralSummary = (order: AdminOrderRow) => buildAccountingSummary([order], [product], productCosts, [], weightedCosts, augustMonth);
+const referralAccounting = referralSummary(referralPaid);
+check(referralPaid.subtotalAfterPromotion, 50, "Promotion subtotal keeps its pre-referral meaning");
+check(referralAccounting.collectedRevenue, 50.49, "Referral collected revenue includes shipping");
+check(referralAccounting.productNetRevenue, 45, "Frozen 500 referral cents reduce product revenue from 50 to 45");
+check(referralAccounting.deliveryRevenue, 5.49, "Referral never reduces delivery revenue");
+check(referralAccounting.productNetRevenue + referralAccounting.deliveryRevenue, 50.49, "Products plus delivery reconcile to collection");
+check(referralAccounting.discounts, 5, "discountAmount already includes referral once");
+check(referralAccounting.estimatedProductCost, 22.5, "Frozen product costs are unchanged");
+check(referralAccounting.grossMargin, 22.5, "Margin is 45 minus product cost, not 50 minus cost");
+check(referralAccounting.grossMarkupRate, 22.5 / 45, "Margin ratio uses corrected product revenue");
+check(referralAccounting.productRows.map(row => [row.productNetRevenue, row.grossMargin]), [[45, 22.5]], "Product rows use corrected revenue and margin");
+for (const subtotalAfterPromotion of [undefined, NaN]) {
+  check(referralSummary({ ...referralPaid, subtotalAfterPromotion }).productNetRevenue, 45, "Subtotal fallback uses discountAmount without a second referral subtraction");
+}
+check(referralSummary({ ...referralPaid, subtotal: undefined, subtotalBeforePromotion: undefined, subtotalAfterPromotion: undefined }).productNetRevenue,
+  45, "Total-minus-delivery fallback does not subtract referral twice");
+const threeLineReferral = orderFixture({ ...referralPaid, items: [1667, 1667, 1666].map((cents, index) => ({
+  ...referralPaid.items[0], productId: `accounting-line-${index}`, quantity: 1, unitPrice: cents / 100, lineTotal: cents / 100,
+  purchaseCostTotalSnapshot: 3,
+})), referral: createReferralOrderSnapshot({ refereeUid: "accounting-referee", createdAtEpochMs: 1000,
+  lines: [1667, 1667, 1666].map((cents, index) => ({ lineId: String(index), eligibleBeforeReferralCents: cents, referralDiscountCents: [167, 167, 166][index] })) }) });
+const threeLineSummary = referralSummary(threeLineReferral);
+check(threeLineSummary.productRows.reduce((sum, row) => sum + Math.round(row.productNetRevenue * 100), 0), 4500,
+  "Three proportional product rows preserve every cent after final rounding");
+check(threeLineSummary.productNetRevenue, 45, "Multiline referral net remains 45");
+check(threeLineSummary.deliveryRevenue, 5.49, "Multiline shipping stays separate");
+check(threeLineSummary.productRows.every(row => row.productNetRevenue >= 0 && Number.isFinite(row.productNetRevenue)), true, "Multiline allocation is finite and nonnegative");
+check(referralSummary({ ...referralPaid, referral: { ...referralSnapshot, refereeDiscountCents: 750 } as unknown as AdminOrderRow["referral"] }).productNetRevenue,
+  42.5, "Accounting reads the frozen amount, without hardcoding the current tariff");
+check(referralSummary({ ...referralPaid, referral: { ...referralSnapshot, refereeDiscountCents: Number.MAX_SAFE_INTEGER } as unknown as AdminOrderRow["referral"] }).productNetRevenue,
+  0, "Even an excessive valid integer snapshot cannot make revenue negative");
+for (const malformed of [null, {}, [], { refereeDiscountCents: "500" }, { refereeDiscountCents: NaN }, { refereeDiscountCents: Infinity },
+  { refereeDiscountCents: -1 }, { refereeDiscountCents: 0.5 }, { refereeDiscountCents: Number.MAX_SAFE_INTEGER + 1 }]) {
+  check(referralSummary({ ...referralPaid, referral: malformed as AdminOrderRow["referral"] }).productNetRevenue, 50,
+    "Malformed referral cents are ignored defensively without NaN or a dashboard exception");
+}
+check(referralSummary({ ...referralPaid, referral: { ...referralSnapshot, refereeDiscountCents: 0 } as unknown as AdminOrderRow["referral"] }).productNetRevenue,
+  50, "Zero frozen referral cents are accepted");
+check(referralSummary({ ...referralPaid, referral: undefined, discountAmount: 0, deliveryFee: 0, total: "50,00 EUR" }).productNetRevenue,
+  50, "Ordinary product revenue is unchanged");
+check(summary.productNetRevenue, 71.55, "Legacy promotion product revenue remains unchanged");
+check(summary.productRows[0].productNetRevenue, 71.55, "Legacy promotion row allocation remains unchanged");
+
 console.log(`Accounting period and date tests passed (${assertions} assertions).`);
 
 function orderFixture(overrides: Partial<AdminOrderRow> = {}): AdminOrderRow {
@@ -462,6 +513,8 @@ function orderFixture(overrides: Partial<AdminOrderRow> = {}): AdminOrderRow {
     promotionDiscountTotal: 7.95,
     deliveryFee: 0,
     total: "71,55 EUR",
+    financing: { kind: "ordinary", totalCents: 7155, cagnotteCents: 0, paymentCents: 7155, verification: "verified",
+      cagnotteState: "not_applicable", externalPaymentState: "planned", orderCancelled: false },
     createdAt: "2026-08-01T10:00:00.000Z",
     updatedAt: "2026-08-01T10:00:00.000Z",
     ...overrides,
@@ -473,7 +526,7 @@ function productFixture(): Product {
     id: "product-1",
     slug: "produit",
     name: "Produit",
-    category: "Fleur CBD",
+    category: "flowers",
     price: 7.95,
     shortDescription: "Produit de test comptable",
     longDescription: "Produit de test comptable",

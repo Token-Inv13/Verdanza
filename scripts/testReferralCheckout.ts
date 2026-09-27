@@ -5,8 +5,9 @@ import { randomUUID } from "node:crypto";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { aixRadiusDeliveryZone } from "../src/data/deliveryZones.js";
 import { connectCagnotteEmulator, CAGNOTTE_DEMO } from "./cagnotteEmulator.js";
-import { createOrderHandler } from "../api/create-order.js";
+import { commitCheckoutOrder, createOrderHandler } from "../api/create-order.js";
 import { createQuoteOrderHandler } from "../api/quote-order.js";
+import { FirebaseIdTokenVerificationError } from "../api/_server/adminAuth.js";
 import { parseCheckoutBody, priceCheckout } from "../api/_server/checkout.js";
 import { checkoutPayloadFingerprint } from "../api/_server/orderSideEffects.js";
 import { allocateReferralDiscount, prepareReferralCheckout, readReferralCheckoutContext } from "../api/_server/referralCheckout.js";
@@ -23,6 +24,9 @@ import type { VercelRequestLike, VercelResponseLike } from "../api/_server/http.
 import type { CagnotteTestProgram } from "../api/_server/cagnotteLedgerTypes.js";
 import type { ReferralRelation } from "../src/types/referral.js";
 import type { ReferralCheckoutQuote } from "../src/types/referralCheckout.js";
+import { buildAccountingSummary } from "../src/lib/accountingSummary.js";
+import { customAccountingPeriodRange } from "../src/lib/accountingPeriods.js";
+import { adminOrderRow } from "../src/services/ordersService.js";
 
 const db = await connectCagnotteEmulator(CAGNOTTE_DEMO);
 const program = { mode: "active" as const, startsAtEpochMs: 1000, operational: true };
@@ -112,6 +116,12 @@ await test("canonical charged delivery: 5000 -> 4500 + 549 = 5049, loyalty 225",
   const q = await proposal(request); ok(q.applied); deepStrictEqual([q.productsAfterReferralCents, q.deliveryCents, q.payableCents, q.loyaltyEstimateCents], [4500, 549, 5049, 225]);
   const c = await create(accepted(request, q)); equal(c.status, 200); const order = (await db.collection("orders").doc(String(c.data.orderId)).get()).data()!;
   equal(order.total, 50.49); equal(order.deliveryFee, 5.49); equal(order.cagnotte.snapshot.productsPaidCents, 4500);
+  await transition({ orderId: String(c.data.orderId), paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+  const paid = { ...(await db.collection("orders").doc(String(c.data.orderId)).get()).data(), id: String(c.data.orderId) } as Order;
+  const row = adminOrderRow(paid); deepStrictEqual(row.referral, paid.referral); equal(row.subtotalAfterPromotion, 50);
+  const accounting = buildAccountingSummary([row], [], new Map(), [], new Map(), customAccountingPeriodRange("2000-01-02", "2000-01-04"));
+  deepStrictEqual([accounting.collectedRevenue, accounting.productNetRevenue, accounting.deliveryRevenue, accounting.discounts], [50.49, 45, 5.49, 5]);
+  equal(accounting.productRows.reduce((sum, item) => sum + item.productNetRevenue, 0), 45);
 });
 for (const cents of [4999, 5000, 5001]) await test(`threshold ${cents}`, async () => { await seed(cents); equal((await proposal()).applied, cents >= 5000); });
 await test("positive cagnotte explicitly requires a new quote; zero compatible", async () => {
@@ -240,6 +250,7 @@ await test("checkout fingerprint distinguishes referral request/acceptance; norm
 await test("created order binds request UID, replay and other UID conflict", async () => {
   const request = body(); const b = accepted(request, await proposal(request)); const c = await create(b); equal(c.status, 200);
   equal((await db.collection("checkoutRequests").doc(b.checkoutRequestId).get()).data()?.referralBeneficiaryId, uid);
+  equal((await db.collection("checkoutRequests").doc(b.checkoutRequestId).get()).data()?.referralApplied, true);
   const before = await capture(); equal((await create(b)).data.orderId, c.data.orderId); deepStrictEqual(await capture(), before);
   equal((await create({ ...b, authToken: "other" })).data.code, "checkout_request_conflict"); deepStrictEqual(await capture(), before);
   equal((await create({ ...b, referralUse: undefined })).data.code, "checkout_request_conflict");
@@ -488,5 +499,90 @@ await test("early miss concurrent commit fallback still rejects a different owne
   } }) as Firestore;
   const result = await create({ ...b, authToken: "wrong-user" }, { getDb: () => racingDb, referralRuntime: () => { throw new Error("unavailable"); } });
   equal(result.status, 409); equal(result.data.code, "checkout_request_conflict"); equal((await db.collection("orders").get()).size, 1);
+});
+async function unappliedRequest(reason: "below_threshold" | "no_relation" | "priority_advantage" | "right_reserved") {
+  const request = body();
+  if (reason === "below_threshold") await db.collection("products").doc("main").update({ price: 49.99 });
+  if (reason === "no_relation") await relationRef().delete();
+  if (reason === "priority_advantage") {
+    await db.collection("coupons").doc("free").set({ code: "FREE", isActive: true, usedCount: 0, minimumOrder: 0, discountType: "free_shipping", discountValue: 0 });
+    Object.assign(request, { couponCode: "FREE" });
+  }
+  if (reason === "right_reserved") await candidate();
+  return request;
+}
+function ownershipReplayDependencies(counter: { auth: number; business: number }) {
+  const forbidden = () => { counter.business++; throw new Error("replay must not requalify"); };
+  const replayDb = new Proxy(db, { get(target, property) {
+    if (property === "collection") return (name: string) => { ok(["checkoutRequests", "orders"].includes(name)); return target.collection(name); };
+    throw new Error("replay must not start pricing/transactions");
+  } }) as Firestore;
+  return { getDb: () => replayDb, referralRuntime: forbidden, referralIdentity: async () => forbidden(), referralKeyring: forbidden,
+    getRuntimeConfiguration: forbidden, getFirebaseProjectId: forbidden, enforceRateLimit: async () => forbidden(), processSideEffects: async () => forbidden(),
+    verifyToken: async (token: string) => { counter.auth++; if (token === "invalid-token") throw new FirebaseIdTokenVerificationError("authentication"); return { uid: token, email: null }; } };
+}
+async function transactionalReplay(request: ReturnType<typeof body>, customerId = uid) {
+  const parsed = parseCheckoutBody(request);
+  return commitCheckoutOrder({ db: checkedDb(), body: parsed, priced: {} as Awaited<ReturnType<typeof priceCheckout>>, customerId,
+    checkoutRequestId: request.checkoutRequestId, payloadFingerprint: checkoutPayloadFingerprint(parsed), accrualProgram: null, reservationProgram: null });
+}
+for (const reason of ["below_threshold", "no_relation", "priority_advantage", "right_reserved"] as const)
+for (const enrollment of ["absent", "not_started"] as const) await test(`unapplied ${reason}/${enrollment}: owner binding without enrollment, strict replay before runtime`, async () => {
+  const request = await unappliedRequest(reason);
+  const accrualProgram = enrollment === "absent" ? null : { ...loyalty, startsAtEpochMs: 20000 };
+  const q = await quote(request, { accrualProgram }); equal(q.status, 200);
+  const refusal = q.data.referralUse as ReferralCheckoutQuote; ok(!refusal.applied); equal(refusal.reason, reason);
+  const c = await create(request, { accrualProgram }); equal(c.status, 200);
+  const doc = (await db.collection("checkoutRequests").doc(request.checkoutRequestId).get()).data()!;
+  const order = (await db.collection("orders").doc(String(c.data.orderId)).get()).data()!;
+  equal(doc.referralBeneficiaryId, uid); equal(doc.referralApplied, false); equal(doc.cagnotteBeneficiaryId, undefined);
+  equal(order.customerId, uid); equal(order.referral, undefined); equal(order.cagnotte, undefined);
+  equal(checkoutPayloadFingerprint(parseCheckoutBody(request)), checkoutPayloadFingerprint(parseCheckoutBody({ ...request, authToken: "another-uid" })));
+  const before = await capture(); const counter = { auth: 0, business: 0 }, overrides = ownershipReplayDependencies(counter);
+  const same = await create(request, overrides); equal(same.status, 200); equal(same.data.orderId, c.data.orderId); equal(counter.auth, 1);
+  equal(same.headers.get("Cache-Control"), "private, no-store"); equal(same.headers.get("Vary"), "Authorization");
+  const other = await create({ ...request, authToken: "another-uid" }, overrides); equal(other.status, 409); equal(other.data.code, "checkout_request_conflict"); equal(counter.auth, 2);
+  const absent = await create({ ...request, authToken: undefined }, overrides); equal(absent.status, 409); equal(absent.data.code, "checkout_request_conflict"); equal(counter.auth, 2);
+  const invalid = await create({ ...request, authToken: "invalid-token" }, overrides); equal(invalid.status, 401); equal(counter.auth, 3);
+  equal(counter.business, 0);
+  equal((await transactionalReplay(request)).orderId, c.data.orderId);
+  await rejects(transactionalReplay(request, "another-uid"), { message: "checkout_request_conflict" }); deepStrictEqual(await capture(), before);
+});
+for (const applied of [true, false]) await test(`legacy binding without applied flag remains replayable, applied=${applied}`, async () => {
+  const c = applied ? await candidate() : await (async () => { const request = await unappliedRequest("no_relation"); const r = await create(request, { accrualProgram: null }); equal(r.status, 200); return { request, id: String(r.data.orderId) }; })();
+  const ref = db.collection("checkoutRequests").doc(c.request.checkoutRequestId); const value = (await ref.get()).data()!; delete value.referralApplied; await ref.set(value);
+  const before = await capture(); const counter = { auth: 0, business: 0 };
+  const r = await create(c.request, ownershipReplayDependencies(counter)); equal(r.status, 200); equal(r.data.orderId, c.id); equal(counter.auth, 1); equal(counter.business, 0);
+  equal((await transactionalReplay(c.request)).orderId, c.id); await rejects(transactionalReplay(c.request, "other")); deepStrictEqual(await capture(), before);
+});
+for (const applied of [true, false]) for (const corrupt of ["order_owner", "applied_flag", "invalid_flag", "conflicting_cagnotte", "missing_order"] as const)
+await test(`binding corruption ${corrupt}/applied=${applied}: early and transactional replay fail closed`, async () => {
+  const c = applied ? await candidate() : await (async () => { const request = await unappliedRequest("no_relation"); const r = await create(request, { accrualProgram: null }); equal(r.status, 200); return { request, id: String(r.data.orderId) }; })();
+  const requestRef = db.collection("checkoutRequests").doc(c.request.checkoutRequestId), orderRef = db.collection("orders").doc(c.id);
+  if (corrupt === "order_owner") await orderRef.update({ customerId: "another-uid" });
+  if (corrupt === "applied_flag") await requestRef.update({ referralApplied: !applied });
+  if (corrupt === "invalid_flag") await requestRef.update({ referralApplied: "invalid" });
+  if (corrupt === "conflicting_cagnotte") await requestRef.update({ cagnotteBeneficiaryId: "another-uid" });
+  if (corrupt === "missing_order") await orderRef.delete();
+  const before = await capture(); const counter = { auth: 0, business: 0 };
+  const r = await create(c.request, ownershipReplayDependencies(counter)); equal(r.status, 409); equal(r.data.code, "checkout_request_conflict"); equal(counter.business, 0);
+  await rejects(transactionalReplay(c.request), { message: "checkout_request_conflict" }); deepStrictEqual(await capture(), before);
+});
+for (const otherUid of [false, true]) await test(`unapplied concurrent same request, different UID=${otherUid}: one owner/order/outbox`, async () => {
+  const request = await unappliedRequest("no_relation"); let effects = 0;
+  const overrides = { accrualProgram: null, processSideEffects: async (...args: Parameters<NonNullable<Parameters<typeof createOrderHandler>[0]["processSideEffects"]>>) => { effects++; return deps().processSideEffects!(...args); } };
+  const results = await Promise.all([create(request, overrides), create({ ...request, authToken: otherUid ? "another-uid" : uid }, overrides)]);
+  equal(results.filter(r => r.status === 200).length, otherUid ? 1 : 2); equal(effects, 1);
+  if (otherUid) { equal(results.filter(r => r.status === 409).length, 1); equal(results.find(r => r.status === 409)?.data.code, "checkout_request_conflict"); }
+  const order = (await db.collection("orders").get()).docs[0], binding = (await db.collection("checkoutRequests").doc(request.checkoutRequestId).get()).data()!;
+  equal((await db.collection("orders").get()).size, 1); equal((await db.collection("orderSideEffects").get()).size, 1);
+  equal(order.data().customerId, binding.referralBeneficiaryId); equal(binding.referralApplied, false); equal(order.data().referral, undefined);
+});
+await test("normal request without referral remains unbound and preserves the legacy replay contract", async () => {
+  const request = { ...body(), referralUse: undefined }; const c = await create(request, { accrualProgram: null }); equal(c.status, 200);
+  const doc = (await db.collection("checkoutRequests").doc(request.checkoutRequestId).get()).data()!;
+  equal(doc.referralBeneficiaryId, undefined); equal(doc.referralApplied, undefined); equal(doc.cagnotteBeneficiaryId, undefined);
+  const r = await create({ ...request, authToken: undefined }, { verifyToken: async () => { throw new Error("legacy unbound replay must not authenticate"); }, referralRuntime: () => { throw new Error("must not resolve"); } });
+  equal(r.status, 200); equal(r.data.orderId, c.data.orderId);
 });
 console.log(`Referral checkout: ${passed} PASS`);

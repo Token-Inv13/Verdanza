@@ -3,7 +3,7 @@ import { prepareReferralCheckoutReservation, prepareReferralCheckout, assertAcce
 import { ReferralError } from "./referralService.js";
 import { FieldValue } from "firebase-admin/firestore";
 import { orderPayload, priceCheckout, type CheckoutRequestBody, type PricedCheckout } from "./checkout.js";
-import { CheckoutRequestConflictError, cagnotteProductionFixtureSideEffectsDocument, checkoutRequestDocument, checkoutRequestsCollection, orderSideEffectsCollection, orderSideEffectsDocument, validateCheckoutRequestId } from "./orderSideEffects.js";
+import { assertCheckoutRequestOrderBindings, checkoutRequestBindings, CheckoutRequestConflictError, cagnotteProductionFixtureSideEffectsDocument, checkoutRequestDocument, checkoutRequestsCollection, orderSideEffectsCollection, orderSideEffectsDocument, validateCheckoutRequestId } from "./orderSideEffects.js";
 import { fixedPriceEffectiveUnitPrice, fixedPriceLineTotal, resolveFixedPriceOptions } from "../../src/lib/fixedPriceOptions.js";
 import type { Order, Product } from "../../src/types/index.js";
 import { calculateExternalPaymentCents, exactEuroCents } from "../../src/lib/orderFinancing.js";
@@ -112,22 +112,16 @@ export async function commitCheckoutOrder(input: {
       if (fixtureMarker && !isExactCagnotteProductionFixtureMarker(existing.productionFixture)) {
         throw new CheckoutRequestConflictError();
       }
-      if (existing.referralBeneficiaryId) {
+      const bindings = checkoutRequestBindings(existing);
+      if (bindings.referralBeneficiaryId || bindings.cagnotteBeneficiaryId) {
         const original = await transaction.get(db.collection("orders").doc(String(existing.orderId)));
-        if (existing.referralBeneficiaryId !== customerId || !original.exists || original.data()?.customerId !== customerId ||
-            original.data()?.referral?.referralId !== customerId) throw new CheckoutRequestConflictError();
-      }
-      if (existing.cagnotteBeneficiaryId) {
-        const original = await transaction.get(db.collection("orders").doc(String(existing.orderId)));
-        if (existing.cagnotteBeneficiaryId !== customerId || !original.exists ||
-          original.data()?.cagnotte?.beneficiaryId !== customerId || original.data()?.customerId !== customerId) {
-          throw new CheckoutRequestConflictError();
-        }
+        if (!original.exists) throw new CheckoutRequestConflictError();
+        assertCheckoutRequestOrderBindings(original.data()!, bindings, customerId);
         if (fixtureMarker && !isExactCagnotteProductionFixtureOrder({ id: original.id, ...original.data() })) {
           throw new CheckoutRequestConflictError();
         }
       }
-      return { created: false, orderId: String(existing.orderId) };
+      return { created: false, orderId: String(existing.orderId), ...bindings };
     }
 
     if (fixtureMarker) {
@@ -155,7 +149,7 @@ export async function commitCheckoutOrder(input: {
     let referralReservationPlan: Awaited<ReturnType<typeof prepareReferralCheckoutReservation>> | null = null;
     let referralSnapshot: import("../../src/types/referral.js").ReferralOrderSnapshot | undefined;
     if (body.referralUse) {
-      if (!input.referralContext || input.referralContext.uid !== customerId) throw new ReferralError("AUTH_REQUIRED", 401);
+      if (!input.referralContext || !customerId || input.referralContext.uid !== customerId) throw new ReferralError("AUTH_REQUIRED", 401);
       try {
         committedPrice = await priceCheckout(transactionalReader(db, transaction), body);
         const referral = await prepareReferralCheckout({ db, transaction, body, priced: committedPrice,
@@ -455,8 +449,10 @@ export async function commitCheckoutOrder(input: {
     transaction.set(
       requestRef,
       {
-        ...checkoutRequestDocument(orderRef.id, payloadFingerprint, enrollment?.beneficiaryId),
-        ...(referralSnapshot ? { referralBeneficiaryId: customerId } : {}),
+        ...checkoutRequestDocument(orderRef.id, payloadFingerprint, {
+          cagnotteBeneficiaryId: enrollment?.beneficiaryId,
+          ...(body.referralUse ? { referralBeneficiaryId: input.referralContext!.uid, referralApplied: Boolean(referralSnapshot) } : {}),
+        }),
         ...(fixtureMarker ? { productionFixture: fixtureMarker } : {}),
       },
     );
