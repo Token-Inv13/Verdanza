@@ -7,6 +7,9 @@ export function hasCagnotteEnrollment(value: object): boolean {
 }
 
 export function assertOrderDeletionAllowed(order: object) {
+  if (Object.prototype.hasOwnProperty.call(order, "referral")) {
+    throw new Error("Suppression refusee: commande parrainage conservee pour tracabilite.");
+  }
   if (hasCagnotteEnrollment(order)) {
     throw new Error("Suppression refusee: commande inscrite cagnotte conservee pour tracabilite.");
   }
@@ -17,7 +20,8 @@ export function orderFromSnapshot(snapshot: { id: string; data(): Record<string,
   return { ...snapshot.data(), id: snapshot.id } as Order;
 }
 
-/** Maintenance deletion: recheck every document in the deleting transaction. */
+/** Maintenance deletion: recheck every document in the deleting transaction.
+ * Payment identity tombstones and email claims survive order deletion/cleanup; never cascade them. */
 export async function deleteUnenrolledOrderCandidates(input: {
   db: Firestore; orderIds: string[];
   writeAudit: (transaction: Transaction, orderRef: DocumentReference) => void;

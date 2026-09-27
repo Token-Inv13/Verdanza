@@ -1,4 +1,4 @@
-import type { VerifiedFirebaseUser } from "../../api/_server/adminAuth.js";
+import { FirebaseIdTokenVerificationError, type VerifiedFirebaseUser } from "../../api/_server/adminAuth.js";
 import { localUrl, RECIPE_PORTS, RECIPE_PROJECT_ID } from "./constants.js";
 
 type TokenClaims = {
@@ -19,7 +19,7 @@ export async function verifyLocalAuthEmulatorToken(idToken: string): Promise<Ver
     typeof claims.exp !== "number" ||
     claims.exp * 1000 <= Date.now()
   ) {
-    throw new Error("INVALID_ID_TOKEN");
+    throw new FirebaseIdTokenVerificationError("authentication");
   }
 
   const response = await fetch(
@@ -29,14 +29,14 @@ export async function verifyLocalAuthEmulatorToken(idToken: string): Promise<Ver
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ idToken }),
     },
-  );
-  const payload = await response.json().catch(() => ({})) as {
+  ).catch(() => { throw new FirebaseIdTokenVerificationError("unavailable"); });
+  const payload = await response.json().catch(() => { throw new FirebaseIdTokenVerificationError("unavailable"); }) as {
     users?: Array<{ localId?: string; email?: string; emailVerified?: boolean }>;
     error?: { message?: string };
   };
   const user = payload.users?.[0];
   if (!response.ok || !user?.localId || user.localId !== claims.sub) {
-    throw new Error(payload.error?.message || "INVALID_ID_TOKEN");
+    throw new FirebaseIdTokenVerificationError(response.status >= 500 || response.status === 429 ? "unavailable" : "authentication");
   }
   return {
     uid: user.localId,
@@ -47,10 +47,10 @@ export async function verifyLocalAuthEmulatorToken(idToken: string): Promise<Ver
 
 function decodeClaims(token: string): TokenClaims {
   const parts = token.split(".");
-  if (parts.length !== 3 || !parts[1]) throw new Error("INVALID_ID_TOKEN");
+  if (parts.length !== 3 || !parts[1]) throw new FirebaseIdTokenVerificationError("authentication");
   try {
     return JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as TokenClaims;
   } catch {
-    throw new Error("INVALID_ID_TOKEN");
+    throw new FirebaseIdTokenVerificationError("authentication");
   }
 }

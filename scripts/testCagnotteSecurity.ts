@@ -1,7 +1,7 @@
 import { deepStrictEqual, equal, ok, rejects } from "node:assert/strict";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { CAGNOTTE_DEMO, connectCagnotteEmulator } from "./cagnotteEmulator.js";
-import { assertAdminUser, type VerifiedFirebaseUser } from "../api/_server/adminAuth.js";
+import { assertAdminUser, FirebaseIdTokenVerificationError, type VerifiedFirebaseUser } from "../api/_server/adminAuth.js";
 import { createOrderStatusHandler } from "../api/_server/orderStatusRoute.js";
 import { commitOrderStatusTransition } from "../api/_server/orderStatusTransition.js";
 import { createCheckoutIdentityResolver } from "../api/_server/checkoutIdentity.js";
@@ -74,7 +74,9 @@ try {
   await db.collection("products").doc("security-product").set({ stock: 1000, price: 10, name: "Synthetic", isActive: true, category: "flowers", slug: "synthetic" });
   for (const [name, body, identity, status] of [
     ["sans authentification", {}, admin, 401],
-    ["verification jeton en echec", { authToken: "invalid-synthetic" }, new Error("synthetic token failure"), 400],
+    ["verification jeton en echec", { authToken: "invalid-synthetic" }, new FirebaseIdTokenVerificationError("authentication"), 401],
+    ["configuration auth invalide", { authToken: "invalid-synthetic" }, new FirebaseIdTokenVerificationError("configuration"), 503],
+    ["auth indisponible", { authToken: "invalid-synthetic" }, new FirebaseIdTokenVerificationError("unavailable"), 503],
     ["identite valide non admin", { authToken: "valid-synthetic" }, { uid: "customer-only", email: "customer@example.test", emailVerified: true }, 403],
     ["profil auto-declare admin sans autorite", { authToken: "valid-synthetic", uid: admin.uid, email: admin.email, role: "admin", isAdmin: true, admin }, { uid: "self-admin", email: "self@example.test", emailVerified: true }, 403],
     ["email non verifie refuse", { authToken: "valid-synthetic" }, { uid: "unverified", email: "verified-fallback@example.test", emailVerified: false }, 403],

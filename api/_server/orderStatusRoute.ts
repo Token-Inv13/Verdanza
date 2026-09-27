@@ -1,5 +1,5 @@
-import { commitOrderStatusTransition, processOrderStatusTransitionEffects } from "./orderStatusTransition.js";
-import { assertAdminUser, type verifyFirebaseIdToken } from "./adminAuth.js";
+import { assertReferralDeliveryReconciliationAction, commitOrderStatusTransition, processOrderStatusTransitionEffects } from "./orderStatusTransition.js";
+import { assertAdminUser, firebaseAuthHttpFailure, type verifyFirebaseIdToken } from "./adminAuth.js";
 import {
   assertMethod,
   sendJson,
@@ -14,6 +14,8 @@ import type {
 } from "../../src/types/index.js";
 import { CagnotteLedgerError } from "./cagnotteLedger.js";
 import { CagnotteReservationError } from "./cagnotteReservations.js";
+import { ReferralError } from "./referralService.js";
+import { ReferralConfigurationError } from "./referralRuntimeConfig.js";
 import { UnpaidReviewError, type UnpaidReviewRequest } from "./unpaidOrderReview.js";
 import {
   CagnotteRuntimeConfigurationError,
@@ -55,6 +57,7 @@ export function createOrderStatusHandler(dependencies: {
   reservationProgram?: Parameters<typeof commitOrderStatusTransition>[0]["reservationProgram"];
   getFirebaseProjectId?: () => string | null;
   getRuntimeConfiguration?: () => CagnotteRuntimeConfiguration;
+  resolveReferralRuntime?: Parameters<typeof commitOrderStatusTransition>[0]["resolveReferralRuntime"];
   now?: Parameters<typeof commitOrderStatusTransition>[0]["now"];
 }) {
 return async function handler(
@@ -95,6 +98,7 @@ return async function handler(
         accrualProgram,
         reservationProgram,
         firebaseProjectId,
+        resolveReferralRuntime: dependencies.resolveReferralRuntime,
         now: dependencies.now,
       });
 
@@ -112,6 +116,11 @@ return async function handler(
 
     sendJson(response, { ok: true, analyticsPurchase: purchaseAnalyticsResult, unpaidReview: committed.unpaidReviewContext });
   } catch (error) {
+    const authFailure = firebaseAuthHttpFailure(error);
+    if (authFailure) return sendJson(response, {
+      code: authFailure.code,
+      error: authFailure.status === 401 ? "Session expirée." : "Authentification indisponible.",
+    }, authFailure.status);
     if (error instanceof CagnotteRuntimeConfigurationError) {
       console.error("update-order-status cagnotte configuration invalid");
       return sendJson(response, {
@@ -119,9 +128,17 @@ return async function handler(
         error: "Configuration cagnotte indisponible.",
       }, 503);
     }
+    if (error instanceof ReferralConfigurationError) {
+      console.error("update-order-status referral configuration invalid");
+      return sendJson(response, {
+        code: "referral_configuration_invalid",
+        error: "Configuration parrainage indisponible.",
+      }, 503);
+    }
     console.error("update-order-status failed", error);
     const message =
       error instanceof Error ? error.message : "Mise a jour commande impossible.";
+    if (error instanceof ReferralError) return sendJson(response, { error: message, code: error.code }, error.status);
     const conflict = error instanceof CagnotteReservationError || error instanceof UnpaidReviewError ||
       (error instanceof CagnotteLedgerError && error.code === "CONFLICT");
     sendJson(response, { error: message, ...(error instanceof UnpaidReviewError ? { code: error.code } : {}) }, message === "Acces admin requis." ? 403 : conflict ? 409 : 400);
@@ -150,6 +167,7 @@ function parseBody(value: unknown): {
   deleteCancelled?: boolean;
   historyNote?: string;
   unpaidReview?: UnpaidReviewRequest;
+  reconcileReferralDelivery?: boolean;
   authToken?: string;
 } {
   const body = typeof value === "string" ? JSON.parse(value) : value;
@@ -174,9 +192,11 @@ function parseBody(value: unknown): {
     deleteCancelled?: boolean;
     historyNote?: string;
     unpaidReview?: unknown;
+    reconcileReferralDelivery?: boolean;
     authToken?: string;
   };
   if (!payload.orderId) throw new Error("orderId requis.");
+  assertReferralDeliveryReconciliationAction(payload);
   if (payload.orderStatus && !orderStatuses.includes(payload.orderStatus)) {
     throw new Error("Statut commande invalide.");
   }
@@ -206,6 +226,7 @@ function parseBody(value: unknown): {
     archived: payload.archived, hidden: payload.hidden, restore: payload.restore,
     deleteCancelled: payload.deleteCancelled, historyNote: payload.historyNote,
     unpaidReview: parseUnpaidReview(payload.unpaidReview),
+    reconcileReferralDelivery: payload.reconcileReferralDelivery,
   };
 }
 

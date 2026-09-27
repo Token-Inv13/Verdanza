@@ -1,4 +1,4 @@
-import { assertAdminUser } from "./_server/adminAuth.js";
+import { assertAdminUser, firebaseAuthHttpFailure } from "./_server/adminAuth.js";
 import { getAdminDb } from "./_server/firebaseAdmin.js";
 import {
   assertMethod,
@@ -33,6 +33,11 @@ export default async function handler(
     const result = await analyzeSupplierInvoicePdfBuffer(db, buffer);
     sendJson(response, result);
   } catch (error) {
+    const authFailure = firebaseAuthHttpFailure(error);
+    if (authFailure) return sendJson(response, {
+      code: authFailure.code,
+      error: authFailure.status === 401 ? "Token admin invalide." : "Authentification indisponible.",
+    }, authFailure.status);
     console.error("analyze-supplier-invoice failed", publicError(error));
     sendJson(response, { error: publicError(error) }, 400);
   }

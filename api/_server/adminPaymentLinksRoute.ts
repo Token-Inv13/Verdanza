@@ -1,4 +1,4 @@
-import { assertAdminUser } from "./adminAuth.js";
+import { assertAdminUser, firebaseAuthHttpFailure } from "./adminAuth.js";
 import { activeAdminPaymentLinks } from "./adminPaymentLinks.js";
 import { getAdminDb } from "./firebaseAdmin.js";
 import {
@@ -24,6 +24,11 @@ export async function handleAdminPaymentLinks(
     await assertAdminUser(getAdminDb(), token);
     sendJson(response, { links: activeAdminPaymentLinks() });
   } catch (error) {
+    const authFailure = firebaseAuthHttpFailure(error);
+    if (authFailure) return sendJson(response, {
+      code: authFailure.code,
+      error: authFailure.status === 401 ? "Token admin invalide." : "Authentification indisponible.",
+    }, authFailure.status);
     console.error("admin-payment-links failed", error);
     const message = error instanceof Error ? error.message : "Liens paiement indisponibles.";
     sendJson(response, { error: message }, message === "Acces admin requis." ? 403 : 400);

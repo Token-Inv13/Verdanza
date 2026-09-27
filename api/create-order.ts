@@ -16,7 +16,7 @@ import {
   type PricedCheckout,
 } from "./_server/checkout.js";
 import { createCheckoutIdentityResolver } from "./_server/checkoutIdentity.js";
-import { verifyFirebaseIdToken } from "./_server/adminAuth.js";
+import { firebaseAuthHttpFailure, verifyFirebaseIdToken } from "./_server/adminAuth.js";
 import { CagnotteCheckoutError } from "./_server/cagnotteCheckout.js";
 import { CagnotteReservationError } from "./_server/cagnotteReservations.js";
 import type { CagnotteReservationProgram } from "./_server/cagnotteReservationTypes.js";
@@ -245,6 +245,11 @@ return async function handler(
       },
     });
   } catch (error) {
+    const authFailure = firebaseAuthHttpFailure(error);
+    if (authFailure) return sendJson(response, {
+      code: authFailure.status === 401 ? "AUTH_REQUIRED" : "authentication_unavailable",
+      error: authFailure.status === 401 ? "Authentification cagnotte invalide." : "Authentification indisponible.",
+    }, authFailure.status);
     if (error instanceof CagnotteRuntimeConfigurationError) {
       console.error("create-order cagnotte configuration invalid");
       return sendJson(response, {

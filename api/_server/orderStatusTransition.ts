@@ -21,6 +21,15 @@ import {
   type CagnotteProductionFixtureCapability,
 } from "./cagnotteProductionFixture.js";
 import { validateCagnotteProductionFixtureState } from "./cagnotteProductionFixtureState.js";
+import { getReferralRuntime, ReferralConfigurationError, REFERRAL_CLOSED_RUNTIME } from "./referralRuntimeConfig.js";
+import type { ReferralRuntime } from "./referralRuntimeConfig.js";
+import { prepareFirstPaymentWithoutReferral, prepareReferralTransition, validateReferralOrderSnapshot, type ReferralPaymentEvidence } from "./referralLedger.js";
+import { getReferralSponsorIdentity, type ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
+import { normalizeReferralEmail } from "./referralIdentity.js";
+import { prepareReferralPaymentIdentity, readCurrentPaymentIdentity, type CurrentPaymentIdentity } from "./referralPaymentIdentity.js";
+import { usableOrderEmail } from "./orderEmailIdentity.js";
+import { productOrder, hasHistoricalPaymentEvidence, isValidHistoricalPaymentInstant, ReferralError } from "./referralService.js";
+import { prepareReferralOrderEmailHistoryInvalidation } from "./referralOrderEmailHistory.js";
 
 export type OrderStatusChange = {
   orderId: string; orderStatus?: OrderStatus; paymentStatus?: PaymentStatus;
@@ -29,13 +38,50 @@ export type OrderStatusChange = {
   paymentLinkSent?: boolean; paymentLinkChannel?: PaymentLinkChannel | ""; trackingNumber?: string;
   archived?: boolean; hidden?: boolean; restore?: boolean; deleteCancelled?: boolean; historyNote?: string;
   unpaidReview?: UnpaidReviewRequest;
+  reconcileReferralDelivery?: boolean;
 };
+
+/** The dedicated admin action must never carry an order lifecycle mutation. */
+export function assertReferralDeliveryReconciliationAction(body: object): void {
+  const value = Reflect.get(body, "reconcileReferralDelivery");
+  if (value !== undefined && typeof value !== "boolean") throw new Error("Réconciliation parrainage invalide.");
+  if (value === true && Object.entries(body).some(([key, field]) => field !== undefined &&
+    !["orderId", "authToken", "reconcileReferralDelivery"].includes(key))) throw new Error("Réconciliation parrainage exclusive requise.");
+}
+
+/** Delivery is a persisted server fact, independent of a later status-only cancellation. */
+export function hasHistoricalDeliveryEvidence(order: Order): boolean {
+  return order.orderStatus === "delivered" || (Array.isArray(order.statusHistory) && order.statusHistory.some((entry) =>
+    entry !== null && typeof entry === "object" && (entry.changedBy === "admin" || entry.changedBy === "system") &&
+    isValidHistoricalPaymentInstant(entry.changedAt) &&
+    (entry.status === "delivered" || (entry.status === "cancelled" && entry.previousStatus === "delivered"))));
+}
+
+/** A referral discount cannot share an order with a positive cagnotte reservation or spend. */
+export function hasPositiveCagnotteFinancing(order: Order): boolean {
+  return (typeof order.cagnotteReservationIntent?.amountCents === "number" && order.cagnotteReservationIntent.amountCents > 0) ||
+    (typeof order.cagnotte?.snapshot.appliedCagnotteCents === "number" && order.cagnotte.snapshot.appliedCagnotteCents > 0);
+}
+
+/** Only persisted, actually applied commercial advantages conflict with a referral discount. */
+export function hasAppliedReferralPriority(order: Order): boolean {
+  const present = (value: unknown) => typeof value === "string" && value.trim().length > 0;
+  return present(order.couponCode) || present(order.promoCode) || present(order.promoId) ||
+    present(order.contestPrizeId) || order.promoApplied === true ||
+    (typeof order.promotionDiscountTotal === "number" && order.promotionDiscountTotal > 0) ||
+    (Array.isArray(order.appliedPromotions) && order.appliedPromotions.length > 0) ||
+    (Array.isArray(order.items) && order.items.some((item) => item.isGift === true || present(item.promotionId)));
+}
 
 /** Actual endpoint transaction; admin is already verified by its unchanged HTTP boundary. */
 export async function commitOrderStatusTransition({
   db, body, admin, accrualProgram = CAGNOTTE_SERVER_PROGRAM,
   reservationProgram = CAGNOTTE_RESERVATION_PROGRAM, firebaseProjectId,
   productionFixtureCapability,
+  referralProgram,
+  resolveReferralRuntime = getReferralRuntime,
+  getSponsorIdentity = getReferralSponsorIdentity,
+  referralEmailKeyring = () => process.env.REFERRAL_EMAIL_HMAC_KEYRING_JSON ?? "",
   now = () => new Date().toISOString(),
 }: {
   db: Firestore; body: OrderStatusChange; admin: {uid:string; email:string | null};
@@ -43,18 +89,82 @@ export async function commitOrderStatusTransition({
   reservationProgram?: CagnotteReservationProgram | null;
   firebaseProjectId?: string | null;
   productionFixtureCapability?: CagnotteProductionFixtureCapability;
+  referralProgram?: ReferralRuntime;
+  resolveReferralRuntime?: () => ReferralRuntime;
+  getSponsorIdentity?: (uid: string) => Promise<ReferralSponsorIdentity>;
+  referralEmailKeyring?: () => string;
   now?: ()=>string;
 }): Promise<{ updatedOrder: Order | null; previousStatus: OrderStatus | null; purchaseAnalyticsQueued: boolean; missingPromotionIds: string[]; unpaidReviewContext: Awaited<ReturnType<typeof prepareUnpaidReviewControl>>["context"] | null }> {
+  assertReferralDeliveryReconciliationAction(body);
   const operationTime=now();
   let updatedOrder: Order | null = null;
   let previousStatus: OrderStatus | null = null;
   let purchaseAnalyticsQueued = false;
   let missingPromotionIds: string[] = [];
   let unpaidReviewContext: Awaited<ReturnType<typeof prepareUnpaidReviewControl>>["context"] | null = null;
+  let resolvedReferralProgram = referralProgram;
+  let referralConfigurationError: ReferralConfigurationError | undefined;
+  // Both the preflight and transaction use the same relevance and failure policy.
+  // Retain an invalid resolution so a later snapshot cannot reuse a lenient closure.
+  const resolveReferralRuntimeForTransition = (order: Order, payment: boolean, delivery: boolean): ReferralRuntime | null => {
+    if (!(order.referral && (payment || delivery)) && !(payment && order.customerId)) return null;
+    if (!resolvedReferralProgram && !referralConfigurationError) {
+      try { resolvedReferralProgram = resolveReferralRuntime(); }
+      catch (error) {
+        // Referral runtime availability must never hold up an undiscounted business payment.
+        // Keep the closure cached so a snapshot introduced by a race remains strict (503).
+        referralConfigurationError = error instanceof ReferralConfigurationError ? error : new ReferralConfigurationError();
+      }
+    }
+    if (referralConfigurationError) {
+      if (order.referral) throw referralConfigurationError;
+      return REFERRAL_CLOSED_RUNTIME;
+    }
+    return resolvedReferralProgram!;
+  };
+  let paymentEvidence: ReferralPaymentEvidence | undefined;
+  let currentPaymentIdentity: CurrentPaymentIdentity | undefined;
+  if (body.paymentStatus === "paid") {
+    const candidateSnapshot = await db.collection("orders").doc(body.orderId).get();
+    if (candidateSnapshot.exists) {
+      const candidate = orderFromSnapshot(candidateSnapshot);
+      if (candidate.paymentStatus !== "paid" && !candidate.productionFixture && candidate.customerId && productOrder(candidate, true)) {
+        const candidateReferralProgram = resolveReferralRuntimeForTransition(candidate, true, false);
+        if (candidateReferralProgram?.operational && candidateReferralProgram.mode !== "off") {
+          currentPaymentIdentity = await readCurrentPaymentIdentity(candidate.customerId, getSponsorIdentity, referralEmailKeyring);
+          const referralId = candidate.referral ? validateReferralOrderSnapshot(candidate).referralId : candidate.customerId!;
+          const relationDoc = await db.collection("referrals").doc(referralId).get();
+          const relation = relationDoc.data();
+          if (!relation && candidate.referral) throw new Error("referral_relation_missing");
+          // Relation binding remains explicit; identity protection itself does not require a relation.
+          if (relation?.qualifyingOrderId === null && relation.state === "linked") {
+            const sponsorUid = relation.sponsorUid;
+            if (typeof sponsorUid !== "string" || !sponsorUid) throw new Error("referral_relation_missing");
+            let sponsorAccount: ReferralPaymentEvidence["sponsorAccount"] = "unavailable";
+            let sponsorEmail: string | undefined;
+            try {
+              const identity = await getSponsorIdentity(sponsorUid);
+              if (identity.uid === sponsorUid) {
+                sponsorAccount = identity.disabled ? "disabled" : "active";
+                sponsorEmail = normalizeReferralEmail(identity.email);
+              }
+            } catch { /* A payment may proceed, but an unverified sponsor earns no reward. */ }
+            const refereeAccount = currentPaymentIdentity.reason === "referee_email_unverified" ? "unverified" :
+              currentPaymentIdentity.reason === "auth_unavailable" || currentPaymentIdentity.reason === "identity_unavailable" ? "unavailable" : "active";
+            paymentEvidence = { referralId, sponsorUid, refereeUid: referralId,
+              linkedAtEpochMs: relation.linkedAtEpochMs, sponsorAccount, refereeAccount, sponsorEmail,
+              refereeEmail: currentPaymentIdentity.normalizedEmail, claimAliases: currentPaymentIdentity.aliases,
+              activeKeyVersion: currentPaymentIdentity.activeKeyVersion };
+          }
+        }
+      }
+    }
+  }
   await db.runTransaction(async (transaction) => {
     updatedOrder = null; previousStatus = null; purchaseAnalyticsQueued = false; missingPromotionIds = []; unpaidReviewContext = null;
     let cancellationPlan: Awaited<ReturnType<typeof prepareOrderCancellationInTransaction>> | null = null;
     let writePaymentLinkEvent: (() => void) | null = null;
+    let emailHistoryInvalidationPlan: Awaited<ReturnType<typeof prepareReferralOrderEmailHistoryInvalidation>> | null = null;
     const orderRef = db.collection("orders").doc(body.orderId);
     const snapshot = await transaction.get(orderRef);
     if (!snapshot.exists) throw new Error("Commande introuvable.");
@@ -63,6 +173,19 @@ export async function commitOrderStatusTransition({
     const productionFixture = hasPersistedCagnotteProductionFixtureMarker(order);
     if (productionFixture && !isExactCagnotteProductionFixtureOrder(order)) {
       throw new Error("production_fixture_marker_invalid");
+    }
+    if (body.reconcileReferralDelivery === true) {
+      if (productionFixture || !order.referral) throw new ReferralError("referral_reconciliation_not_applicable");
+      if (!hasHistoricalPaymentEvidence(order) || !hasHistoricalDeliveryEvidence(order))
+        throw new ReferralError("referral_delivery_evidence_missing");
+      const reconciliationProgram = resolveReferralRuntimeForTransition(order, false, true)!;
+      if (!reconciliationProgram.operational || reconciliationProgram.mode === "off") throw new ReferralError("referral_program_disabled", 503);
+      const plan = await prepareReferralTransition({ db, transaction, order, program: reconciliationProgram,
+        event: "delivery", recordedAtEpochMs: Date.parse(operationTime) });
+      // All reads precede writes. This action never writes the order or invokes another plan.
+      plan?.write();
+      updatedOrder = order; previousStatus = order.orderStatus;
+      return;
     }
     if (productionFixture) {
       const expectedTransition = assertCagnotteProductionFixtureStatusTransition({
@@ -78,9 +201,15 @@ export async function commitOrderStatusTransition({
         expectedTransition,
       });
     }
-    if (hasCagnotteEnrollment(order) && (order.orderStatus === "cancelled" || order.cancelledAt) &&
+    if ((hasCagnotteEnrollment(order) || Object.prototype.hasOwnProperty.call(order, "referral")) && (order.orderStatus === "cancelled" || order.cancelledAt) &&
       ((body.orderStatus && body.orderStatus !== "cancelled") || (body.paymentStatus && body.paymentStatus !== "cancelled"))) {
       throw new CagnotteReservationError("CONFLICT", "Une commande inscrite annulée ne peut pas être réactivée.");
+    }
+    if (body.paymentStatus === "paid" && order.paymentStatus !== "paid" && order.referral && hasPositiveCagnotteFinancing(order)) {
+      throw new CagnotteReservationError("CONFLICT", "Parrainage et cagnotte incompatibles sur cette commande.");
+    }
+    if (body.paymentStatus === "paid" && order.paymentStatus !== "paid" && order.referral && hasAppliedReferralPriority(order)) {
+      throw new CagnotteReservationError("CONFLICT", "Parrainage et avantage prioritaire incompatibles sur cette commande.");
     }
     previousStatus = order.orderStatus;
     if (body.deleteCancelled) {
@@ -157,6 +286,14 @@ export async function commitOrderStatusTransition({
       }
       update.paymentStatus = body.paymentStatus;
       if (body.paymentStatus === "paid" && order.paymentStatus !== "paid") {
+        const normalizedEmail = usableOrderEmail(order.customerEmail);
+        if (normalizedEmail !== null) {
+          if (order.customerEmailNormalized !== normalizedEmail) update.customerEmailNormalized = normalizedEmail;
+        } else if (productOrder(order, true)) {
+          emailHistoryInvalidationPlan = await prepareReferralOrderEmailHistoryInvalidation(
+            transaction, db, Date.parse(operationTime),
+          );
+        }
         const paidAt = operationTime;
         update.paidAt = paidAt;
         update.paymentConfirmedAt = paidAt;
@@ -276,6 +413,31 @@ export async function commitOrderStatusTransition({
       nextPaymentStatus: (update.paymentStatus as PaymentStatus | undefined) ?? order.paymentStatus,
       paymentConfirmationRequested: body.paymentStatus === "paid",
     });
+    const paymentTransition = body.paymentStatus === "paid" && order.paymentStatus !== "paid";
+    const deliveryTransition = body.orderStatus === "delivered" && order.orderStatus !== "delivered";
+    // Explicit admin replay may finish a qualified reward whose delivery was persisted while off.
+    const referralDeliveryReconciliationRequested = body.orderStatus === "delivered" && order.orderStatus === "delivered" &&
+      order.paymentStatus === "paid" && Boolean(order.referral);
+    const referralDeliveryEvent = deliveryTransition || referralDeliveryReconciliationRequested;
+    const referralEvent = paymentTransition ? nextStatus === "delivered" ? "payment_and_delivery" : "payment"
+      : referralDeliveryEvent ? "delivery" : null;
+    const transitionReferralProgram = linkOnly || !referralEvent ? null :
+      resolveReferralRuntimeForTransition(order, paymentTransition, referralDeliveryEvent);
+    const paymentIdentityPlan = paymentTransition && !productionFixture && order.customerId && productOrder(order, true)
+      ? await prepareReferralPaymentIdentity({ db, transaction, orderId: order.id, customerUid: order.customerId,
+        operational: Boolean(transitionReferralProgram?.operational && transitionReferralProgram.mode !== "off"),
+        identity: currentPaymentIdentity, recordedAtEpochMs: Date.parse(operationTime) }) : null;
+    if (paymentIdentityPlan?.evidence.status === "unresolved" && !emailHistoryInvalidationPlan) {
+      emailHistoryInvalidationPlan = await prepareReferralOrderEmailHistoryInvalidation(
+        transaction, db, Date.parse(operationTime), "payment_identity_unresolved",
+      );
+    }
+    const referralPlan = !transitionReferralProgram || !transitionReferralProgram.operational || transitionReferralProgram.mode === "off" ? null : order.referral ? await prepareReferralTransition({
+      db, transaction, order, program: transitionReferralProgram, recordedAtEpochMs: Date.parse(operationTime),
+      event: referralEvent!, paymentEvidence, identityClaim: paymentIdentityPlan?.claim,
+    }) : paymentTransition ? await prepareFirstPaymentWithoutReferral({ db, transaction, order,
+      program: transitionReferralProgram, paymentEvidence, identityClaim: paymentIdentityPlan?.claim,
+      identityHistoryInvalidationPrepared: Boolean(emailHistoryInvalidationPlan), recordedAtEpochMs: Date.parse(operationTime) }) : null;
     if (body.paymentStatus === "paid" && order.paymentStatus !== "paid" && order.cagnotte?.snapshot.appliedCagnotteCents) {
       if (!cagnottePlan || !("reservation" in cagnottePlan) || !("ledger" in cagnottePlan) ||
         !["consumed", "already_consumed"].includes(cagnottePlan.reservation.status)) {
@@ -297,9 +459,12 @@ export async function commitOrderStatusTransition({
       };
     }
     // All reads and business checks are complete. Only writes from this point on.
+    emailHistoryInvalidationPlan?.write();
+    paymentIdentityPlan?.write();
     cancellationPlan?.write();
     writePaymentLinkEvent?.();
     cagnottePlan?.write();
+    referralPlan?.write();
     if (body.paymentStatus === "paid" && !productionFixture) {
       purchaseAnalyticsQueued = await enqueuePurchaseAnalyticsForPaidTransition({
         db,

@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
-import { assertAdminUser, verifyFirebaseIdToken } from "./adminAuth.js";
+import { assertAdminUser, firebaseAuthHttpFailure, verifyFirebaseIdToken } from "./adminAuth.js";
 import { getAdminDb } from "./firebaseAdmin.js";
 import {
   sendJson,
@@ -45,32 +45,37 @@ export class BlogInteractionError extends Error {
   }
 }
 
-export async function handleBlogInteractions(
-  request: VercelRequestLike,
-  response: VercelResponseLike,
-) {
-  response.setHeader("Cache-Control", "no-store");
-  try {
-    if (request.method === "GET") {
-      await handleGet(request, response);
-      return;
+type BlogInteractionDependencies = { getDb: typeof getAdminDb; verifyToken: typeof verifyFirebaseIdToken };
+
+export function createBlogInteractionsHandler(dependencies: BlogInteractionDependencies) {
+  return async function handler(request: VercelRequestLike, response: VercelResponseLike) {
+    response.setHeader("Cache-Control", "no-store");
+    try {
+      if (request.method === "GET") {
+        await handleGet(request, response, dependencies);
+        return;
+      }
+      if (request.method === "POST") {
+        await handlePost(request, response, dependencies);
+        return;
+      }
+      sendJson(response, { error: "Methode non autorisee." }, 405);
+    } catch (error) {
+      if (!firebaseAuthHttpFailure(error) && !(error instanceof Error && error.message === "Acces admin requis.")) {
+        console.error("blog interactions failed", error);
+      }
+      sendBlogError(response, error);
     }
-    if (request.method === "POST") {
-      await handlePost(request, response);
-      return;
-    }
-    sendJson(response, { error: "Methode non autorisee." }, 405);
-  } catch (error) {
-    console.error("blog interactions failed", error);
-    sendBlogError(response, error);
-  }
+  };
 }
 
-async function handleGet(request: VercelRequestLike, response: VercelResponseLike) {
+export const handleBlogInteractions = createBlogInteractionsHandler({ getDb: getAdminDb, verifyToken: verifyFirebaseIdToken });
+
+async function handleGet(request: VercelRequestLike, response: VercelResponseLike, dependencies: BlogInteractionDependencies) {
   const query = new URL(request.url || "/", "https://verdanza.local").searchParams;
   const action = query.get("action") || "summary";
   const slug = assertKnownSlug(query.get("slug") || "");
-  const db = getAdminDb();
+  const db = dependencies.getDb();
   if (action === "summary") {
     sendJson(response, await getBlogEngagementSummary(db, {
       slug,
@@ -89,7 +94,7 @@ async function handleGet(request: VercelRequestLike, response: VercelResponseLik
   if (action === "adminComments") {
     const token = bearerToken(request);
     if (!token) throw new BlogInteractionError("Token admin requis.", 401, "admin_token_required");
-    await assertAdminUser(db, token);
+    await assertAdminUser(db, token, dependencies.verifyToken);
     sendJson(response, await listAdminComments(db, {
       slug: query.get("slug") || "",
       status: query.get("status") || "",
@@ -101,10 +106,10 @@ async function handleGet(request: VercelRequestLike, response: VercelResponseLik
   throw new BlogInteractionError("Action inconnue.");
 }
 
-async function handlePost(request: VercelRequestLike, response: VercelResponseLike) {
+async function handlePost(request: VercelRequestLike, response: VercelResponseLike, dependencies: BlogInteractionDependencies) {
   const body = parseBody(request.body);
   const action = String(body.action || "");
-  const db = getAdminDb();
+  const db = dependencies.getDb();
   if (action === "toggleLike") {
     const slug = assertKnownSlug(body.slug);
     const browserId = assertBrowserId(body.browserId);
@@ -133,7 +138,7 @@ async function handlePost(request: VercelRequestLike, response: VercelResponseLi
         "comment_auth_required",
       );
     }
-    const user = await verifyFirebaseIdToken(token);
+    const user = await dependencies.verifyToken(token);
     const rateLimit = await enforcePublicSubmissionRateLimit({
       route: "/api/blog-interactions",
       request,
@@ -158,7 +163,7 @@ async function handlePost(request: VercelRequestLike, response: VercelResponseLi
   if (action === "moderateComment") {
     const token = bearerToken(request);
     if (!token) throw new BlogInteractionError("Token admin requis.", 401, "admin_token_required");
-    const admin = await assertAdminUser(db, token);
+    const admin = await assertAdminUser(db, token, dependencies.verifyToken);
     const commentId = cleanIdentifier(body.commentId);
     const status = String(body.status || "") as BlogCommentStatus;
     if (!allowedCommentStatuses.includes(status) || status === "pending") {
@@ -176,7 +181,7 @@ async function handlePost(request: VercelRequestLike, response: VercelResponseLi
   if (action === "deleteComment") {
     const token = bearerToken(request);
     if (!token) throw new BlogInteractionError("Token admin requis.", 401, "admin_token_required");
-    const admin = await assertAdminUser(db, token);
+    const admin = await assertAdminUser(db, token, dependencies.verifyToken);
     await deleteComment(db, cleanIdentifier(body.commentId), admin.email || admin.uid);
     sendJson(response, { ok: true });
     return;
@@ -546,6 +551,14 @@ function dateValue(value: unknown) {
 }
 
 function sendBlogError(response: VercelResponseLike, error: unknown) {
+  const authFailure = firebaseAuthHttpFailure(error);
+  if (authFailure) return sendJson(response, {
+    error: authFailure.status === 401 ? "Connexion requise." : "Authentification indisponible.",
+    code: authFailure.code,
+  }, authFailure.status);
+  if (error instanceof Error && error.message === "Acces admin requis.") {
+    return sendJson(response, { error: "Accès admin requis.", code: "admin_required" }, 403);
+  }
   const blogError = error instanceof BlogInteractionError ? error : null;
   const message = blogError?.message || "Interaction guide indisponible pour le moment.";
   sendJson(

@@ -4,7 +4,7 @@ import {
   hasPersistedCagnotteProductionFixtureMarker,
 } from "./_server/cagnotteProductionFixture.js";
 import { FieldValue } from "firebase-admin/firestore";
-import { assertAdminUser } from "./_server/adminAuth.js";
+import { assertAdminUser, firebaseAuthHttpFailure } from "./_server/adminAuth.js";
 import { getAdminDb, getAdminStorageBucket } from "./_server/firebaseAdmin.js";
 import {
   assertMethod,
@@ -275,6 +275,11 @@ export default async function handler(
 
     sendJson(response, { error: "Action facture inconnue." }, 400);
   } catch (error) {
+    const authFailure = firebaseAuthHttpFailure(error);
+    if (authFailure) return sendJson(response, {
+      code: authFailure.code,
+      error: authFailure.status === 401 ? "Token admin invalide." : "Authentification indisponible.",
+    }, authFailure.status);
     console.error("invoices failed", error);
     const details = error as {
       statusCode?: number;

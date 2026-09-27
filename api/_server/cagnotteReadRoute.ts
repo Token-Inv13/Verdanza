@@ -1,4 +1,4 @@
-import { assertAdminUser, verifyFirebaseIdToken } from "./adminAuth.js";
+import { assertAdminUser, firebaseAuthHttpFailure, verifyFirebaseIdToken } from "./adminAuth.js";
 import { CagnotteReadError, readCagnotte, validatedId } from "./cagnotteRead.js";
 import { getAdminDb } from "./firebaseAdmin.js";
 import { assertMethod, sendJson, type VercelRequestLike, type VercelResponseLike } from "./http.js";
@@ -77,10 +77,12 @@ export function createCagnotteReadHandler(dependencies: {
       }
       throw new CagnotteReadError("invalid_request", "Portée de consultation invalide.");
     } catch (error) {
+      const authFailure = firebaseAuthHttpFailure(error);
+      if (authFailure) return sendJson(response, authFailure.status === 401
+        ? { code: "session_expired", error: "Session expirée." }
+        : { code: "authentication_unavailable", error: "Authentification indisponible." }, authFailure.status);
       const message = error instanceof Error ? error.message : "";
-      const authentication = ["Token Firebase invalide.", "INVALID_ID_TOKEN", "TOKEN_EXPIRED", "USER_NOT_FOUND"].includes(message);
       if (message === "Acces admin requis.") return sendJson(response, { code: "admin_required", error: "Accès administrateur requis." }, 403);
-      if (authentication) return sendJson(response, { code: "session_expired", error: "Session expirée." }, 401);
       if (error instanceof CagnotteReadError) {
         const status = error.code === "inconsistent_data" ? 409 : error.code === "unavailable" ? 500 : 400;
         return sendJson(response, { code: error.code, error: error.message }, status);

@@ -15,7 +15,7 @@ import type { CagnotteReservationTestProgram } from "../api/_server/cagnotteRese
 import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
 import { assertWalletJournal, fixtureSpentGain } from "./cagnotteRegularizationFixtures.js";
 import { CAGNOTTE_DEMO, connectCagnotteEmulator, validateCagnotteTestEnvironment } from "./cagnotteEmulator.js";
-import type { VerifiedFirebaseUser } from "../api/_server/adminAuth.js";
+import { FirebaseIdTokenVerificationError, type VerifiedFirebaseUser } from "../api/_server/adminAuth.js";
 import type { VercelRequestLike, VercelResponseLike } from "../api/_server/http.js";
 import type { EnforcePublicRateLimitInput, PublicRateLimitResult } from "../api/_server/publicRateLimit.js";
 import type { Order } from "../src/types/index.js";
@@ -70,6 +70,18 @@ try {
     assert.equal(disabledCreate.status, 409);
     assert.equal((await orders()).length, 0);
     assert.equal(CAGNOTTE_RESERVATION_PROGRAM, null);
+  });
+
+  await test("Gardes HTTP", "erreurs Auth cagnotte 401/503 sans commande", async () => {
+    await clear(); await seed();
+    for (const category of ["authentication", "configuration", "unavailable"] as const) {
+      const expected = category === "authentication" ? 401 : 503;
+      const identity = new FirebaseIdTokenVerificationError(category);
+      assert.equal((await quote(quoteBody(), program, identity)).status, expected);
+      assert.equal((await create({ ...checkoutBody(), checkoutRequestId: randomUUID() }, program, identity)).status, expected);
+      assert.equal((await orders()).length, 0);
+    }
+    assert.equal((await quote({ ...quoteBody(), cagnotteUse: undefined }, null, undefined)).status, 200);
   });
 
   for (const scenario of [{ name: "A", wallet: 2000, used: 2000, external: 8000, gain: 400 },
@@ -625,7 +637,7 @@ function acceptedCheckout(proposal: Record<string, unknown>, requestId = randomU
 async function quote(
   body: Record<string, unknown>,
   selectedProgram: CagnotteReservationTestProgram | null,
-  identity: string | undefined,
+  identity: string | Error | undefined,
   selectedAccrualProgram: CagnotteTestProgram | null = selectedProgram ? accrualProgram : null,
 ) {
   const handler = createQuoteOrderHandler({
@@ -633,7 +645,7 @@ async function quote(
     accrualProgram: selectedAccrualProgram,
     reservationProgram: selectedProgram,
     now: () => 10_000,
-    verifyToken: async () => ({ uid: identity || "", email: "customer@example.test", emailVerified: true }),
+    verifyToken: async () => { if (identity instanceof Error) throw identity; return { uid: identity || "", email: "customer@example.test", emailVerified: true }; },
   });
   return invoke(handler, body);
 }
@@ -641,7 +653,7 @@ async function quote(
 async function create(
   body: Record<string, unknown>,
   selectedProgram: CagnotteReservationTestProgram | null,
-  identity: string | undefined,
+  identity: string | Error | undefined,
   processSideEffects?: () => Promise<never>,
   failBeforeCommit = false,
   selectedAccrualProgram: CagnotteAccrualProgram | null = selectedProgram ? accrualProgram : null,
@@ -659,7 +671,7 @@ async function create(
     reservationProgram: selectedProgram,
     getFirebaseProjectId: options.getFirebaseProjectId,
     now: options.now ?? (() => 10_000),
-    verifyToken: async () => ({ uid: identity || "", email: "customer@example.test", emailVerified: true }),
+    verifyToken: async () => { if (identity instanceof Error) throw identity; return { uid: identity || "", email: "customer@example.test", emailVerified: true }; },
     enforceRateLimit: options.enforceRateLimit ?? (async () => ({ allowed: true, code: "allowed", retryAfterSeconds: 0 })),
     processSideEffects: processSideEffects
       ? async () => processSideEffects()

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { PDFDocument } from "pdf-lib";
 import { FieldValue } from "firebase-admin/firestore";
-import { assertAdminUser } from "./adminAuth.js";
+import { assertAdminUser, firebaseAuthHttpFailure } from "./adminAuth.js";
 import { getAdminDb, getAdminStorageBucket } from "./firebaseAdmin.js";
 import { sendJson, type VercelRequestLike, type VercelResponseLike } from "./http.js";
 import { createSelectionPdf } from "./selectionPdf.js";
@@ -294,6 +294,11 @@ export async function handleSelection(request: VercelRequestLike, response: Verc
     }
     throw new SelectionError("Action inconnue.", 400);
   } catch (error) {
+    const authFailure = firebaseAuthHttpFailure(error);
+    if (authFailure) return sendJson(response, {
+      code: authFailure.code,
+      error: authFailure.status === 401 ? "Token admin invalide." : "Authentification indisponible.",
+    }, authFailure.status);
     const status = error instanceof SelectionError ? error.status : 500;
     if (status === 500) console.error("selection_api_failed", error);
     sendJson(response, { error: error instanceof SelectionError ? error.message : "Opération indisponible." }, status);

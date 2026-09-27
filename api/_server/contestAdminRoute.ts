@@ -1,5 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
-import { assertAdminUser } from "./adminAuth.js";
+import { assertAdminUser, firebaseAuthHttpFailure } from "./adminAuth.js";
 import {
   ContestError,
   contestCollections,
@@ -162,6 +162,11 @@ export async function handleAdminContests(
     }
     throw new ContestError("Action admin inconnue.");
   } catch (error) {
+    const authFailure = firebaseAuthHttpFailure(error);
+    if (authFailure) return sendJson(response, {
+      code: authFailure.code,
+      error: authFailure.status === 401 ? "Token admin invalide." : "Authentification indisponible.",
+    }, authFailure.status);
     console.error("admin contests failed", error);
     const contestError = error instanceof ContestError ? error : null;
     const message = error instanceof Error ? error.message : "Operation concours impossible.";

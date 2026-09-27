@@ -96,7 +96,12 @@ export type CagnotteMovement = {
     | "credit_released"
     | "credit_refunded_after_return"
     | "refund_declaration_corrected"
-    | "credit_refund_corrected";
+    | "credit_refund_corrected"
+    | "referral_reward_pending"
+    | "referral_reward_available"
+    | "referral_reward_cancelled"
+    | "referral_reward_reversed"
+    | "referral_reward_restored";
   eventKey: string;
   /** Canonical payload detects conflicting reuse of a refund ID. */
   payload: string;

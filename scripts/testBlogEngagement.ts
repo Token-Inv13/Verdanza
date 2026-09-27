@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
+  createBlogInteractionsHandler,
   cleanCommentText,
   createPendingComment,
   getBlogEngagementSummary,
@@ -8,6 +9,8 @@ import {
   moderateComment,
   toggleArticleLike,
 } from "../api/_server/blogInteractions.js";
+import { FirebaseIdTokenVerificationError } from "../api/_server/adminAuth.js";
+import type { VercelRequestLike, VercelResponseLike } from "../api/_server/http.js";
 import { publishedBlogArticleSlugs } from "../src/data/blogArticleSlugs.js";
 
 type StoredDocument = Record<string, unknown>;
@@ -230,7 +233,7 @@ test("la validation refuse un slug inconnu", async () => {
 test("un visiteur non connecte est bloque par la route commentaire", () => {
   const source = readFileSync("api/_server/blogInteractions.ts", "utf8");
   assert.match(source, /Connectez-vous pour commenter/);
-  assert.match(source, /verifyFirebaseIdToken\(token\)/);
+  assert.match(source, /dependencies\.verifyToken\(token\)/);
 });
 
 test("un utilisateur connecte peut envoyer un commentaire pending", async () => {
@@ -304,7 +307,7 @@ test("rejeter un commentaire approuve decremente sans compteur negatif", async (
 test("l'acces administrateur est protege par token et adminUsers", () => {
   const source = readFileSync("api/_server/blogInteractions.ts", "utf8");
   assert.match(source, /Token admin requis/);
-  assert.match(source, /assertAdminUser\(db, token\)/);
+  assert.match(source, /assertAdminUser\(db, token, dependencies\.verifyToken\)/);
 });
 
 test("le partage conserve le partage natif et les deux fallbacks de copie", () => {
@@ -372,6 +375,38 @@ test("les regles Firestore interdisent les collections blog au client", () => {
   assert.match(rules, /match \/blogArticleStats\/\{statId\}/);
   assert.match(rules, /match \/blogArticleLikes\/\{likeId\}/);
   assert.match(rules, /match \/blogArticleComments\/\{commentId\}/);
+});
+
+test("les actions blog authentifiees classent Auth avant toute mutation", async () => {
+  for (const category of ["authentication", "configuration", "unavailable"] as const) {
+    for (const action of ["createComment", "adminComments", "moderateComment", "deleteComment"] as const) {
+      const raw = new FakeFirestore();
+      let status = 0;
+      let payload: unknown;
+      const response = {
+        setHeader() {}, status(code: number) { status = code; return this; }, json(value: unknown) { payload = value; },
+      } as unknown as VercelResponseLike;
+      const request = action === "adminComments"
+        ? { method: "GET", url: `/api/blog-interactions?action=adminComments&slug=${slug}`, headers: { authorization: "Bearer fixture" } }
+        : { method: "POST", headers: { authorization: "Bearer fixture" }, body: { action, slug } };
+      await createBlogInteractionsHandler({
+        getDb: () => raw as unknown as FirebaseFirestore.Firestore,
+        verifyToken: async () => { throw new FirebaseIdTokenVerificationError(category); },
+      })(request as VercelRequestLike, response);
+      assert.equal(status, category === "authentication" ? 401 : 503, `${action}/${category}`);
+      assert.equal((payload as { code: string }).code, category === "authentication" ? "authentication_required" : "authentication_unavailable");
+      assert.equal(raw.documents.size, 0);
+    }
+  }
+  const raw = new FakeFirestore();
+  let status = 0;
+  const response = { setHeader() {}, status(code: number) { status = code; return this; }, json() {} } as unknown as VercelResponseLike;
+  await createBlogInteractionsHandler({
+    getDb: () => raw as unknown as FirebaseFirestore.Firestore,
+    verifyToken: async () => ({ uid: "non-admin", email: "non-admin@example.test", emailVerified: true }),
+  })({ method: "GET", url: `/api/blog-interactions?action=adminComments&slug=${slug}`, headers: { authorization: "Bearer fixture" } } as VercelRequestLike, response);
+  assert.equal(status, 403);
+  assert.equal(raw.documents.size, 0);
 });
 
 let passed = 0;

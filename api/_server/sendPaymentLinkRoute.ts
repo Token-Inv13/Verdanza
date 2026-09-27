@@ -1,4 +1,4 @@
-import { assertAdminUser, verifyFirebaseIdToken } from "./adminAuth.js";
+import { assertAdminUser, firebaseAuthHttpFailure, verifyFirebaseIdToken } from "./adminAuth.js";
 import { findActiveAdminPaymentLink } from "./adminPaymentLinks.js";
 import { sendPaymentLinkEmail } from "./email.js";
 import { getAdminDb } from "./firebaseAdmin.js";
@@ -160,6 +160,12 @@ function resolvePaymentLink(body: {
 }
 
 function publicError(error: unknown) {
+  const authFailure = firebaseAuthHttpFailure(error);
+  if (authFailure) return {
+    status: authFailure.status,
+    code: authFailure.status === 401 ? "admin_token_invalid" : "authentication_unavailable",
+    message: authFailure.status === 401 ? "Authentification admin invalide." : "Authentification indisponible.",
+  };
   if (error instanceof PaymentLinkConflictError) {
     return {
       status: 409,
@@ -187,19 +193,6 @@ function publicError(error: unknown) {
     "payment_link_not_allowed",
     "payment_link_amount_required",
   ]);
-  const authenticationErrors = new Set([
-    "Token Firebase invalide.",
-    "INVALID_ID_TOKEN",
-    "TOKEN_EXPIRED",
-    "USER_NOT_FOUND",
-  ]);
-  if (authenticationErrors.has(code)) {
-    return {
-      status: 401,
-      code: "admin_token_invalid",
-      message: "Authentification admin invalide.",
-    };
-  }
   if (!inputErrors.has(code)) {
     return {
       status: 500,

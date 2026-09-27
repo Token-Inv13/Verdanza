@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { canonicalOrderEmail } from "./orderEmailIdentity.js";
 import type {
   Address,
   DeliveryMethod,
@@ -822,6 +823,7 @@ export function orderPayload(
     orderType: "order",
     customerId: customerId ?? null,
     customerEmail: body.customer.email,
+    customerEmailNormalized: canonicalOrderEmail(body.customer.email),
     customerPhone: body.customer.phone,
     customerName: `${body.customer.firstName} ${body.customer.lastName}`,
     items: priced.orderItems,
