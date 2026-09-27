@@ -303,7 +303,8 @@ async function referralRefundFixture() {
   const referralProgram = { mode: "active" as const, operational: true, startsAtEpochMs: 1000 };
   const keyringJson = JSON.stringify({ activeVersion: "v1", keys: { v1: "synthetic-refund-referral-secret-over-32-bytes" } });
   await db.collection("referralMigrations").doc(ORDER_EMAIL_NORMALIZATION_VERSION).set({ schemaVersion: 1,
-    version: ORDER_EMAIL_NORMALIZATION_VERSION, status: "complete", completedAtEpochMs: 1000, verifiedOrders: 0, verifiedPaidProductOrders: 0 });
+    version: ORDER_EMAIL_NORMALIZATION_VERSION, status: "complete", completedAtEpochMs: 1000, verifiedOrders: 0, verifiedPaidProductOrders: 0,
+    verifiedReferralRelations: 0, verifiedUnresolvedIdentityRelations: 0 });
   await db.collection("orders").doc(`sponsor-eligibility-${f.id}`).set({ customerId: sponsorUid, customerEmail: `${sponsorUid}@example.test`,
     customerEmailNormalized: `${sponsorUid}@example.test`, orderStatus: "delivered", paymentStatus: "paid", total: 60,
     items: [{ productId: "refund-product", quantity: 1 }] });

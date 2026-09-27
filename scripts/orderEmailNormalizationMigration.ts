@@ -1,11 +1,14 @@
 import { FieldPath, type Firestore, type QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { usableOrderEmail } from "../api/_server/orderEmailIdentity.js";
 import { hasHistoricalPaymentEvidence, isValidHistoricalPaymentInstant } from "../api/_server/referralService.js";
-import { isReferralOrderEmailHistoryReady, ORDER_EMAIL_MIGRATION_COLLECTION, ORDER_EMAIL_NORMALIZATION_VERSION } from "../api/_server/referralOrderEmailHistory.js";
+import { isReferralOrderEmailHistoryReady, ORDER_EMAIL_MIGRATION_COLLECTION, ORDER_EMAIL_NORMALIZATION_VERSION, referralRelationIdentityHistoryStatus } from "../api/_server/referralOrderEmailHistory.js";
 
 export const ORDER_EMAIL_MIGRATION_PROJECT = "verdanza-1f621";
-type Counts = { scannedOrders: number; usableEmails: number; alreadyNormalized: number; changesRequired: number; paidProductOrders: number; anomalies: number };
-const emptyCounts = (): Counts => ({ scannedOrders: 0, usableEmails: 0, alreadyNormalized: 0, changesRequired: 0, paidProductOrders: 0, anomalies: 0 });
+type Counts = { scannedOrders: number; usableEmails: number; alreadyNormalized: number; changesRequired: number; paidProductOrders: number; anomalies: number;
+  scannedReferralRelations: number; unresolvedIdentityRelations: number; corruptReferralRelations: number };
+const emptyCounts = (): Counts => ({ scannedOrders: 0, usableEmails: 0, alreadyNormalized: 0, changesRequired: 0, paidProductOrders: 0, anomalies: 0,
+  scannedReferralRelations: 0, unresolvedIdentityRelations: 0, corruptReferralRelations: 0 });
+const blocked = (counts: Counts) => counts.anomalies > 0 || counts.unresolvedIdentityRelations > 0 || counts.corruptReferralRelations > 0;
 
 /** Guard applies to the injected engine too; local tests cannot fall back to Production. */
 export function assertOrderEmailMigrationTarget(input: { projectId: string; emulatorHost?: string; apply?: boolean; confirmation?: string }) {
@@ -15,7 +18,7 @@ export function assertOrderEmailMigrationTarget(input: { projectId: string; emul
   if (input.apply && input.confirmation !== ORDER_EMAIL_NORMALIZATION_VERSION) throw new Error("order_email_migration_confirmation_required");
 }
 
-/** Paginated technical update only. Does not read or create any commercial referral right. */
+/** Paginated technical certification. Relations are read-only; no commercial right is created or repaired. */
 export async function migrateOrderEmailNormalization(input: {
   db: Firestore; projectId: string; apply?: boolean; confirmation?: string; pageSize?: number; now?: () => number;
 }) {
@@ -62,6 +65,20 @@ export async function migrateOrderEmailNormalization(input: {
       if (updates) { await batch.commit(); changedOrders += updates; }
       cursor = page.docs[page.docs.length - 1];
     }
+    cursor = undefined;
+    for (;;) {
+      let query = input.db.collection("referrals").orderBy(FieldPath.documentId()).limit(pageSize);
+      if (cursor) query = query.startAfter(cursor);
+      const page = await query.get();
+      if (page.empty) break;
+      for (const doc of page.docs) {
+        counts.scannedReferralRelations++;
+        const status = referralRelationIdentityHistoryStatus(doc.id, doc.data());
+        if (status === "unresolved") counts.unresolvedIdentityRelations++;
+        if (status === "corrupt") counts.corruptReferralRelations++;
+      }
+      cursor = page.docs[page.docs.length - 1];
+    }
     return { ...counts, changedOrders };
   }
 
@@ -71,7 +88,7 @@ export async function migrateOrderEmailNormalization(input: {
   const existingMarker = await markerRef.get();
   const alreadyCertified = isReferralOrderEmailHistoryReady(existingMarker.data());
   let markerPrecondition = existingMarker.updateTime;
-  if (!alreadyCertified || initial.changesRequired > 0 || initial.anomalies > 0) {
+  if (!alreadyCertified || initial.changesRequired > 0 || blocked(initial)) {
     // Close a previous certificate BEFORE any update or anomaly exit.
     const batch = input.db.batch();
     const incomplete = { schemaVersion: 1, version: ORDER_EMAIL_NORMALIZATION_VERSION, status: "incomplete" };
@@ -79,12 +96,12 @@ export async function migrateOrderEmailNormalization(input: {
     else batch.create(markerRef, incomplete);
     markerPrecondition = (await batch.commit())[0].writeTime;
   }
-  if (initial.anomalies > 0) return { mode: "apply" as const, initial, verification: null, markerComplete: false, markerWritten: false };
+  if (blocked(initial)) return { mode: "apply" as const, initial, verification: null, markerComplete: false, markerWritten: false };
 
   const applied = await scan(!alreadyCertified || initial.changesRequired > 0);
   // A fresh exhaustive pass, after all writes, is mandatory even on an idempotent replay.
   const verification = await scan(false);
-  if (applied.anomalies > 0 || verification.anomalies > 0 || verification.changesRequired > 0) {
+  if (blocked(applied) || blocked(verification) || verification.changesRequired > 0) {
     const batch = input.db.batch();
     batch.update(markerRef, { schemaVersion: 1, version: ORDER_EMAIL_NORMALIZATION_VERSION, status: "incomplete" }, { lastUpdateTime: markerPrecondition! });
     await batch.commit();
@@ -93,14 +110,23 @@ export async function migrateOrderEmailNormalization(input: {
   // Keep a coherent existing certificate byte-for-byte unchanged on a no-op rerun.
   const markerWritten = !alreadyCertified || initial.changesRequired > 0 ||
     existingMarker.data()?.verifiedOrders !== verification.scannedOrders ||
-    existingMarker.data()?.verifiedPaidProductOrders !== verification.paidProductOrders;
+    existingMarker.data()?.verifiedPaidProductOrders !== verification.paidProductOrders ||
+    existingMarker.data()?.verifiedReferralRelations !== verification.scannedReferralRelations;
   if (markerWritten) {
     const completedAtEpochMs = now();
     if (!Number.isSafeInteger(completedAtEpochMs) || completedAtEpochMs <= 0) throw new Error("order_email_migration_instant_invalid");
     const batch = input.db.batch();
     batch.update(markerRef, { schemaVersion: 1, version: ORDER_EMAIL_NORMALIZATION_VERSION, status: "complete", completedAtEpochMs,
-      verifiedOrders: verification.scannedOrders, verifiedPaidProductOrders: verification.paidProductOrders }, { lastUpdateTime: markerPrecondition! });
+      verifiedOrders: verification.scannedOrders, verifiedPaidProductOrders: verification.paidProductOrders,
+      verifiedReferralRelations: verification.scannedReferralRelations, verifiedUnresolvedIdentityRelations: 0 }, { lastUpdateTime: markerPrecondition! });
     await batch.commit();
+  } else {
+    // A no-op replay must also reject an invalidation that raced with its scans.
+    await input.db.runTransaction(async (tx) => {
+      const marker = await tx.get(markerRef);
+      if (!marker.updateTime?.isEqual(markerPrecondition!) || !isReferralOrderEmailHistoryReady(marker.data()))
+        throw new Error("order_email_migration_certificate_changed");
+    });
   }
   return { mode: "apply" as const, initial, applied, verification, markerComplete: true, markerWritten };
 }

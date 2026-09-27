@@ -22,7 +22,7 @@ import type { Order } from "../src/types/index.js";
 import type { ReferralRelation } from "../src/types/referral.js";
 import type { VercelRequestLike, VercelResponseLike } from "../api/_server/http.js";
 import { canonicalOrderEmail } from "../api/_server/orderEmailIdentity.js";
-import { ORDER_EMAIL_NORMALIZATION_VERSION, readReferralOrderEmailHistoryReady } from "../api/_server/referralOrderEmailHistory.js";
+import { ORDER_EMAIL_NORMALIZATION_VERSION, readReferralOrderEmailHistoryReady, isUnresolvedReferralIdentityHistoryReason, referralRelationIdentityHistoryStatus } from "../api/_server/referralOrderEmailHistory.js";
 import { assertOrderEmailMigrationTarget, migrateOrderEmailNormalization } from "./orderEmailNormalizationMigration.js";
 
 let passed = 0;
@@ -163,7 +163,7 @@ await test("API mappe les catégories de token sans lecture Firestore", async ()
 const db = await connectCagnotteEmulator(CAGNOTTE_DEMO);
 const historyMarker = db.collection("referralMigrations").doc(ORDER_EMAIL_NORMALIZATION_VERSION);
 const completeHistoryMarker = { schemaVersion: 1, version: ORDER_EMAIL_NORMALIZATION_VERSION, status: "complete",
-  completedAtEpochMs: 1000, verifiedOrders: 0, verifiedPaidProductOrders: 0 };
+  completedAtEpochMs: 1000, verifiedOrders: 0, verifiedPaidProductOrders: 0, verifiedReferralRelations: 0, verifiedUnresolvedIdentityRelations: 0 };
 await historyMarker.set(completeHistoryMarker);
 const sponsorOrder = (id: string, uid: string, status = "delivered") => db.collection("orders").doc(id).set({ customerId: uid, paymentStatus: "paid", orderStatus: status, orderType: "order", total: 60,
   items: [{ productId: "fixture-product", quantity: 1, lineTotal: 60 }] });
@@ -2343,8 +2343,173 @@ await test("migration cible exacte et apply explicite, pas de fallback distant",
 });
 
 // Dedicated emulator only: reset orders after all commercial tests, so the exhaustive
+await test("certificat V1 ne prouve pas la garantie identité V2", async () => {
+  await historyMarker.set({ ...completeHistoryMarker, version: "order-email-normalization-v1" });
+  equal(await db.runTransaction((tx) => readReferralOrderEmailHistoryReady(tx, db)), false);
+  await historyMarker.set(completeHistoryMarker);
+  equal(isUnresolvedReferralIdentityHistoryReason("referee_email_claimed"), false);
+  for (const reason of ["referee_identity_unavailable", "referee_email_unverified", "referral_identity_changed"])
+    equal(isUnresolvedReferralIdentityHistoryReason(reason), true);
+  for (const patch of [{ verifiedReferralRelations: -1 }, { verifiedUnresolvedIdentityRelations: 1 }]) {
+    await historyMarker.set({ ...completeHistoryMarker, ...patch });
+    equal(await db.runTransaction((tx) => readReferralOrderEmailHistoryReady(tx, db)), false);
+  }
+  const oldShape = { ...completeHistoryMarker };
+  Reflect.deleteProperty(oldShape, "verifiedReferralRelations"); Reflect.deleteProperty(oldShape, "verifiedUnresolvedIdentityRelations");
+  await historyMarker.set(oldShape);
+  equal(await db.runTransaction((tx) => readReferralOrderEmailHistoryReady(tx, db)), false);
+  await historyMarker.set(completeHistoryMarker);
+});
+
+for (const scenario of ["auth", "keyring_absent", "keyring_invalid", "unverified", "disabled", "binding"] as const) {
+  await test(`plain payment ${scenario}: payable, lien consommé, certificat invalidé et futur link fermé`, async () => {
+    await historyMarker.set({ ...completeHistoryMarker, invalidationRevision: 4 });
+    const id = `plain-identity-${scenario}`;
+    const child = await createPlainRouteCandidate(id, `referee-${id}`);
+    const currentEmail = `${scenario}-current-plain@example.test`;
+    const claimRef = db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, currentEmail));
+    const sponsorBefore = await wallet("sponsor-b");
+    let mutation = false;
+    const observedDb = scenario === "binding" ? new Proxy(db, { get(target, property) {
+      if (property === "runTransaction") return async (callback: Parameters<typeof db.runTransaction>[0]) => {
+        if (!mutation) { mutation = true; await target.collection("referrals").doc(child.uid).update({ linkedAtEpochMs: 2001 }); }
+        return target.runTransaction(callback);
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } }) : db;
+    const pay = () => commitOrderStatusTransition({ db: observedDb, body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" },
+      admin: routeActor, referralProgram: program, now: () => "2000-01-03T00:00:00.000Z",
+      getSponsorIdentity: async (uid) => {
+        if (uid !== child.uid) return activeIdentity(uid);
+        if (scenario === "auth") throw new Error("fixture_auth_unavailable");
+        return { uid, email: currentEmail, emailVerified: scenario !== "unverified", disabled: scenario === "disabled" };
+      }, referralEmailKeyring: () => {
+        if (scenario === "keyring_absent") throw new Error("fixture_keyring_absent");
+        return scenario === "keyring_invalid" ? "{}" : keyringJson;
+      } });
+    await pay();
+    const consumed = await routeRelation(child.uid);
+    const reason = scenario === "binding" ? "referral_identity_changed" : scenario === "unverified" || scenario === "disabled"
+      ? "referee_email_unverified" : "referee_identity_unavailable";
+    equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
+    equal(consumed.state, "cancelled"); equal(consumed.paymentConfirmed, true); equal(consumed.qualifyingOrderId, id);
+    equal(consumed.rewardCompartment, "none"); equal(consumed.rewardIneligibilityReason, reason);
+    equal(referralRelationIdentityHistoryStatus(child.uid, consumed), "unresolved");
+    equal((await claimRef.get()).exists, false); equal((await routeMovements(id)).length, 0);
+    deepStrictEqual(await wallet("sponsor-b"), sponsorBefore);
+    const marker = await historyMarker.get();
+    equal(marker.data()?.status, "incomplete"); equal(marker.data()?.invalidationRevision, 5);
+    equal(marker.data()?.invalidationReason, "plain_payment_identity_unresolved");
+    equal(marker.data()?.invalidatedAtEpochMs, Date.parse("2000-01-03T00:00:00.000Z"));
+    await pay(); const replayMarker = await historyMarker.get();
+    ok(replayMarker.updateTime!.isEqual(marker.updateTime!)); deepStrictEqual(await routeRelation(child.uid), consumed);
+    await rejects(linkReferral({ db, user: { uid: `new-${id}`, email: currentEmail, emailVerified: true }, code: codeB,
+      keyring, program, nowEpochMs, getSponsorIdentity: activeIdentity }), { code: "referral_history_inconclusive" });
+    await historyMarker.set(completeHistoryMarker);
+  });
+}
+await test("plain payment claim courant valide ou déjà détenu: certificat inchangé", async () => {
+  for (const existing of [false, true]) {
+    const id = `plain-valid-identity-${existing}`; const child = await createPlainRouteCandidate(id, `referee-${id}`);
+    const currentEmail = existing ? child.email : `${id}-current@example.test`;
+    const marker = await historyMarker.get();
+    await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
+      async (uid) => uid === child.uid ? { uid, email: currentEmail, emailVerified: true, disabled: false } : activeIdentity(uid));
+    const consumed = await routeRelation(child.uid);
+    equal(consumed.rewardIneligibilityReason, "first_paid_order_without_referral_discount");
+    equal(referralRelationIdentityHistoryStatus(child.uid, consumed), "clear");
+    equal((await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, currentEmail)).get()).data()?.refereeUid, child.uid);
+    ok((await historyMarker.get()).updateTime!.isEqual(marker.updateTime!));
+  }
+});
+await test("plain payment email déjà claimé: paiement accepté, claim bloque nouvel UID sans fermeture globale", async () => {
+  const id = "plain-identity-claimed-safe"; const child = await createPlainRouteCandidate(id, `referee-${id}`);
+  const email = "plain-identity-claimed-current@example.test";
+  await linkReferral({ db, user: { uid: "plain-current-email-owner", email, emailVerified: true }, code: codeB,
+    keyring, program, nowEpochMs, getSponsorIdentity: activeIdentity });
+  const marker = await historyMarker.get();
+  await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
+    async (uid) => uid === child.uid ? { uid, email, emailVerified: true, disabled: false } : activeIdentity(uid));
+  const consumed = await routeRelation(child.uid);
+  equal(consumed.rewardIneligibilityReason, "referee_email_claimed");
+  equal(referralRelationIdentityHistoryStatus(child.uid, consumed), "clear");
+  ok((await historyMarker.get()).updateTime!.isEqual(marker.updateTime!));
+  await rejects(linkReferral({ db, user: { uid: "plain-third-email-owner", email, emailVerified: true }, code: codeB,
+    keyring, program, nowEpochMs, getSponsorIdentity: activeIdentity }), { code: "referral_email_claimed" });
+});
+await test("plain payment identité unresolved avec marker absent: aucune création de certificat", async () => {
+  const id = "plain-identity-marker-absent"; const child = await createPlainRouteCandidate(id, `referee-${id}`);
+  await historyMarker.delete();
+  await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program, async () => { throw new Error("fixture_auth"); });
+  equal((await historyMarker.get()).exists, false);
+  equal(referralRelationIdentityHistoryStatus(child.uid, await routeRelation(child.uid)), "unresolved");
+  await historyMarker.set(completeHistoryMarker);
+});
+await test("plain payment identité unresolved: rollback inclut order, relation et certificat", async () => {
+  const id = "plain-identity-atomic-abort"; await createPlainRouteCandidate(id, `referee-${id}`);
+  const before = await capturePaymentState();
+  const abortDb = new Proxy(db, { get(target, property) {
+    if (property === "runTransaction") return (callback: Parameters<typeof db.runTransaction>[0]) => target.runTransaction(async (tx) => {
+      await callback(tx); throw new Error("fixture_plain_abort");
+    });
+    const value = Reflect.get(target, property, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  } });
+  await rejects(commitOrderStatusTransition({ db: abortDb, body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" },
+    admin: routeActor, referralProgram: program, getSponsorIdentity: async () => { throw new Error("fixture_auth"); },
+    referralEmailKeyring: () => keyringJson, now: () => "2000-01-03T00:00:00.000Z" }), /fixture_plain_abort/);
+  deepStrictEqual(await capturePaymentState(), before);
+});
+await test("plain payments unresolved concurrents: les deux paiements sérialisent les invalidations", async () => {
+  const ids = ["plain-identity-concurrent-a", "plain-identity-concurrent-b"];
+  for (const id of ids) await createPlainRouteCandidate(id, `referee-${id}`);
+  await Promise.all(ids.map((id) => routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
+    async () => { throw new Error("fixture_auth"); })));
+  equal((await historyMarker.get()).data()?.invalidationRevision, 2);
+  for (const id of ids) equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
+  await historyMarker.set(completeHistoryMarker);
+});
+await test("route order status: snapshot avant instant du programme conserve HTTP 503 et zéro mutation", async () => {
+  const id = "referral-route-before-program-start"; await createRouteCandidate(id, `referee-${id}`);
+  await db.collection("adminUsers").doc(routeActor.uid).set({ isActive: true });
+  const before = await capturePaymentState();
+  let status = 0; let payload: unknown;
+  const handler = createOrderStatusHandler({ getDb: () => db, verifyToken: async () => routeActor,
+    accrualProgram: null, reservationProgram: null, resolveReferralRuntime: () => ({ ...program, startsAtEpochMs: 3000 }),
+    now: () => "2000-01-03T00:00:00.000Z", sendStatusEmail: async () => { throw new Error("unexpected_email"); },
+    processAnalytics: async () => { throw new Error("unexpected_analytics"); } });
+  await handler({ method: "POST", headers: { authorization: "Bearer fixture" }, body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" } } as VercelRequestLike,
+    { setHeader() {}, status(value: number) { status = value; return this; }, json(value: unknown) { payload = value; } } as unknown as VercelResponseLike);
+  equal(status, 503); deepStrictEqual(payload, { error: "referral_program_disabled", code: "referral_program_disabled" });
+  deepStrictEqual(await capturePaymentState(), before);
+});
+await test("route order status: ReferralError tous statuts et fallback non typé inchangé", async () => {
+  const id = "referral-route-status-fixture"; await createPlainRouteCandidate(id, `referee-${id}`);
+  for (const expected of [400, 403, 409, 422, 503, "unknown"] as const) {
+    const failure = expected === "unknown" ? new Error("fixture_unknown") : new ReferralError("fixture_typed_referral", expected);
+    const observedDb = new Proxy(db, { get(target, property) {
+      if (property === "runTransaction") return () => Promise.reject(failure);
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    let status = 0; let payload: unknown;
+    const before = await capturePaymentState();
+    const handler = createOrderStatusHandler({ getDb: () => observedDb, verifyToken: async () => routeActor,
+      accrualProgram: null, reservationProgram: null, resolveReferralRuntime: () => REFERRAL_CLOSED_RUNTIME,
+      sendStatusEmail: async () => { throw new Error("unexpected_email"); }, processAnalytics: async () => { throw new Error("unexpected_analytics"); } });
+    await handler({ method: "POST", headers: { authorization: "Bearer fixture" }, body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" } } as VercelRequestLike,
+      { setHeader() {}, status(value: number) { status = value; return this; }, json(value: unknown) { payload = value; } } as unknown as VercelResponseLike);
+    equal(status, expected === "unknown" ? 400 : expected);
+    deepStrictEqual(payload, expected === "unknown" ? { error: "fixture_unknown" } : { error: "fixture_typed_referral", code: "fixture_typed_referral" });
+    deepStrictEqual(await capturePaymentState(), before);
+  }
+});
+
+// Dedicated emulator only: reset orders and relations after all commercial tests.
 // migration sees a precisely known dataset (including the deliberately invalid cases below).
 await db.recursiveDelete(db.collection("orders"));
+await db.recursiveDelete(db.collection("referrals"));
 await historyMarker.delete();
 const migrationPaidOrder = { customerId: "migration-old-uid", orderType: "order", paymentStatus: "paid", total: 60,
   items: [{ productId: "fixture-product", quantity: 1 }] };
@@ -2362,7 +2527,7 @@ await test("migration dry-run paginée: compteurs exacts, zéro écriture", asyn
   const before = await capturePaymentState();
   const report = await runMigration();
   deepStrictEqual(report.initial, { scannedOrders: 5, usableEmails: 5, alreadyNormalized: 1, changesRequired: 4,
-    paidProductOrders: 4, anomalies: 0, changedOrders: 0 });
+    paidProductOrders: 4, anomalies: 0, changedOrders: 0, scannedReferralRelations: 0, unresolvedIdentityRelations: 0, corruptReferralRelations: 0 });
   equal(report.verification, null); equal(report.markerWritten, false); equal((await historyMarker.get()).exists, false);
   deepStrictEqual(await capturePaymentState(), before);
 });
@@ -2492,5 +2657,148 @@ await test("vrai apply migration: paiement après scan final fait échouer sa pr
   equal(injected, true); equal((await historyMarker.get()).data()?.invalidationRevision, 5);
   equal((await historyMarker.get()).data()?.status, "incomplete");
   equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
+});
+const identityRelationFixture = (uid: string, patch: Partial<ReferralRelation> = {}): ReferralRelation => ({ schemaVersion: 1,
+  programVersion: "referral-commercial-policy-v1", sponsorUid: "sponsor-b", refereeUid: uid, state: "cancelled",
+  createdAtEpochMs: 2000, linkedAtEpochMs: 2000, qualifyingOrderId: `order-${uid}`, deliveredOrderId: null,
+  paymentConfirmed: true, deliveryConfirmed: false, rewardCompartment: "none", cumulativeReturnedProductsCents: 0,
+  processedRefunds: {}, rewardIneligibilityReason: "referee_identity_unavailable", ...patch });
+// Remove the last legacy invalid-email fixture; the following datasets have canonical order emails.
+await db.collection("orders").doc("migration-concurrent-legacy-payment").delete();
+for (const reason of ["referee_identity_unavailable", "referee_email_unverified", "referral_identity_changed"] as const) {
+  await test(`migration relation ${reason}: refuse recertification avec marker absent puis existant`, async () => {
+    const uid = `migration-unresolved-${reason}`;
+    const ref = db.collection("referrals").doc(uid);
+    await ref.set(identityRelationFixture(uid, { rewardIneligibilityReason: reason }));
+    await historyMarker.delete();
+    const before = await capturePaymentState(); const dry = await runMigration();
+    equal(dry.initial.unresolvedIdentityRelations, 1); equal(dry.initial.corruptReferralRelations, 0);
+    deepStrictEqual(await capturePaymentState(), before);
+    const first = await runMigration(true); equal(first.markerComplete, false);
+    equal((await historyMarker.get()).data()?.status, "incomplete");
+    await historyMarker.set(completeHistoryMarker);
+    equal((await runMigration(true)).markerComplete, false);
+    equal((await historyMarker.get()).data()?.status, "incomplete");
+    deepStrictEqual((await ref.get()).data(), identityRelationFixture(uid, { rewardIneligibilityReason: reason }));
+    await ref.delete();
+  });
+}
+await test("migration relation claimed-safe et claim cohérent: certification V2 sans anomalie", async () => {
+  const uid = "migration-claimed-safe";
+  const ref = db.collection("referrals").doc(uid);
+  await ref.set(identityRelationFixture(uid, { rewardIneligibilityReason: "referee_email_claimed" }));
+  const email = "migration-claimed-safe@example.test";
+  const claimRef = db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, email));
+  const claim = { schemaVersion: 1, programVersion: "referral-commercial-policy-v1", keyVersion: "v1",
+    refereeUid: "other-claimed-safe-uid", referralId: "other-claimed-safe-uid", createdAtEpochMs: 2000 };
+  await claimRef.set(claim);
+  const report = await runMigration(true);
+  equal(report.markerComplete, true); equal(report.verification?.unresolvedIdentityRelations, 0);
+  equal(report.verification?.scannedReferralRelations, 1);
+  equal((await historyMarker.get()).data()?.verifiedReferralRelations, 1);
+  equal((await historyMarker.get()).data()?.verifiedUnresolvedIdentityRelations, 0);
+  deepStrictEqual((await claimRef.get()).data(), claim);
+  const reopened = { uid: "migration-claimed-safe-new", email, emailVerified: true };
+  await sponsorOrder("migration-claimed-sponsor", "sponsor-b");
+  await rejects(linkReferral({ db, user: reopened, code: codeB, keyring, program, nowEpochMs, getSponsorIdentity: activeIdentity }),
+    { code: "referral_email_claimed" });
+  await db.collection("orders").doc("migration-claimed-sponsor").delete();
+  await ref.delete(); await claimRef.delete();
+});
+await test("migration relations corrompues: aucune certification et aucun changement de relation", async () => {
+  const uid = "migration-corrupt-relation"; const ref = db.collection("referrals").doc(uid);
+  for (const patch of [{ schemaVersion: 9 }, { programVersion: "unknown" }, { refereeUid: "wrong-uid" },
+    { qualifyingOrderId: null }, { paymentConfirmed: false }, { state: "pending" }, { rewardCompartment: "pending" },
+    { rewardIneligibilityReason: "unknown" }, { deliveryConfirmed: true }, { sponsorUid: uid }]) {
+    await ref.set({ ...identityRelationFixture(uid), ...patch });
+    await historyMarker.set(completeHistoryMarker);
+    const relationBefore = await ref.get(); const report = await runMigration(true);
+    equal(report.initial.corruptReferralRelations, 1); equal(report.markerComplete, false);
+    equal((await historyMarker.get()).data()?.status, "incomplete");
+    ok((await ref.get()).updateTime!.isEqual(relationBefore.updateTime!));
+  }
+  await ref.delete();
+});
+await test("migration scan relations paginé: anomalie au-delà de la première page bloque complete", async () => {
+  const refs = Array.from({ length: 5 }, (_, i) => db.collection("referrals").doc(`migration-page-${i}`));
+  for (const [i, ref] of refs.entries()) await ref.set(identityRelationFixture(ref.id,
+    { rewardIneligibilityReason: i === 4 ? "referee_identity_unavailable" : "first_paid_order_without_referral_discount" }));
+  const report = await runMigration(true);
+  equal(report.initial.scannedReferralRelations, 5); equal(report.initial.unresolvedIdentityRelations, 1);
+  equal(report.markerComplete, false);
+  for (const ref of refs) await ref.delete();
+});
+async function createMigrationPlainCandidate(id: string) {
+  const uid = `referee-${id}`;
+  const linked: Partial<ReferralRelation> = identityRelationFixture(uid, { state: "linked", paymentConfirmed: false, qualifyingOrderId: null });
+  delete linked.rewardIneligibilityReason;
+  await db.collection("referrals").doc(uid).set(linked);
+  await createBadEmailOrder(id, { customerId: uid, customerEmail: `old-${id}@example.test` });
+  return uid;
+}
+const payMigrationPlain = (id: string) => commitOrderStatusTransition({ db,
+  body: { orderId: id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, admin: routeActor,
+  referralProgram: program, getSponsorIdentity: async () => { throw new Error("fixture_auth_unavailable"); },
+  referralEmailKeyring: () => keyringJson, now: () => "2000-01-03T00:00:00.000Z" });
+for (const markerAbsent of [false, true]) {
+  await test(`migration/payment race après scan final, marker absent initialement=${markerAbsent}: complete échoue`, async () => {
+    const id = `migration-plain-race-${markerAbsent}`; const uid = await createMigrationPlainCandidate(id);
+    if (markerAbsent) await historyMarker.delete(); else await historyMarker.set({ ...completeHistoryMarker, status: "incomplete", invalidationRevision: 4 });
+    let injected = false;
+    const racingDb = new Proxy(db, { get(target, property) {
+      if (property === "batch") return () => {
+        const batch = target.batch(); let certifying = false;
+        return new Proxy(batch, { get(batchTarget, batchProperty) {
+          if (batchProperty === "update") return (...args: Parameters<typeof batch.update>) => {
+            if (args[0].path === historyMarker.path && Reflect.get(args[1] as object, "status") === "complete") certifying = true;
+            return batchTarget.update(...args);
+          };
+          if (batchProperty === "commit") return async () => {
+            if (certifying && !injected) { injected = true; await payMigrationPlain(id); }
+            return batchTarget.commit();
+          };
+          const value = Reflect.get(batchTarget, batchProperty, batchTarget);
+          return typeof value === "function" ? value.bind(batchTarget) : value;
+        } });
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    await rejects(migrateOrderEmailNormalization({ db: racingDb, projectId: CAGNOTTE_DEMO.projectId, apply: true,
+      confirmation: ORDER_EMAIL_NORMALIZATION_VERSION, pageSize: 2, now: () => 6000 }),
+      (error: unknown) => typeof error === "object" && error !== null && Reflect.get(error, "code") === 9);
+    equal(injected, true); equal((await historyMarker.get()).data()?.status, "incomplete");
+    equal((await historyMarker.get()).data()?.invalidationRevision, markerAbsent ? 1 : 5);
+    equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
+    equal((await runMigration(true)).initial.unresolvedIdentityRelations, 1);
+    await db.collection("referrals").doc(uid).delete(); await db.collection("orders").doc(id).delete();
+  });
+}
+await test("plain paiement avant création du marker: scan migration détecte la relation persistée", async () => {
+  const id = "migration-plain-before-marker"; const uid = await createMigrationPlainCandidate(id);
+  await historyMarker.delete(); await payMigrationPlain(id);
+  equal((await historyMarker.get()).exists, false);
+  const report = await runMigration(true);
+  equal(report.initial.anomalies, 0); equal(report.initial.unresolvedIdentityRelations, 1); equal(report.markerComplete, false);
+  equal((await historyMarker.get()).data()?.status, "incomplete");
+  await db.collection("referrals").doc(uid).delete(); await db.collection("orders").doc(id).delete();
+});
+await test("migration no-op: invalidation après scan final ne peut pas être rapportée complete", async () => {
+  const id = "migration-plain-noop-race"; const uid = await createMigrationPlainCandidate(id);
+  equal((await runMigration(true)).markerComplete, true);
+  let injected = false;
+  const racingDb = new Proxy(db, { get(target, property) {
+    if (property === "runTransaction") return async (callback: Parameters<typeof db.runTransaction>[0]) => {
+      if (!injected) { injected = true; await payMigrationPlain(id); }
+      return target.runTransaction(callback);
+    };
+    const value = Reflect.get(target, property, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  } });
+  await rejects(migrateOrderEmailNormalization({ db: racingDb, projectId: CAGNOTTE_DEMO.projectId, apply: true,
+    confirmation: ORDER_EMAIL_NORMALIZATION_VERSION, pageSize: 2, now: () => 7000 }), /order_email_migration_certificate_changed/);
+  equal(injected, true); equal((await historyMarker.get()).data()?.status, "incomplete");
+  equal((await runMigration(true)).markerComplete, false);
+  await db.collection("referrals").doc(uid).delete(); await db.collection("orders").doc(id).delete();
 });
 console.log(`Referral backend: ${passed} checks.`);

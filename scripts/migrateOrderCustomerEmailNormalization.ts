@@ -25,7 +25,8 @@ async function main() {
     const report = await migrateOrderEmailNormalization({ db, projectId, apply, confirmation });
     // Counts and outcomes only: no email, UID, code, HMAC, token or credential material.
     console.log(JSON.stringify({ version: ORDER_EMAIL_NORMALIZATION_VERSION, ...report }));
-    if (report.initial.anomalies > 0 || (apply && !report.markerComplete)) process.exitCode = 1;
+    if (report.initial.anomalies > 0 || report.initial.unresolvedIdentityRelations > 0 || report.initial.corruptReferralRelations > 0 ||
+      (apply && !report.markerComplete)) process.exitCode = 1;
   } finally {
     try { await db.terminate(); } finally { await deleteApp(app); }
   }

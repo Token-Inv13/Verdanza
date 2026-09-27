@@ -138,10 +138,10 @@ return async function handler(
     console.error("update-order-status failed", error);
     const message =
       error instanceof Error ? error.message : "Mise a jour commande impossible.";
+    if (error instanceof ReferralError) return sendJson(response, { error: message, code: error.code }, error.status);
     const conflict = error instanceof CagnotteReservationError || error instanceof UnpaidReviewError ||
-      (error instanceof ReferralError && error.status === 409) ||
       (error instanceof CagnotteLedgerError && error.code === "CONFLICT");
-    sendJson(response, { error: message, ...((error instanceof UnpaidReviewError || error instanceof ReferralError) ? { code: error.code } : {}) }, message === "Acces admin requis." ? 403 : conflict ? 409 : 400);
+    sendJson(response, { error: message, ...(error instanceof UnpaidReviewError ? { code: error.code } : {}) }, message === "Acces admin requis." ? 403 : conflict ? 409 : 400);
   }
 }
 

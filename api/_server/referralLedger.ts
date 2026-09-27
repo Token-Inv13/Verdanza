@@ -7,6 +7,7 @@ import { applyCagnotteWalletDeltas, prepareCagnotteWalletMutation, writeCagnotte
 import { CAGNOTTE_REGULARIZATION_VERSION, CAGNOTTE_RESERVATION_VERSION, type CagnotteMovement } from "./cagnotteLedgerTypes.js";
 import { findPriorPaidProductOrder, ReferralError, sponsorHasDeliveredPaidOrder } from "./referralService.js";
 import { canonicalReferralJson, referralSnapshotFingerprint } from "./referralSnapshot.js";
+import { isUnresolvedReferralIdentityHistoryReason, prepareReferralOrderEmailHistoryInvalidation } from "./referralOrderEmailHistory.js";
 
 type Event = "payment" | "payment_and_delivery" | "delivery" | "refund" | "correction";
 type Program = { mode: "off" | "drain" | "active"; startsAtEpochMs: number | null; operational: boolean };
@@ -58,8 +59,11 @@ export async function prepareFirstPaymentWithoutReferral(input: { db: Firestore;
   if (before.paymentConfirmed || before.rewardCompartment !== "none") throw new ReferralError("referral_relation_corrupt");
   const claim = await prepareCurrentRefereeClaim({ db: input.db, transaction: input.transaction, before,
     evidence: input.paymentEvidence, recordedAtEpochMs: input.recordedAtEpochMs });
+  const historyInvalidation = isUnresolvedReferralIdentityHistoryReason(claim.reason)
+    ? await prepareReferralOrderEmailHistoryInvalidation(input.transaction, input.db, input.recordedAtEpochMs, "plain_payment_identity_unresolved") : null;
   return { status: "applied" as const, write() { input.transaction.set(relationRef, { ...before, state: "cancelled", paymentConfirmed: true,
     qualifyingOrderId: input.order.id, rewardIneligibilityReason: claim.reason ?? "first_paid_order_without_referral_discount" } satisfies ReferralRelation);
+    historyInvalidation?.write();
     if (claim.newClaim) input.transaction.create(claim.newClaim.ref, claim.newClaim.value);
   } };
 }
