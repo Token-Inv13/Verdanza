@@ -394,10 +394,14 @@ export async function commitOrderStatusTransition({
     });
     const paymentTransition = body.paymentStatus === "paid" && order.paymentStatus !== "paid";
     const deliveryTransition = body.orderStatus === "delivered" && order.orderStatus !== "delivered";
+    // Explicit admin replay may finish a qualified reward whose delivery was persisted while off.
+    const referralDeliveryReconciliationRequested = body.orderStatus === "delivered" && order.orderStatus === "delivered" &&
+      order.paymentStatus === "paid" && Boolean(order.referral);
+    const referralDeliveryEvent = deliveryTransition || referralDeliveryReconciliationRequested;
     const referralEvent = paymentTransition ? nextStatus === "delivered" ? "payment_and_delivery" : "payment"
-      : deliveryTransition ? "delivery" : null;
+      : referralDeliveryEvent ? "delivery" : null;
     const transitionReferralProgram = linkOnly || !referralEvent ? null :
-      resolveReferralRuntimeForTransition(order, paymentTransition, deliveryTransition);
+      resolveReferralRuntimeForTransition(order, paymentTransition, referralDeliveryEvent);
     const referralPlan = !transitionReferralProgram || !transitionReferralProgram.operational || transitionReferralProgram.mode === "off" ? null : order.referral ? await prepareReferralTransition({
       db, transaction, order, program: transitionReferralProgram, recordedAtEpochMs: Date.parse(operationTime),
       event: referralEvent!, paymentEvidence,

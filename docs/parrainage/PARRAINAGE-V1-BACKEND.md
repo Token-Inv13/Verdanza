@@ -53,6 +53,12 @@ Même sans snapshot, le préflight d’un premier paiement relit l’identité a
 
 ## Validation et gates restants
 
+### Livraison persistée pendant off
+
+Si le paiement a déjà qualifié la relation en `pending`, une livraison enregistrée pendant `off` ne modifie ni la relation ni le wallet parrain. Après retour à un runtime opérationnel `active` ou `drain`, un admin peut rejouer explicitement `{ orderStatus: "delivered" }` sur cette même commande déjà payée et livrée. Ce rattrapage réutilise le ledger de livraison existant et sa compensation de régularisation, sans relire Auth ni keyring. Il conserve `previousStatus=delivered` et n’ajoute aucun statut, email, achat analytics, mouvement fidélité ou effet stock. Les replays et leur concurrence sont idempotents.
+
+Le mode `off` reste inert. Une relation d’une autre commande, un paiement jamais qualifié parce qu’effectué pendant off, une annulation sous seuil ou une inéligibilité persistée ne gagnent aucun droit par ce replay. Les faits livraison peuvent servir à une correction administrative ultérieure. Les snapshots et la configuration restent strictement validés. Sans snapshot, ou pour une note, un tracking, un archivage, un masquage ou un événement payment-link sans intention de livraison, aucun rattrapage ni résolution de runtime Referral n’est ajouté. Aucun cron, backfill ou effet de lecture n’est prévu.
+
 ### Migration technique et déploiement futur
 
 `scripts/migrateOrderCustomerEmailNormalization.ts` est DRY-RUN par défaut. Il parcourt `orders` et `referrals` par pages (200 documents par défaut), valide les schémas et états cohérents des relations, ne rapporte que des compteurs et prépare uniquement `customerEmailNormalized`. Aucune création de droit, code, relation, claim, wallet ou mouvement. Une vraie commande produits historiquement payée sans email exploitable bloque la certification ; les précommandes payées sont incluses. Un apply ferme d’abord un ancien certificat si des écarts ou anomalies sont constatés, utilise des préconditions sur les documents afin de refuser un écrasement concurrent, puis refait une passe exhaustive. `complete` est écrit en dernier seulement si les emails exploitables sont tous canoniques et aucune commande payée pertinente n’a d’email inexploitable, aucune relation ne porte une identité non résolue et aucune relation corrompue n’a été trouvée. Un replay conserve les commandes correctes et un certificat cohérent sans nouvelles écritures. Les scripts de migration doivent être exécutés séquentiellement.

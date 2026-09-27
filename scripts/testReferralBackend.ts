@@ -15,7 +15,7 @@ import { applyCagnotteReservationOperation, CagnotteReservationError, createCagn
 import { CAGNOTTE_RESERVATION_VERSION } from "../api/_server/cagnotteLedgerTypes.js";
 import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
 import { executeOrderRefund } from "../api/_server/orderRefunds.js";
-import { commitOrderStatusTransition, hasPositiveCagnotteFinancing, hasAppliedReferralPriority } from "../api/_server/orderStatusTransition.js";
+import { commitOrderStatusTransition, processOrderStatusTransitionEffects, hasPositiveCagnotteFinancing, hasAppliedReferralPriority } from "../api/_server/orderStatusTransition.js";
 import { createOrderStatusHandler } from "../api/_server/orderStatusRoute.js";
 import { readUnpaidOrderContext } from "../api/_server/unpaidOrderReview.js";
 import type { Order } from "../src/types/index.js";
@@ -2340,6 +2340,198 @@ await test("migration cible exacte et apply explicite, pas de fallback distant",
   throws(() => assertOrderEmailMigrationTarget({ projectId: "verdanza-1f621", emulatorHost: "127.0.0.1:18085" }));
   throws(() => assertOrderEmailMigrationTarget({ projectId: CAGNOTTE_DEMO.projectId, emulatorHost: "remote:18085" }));
   assertOrderEmailMigrationTarget({ projectId: "verdanza-1f621", apply: true, confirmation: ORDER_EMAIL_NORMALIZATION_VERSION });
+});
+
+const catchupLoyaltyProgram = { mode: "local_test" as const, programVersion: "fixture-referral-settlement-v1",
+  calculationVersion: "cagnotte-math-v1" as const, startsAtEpochMs: 1000, newAccrualsEnabled: true };
+const replayDelivery = (id: string, mode: Parameters<typeof commitOrderStatusTransition>[0]["referralProgram"] = program) =>
+  commitOrderStatusTransition({ db, admin: routeActor, referralProgram: mode, accrualProgram: catchupLoyaltyProgram,
+    getSponsorIdentity: async () => { throw new Error("unexpected_delivery_auth"); },
+    referralEmailKeyring: () => { throw new Error("unexpected_delivery_keyring"); },
+    body: { orderId: id, orderStatus: "delivered" }, now: () => "2000-01-05T00:00:00.000Z" });
+const captureCatchupSideEffects = async (id: string, uid: string) => ({
+  history: (await db.collection("orders").doc(id).get()).data()?.statusHistory,
+  loyalty: (await routeMovements(id)).filter((doc) => !String(doc.data().businessEvent).startsWith("referral_"))
+    .map((doc) => ({ id: doc.id, data: doc.data(), updateTime: doc.updateTime.toMillis() })),
+  refereeWallet: (await db.collection("cagnotteWallets").doc(uid).get()).data(),
+  stock: (await db.collection("products").get()).docs.map((doc) => ({ id: doc.id, data: doc.data(), updateTime: doc.updateTime.toMillis() })),
+  analytics: await Promise.all(["analyticsOutbox", "analyticsOperationalEvents"].map(async (name) => (await db.collection(name).get()).docs
+    .map((doc) => ({ id: doc.id, data: doc.data(), updateTime: doc.updateTime.toMillis() })))),
+});
+for (const mode of [program, drain]) {
+  await test(`livraison off puis replay explicite ${mode.mode}: available unique sans nouveaux effets commande`, async () => {
+    const id = `referral-catchup-${mode.mode}`;
+    const sponsorBefore = await wallet("sponsor-b");
+    const child = await createSettlementCandidate(id, false);
+    const pending = await routeRelation(child.uid); const pendingWallet = await wallet("sponsor-b");
+    equal(pending.state, "pending"); equal(pending.deliveryConfirmed, false); equal(pending.qualifyingOrderId, id);
+    equal(pendingWallet.pendingCents, sponsorBefore.pendingCents + 1000);
+    equal((await routeReferralMovements(id)).length, 1);
+    await commitOrderStatusTransition({ db: noReferralDb, admin: routeActor, referralProgram: REFERRAL_CLOSED_RUNTIME,
+      accrualProgram: catchupLoyaltyProgram, getSponsorIdentity: async () => { throw new Error("unexpected_off_auth"); },
+      referralEmailKeyring: () => { throw new Error("unexpected_off_keyring"); },
+      body: { orderId: id, orderStatus: "delivered" }, now: () => "2000-01-04T00:00:00.000Z" });
+    equal((await db.collection("orders").doc(id).get()).data()?.orderStatus, "delivered");
+    deepStrictEqual(await routeRelation(child.uid), pending); deepStrictEqual(await wallet("sponsor-b"), pendingWallet);
+    const beforeReplay = await captureCatchupSideEffects(id, child.uid);
+    let resolutions = 0; let authCalls = 0; let keyringCalls = 0; let emailCalls = 0; let analyticsCalls = 0;
+    const committed = await commitOrderStatusTransition({ db, admin: routeActor, accrualProgram: catchupLoyaltyProgram,
+      resolveReferralRuntime: () => { resolutions++; return mode; },
+      getSponsorIdentity: async () => { authCalls++; throw new Error("unexpected_catchup_auth"); },
+      referralEmailKeyring: () => { keyringCalls++; throw new Error("unexpected_catchup_keyring"); },
+      body: { orderId: id, orderStatus: "delivered" }, now: () => "2000-01-05T00:00:00.000Z" });
+    equal(resolutions, 1); equal(authCalls, 0); equal(keyringCalls, 0);
+    equal(committed.previousStatus, "delivered"); equal(committed.updatedOrder?.orderStatus, "delivered"); equal(committed.purchaseAnalyticsQueued, false);
+    await processOrderStatusTransitionEffects({ db, body: { orderId: id, orderStatus: "delivered" }, committed,
+      sendStatusEmail: async () => { emailCalls++; throw new Error("unexpected_catchup_email"); },
+      processAnalytics: async () => { analyticsCalls++; throw new Error("unexpected_catchup_analytics"); } });
+    equal(emailCalls, 0); equal(analyticsCalls, 0);
+    const rewarded = await routeRelation(child.uid); const availableWallet = await wallet("sponsor-b");
+    equal(rewarded.state, "rewarded"); equal(rewarded.deliveryConfirmed, true); equal(rewarded.deliveredOrderId, id);
+    equal(availableWallet.pendingCents, pendingWallet.pendingCents - 1000);
+    const compensation = Math.min(pendingWallet.regularizationCents, 1000);
+    equal(availableWallet.availableCents, pendingWallet.availableCents + 1000 - compensation);
+    equal(availableWallet.regularizationCents, pendingWallet.regularizationCents - compensation);
+    const movements = await routeReferralMovements(id);
+    equal(movements.length, 2); equal(movements.filter((doc) => doc.data().businessEvent === "referral_reward_available").length, 1);
+    deepStrictEqual(await captureCatchupSideEffects(id, child.uid), beforeReplay);
+    const rewardState = await captureReferralState();
+    await Promise.all([replayDelivery(id, mode), replayDelivery(id, mode)]);
+    deepStrictEqual(await captureReferralState(), rewardState);
+    deepStrictEqual(await captureCatchupSideEffects(id, child.uid), beforeReplay);
+  });
+}
+await test("replay delivered pendant off: zéro lecture Referral, aucun nouveau reward", async () => {
+  const id = "referral-catchup-off-replay"; const child = await createSettlementCandidate(id, false);
+  await replayDelivery(id, REFERRAL_CLOSED_RUNTIME);
+  const before = await captureReferralState(); const beforeEffects = await captureCatchupSideEffects(id, child.uid);
+  let runtimeCalls = 0;
+  await commitOrderStatusTransition({ db: noReferralDb, admin: routeActor, accrualProgram: catchupLoyaltyProgram,
+    resolveReferralRuntime: () => { runtimeCalls++; return REFERRAL_CLOSED_RUNTIME; },
+    getSponsorIdentity: async () => { throw new Error("unexpected_off_auth"); }, referralEmailKeyring: () => { throw new Error("unexpected_off_keyring"); },
+    body: { orderId: id, orderStatus: "delivered" }, now: () => "2000-01-05T00:00:00.000Z" });
+  equal(runtimeCalls, 1); equal((await routeRelation(child.uid)).state, "pending");
+  deepStrictEqual(await captureReferralState(), before); deepStrictEqual(await captureCatchupSideEffects(id, child.uid), beforeEffects);
+});
+await test("handler replay delivered 200: reward réconcilié, aucun email ni analytics secondaire", async () => {
+  const id = "referral-catchup-handler"; const child = await createSettlementCandidate(id, false);
+  await replayDelivery(id, REFERRAL_CLOSED_RUNTIME);
+  await db.collection("adminUsers").doc(routeActor.uid).set({ isActive: true });
+  const beforeEffects = await captureCatchupSideEffects(id, child.uid);
+  let status = 0; let payload: unknown; let effectCalls = 0;
+  const handler = createOrderStatusHandler({ getDb: () => db, verifyToken: async () => routeActor,
+    accrualProgram: catchupLoyaltyProgram, reservationProgram: null, resolveReferralRuntime: () => drain,
+    now: () => "2000-01-05T00:00:00.000Z", sendStatusEmail: async () => { effectCalls++; throw new Error("unexpected_email"); },
+    processAnalytics: async () => { effectCalls++; throw new Error("unexpected_analytics"); } });
+  await handler({ method: "POST", headers: { authorization: "Bearer fixture" }, body: { orderId: id, orderStatus: "delivered" } } as VercelRequestLike,
+    { setHeader() {}, status(value: number) { status = value; return this; }, json(value: unknown) { payload = value; } } as unknown as VercelResponseLike);
+  equal(status, 200); equal((payload as { ok: boolean }).ok, true); equal(effectCalls, 0);
+  equal((await routeRelation(child.uid)).state, "rewarded"); equal((await routeReferralMovements(id)).length, 2);
+  deepStrictEqual(await captureCatchupSideEffects(id, child.uid), beforeEffects);
+});
+await test("replay mauvaise commande qualifiante: ne libère pas le pending d’une autre commande", async () => {
+  const first = "referral-catchup-right-order"; const second = "referral-catchup-wrong-order";
+  const child = await createRouteCandidate(first, "referee-catchup-wrong-order"); await createRouteCandidate(second, child.uid);
+  await routeTransition(first, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+  await routeTransition(second, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link", orderStatus: "delivered" }, REFERRAL_CLOSED_RUNTIME);
+  const before = await captureReferralState(); await replayDelivery(second);
+  deepStrictEqual(await captureReferralState(), before); equal((await routeRelation(child.uid)).qualifyingOrderId, first);
+  equal((await routeReferralMovements(second)).length, 0);
+});
+await test("paiement et livraison pendant off: replay operational sans attribution rétroactive", async () => {
+  const id = "referral-catchup-unqualified-off"; const child = await createRouteCandidate(id, `referee-${id}`);
+  await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link", orderStatus: "delivered" }, REFERRAL_CLOSED_RUNTIME);
+  const before = await captureReferralState(); await replayDelivery(id); await replayDelivery(id, drain);
+  deepStrictEqual(await captureReferralState(), before); equal((await routeRelation(child.uid)).qualifyingOrderId, null);
+  equal((await routeRelation(child.uid)).state, "linked"); equal((await routeReferralMovements(id)).length, 0);
+});
+for (const regularization of [600, 1500]) {
+  await test(`rattrapage livraison réutilise la compensation existante de ${regularization} centimes`, async () => {
+    const id = `referral-catchup-compensation-${regularization}`; await createSettlementCandidate(id, false);
+    await replayDelivery(id, REFERRAL_CLOSED_RUNTIME);
+    const prior = await wallet("sponsor-b");
+    await db.collection("cagnotteWallets").doc("sponsor-b").update({ availableCents: 0, regularizationCents: regularization });
+    await replayDelivery(id);
+    const after = await wallet("sponsor-b");
+    equal(after.pendingCents, prior.pendingCents - 1000);
+    equal(after.availableCents, Math.max(0, 1000 - regularization));
+    equal(after.regularizationCents, Math.max(0, regularization - 1000));
+    const movement = (await routeReferralMovements(id)).find((doc) => doc.data().businessEvent === "referral_reward_available"); ok(movement);
+    equal(movement.data().availableDeltaCents, Math.max(0, 1000 - regularization));
+    equal(movement.data().regularizationDeltaCents, -Math.min(1000, regularization));
+    await db.collection("cagnotteWallets").doc("sponsor-b").update({ availableCents: prior.availableCents, regularizationCents: prior.regularizationCents });
+  });
+}
+await test("refund sous seuil avant rattrapage: aucun gain, correction exploite la livraison réconciliée", async () => {
+  const id = "referral-catchup-refunded"; const child = await createSettlementCandidate(id, false);
+  await replayDelivery(id, REFERRAL_CLOSED_RUNTIME);
+  const common = { db, actor: routeActor, now: () => "2000-01-06T00:00:00.000Z", log: () => undefined };
+  const selection = { action: "preview" as const, orderId: id, currency: "EUR" as const,
+    additionalReturns: [{ lineId: "line", additionalNetCents: 1100 }], deliveryRefundCents: 0 };
+  const preview = await executeOrderRefund({ ...common, request: selection });
+  await executeOrderRefund({ ...common, request: { ...selection, action: "record_confirmed", source: "admin", reference: `refund-${id}`,
+    declaredFinancialCents: preview.totalFinancialCents, reason: "product_return", confirmedAt: "2000-01-06T00:00:00.000Z", expectedPreviewVersion: preview.previewVersion } });
+  equal((await routeRelation(child.uid)).state, "cancelled"); equal((await routeRelation(child.uid)).deliveryConfirmed, false);
+  const sponsorBefore = await wallet("sponsor-b"); const countBefore = (await routeReferralMovements(id)).length;
+  await replayDelivery(id);
+  equal((await routeRelation(child.uid)).deliveryConfirmed, true); equal((await routeRelation(child.uid)).state, "cancelled");
+  deepStrictEqual(await wallet("sponsor-b"), sponsorBefore); equal((await routeReferralMovements(id)).length, countBefore);
+  const events = await db.collection("cagnotteRefunds").where("orderId", "==", id).get(); equal(events.size, 1);
+  const correction = { action: "preview_correction" as const, orderId: id, currency: "EUR" as const, targetEventId: events.docs[0].id,
+    expectedRevision: 0, replacementReturns: [], deliveryRefundCents: 0, declaredFinancialCents: 0,
+    correctionReason: "Rectification externe vérifiée", externalVerificationConfirmed: true as const };
+  const correctionPreview = await executeOrderRefund({ ...common, request: correction });
+  const request = { ...correction, action: "record_correction" as const, correctionReference: `correction-${id}`, expectedPreviewVersion: correctionPreview.previewVersion };
+  await executeOrderRefund({ ...common, request });
+  equal((await routeRelation(child.uid)).state, "rewarded"); equal((await routeRelation(child.uid)).deliveryConfirmed, true);
+  const restored = await captureReferralState(); await executeOrderRefund({ ...common, request }); await replayDelivery(id);
+  deepStrictEqual(await captureReferralState(), restored);
+  equal((await routeReferralMovements(id)).filter((doc) => doc.data().businessEvent === "referral_reward_restored").length, 1);
+});
+await test("sponsor inéligible au paiement: rattrapage conserve absence de gain", async () => {
+  const id = "referral-catchup-ineligible"; const child = await createRouteCandidate(id, `referee-${id}`);
+  await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, program,
+    async (uid) => ({ ...await activeIdentity(uid), disabled: uid === "sponsor-b" }));
+  equal((await routeRelation(child.uid)).rewardIneligibilityReason, "sponsor_account_disabled");
+  await replayDelivery(id, REFERRAL_CLOSED_RUNTIME);
+  const walletBefore = await wallet("sponsor-b"); await replayDelivery(id);
+  equal((await routeRelation(child.uid)).deliveryConfirmed, true); equal((await routeRelation(child.uid)).state, "cancelled");
+  equal((await routeRelation(child.uid)).rewardIneligibilityReason, "sponsor_account_disabled");
+  deepStrictEqual(await wallet("sponsor-b"), walletBefore); equal((await routeReferralMovements(id)).length, 0);
+});
+await test("replay snapshot déjà delivered: runtime malformed 503 et snapshot invalid refusés sans mutation", async () => {
+  const id = "referral-catchup-invalid"; await createSettlementCandidate(id, false); await replayDelivery(id, REFERRAL_CLOSED_RUNTIME);
+  const before = await capturePaymentState(); let status = 0; let payload: unknown;
+  const handler = createOrderStatusHandler({ getDb: () => db, verifyToken: async () => routeActor,
+    accrualProgram: catchupLoyaltyProgram, reservationProgram: null, resolveReferralRuntime: () => { throw new ReferralConfigurationError(); },
+    sendStatusEmail: async () => { throw new Error("unexpected_email"); }, processAnalytics: async () => { throw new Error("unexpected_analytics"); } });
+  await handler({ method: "POST", headers: { authorization: "Bearer fixture" }, body: { orderId: id, orderStatus: "delivered" } } as VercelRequestLike,
+    { setHeader() {}, status(value: number) { status = value; return this; }, json(value: unknown) { payload = value; } } as unknown as VercelResponseLike);
+  equal(status, 503); deepStrictEqual(payload, { code: "referral_configuration_invalid", error: "Configuration parrainage indisponible." });
+  deepStrictEqual(await capturePaymentState(), before);
+  await db.collection("orders").doc(id).update({ "referral.fingerprint": "corrupt" });
+  const beforeInvalid = await capturePaymentState(); await rejects(replayDelivery(id), { code: "referral_snapshot_invalid" });
+  deepStrictEqual(await capturePaymentState(), beforeInvalid);
+});
+await test("replay delivered sans snapshot, avec ou sans customerId: zéro runtime, Auth, keyring ou lecture Referral", async () => {
+  for (const customerId of [undefined, "referee-catchup-plain"]) {
+    const id = `catchup-no-referral-${customerId ?? "anonymous"}`; await createUnrelatedOrder(id, customerId);
+    await db.collection("orders").doc(id).update({ orderStatus: "delivered", paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+    const { calls, dependencies } = closedTransitionDependencies(); const before = await captureReferralState();
+    await commitOrderStatusTransition({ ...dependencies, body: { orderId: id, orderStatus: "delivered" } });
+    deepStrictEqual(calls, { runtime: 0, auth: 0, keyring: 0 }); deepStrictEqual(await captureReferralState(), before);
+  }
+});
+await test("note, tracking, archive, masque et lien ne demandent pas un rattrapage implicite", async () => {
+  const id = "referral-catchup-explicit-only"; const child = await createSettlementCandidate(id, false); await replayDelivery(id, REFERRAL_CLOSED_RUNTIME);
+  const before = await captureReferralState(); let resolutions = 0;
+  const dependencies = { db: noReferralDb, admin: routeActor, accrualProgram: catchupLoyaltyProgram,
+    resolveReferralRuntime: () => { resolutions++; throw new ReferralConfigurationError(); },
+    getSponsorIdentity: async () => { throw new Error("unexpected_auth"); }, referralEmailKeyring: () => { throw new Error("unexpected_keyring"); } };
+  for (const body of [{ internalNote: "fixture-note" }, { trackingNumber: "fixture-tracking" }, { archived: true }, { hidden: true }, { paymentLinkLabel: "fixture-link" }])
+    await commitOrderStatusTransition({ ...dependencies, body: { orderId: id, ...body } });
+  await rejects(commitOrderStatusTransition({ ...dependencies, body: { orderId: id, paymentLinkSent: true } }), /commande.*pay|order_already_paid/i);
+  equal(resolutions, 0); equal((await routeRelation(child.uid)).state, "pending"); deepStrictEqual(await captureReferralState(), before);
 });
 
 // Dedicated emulator only: reset orders after all commercial tests, so the exhaustive
