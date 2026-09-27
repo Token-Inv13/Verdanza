@@ -122,7 +122,7 @@ export function ProductSheetsPage() {
               Toutes les fiches
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-ink/60 sm:mt-3 sm:text-base sm:leading-7">
-              Passez des fleurs aux résines en un geste, puis parcourez les fiches à votre rythme.
+              Passez des fleurs aux résines en un geste, puis parcourez les fiches selon votre profil.
             </p>
           </div>
 
