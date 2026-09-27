@@ -2,11 +2,13 @@ import { createServer } from "node:http";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Order } from "../src/types/index.js";
+import { createReferralOrderSnapshot } from "../api/_server/referralSnapshot.js";
 import {
   buildGa4PurchasePayload,
   isPurchaseEligible,
   netProductValue,
   sendGa4Payload,
+  sendGa4Purchase,
 } from "../api/_server/ga4MeasurementProtocol.js";
 
 const repoRoot = process.cwd();
@@ -57,6 +59,7 @@ async function main() {
   );
 
   await auditMockMeasurementProtocol(payload);
+  await auditReferralPurchase();
   auditNoClientPurchase();
   console.log("audit:analytics-purchase OK");
 }
@@ -95,9 +98,96 @@ async function auditMockMeasurementProtocol(payload: NonNullable<ReturnType<type
     assert(receivedUrl.includes("measurement_id=G-E9XNP7BJ2Y"), "measurement id should be present");
     assert(receivedUrl.includes("api_secret="), "api secret should be used only in request URL");
     assert(JSON.parse(receivedBody).events[0].name === "purchase", "network payload should be purchase");
+    assert(JSON.stringify(JSON.parse(receivedBody)) === JSON.stringify(payload), "network body must preserve every item price and discount");
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
+}
+
+async function auditReferralPurchase() {
+  const order = mockReferralOrder();
+  const expected = { "fleur-test": [28.87, 3.13], "resine-test": [17.33, 1.87] } as const;
+  for (const [itemsReversed, linesReversed] of [[false, false], [true, false], [false, true], [true, true]]) {
+    const variant: Order = {
+      ...order,
+      items: itemsReversed ? [...order.items].reverse() : order.items,
+      referral: linesReversed ? { ...order.referral!, lines: [...order.referral!.lines].reverse() } : order.referral,
+    };
+    const payload = buildGa4PurchasePayload(variant);
+    assert(payload, "valid frozen referral purchase must produce a payload regardless of order");
+    const { value, shipping, items } = payload.events[0].params;
+    assert(value === 46.2 && shipping === 5.49, "referral event value and shipping must remain separate");
+    assert(items.length === 2, "every frozen referral line must remain a separate GA4 item");
+    for (const item of items) {
+      const cents = expected[item.item_id as keyof typeof expected];
+      assert(cents && item.price === cents[0] && item.discount === cents[1], "GA4 must preserve the frozen allocation by lineId");
+    }
+    assert(Math.round(items.reduce((sum, item) => sum + item.price * item.quantity, 0) * 100) === 4620, "item net cents must equal event value");
+    assert(Math.round(items.reduce((sum, item) => sum + (item.discount ?? 0) * item.quantity, 0) * 100) === 500, "item discount cents must equal frozen discount");
+  }
+
+  const quantityThree: Order = { ...order, items: [{ ...order.items[0], quantity: 3, purchaseMode: "fixed_price" }, order.items[1]] };
+  const split = buildGa4PurchasePayload(quantityThree);
+  assert(split, "non-divisible fixed-price quantity must remain valid");
+  const first = split.events[0].params.items[0];
+  assert(Math.round(first.price * first.quantity * 100) === 2887, "fixed-price quantity must reconstruct frozen net cents");
+  assert(Math.round((first.discount ?? 0) * first.quantity * 100) === 313, "unit discount must retain the third cent");
+  assert(Math.round((first.price + (first.discount ?? 0)) * first.quantity * 100) === 3200, "fixed-price gross cents must reconstruct");
+  assert(first.discount !== 1.04, "referral unit discount must not be rounded before GA4 transport");
+
+  const repeatedProduct: Order = { ...order, items: order.items.map((item) => ({ ...item, productId: "same-product", slug: "same-product" })) };
+  const repeated = buildGa4PurchasePayload(repeatedProduct);
+  assert(repeated?.events[0].params.items.length === 2, "same product on distinct lines must stay separate");
+  assert(repeated.events[0].params.items[0].discount === 3.13 && repeated.events[0].params.items[1].discount === 1.87,
+    "same-product lines must retain their distinct frozen discounts");
+
+  const lines = order.referral!.lines;
+  const corrupt: Order[] = [
+    { ...order, items: [{ ...order.items[0], lineId: "missing" }, order.items[1]] },
+    { ...order, items: [{ ...order.items[0], lineId: "line-b" }, order.items[1]] },
+    { ...order, referral: { ...order.referral!, lines: [lines[0], { ...lines[1], lineId: "line-a" }] } },
+    { ...order, items: [{ ...order.items[0], lineTotal: 31.99 }, order.items[1]] },
+    { ...order, referral: { ...order.referral!, lines: [{ ...lines[0], referralDiscountCents: 3200 }, lines[1]] } },
+    { ...order, referral: { ...order.referral!, lines: [{ ...lines[0], referralDiscountCents: 312 }, lines[1]] } },
+    { ...order, items: [...order.items, { ...order.items[0], lineId: "extra", lineTotal: 1 }] },
+    { ...order, referral: null } as unknown as Order,
+  ];
+  const localConfig = { measurementId: "G-E9XNP7BJ2Y", apiSecret: "test_secret_123456", host: "http://127.0.0.1:1" };
+  for (const variant of corrupt) {
+    assert(buildGa4PurchasePayload(variant) === null, "corrupt referral snapshot must fail closed without reallocation");
+    const result = await sendGa4Purchase(variant, localConfig, async () => { throw new Error("must not send corrupt referral payload"); });
+    assert(result.status === "failed" && result.code === "purchase_not_eligible", "corrupt referral purchase must not reach Measurement Protocol");
+  }
+
+  const payload = buildGa4PurchasePayload(order);
+  assert(payload, "canonical referral payload must exist");
+  const json = JSON.stringify(payload);
+  assert(!json.includes(order.customerEmail) && !json.includes(order.customerPhone) && !json.includes(order.customerName || ""), "referral payload must exclude customer PII");
+  assert(!json.includes(order.referral!.referralId), "referral payload must exclude referral identity");
+  await auditMockMeasurementProtocol(payload);
+}
+
+function mockReferralOrder(): Order {
+  const base = mockPaidOrder();
+  const lines = [
+    { lineId: "line-a", eligibleBeforeReferralCents: 3200, referralDiscountCents: 313 },
+    { lineId: "line-b", eligibleBeforeReferralCents: 1920, referralDiscountCents: 187 },
+  ];
+  return {
+    ...base,
+    id: "order_referral_analytics",
+    items: [
+      { ...base.items[0], lineId: "line-a", quantity: 1, unitPrice: 32, lineTotal: 32 },
+      { ...base.items[1], lineId: "line-b", quantity: 1, unitPrice: 19.2, lineTotal: 19.2 },
+    ],
+    subtotal: 51.2,
+    subtotalAfterPromotion: 51.2,
+    subtotalBeforeDiscount: 51.2,
+    discountAmount: 5,
+    deliveryFee: 5.49,
+    total: 51.69,
+    referral: createReferralOrderSnapshot({ refereeUid: "referral-audit-only", createdAtEpochMs: 1000, lines }),
+  };
 }
 
 function auditNoClientPurchase() {

@@ -170,6 +170,9 @@ jobs:
       - name: Verify accounting periods and frozen referral revenue
         run: npm run test:accounting-periods
 
+      - name: Audit GA4 purchase items and frozen referral allocations
+        run: npm run audit:analytics-purchase
+
       - name: Qualify cagnotte checkout handoff
         run: |
           npm run test:cagnotte-checkout-use

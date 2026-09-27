@@ -25,6 +25,7 @@ import type { CagnotteTestProgram } from "../api/_server/cagnotteLedgerTypes.js"
 import type { ReferralRelation } from "../src/types/referral.js";
 import type { ReferralCheckoutQuote } from "../src/types/referralCheckout.js";
 import { buildAccountingSummary } from "../src/lib/accountingSummary.js";
+import { buildGa4PurchasePayload } from "../api/_server/ga4MeasurementProtocol.js";
 import { customAccountingPeriodRange } from "../src/lib/accountingPeriods.js";
 import { adminOrderRow } from "../src/services/ordersService.js";
 
@@ -227,13 +228,29 @@ await test("allocation deterministic under reversal, one-cent line excluded, exa
   equal(a.find(line => line.lineId === "z")?.referralDiscountCents, 0); ok(a.every(line => line.referralDiscountCents < line.eligibleBeforeReferralCents));
   throws(() => allocateReferralDiscount([{ lineId: "tiny", eligibleBeforeReferralCents: 1 }]));
 });
-await test("multi-line reversal gives identical quote fingerprint and frozen allocations", async () => {
+await test("multi-line checkout, payment and GA4 retain frozen allocations", async () => {
   await db.collection("products").doc("second").set({ name: "Second", slug: "second", price: 25, stock: 100, isActive: true, category: "flowers" });
   await db.collection("products").doc("main").update({ price: 25 });
-  const request = { ...body(), items: [{ productId: "main", quantity: 1 }, { productId: "second", quantity: 1 }] };
+  const request = { ...body(), items: [{ productId: "main", quantity: 1 }, { productId: "second", quantity: 1 }],
+    analyticsContext: { consentGranted: true as const, consentCapturedAt: "2000-01-02T00:00:00.000Z", clientId: "123456789.987654321", sessionId: "1234567890" } };
   const q = await proposal(request); const reverse = await proposal({ ...request, items: [...request.items].reverse() }); deepStrictEqual(q, reverse);
   const r = await create(accepted(request, q)); equal(r.status, 200); const order = (await db.collection("orders").doc(String(r.data.orderId)).get()).data()!;
   equal(order.referral.lines.reduce((sum: number, line: { referralDiscountCents: number }) => sum + line.referralDiscountCents, 0), 500);
+  await transition({ orderId: String(r.data.orderId), paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+  const paid = { ...(await db.collection("orders").doc(String(r.data.orderId)).get()).data(), id: String(r.data.orderId) } as Order;
+  const payload = buildGa4PurchasePayload(paid);
+  ok(payload, "paid consented checkout order should produce GA4 purchase payload");
+  const ga4Items = payload.events[0].params.items;
+  equal(ga4Items.length, paid.referral!.lines.length);
+  for (const line of paid.referral!.lines) {
+    const orderItem = paid.items.find(item => item.lineId === line.lineId);
+    ok(orderItem);
+    const ga4Item = ga4Items.find(item => item.item_id === (orderItem.slug || orderItem.productId));
+    ok(ga4Item);
+    equal(Math.round(ga4Item.price * ga4Item.quantity * 100), line.eligibleBeforeReferralCents - line.referralDiscountCents);
+    equal(Math.round((ga4Item.discount ?? 0) * ga4Item.quantity * 100), line.referralDiscountCents);
+  }
+  equal(Math.round(ga4Items.reduce((sum, item) => sum + item.price * item.quantity, 0) * 100), Math.round(payload.events[0].params.value * 100));
 });
 await test("fixed-price format and zero-cent cagnotte produce 4500 net and 225 loyalty", async () => {
   await db.collection("products").doc("main").update({ price: 5.5, fixedPriceMode: "manual", fixedPriceOptions: [{ id: "fixed50", totalPrice: 50, quantityGrams: 10, isActive: true }] });
