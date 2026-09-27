@@ -3,6 +3,7 @@ import { REFERRAL_PROGRAM_VERSION, type ReferralCode, type ReferralEmailClaim, t
 import { newReferralCode, normalizeReferralEmail, referralEmailClaimAliases, type ReferralEmailKeyring } from "./referralIdentity.js";
 import type { ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
 import { canonicalOrderEmail } from "./orderEmailIdentity.js";
+import { findPriorReferralPaymentIdentity } from "./referralPaymentIdentity.js";
 import { readReferralOrderEmailHistoryReady } from "./referralOrderEmailHistory.js";
 
 export class ReferralError extends Error {
@@ -62,6 +63,10 @@ export async function findPriorPaidProductOrder(tx: Transaction, db: Firestore, 
         inconclusive = true;
     }
   }
+  const paymentIdentity = await findPriorReferralPaymentIdentity(tx, db, refereeUid);
+  // A pre-existing proof is historical, including one named currentOrderId. No claim lookup is needed.
+  if (paymentIdentity.kind === "found") return paymentIdentity;
+  if (paymentIdentity.kind === "inconclusive") inconclusive = true;
   // Exact legacy strings are useful positive evidence, but cannot prove absence.
   if (!await readReferralOrderEmailHistoryReady(tx, db)) inconclusive = true;
   return { kind: inconclusive ? "inconclusive" : "none" };

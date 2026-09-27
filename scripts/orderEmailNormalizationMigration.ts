@@ -8,10 +8,10 @@ import type { ReferralPaymentIdentityEvidence } from "../src/types/referral.js";
 export const ORDER_EMAIL_MIGRATION_PROJECT = "verdanza-1f621";
 type Counts = { scannedOrders: number; usableEmails: number; alreadyNormalized: number; changesRequired: number; paidProductOrders: number; anomalies: number;
   scannedReferralRelations: number; unresolvedIdentityRelations: number; corruptReferralRelations: number; linkedRelationsWithPaidHistory: number;
-  paymentIdentityEvidence: number; missingPaymentIdentityEvidence: number; unresolvedPaymentIdentityEvidence: number; corruptPaymentIdentityEvidence: number };
+  paymentIdentityEvidence: number; detachedPaymentIdentityEvidence: number; missingPaymentIdentityEvidence: number; unresolvedPaymentIdentityEvidence: number; corruptPaymentIdentityEvidence: number };
 const emptyCounts = (): Counts => ({ scannedOrders: 0, usableEmails: 0, alreadyNormalized: 0, changesRequired: 0, paidProductOrders: 0, anomalies: 0,
   scannedReferralRelations: 0, unresolvedIdentityRelations: 0, corruptReferralRelations: 0, linkedRelationsWithPaidHistory: 0,
-  paymentIdentityEvidence: 0, missingPaymentIdentityEvidence: 0, unresolvedPaymentIdentityEvidence: 0, corruptPaymentIdentityEvidence: 0 });
+  paymentIdentityEvidence: 0, detachedPaymentIdentityEvidence: 0, missingPaymentIdentityEvidence: 0, unresolvedPaymentIdentityEvidence: 0, corruptPaymentIdentityEvidence: 0 });
 const blocked = (counts: Counts) => counts.anomalies > 0 || counts.unresolvedIdentityRelations > 0 || counts.corruptReferralRelations > 0 || counts.linkedRelationsWithPaidHistory > 0 ||
   counts.missingPaymentIdentityEvidence > 0 || counts.unresolvedPaymentIdentityEvidence > 0 || counts.corruptPaymentIdentityEvidence > 0;
 
@@ -38,6 +38,7 @@ export async function migrateOrderEmailNormalization(input: {
     const counts = emptyCounts();
     // Internal scan evidence only. Never return or log the customer identities.
     const paidProductCustomerIds = new Set<string>();
+    const mismatchedEvidence = new Set<string>();
     let changedOrders = 0;
     let cursor: QueryDocumentSnapshot | undefined;
     for (;;) {
@@ -57,17 +58,9 @@ export async function migrateOrderEmailNormalization(input: {
             paidProductCustomerIds.add(order.customerId);
             const identityDoc = await input.db.collection(REFERRAL_PAYMENT_IDENTITIES_COLLECTION).doc(doc.id).get();
             if (!identityDoc.exists) counts.missingPaymentIdentityEvidence++;
-            else {
-              const evidence = identityDoc.data();
-              const shape = paymentIdentityEvidenceShape(evidence, doc.id, order.customerId);
-              if (shape === "unresolved") counts.unresolvedPaymentIdentityEvidence++;
-              else if (shape === "corrupt") counts.corruptPaymentIdentityEvidence++;
-              else {
-                const claim = await input.db.collection("referralEmailClaims").doc(evidence!.claimId).get();
-                if (paymentIdentityClaimMatches(evidence as ReferralPaymentIdentityEvidence, claim.data())) counts.paymentIdentityEvidence++;
-                else counts.corruptPaymentIdentityEvidence++;
-              }
-            }
+            // Validity is counted once by the independent evidence scan below.
+            else if (identityDoc.data()?.orderId !== doc.id || identityDoc.data()?.customerUid !== order.customerId)
+              mismatchedEvidence.add(doc.id);
           }
         }
         const email = usableOrderEmail(order.customerEmail);
@@ -88,6 +81,30 @@ export async function migrateOrderEmailNormalization(input: {
         }
       }
       if (updates) { await batch.commit(); changedOrders += updates; }
+      cursor = page.docs[page.docs.length - 1];
+    }
+    cursor = undefined;
+    for (;;) {
+      let query = input.db.collection(REFERRAL_PAYMENT_IDENTITIES_COLLECTION).orderBy(FieldPath.documentId()).limit(pageSize);
+      if (cursor) query = query.startAfter(cursor);
+      const page = await query.get();
+      if (page.empty) break;
+      for (const doc of page.docs) {
+        const evidence = doc.data();
+        const shape = paymentIdentityEvidenceShape(evidence, doc.id, evidence.customerUid);
+        if (shape !== "corrupt") paidProductCustomerIds.add(evidence.customerUid);
+        const order = await input.db.collection("orders").doc(doc.id).get();
+        const bindingCorrupt = order.exists && (order.data()!.customerId !== evidence.customerUid || !hasHistoricalPaymentEvidence(order.data()!));
+        if (shape === "corrupt" || mismatchedEvidence.has(doc.id) || bindingCorrupt) counts.corruptPaymentIdentityEvidence++;
+        else if (shape === "unresolved") counts.unresolvedPaymentIdentityEvidence++;
+        else {
+          const claim = await input.db.collection("referralEmailClaims").doc(evidence.claimId).get();
+          if (paymentIdentityClaimMatches(evidence as ReferralPaymentIdentityEvidence, claim.data())) {
+            counts.paymentIdentityEvidence++;
+            if (!order.exists) counts.detachedPaymentIdentityEvidence++;
+          } else counts.corruptPaymentIdentityEvidence++;
+        }
+      }
       cursor = page.docs[page.docs.length - 1];
     }
     cursor = undefined;
@@ -140,7 +157,8 @@ export async function migrateOrderEmailNormalization(input: {
     existingMarker.data()?.verifiedOrders !== verification.scannedOrders ||
     existingMarker.data()?.verifiedPaidProductOrders !== verification.paidProductOrders ||
     existingMarker.data()?.verifiedReferralRelations !== verification.scannedReferralRelations ||
-    existingMarker.data()?.verifiedPaymentIdentityEvidence !== verification.paymentIdentityEvidence;
+    existingMarker.data()?.verifiedPaymentIdentityEvidence !== verification.paymentIdentityEvidence ||
+    existingMarker.data()?.verifiedDetachedPaymentIdentityEvidence !== verification.detachedPaymentIdentityEvidence;
   if (markerWritten) {
     const completedAtEpochMs = now();
     if (!Number.isSafeInteger(completedAtEpochMs) || completedAtEpochMs <= 0) throw new Error("order_email_migration_instant_invalid");
@@ -149,6 +167,7 @@ export async function migrateOrderEmailNormalization(input: {
       verifiedOrders: verification.scannedOrders, verifiedPaidProductOrders: verification.paidProductOrders,
       verifiedReferralRelations: verification.scannedReferralRelations, verifiedUnresolvedIdentityRelations: 0,
       verifiedLinkedRelationsWithPaidHistory: 0, verifiedPaymentIdentityEvidence: verification.paymentIdentityEvidence,
+      verifiedDetachedPaymentIdentityEvidence: verification.detachedPaymentIdentityEvidence,
       verifiedMissingPaymentIdentityEvidence: 0, verifiedUnresolvedPaymentIdentityEvidence: 0, verifiedCorruptPaymentIdentityEvidence: 0 }, { lastUpdateTime: markerPrecondition! });
     await batch.commit();
   } else {

@@ -87,6 +87,21 @@ export function paymentIdentityClaimMatches(evidence: ReferralPaymentIdentityEvi
     (evidence.status === "claimed" ? claim.refereeUid === evidence.customerUid : claim.refereeUid !== evidence.customerUid);
 }
 
+/** Bounded positive payment proof. Claims and source orders are deliberately not required. */
+export async function findPriorReferralPaymentIdentity(transaction: Transaction, db: Firestore, customerUid: string):
+  Promise<{ kind: "found"; orderId: string } | { kind: "none" | "inconclusive" }> {
+  if (!validId(customerUid)) return { kind: "inconclusive" };
+  const limit = 100;
+  const result = await transaction.get(db.collection(REFERRAL_PAYMENT_IDENTITIES_COLLECTION).where("customerUid", "==", customerUid).limit(limit));
+  let inconclusive = result.size >= limit;
+  for (const doc of result.docs) {
+    const shape = paymentIdentityEvidenceShape(doc.data(), doc.id, customerUid);
+    if (shape === "safe" || shape === "unresolved") return { kind: "found", orderId: doc.id };
+    inconclusive = true;
+  }
+  return { kind: inconclusive ? "inconclusive" : "none" };
+}
+
 /** Writes are deliberately delegated to the caller's final transaction write phase. */
 export async function prepareReferralPaymentIdentity(input: { db: Firestore; transaction: Transaction; orderId: string; customerUid: string;
   operational: boolean; identity?: CurrentPaymentIdentity; recordedAtEpochMs: number }) {

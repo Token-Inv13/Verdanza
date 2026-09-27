@@ -1,7 +1,7 @@
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { REFERRAL_PROGRAM_VERSION } from "../../src/types/referral.js";
 
-export const ORDER_EMAIL_NORMALIZATION_VERSION = "order-email-normalization-v4";
+export const ORDER_EMAIL_NORMALIZATION_VERSION = "order-email-normalization-v5";
 export const ORDER_EMAIL_MIGRATION_COLLECTION = "referralMigrations";
 
 export function isUnresolvedReferralIdentityHistoryReason(reason: unknown): boolean {
@@ -44,7 +44,8 @@ export function isReferralOrderEmailHistoryReady(value: FirebaseFirestore.Docume
     Number.isSafeInteger(value.verifiedReferralRelations) && value.verifiedReferralRelations >= 0 &&
     value.verifiedUnresolvedIdentityRelations === 0 && value.verifiedLinkedRelationsWithPaidHistory === 0 &&
     Number.isSafeInteger(value.verifiedPaymentIdentityEvidence) && value.verifiedPaymentIdentityEvidence >= 0 &&
-    value.verifiedPaymentIdentityEvidence <= value.verifiedPaidProductOrders &&
+    Number.isSafeInteger(value.verifiedDetachedPaymentIdentityEvidence) && value.verifiedDetachedPaymentIdentityEvidence >= 0 &&
+    value.verifiedDetachedPaymentIdentityEvidence <= value.verifiedPaymentIdentityEvidence &&
     value.verifiedMissingPaymentIdentityEvidence === 0 && value.verifiedUnresolvedPaymentIdentityEvidence === 0 &&
     value.verifiedCorruptPaymentIdentityEvidence === 0;
 }
