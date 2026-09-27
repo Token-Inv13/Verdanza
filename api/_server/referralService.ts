@@ -4,11 +4,10 @@ import { newReferralCode, normalizeReferralEmail, referralEmailClaimAliases, typ
 import type { ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
 import { canonicalOrderEmail } from "./orderEmailIdentity.js";
 import { findPriorReferralPaymentIdentity } from "./referralPaymentIdentity.js";
-import { readReferralOrderEmailHistoryReady } from "./referralOrderEmailHistory.js";
+import { referralRelationIdentityHistoryStatus, readReferralOrderEmailHistoryReady } from "./referralOrderEmailHistory.js";
 
-export class ReferralError extends Error {
-  constructor(readonly code: string, readonly status = 409) { super(code); }
-}
+import { ReferralError } from "./referralErrors.js";
+export { ReferralError } from "./referralErrors.js";
 type VerifiedUser = { uid: string; email: string | null; emailVerified?: boolean };
 type Program = { mode: "active" | "drain"; startsAtEpochMs: number };
 const ID = /^[A-Za-z0-9._:@+-]{1,128}$/;
@@ -144,7 +143,9 @@ export async function linkReferral(input: { db: Firestore; user: VerifiedUser; c
       (claimDoc.data()?.refereeUid !== refereeUid || claimDoc.data()?.referralId !== refereeUid ||
        claimDoc.data()?.schemaVersion !== 1 || claimDoc.data()?.programVersion !== REFERRAL_PROGRAM_VERSION ||
        claimDoc.data()?.keyVersion !== aliases[index].version)) throw new ReferralError("referral_email_claimed");
+    if (existing && referralRelationIdentityHistoryStatus(refereeUid, existing) !== "clear") throw new ReferralError("referral_relation_corrupt");
     if (existing && (existing.refereeUid !== refereeUid || existing.programVersion !== REFERRAL_PROGRAM_VERSION || existing.state !== "linked" || existing.qualifyingOrderId !== null)) throw new ReferralError("referral_relation_consumed");
+    if (existing?.checkoutReservation && existing.sponsorUid !== sponsorUid) throw new ReferralError("referral_checkout_reserved");
     const activeClaimExists = claimDocs[aliases.indexOf(activeAlias)].exists;
     if (existing?.sponsorUid === sponsorUid && activeClaimExists) return { state: "linked" as const, changed: false };
     const revision = (existing?.relinkRevision ?? 0) + (existing && existing.sponsorUid !== sponsorUid ? 1 : 0);

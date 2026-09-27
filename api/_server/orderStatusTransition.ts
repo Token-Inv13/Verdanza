@@ -23,7 +23,7 @@ import {
 import { validateCagnotteProductionFixtureState } from "./cagnotteProductionFixtureState.js";
 import { getReferralRuntime, ReferralConfigurationError, REFERRAL_CLOSED_RUNTIME } from "./referralRuntimeConfig.js";
 import type { ReferralRuntime } from "./referralRuntimeConfig.js";
-import { prepareFirstPaymentWithoutReferral, prepareReferralTransition, validateReferralOrderSnapshot, type ReferralPaymentEvidence } from "./referralLedger.js";
+import { prepareReferralCheckoutReservationRelease, prepareFirstPaymentWithoutReferral, prepareReferralTransition, validateReferralOrderSnapshot, type ReferralPaymentEvidence } from "./referralLedger.js";
 import { getReferralSponsorIdentity, type ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
 import { normalizeReferralEmail } from "./referralIdentity.js";
 import { prepareReferralPaymentIdentity, readCurrentPaymentIdentity, type CurrentPaymentIdentity } from "./referralPaymentIdentity.js";
@@ -201,7 +201,7 @@ export async function commitOrderStatusTransition({
         expectedTransition,
       });
     }
-    if ((hasCagnotteEnrollment(order) || Object.prototype.hasOwnProperty.call(order, "referral")) && (order.orderStatus === "cancelled" || order.cancelledAt) &&
+    if ((hasCagnotteEnrollment(order) || Object.prototype.hasOwnProperty.call(order, "referral")) && (order.orderStatus === "cancelled" || order.cancelledAt || (order.referral && order.paymentStatus === "cancelled")) &&
       ((body.orderStatus && body.orderStatus !== "cancelled") || (body.paymentStatus && body.paymentStatus !== "cancelled"))) {
       throw new CagnotteReservationError("CONFLICT", "Une commande inscrite annulée ne peut pas être réactivée.");
     }
@@ -458,6 +458,8 @@ export async function commitOrderStatusTransition({
         recordedAt: operationTime,
       };
     }
+    const referralReleasePlan = !productionFixture ? await prepareReferralCheckoutReservationRelease({ db, transaction, order,
+      nextOrderStatus: nextStatus, nextPaymentStatus: (update.paymentStatus as PaymentStatus | undefined) ?? order.paymentStatus }) : null;
     // All reads and business checks are complete. Only writes from this point on.
     emailHistoryInvalidationPlan?.write();
     paymentIdentityPlan?.write();
@@ -465,6 +467,7 @@ export async function commitOrderStatusTransition({
     writePaymentLinkEvent?.();
     cagnottePlan?.write();
     referralPlan?.write();
+    referralReleasePlan?.write();
     if (body.paymentStatus === "paid" && !productionFixture) {
       purchaseAnalyticsQueued = await enqueuePurchaseAnalyticsForPaidTransition({
         db,

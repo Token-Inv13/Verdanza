@@ -20,7 +20,7 @@ La réservation de l’email courant vérifié est indépendante de l’attribut
 - `referralEmailClaims/<HMAC>` réserve un email normalisé pour un UID. La convention `referralId === refereeUid` reste inchangée, mais un claim peut précéder tout document `referrals/<uid>` et ne crée aucun droit commercial. Aucun email clair. Un lien refuse un alias appartenant à un autre UID ; le même UID réutilise le claim sans duplication. Un paiement sans remise reste accepté face à un claim d’un autre UID, avec une preuve `protected_by_existing_claim`.
 - `orders/<id>.customerEmailNormalized` est la forme canonique serveur de l’email (`String(email).trim().toLowerCase()`), distincte du `customerEmail` brut conservé pour les communications. Le payload des nouvelles commandes la persiste systématiquement ; le premier paiement d’une commande legacy la répare si absente ou incorrecte et si `usableOrderEmail(customerEmail)` est exploitable, dans la même transaction et uniquement sur cette commande. Si le brut est inexploitable, aucun normalized artificiel n’est écrit, même si un ancien normalized semble plausible. Le type reste optionnel pour l’historique. Le helper partagé sert aussi à la normalisation stricte Referral et à la migration.
 - `referralMigrations/order-email-normalization-v5` certifie la migration technique exhaustive : `schemaVersion: 1`, `version: "order-email-normalization-v5"`, `status: "complete"`, `completedAtEpochMs`, `verifiedOrders`, `verifiedPaidProductOrders`, `verifiedReferralRelations`, `verifiedUnresolvedIdentityRelations: 0`, `verifiedLinkedRelationsWithPaidHistory: 0`. Les certificats V1, V2, V3 et V4 ne satisfont pas cette garantie V5. Ces compteurs entiers et l’instant positif sont validés ; aucun email ne figure dans le marqueur. Les règles candidates refusent lecture et écriture client, descendants compris. Un premier paiement produits avec email brut inexploitable invalide atomiquement tout marqueur existant : `status: "incomplete"`, schéma/version techniques imposés, `invalidatedAtEpochMs`, `invalidationReason: "paid_order_email_unusable"`, `invalidationRevision` entière incrémentée (ou 1 si invalide/épuisée), sans PII ajoutée. Même un marqueur déjà incomplet change de version Firestore ; une ancienne précondition de migration ne peut plus certifier son scan périmé. Un marqueur absent est lu transactionnellement mais jamais créé par le paiement ; une création concurrente impose la sérialisation ou le retry.
-- `orders/<id>.referral` est un instantané serveur versionné : base et seuil avant remise, remise totale, allocation par ligne et empreinte. Il ne contient pas le UID parrain. Chaque ligne doit avoir une base strictement positive et conserver au moins 1 centime net après sa part de remise parrainage ; le futur allocateur checkout devra respecter cet invariant. Le checkout normal ne construit pas encore cet instantané ni la remise ; la fabrique sert à l’injection locale et au prochain lot.
+- `orders/<id>.referral` est un instantané serveur versionné : base et seuil avant remise, remise totale, allocation par ligne et empreinte. Il ne contient pas le UID parrain. Chaque ligne doit avoir une base strictement positive et conserver au moins 1 centime net après sa part de remise parrainage ; l’allocateur serveur checkout respecte cet invariant. Le checkout sans demande explicite reste inchangé ; seul le devis Referral accepté en runtime active construit cet instantané via la fabrique serveur.
 - `cagnotteWallets/<sponsorUid>` et `cagnotteMovements/<eventKey>` sont le seul solde et journal monétaires. Aucun `referralRewards` n’est créé.
 
 ## Transitions et remboursements
@@ -31,13 +31,13 @@ La lecture affiche « Récompense de parrainage affectée à une régularisation
 
 Le cycle de commande résout le runtime Parrainage uniquement pour un paiement avec snapshot ou `customerId`, et pour une livraison avec snapshot. Une commande anonyme sans snapshot et une simple livraison sans snapshot ne le résolvent jamais. Une configuration invalide est traitée comme fermée pour le paiement sans remise, sans lecture de relation, Auth ou keyring et sans correction Parrainage persistée ; l’historique de ce paiement interdit une remise ultérieure après réactivation. Pour une commande portant un snapshot, la même configuration invalide refuse paiement ou livraison avant toute écriture avec `503 referral_configuration_invalid`. Un runtime absent ou explicitement `off` conserve son comportement inert, y compris pour un ancien snapshot. Le runtime explicitement injecté est utilisé sans résolution environnementale.
 
-En mode `off`, le paiement d’une commande, avec ou sans snapshot `referral`, n’attribue aucun gain et ne lit ni ne modifie les collections commerciales Parrainage ; le paiement métier continue. La maintenance technique du certificat est indépendante de ce runtime : un premier paiement produits réel avec email inexploitable lit le marker et invalide seulement un document déjà existant, même avec configuration absente, off ou malformée. Elle ne résout pas le runtime uniquement pour cette maintenance, ne consulte ni Auth ni HMAC, et ne crée ni relation, ni claim, ni wallet, ni mouvement. Les précommandes suivent le même prédicat de commande produits que la preuve historique ; fixtures et documents non produits sont exclus. En mode opérationnel, **toute première transition de commande produits vers `paid`** lit la relation du filleul dans la transaction. Si le checkout n’a appliqué aucune remise parrainage (seuil non atteint ou promotion prioritaire), un lien `linked` est consommé en `cancelled` avec `first_paid_order_without_referral_discount`, sans wallet ni mouvement. Pour une commande avec snapshot, la qualification recherche d’abord, dans la même transaction, toute autre commande produits payée historiquement par UID et, si l’email courant est vérifié, par email canonique avec variantes legacy en défense supplémentaire. Un paiement historique déjà trouvé interdit le paiement de la nouvelle commande remisée avec un conflit 409, sans mutation de la relation ; un nouveau devis sans remise est nécessaire. Un historique saturé ou incohérent refuse également le paiement remisé avec `referral_history_inconclusive` (409), avant toute mutation de commande, relation, claim, wallet ou ledger : la commande doit être requotée sans remise. Une commande sans snapshot Referral reste payable et consomme le lien sans gain. Aucune rétroattribution, tâche différée ou mutation commerciale Parrainage en mode `off` n’est prévue. La livraison prépaiement reste un fait de commande : elle ne réserve ni `qualifyingOrderId` ni `deliveredOrderId` dans la relation. La première commande réellement payée réclame la relation dans sa transaction ; si elle est déjà livrée, le paiement établit aussi sa livraison et les deux mouvements sont inscrits ensemble. `deliveredOrderId` désigne uniquement cette commande qualifiante. Une autre commande avec snapshot ne peut plus passer à `paid` après consommation du droit ; ses transitions hors paiement restent indépendantes. Une commande sans snapshot reste payable. Si le parrain reste éligible, le paiement inscrit `referral_reward_pending` et +1 000 pending ; la livraison de la commande qualifiante inscrit `referral_reward_available`, retire 1 000 pending et rend disponible le reliquat après compensation d’une éventuelle régularisation. Une annulation statutaire avant paiement ne touche pas la relation. Après paiement, le statut `cancelled` n’altère ni la relation ni le wallet parrain ; seul un remboursement confirmé sous le seuil retire le gain. Les IDs de mouvements sont déterministes et les transactions Firestore sérialisent les accès concurrents au même wallet.
+En mode `off`, le paiement d’une commande, avec ou sans snapshot `referral`, n’attribue aucun gain et ne lit ni ne modifie les collections commerciales Parrainage ; le paiement métier continue. La maintenance technique du certificat est indépendante de ce runtime : un premier paiement produits réel avec email inexploitable lit le marker et invalide seulement un document déjà existant, même avec configuration absente, off ou malformée. Elle ne résout pas le runtime uniquement pour cette maintenance, ne consulte ni Auth ni HMAC, et ne crée ni relation, ni claim, ni wallet, ni mouvement. Les précommandes suivent le même prédicat de commande produits que la preuve historique ; fixtures et documents non produits sont exclus. En mode opérationnel, **toute première transition de commande produits vers `paid`** lit la relation du filleul dans la transaction. Si le checkout n’a appliqué aucune remise parrainage (seuil non atteint ou promotion prioritaire), un lien `linked` est consommé en `cancelled` avec `first_paid_order_without_referral_discount`, sans wallet ni mouvement. Pour une commande avec snapshot, la qualification recherche d’abord, dans la même transaction, toute autre commande produits payée historiquement par UID et, si l’email courant est vérifié, par email canonique avec variantes legacy en défense supplémentaire. Un paiement historique déjà trouvé interdit le paiement de la nouvelle commande remisée avec un conflit 409, sans mutation de la relation ; un nouveau devis sans remise est nécessaire. Un historique saturé ou incohérent refuse également le paiement remisé avec `referral_history_inconclusive` (409), avant toute mutation de commande, relation, claim, wallet ou ledger : la commande doit être requotée sans remise. Une commande sans snapshot Referral reste payable et consomme le lien sans gain. Aucune rétroattribution, tâche différée ou mutation commerciale Parrainage en mode `off` n’est prévue. La livraison prépaiement reste un fait de commande : elle ne réserve ni `qualifyingOrderId` ni `deliveredOrderId` dans la relation. La première commande réellement payée réclame la relation dans sa transaction ; si elle est déjà livrée, le paiement établit aussi sa livraison et les deux mouvements sont inscrits ensemble. `deliveredOrderId` désigne uniquement cette commande qualifiante. Une autre commande avec snapshot ne peut plus passer à `paid` après consommation du droit ; ses transitions hors paiement restent indépendantes. Une commande sans snapshot reste payable. Si le parrain reste éligible, le paiement inscrit `referral_reward_pending` et +1 000 pending ; la livraison de la commande qualifiante inscrit `referral_reward_available`, retire 1 000 pending et rend disponible le reliquat après compensation d’une éventuelle régularisation. Une annulation statutaire avant paiement ne crée aucun gain ; elle retire seulement la réservation checkout de sa commande jamais payée, si présente, même sous off. Après paiement, le statut `cancelled` n’altère ni la relation ni le wallet parrain ; seul un remboursement confirmé sous le seuil retire le gain. Les IDs de mouvements sont déterministes et les transactions Firestore sérialisent les accès concurrents au même wallet.
 
-Une commande portant à la fois un snapshot `referral` et une réservation ou utilisation de cagnotte positive est refusée avant les plans financiers et avant toute écriture de paiement. Un enrollment cagnotte à zéro reste compatible avec le parrainage ; une commande incompatible déjà enregistrée reste annulable selon le contrôle de paiement impayé existant. Le prochain lot checkout devra empêcher la création de ce mélange et demander un nouveau devis explicite en cas de cagnotte positive.
+Une commande portant à la fois un snapshot `referral` et une réservation ou utilisation de cagnotte positive est refusée avant les plans financiers et avant toute écriture de paiement. Un enrollment cagnotte à zéro reste compatible avec le parrainage ; une commande incompatible déjà enregistrée reste annulable selon le contrôle de paiement impayé existant. Le checkout serveur interdit maintenant la création de ce mélange et demande un nouveau devis explicite sans cagnotte positive.
 
 Pour une commande déjà remisée, l’identité filleul actuelle doit rester valide et exclusive au paiement. Un binding modifié, un compte désactivé, un email non vérifié, une identité ou un keyring indisponible, un claim détenu par un autre UID ou l’auto-parrainage provoquent un conflit 409 avec le motif précis, avant toute écriture. Un nouveau devis sans remise est requis. Une inéligibilité du parrain seul (compte désactivé, Auth indisponible ou absence de commande payée et livrée) ne retire pas la remise filleul : le paiement reste accepté et son claim courant est créé ou migré, sans reward parrain. Les commandes sans snapshot conservent leur paiement métier et leur consommation du lien sans gain.
 
-Une commande avec snapshot `referral` et avantage commercial prioritaire effectivement appliqué est aussi refusée avant paiement : code promo (y compris livraison offerte), prix promotionnel, gain concours, promotion automatique ou cadeau. Le contrôle utilise les faits persistés (`couponCode`, `promoCode`, `promoId`, `contestPrizeId`, `promoApplied`, `promotionDiscountTotal`, `appliedPromotions`, lignes cadeau ou liées à une promotion). `discountAmount` contient potentiellement la remise parrainage et ne suffit pas à établir un conflit ; la livraison offerte sans avantage promotionnel n’en établit pas un non plus. Le checkout devra produire un devis exclusif avant toute activation.
+Une commande avec snapshot `referral` et avantage commercial prioritaire effectivement appliqué est aussi refusée avant paiement : code promo (y compris livraison offerte), prix promotionnel, gain concours, promotion automatique ou cadeau. Le contrôle utilise les faits persistés (`couponCode`, `promoCode`, `promoId`, `contestPrizeId`, `promoApplied`, `promotionDiscountTotal`, `appliedPromotions`, lignes cadeau ou liées à une promotion). `discountAmount` contient potentiellement la remise parrainage et ne suffit pas à établir un conflit ; la livraison offerte sans avantage promotionnel n’en établit pas un non plus. Le checkout serveur produit maintenant ce devis exclusif ; l’activation reste hors lot.
 
 Le remboursement confirmé et la correction administrative appellent le même service dans leur transaction. Le cumul retourné est calculé par ligne depuis l’historique des retours, puis ramené en base avant remise à l’aide de l’allocation figée et d’une division entière. Si la base retenue tombe sous 5 000 centimes, le droit pending est annulé, ou le droit disponible est contrepassé jusqu’au solde disponible ; le reste devient `regularizationCents`, sans dette financière. Une correction qui restaure le seuil émet `referral_reward_restored`, puis `referral_reward_available` si paiement et livraison sont établis. Les remboursements/corrections rejoués avec le même ID et le même cumul sont sans effet.
 
@@ -141,3 +141,172 @@ La certification V5 scanne toutes les payment identities indépendamment de orde
 Le reconciler pagine aussi les preuves sans commande. Une unresolved orphan structurellement valide fournit elle-même orderId/customerUid du paiement historique. Auth est relu hors transaction ; preuve, absence de commande et aliases sont relus atomiquement avant claim/evidence. UID changé, preuve disparue/corrompue ou commande réapparue ferme la tentative. Auth indisponible/supprimé laisse unresolved. Il ne recrée aucun ordre et ne touche aucun droit, relation, reward, remise, wallet ou marker. Dry-run par défaut et confirmation apply restent inchangés ; replay et concurrence sont idempotents. Seule la migration V5 ultérieure peut certifier.
 
 Aucune migration/réconciliation Production, même dry-run, ni activation/configuration/infrastructure Production dans ce lot. Les tests de suppression, certification orphan et reconciliation utilisent seulement l'émulateur dédié et Auth mocké.
+# Checkout serveur inert — devis et acceptation V1
+
+Le contrat `referralUse` est strict : `{ requested: true, acceptance? }`. L'acceptation
+contient seulement `quoteVersion: "referral-checkout-quote-v1"`, le fingerprint SHA-256,
+`acceptedReferralDiscountCents: 500` et `acceptedPayableCents`. Aucun montant libre,
+sponsor, relation, snapshot ou allocation HTTP n'est accepté dans ce bloc. Les anciens
+champs HTTP hors contrat ne sont jamais utilisés pour construire un snapshot.
+
+Sans demande, aucun runtime/lookup Auth/keyring/collection Referral n'est consulté.
+La demande seule exige un runtime opérationnel **active** déjà démarré ; off/absent,
+drain et configuration malformée ferment avant Auth et lectures métier Firestore.
+Quote ne consulte aucune dépendance ; create consulte d’abord uniquement le checkoutRequest
+technique pour récupérer un éventuel replay déjà committé. Aucune nouvelle
+variable, clé, activation ou UI n'est ajoutée par ce lot.
+
+`referralCheckout.ts` relit l'identité Auth actuelle hors transaction. Le devis exige
+un email actif/vérifié, au moins un claim compatible du même UID, aucun alias d'un autre
+UID, une relation linked cohérente et l'absence d'historique payé selon l'autorité V5
+(commandes, preuves durables et certificat). Le devis ne réserve, ne crée et ne modifie
+aucun claim, relation, wallet, récompense, commande ou marqueur, même avec une ancienne
+clé encore valide. Toutes les réponses Referral sont `private, no-store` et varient sur
+`Authorization` ; aucun identifiant de parrain n'est projeté.
+
+Les avantages prioritaires déjà appliqués (code, concours, promotion, cadeau et code
+livraison gratuite) excluent Referral. La base de 5000c contient les seuls produits
+payants hors livraison/cadeaux. Les 500c sont alloués par largest remainder et IDs de
+ligne serveur stables, avec au moins un centime net par ligne. Une ligne de 1c reçoit
+zéro remise. L'ordre d'entrée du panier ne change ni les allocations ni le fingerprint.
+
+Referral applicable avec cagnotte positive retourne `REFERRAL_CAGNOTTE_CONFLICT` : le
+client doit demander un nouveau devis sans cagnotte. Zéro est compatible. Le programme
+d'acquisition fidélité doit pouvoir inscrire cette commande ; sinon Referral ferme en
+`referral_loyalty_unavailable`, sans créer une commande remisée dépourvue de base refund.
+L'ancien contrat mathématique de compatibilité Referral/cagnotte n'est pas modifié.
+
+À la création, le moteur prix existant relit transactionnellement produits, stocks,
+formats, coupons et livraison ; Referral relit relation, claims, historique et V5.
+Le fingerprint lie UID, version/runtime, relation, certificat et sa version documentaire,
+versions/stock des produits, lignes/quantités/formats/prix, allocations, livraison/adresse,
+promotions, cagnotte demandée, montant payable et fidélité. Toute divergence d'un devis
+accepté produit `REFERRAL_QUOTE_CONFLICT` (409). Une acceptation manquante sur un devis
+applicable produit `REFERRAL_ACCEPTANCE_REQUIRED`. Aucun fallback plein tarif silencieux.
+Un cas non applicable sans acceptation suit la commande normale sans snapshot Referral.
+
+Seul `createReferralOrderSnapshot` construit le snapshot persisté. Il est posé sur le
+payload avant le calcul fidélité. Les remises par ligne sont `ProductDiscount.kind =
+referral_discount` ; une validation croisée vérifie exactement chaque allocation.
+`promotionDiscountTotal` reste réservé aux promotions ; `discountAmount` inclut les 500c
+Referral et `total` diminue de 500c. Livraison inchangée. 5000c de produits donnent 4500c
+payés et 225c de fidélité. Avec livraison facturée 549c, le payable est 5049c. Le tarif
+postal existant offre toutefois déjà la livraison à 50 EUR : ce cas postal reste gratuit.
+La fixture locale facturée à 549c vérifie l'exemple canonique sans changer cette politique.
+
+`checkoutPayloadFingerprint` inclut la demande/acceptation uniquement lorsqu'elle existe,
+préservant l'empreinte historique sans demande. `checkoutRequests.referralBeneficiaryId`
+et les réponses de replay vérifient le UID propriétaire. Toutes les lectures précèdent
+les écritures ; ni Auth/réseau ni transaction imbriquée dans le commit. Un abort ne
+laisse aucune commande, stock, request, claim ou wallet partiellement modifié.
+
+`npm run test:referral-checkout` exécute le nouvel émulateur contrôlé avec Auth mocké.
+La suite couvre les routes réelles, seuils, refus de falsification, priorités, historique
+durable, conflits, allocation, formats, replay/binding, abort, validation croisée et
+paiement/livraison/refund à partir d'une commande issue du vrai checkout. Elle est
+réellement intégrée à `npm run verify`, donc à CI. Les 260 contrôles backend restent
+séparés. Le cycle commande/refund qualifié est réutilisé, sans branche Stripe.
+
+Restent hors lot : UI/flags publics, Stripe Referral, activation Production, keyring/secret,
+certification ou réconciliation V5 Production, marqueur, seed et deploy rules/index.
+Les candidatures Firebase existantes ne sont pas modifiées ni déployées.
+
+
+## Réservation exclusive et replay de commande (PR #21)
+
+`ReferralRelation.checkoutReservation` est optionnel, rétrocompatible V1/V5 et contient
+`schemaVersion: 1`, `orderId`, `checkoutRequestId` (UUID checkout canonique),
+`createdAtEpochMs`. Sa présence est valide uniquement sur une relation `linked`,
+qualifyingOrderId/deliveredOrderId null, paymentConfirmed/deliveryConfirmed false,
+rewardCompartment none. Les validateurs relation, ledger et certification V5 refusent
+une réservation malformée ou présente dans un état qualifié/terminal. Sans champ,
+les anciens snapshots serveur et fixtures restent utilisables.
+
+Le devis reste strictement read-only. Deux devis avant création peuvent proposer la
+remise, mais une relation déjà réservée produit `applied=false, reason=right_reserved`.
+La création relit/revalide les faits et l’acceptance, puis réserve son ordre dans la
+même transaction que commande, checkoutRequest, stock, enrollment et outbox. Deux
+requests distincts concurrents ne peuvent créer qu’une seule commande remisée ; le
+perdant reçoit REFERRAL_QUOTE_CONFLICT, sans stock, request ni side-effect réussi.
+Un abort ne laisse ni ordre ni réservation. Le même request exact reste idempotent.
+
+Le paiement de l’ordre réservé poursuit les contrôles existants et transforme la
+réservation en qualifyingOrderId atomiquement ; drain permet ce règlement engagé.
+Une autre commande remisée est refusée (referral_discount_reserved_for_other_order).
+Un refus/abort ne libère rien. Un paiement plain antérieur reste prioritaire et
+consomme la relation, retirant la réservation ; la commande remisée ensuite ne peut
+plus payer sa remise. Sous off, le paiement conserve l’inertie commerciale existante
+et ne libère pas la réservation. L’autorité des preuves de paiement V5 reste intacte.
+
+Une annulation explicite orderStatus/paymentStatus cancelled d’un ordre jamais payé
+libère sa propre réservation, même sous off/configuration indisponible, sans Auth,
+sponsor ni keyring. Relation et commande suffisent ; toutes les lectures précèdent
+les écritures. Historique paid/paidAt/paymentConfirmedAt, même un instant inexploitable,
+empêche de traiter le droit comme jamais consommé. Le lifecycle financier existant
+reste autoritaire. Annulation rejouée : aucun nouvel effet sur la relation ; le devis
+peut à nouveau proposer la remise si les autres conditions passent. Aucun TTL, cron,
+expiration ou auto-release : un abandon exige une annulation explicite. Une commande Referral annulée, y compris par le seul paymentStatus, ne peut pas
+être réactivée pour payer sa remise après cette libération. Le hard delete
+Referral reste interdit. Un relink vers un autre sponsor est refusé pendant réservation
+(referral_checkout_reserved) ; le même sponsor peut rester un no-op valide.
+
+create-order parse le contrat, calcule le fingerprint et retrouve d’abord le
+checkoutRequest. Le replay exact vérifie UID serveur, beneficiaryId et ordre existant,
+puis rend son état actuel, même annulé, sans runtime Referral/cagnotte, current identity,
+keyring, prix, rate limit, relation/history/marker ou nouveau side-effect. Une mauvaise
+identité, payload différent ou ordre manquant reste checkout_request_conflict. Après
+un early miss, une erreur de résolution runtime/identité donne lieu à UNE seconde
+recherche exacte protégée : une création concurrente peut être récupérée sans fallback
+aveugle. Le check transactionnel existant couvre également la course jusqu’au commit.
+
+Ainsi, une demande nouvelle fermée ne fait que les lectures techniques de replay
+checkoutRequests avant son refus ; elle ne lit pas les collections métier Referral,
+Auth ou keyring. Quote conserve son refus avant toutes ces dépendances. Un body invalide
+ne peut pas rejouer et conserve la priorité historique d’erreur cagnotte.
+
+Le parser HTTP Referral est isolé dans referralCheckoutRequest.ts avec une classe
+pure referralErrors.ts : checkout.ts n’importe plus le module métier complet ni Firebase
+Admin dans le serveur de tests local. Le contrôle strict testCheckoutAdapters est conservé.
+Les tests de réservation/replay renforcent les 43 cas checkout initiaux, sans modification
+des timeouts, garde-fous, UI, Stripe, règles/index ou configuration Production.
+
+## Revenu comptable et propriété des demandes sans remise (PR #21)
+
+`subtotalAfterPromotion` conserve son sens : produits après promotions, avant Referral.
+La projection admin transmet le snapshot Referral persisté à Accounting. Le revenu
+produits soustrait uniquement `referral.refereeDiscountCents`, entier sûr non négatif,
+converti en euros et borné à zéro. Aucun barème courant ni montant hardcodé. Une valeur
+malformée est ignorée sans exception globale. Le fallback historique subtotal moins
+discountAmount reste inchangé : il inclut déjà Referral et ne la soustrait pas deux fois.
+La métrique discounts continue d'utiliser discountAmount ; la livraison est séparée.
+
+Exemple payé : 50 EUR produits, 500c Referral, 5,49 EUR livraison donnent 45 EUR de
+productNetRevenue, 5,49 EUR deliveryRevenue, 50,49 EUR collectedRevenue et 5 EUR de
+discounts. Marge et ratios utilisent les 45 EUR. Chaque ligne Referral reprend son net
+gelé `eligibleBeforeReferralCents - referralDiscountCents`, relié exclusivement par `lineId`.
+Aucune réallocation : 3200/1920 moins 313/187 donnent 2887/1733, indépendamment de l'ordre
+des items ou du snapshot. Un mapping ou des sommes incohérents utilisent le fallback
+historique sans mutation de commande. Sans Referral, projection et allocation historiques
+restent inchangées. Les snapshots, calculs de fidélité et remboursements ne changent pas.
+
+Toute création réussie avec `body.referralUse` conserve le UID vérifié dans
+`checkoutRequests.referralBeneficiaryId`, même si applied=false (below_threshold,
+no_relation, priority_advantage ou right_reserved lorsque la commande normale est autorisée).
+Le champ serveur `referralApplied` distingue les deux cas. Un applied=true exige un
+snapshot order.referral dont referralId est ce UID ; applied=false exige son absence.
+Les deux exigent order.customerId égal au bénéficiaire. Les bindings cagnotte/Referral,
+lorsqu'ils coexistent, doivent viser le même UID. Un flag malformé/incohérent est refusé.
+
+Lookup initial, fallback de race et replay transactionnel transportent/valident les mêmes
+bindings jusqu'à la réponse. Même UID : état actuel sans runtime/identity/keyring/pricing/
+rate-limit/side-effect ; autre UID, token absent/invalide, ordre manquant ou owner corrompu :
+refus. authToken reste exclu du fingerprint commercial. Les anciennes requests bindées sans
+referralApplied restent compatibles : un snapshot présent est validé comme applied,
+sinon customerId/bénéficiaire suffisent. Une request ordinaire sans Referral garde son contrat.
+
+Tests : 78 checkout antérieurs conservés, cas applied=false sans acquisition ou avant son
+démarrage, replays early/transactionnels, compatibilité, corruption et concurrence ajoutés.
+Accounting couvre le montant gelé, livraison/marge/lignes, fallbacks, données malformées et
+promotions ordinaires ; son test complet est aussi exécuté en CI. Un checkout réel puis paid
+est projeté via adminOrderRow et Accounting, avec 45 EUR produits et 5,49 EUR livraison.
+Programme toujours fermé par défaut ; aucune opération/configuration Production ajoutée.

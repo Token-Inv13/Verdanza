@@ -1,5 +1,6 @@
 import type { Order, OrderItem, ProductCategory } from "../../src/types/index.js";
 import { orderItemLineTotal } from "../../src/lib/orderLineDisplay.js";
+import { resolveFrozenReferralLineAmounts } from "../../src/lib/referralFrozenLines.js";
 
 export type Ga4PurchaseResult =
   | { status: "sent" }
@@ -59,7 +60,12 @@ export function getGa4ServerConfig(env: NodeJS.ProcessEnv = process.env): Ga4Ser
 export function buildGa4PurchasePayload(order: Order): Ga4PurchasePayload | null {
   if (!isPurchaseEligible(order)) return null;
   const items = buildPurchaseItems(order);
-  if (!items.length) return null;
+  if (!items?.length) return null;
+  const value = roundMoney(netProductValue(order));
+  if (hasReferralSnapshot(order) && order.referral && (
+    Math.round(items.reduce((sum, item) => sum + item.price * item.quantity, 0) * 100) !== Math.round(value * 100) ||
+    Math.round(items.reduce((sum, item) => sum + (item.discount ?? 0) * item.quantity, 0) * 100) !== order.referral.refereeDiscountCents
+  )) return null;
   const paidAtMs = order.paidAt ? Date.parse(order.paidAt) : NaN;
   return {
     client_id: order.analytics.clientId,
@@ -74,7 +80,7 @@ export function buildGa4PurchasePayload(order: Order): Ga4PurchasePayload | null
         params: {
           transaction_id: order.id,
           currency: "EUR",
-          value: roundMoney(netProductValue(order)),
+          value,
           shipping: roundMoney(Number(order.deliveryFee || 0)),
           coupon: order.couponCode || order.promoCode || undefined,
           payment_method: order.finalPaymentMethod,
@@ -156,7 +162,37 @@ export function netProductValue(order: Order) {
   return roundMoney(Math.max(0, productSubtotal - productDiscount));
 }
 
-function buildPurchaseItems(order: Order): Ga4PurchaseItem[] {
+function hasReferralSnapshot(order: Order): boolean {
+  return Object.prototype.hasOwnProperty.call(order, "referral") && order.referral !== undefined;
+}
+
+function buildPurchaseItems(order: Order): Ga4PurchaseItem[] | null {
+  if (hasReferralSnapshot(order)) {
+    const frozen = resolveFrozenReferralLineAmounts(order);
+    if (!frozen) return null;
+    const items = order.items.map((item): Ga4PurchaseItem | null => {
+      const line = item.lineId ? frozen.get(item.lineId) : undefined;
+      const quantity = Number(item.quantity || 0);
+      if (!line || !item.productId || !item.name || !Number.isFinite(quantity) || quantity <= 0) return null;
+      const price = line.netCents / 100 / quantity;
+      const discount = line.discountCents / 100 / quantity;
+      if (!Number.isFinite(price) || !Number.isFinite(discount) ||
+          Math.round(price * quantity * 100) !== line.netCents ||
+          Math.round(discount * quantity * 100) !== line.discountCents ||
+          Math.round((price + discount) * quantity * 100) !== line.eligibleCents) return null;
+      return {
+        item_id: item.slug || item.productId,
+        item_name: item.name,
+        item_category: itemCategoryLabel(item.category),
+        item_variant: item.cultureType,
+        price,
+        discount,
+        quantity,
+      };
+    });
+    return items.some((item) => item === null) ? null : items as Ga4PurchaseItem[];
+  }
+
   const productSubtotal = roundMoney(
     (order.items || []).reduce(
       (sum, item) => sum + orderItemLineTotal(item),

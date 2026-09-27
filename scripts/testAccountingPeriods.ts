@@ -12,6 +12,7 @@ import {
   supplierPurchaseAccountingDate,
 } from "../src/lib/accountingPeriods.js";
 import { buildAccountingSummary } from "../src/lib/accountingSummary.js";
+import { createReferralOrderSnapshot } from "../api/_server/referralSnapshot.js";
 import {
   computeWeightedSupplierCosts,
   type WeightedSupplierCost,
@@ -28,7 +29,7 @@ function check(actual: unknown, expected: unknown, message: string) {
 }
 
 function checkThrows(callback: () => unknown, message: string) {
-  assert.throws(callback, undefined, message);
+  assert.throws(callback, message);
   assertions += 1;
 }
 
@@ -359,7 +360,7 @@ const productionFixtureOrder = orderFixture({
     purchasePricePerGramSnapshot: 2.5,
     purchaseCostTotalSnapshot: 25,
     purchaseCostCapturedAt: "2026-08-11T08:00:00.000Z",
-    purchaseCostSource: "fixture",
+    purchaseCostSource: "manual_fallback",
   }],
   subtotalBeforePromotion: 100,
   subtotalAfterPromotion: 100,
@@ -434,6 +435,131 @@ check(legacySummary.paymentDateQualityCounts, { exact: 1, legacy_explicit: 1, le
 check(legacySummary.historicalPaymentDateIssues.map((issue) => issue.orderId), ["ESTIMATE", "FALLBACK", "MISSING"], "Historical warnings expose only abbreviated identifiers");
 check(legacySummary.paidOrdersCount, 4, "A missing date cannot be silently assigned to a period");
 
+const referralSnapshot = createReferralOrderSnapshot({ refereeUid: "accounting-referee", createdAtEpochMs: 1000,
+  lines: [{ lineId: "product-1", eligibleBeforeReferralCents: 5000, referralDiscountCents: 500 }] });
+const referralPaid = orderFixture({ id: "REFERRAL-PAID", paymentStatus: "paid", paymentConfirmedAt: "2026-08-02T10:00:00.000Z",
+  referral: referralSnapshot, subtotal: 50, subtotalBeforePromotion: 50, subtotalAfterPromotion: 50,
+  promotionDiscountTotal: 0, discountAmount: 5, deliveryFee: 5.49, total: "50,49 EUR",
+  items: [{ ...exactPaid.items[0], lineId: "product-1", unitPrice: 5, lineTotal: 50 }] });
+const referralSummary = (order: AdminOrderRow) => buildAccountingSummary([order], [product], productCosts, [], weightedCosts, augustMonth);
+const referralAccounting = referralSummary(referralPaid);
+check(referralPaid.subtotalAfterPromotion, 50, "Promotion subtotal keeps its pre-referral meaning");
+check(referralAccounting.collectedRevenue, 50.49, "Referral collected revenue includes shipping");
+check(referralAccounting.productNetRevenue, 45, "Frozen 500 referral cents reduce product revenue from 50 to 45");
+check(referralAccounting.deliveryRevenue, 5.49, "Referral never reduces delivery revenue");
+check(referralAccounting.productNetRevenue + referralAccounting.deliveryRevenue, 50.49, "Products plus delivery reconcile to collection");
+check(referralAccounting.discounts, 5, "discountAmount already includes referral once");
+check(referralAccounting.estimatedProductCost, 22.5, "Frozen product costs are unchanged");
+check(referralAccounting.grossMargin, 22.5, "Margin is 45 minus product cost, not 50 minus cost");
+check(referralAccounting.grossMarkupRate, 22.5 / 45, "Margin ratio uses corrected product revenue");
+check(referralAccounting.productRows.map(row => [row.productNetRevenue, row.grossMargin]), [[45, 22.5]], "Product rows use corrected revenue and margin");
+for (const subtotalAfterPromotion of [undefined, NaN]) {
+  check(referralSummary({ ...referralPaid, subtotalAfterPromotion }).productNetRevenue, 45, "Subtotal fallback uses discountAmount without a second referral subtraction");
+}
+check(referralSummary({ ...referralPaid, subtotal: undefined, subtotalBeforePromotion: undefined, subtotalAfterPromotion: undefined }).productNetRevenue,
+  45, "Total-minus-delivery fallback does not subtract referral twice");
+const threeLineReferral = orderFixture({ ...referralPaid, items: [1667, 1667, 1666].map((cents, index) => ({
+  ...referralPaid.items[0], lineId: String(index), productId: `accounting-line-${index}`, quantity: 1, unitPrice: cents / 100, lineTotal: cents / 100,
+  purchaseCostTotalSnapshot: 3,
+})), referral: createReferralOrderSnapshot({ refereeUid: "accounting-referee", createdAtEpochMs: 1000,
+  lines: [1667, 1667, 1666].map((cents, index) => ({ lineId: String(index), eligibleBeforeReferralCents: cents, referralDiscountCents: [167, 167, 166][index] })) }) });
+const threeLineSummary = referralSummary(threeLineReferral);
+check(threeLineSummary.productRows.reduce((sum, row) => sum + Math.round(row.productNetRevenue * 100), 0), 4500,
+  "Three proportional product rows preserve every cent after final rounding");
+check(threeLineSummary.productNetRevenue, 45, "Multiline referral net remains 45");
+check(threeLineSummary.deliveryRevenue, 5.49, "Multiline shipping stays separate");
+check(threeLineSummary.productRows.every(row => row.productNetRevenue >= 0 && Number.isFinite(row.productNetRevenue)), true, "Multiline allocation is finite and nonnegative");
+check(referralSummary({ ...referralPaid, referral: { ...referralSnapshot, refereeDiscountCents: 750 } as unknown as AdminOrderRow["referral"] }).productNetRevenue,
+  42.5, "Accounting reads the frozen amount, without hardcoding the current tariff");
+check(referralSummary({ ...referralPaid, referral: { ...referralSnapshot, refereeDiscountCents: Number.MAX_SAFE_INTEGER } as unknown as AdminOrderRow["referral"] }).productNetRevenue,
+  0, "Even an excessive valid integer snapshot cannot make revenue negative");
+for (const malformed of [null, {}, [], { refereeDiscountCents: "500" }, { refereeDiscountCents: NaN }, { refereeDiscountCents: Infinity },
+  { refereeDiscountCents: -1 }, { refereeDiscountCents: 0.5 }, { refereeDiscountCents: Number.MAX_SAFE_INTEGER + 1 }]) {
+  check(referralSummary({ ...referralPaid, referral: malformed as AdminOrderRow["referral"] }).productNetRevenue, 50,
+    "Malformed referral cents are ignored defensively without NaN or a dashboard exception");
+}
+check(referralSummary({ ...referralPaid, referral: { ...referralSnapshot, refereeDiscountCents: 0 } as unknown as AdminOrderRow["referral"] }).productNetRevenue,
+  50, "Zero frozen referral cents are accepted");
+check(referralSummary({ ...referralPaid, referral: undefined, discountAmount: 0, deliveryFee: 0, total: "50,00 EUR" }).productNetRevenue,
+  50, "Ordinary product revenue is unchanged");
+check(summary.productNetRevenue, 71.55, "Legacy promotion product revenue remains unchanged");
+check(summary.productRows[0].productNetRevenue, 71.55, "Legacy promotion row allocation remains unchanged");
+
+assert.equal(assertions, 89, "All 89 accounting baseline assertions remain executed");
+const frozenLines = [
+  { lineId: "line-a", eligibleBeforeReferralCents: 3200, referralDiscountCents: 313 },
+  { lineId: "line-b", eligibleBeforeReferralCents: 1920, referralDiscountCents: 187 },
+];
+const frozenOrder = orderFixture({ ...referralPaid, id: "FROZEN-LINES", subtotal: 51.2, subtotalBeforePromotion: 51.2,
+  subtotalAfterPromotion: 51.2, deliveryFee: 0, total: "46,20 EUR", items: frozenLines.map((line, index) => ({
+    ...referralPaid.items[0], lineId: line.lineId, productId: index === 0 ? "product-a" : "product-b", quantity: 1,
+    unitPrice: line.eligibleBeforeReferralCents / 100, lineTotal: line.eligibleBeforeReferralCents / 100,
+    purchaseCostTotalSnapshot: index === 0 ? 4 : 3,
+  })), referral: createReferralOrderSnapshot({ refereeUid: "accounting-referee", createdAtEpochMs: 1000, lines: frozenLines }) });
+const rowsByProduct = (order: AdminOrderRow) => referralSummary(order).productRows
+  .map(row => [row.productId, row.productNetRevenue, row.purchaseCost, row.grossMargin]);
+const frozenBefore = JSON.stringify(frozenOrder);
+for (const reverseItems of [false, true]) for (const reverseSnapshot of [false, true]) {
+  const variant = { ...frozenOrder, items: reverseItems ? [...frozenOrder.items].reverse() : frozenOrder.items,
+    referral: { ...frozenOrder.referral!, lines: reverseSnapshot ? [...frozenLines].reverse() : frozenLines } };
+  const result = referralSummary(variant);
+  check(rowsByProduct(variant), [["product-a", 28.87, 4, 24.87], ["product-b", 17.33, 3, 14.33]],
+    "Frozen lineId revenue and margin are independent of item/snapshot order, never 28.88/17.32");
+  check(result.productNetRevenue, 46.2, "5120 minus 500 preserves aggregate product revenue");
+  check(result.productRows.reduce((sum, row) => sum + Math.round(row.productNetRevenue * 100), 0), 4620,
+    "Every frozen line cent reconciles to the aggregate");
+  check(result.grossMargin, 39.2, "Global margin is frozen revenue minus distinct frozen costs");
+}
+const shippedFrozen = referralSummary({ ...frozenOrder, deliveryFee: 5.49, total: "51,69 EUR" });
+check([shippedFrozen.collectedRevenue, shippedFrozen.productNetRevenue, shippedFrozen.deliveryRevenue, shippedFrozen.discounts],
+  [51.69, 46.2, 5.49, 5], "Frozen products, shipping, collection and discount reconcile separately");
+check(Math.round(shippedFrozen.productNetRevenue * 100) + Math.round(shippedFrozen.deliveryRevenue * 100),
+  Math.round(shippedFrozen.collectedRevenue * 100),
+  "Products plus delivery equals collected revenue");
+check(rowsByProduct({ ...frozenOrder, items: frozenOrder.items.map(item => ({ ...item, productId: "same-product" })) }),
+  [["same-product", 46.2, 7, 39.2]], "Distinct lineIds of one product aggregate their frozen cents and costs exactly");
+check(rowsByProduct({ ...frozenOrder, referral: undefined, discountAmount: 0, total: "51,20 EUR" }),
+  [["product-a", 32, 4, 28], ["product-b", 19.2, 3, 16.2]], "Ordinary multiline proportional projection is unchanged");
+check(rowsByProduct({ ...frozenOrder, referral: undefined, subtotalAfterPromotion: 46.08, promotionDiscountTotal: 5.12,
+  discountAmount: 5.12, total: "46,08 EUR" }), [["product-a", 28.8, 4, 24.8], ["product-b", 17.28, 3, 14.28]],
+  "Historical promotion multiline projection is unchanged");
+check(rowsByProduct({ ...frozenOrder, referral: undefined, discountAmount: 0, total: "51,20 EUR",
+  items: frozenOrder.items.map(item => ({ ...item, lineId: undefined })) }),
+  [["product-a", 32, 4, 28], ["product-b", 19.2, 3, 16.2]], "Legacy ordinary orders need no lineIds");
+
+const corruptLine = (changes: Record<string, unknown>) => ({ ...frozenOrder.referral!, lines: [{ ...frozenLines[0], ...changes }, frozenLines[1]] });
+const corruptOrders: AdminOrderRow[] = [
+  ...["missing", "", 1].map(lineId => ({ ...frozenOrder, referral: corruptLine({ lineId }) as AdminOrderRow["referral"] })),
+  { ...frozenOrder, referral: { ...frozenOrder.referral!, lines: [frozenLines[0], frozenLines[0]] } },
+  { ...frozenOrder, items: [frozenOrder.items[0], { ...frozenOrder.items[1], lineId: "line-a" }] },
+  ...[3201, 3200, -1, 0.5, NaN, Infinity, "313", Number.MAX_SAFE_INTEGER + 1]
+    .map(referralDiscountCents => ({ ...frozenOrder, referral: corruptLine({ referralDiscountCents }) as AdminOrderRow["referral"] })),
+  ...[0, -1, 3200.5, NaN, Infinity, "3200", Number.MAX_SAFE_INTEGER + 1]
+    .map(eligibleBeforeReferralCents => ({ ...frozenOrder, referral: corruptLine({ eligibleBeforeReferralCents }) as AdminOrderRow["referral"] })),
+  { ...frozenOrder, referral: { ...frozenOrder.referral!, eligibleProductsBeforeReferralCents: 5121 } },
+  { ...frozenOrder, referral: { ...frozenOrder.referral!, refereeDiscountCents: 499 } as unknown as AdminOrderRow["referral"] },
+  { ...frozenOrder, referral: { ...frozenOrder.referral!, lines: [] } },
+  { ...frozenOrder, referral: { ...frozenOrder.referral!, lines: null } as unknown as AdminOrderRow["referral"] },
+  { ...frozenOrder, referral: { ...frozenOrder.referral!, lines: [null] } as unknown as AdminOrderRow["referral"] },
+  { ...frozenOrder, items: frozenOrder.items.map(item => ({ ...item, lineId: undefined })) },
+  { ...frozenOrder, items: [{ ...frozenOrder.items[0], lineTotal: 32.01 }, frozenOrder.items[1]] },
+  { ...frozenOrder, subtotalAfterPromotion: 51.21 },
+  { ...frozenOrder, items: [...frozenOrder.items, { ...frozenOrder.items[1], lineId: "unfrozen", productId: "product-c" }] },
+];
+for (const order of corruptOrders) {
+  const before = JSON.stringify(order);
+  const result = referralSummary(order);
+  const gross = order.items.reduce((sum, item) => sum + item.lineTotal!, 0);
+  const expectedRows = order.items.map(item => [item.productId,
+    Math.round((result.productNetRevenue * (item.lineTotal! / gross) + Number.EPSILON) * 100) / 100]);
+  check(result.productRows.map(row => [row.productId, row.productNetRevenue]), expectedRows,
+    "Inconsistent frozen facts/mapping use exactly the historical proportional fallback");
+  check(result.productRows.every(row => Number.isFinite(row.productNetRevenue) && row.productNetRevenue >= 0), true,
+    "Corrupt referral data cannot produce NaN, negative row revenue or a dashboard exception");
+  check(JSON.stringify(order), before, "Accounting never repairs or mutates persisted order facts");
+}
+check(JSON.stringify(frozenOrder), frozenBefore, "Valid frozen orders are projected without mutation");
+
 console.log(`Accounting period and date tests passed (${assertions} assertions).`);
 
 function orderFixture(overrides: Partial<AdminOrderRow> = {}): AdminOrderRow {
@@ -462,6 +588,8 @@ function orderFixture(overrides: Partial<AdminOrderRow> = {}): AdminOrderRow {
     promotionDiscountTotal: 7.95,
     deliveryFee: 0,
     total: "71,55 EUR",
+    financing: { kind: "ordinary", totalCents: 7155, cagnotteCents: 0, paymentCents: 7155, verification: "verified",
+      cagnotteState: "not_applicable", externalPaymentState: "planned", orderCancelled: false },
     createdAt: "2026-08-01T10:00:00.000Z",
     updatedAt: "2026-08-01T10:00:00.000Z",
     ...overrides,
@@ -473,7 +601,7 @@ function productFixture(): Product {
     id: "product-1",
     slug: "produit",
     name: "Produit",
-    category: "Fleur CBD",
+    category: "flowers",
     price: 7.95,
     shortDescription: "Produit de test comptable",
     longDescription: "Produit de test comptable",

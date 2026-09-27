@@ -1,6 +1,9 @@
+import { transactionalReader } from "./checkoutTransactionalReader.js";
+import { prepareReferralCheckoutReservation, prepareReferralCheckout, assertAcceptedReferralQuote, type ReferralCheckoutContext } from "./referralCheckout.js";
+import { ReferralError } from "./referralService.js";
 import { FieldValue } from "firebase-admin/firestore";
 import { orderPayload, priceCheckout, type CheckoutRequestBody, type PricedCheckout } from "./checkout.js";
-import { CheckoutRequestConflictError, cagnotteProductionFixtureSideEffectsDocument, checkoutRequestDocument, checkoutRequestsCollection, orderSideEffectsCollection, orderSideEffectsDocument, validateCheckoutRequestId } from "./orderSideEffects.js";
+import { assertCheckoutRequestOrderBindings, checkoutRequestBindings, CheckoutRequestConflictError, cagnotteProductionFixtureSideEffectsDocument, checkoutRequestDocument, checkoutRequestsCollection, orderSideEffectsCollection, orderSideEffectsDocument, validateCheckoutRequestId } from "./orderSideEffects.js";
 import { fixedPriceEffectiveUnitPrice, fixedPriceLineTotal, resolveFixedPriceOptions } from "../../src/lib/fixedPriceOptions.js";
 import type { Order, Product } from "../../src/types/index.js";
 import { calculateExternalPaymentCents, exactEuroCents } from "../../src/lib/orderFinancing.js";
@@ -44,6 +47,7 @@ export async function commitCheckoutOrder(input: {
   checkoutRequestId: string;
   payloadFingerprint: string;
   customerId?: string;
+  referralContext?: ReferralCheckoutContext;
   analyticsRevocationTokenHash?: string;
   orderId?: string;
   accrualProgram?: CagnotteAccrualProgram | null;
@@ -108,17 +112,16 @@ export async function commitCheckoutOrder(input: {
       if (fixtureMarker && !isExactCagnotteProductionFixtureMarker(existing.productionFixture)) {
         throw new CheckoutRequestConflictError();
       }
-      if (existing.cagnotteBeneficiaryId) {
+      const bindings = checkoutRequestBindings(existing);
+      if (bindings.referralBeneficiaryId || bindings.cagnotteBeneficiaryId) {
         const original = await transaction.get(db.collection("orders").doc(String(existing.orderId)));
-        if (existing.cagnotteBeneficiaryId !== customerId || !original.exists ||
-          original.data()?.cagnotte?.beneficiaryId !== customerId || original.data()?.customerId !== customerId) {
-          throw new CheckoutRequestConflictError();
-        }
+        if (!original.exists) throw new CheckoutRequestConflictError();
+        assertCheckoutRequestOrderBindings(original.data()!, bindings, customerId);
         if (fixtureMarker && !isExactCagnotteProductionFixtureOrder({ id: original.id, ...original.data() })) {
           throw new CheckoutRequestConflictError();
         }
       }
-      return { created: false, orderId: String(existing.orderId) };
+      return { created: false, orderId: String(existing.orderId), ...bindings };
     }
 
     if (fixtureMarker) {
@@ -142,9 +145,27 @@ export async function commitCheckoutOrder(input: {
     }
 
     const positiveUseRequested = Number(body.cagnotteUse?.requestedCents || 0) > 0;
-    const committedPrice = positiveUseRequested
-      ? await priceCheckout(transactionalReader(db, transaction), body)
-      : priced;
+    let committedPrice = priced;
+    let referralReservationPlan: Awaited<ReturnType<typeof prepareReferralCheckoutReservation>> | null = null;
+    let referralSnapshot: import("../../src/types/referral.js").ReferralOrderSnapshot | undefined;
+    if (body.referralUse) {
+      if (!input.referralContext || !customerId || input.referralContext.uid !== customerId) throw new ReferralError("AUTH_REQUIRED", 401);
+      try {
+        committedPrice = await priceCheckout(transactionalReader(db, transaction), body);
+        const referral = await prepareReferralCheckout({ db, transaction, body, priced: committedPrice,
+          context: input.referralContext, nowEpochMs: operationEpochMs, accrualProgram, firebaseProjectId: input.firebaseProjectId });
+        assertAcceptedReferralQuote(referral.quote, body.referralUse.acceptance);
+        committedPrice = referral.priced; referralSnapshot = referral.snapshot;
+        if (referralSnapshot) referralReservationPlan = await prepareReferralCheckoutReservation({ db, transaction,
+          uid: input.referralContext.uid, orderId: orderRef.id, checkoutRequestId: normalizedRequestId, createdAtEpochMs: operationEpochMs });
+      } catch (error) {
+        if (body.referralUse.acceptance && !(error instanceof ReferralError && error.code === "REFERRAL_CAGNOTTE_CONFLICT"))
+          throw new ReferralError("REFERRAL_QUOTE_CONFLICT");
+        throw error;
+      }
+    } else if (positiveUseRequested) {
+      committedPrice = await priceCheckout(transactionalReader(db, transaction), body);
+    }
     let reservationIntent: ReturnType<typeof createCagnotteReservationIntent> = null;
     if (positiveUseRequested) {
       if (!customerId) throw new Error("Authentification requise pour utiliser la cagnotte.");
@@ -254,6 +275,7 @@ export async function commitCheckoutOrder(input: {
         changedAt: controlledInstant,
       }));
     }
+    if (referralSnapshot) payload.referral = referralSnapshot;
     const enrollment = reservationIntent && reservationIntent.amountCents > 0
       ? {
           schemaVersion: 1 as const,
@@ -372,6 +394,7 @@ export async function commitCheckoutOrder(input: {
       : null;
 
     // Every product, commercial condition and wallet fact has been read before writes.
+    referralReservationPlan?.write();
     reservationPlan?.write();
     for (const write of stockWrites) write();
 
@@ -426,7 +449,10 @@ export async function commitCheckoutOrder(input: {
     transaction.set(
       requestRef,
       {
-        ...checkoutRequestDocument(orderRef.id, payloadFingerprint, enrollment?.beneficiaryId),
+        ...checkoutRequestDocument(orderRef.id, payloadFingerprint, {
+          cagnotteBeneficiaryId: enrollment?.beneficiaryId,
+          ...(body.referralUse ? { referralBeneficiaryId: input.referralContext!.uid, referralApplied: Boolean(referralSnapshot) } : {}),
+        }),
         ...(fixtureMarker ? { productionFixture: fixtureMarker } : {}),
       },
     );
@@ -440,32 +466,6 @@ export async function commitCheckoutOrder(input: {
         : orderSideEffectsDocument(orderRef.id),
     );
     return { created: true, orderId: orderRef.id };
-  });
-}
-
-/** Read-only Firestore facade: every get performed by the existing pricing engine joins the transaction. */
-function transactionalReader(
-  db: FirebaseFirestore.Firestore,
-  transaction: FirebaseFirestore.Transaction,
-): FirebaseFirestore.Firestore {
-  const wrap = <T extends object>(target: T): T => new Proxy(target, {
-    get(current, key, receiver) {
-      if (key === "get") return () => transaction.get(current as never);
-      const value = Reflect.get(current, key, receiver);
-      if (typeof value !== "function") return value;
-      return (...args: unknown[]) => {
-        const result = Reflect.apply(value, current, args);
-        return result && typeof result === "object" ? wrap(result) : result;
-      };
-    },
-  });
-  return new Proxy(db, {
-    get(current, key, receiver) {
-      if (key === "collection") {
-        return (path: string) => wrap(current.collection(path));
-      }
-      return Reflect.get(current, key, receiver);
-    },
   });
 }
 

@@ -16,6 +16,7 @@ import {
   type AccountingPeriodRange,
 } from "./accountingPeriods.js";
 import { orderItemLineTotal } from "./orderLineDisplay.js";
+import { resolveFrozenReferralLineAmounts } from "./referralFrozenLines.js";
 import {
   filterOrdinaryProducts,
   filterOrdinarySupplierPurchases,
@@ -149,14 +150,16 @@ export function buildAccountingSummary(
       (sum, item) => sum + orderItemLineTotal(item),
       0,
     );
+    const referralLineRevenue = resolveFrozenReferralLineAmounts(order);
 
     order.items.forEach((item) => {
       const quantity = Number(item.quantity || 0);
       const grossLineRevenue = orderItemLineTotal(item);
-      const lineProductNetRevenue =
+      const frozenNetCents = item.lineId ? referralLineRevenue?.get(item.lineId)?.netCents : undefined;
+      const lineProductNetRevenue = frozenNetCents !== undefined ? frozenNetCents / 100 : (
         grossLinesTotal > 0
           ? orderProductRevenue * (grossLineRevenue / grossLinesTotal)
-          : 0;
+          : 0);
       const costResult = resolveOrderItemPurchaseCost(
         item,
         weightedSupplierCosts,
@@ -330,10 +333,17 @@ function orderDiscountAmount(order: AdminOrderRow) {
   return Number(order.discountAmount ?? order.promotionDiscountTotal ?? 0);
 }
 
+function orderReferralDiscountAmount(order: AdminOrderRow) {
+  const cents = order.referral?.refereeDiscountCents;
+  return typeof cents === "number" && Number.isSafeInteger(cents) && cents >= 0
+    ? cents / 100
+    : 0;
+}
+
 function orderProductNetRevenue(order: AdminOrderRow) {
   const subtotalAfterPromotion = Number(order.subtotalAfterPromotion);
   if (Number.isFinite(subtotalAfterPromotion) && subtotalAfterPromotion > 0) {
-    return subtotalAfterPromotion;
+    return Math.max(0, subtotalAfterPromotion - orderReferralDiscountAmount(order));
   }
   const subtotal = Number(
     order.subtotalBeforePromotion ??

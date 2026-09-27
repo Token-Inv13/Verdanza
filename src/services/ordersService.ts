@@ -169,6 +169,7 @@ export type AdminOrderRow = {
   id: string;
   customerId?: string;
   cagnotte?: Order["cagnotte"];
+  referral?: Order["referral"];
   cagnotteReservationIntent?: Order["cagnotteReservationIntent"];
   productionFixture?: Order["productionFixture"];
   orderType?: OrderType;
@@ -279,6 +280,7 @@ export function adminOrderRow(order: Order): AdminOrderRow {
         id: order.id,
         customerId: order.customerId,
         cagnotte: order.cagnotte,
+        ...(order.referral !== undefined ? { referral: order.referral } : {}),
         cagnotteReservationIntent: order.cagnotteReservationIntent,
         ...(hasOwnProductionFixtureMarker(order) ? { productionFixture: order.productionFixture } : {}),
         orderType: order.orderType || "order",

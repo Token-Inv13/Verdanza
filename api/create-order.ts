@@ -1,3 +1,6 @@
+import { hasReferralCheckoutRequest } from "./_server/referralCheckoutRequest.js";
+import { readReferralCheckoutContext, type ReferralCheckoutDependencies } from "./_server/referralCheckout.js";
+import { ReferralError } from "./_server/referralService.js";
 import { orderFromSnapshot } from "./_server/orderProtection.js";
 import { commitCheckoutOrder } from "./_server/checkoutOrder.js";
 export { commitCheckoutOrder, assertFixedPriceOrderItemStillMatchesProduct } from "./_server/checkoutOrder.js";
@@ -34,6 +37,8 @@ import {
 } from "./_server/email.js";
 import { sendOrderCreationAlerts } from "./_server/orderAlerts.js";
 import {
+  assertCheckoutRequestOrderBindings,
+  type CheckoutRequestBindings,
   CheckoutRequestConflictError,
   checkoutPayloadFingerprint,
   claimOrderSideEffectTask,
@@ -66,7 +71,7 @@ export function createOrderHandler(dependencies: {
   now?: () => number;
   processSideEffects?: typeof processOrderSideEffectsBestEffort;
   enforceRateLimit?: typeof enforcePublicSubmissionRateLimit;
-}) {
+} & ReferralCheckoutDependencies) {
 return async function handler(
   request: VercelRequestLike,
   response: VercelResponseLike,
@@ -74,22 +79,17 @@ return async function handler(
   if (assertMethod(request, response, "POST")) return;
 
   try {
-    const runtimeConfiguration = dependencies.getRuntimeConfiguration?.();
-    const accrualProgram = runtimeConfiguration
-      ? runtimeConfiguration.accrualProgram
-      : dependencies.accrualProgram ?? null;
-    const reservationProgram = runtimeConfiguration
-      ? runtimeConfiguration.reservationProgram
-      : dependencies.reservationProgram ?? null;
-    const firebaseProjectId = runtimeConfiguration
-      ? runtimeConfiguration.firebaseProjectId
-      : accrualProgram || reservationProgram
-        ? dependencies.getFirebaseProjectId?.()
-        : null;
-    const requestBody =
-      typeof request.body === "string" ? JSON.parse(request.body) : request.body;
-    const body = parseCheckoutBody(requestBody);
+    let body: ReturnType<typeof parseCheckoutBody>;
+    try {
+      const requestBody = typeof request.body === "string" ? JSON.parse(request.body) : request.body;
+      body = parseCheckoutBody(requestBody);
+    } catch (error) {
+      // An invalid body cannot replay a request. Preserve the historical cagnotte error contract.
+      if (!hasReferralCheckoutRequest(request.body)) dependencies.getRuntimeConfiguration?.();
+      throw error;
+    }
     const operationNowEpochMs = (dependencies.now ?? Date.now)();
+    if (body.referralUse) { response.setHeader("Cache-Control", "private, no-store"); response.setHeader("Vary", "Authorization"); }
     const checkoutRequestId = validateCheckoutRequestId(body.checkoutRequestId);
     if (checkoutRequestId === CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID) {
       throw new Error("checkout_request_id_reserved");
@@ -98,19 +98,32 @@ return async function handler(
     const payloadFingerprint = checkoutPayloadFingerprint(body);
     const db = dependencies.getDb();
     const verifiedUid = createCheckoutIdentityResolver(body.authToken, dependencies.verifyToken);
-    const existingRequest = await findCheckoutRequest(
-      db,
-      checkoutRequestId,
-      payloadFingerprint,
-      verifiedUid,
-    );
-    if (existingRequest) {
-      await sendExistingOrderResponse(db, response, existingRequest.orderId, verifiedUid);
-      return;
+    const replayExisting = async () => {
+      const existing = await findCheckoutRequest(db, checkoutRequestId, payloadFingerprint, verifiedUid);
+      if (!existing) return false;
+      await sendExistingOrderResponse(db, response, existing.orderId, verifiedUid, existing);
+      return true;
+    };
+    // A committed request recovers its current order without any new commercial qualification.
+    if (await replayExisting()) return;
+    let referralContext: Awaited<ReturnType<typeof readReferralCheckoutContext>>;
+    let accrualProgram: CagnotteAccrualProgram | null;
+    let reservationProgram: CagnotteReservationProgram | null;
+    let firebaseProjectId: string | null | undefined;
+    try {
+      referralContext = await readReferralCheckoutContext(body, dependencies, dependencies.verifyToken, operationNowEpochMs);
+      const runtimeConfiguration = dependencies.getRuntimeConfiguration?.();
+      accrualProgram = runtimeConfiguration ? runtimeConfiguration.accrualProgram : dependencies.accrualProgram ?? null;
+      reservationProgram = runtimeConfiguration ? runtimeConfiguration.reservationProgram : dependencies.reservationProgram ?? null;
+      firebaseProjectId = runtimeConfiguration ? runtimeConfiguration.firebaseProjectId : accrualProgram || reservationProgram ? dependencies.getFirebaseProjectId?.() : null;
+    } catch (error) {
+      // One exact ownership/fingerprint lookup covers a concurrent commit after the early miss.
+      if (await replayExisting()) return;
+      throw error;
     }
     const requestedCagnotteCents = Number(body.cagnotteUse?.requestedCents || 0);
-    let verifiedCustomerId: string | undefined;
-    if (requestedCagnotteCents > 0) {
+    let verifiedCustomerId: string | undefined = referralContext?.uid;
+    if (requestedCagnotteCents > 0 && !referralContext) {
       verifiedCustomerId = await verifiedUid();
       if (!body.authToken || !verifiedCustomerId) {
         throw new CagnotteCheckoutError("AUTH_REQUIRED", "Authentification requise pour utiliser la cagnotte.");
@@ -202,9 +215,10 @@ return async function handler(
         verifiedUid,
       );
       if (requestCreatedDuringPricing) {
-        await sendExistingOrderResponse(db, response, requestCreatedDuringPricing.orderId, verifiedUid);
+        await sendExistingOrderResponse(db, response, requestCreatedDuringPricing.orderId, verifiedUid, requestCreatedDuringPricing);
         return;
       }
+      if (body.referralUse?.acceptance) throw new ReferralError("REFERRAL_QUOTE_CONFLICT");
       throw error;
     }
     const customerId = verifiedCustomerId ?? await verifiedUid();
@@ -220,6 +234,7 @@ return async function handler(
       body,
       priced,
       customerId,
+      referralContext,
       analyticsRevocationTokenHash,
       checkoutRequestId,
       payloadFingerprint,
@@ -229,7 +244,7 @@ return async function handler(
       nowEpochMs: operationNowEpochMs,
     });
     if (!creation.created) {
-      await sendExistingOrderResponse(db, response, creation.orderId, verifiedUid);
+      await sendExistingOrderResponse(db, response, creation.orderId, verifiedUid, creation);
       return;
     }
 
@@ -245,6 +260,7 @@ return async function handler(
       },
     });
   } catch (error) {
+    if (error instanceof ReferralError) return sendJson(response, { code: error.code }, error.status);
     const authFailure = firebaseAuthHttpFailure(error);
     if (authFailure) return sendJson(response, {
       code: authFailure.status === 401 ? "AUTH_REQUIRED" : "authentication_unavailable",
@@ -384,13 +400,19 @@ async function sendExistingOrderResponse(
   response: VercelResponseLike,
   orderId: string,
   verifyCustomer: () => Promise<string | undefined>,
+  bindings: CheckoutRequestBindings,
 ) {
   const snapshot = await db.collection("orders").doc(orderId).get();
   if (!snapshot.exists) throw new CheckoutRequestConflictError();
   const order = orderFromSnapshot(snapshot);
+  if (bindings.referralBeneficiaryId || bindings.cagnotteBeneficiaryId) {
+    assertCheckoutRequestOrderBindings(order, bindings, await verifyCustomer());
+  }
   if (order.cagnotte && (await verifyCustomer() !== order.cagnotte.beneficiaryId || order.customerId !== order.cagnotte.beneficiaryId)) {
     throw new CheckoutRequestConflictError();
   }
+  if (order.referral && (await verifyCustomer() !== order.referral.referralId || order.customerId !== order.referral.referralId)) throw new CheckoutRequestConflictError();
+  if (order.referral || bindings.referralBeneficiaryId) { response.setHeader("Cache-Control", "private, no-store"); response.setHeader("Vary", "Authorization"); }
   const client = storedEmailResult(order.emails?.orderConfirmationStatus);
   const admin = storedEmailResult(order.emails?.adminNotificationStatus);
   sendJson(response, {

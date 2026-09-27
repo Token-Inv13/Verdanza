@@ -1,3 +1,7 @@
+import { hasReferralCheckoutRequest } from "./_server/referralCheckoutRequest.js";
+import { readReferralCheckoutContext, prepareReferralCheckout, type ReferralCheckoutDependencies } from "./_server/referralCheckout.js";
+import { ReferralError } from "./_server/referralService.js";
+import { transactionalReader } from "./_server/checkoutTransactionalReader.js";
 import { getAdminDb } from "./_server/firebaseAdmin.js";
 import {
   assertMethod,
@@ -47,7 +51,7 @@ export function createQuoteOrderHandler(dependencies: {
   getFirebaseProjectId?: () => string | null;
   getRuntimeConfiguration?: () => CagnotteRuntimeConfiguration;
   now?: () => number;
-}) {
+} & ReferralCheckoutDependencies) {
 return async function handler(
   request: VercelRequestLike,
   response: VercelResponseLike,
@@ -60,7 +64,14 @@ return async function handler(
   if (assertMethod(request, response, "POST")) return;
 
   try {
-    const runtimeConfiguration = dependencies.getRuntimeConfiguration?.();
+    const referralRequested = hasReferralCheckoutRequest(request.body);
+    let runtimeConfiguration = referralRequested ? undefined : dependencies.getRuntimeConfiguration?.();
+    const requestBody = typeof request.body === "string" ? JSON.parse(request.body) : request.body;
+    const body = parseQuoteBody(requestBody);
+    const operationNowEpochMs = (dependencies.now ?? Date.now)();
+    if (body.referralUse) { response.setHeader("Cache-Control", "private, no-store"); response.setHeader("Vary", "Authorization"); }
+    const referralContext = await readReferralCheckoutContext(body, dependencies, dependencies.verifyToken, operationNowEpochMs);
+    if (referralRequested) runtimeConfiguration = dependencies.getRuntimeConfiguration?.();
     const accrualProgram = runtimeConfiguration
       ? runtimeConfiguration.accrualProgram
       : dependencies.accrualProgram ?? null;
@@ -72,13 +83,10 @@ return async function handler(
       : accrualProgram || reservationProgram
         ? dependencies.getFirebaseProjectId?.()
         : null;
-    const requestBody =
-      typeof request.body === "string" ? JSON.parse(request.body) : request.body;
-    const body = parseQuoteBody(requestBody);
     const db = dependencies.getDb();
     const requestedCents = body.cagnotteUse?.requestedCents ?? 0;
     let beneficiaryId = "";
-    if (requestedCents > 0) {
+    if (requestedCents > 0 && !referralContext) {
       if (!reservationProgram) {
         throw new CagnotteCheckoutError("RESERVATIONS_DISABLED", "L’utilisation de la cagnotte est désactivée.");
       }
@@ -90,7 +98,13 @@ return async function handler(
         throw new CagnotteCheckoutError("AUTH_REQUIRED", "Authentification cagnotte invalide.");
       }
     }
-    const priced = await priceCheckout(db, body);
+    const referral = referralContext ? await db.runTransaction(async transaction => {
+      const priced = await priceCheckout(transactionalReader(db, transaction), body);
+      return prepareReferralCheckout({ db, transaction, body, priced, context: referralContext, nowEpochMs: operationNowEpochMs,
+        accrualProgram, firebaseProjectId });
+    }) : undefined;
+    const priced = referral?.priced ?? await priceCheckout(db, body);
+    if (referralContext) beneficiaryId = referralContext.uid;
     const cagnotteUse = requestedCents > 0
       ? prepareCagnotteCheckoutQuote({
           body,
@@ -129,8 +143,10 @@ return async function handler(
       giftPromotions: priced.giftPromotions,
       promotionConflictMessage: priced.promotionConflictMessage,
       ...(cagnotteUse ? { cagnotteUse } : {}),
+      ...(referral ? { referralUse: referral.quote } : {}),
     });
   } catch (error) {
+    if (error instanceof ReferralError) return sendJson(response, { code: error.code }, error.status);
     const authFailure = firebaseAuthHttpFailure(error);
     if (authFailure) return sendJson(response, {
       code: authFailure.status === 401 ? "AUTH_REQUIRED" : "authentication_unavailable",
@@ -330,6 +346,8 @@ function parseQuoteBody(value: unknown): CheckoutRequestBody {
     promotionSelections?: PromotionSelection[];
     authToken?: string;
     cagnotteUse?: CheckoutRequestBody["cagnotteUse"];
+    referralUse?: CheckoutRequestBody["referralUse"];
+    deliverySlot?: string;
   };
 
   if (!Array.isArray(body.items) || !body.items.length) {
@@ -347,6 +365,8 @@ function parseQuoteBody(value: unknown): CheckoutRequestBody {
     promotionSelections: body.promotionSelections,
     authToken: body.authToken,
     cagnotteUse: body.cagnotteUse,
+    referralUse: body.referralUse,
+    deliverySlot: body.deliverySlot,
     complianceAccepted: true,
     preferredPaymentMethod: "card_payment_link",
     customer: {

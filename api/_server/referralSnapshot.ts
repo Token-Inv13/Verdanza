@@ -12,7 +12,7 @@ export function referralSnapshotFingerprint(value: Omit<ReferralOrderSnapshot, "
   return createHash("sha256").update(canonicalReferralJson(value)).digest("hex");
 }
 
-/** Only for a future trusted checkout integration or local fixture; never accepts an HTTP snapshot. */
+/** Trusted server checkout or local fixture only; never accepts an HTTP snapshot. */
 export function createReferralOrderSnapshot(input: { refereeUid: string; createdAtEpochMs: number; lines: readonly { lineId: string; eligibleBeforeReferralCents: number; referralDiscountCents: number }[] }): ReferralOrderSnapshot {
   const base = input.lines.reduce((sum, line) => sum + line.eligibleBeforeReferralCents, 0);
   const discount = input.lines.reduce((sum, line) => sum + line.referralDiscountCents, 0);
@@ -22,6 +22,22 @@ export function createReferralOrderSnapshot(input: { refereeUid: string; created
     createdAtEpochMs: input.createdAtEpochMs, thresholdCents: REFERRAL_MINIMUM_PRODUCTS_CENTS,
     refereeDiscountCents: REFERRAL_REFEREE_DISCOUNT_CENTS, eligibleProductsBeforeReferralCents: base, lines: input.lines } as const;
   return { ...snapshot, fingerprint: referralSnapshotFingerprint(snapshot) };
+}
+
+/** Compare frozen referral cents to the exact loyalty/refund allocation, never just its total. */
+export function assertReferralCagnotteAllocation(referral: ReferralOrderSnapshot, cagnotte: CagnotteSnapshot) {
+  const { fingerprint, ...facts } = referral;
+  if (referralSnapshotFingerprint(facts) !== fingerprint || cagnotte.appliedCagnotteCents !== 0 ||
+      referral.lines.length !== cagnotte.lines.length || cagnotte.subtotalCents !== referral.eligibleProductsBeforeReferralCents ||
+      cagnotte.discountCents !== referral.refereeDiscountCents) throw new Error("referral_cross_snapshot_invalid");
+  for (const line of referral.lines) {
+    const calculated = cagnotte.lines.find(entry => entry.lineId === line.lineId);
+    if (!calculated || calculated.isGift || calculated.initialCents !== line.eligibleBeforeReferralCents ||
+        calculated.discountCents !== line.referralDiscountCents || calculated.netCents !== line.eligibleBeforeReferralCents - line.referralDiscountCents ||
+        calculated.discounts.some(discount => discount.discountId !== `referral-discount:${line.lineId}`) ||
+        calculated.discounts.reduce((sum, discount) => sum + discount.amountCents, 0) !== line.referralDiscountCents)
+      throw new Error("referral_cross_snapshot_invalid");
+  }
 }
 
 /** Map historic refund net amounts back to the frozen pre-referral line basis. */
