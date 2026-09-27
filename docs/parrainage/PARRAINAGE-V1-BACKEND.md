@@ -282,9 +282,11 @@ La métrique discounts continue d'utiliser discountAmount ; la livraison est sé
 
 Exemple payé : 50 EUR produits, 500c Referral, 5,49 EUR livraison donnent 45 EUR de
 productNetRevenue, 5,49 EUR deliveryRevenue, 50,49 EUR collectedRevenue et 5 EUR de
-discounts. Marge et ratios utilisent les 45 EUR. Les lignes Referral gardent les mêmes
-poids proportionnels ; la répartition en centimes par plus fort reste préserve le total
-après arrondi, même sur trois lignes. Sans Referral, projection et allocation historiques
+discounts. Marge et ratios utilisent les 45 EUR. Chaque ligne Referral reprend son net
+gelé `eligibleBeforeReferralCents - referralDiscountCents`, relié exclusivement par `lineId`.
+Aucune réallocation : 3200/1920 moins 313/187 donnent 2887/1733, indépendamment de l'ordre
+des items ou du snapshot. Un mapping ou des sommes incohérents utilisent le fallback
+historique sans mutation de commande. Sans Referral, projection et allocation historiques
 restent inchangées. Les snapshots, calculs de fidélité et remboursements ne changent pas.
 
 Toute création réussie avec `body.referralUse` conserve le UID vérifié dans

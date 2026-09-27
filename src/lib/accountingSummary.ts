@@ -16,7 +16,6 @@ import {
   type AccountingPeriodRange,
 } from "./accountingPeriods.js";
 import { orderItemLineTotal } from "./orderLineDisplay.js";
-import { allocateCents } from "./cagnotteCalculations.js";
 import {
   filterOrdinaryProducts,
   filterOrdinarySupplierPurchases,
@@ -150,19 +149,13 @@ export function buildAccountingSummary(
       (sum, item) => sum + orderItemLineTotal(item),
       0,
     );
-    const revenueCents = Math.round(orderProductRevenue * 100);
-    const bases = order.items.map((item, index) => ({ lineId: String(index), baseCents: Math.round(orderItemLineTotal(item) * 100) }));
-    const baseCents = bases.reduce((sum, line) => sum + line.baseCents, 0);
-    // Referral rows use the same proportional weights, with cent remainders preserved.
-    // Ordinary orders retain their historical allocation unchanged.
-    const referralLineRevenue = orderReferralDiscountAmount(order) > 0 && Number.isSafeInteger(revenueCents) && revenueCents >= 0 &&
-      Number.isSafeInteger(baseCents) && bases.every(line => Number.isSafeInteger(line.baseCents) && line.baseCents >= 0) && revenueCents <= baseCents
-      ? new Map(allocateCents(revenueCents, bases).map(line => [line.lineId, line.amountCents / 100])) : null;
+    const referralLineRevenue = referralLineNetRevenueCents(order);
 
-    order.items.forEach((item, index) => {
+    order.items.forEach((item) => {
       const quantity = Number(item.quantity || 0);
       const grossLineRevenue = orderItemLineTotal(item);
-      const lineProductNetRevenue = referralLineRevenue?.get(String(index)) ?? (
+      const frozenNetCents = item.lineId ? referralLineRevenue?.get(item.lineId) : undefined;
+      const lineProductNetRevenue = frozenNetCents !== undefined ? frozenNetCents / 100 : (
         grossLinesTotal > 0
           ? orderProductRevenue * (grossLineRevenue / grossLinesTotal)
           : 0);
@@ -344,6 +337,53 @@ function orderReferralDiscountAmount(order: AdminOrderRow) {
   return typeof cents === "number" && Number.isSafeInteger(cents) && cents >= 0
     ? cents / 100
     : 0;
+}
+
+/** Accounting consumes frozen line facts; it never allocates the referral discount again. */
+function referralLineNetRevenueCents(order: AdminOrderRow): Map<string, number> | null {
+  const snapshot = order.referral;
+  if (!snapshot || !Array.isArray(snapshot.lines) || !snapshot.lines.length ||
+      !Number.isSafeInteger(snapshot.eligibleProductsBeforeReferralCents) || snapshot.eligibleProductsBeforeReferralCents <= 0 ||
+      !Number.isSafeInteger(snapshot.refereeDiscountCents) || snapshot.refereeDiscountCents < 0) return null;
+
+  const subtotalCents = Math.round(Number(order.subtotalAfterPromotion) * 100);
+  const expectedNetCents = Math.round(orderProductNetRevenue(order) * 100);
+  if (!Number.isSafeInteger(subtotalCents) || subtotalCents <= 0 ||
+      !Number.isSafeInteger(expectedNetCents) || expectedNetCents < 0) return null;
+
+  const itemsByLineId = new Map<string, AdminOrderRow["items"][number] | null>();
+  let grossCents = 0;
+  for (const item of order.items) {
+    const cents = Math.round(orderItemLineTotal(item) * 100);
+    if (!Number.isSafeInteger(cents) || cents < 0) return null;
+    grossCents += cents;
+    if (!Number.isSafeInteger(grossCents)) return null;
+    if (typeof item.lineId === "string" && item.lineId) {
+      itemsByLineId.set(item.lineId, itemsByLineId.has(item.lineId) ? null : item);
+    }
+  }
+
+  const revenues = new Map<string, number>();
+  let eligibleCents = 0;
+  let discountCents = 0;
+  let netCents = 0;
+  for (const line of snapshot.lines) {
+    if (!line || typeof line.lineId !== "string" || !line.lineId || revenues.has(line.lineId) ||
+        !Number.isSafeInteger(line.eligibleBeforeReferralCents) || line.eligibleBeforeReferralCents <= 0 ||
+        !Number.isSafeInteger(line.referralDiscountCents) || line.referralDiscountCents < 0 ||
+        line.referralDiscountCents >= line.eligibleBeforeReferralCents) return null;
+    const item = itemsByLineId.get(line.lineId);
+    if (!item || Math.round(orderItemLineTotal(item) * 100) !== line.eligibleBeforeReferralCents) return null;
+    const frozenNetCents = line.eligibleBeforeReferralCents - line.referralDiscountCents;
+    revenues.set(line.lineId, frozenNetCents);
+    eligibleCents += line.eligibleBeforeReferralCents;
+    discountCents += line.referralDiscountCents;
+    netCents += frozenNetCents;
+    if (![eligibleCents, discountCents, netCents].every(Number.isSafeInteger)) return null;
+  }
+  return eligibleCents === snapshot.eligibleProductsBeforeReferralCents && eligibleCents === subtotalCents &&
+    grossCents === eligibleCents && discountCents === snapshot.refereeDiscountCents &&
+    netCents === subtotalCents - snapshot.refereeDiscountCents && netCents === expectedNetCents ? revenues : null;
 }
 
 function orderProductNetRevenue(order: AdminOrderRow) {
