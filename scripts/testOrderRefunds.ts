@@ -5,14 +5,18 @@ import { FieldValue } from "firebase-admin/firestore";
 import { connectCagnotteEmulator, CAGNOTTE_DEMO } from "./cagnotteEmulator.js";
 import { createOrderRefundHandler, handleOrderRefund } from "../api/_server/orderRefundRoute.js";
 import { FirebaseIdTokenVerificationError } from "../api/_server/adminAuth.js";
-import type { OrderRefundOperationalLog } from "../api/_server/orderRefunds.js";
+import { OrderRefundError, type OrderRefundOperationalLog } from "../api/_server/orderRefunds.js";
+import { ensureReferralCode, linkReferral, ReferralError } from "../api/_server/referralService.js";
+import { parseReferralEmailKeyring } from "../api/_server/referralIdentity.js";
+import { createReferralOrderSnapshot } from "../api/_server/referralSnapshot.js";
+import { ORDER_EMAIL_NORMALIZATION_VERSION } from "../api/_server/referralOrderEmailHistory.js";
 import { CAGNOTTE_SERVER_PROGRAM } from "../api/_server/cagnotteProgram.js";
 import { CAGNOTTE_CLOSED_RUNTIME_CONFIGURATION } from "../api/_server/cagnotteRuntimeConfig.js";
 import { commitOrderStatusTransition, type OrderStatusChange } from "../api/_server/orderStatusTransition.js";
 import { calculateCagnotte } from "../src/lib/cagnotteCalculations.js";
 import { fixtureSpentGain, assertWalletJournal } from "./cagnotteRegularizationFixtures.js";
-import { applyCagnotteLedgerOperation, validateCagnotteLedgerMovementForRead } from "../api/_server/cagnotteLedger.js";
-import { applyCagnotteReservationOperation, createCagnotteReservationIntent } from "../api/_server/cagnotteReservations.js";
+import { applyCagnotteLedgerOperation, CagnotteLedgerError, validateCagnotteLedgerMovementForRead } from "../api/_server/cagnotteLedger.js";
+import { applyCagnotteReservationOperation, CagnotteReservationError, createCagnotteReservationIntent } from "../api/_server/cagnotteReservations.js";
 import type { CagnotteReservationTestProgram } from "../api/_server/cagnotteReservationTypes.js";
 import type { CagnotteTestProgram } from "../api/_server/cagnotteLedgerTypes.js";
 import type { VerifiedFirebaseUser } from "../api/_server/adminAuth.js";
@@ -171,20 +175,21 @@ function selection(f: Fixture, amount = 2500, deliveryRefundCents = 0) {
   return { action: "preview", orderId: f.id, currency: "EUR", additionalReturns: amount ? [{ lineId: "line-0", additionalNetCents: amount }] : [], deliveryRefundCents };
 }
 type ResponseResult = Awaited<ReturnType<typeof import("../api/_server/orderRefunds.js").executeOrderRefund>>;
-type Payload = { code?: string; result?: ResponseResult; bankingOperationExecuted?: boolean; bankingTransferVerified?: boolean };
+type Payload = { code?: string; error?: string; result?: ResponseResult; bankingOperationExecuted?: boolean; bankingTransferVerified?: boolean };
 async function invoke(handler: ReturnType<typeof createOrderRefundHandler>, body: unknown, method = "POST", headers = {}) {
   let status = 0, payload: Payload = {};
   const response = { setHeader() {}, status(code: number) { status = code; return this; }, json(value: Payload) { payload = value; } };
   await handler({ method, body, headers } as VercelRequestLike, response as unknown as VercelResponseLike);
   return { status, ...payload };
 }
-type Options = { identity?: VerifiedFirebaseUser | Error; noToken?: boolean; enabled?: boolean; fail?: boolean; loseAck?: boolean; before?: () => Promise<void>; betweenAttempts?: () => Promise<void>; logs?: OrderRefundOperationalLog[]; loggerThrows?: boolean };
+type Options = { identity?: VerifiedFirebaseUser | Error; noToken?: boolean; enabled?: boolean; fail?: boolean; transactionError?: Error; loseAck?: boolean; before?: () => Promise<void>; betweenAttempts?: () => Promise<void>; logs?: OrderRefundOperationalLog[]; loggerThrows?: boolean };
 async function call(body: Record<string, unknown>, options: Options = {}) {
   let transactions = 0, writes = 0, walletWrites = 0, callbacks = 0, verificationCalls = 0;
   const checked = new Proxy(db, { get(target, key) {
     if (key === "runTransaction") return async (run: (tx: Transaction) => Promise<unknown>) => {
       transactions++; await options.before?.(); let abort = Boolean(options.betweenAttempts);
       const callback = async (tx: Transaction) => {
+        if (options.transactionError) throw options.transactionError;
         callbacks++; let wrote = false;
         const wrapped = new Proxy(tx, { get(t, method) {
           const value = Reflect.get(t, method); if (typeof value !== "function") return value;
@@ -290,6 +295,43 @@ async function expectCorruptHistoryRejectedEverywhere(
   await refused({ ...correction, action: "record_correction", correctionReference: `h8-chain-${++seq}`,
     expectedPreviewVersion: "f".repeat(64) }, "refund_history_requires_verification");
 }
+
+async function referralRefundFixture() {
+  const f = await fixture({ amounts: [6000], ready: false });
+  const sponsorUid = `sponsor-${f.id}`;
+  const identity = async (uid: string) => ({ uid, email: `${uid}@example.test`, emailVerified: true, disabled: false });
+  const referralProgram = { mode: "active" as const, operational: true, startsAtEpochMs: 1000 };
+  const keyringJson = JSON.stringify({ activeVersion: "v1", keys: { v1: "synthetic-refund-referral-secret-over-32-bytes" } });
+  await db.collection("referralMigrations").doc(ORDER_EMAIL_NORMALIZATION_VERSION).set({ schemaVersion: 1,
+    version: ORDER_EMAIL_NORMALIZATION_VERSION, status: "complete", completedAtEpochMs: 1000, verifiedOrders: 0, verifiedPaidProductOrders: 0 });
+  await db.collection("orders").doc(`sponsor-eligibility-${f.id}`).set({ customerId: sponsorUid, customerEmail: `${sponsorUid}@example.test`,
+    customerEmailNormalized: `${sponsorUid}@example.test`, orderStatus: "delivered", paymentStatus: "paid", total: 60,
+    items: [{ productId: "refund-product", quantity: 1 }] });
+  const sponsorCode = await ensureReferralCode({ db, user: await identity(sponsorUid), program: referralProgram,
+    nowEpochMs: 3000, getSponsorIdentity: identity });
+  await linkReferral({ db, user: await identity(f.uid), code: sponsorCode.code, program: referralProgram,
+    keyring: parseReferralEmailKeyring(keyringJson), nowEpochMs: 3000, getSponsorIdentity: identity });
+  const snapshot = calculateCagnotte({ lines: [{ lineId: "line-0", initialCents: 6000 }],
+    discounts: [{ discountId: "referral", amountCents: 500, kind: "referral_discount", lineIds: ["line-0"] }],
+    requestedCagnotteCents: 0, availableCagnotteCents: 0, advantages: ["referral_discount"] });
+  await db.collection("orders").doc(f.id).update({ customerEmail: `${f.uid}@example.test`, total: 55, discountAmount: 5,
+    cagnotte: { schemaVersion: 1, beneficiaryId: f.uid, programVersion: program.programVersion,
+      calculationVersion: "cagnotte-math-v1", createdAtEpochMs: 2000, snapshot },
+    referral: createReferralOrderSnapshot({ refereeUid: f.uid, createdAtEpochMs: 3000,
+      lines: [{ lineId: "line-0", eligibleBeforeReferralCents: 6000, referralDiscountCents: 500 }] }) });
+  await commitOrderStatusTransition({ db, admin: actor, accrualProgram, referralProgram,
+    getSponsorIdentity: identity, referralEmailKeyring: () => keyringJson,
+    now: () => "2000-01-01T00:00:00.000Z", body: { orderId: f.id, ...paid, orderStatus: "delivered" } });
+  const relationRef = db.collection("referrals").doc(f.uid);
+  const relation = (await relationRef.get()).data()!;
+  equal(relation.state, "rewarded"); equal(relation.qualifyingOrderId, f.id);
+  return { f, relationRef, relation };
+}
+async function dumpReferralRefundState() {
+  return Promise.all([...collections, "referrals", "referralEmailClaims", "referralCodes", "referralMigrations"].map(async (name) =>
+    (await db.collection(name).get()).docs.map((doc) => ({ id: doc.id, data: doc.data(), updateTime: doc.updateTime }))));
+}
+const refundConflictMessage = "Enregistrement non confirmé : vérification ou nouvelle prévisualisation nécessaire.";
 
 try {
   equal(CAGNOTTE_SERVER_PROGRAM, null); equal(CAGNOTTE_CLOSED_RUNTIME_CONFIGURATION.orderRefundsEnabled, false);
@@ -1952,6 +1994,66 @@ try {
     const response = await captureWarnings(() => call(correctionSelection(f, target, 0, 0, 0), { loggerThrows: true }));
     equal(response.result.status, 200, JSON.stringify(response.result)); equal(response.result.result!.kind, "correction_requires_review");
     equal(response.result.stats.writes, 0); eq(await dump(), before); equal(response.warnings.length, 1);
+  });
+  await test("vrai refund Referral via handler: conflit relation précis 409, aucune mutation", async () => {
+    const { f, relationRef, relation } = await referralRefundFixture();
+    const body = selection(f, 1100), p = await preview(body);
+    await relationRef.update({ programVersion: "incompatible-fixture-version" });
+    try {
+      const before = await dumpReferralRefundState();
+      const r = await call(confirmation(body, p, "referral-conflict-original"));
+      equal(r.status, 409); equal(r.code, "referral_relation_conflict"); equal(r.error, refundConflictMessage);
+      equal(r.bankingOperationExecuted, false); equal(r.bankingTransferVerified, false);
+      equal(r.stats.transactions, 1); equal(r.stats.writes, 0); eq(await dumpReferralRefundState(), before);
+    } finally { await relationRef.set(relation); }
+  });
+  await test("vraie correction Referral via handler: même conflit 409 et rollback complet", async () => {
+    const { f, relationRef } = await referralRefundFixture();
+    await record(f, 500, "referral-correction-original");
+    const target = await correctionTarget(f);
+    const body = correctionSelection(f, target, 0, 1100, 1100), p = await preview(body);
+    const relation = (await relationRef.get()).data()!;
+    await relationRef.update({ programVersion: "incompatible-fixture-version" });
+    try {
+      const before = await dumpReferralRefundState();
+      const r = await call({ ...body, action: "record_correction", correctionReference: "referral-conflict-correction", expectedPreviewVersion: p.previewVersion });
+      equal(r.status, 409); equal(r.code, "referral_relation_conflict"); equal(r.error, refundConflictMessage);
+      equal(r.bankingOperationExecuted, false); equal(r.bankingTransferVerified, false);
+      equal(r.stats.transactions, 1); equal(r.stats.writes, 0); eq(await dumpReferralRefundState(), before);
+    } finally { await relationRef.set(relation); }
+  });
+  await test("mapping global ReferralError conserve status/code sur preview, refund et correction", async () => {
+    const f = await fixture();
+    const body = selection(f), p = await preview(body);
+    const commands = [body, confirmation(body, p, "mapping-referral-status"),
+      { ...correctionSelection(f, "a".repeat(64), 0, 1000, 1000), action: "record_correction",
+        correctionReference: "mapping-referral-correction", expectedPreviewVersion: "f".repeat(64) }];
+    for (const command of commands) for (const [code, status] of [["referral_movement_conflict", 409], ["referral_wallet_missing", 409],
+      ["fixture_referral_validation", 422], ["fixture_referral_unavailable", 503]] as const) {
+      const before = await dumpReferralRefundState();
+      const r = await call(command, { transactionError: new ReferralError(code, status) });
+      equal(r.status, status); equal(r.code, code);
+      equal(r.error, status === 409 ? refundConflictMessage : "Demande d’enregistrement refusée.");
+      equal(r.bankingOperationExecuted, false); equal(r.bankingTransferVerified, false);
+      equal(r.stats.writes, 0); eq(await dumpReferralRefundState(), before);
+    }
+  });
+  await test("mapping existant conservé: panne inconnue 500, conflits cagnotte et OrderRefundError", async () => {
+    const f = await fixture();
+    for (const [error, status, code] of [
+      [new Error("Synthetic failure with internal details"), 500, "refund_registration_unavailable"],
+      [new CagnotteLedgerError("CONFLICT", "Synthetic ledger details"), 409, "refund_ledger_requires_verification"],
+      [new CagnotteReservationError("CONFLICT", "Synthetic reservation details"), 409, "refund_ledger_requires_verification"],
+      [new OrderRefundError("fixture_order_refund", 422), 422, "fixture_order_refund"],
+      [new RangeError("Synthetic range details"), 400, "refund_validation_failed"],
+    ] as const) {
+      const before = await dumpReferralRefundState();
+      const r = await call(selection(f), { transactionError: error });
+      equal(r.status, status); equal(r.code, code);
+      equal(r.error, status === 409 ? refundConflictMessage : "Demande d’enregistrement refusée.");
+      equal(r.bankingOperationExecuted, false); equal(r.bankingTransferVerified, false);
+      equal(r.stats.writes, 0); eq(await dumpReferralRefundState(), before);
+    }
   });
   await test("concordance finale de tous les portefeuilles et journaux", async () => { for (const wallet of (await db.collection("cagnotteWallets").get()).docs) await assertWalletJournal(db, wallet.id); });
   console.log(`LOT 4C : ${tests} scenarios HTTP/emulateur reussis. Confirmation administrative seulement, aucune operation bancaire.`);

@@ -4,6 +4,7 @@ import { assertMethod, sendJson, type VercelRequestLike, type VercelResponseLike
 import { executeOrderRefund, parseOrderRefundRequest, OrderRefundError } from "./orderRefunds.js";
 import { CagnotteLedgerError } from "./cagnotteLedger.js";
 import { CagnotteReservationError } from "./cagnotteReservations.js";
+import { ReferralError } from "./referralService.js";
 import {
   CagnotteRuntimeConfigurationError,
   getCagnotteRuntimeConfiguration,
@@ -54,8 +55,8 @@ export function createOrderRefundHandler(dependencies: {
       }, authFailure.status);
       const message = error instanceof Error ? error.message : "";
       const cagnotteConflict = error instanceof CagnotteLedgerError || error instanceof CagnotteReservationError;
-      const status = error instanceof OrderRefundError ? error.status : message === "Acces admin requis." ? 403 : cagnotteConflict ? 409 : error instanceof RangeError ? 400 : 500;
-      const code = error instanceof OrderRefundError ? error.code : message === "Acces admin requis." ? "admin_required" : cagnotteConflict ? "refund_ledger_requires_verification" : error instanceof RangeError ? "refund_validation_failed" : "refund_registration_unavailable";
+      const status = error instanceof OrderRefundError ? error.status : message === "Acces admin requis." ? 403 : error instanceof ReferralError ? error.status : cagnotteConflict ? 409 : error instanceof RangeError ? 400 : 500;
+      const code = error instanceof OrderRefundError ? error.code : message === "Acces admin requis." ? "admin_required" : error instanceof ReferralError ? error.code : cagnotteConflict ? "refund_ledger_requires_verification" : error instanceof RangeError ? "refund_validation_failed" : "refund_registration_unavailable";
       sendJson(response, { code, error: status === 409 ? "Enregistrement non confirmé : vérification ou nouvelle prévisualisation nécessaire." : "Demande d’enregistrement refusée.",
         bankingOperationExecuted: false, bankingTransferVerified: false }, status);
     }
