@@ -27,7 +27,7 @@ import { prepareFirstPaymentWithoutReferral, prepareReferralTransition, validate
 import { getReferralSponsorIdentity, type ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
 import { normalizeReferralEmail, parseReferralEmailKeyring, referralEmailClaimAliases } from "./referralIdentity.js";
 import { usableOrderEmail } from "./orderEmailIdentity.js";
-import { productOrder } from "./referralService.js";
+import { productOrder, hasHistoricalPaymentEvidence, isValidHistoricalPaymentInstant, ReferralError } from "./referralService.js";
 import { prepareReferralOrderEmailHistoryInvalidation } from "./referralOrderEmailHistory.js";
 
 export type OrderStatusChange = {
@@ -37,7 +37,24 @@ export type OrderStatusChange = {
   paymentLinkSent?: boolean; paymentLinkChannel?: PaymentLinkChannel | ""; trackingNumber?: string;
   archived?: boolean; hidden?: boolean; restore?: boolean; deleteCancelled?: boolean; historyNote?: string;
   unpaidReview?: UnpaidReviewRequest;
+  reconcileReferralDelivery?: boolean;
 };
+
+/** The dedicated admin action must never carry an order lifecycle mutation. */
+export function assertReferralDeliveryReconciliationAction(body: object): void {
+  const value = Reflect.get(body, "reconcileReferralDelivery");
+  if (value !== undefined && typeof value !== "boolean") throw new Error("Réconciliation parrainage invalide.");
+  if (value === true && Object.entries(body).some(([key, field]) => field !== undefined &&
+    !["orderId", "authToken", "reconcileReferralDelivery"].includes(key))) throw new Error("Réconciliation parrainage exclusive requise.");
+}
+
+/** Delivery is a persisted server fact, independent of a later status-only cancellation. */
+export function hasHistoricalDeliveryEvidence(order: Order): boolean {
+  return order.orderStatus === "delivered" || (Array.isArray(order.statusHistory) && order.statusHistory.some((entry) =>
+    entry !== null && typeof entry === "object" && (entry.changedBy === "admin" || entry.changedBy === "system") &&
+    isValidHistoricalPaymentInstant(entry.changedAt) &&
+    (entry.status === "delivered" || (entry.status === "cancelled" && entry.previousStatus === "delivered"))));
+}
 
 /** A referral discount cannot share an order with a positive cagnotte reservation or spend. */
 export function hasPositiveCagnotteFinancing(order: Order): boolean {
@@ -77,6 +94,7 @@ export async function commitOrderStatusTransition({
   referralEmailKeyring?: () => string;
   now?: ()=>string;
 }): Promise<{ updatedOrder: Order | null; previousStatus: OrderStatus | null; purchaseAnalyticsQueued: boolean; missingPromotionIds: string[]; unpaidReviewContext: Awaited<ReturnType<typeof prepareUnpaidReviewControl>>["context"] | null }> {
+  assertReferralDeliveryReconciliationAction(body);
   const operationTime=now();
   let updatedOrder: Order | null = null;
   let previousStatus: OrderStatus | null = null;
@@ -165,6 +183,19 @@ export async function commitOrderStatusTransition({
     const productionFixture = hasPersistedCagnotteProductionFixtureMarker(order);
     if (productionFixture && !isExactCagnotteProductionFixtureOrder(order)) {
       throw new Error("production_fixture_marker_invalid");
+    }
+    if (body.reconcileReferralDelivery === true) {
+      if (productionFixture || !order.referral) throw new ReferralError("referral_reconciliation_not_applicable");
+      if (!hasHistoricalPaymentEvidence(order) || !hasHistoricalDeliveryEvidence(order))
+        throw new ReferralError("referral_delivery_evidence_missing");
+      const reconciliationProgram = resolveReferralRuntimeForTransition(order, false, true)!;
+      if (!reconciliationProgram.operational || reconciliationProgram.mode === "off") throw new ReferralError("referral_program_disabled", 503);
+      const plan = await prepareReferralTransition({ db, transaction, order, program: reconciliationProgram,
+        event: "delivery", recordedAtEpochMs: Date.parse(operationTime) });
+      // All reads precede writes. This action never writes the order or invokes another plan.
+      plan?.write();
+      updatedOrder = order; previousStatus = order.orderStatus;
+      return;
     }
     if (productionFixture) {
       const expectedTransition = assertCagnotteProductionFixtureStatusTransition({
@@ -402,6 +433,12 @@ export async function commitOrderStatusTransition({
       : referralDeliveryEvent ? "delivery" : null;
     const transitionReferralProgram = linkOnly || !referralEvent ? null :
       resolveReferralRuntimeForTransition(order, paymentTransition, referralDeliveryEvent);
+    if (paymentTransition && !productionFixture && order.customerId && productOrder(order, true) &&
+      (!transitionReferralProgram?.operational || transitionReferralProgram.mode === "off") && !emailHistoryInvalidationPlan) {
+      emailHistoryInvalidationPlan = await prepareReferralOrderEmailHistoryInvalidation(
+        transaction, db, Date.parse(operationTime), "payment_identity_unchecked_while_closed",
+      );
+    }
     const referralPlan = !transitionReferralProgram || !transitionReferralProgram.operational || transitionReferralProgram.mode === "off" ? null : order.referral ? await prepareReferralTransition({
       db, transaction, order, program: transitionReferralProgram, recordedAtEpochMs: Date.parse(operationTime),
       event: referralEvent!, paymentEvidence,

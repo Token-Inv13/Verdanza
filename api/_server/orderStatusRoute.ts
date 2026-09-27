@@ -1,4 +1,4 @@
-import { commitOrderStatusTransition, processOrderStatusTransitionEffects } from "./orderStatusTransition.js";
+import { assertReferralDeliveryReconciliationAction, commitOrderStatusTransition, processOrderStatusTransitionEffects } from "./orderStatusTransition.js";
 import { assertAdminUser, firebaseAuthHttpFailure, type verifyFirebaseIdToken } from "./adminAuth.js";
 import {
   assertMethod,
@@ -167,6 +167,7 @@ function parseBody(value: unknown): {
   deleteCancelled?: boolean;
   historyNote?: string;
   unpaidReview?: UnpaidReviewRequest;
+  reconcileReferralDelivery?: boolean;
   authToken?: string;
 } {
   const body = typeof value === "string" ? JSON.parse(value) : value;
@@ -191,9 +192,11 @@ function parseBody(value: unknown): {
     deleteCancelled?: boolean;
     historyNote?: string;
     unpaidReview?: unknown;
+    reconcileReferralDelivery?: boolean;
     authToken?: string;
   };
   if (!payload.orderId) throw new Error("orderId requis.");
+  assertReferralDeliveryReconciliationAction(payload);
   if (payload.orderStatus && !orderStatuses.includes(payload.orderStatus)) {
     throw new Error("Statut commande invalide.");
   }
@@ -223,6 +226,7 @@ function parseBody(value: unknown): {
     archived: payload.archived, hidden: payload.hidden, restore: payload.restore,
     deleteCancelled: payload.deleteCancelled, historyNote: payload.historyNote,
     unpaidReview: parseUnpaidReview(payload.unpaidReview),
+    reconcileReferralDelivery: payload.reconcileReferralDelivery,
   };
 }
 

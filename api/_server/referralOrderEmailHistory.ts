@@ -1,7 +1,7 @@
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { REFERRAL_PROGRAM_VERSION } from "../../src/types/referral.js";
 
-export const ORDER_EMAIL_NORMALIZATION_VERSION = "order-email-normalization-v2";
+export const ORDER_EMAIL_NORMALIZATION_VERSION = "order-email-normalization-v3";
 export const ORDER_EMAIL_MIGRATION_COLLECTION = "referralMigrations";
 
 export function isUnresolvedReferralIdentityHistoryReason(reason: unknown): boolean {
@@ -42,7 +42,7 @@ export function isReferralOrderEmailHistoryReady(value: FirebaseFirestore.Docume
     Number.isSafeInteger(value.verifiedPaidProductOrders) && value.verifiedPaidProductOrders >= 0 &&
     value.verifiedPaidProductOrders <= value.verifiedOrders &&
     Number.isSafeInteger(value.verifiedReferralRelations) && value.verifiedReferralRelations >= 0 &&
-    value.verifiedUnresolvedIdentityRelations === 0;
+    value.verifiedUnresolvedIdentityRelations === 0 && value.verifiedLinkedRelationsWithPaidHistory === 0;
 }
 
 export async function readReferralOrderEmailHistoryReady(tx: Transaction, db: Firestore): Promise<boolean> {
@@ -54,7 +54,7 @@ export async function readReferralOrderEmailHistoryReady(tx: Transaction, db: Fi
  * Reading an absent marker also participates in transaction conflict detection. */
 export async function prepareReferralOrderEmailHistoryInvalidation(
   tx: Transaction, db: Firestore, invalidatedAtEpochMs: number,
-  reason: "paid_order_email_unusable" | "plain_payment_identity_unresolved" = "paid_order_email_unusable",
+  reason: "paid_order_email_unusable" | "plain_payment_identity_unresolved" | "payment_identity_unchecked_while_closed" = "paid_order_email_unusable",
 ): Promise<{ write: () => void }> {
   if (!Number.isSafeInteger(invalidatedAtEpochMs) || invalidatedAtEpochMs <= 0) throw new Error("order_email_invalidation_instant_invalid");
   const ref = db.collection(ORDER_EMAIL_MIGRATION_COLLECTION).doc(ORDER_EMAIL_NORMALIZATION_VERSION);

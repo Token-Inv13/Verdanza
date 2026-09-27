@@ -5,10 +5,10 @@ import { isReferralOrderEmailHistoryReady, ORDER_EMAIL_MIGRATION_COLLECTION, ORD
 
 export const ORDER_EMAIL_MIGRATION_PROJECT = "verdanza-1f621";
 type Counts = { scannedOrders: number; usableEmails: number; alreadyNormalized: number; changesRequired: number; paidProductOrders: number; anomalies: number;
-  scannedReferralRelations: number; unresolvedIdentityRelations: number; corruptReferralRelations: number };
+  scannedReferralRelations: number; unresolvedIdentityRelations: number; corruptReferralRelations: number; linkedRelationsWithPaidHistory: number };
 const emptyCounts = (): Counts => ({ scannedOrders: 0, usableEmails: 0, alreadyNormalized: 0, changesRequired: 0, paidProductOrders: 0, anomalies: 0,
-  scannedReferralRelations: 0, unresolvedIdentityRelations: 0, corruptReferralRelations: 0 });
-const blocked = (counts: Counts) => counts.anomalies > 0 || counts.unresolvedIdentityRelations > 0 || counts.corruptReferralRelations > 0;
+  scannedReferralRelations: 0, unresolvedIdentityRelations: 0, corruptReferralRelations: 0, linkedRelationsWithPaidHistory: 0 });
+const blocked = (counts: Counts) => counts.anomalies > 0 || counts.unresolvedIdentityRelations > 0 || counts.corruptReferralRelations > 0 || counts.linkedRelationsWithPaidHistory > 0;
 
 /** Guard applies to the injected engine too; local tests cannot fall back to Production. */
 export function assertOrderEmailMigrationTarget(input: { projectId: string; emulatorHost?: string; apply?: boolean; confirmation?: string }) {
@@ -31,6 +31,8 @@ export async function migrateOrderEmailNormalization(input: {
 
   async function scan(write: boolean) {
     const counts = emptyCounts();
+    // Internal scan evidence only. Never return or log the customer identities.
+    const paidProductCustomerIds = new Set<string>();
     let changedOrders = 0;
     let cursor: QueryDocumentSnapshot | undefined;
     for (;;) {
@@ -44,7 +46,10 @@ export async function migrateOrderEmailNormalization(input: {
         const order = doc.data();
         counts.scannedOrders++;
         const paid = hasHistoricalPaymentEvidence(order);
-        if (paid) counts.paidProductOrders++;
+        if (paid) {
+          counts.paidProductOrders++;
+          if (typeof order.customerId === "string" && order.customerId) paidProductCustomerIds.add(order.customerId);
+        }
         const email = usableOrderEmail(order.customerEmail);
         if (email === null) {
           // An ambiguous paid document cannot certify absence for a recreated UID either.
@@ -73,9 +78,12 @@ export async function migrateOrderEmailNormalization(input: {
       if (page.empty) break;
       for (const doc of page.docs) {
         counts.scannedReferralRelations++;
-        const status = referralRelationIdentityHistoryStatus(doc.id, doc.data());
+        const relation = doc.data();
+        const status = referralRelationIdentityHistoryStatus(doc.id, relation);
         if (status === "unresolved") counts.unresolvedIdentityRelations++;
         if (status === "corrupt") counts.corruptReferralRelations++;
+        if (status === "clear" && relation.state === "linked" && !relation.paymentConfirmed && relation.qualifyingOrderId === null &&
+          paidProductCustomerIds.has(relation.refereeUid)) counts.linkedRelationsWithPaidHistory++;
       }
       cursor = page.docs[page.docs.length - 1];
     }
@@ -118,7 +126,8 @@ export async function migrateOrderEmailNormalization(input: {
     const batch = input.db.batch();
     batch.update(markerRef, { schemaVersion: 1, version: ORDER_EMAIL_NORMALIZATION_VERSION, status: "complete", completedAtEpochMs,
       verifiedOrders: verification.scannedOrders, verifiedPaidProductOrders: verification.paidProductOrders,
-      verifiedReferralRelations: verification.scannedReferralRelations, verifiedUnresolvedIdentityRelations: 0 }, { lastUpdateTime: markerPrecondition! });
+      verifiedReferralRelations: verification.scannedReferralRelations, verifiedUnresolvedIdentityRelations: 0,
+      verifiedLinkedRelationsWithPaidHistory: 0 }, { lastUpdateTime: markerPrecondition! });
     await batch.commit();
   } else {
     // A no-op replay must also reject an invalidation that raced with its scans.
