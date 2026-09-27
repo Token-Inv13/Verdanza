@@ -115,7 +115,7 @@ export function HomePage() {
                 </h1>
                 <p className="home-hero-v2__intro">
                   Fleurs et résines choisies avec soin, à découvrir selon vos
-                  préférences et votre rythme.
+                  préférences et votre profil.
                 </p>
                 <div className="home-hero-v2__actions">
                   <Link

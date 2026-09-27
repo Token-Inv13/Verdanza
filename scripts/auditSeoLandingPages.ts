@@ -27,7 +27,7 @@ const pages = [
     h2: [
       "Une entrée simple vers l’univers Verdanza",
       "Des repères clairs avant de choisir",
-      "Découvrez Verdanza à votre rythme",
+      "Découvrez la sélection Verdanza selon votre profil",
     ],
     links: ["/boutique", "/fleurs-cbd", "/resines-cbd", "/blog", "/livraison", "/qualite-conformite"],
     textMarkers: [

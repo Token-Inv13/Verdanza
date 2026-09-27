@@ -247,7 +247,7 @@ export function FlyerLandingPage() {
                 Poursuivre la découverte
               </p>
               <h2 className="mt-3 font-display text-4xl leading-tight text-forest sm:text-5xl">
-                Découvrez Verdanza à votre rythme
+                Découvrez la sélection Verdanza selon votre profil
               </h2>
               <p className="mt-4 max-w-3xl text-base leading-7 text-ink/70">
                 Parcourez la sélection, consultez les informations de qualité
