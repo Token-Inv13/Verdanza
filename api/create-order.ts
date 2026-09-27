@@ -1,4 +1,5 @@
-import { hasReferralCheckoutRequest, readReferralCheckoutContext, type ReferralCheckoutDependencies } from "./_server/referralCheckout.js";
+import { hasReferralCheckoutRequest } from "./_server/referralCheckoutRequest.js";
+import { readReferralCheckoutContext, type ReferralCheckoutDependencies } from "./_server/referralCheckout.js";
 import { ReferralError } from "./_server/referralService.js";
 import { orderFromSnapshot } from "./_server/orderProtection.js";
 import { commitCheckoutOrder } from "./_server/checkoutOrder.js";
@@ -76,26 +77,17 @@ return async function handler(
   if (assertMethod(request, response, "POST")) return;
 
   try {
-    const referralRequested = hasReferralCheckoutRequest(request.body);
-    let runtimeConfiguration = referralRequested ? undefined : dependencies.getRuntimeConfiguration?.();
-    const requestBody =
-      typeof request.body === "string" ? JSON.parse(request.body) : request.body;
-    const body = parseCheckoutBody(requestBody);
+    let body: ReturnType<typeof parseCheckoutBody>;
+    try {
+      const requestBody = typeof request.body === "string" ? JSON.parse(request.body) : request.body;
+      body = parseCheckoutBody(requestBody);
+    } catch (error) {
+      // An invalid body cannot replay a request. Preserve the historical cagnotte error contract.
+      if (!hasReferralCheckoutRequest(request.body)) dependencies.getRuntimeConfiguration?.();
+      throw error;
+    }
     const operationNowEpochMs = (dependencies.now ?? Date.now)();
     if (body.referralUse) { response.setHeader("Cache-Control", "private, no-store"); response.setHeader("Vary", "Authorization"); }
-    const referralContext = await readReferralCheckoutContext(body, dependencies, dependencies.verifyToken, operationNowEpochMs);
-    if (referralRequested) runtimeConfiguration = dependencies.getRuntimeConfiguration?.();
-    const accrualProgram = runtimeConfiguration
-      ? runtimeConfiguration.accrualProgram
-      : dependencies.accrualProgram ?? null;
-    const reservationProgram = runtimeConfiguration
-      ? runtimeConfiguration.reservationProgram
-      : dependencies.reservationProgram ?? null;
-    const firebaseProjectId = runtimeConfiguration
-      ? runtimeConfiguration.firebaseProjectId
-      : accrualProgram || reservationProgram
-        ? dependencies.getFirebaseProjectId?.()
-        : null;
     const checkoutRequestId = validateCheckoutRequestId(body.checkoutRequestId);
     if (checkoutRequestId === CAGNOTTE_PRODUCTION_FIXTURE_CHECKOUT_REQUEST_ID) {
       throw new Error("checkout_request_id_reserved");
@@ -104,15 +96,28 @@ return async function handler(
     const payloadFingerprint = checkoutPayloadFingerprint(body);
     const db = dependencies.getDb();
     const verifiedUid = createCheckoutIdentityResolver(body.authToken, dependencies.verifyToken);
-    const existingRequest = await findCheckoutRequest(
-      db,
-      checkoutRequestId,
-      payloadFingerprint,
-      verifiedUid,
-    );
-    if (existingRequest) {
-      await sendExistingOrderResponse(db, response, existingRequest.orderId, verifiedUid);
-      return;
+    const replayExisting = async () => {
+      const existing = await findCheckoutRequest(db, checkoutRequestId, payloadFingerprint, verifiedUid);
+      if (!existing) return false;
+      await sendExistingOrderResponse(db, response, existing.orderId, verifiedUid);
+      return true;
+    };
+    // A committed request recovers its current order without any new commercial qualification.
+    if (await replayExisting()) return;
+    let referralContext: Awaited<ReturnType<typeof readReferralCheckoutContext>>;
+    let accrualProgram: CagnotteAccrualProgram | null;
+    let reservationProgram: CagnotteReservationProgram | null;
+    let firebaseProjectId: string | null | undefined;
+    try {
+      referralContext = await readReferralCheckoutContext(body, dependencies, dependencies.verifyToken, operationNowEpochMs);
+      const runtimeConfiguration = dependencies.getRuntimeConfiguration?.();
+      accrualProgram = runtimeConfiguration ? runtimeConfiguration.accrualProgram : dependencies.accrualProgram ?? null;
+      reservationProgram = runtimeConfiguration ? runtimeConfiguration.reservationProgram : dependencies.reservationProgram ?? null;
+      firebaseProjectId = runtimeConfiguration ? runtimeConfiguration.firebaseProjectId : accrualProgram || reservationProgram ? dependencies.getFirebaseProjectId?.() : null;
+    } catch (error) {
+      // One exact ownership/fingerprint lookup covers a concurrent commit after the early miss.
+      if (await replayExisting()) return;
+      throw error;
     }
     const requestedCagnotteCents = Number(body.cagnotteUse?.requestedCents || 0);
     let verifiedCustomerId: string | undefined = referralContext?.uid;

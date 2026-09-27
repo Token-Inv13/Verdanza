@@ -108,7 +108,7 @@ const fallbackDeliveryZones: DeliveryZone[] = [
 ];
 
 import type { ReferralUseRequest } from "../../src/types/referralCheckout.js";
-import { parseReferralUse } from "./referralCheckout.js";
+import { parseReferralUse } from "./referralCheckoutRequest.js";
 
 export type CheckoutRequestItem = {
   productId: string;

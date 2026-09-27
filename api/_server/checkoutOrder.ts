@@ -1,5 +1,5 @@
 import { transactionalReader } from "./checkoutTransactionalReader.js";
-import { prepareReferralCheckout, assertAcceptedReferralQuote, type ReferralCheckoutContext } from "./referralCheckout.js";
+import { prepareReferralCheckoutReservation, prepareReferralCheckout, assertAcceptedReferralQuote, type ReferralCheckoutContext } from "./referralCheckout.js";
 import { ReferralError } from "./referralService.js";
 import { FieldValue } from "firebase-admin/firestore";
 import { orderPayload, priceCheckout, type CheckoutRequestBody, type PricedCheckout } from "./checkout.js";
@@ -152,6 +152,7 @@ export async function commitCheckoutOrder(input: {
 
     const positiveUseRequested = Number(body.cagnotteUse?.requestedCents || 0) > 0;
     let committedPrice = priced;
+    let referralReservationPlan: Awaited<ReturnType<typeof prepareReferralCheckoutReservation>> | null = null;
     let referralSnapshot: import("../../src/types/referral.js").ReferralOrderSnapshot | undefined;
     if (body.referralUse) {
       if (!input.referralContext || input.referralContext.uid !== customerId) throw new ReferralError("AUTH_REQUIRED", 401);
@@ -161,6 +162,8 @@ export async function commitCheckoutOrder(input: {
           context: input.referralContext, nowEpochMs: operationEpochMs, accrualProgram, firebaseProjectId: input.firebaseProjectId });
         assertAcceptedReferralQuote(referral.quote, body.referralUse.acceptance);
         committedPrice = referral.priced; referralSnapshot = referral.snapshot;
+        if (referralSnapshot) referralReservationPlan = await prepareReferralCheckoutReservation({ db, transaction,
+          uid: input.referralContext.uid, orderId: orderRef.id, checkoutRequestId: normalizedRequestId, createdAtEpochMs: operationEpochMs });
       } catch (error) {
         if (body.referralUse.acceptance && !(error instanceof ReferralError && error.code === "REFERRAL_CAGNOTTE_CONFLICT"))
           throw new ReferralError("REFERRAL_QUOTE_CONFLICT");
@@ -397,6 +400,7 @@ export async function commitCheckoutOrder(input: {
       : null;
 
     // Every product, commercial condition and wallet fact has been read before writes.
+    referralReservationPlan?.write();
     reservationPlan?.write();
     for (const write of stockWrites) write();
 

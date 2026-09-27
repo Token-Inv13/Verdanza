@@ -1,4 +1,6 @@
 import { deepStrictEqual, equal, ok, throws } from "node:assert/strict";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { rejects } from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { aixRadiusDeliveryZone } from "../src/data/deliveryZones.js";
@@ -10,7 +12,10 @@ import { checkoutPayloadFingerprint } from "../api/_server/orderSideEffects.js";
 import { allocateReferralDiscount, prepareReferralCheckout, readReferralCheckoutContext } from "../api/_server/referralCheckout.js";
 import { parseReferralEmailKeyring, referralEmailClaimId } from "../api/_server/referralIdentity.js";
 import { REFERRAL_CLOSED_RUNTIME, ReferralConfigurationError } from "../api/_server/referralRuntimeConfig.js";
-import { ORDER_EMAIL_NORMALIZATION_VERSION } from "../api/_server/referralOrderEmailHistory.js";
+import { prepareReferralCheckoutReservationRelease } from "../api/_server/referralLedger.js";
+import { linkReferral } from "../api/_server/referralService.js";
+import type { Order } from "../src/types/index.js";
+import { referralRelationIdentityHistoryStatus, ORDER_EMAIL_NORMALIZATION_VERSION } from "../api/_server/referralOrderEmailHistory.js";
 import { commitOrderStatusTransition } from "../api/_server/orderStatusTransition.js";
 import { executeOrderRefund } from "../api/_server/orderRefunds.js";
 import { buildCagnotteOrderEnrollment } from "../api/_server/cagnotteOrders.js";
@@ -27,9 +32,9 @@ const keyring = JSON.stringify({ activeVersion: "v1", keys: { v1: secret } });
 const uid = "checkout-referee";
 const actor = { uid: "checkout-admin", email: "admin@example.test" };
 const identity = async (id: string) => ({ uid: id, email: `${id}@example.test`, emailVerified: true, disabled: false });
-const collections = ["orders", "products", "coupons", "deliveryZones", "referrals", "referralEmailClaims", "referralPaymentIdentities", "referralMigrations", "cagnotteWallets", "cagnotteMovements", "cagnotteAccruals", "cagnotteRefunds", "orderRefunds", "checkoutRequests", "orderSideEffects", "stockMovements", "productCosts", "analyticsOutbox", "adminUsers"];
+const collections = ["orders", "referralCodes", "products", "coupons", "deliveryZones", "referrals", "referralEmailClaims", "referralPaymentIdentities", "referralMigrations", "cagnotteWallets", "cagnotteMovements", "cagnotteAccruals", "cagnotteRefunds", "orderRefunds", "checkoutRequests", "orderSideEffects", "stockMovements", "productCosts", "analyticsOutbox", "adminUsers"];
 let passed = 0;
-let depth = 0;
+const transactionDepth = new AsyncLocalStorage<number>();
 async function test(name: string, run: () => Promise<void> | void) { await seed(); await run(); console.log(`OK ${++passed} - ${name}`); }
 async function capture() {
   return Promise.all(collections.map(async name => [name, (await db.collection(name).get()).docs.map(doc => ({ id: doc.id, value: doc.data(), time: doc.updateTime?.toMillis() }))]));
@@ -54,8 +59,8 @@ function body() { return { items: [{ productId: "main", quantity: 1 }], delivery
   referralUse: { requested: true as const }, cagnotteUse: { requestedCents: 0 } }; }
 function checkedDb(abort = false) {
   return new Proxy(db, { get(target, key) {
-    if (key === "runTransaction") return (callback: (tx: Transaction) => Promise<unknown>) => target.runTransaction(async tx => {
-      let wrote = false; depth++;
+    if (key === "runTransaction") return (callback: (tx: Transaction) => Promise<unknown>) => target.runTransaction(async tx => transactionDepth.run(1, async () => {
+      let wrote = false;
       const checked = new Proxy(tx, { get(current, method) {
         const value = Reflect.get(current, method);
         if (typeof value !== "function") return value;
@@ -65,19 +70,18 @@ function checkedDb(abort = false) {
           return Reflect.apply(value, current, args);
         };
       } });
-      try { const value = await callback(checked); if (abort && wrote) throw new Error("injected abort"); return value; }
-      finally { depth--; }
-    });
+      const value = await callback(checked); if (abort && wrote) throw new Error("injected abort"); return value;
+    }));
     const value = Reflect.get(target, key); return typeof value === "function" ? value.bind(target) : value;
   } }) as Firestore;
 }
 function deps(overrides: Partial<Parameters<typeof createOrderHandler>[0]> = {}): Parameters<typeof createOrderHandler>[0] {
-  return { getDb: () => checkedDb(), verifyToken: async (token: string) => { equal(depth, 0); return { uid: token, email: `${token}@example.test`, emailVerified: true }; },
+  return { getDb: () => checkedDb(), verifyToken: async (token: string) => { equal(transactionDepth.getStore() ?? 0, 0); return { uid: token, email: `${token}@example.test`, emailVerified: true }; },
     accrualProgram: loyalty, reservationProgram: null, now: () => 10000,
-    referralRuntime: () => program, referralIdentity: async (id: string) => { equal(depth, 0); return identity(id); },
-    referralKeyring: () => { equal(depth, 0); return keyring; },
+    referralRuntime: () => program, referralIdentity: async (id: string) => { equal(transactionDepth.getStore() ?? 0, 0); return identity(id); },
+    referralKeyring: () => { equal(transactionDepth.getStore() ?? 0, 0); return keyring; },
     enforceRateLimit: async () => ({ allowed: true, code: "allowed", retryAfterSeconds: 0 }),
-    processSideEffects: async () => { equal(depth, 0); return { client: { status: "skipped" as const, reason: "fixture" }, admin: { status: "skipped" as const, reason: "fixture" } }; }, ...overrides };
+    processSideEffects: async () => { equal(transactionDepth.getStore() ?? 0, 0); return { client: { status: "skipped" as const, reason: "fixture" }, admin: { status: "skipped" as const, reason: "fixture" } }; }, ...overrides };
 }
 async function invoke(handler: ReturnType<typeof createOrderHandler>, request: unknown) {
   let status = 0; let result: unknown; const headers = new Map<string, unknown>();
@@ -132,11 +136,16 @@ await test("minimal parser rejects embedded sponsor/snapshot/money fields", asyn
   equal(r.status, 200); const stored = (await db.collection("orders").doc(String(r.data.orderId)).get()).data()!;
   equal(stored.referral.referralId, uid); equal(stored.referral.refereeDiscountCents, 500); equal(stored.discountAmount, 5); equal(stored.promotionDiscountTotal, 0);
 });
-for (const mode of ["off", "drain", "malformed"] as const) await test(`${mode} requested closes before DB/Auth/keyring; absent request unchanged`, async () => {
+for (const mode of ["off", "drain", "malformed"] as const) await test(`${mode} requested closes before business/Auth/keyring; exact replay lookup allowed; absent request unchanged`, async () => {
   const runtime = () => { if (mode === "malformed") throw new ReferralConfigurationError(); return mode === "off" ? REFERRAL_CLOSED_RUNTIME : { ...program, mode: "drain" as const }; };
   const fail = () => { throw new Error("must not run"); };
   const closed = { referralRuntime: runtime, getDb: fail, verifyToken: async () => fail(), referralIdentity: async () => fail(), referralKeyring: fail };
-  equal((await quote(body(), closed)).status, 503); equal((await create(body(), closed)).status, 503);
+  equal((await quote(body(), closed)).status, 503);
+  const technicalOnlyDb = new Proxy(db, { get(target, property) {
+    if (property === "collection") return (name: string) => { equal(name, "checkoutRequests"); return target.collection(name); };
+    throw new Error("closed creation must only look for an existing request");
+  } }) as Firestore;
+  equal((await create(body(), { ...closed, getDb: () => technicalOnlyDb })).status, 503);
   const request = { ...body(), referralUse: undefined };
   const unchanged = { referralRuntime: fail, referralIdentity: async () => fail(), referralKeyring: fail };
   const normal = await quote(request, unchanged); equal(normal.status, 200); equal(normal.data.referralUse, undefined);
@@ -238,6 +247,7 @@ await test("created order binds request UID, replay and other UID conflict", asy
 await test("aborted transaction leaves stock/order/request/claims/wallet untouched", async () => {
   const request = body(); const b = accepted(request, await proposal(request)); const before = await capture();
   ok((await create(b, { getDb: () => checkedDb(true) })).status >= 400); deepStrictEqual(await capture(), before);
+  equal((await db.collection("referrals").doc(uid).get()).data()?.checkoutReservation, undefined); equal((await db.collection("orders").get()).size, 0);
 });
 await test("cross-snapshot mismatch closes enrollment", async () => {
   const request = body(); const c = await create(accepted(request, await proposal(request))); equal(c.status, 200);
@@ -272,5 +282,211 @@ await test("real checkout -> payment -> delivery -> refund; sponsor 1000 and ref
   equal((await db.collection("cagnotteWallets").doc(uid).get()).data()?.availableCents, 180);
   equal((await db.collection("orders").doc(id).get()).data()?.referral.refereeDiscountCents, 500);
   const after = await settlement(); await executeOrderRefund({ ...refundContext, request: refund }); deepStrictEqual(await settlement(), after);
+});
+
+
+async function candidate() {
+  const request = body(); const acceptance = accepted(request, await proposal(request));
+  const result = await create(acceptance); equal(result.status, 200);
+  return { request: acceptance, id: String(result.data.orderId) };
+}
+async function transition(change: Parameters<typeof commitOrderStatusTransition>[0]["body"], overrides: Partial<Parameters<typeof commitOrderStatusTransition>[0]> = {}) {
+  return commitOrderStatusTransition({ db: checkedDb(), admin: actor, body: change, accrualProgram: loyalty, reservationProgram: null,
+    referralProgram: program, getSponsorIdentity: async id => { equal(transactionDepth.getStore() ?? 0, 0); return identity(id); },
+    referralEmailKeyring: () => { equal(transactionDepth.getStore() ?? 0, 0); return keyring; },
+    now: () => "2000-01-03T00:00:00.000Z", ...overrides });
+}
+const relationRef = () => db.collection("referrals").doc(uid);
+await test("two pure accepted quotes and concurrent distinct requests: exactly one order/reservation/stock/outbox", async () => {
+  const before = await capture(); const a = body(), b = body(); const q1 = await proposal(a), q2 = await proposal(b); deepStrictEqual(q1, q2); ok(q1.applied);
+  deepStrictEqual(await capture(), before);
+  let effects = 0;
+  const results = await Promise.all([create(accepted(a, q1), { processSideEffects: async (...args) => { effects++; return deps().processSideEffects!(...args); } }),
+    create(accepted(b, q2), { processSideEffects: async (...args) => { effects++; return deps().processSideEffects!(...args); } })]);
+  equal(results.filter(r => r.status === 200).length, 1); equal(results.filter(r => r.status === 409 && r.data.code === "REFERRAL_QUOTE_CONFLICT").length, 1);
+  equal(effects, 1); const winner = results.find(r => r.status === 200)!;
+  equal((await db.collection("orders").get()).size, 1); equal((await db.collection("checkoutRequests").get()).size, 1);
+  equal((await db.collection("orderSideEffects").get()).size, 1); equal((await db.collection("stockMovements").get()).size, 1);
+  equal((await db.collection("products").doc("main").get()).data()?.stock, 999);
+  const r = (await relationRef().get()).data()!; const request = (await db.collection("checkoutRequests").get()).docs[0];
+  equal(r.checkoutReservation.orderId, winner.data.orderId); equal(request.data().orderId, winner.data.orderId);
+  equal(r.checkoutReservation.checkoutRequestId, request.id); equal((await db.collection("orders").doc(String(winner.data.orderId)).get()).data()?.checkoutRequestId, request.id);
+  equal(referralRelationIdentityHistoryStatus(uid, r), "clear");
+  const reserved = await quote(); equal(reserved.status, 200); deepStrictEqual(reserved.data.referralUse, { quoteVersion: "referral-checkout-quote-v1", applied: false, reason: "right_reserved" });
+});
+await test("same request concurrent creates replay one reservation and one side-effect", async () => {
+  const request = body(), b = accepted(request, await proposal(request)); let effects = 0;
+  const overrides = { processSideEffects: async (...args: Parameters<NonNullable<Parameters<typeof createOrderHandler>[0]["processSideEffects"]>>) => { effects++; return deps().processSideEffects!(...args); } };
+  const results = await Promise.all([create(b, overrides), create(b, overrides)]); equal(results[0].status, 200); equal(results[1].status, 200);
+  equal(results[0].data.orderId, results[1].data.orderId); equal(effects, 1); equal((await db.collection("orders").get()).size, 1);
+});
+for (const mode of ["active", "drain"] as const) await test(`reserved payment ${mode}: qualify and remove reservation atomically`, async () => {
+  const c = await candidate(); await transition({ orderId: c.id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, { referralProgram: { ...program, mode } });
+  const r = (await relationRef().get()).data()!; equal(r.checkoutReservation, undefined); equal(r.qualifyingOrderId, c.id); equal(r.paymentConfirmed, true);
+  equal(referralRelationIdentityHistoryStatus(uid, r), "clear"); equal((await db.collection("orders").doc(c.id).get()).data()?.paymentStatus, "paid");
+});
+await test("other discounted order cannot pay against another reservation", async () => {
+  const c = await candidate(); const order = (await db.collection("orders").doc(c.id).get()).data()!;
+  await db.collection("orders").doc("other-discounted").set({ ...order, checkoutRequestId: randomUUID() }); const before = await capture();
+  await rejects(transition({ orderId: "other-discounted", paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }), { code: "referral_discount_reserved_for_other_order", status: 409 });
+  deepStrictEqual(await capture(), before);
+});
+for (const failure of ["history", "identity", "corrupt", "abort"] as const) await test(`reserved payment failure ${failure} retains reservation and zero partial writes`, async () => {
+  const c = await candidate(); let extra: Partial<Parameters<typeof commitOrderStatusTransition>[0]> = {};
+  if (failure === "history") await db.collection("referralPaymentIdentities").doc("prior").set({ schemaVersion: 1, version: "referral-payment-identity-v1", orderId: "prior", customerUid: uid, status: "unresolved", reason: "runtime_closed", recordedAtEpochMs: 9999 });
+  if (failure === "identity") extra = { getSponsorIdentity: async () => { throw new Error("unavailable"); } };
+  if (failure === "corrupt") await relationRef().update({ "checkoutReservation.schemaVersion": 99 });
+  if (failure === "abort") extra = { db: checkedDb(true) };
+  const before = await capture(); await rejects(transition({ orderId: c.id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, extra));
+  deepStrictEqual(await capture(), before); equal((await relationRef().get()).data()?.checkoutReservation.orderId, c.id);
+});
+await test("off payment never silently releases the reserved engagement", async () => {
+  const c = await candidate(); const before = (await relationRef().get()).data();
+  await transition({ orderId: c.id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }, { referralProgram: REFERRAL_CLOSED_RUNTIME,
+    getSponsorIdentity: async () => { throw new Error("must not read Auth"); }, referralEmailKeyring: () => { throw new Error("must not read keyring"); } });
+  deepStrictEqual((await relationRef().get()).data(), before); equal((await db.collection("orders").doc(c.id).get()).data()?.paymentStatus, "paid");
+  await transition({ orderId: c.id, orderStatus: "cancelled" }, { referralProgram: REFERRAL_CLOSED_RUNTIME });
+  deepStrictEqual((await relationRef().get()).data(), before);
+});
+for (const mode of ["active", "off", "malformed"] as const) for (const event of ["order", "payment"] as const)
+await test(`explicit never-paid ${event} cancellation ${mode}: release without Auth/keyring, no TTL, replay safe`, async () => {
+  const c = await candidate(); const r = (await relationRef().get()).data()!;
+  const fail = () => { throw new Error("cleanup must not resolve runtime/Auth/keyring"); };
+  const configuration = { referralProgram: mode === "malformed" ? undefined : mode === "off" ? REFERRAL_CLOSED_RUNTIME : program,
+    resolveReferralRuntime: fail, getSponsorIdentity: async () => fail(), referralEmailKeyring: fail };
+  const change = event === "order" ? { orderId: c.id, orderStatus: "cancelled" as const } : { orderId: c.id, paymentStatus: "cancelled" as const };
+  // Advancing time alone does not release the candidate.
+  const later = await quote(body(), { now: () => 10000 + 1000 * 3600 * 24 * 365 }); equal((later.data.referralUse as ReferralCheckoutQuote).applied, false);
+  deepStrictEqual((await relationRef().get()).data(), r);
+  await transition(change, configuration); equal((await relationRef().get()).data()?.checkoutReservation, undefined);
+  const released = await settlement(); await transition(change, configuration); deepStrictEqual(await settlement(), released);
+  const beforePay = await capture();
+  await rejects(transition({ orderId: c.id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" })); deepStrictEqual(await capture(), beforePay);
+  const next = await proposal(); ok(next.applied);
+});
+for (const marker of ["paidAt", "paymentConfirmedAt"] as const) await test(`historical ${marker} prevents never-paid reservation release`, async () => {
+  const c = await candidate(); await db.collection("orders").doc(c.id).update({ [marker]: "2000-01-02T00:00:00.000Z" });
+  const raw = (await db.collection("orders").doc(c.id).get()).data()!; const before = await capture();
+  await db.runTransaction(async transaction => { const plan = await prepareReferralCheckoutReservationRelease({ db, transaction,
+    order: { ...raw, id: c.id } as Order, nextOrderStatus: "cancelled", nextPaymentStatus: "cancelled" }); equal(plan, null); });
+  deepStrictEqual(await capture(), before);
+});
+await test("plain first payment consumes linked reservation and blocks later discounted payment", async () => {
+  const c = await candidate(); const plain = await create({ ...body(), referralUse: undefined }); equal(plain.status, 200);
+  await transition({ orderId: String(plain.data.orderId), paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
+  const r = (await relationRef().get()).data()!; equal(r.checkoutReservation, undefined); equal(r.state, "cancelled"); equal(r.qualifyingOrderId, plain.data.orderId);
+  const before = await capture(); await rejects(transition({ orderId: c.id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }), { code: "referral_discount_already_consumed" });
+  deepStrictEqual(await capture(), before);
+});
+await test("reserved relation rejects other sponsor, allows same sponsor no-op and protects hard deletion", async () => {
+  const c = await candidate();
+  for (const [sponsor, code] of [["checkout-sponsor", "A".repeat(26)], ["other-sponsor", "B".repeat(26)]]) {
+    const mapping = { schemaVersion: 1, programVersion: "referral-commercial-policy-v1", ownerUid: sponsor, code, createdAtEpochMs: 2000 };
+    await db.collection("referralCodes").doc(`owner_${sponsor}`).set(mapping); await db.collection("referralCodes").doc(`code_${code}`).set(mapping);
+    await db.collection("orders").doc(`delivered-${sponsor}`).set({ customerId: sponsor, total: 50, paymentStatus: "paid", orderStatus: "delivered", items: [{ productId: "main", quantity: 1 }] });
+  }
+  const input = { db: checkedDb(), user: { uid, email: `${uid}@example.test`, emailVerified: true }, keyring: parseReferralEmailKeyring(keyring), program, nowEpochMs: 10000, getSponsorIdentity: identity };
+  const before = await capture(); equal((await linkReferral({ ...input, code: "A".repeat(26) })).changed, false);
+  await rejects(linkReferral({ ...input, code: "B".repeat(26) }), { code: "referral_checkout_reserved" }); deepStrictEqual(await capture(), before);
+  await transition({ orderId: c.id, orderStatus: "cancelled" }); await rejects(transition({ orderId: c.id, deleteCancelled: true }));
+  ok((await db.collection("orders").doc(c.id).get()).exists);
+});
+await test("V5 accepts optional valid reservation and rejects its malformed or terminal variants", async () => {
+  const c = await candidate(); const relation = (await relationRef().get()).data()!;
+  equal(ORDER_EMAIL_NORMALIZATION_VERSION, "order-email-normalization-v5"); equal(referralRelationIdentityHistoryStatus(uid, relation), "clear");
+  const without = { ...relation }; delete without.checkoutReservation; equal(referralRelationIdentityHistoryStatus(uid, without), "clear");
+  for (const reservation of [null, [], { ...relation.checkoutReservation, schemaVersion: 2 }, { ...relation.checkoutReservation, orderId: "bad/path" },
+    { ...relation.checkoutReservation, checkoutRequestId: "bad" }, { ...relation.checkoutReservation, createdAtEpochMs: -1 }])
+    equal(referralRelationIdentityHistoryStatus(uid, { ...relation, checkoutReservation: reservation }), "corrupt");
+  for (const state of ["pending", "rewarded", "cancelled", "reversed"])
+    equal(referralRelationIdentityHistoryStatus(uid, { ...relation, state, qualifyingOrderId: c.id, paymentConfirmed: true }), "corrupt");
+});
+for (const failure of ["off", "drain", "malformed", "identity", "keyring", "cagnotte"] as const)
+await test(`exact replay ${failure}: zero runtime/identity/keyring/pricing/rate/effects and same order`, async () => {
+  const c = await candidate(); let calls = 0, ownership = 0;
+  const forbidden = () => { calls++; throw new Error("must not requalify replay"); };
+  const replayDb = new Proxy(db, { get(target, property) {
+    if (property === "collection") return (name: string) => { ok(["checkoutRequests", "orders"].includes(name)); return target.collection(name); };
+    throw new Error("replay never starts pricing or a transaction");
+  } }) as Firestore;
+  const r = await create(c.request, { getDb: () => replayDb, referralRuntime: forbidden, referralIdentity: async () => forbidden(), referralKeyring: forbidden,
+    getRuntimeConfiguration: forbidden, getFirebaseProjectId: forbidden, enforceRateLimit: async () => forbidden(), processSideEffects: async () => forbidden(),
+    verifyToken: async token => { ownership++; return { uid: token, email: null }; } });
+  equal(r.status, 200); equal(r.data.orderId, c.id); equal(calls, 0); equal(ownership, 1);
+  equal(r.headers.get("Cache-Control"), "private, no-store"); equal(r.headers.get("Vary"), "Authorization");
+});
+await test("replay ownership and payload/order integrity fail before requalification", async () => {
+  const c = await candidate(); let calls = 0; const forbidden = () => { calls++; throw new Error("must not requalify"); };
+  const overrides = { referralRuntime: forbidden, getRuntimeConfiguration: forbidden, referralIdentity: async () => forbidden(), referralKeyring: forbidden };
+  const cases = [{ ...c.request, authToken: "wrong-user" }, { ...c.request, items: [{ productId: "main", quantity: 2 }] },
+    { ...c.request, referralUse: undefined }, { ...c.request, referralUse: { ...c.request.referralUse, acceptance: { ...c.request.referralUse.acceptance, acceptedPayableCents: 1 } } },
+    { ...c.request, deliveryMethod: "local_express", deliveryZone: "new-zone" },
+    { ...c.request, customer: { ...c.request.customer, address: { ...address, city: "Lyon" } } }];
+  const before = await capture(); for (const request of cases) equal((await create(request, overrides)).data.code, "checkout_request_conflict");
+  equal(calls, 0); deepStrictEqual(await capture(), before);
+  await db.collection("orders").doc(c.id).delete(); equal((await create(c.request, overrides)).data.code, "checkout_request_conflict"); equal(calls, 0);
+});
+await test("lost ACK/current cancelled order and modified relation replay without qualification", async () => {
+  const c = await candidate(); await transition({ orderId: c.id, orderStatus: "cancelled" });
+  await relationRef().update({ sponsorUid: "externally-modified", state: "reversed" });
+  const before = await capture(); const r = await create(c.request, { referralRuntime: () => { throw new Error("must not run"); } });
+  equal(r.status, 200); equal(r.data.orderId, c.id); equal(r.data.orderStatus, "cancelled"); deepStrictEqual(await capture(), before);
+});
+for (const failure of ["runtime", "identity", "keyring", "cagnotte"] as const)
+await test(`early miss/concurrent commit/${failure} failure: one exact safe fallback`, async () => {
+  const request = body(), b = accepted(request, await proposal(request)); let committedId = "", lookups = 0, failureCalls = 0;
+  // Return the missing snapshot captured before an intervening real successful create.
+  const racingDb = new Proxy(db, { get(target, property) {
+    if (property === "collection") return (name: string) => {
+      const collection = target.collection(name);
+      if (name !== "checkoutRequests") return collection;
+      return new Proxy(collection, { get(col, key) {
+        if (key === "doc") return (id: string) => {
+          const ref = col.doc(id); return new Proxy(ref, { get(doc, method) {
+            if (method === "get") return async () => {
+              lookups++; const snapshot = await doc.get();
+              if (lookups === 1) { equal(snapshot.exists, false); const c = await create(b); equal(c.status, 200); committedId = String(c.data.orderId); }
+              return snapshot;
+            };
+            const value = Reflect.get(doc, method); return typeof value === "function" ? value.bind(doc) : value;
+          } });
+        };
+        const value = Reflect.get(col, key); return typeof value === "function" ? value.bind(col) : value;
+      } });
+    };
+    const value = Reflect.get(target, property); return typeof value === "function" ? value.bind(target) : value;
+  } }) as Firestore;
+  const forbidden = () => { failureCalls++; throw new Error("unavailable after concurrent commit"); };
+  const overrides: Partial<Parameters<typeof createOrderHandler>[0]> = { getDb: () => racingDb };
+  if (failure === "runtime") overrides.referralRuntime = forbidden;
+  if (failure === "identity") overrides.referralIdentity = async () => forbidden();
+  if (failure === "keyring") overrides.referralKeyring = forbidden;
+  if (failure === "cagnotte") overrides.getRuntimeConfiguration = forbidden;
+  const r = await create(b, overrides); equal(r.status, 200); equal(r.data.orderId, committedId); equal(lookups, 2); equal(failureCalls, 1);
+  equal((await db.collection("orders").get()).size, 1);
+});
+await test("unpaid cancellation abort preserves reservation/order/stock atomically", async () => {
+  const c = await candidate(); const before = await capture();
+  await rejects(transition({ orderId: c.id, orderStatus: "cancelled" }, { db: checkedDb(true), referralProgram: REFERRAL_CLOSED_RUNTIME }));
+  deepStrictEqual(await capture(), before);
+});
+await test("early miss concurrent commit fallback still rejects a different owner", async () => {
+  const request = body(), b = accepted(request, await proposal(request)); let staged = false;
+  const racingDb = new Proxy(db, { get(target, property) {
+    if (property === "collection") return (name: string) => {
+      const collection = target.collection(name); if (name !== "checkoutRequests") return collection;
+      return new Proxy(collection, { get(col, key) {
+        if (key === "doc") return (id: string) => new Proxy(col.doc(id), { get(doc, method) {
+          if (method === "get") return async () => { const snapshot = await doc.get();
+            if (!staged) { staged = true; equal(snapshot.exists, false); equal((await create(b)).status, 200); } return snapshot; };
+          const value = Reflect.get(doc, method); return typeof value === "function" ? value.bind(doc) : value;
+        } });
+        const value = Reflect.get(col, key); return typeof value === "function" ? value.bind(col) : value;
+      } });
+    };
+    const value = Reflect.get(target, property); return typeof value === "function" ? value.bind(target) : value;
+  } }) as Firestore;
+  const result = await create({ ...b, authToken: "wrong-user" }, { getDb: () => racingDb, referralRuntime: () => { throw new Error("unavailable"); } });
+  equal(result.status, 409); equal(result.data.code, "checkout_request_conflict"); equal((await db.collection("orders").get()).size, 1);
 });
 console.log(`Referral checkout: ${passed} PASS`);

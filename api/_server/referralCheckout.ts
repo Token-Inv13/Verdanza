@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import type { CheckoutRequestBody, PricedCheckout } from "./checkout.js";
 import type { ReferralRelation } from "../../src/types/referral.js";
-import { REFERRAL_CHECKOUT_QUOTE_VERSION, type ReferralCheckoutQuote, type ReferralCheckoutAcceptance, type ReferralUseRequest } from "../../src/types/referralCheckout.js";
+import { REFERRAL_CHECKOUT_QUOTE_VERSION, type ReferralCheckoutQuote, type ReferralCheckoutAcceptance } from "../../src/types/referralCheckout.js";
 import { getReferralRuntime, ReferralConfigurationError, type ReferralRuntime } from "./referralRuntimeConfig.js";
 import { getReferralIdentity, type ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
 import { readCurrentPaymentIdentity, isValidReferralEmailIdentityClaim, type CurrentPaymentIdentity } from "./referralPaymentIdentity.js";
@@ -21,26 +21,6 @@ export type ReferralCheckoutDependencies = {
   referralKeyring?: () => string;
 };
 export type ReferralCheckoutContext = { uid: string; runtime: ReferralRuntime; identity: CurrentPaymentIdentity };
-/** Only distinguishes the new HTTP contract; no business/runtime resolution. */
-export function hasReferralCheckoutRequest(value: unknown): boolean {
-  try {
-    const body = typeof value === "string" ? JSON.parse(value) : value;
-    return Boolean(body && typeof body === "object" && !Array.isArray(body) && body.referralUse !== undefined);
-  } catch { return false; }
-}
-export function parseReferralUse(value: unknown): ReferralUseRequest | undefined {
-  if (value === undefined) return undefined;
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new ReferralError("referral_request_invalid", 400);
-  const raw = value as Record<string, unknown>;
-  if (raw.requested !== true || Object.keys(raw).some(key => !["requested", "acceptance"].includes(key))) throw new ReferralError("referral_request_invalid", 400);
-  if (raw.acceptance === undefined) return { requested: true };
-  const a = raw.acceptance as Partial<ReferralCheckoutAcceptance>;
-  if (!a || typeof a !== "object" || Array.isArray(a) || Object.keys(a).sort().join(",") !== "acceptedPayableCents,acceptedReferralDiscountCents,quoteFingerprint,quoteVersion" ||
-      a.quoteVersion !== REFERRAL_CHECKOUT_QUOTE_VERSION || typeof a.quoteFingerprint !== "string" || !/^[a-f0-9]{64}$/.test(a.quoteFingerprint) ||
-      a.acceptedReferralDiscountCents !== 500 || !Number.isSafeInteger(a.acceptedPayableCents) || Number(a.acceptedPayableCents) < 0) throw new ReferralError("referral_acceptance_invalid", 400);
-  return { requested: true, acceptance: a as ReferralCheckoutAcceptance };
-}
-
 /** Invoked only for an explicit request. Closed before Auth, keyring or Firestore. */
 export async function readReferralCheckoutContext(body: CheckoutRequestBody, deps: ReferralCheckoutDependencies, verify: typeof verifyFirebaseIdToken, now: number): Promise<ReferralCheckoutContext | undefined> {
   if (!body.referralUse) return undefined;
@@ -109,6 +89,7 @@ export async function prepareReferralCheckout(input: { db: Firestore; transactio
   const relation = relationDoc.data() as ReferralRelation;
   if (referralRelationIdentityHistoryStatus(context.uid, relation) !== "clear") throw new ReferralError("referral_relation_corrupt");
   if (relation.state !== "linked" || relation.qualifyingOrderId !== null || relation.paymentConfirmed) return none("right_consumed");
+  if (relation.checkoutReservation) return none("right_reserved");
   // A positive durable payment remains decisive even if its old claim or marker is gone.
   const history = await findPriorPaidProductOrder(tx, db, context.uid, null, context.identity.normalizedEmail, context.identity.normalizedEmail);
   if (history.kind === "found") return none("right_consumed");
@@ -153,4 +134,17 @@ export function assertAcceptedReferralQuote(quote: ReferralCheckoutQuote, accept
   if (acceptance.quoteVersion !== quote.quoteVersion || acceptance.quoteFingerprint !== quote.quoteFingerprint ||
       acceptance.acceptedReferralDiscountCents !== quote.referralDiscountCents || acceptance.acceptedPayableCents !== quote.payableCents)
     throw new ReferralError("REFERRAL_QUOTE_CONFLICT");
+}
+
+/** Prepared only by real creation, never by quote. Its read serializes concurrent candidates. */
+export async function prepareReferralCheckoutReservation(input: { db: Firestore; transaction: Transaction; uid: string;
+  orderId: string; checkoutRequestId: string; createdAtEpochMs: number }) {
+  const ref = input.db.collection("referrals").doc(input.uid);
+  const doc = await input.transaction.get(ref);
+  if (!doc.exists || referralRelationIdentityHistoryStatus(input.uid, doc.data()!) !== "clear" ||
+      doc.data()?.state !== "linked" || doc.data()?.checkoutReservation !== undefined) throw new ReferralError("REFERRAL_QUOTE_CONFLICT");
+  const checkoutReservation = { schemaVersion: 1 as const, orderId: input.orderId,
+    checkoutRequestId: input.checkoutRequestId, createdAtEpochMs: input.createdAtEpochMs };
+  if (referralRelationIdentityHistoryStatus(input.uid, { ...doc.data(), checkoutReservation }) !== "clear") throw new ReferralError("REFERRAL_QUOTE_CONFLICT");
+  return { write() { input.transaction.update(ref, { checkoutReservation }); } };
 }

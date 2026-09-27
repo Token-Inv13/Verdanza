@@ -34,6 +34,8 @@ export type ReferralRelation = {
   createdAtEpochMs: number;
   linkedAtEpochMs: number;
   relinkRevision?: number;
+  /** Exclusive discounted checkout candidate. No TTL; explicit unpaid cancellation releases it. */
+  checkoutReservation?: { schemaVersion: 1; orderId: string; checkoutRequestId: string; createdAtEpochMs: number };
   /** Claimed only by the first confirmed paid order, never by delivery alone. */
   qualifyingOrderId: string | null;
   /** Delivery of qualifyingOrderId only; null until that paid order is delivered. */

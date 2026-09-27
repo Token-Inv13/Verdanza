@@ -8,6 +8,18 @@ export function isUnresolvedReferralIdentityHistoryReason(reason: unknown): bool
   return reason === "referee_identity_unavailable" || reason === "referee_email_unverified" || reason === "referral_identity_changed";
 }
 
+/** Optional V1 reservation is valid only on a completely unqualified linked relation. */
+export function isValidReferralCheckoutReservation(value: FirebaseFirestore.DocumentData): boolean {
+  const r = value.checkoutReservation;
+  if (r === undefined) return true;
+  return r !== null && typeof r === "object" && !Array.isArray(r) && r.schemaVersion === 1 &&
+    typeof r.orderId === "string" && /^[A-Za-z0-9._:@+-]{1,128}$/.test(r.orderId) &&
+    typeof r.checkoutRequestId === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(r.checkoutRequestId) &&
+    Number.isSafeInteger(r.createdAtEpochMs) && r.createdAtEpochMs >= 0 &&
+    value.state === "linked" && value.qualifyingOrderId === null && value.deliveredOrderId === null &&
+    value.paymentConfirmed === false && value.deliveryConfirmed === false && value.rewardCompartment === "none";
+}
+
 /** Migration-only validation. Corruption must not hide a consumed identity anomaly. */
 export function referralRelationIdentityHistoryStatus(id: string, value: FirebaseFirestore.DocumentData): "clear" | "unresolved" | "corrupt" {
   const validId = (v: unknown) => typeof v === "string" && /^[A-Za-z0-9._:@+-]{1,128}$/.test(v);
@@ -15,7 +27,7 @@ export function referralRelationIdentityHistoryStatus(id: string, value: Firebas
   const reasons = ["sponsor_no_longer_eligible", "sponsor_account_disabled", "sponsor_identity_unavailable",
     "first_paid_order_without_referral_discount", "prior_paid_order_detected", "referral_history_inconclusive",
     "referee_identity_unavailable", "referee_email_unverified", "referee_email_claimed", "self_referral_at_payment", "referral_identity_changed"];
-  if (value.schemaVersion !== 1 || value.programVersion !== REFERRAL_PROGRAM_VERSION || !validId(id) || value.refereeUid !== id ||
+  if (!isValidReferralCheckoutReservation(value) || value.schemaVersion !== 1 || value.programVersion !== REFERRAL_PROGRAM_VERSION || !validId(id) || value.refereeUid !== id ||
     !validId(value.sponsorUid) || value.sponsorUid === id || !nonnegative(value.createdAtEpochMs) || !nonnegative(value.linkedAtEpochMs) ||
     typeof value.paymentConfirmed !== "boolean" || typeof value.deliveryConfirmed !== "boolean" ||
     (value.qualifyingOrderId !== null && !validId(value.qualifyingOrderId)) ||

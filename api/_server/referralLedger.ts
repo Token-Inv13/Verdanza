@@ -5,9 +5,9 @@ import { REFERRAL_MINIMUM_PRODUCTS_CENTS, REFERRAL_PROGRAM_VERSION, REFERRAL_SPO
 import type { Order } from "../../src/types/index.js";
 import { applyCagnotteWalletDeltas, prepareCagnotteWalletMutation, writeCagnotteWalletMutation } from "./cagnotteLedger.js";
 import { CAGNOTTE_REGULARIZATION_VERSION, CAGNOTTE_RESERVATION_VERSION, type CagnotteMovement } from "./cagnotteLedgerTypes.js";
-import { findPriorPaidProductOrder, ReferralError, sponsorHasDeliveredPaidOrder } from "./referralService.js";
+import { hasHistoricalPaymentEvidence, findPriorPaidProductOrder, ReferralError, sponsorHasDeliveredPaidOrder } from "./referralService.js";
 import { canonicalReferralJson, referralSnapshotFingerprint } from "./referralSnapshot.js";
-import { isUnresolvedReferralIdentityHistoryReason, prepareReferralOrderEmailHistoryInvalidation } from "./referralOrderEmailHistory.js";
+import { isValidReferralCheckoutReservation, referralRelationIdentityHistoryStatus, isUnresolvedReferralIdentityHistoryReason, prepareReferralOrderEmailHistoryInvalidation } from "./referralOrderEmailHistory.js";
 import { prepareReferralEmailIdentityClaim, type PreparedEmailIdentityClaim } from "./referralPaymentIdentity.js";
 
 type Event = "payment" | "payment_and_delivery" | "delivery" | "refund" | "correction";
@@ -52,13 +52,15 @@ export async function prepareFirstPaymentWithoutReferral(input: { db: Firestore;
   const before = doc.data() as ReferralRelation;
   if (before.refereeUid !== input.order.customerId || before.schemaVersion !== 1 || before.programVersion !== REFERRAL_PROGRAM_VERSION)
     throw new ReferralError("referral_relation_corrupt");
+  if (referralRelationIdentityHistoryStatus(input.order.customerId, before) === "corrupt") throw new ReferralError("referral_relation_corrupt");
   if (before.state !== "linked" || before.qualifyingOrderId !== null) return null;
   if (before.paymentConfirmed || before.rewardCompartment !== "none") throw new ReferralError("referral_relation_corrupt");
   const claim = await prepareCurrentRefereeClaim({ db: input.db, transaction: input.transaction, before,
     evidence: input.paymentEvidence, identityClaim: input.identityClaim, recordedAtEpochMs: input.recordedAtEpochMs });
   const historyInvalidation = !input.identityHistoryInvalidationPrepared && input.identityClaim?.status !== "unresolved" && isUnresolvedReferralIdentityHistoryReason(claim.reason)
     ? await prepareReferralOrderEmailHistoryInvalidation(input.transaction, input.db, input.recordedAtEpochMs, "payment_identity_unresolved") : null;
-  return { status: "applied" as const, write() { input.transaction.set(relationRef, { ...before, state: "cancelled", paymentConfirmed: true,
+  const consumed = { ...before }; delete consumed.checkoutReservation;
+  return { status: "applied" as const, write() { input.transaction.set(relationRef, { ...consumed, state: "cancelled", paymentConfirmed: true,
     qualifyingOrderId: input.order.id, rewardIneligibilityReason: claim.reason ?? "first_paid_order_without_referral_discount" } satisfies ReferralRelation);
     historyInvalidation?.write();
     if (claim.newClaim) input.transaction.create(claim.newClaim.ref, claim.newClaim.value);
@@ -101,7 +103,7 @@ export async function prepareReferralTransition(input: Input) {
   if (before.schemaVersion !== 1 || before.programVersion !== REFERRAL_PROGRAM_VERSION || before.refereeUid !== snapshot.referralId ||
     typeof before.sponsorUid !== "string" || !before.sponsorUid || before.sponsorUid === before.refereeUid ||
     !["linked", "pending", "rewarded", "cancelled", "reversed"].includes(before.state)) throw new ReferralError("referral_relation_conflict");
-  if (!cents(before.cumulativeReturnedProductsCents) ||
+  if (!isValidReferralCheckoutReservation(before) || !cents(before.cumulativeReturnedProductsCents) ||
     !before.processedRefunds || typeof before.processedRefunds !== "object" || Array.isArray(before.processedRefunds) ||
     Object.values(before.processedRefunds).some((value) => !cents(value)) ||
     before.paymentConfirmed !== (before.qualifyingOrderId !== null) || before.deliveryConfirmed !== (before.deliveredOrderId !== null) ||
@@ -114,6 +116,8 @@ export async function prepareReferralTransition(input: Input) {
     (before.rewardIneligibilityReason !== undefined && !["sponsor_no_longer_eligible", "sponsor_account_disabled", "sponsor_identity_unavailable", "first_paid_order_without_referral_discount", "prior_paid_order_detected", "referral_history_inconclusive", "referee_identity_unavailable", "referee_email_unverified", "referee_email_claimed", "self_referral_at_payment", "referral_identity_changed"].includes(before.rewardIneligibilityReason)) ||
     (before.rewardIneligibilityReason !== undefined && (!before.paymentConfirmed || before.rewardCompartment !== "none")))
     throw new ReferralError("referral_relation_corrupt");
+  if (before.checkoutReservation && before.checkoutReservation.orderId !== input.order.id &&
+      (input.event === "payment" || input.event === "payment_and_delivery")) throw new ReferralError("referral_discount_reserved_for_other_order");
   // A second discounted order cannot become paid after another order consumed the right.
   // Its delivery, cancellation and refund workflows remain independent.
   if (before.qualifyingOrderId !== null && before.qualifyingOrderId !== input.order.id) {
@@ -150,6 +154,7 @@ export async function prepareReferralTransition(input: Input) {
       } else if (evidence?.sponsorAccount === "disabled") next.rewardIneligibilityReason = "sponsor_account_disabled";
       else next.rewardIneligibilityReason = "sponsor_identity_unavailable";
     }
+    delete next.checkoutReservation;
     next.paymentConfirmed = true;
     next.qualifyingOrderId = input.order.id;
     if (input.event === "payment_and_delivery") {
@@ -216,4 +221,23 @@ export async function prepareReferralTransition(input: Input) {
     if (wallet) writeCagnotteWalletMutation(wallet);
     for (const movement of output) input.transaction.create(input.db.collection("cagnotteMovements").doc(movement.eventKey), movement);
   } };
+}
+
+/** Technical cleanup of an existing unpaid engagement, independent of runtime/Auth/keyring. */
+export async function prepareReferralCheckoutReservationRelease(input: { db: Firestore; transaction: Transaction; order: Order;
+  nextOrderStatus: Order["orderStatus"]; nextPaymentStatus: Order["paymentStatus"] }) {
+  if (!input.order.referral || (input.nextOrderStatus !== "cancelled" && input.nextPaymentStatus !== "cancelled")) return null;
+  // Unknown/malformed historical timestamps cannot prove that the order was never paid.
+  if (hasHistoricalPaymentEvidence(input.order) || input.order.paidAt !== undefined || input.order.paymentConfirmedAt !== undefined) return null;
+  const snapshot = validateReferralOrderSnapshot(input.order);
+  const ref = input.db.collection("referrals").doc(snapshot.referralId);
+  const doc = await input.transaction.get(ref);
+  if (!doc.exists) throw new ReferralError("referral_relation_missing");
+  const relation = doc.data() as ReferralRelation;
+  if (referralRelationIdentityHistoryStatus(snapshot.referralId, relation) === "corrupt") throw new ReferralError("referral_relation_corrupt");
+  const reservation = relation.checkoutReservation;
+  if (!reservation || reservation.orderId !== input.order.id) return null;
+  if (reservation.checkoutRequestId !== input.order.checkoutRequestId) throw new ReferralError("referral_relation_conflict");
+  const released = { ...relation }; delete released.checkoutReservation;
+  return { write() { input.transaction.set(ref, released); } };
 }
