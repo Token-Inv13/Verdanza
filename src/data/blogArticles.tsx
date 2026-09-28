@@ -6,6 +6,308 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "incertitude-mesure-arrondis-analyse-cbd",
+    title: "Analyse CBD : comprendre l'incertitude de mesure et les arrondis",
+    seoTitle: "Analyse CBD : incertitude et arrondis | Verdanza",
+    description:
+      "Apprenez à lire l'incertitude de mesure, les chiffres significatifs et les arrondis d'une analyse CBD sans donner au résultat une précision excessive.",
+    excerpt:
+      "Un résultat analytique n'est pas une valeur parfaitement exacte. L'incertitude et les arrondis indiquent avec quelle prudence lire et comparer les chiffres.",
+    category: "Guide qualité",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-09-28T09:02:00+02:00",
+    dateModified: "2026-09-28T09:02:00+02:00",
+    readingTime: "8 min",
+    status: "published",
+    images: {
+      square: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-1x1.webp",
+      landscape: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-4x3.webp",
+      wide: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-16x9.webp",
+    },
+    relatedSlugs: [
+      "analyse-cbd-nd-lod-loq",
+      "pourcentage-mg-g-ppm-analyse-cbd",
+      "comment-lire-analyse-cbd",
+    ],
+    links: [
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/analyse-cbd-nd-lod-loq",
+        label: "Comprendre ND, LOD et LOQ",
+      },
+      {
+        to: "/blog/pourcentage-mg-g-ppm-analyse-cbd",
+        label: "Comprendre %, mg/g et ppm",
+      },
+      {
+        to: "/blog/comment-lire-analyse-cbd",
+        label: "Lire une analyse CBD",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une analyse CBD fournit des résultats issus d'une méthode, d'un
+            appareil, d'un échantillon et d'une série de calculs. Même lorsque le
+            tableau affiche plusieurs décimales, la valeur ne doit pas être lue
+            comme une mesure parfaitement exacte. L'incertitude et les règles
+            d'arrondi aident à comprendre le niveau de précision réellement
+            disponible.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            L'incertitude de mesure ne signifie pas que le résultat est faux.
+            Elle décrit la dispersion raisonnablement associée au résultat selon
+            la méthode et les conditions indiquées par le laboratoire.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "resultat-mesure",
+        text: "Un résultat de mesure n'est pas une valeur absolue",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Préparation de l'échantillon, étalonnage, répétabilité de l'appareil
+            et calcul final peuvent chacun contribuer à la variabilité. Le
+            laboratoire rassemble ces contributions selon sa procédure pour
+            estimer l'incertitude associée à la mesure.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Cette information peut figurer directement à côté du résultat, dans
+            une colonne dédiée, en note de bas de page ou dans une annexe. Son
+            absence du tableau principal ne permet pas de supposer qu'elle est
+            nulle.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "lire-plus-moins",
+        text: "Comment lire une valeur accompagnée du signe ±",
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Repères pour lire un résultat et son incertitude.",
+          headers: ["Présentation", "Lecture prudente", "Erreur à éviter"],
+          rows: [
+            [
+              "10,0 % ± 0,8 %",
+              "Le résultat annoncé est 10,0 % et l'incertitude indiquée est 0,8 point de pourcentage.",
+              "Transformer automatiquement l'expression en intervalle juridique ou en garantie absolue.",
+            ],
+            [
+              "100 mg/g ± 8 mg/g",
+              "Le résultat et l'incertitude utilisent la même unité massique.",
+              "Comparer directement cette incertitude à une valeur exprimée en mg/kg sans conversion.",
+            ],
+            [
+              "U = 6 %, relative",
+              "L'incertitude est exprimée en proportion du résultat, si la note du laboratoire le confirme.",
+              "Lire 6 % comme six points de pourcentage.",
+            ],
+            [
+              "Incertitude non indiquée",
+              "Consulter la légende, la méthode ou demander la précision au laboratoire.",
+              "Conclure que la mesure est exacte ou que l'incertitude vaut zéro.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le symbole ± doit toujours être rapproché de sa définition. Selon le
+            document, l'incertitude peut être absolue ou relative. Le laboratoire
+            peut aussi préciser un facteur d'élargissement ou un niveau de
+            couverture. Sans cette légende, il faut éviter d'interpréter plus
+            finement la valeur.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "absolue-relative",
+        text: "Incertitude absolue et incertitude relative",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une incertitude absolue est donnée dans la même unité que le résultat.
+            Par exemple, une valeur en mg/g accompagnée d'une incertitude en mg/g
+            se lit directement dans cette unité. Une incertitude relative est
+            exprimée en pourcentage de la valeur mesurée et demande un calcul
+            pour obtenir l'écart dans l'unité du résultat.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Un pourcentage relatif et un point de pourcentage ne désignent pas la
+            même chose. La formulation et l'unité du bulletin doivent guider la
+            lecture.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "arrondis",
+        text: "Pourquoi les arrondis comptent",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le nombre de décimales affiché doit rester cohérent avec la précision
+            de la méthode. Ajouter des chiffres après la virgule à partir d'une
+            conversion ne crée pas d'information supplémentaire. Une valeur de
+            10 % ne devient donc pas plus précise parce qu'elle est réécrite
+            10,000 %.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "conserver les unités et les décimales telles qu'elles sont présentées sur le bulletin ;",
+          "effectuer les conversions avec suffisamment de chiffres pendant le calcul ;",
+          "arrondir seulement le résultat final au niveau de précision pertinent ;",
+          "ne pas déduire des décimales qui ne figurent pas dans la source ;",
+          "vérifier si le laboratoire explique sa règle d'arrondi.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "comparer-resultats",
+        text: "Deux résultats proches ne sont pas forcément différents",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une petite différence entre deux valeurs peut être inférieure à la
+            précision utile des mesures. Avant d'opposer deux bulletins, il faut
+            comparer la méthode, l'unité, l'échantillon, la date, les limites
+            analytiques et les incertitudes annoncées. La différence numérique
+            seule ne suffit pas.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Questions à poser avant de comparer deux analyses CBD.",
+          headers: ["Vérification", "Pourquoi elle compte"],
+          rows: [
+            [
+              "Même unité",
+              "Une comparaison directe exige une base commune : %, mg/g, mg/kg ou ppm.",
+            ],
+            [
+              "Même composé",
+              "CBD, CBDA et CBD total ne désignent pas nécessairement la même ligne de résultat.",
+            ],
+            [
+              "Méthode comparable",
+              "Des méthodes ou préparations différentes peuvent avoir des performances différentes.",
+            ],
+            [
+              "Limites annoncées",
+              "LOD et LOQ précisent ce qui peut être détecté ou quantifié.",
+            ],
+            [
+              "Incertitude connue",
+              "Elle aide à replacer l'écart observé dans le niveau de précision de chaque mesure.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "limites-detection",
+        text: "Ne pas confondre incertitude, LOD et LOQ",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            L'incertitude accompagne une valeur mesurée. La limite de détection
+            indique le niveau à partir duquel un signal peut être distingué,
+            tandis que la limite de quantification indique le niveau à partir
+            duquel une valeur peut être chiffrée selon les critères de la
+            méthode. Le guide sur {" "}
+            <Link to="/blog/analyse-cbd-nd-lod-loq">
+              ND, LOD et LOQ
+            </Link>{" "}
+            détaille ces notions.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "checklist",
+        text: "La checklist pour une lecture prudente",
+      },
+      {
+        type: "list",
+        items: [
+          "identifier le résultat, son unité et le composé concerné ;",
+          "chercher la définition de l'incertitude dans la légende ou l'annexe ;",
+          "distinguer une incertitude absolue d'une incertitude relative ;",
+          "respecter le nombre de chiffres significatifs annoncé ;",
+          "éviter de comparer des valeurs converties avec une précision artificielle ;",
+          "relier le bulletin au bon échantillon et au bon numéro de lot ;",
+          "demander une clarification lorsque la notation reste ambiguë.",
+        ],
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La lecture d'une analyse est plus solide lorsque chaque nombre reste
+            attaché à son unité, à sa méthode et à son contexte. L'incertitude ne
+            retire pas sa valeur au résultat : elle empêche simplement de lui
+            attribuer une exactitude que la mesure ne revendique pas.
+          </>
+        ),
+      },
+      {
+        type: "links",
+        title: "Approfondir la lecture d'une analyse CBD",
+        links: [
+          { to: "/qualite-conformite", label: "Qualité et conformité" },
+          {
+            to: "/blog/pourcentage-mg-g-ppm-analyse-cbd",
+            label: "Comparer %, mg/g et ppm",
+          },
+          {
+            to: "/blog/comment-lire-analyse-cbd",
+            label: "Lire un bulletin d'analyse",
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "emballage-cbd-contenant-fermeture",
     title: "Emballage CBD : comprendre le rôle du contenant et de la fermeture",
     seoTitle: "Emballage CBD : contenant et fermeture | Verdanza",

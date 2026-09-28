@@ -1,4 +1,5 @@
 export const publishedBlogArticleSlugs = [
+  "incertitude-mesure-arrondis-analyse-cbd",
   "emballage-cbd-contenant-fermeture",
   "analyse-cbd-nd-lod-loq",
   "isolat-spectre-large-complet-cbd",
