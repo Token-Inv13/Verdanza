@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { updateCustomerProfile } from "../../services/customersService";
+import { createCustomerProfileIfMissing, updateCustomerProfile } from "../../services/customersService";
 
 export function AccountProfilePage() {
   const { user, customerProfile, refreshCustomerProfile } = useAuth();
@@ -20,6 +20,7 @@ export function AccountProfilePage() {
     setMessage("");
     setError("");
     try {
+      if (!customerProfile) await createCustomerProfileIfMissing(user);
       await updateCustomerProfile(user.uid, { displayName, phone });
       await refreshCustomerProfile();
       setMessage("Profil mis à jour.");
