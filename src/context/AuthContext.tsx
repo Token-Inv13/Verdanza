@@ -16,7 +16,7 @@ import {
 } from "../lib/firebaseAuth";
 import { firebaseAuthActionCodeSettings } from "../lib/firebaseAuthActions";
 import { getAdminUserForAuthUser } from "../services/adminUsersService";
-import { ensureCustomerProfile } from "../services/customersService";
+import { createCustomerProfileIfMissing, getCustomerProfile } from "../services/customersService";
 import type { AdminUser, CustomerProfile } from "../types";
 
 type AuthContextValue = {
@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setCustomerProfile(null);
       return;
     }
-    const profile = await ensureCustomerProfile(auth.currentUser);
+    const profile = await getCustomerProfile(auth.currentUser.uid);
     setCustomerProfile(profile);
   }, []);
 
@@ -98,7 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (nextUser) {
             const [record, profile] = await Promise.all([
               getAdminUserForAuthUser(nextUser),
-              ensureCustomerProfile(nextUser),
+              getCustomerProfile(nextUser.uid),
             ]);
             setAdminUser(record?.isActive ? record : null);
             setCustomerProfile(profile);
@@ -138,7 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           displayName: displayName.trim(),
         });
       }
-      await ensureCustomerProfile(credential.user);
+      setCustomerProfile(await createCustomerProfileIfMissing(credential.user));
     },
     [],
   );
@@ -147,7 +147,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { auth, firebaseAuth } = await loadFirebaseAuthApi();
     if (!auth) throw new Error("Firebase is not configured.");
     const provider = new firebaseAuth.GoogleAuthProvider();
-    await firebaseAuth.signInWithPopup(auth, provider);
+    const credential = await firebaseAuth.signInWithPopup(auth, provider);
+    if (firebaseAuth.getAdditionalUserInfo(credential)?.isNewUser === true) {
+      setCustomerProfile(await createCustomerProfileIfMissing(credential.user));
+    }
   }, []);
 
   const resetPassword = useCallback(async (email: string) => {
