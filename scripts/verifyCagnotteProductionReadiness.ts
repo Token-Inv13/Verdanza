@@ -59,6 +59,7 @@ const expectedEndpoints = [
   "invoices.ts",
   "order-refunds.ts",
   "quote-order.ts",
+  "referral-maintenance.ts",
   "referral.ts",
   "retry-order-emails.ts",
   "retry-order-purchase-analytics.ts",
@@ -427,7 +428,7 @@ await check("configuration runtime invalide refusée avant Firebase, Auth et lec
   assert.equal(dependencyCalls, 0);
 });
 
-await check("20 fonctions API attendues, deux endpoints fidélité, referral.ts et selection.ts connus", () => {
+await check("21 fonctions API attendues, deux endpoints fidélité et trois endpoints indépendants connus", () => {
   const endpoints = readdirSync(resolve("api"), { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
     .map((entry) => entry.name)
@@ -441,8 +442,8 @@ await check("20 fonctions API attendues, deux endpoints fidélité, referral.ts 
   assert.equal(mainEndpoints.length, 16);
   const addedEndpoints = endpoints.filter((file) => !mainEndpoints.includes(file));
   const fidelityEndpoints = ["cagnotte.ts", "order-refunds.ts"];
-  const independentEndpoints = ["referral.ts", "selection.ts"];
-  assert.equal(endpoints.length, 20);
+  const independentEndpoints = ["referral-maintenance.ts", "referral.ts", "selection.ts"];
+  assert.equal(endpoints.length, 21);
   assert.deepEqual(addedEndpoints, [...fidelityEndpoints, ...independentEndpoints].sort());
   assert.deepEqual(addedEndpoints.filter((file) => !independentEndpoints.includes(file)), fidelityEndpoints);
 });
@@ -468,6 +469,36 @@ await check("packaging statique des endpoints cagnotte et parrainage sans dépen
     assert.doesNotMatch(runtimeText, /FIRESTORE_EMULATOR_HOST|demo-verdanza-cagnotte|firebase\.cagnotte\.local|127\.0\.0\.1:18085/);
     console.log(`  ${entry}: ${graph.files.size} modules locaux; packages ${[...graph.packages].sort().join(", ") || "aucun"}`);
   }
+});
+
+await check("maintenance dédiée: packaging serveur, gate fermé et dry-run immuable", () => {
+  const graph = dependencyGraph("api/referral-maintenance.ts");
+  const forbiddenPackages = new Set(["playwright", "@firebase/rules-unit-testing", "tsx", "vite", "firebase-tools"]);
+  assert.deepEqual([...graph.files].filter((file) => file.startsWith("scripts/") ||
+    /(?:^|\/)(?:test|tests|__tests__|recipe|demo)(?:\/|[A-Z_.-])/i.test(file)), []);
+  assert.deepEqual([...graph.packages].filter((name) => forbiddenPackages.has(name)), []);
+  const runtimeText = [...graph.files].map(read).join("\n");
+  assert.doesNotMatch(runtimeText, /process\.argv|orderEmailNormalizationMigration|migrateOrderCustomerEmailNormalization/);
+  const route = read("api/_server/referralMaintenanceRoute.ts");
+  const facade = read("api/_server/referralMaintenanceDryRun.ts");
+  assert.match(route, /dependencies\.enabled\(\) !== "true"/);
+  assert.ok(route.indexOf("dependencies.enabled()") < route.indexOf("dependencies.getDb()"));
+  assert.ok(route.indexOf("dependencies.enabled()") < route.indexOf("dependencies.getKeyringJson()"));
+  assert.match(route, /getKeyringJson: \(\) => process\.env\.REFERRAL_EMAIL_HMAC_KEYRING_JSON/);
+  assert.match(route, /emulatorConfigured: \(\) => process\.env\.FIRESTORE_EMULATOR_HOST !== undefined/);
+  assert.match(route, /runtime\.mode !== "off"/);
+  assert.match(facade, /db: referralReadOnlyFirestore\(input\.db\)/);
+  assert.match(facade, /apply: false/);
+  assert.match(facade, /legacyEmailBlockPolicyVersion: REFERRAL_LEGACY_EMAIL_BLOCK_POLICY_VERSION/);
+  assert.doesNotMatch(facade, /\.\.\.input|input\.apply/);
+  assert.match(read("api/_server/referralReadOnlyFirestore.ts"), /\{ readOnly: true \}/);
+  for (const file of walk("src").filter((file) => /\.(?:ts|tsx)$/.test(file))) {
+    assert.doesNotMatch(read(file), /REFERRAL_EMAIL_HMAC_KEYRING_JSON|referralMaintenanceRoute|referralPaymentIdentityReconciliation/);
+  }
+  const packageJson = JSON.parse(read("package.json"));
+  assert.ok(packageJson.scripts.verify.includes("npm run test:referral-maintenance"));
+  assert.match(read(".env.example"), /^# REFERRAL_MAINTENANCE_DRY_RUN_ENABLED="false"\r?$/m);
+  console.log(`  api/referral-maintenance.ts: ${graph.files.size} modules serveur, aucun outil CLI/test`);
 });
 
 await check("aucun rate limit ou ciblage client contournable sur les nouvelles routes", () => {

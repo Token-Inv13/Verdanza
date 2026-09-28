@@ -51,7 +51,7 @@ const fullAudits = [
 
 expectScript(
   "verify",
-  "npm run verify:local-safety && npm run lint && npm run typecheck && npm run typecheck:cagnotte-interactive && npm run typecheck:api && npm run typecheck:referral-maintenance && npm run typecheck:referral-client-tests && npm run test:firebase-admin-compatibility && npm run test:firebase-auth-error-contract && npm run test:blog-engagement && npm run test:cagnotte-runtime-config && npm run verify:cagnotte-interactive-isolation && npm run test:cagnotte-interactive-reliability && npm run test:cagnotte-interactive-diagnostics && npm run test:cagnotte-runtime-diagnostics && npm run test:cagnotte-rate-limit-windows && npm run test:cagnotte-interactive && npm run test:cagnotte-admin-storage && npm run test:cagnotte-admin-ui && npm run test:cagnotte-emulator-diagnostics && npm run test:cagnotte-read && npm run test:order-refunds && npm run test:cagnotte-payment-links && npm run test:cagnotte-security && npm run test:cagnotte-checkout-use && npm run test:referral-backend && npm run test:referral-checkout && npm run test:referral-client && npm run test:cagnotte-v1-recipe && npm run verify:cagnotte-production-readiness && npm run test:core && npm run build:local && npm run audit:local-essential",
+  "npm run verify:local-safety && npm run lint && npm run typecheck && npm run typecheck:cagnotte-interactive && npm run typecheck:api && npm run typecheck:referral-maintenance && npm run typecheck:referral-client-tests && npm run test:firebase-admin-compatibility && npm run test:firebase-auth-error-contract && npm run test:blog-engagement && npm run test:cagnotte-runtime-config && npm run verify:cagnotte-interactive-isolation && npm run test:cagnotte-interactive-reliability && npm run test:cagnotte-interactive-diagnostics && npm run test:cagnotte-runtime-diagnostics && npm run test:cagnotte-rate-limit-windows && npm run test:cagnotte-interactive && npm run test:cagnotte-admin-storage && npm run test:cagnotte-admin-ui && npm run test:cagnotte-emulator-diagnostics && npm run test:cagnotte-read && npm run test:order-refunds && npm run test:cagnotte-payment-links && npm run test:cagnotte-security && npm run test:cagnotte-checkout-use && npm run test:referral-backend && npm run test:referral-maintenance && npm run test:referral-checkout && npm run test:referral-client && npm run test:cagnotte-v1-recipe && npm run verify:cagnotte-production-readiness && npm run test:core && npm run build:local && npm run audit:local-essential",
 );
 expectScript(
   "verify:full",
@@ -96,6 +96,7 @@ expectScript(
 );
 expectOrderRefundPreparedEmulator(scripts["test:order-refunds"]);
 expectScript("test:referral-backend", "node --import tsx scripts/runCagnotteLedgerTests.ts --referral-only");
+expectScript("test:referral-maintenance", "node --import tsx scripts/runCagnotteLedgerTests.ts --referral-maintenance-only");
 expectScript("test:referral-checkout", "node --import tsx scripts/runCagnotteLedgerTests.ts --referral-checkout-only");
 expectScript("test:referral-client", "node --import tsx scripts/testReferralClient.ts && node --import tsx scripts/testReferralClientUi.tsx");
 expectScript("typecheck:referral-client-tests", "tsc --noEmit -p tsconfig.referral-client-tests.json --incremental false");
@@ -124,7 +125,7 @@ expectScript(
 expectScript("postdeploy:check", "node scripts/postdeployCheck.mjs");
 expectScript(
   "typecheck:referral-maintenance",
-  "tsc --noEmit --moduleResolution NodeNext --module NodeNext --target ES2022 --esModuleInterop --skipLibCheck --strict --types node scripts/orderEmailNormalizationMigration.ts scripts/migrateOrderCustomerEmailNormalization.ts scripts/referralPaymentIdentityReconciliation.ts scripts/reconcileReferralPaymentIdentities.ts",
+  "tsc --noEmit --moduleResolution NodeNext --module NodeNext --target ES2022 --esModuleInterop --skipLibCheck --strict --types node scripts/orderEmailNormalizationMigration.ts scripts/migrateOrderCustomerEmailNormalization.ts scripts/referralPaymentIdentityReconciliation.ts scripts/reconcileReferralPaymentIdentities.ts scripts/testReferralMaintenance.ts",
 );
 
 requireValue(

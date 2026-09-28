@@ -91,8 +91,8 @@ function resolveCredentialSource(environment: FirebaseAdminEnvironment): Firebas
   };
 }
 
-export function getAdminDb() {
-  ensureAdminApp();
+export function getAdminDb(options?: { logIdentity?: false }) {
+  ensureAdminApp(options?.logIdentity !== false);
   return getFirestore();
 }
 
@@ -108,7 +108,7 @@ export function getAdminStorageBucket() {
   return getStorage().bucket();
 }
 
-function ensureAdminApp() {
+function ensureAdminApp(logIdentity = true) {
   return initializeFirebaseAdminApp(
     process.env,
     {
@@ -116,9 +116,9 @@ function ensureAdminApp() {
       cert,
       applicationDefault,
       initializeApp: ({ credential, storageBucket }) => initializeApp({ credential, storageBucket }),
-      log: (event, payload) => console.info(event, payload),
+      log: logIdentity ? (event, payload) => console.info(event, payload) : () => {},
     },
-    identityProofApps,
+    logIdentity ? identityProofApps : new WeakSet<object>(),
   );
 }
 
