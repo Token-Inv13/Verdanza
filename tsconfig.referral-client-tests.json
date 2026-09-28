@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": { "target": "ES2022", "lib": ["ES2023", "DOM", "DOM.Iterable"], "types": ["node", "vite/client"] },
+  "include": ["scripts/testReferralClient.ts", "scripts/testReferralClientUi.tsx", "scripts/testReferralReadModel.ts"]
+}

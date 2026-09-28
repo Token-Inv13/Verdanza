@@ -57,13 +57,18 @@ export function createLocalTestCheckoutConfiguration() {
   }
   const dependencies: CheckoutDependencies = {
     cagnotteEnabled: false,
+    referralEnabled: false,
     useCagnotteCheckout: useTestCagnotte,
     useCheckoutAttempt: () => useTestCheckoutAttempt(dependencies),
     clearCagnottePreference: () => {},
-    quoteOrder: (input) => request<OrderQuote>("quote", input),
+    quoteOrder: (input) => {
+      if (input.referralUse) return Promise.reject(new Error("test_referral_unavailable"));
+      return request<OrderQuote>("quote", input);
+    },
     submitOrder: async (input) => {
       assertLocalTestContext();
       if (input.cagnotteUse) throw new Error("test_cagnotte_unavailable");
+      if (input.referralUse) throw new Error("test_referral_unavailable");
       const attempt = attemptFor(input);
       const result = await request<{ url: string }>("checkout", { items: input.items, customer: input.customer,
         deliveryMethod: input.deliveryMethod, deliveryZone: input.deliveryZone, couponCode: input.couponCode, promotionSelections: input.promotionSelections,

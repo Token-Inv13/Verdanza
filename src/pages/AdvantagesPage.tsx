@@ -3,6 +3,7 @@ import { AdvantagesHub } from "../components/AdvantagesHub";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 import { CAGNOTTE_READ_DISPLAY_ENABLED } from "../config/cagnotteFeatures";
+import { REFERRAL_DISPLAY_CONFIGURATION } from "../config/referralFeatures";
 import { useConsent } from "../context/ConsentContext";
 import { trackCtaClick, trackEvent } from "../lib/analytics";
 
@@ -26,9 +27,9 @@ export function AdvantagesPage() {
         <h1>Plus de raisons de revenir.</h1>
         <p className="advantages-hub__description">Retrouvez nos concours, vos avantages fidélité et les prochains programmes clients Verdanza.</p>
       </header>
-      <AdvantagesHub loyaltyEnabled={CAGNOTTE_READ_DISPLAY_ENABLED} onEntryClick={(entry) => {
+      <AdvantagesHub loyaltyEnabled={CAGNOTTE_READ_DISPLAY_ENABLED} referralEnabled={REFERRAL_DISPLAY_CONFIGURATION.displayEnabled} onEntryClick={(entry) => {
         trackCtaClick({ ctaId: `advantages_${entry.id}`, ctaLocation: "advantages_hub",
-          destinationPath: entry.to, ctaCategory: entry.id === "contest" ? "contest" : "loyalty" });
+          destinationPath: entry.to, ctaCategory: entry.id === "contest" ? "contest" : entry.id === "referral" ? "referral" : "loyalty" });
         trackEvent(entry.event, { destination_path: entry.to });
       }} />
     </main>

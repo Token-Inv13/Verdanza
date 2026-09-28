@@ -4,13 +4,14 @@ import { getAdvantagesEntries, type AdvantageEntry } from "../lib/advantages";
 
 const entryIcons = { contest: Gift, loyalty: Sparkles, referral: UsersRound };
 
-export function AdvantagesHub({ loyaltyEnabled, onEntryClick }: {
+export function AdvantagesHub({ loyaltyEnabled, referralEnabled = false, onEntryClick }: {
   loyaltyEnabled: boolean;
+  referralEnabled?: boolean;
   onEntryClick?: (entry: Extract<AdvantageEntry, { status: "active" }>) => void;
 }) {
   return (
     <section className="advantages-hub__entries" aria-label="Les avantages Verdanza" data-advantages-entries>
-      {getAdvantagesEntries(loyaltyEnabled).map((entry) => <AdvantageSurface key={entry.id} entry={entry} onEntryClick={onEntryClick} />)}
+      {getAdvantagesEntries(loyaltyEnabled, referralEnabled).map((entry) => <AdvantageSurface key={entry.id} entry={entry} onEntryClick={onEntryClick} />)}
     </section>
   );
 }

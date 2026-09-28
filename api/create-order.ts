@@ -431,6 +431,7 @@ function checkoutCreationResult(order: Order) {
     orderStatus: order.orderStatus,
     paymentInstructions: order.paymentInstructions,
     ...(amountCents > 0 ? { cagnotteUse: { amountCents, state: "reserved" as const } } : {}),
+    ...(order.referral ? { referralUse: { discountCents: order.referral.refereeDiscountCents } } : {}),
     summary: {
       items: order.items || [],
       subtotal: Number(order.subtotal || 0),

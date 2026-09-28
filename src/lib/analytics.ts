@@ -3,6 +3,7 @@ import type { DeliveryMethod, PreferredPaymentMethod, Product } from "../types";
 import {
   ga4MeasurementId,
   isAnalyticsSuppressedLocation,
+  isAnalyticsSuppressedPath,
   loadGoogleTagManager,
 } from "./googleTagManager";
 
@@ -73,6 +74,7 @@ export type AnalyticsEventName =
   | "advantages_view"
   | "advantages_contest_click"
   | "advantages_loyalty_click"
+  | "advantages_referral_click"
   | "generate_lead";
 
 export type ContactHelpSource =
@@ -150,6 +152,7 @@ export function trackEvent(event: AnalyticsEventName, payload: AnalyticsPayload 
 
 export function trackPageView(path: string, title: string) {
   const url = new URL(path || "/", "https://verdanza.fr");
+  if (isAnalyticsSuppressedPath(url.pathname)) return;
   trackEvent("page_view", {
     page_location: url.toString(),
     page_path: `${url.pathname}${url.search}`,

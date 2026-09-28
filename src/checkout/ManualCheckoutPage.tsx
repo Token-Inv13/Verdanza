@@ -1,6 +1,7 @@
 import { useCagnotteCheckout, useCheckoutAttempt } from "../hooks/useCagnotteCheckout";
 import { clearCagnottePreference } from "../services/cagnotteCheckoutService";
 import { CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED } from "../config/cagnotteFeatures";
+import { REFERRAL_DISPLAY_CONFIGURATION } from "../config/referralFeatures";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { CheckoutPage as CheckoutForm } from "../pages/CheckoutPage";
@@ -33,6 +34,7 @@ export function CheckoutPage() {
   const navigate = useNavigate();
   const dependencies = useMemo<CheckoutDependencies>(() => ({
     cagnotteEnabled: CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED,
+    referralEnabled: REFERRAL_DISPLAY_CONFIGURATION.checkoutDisplayEnabled,
     useCagnotteCheckout,
     useCheckoutAttempt: useManualCheckoutAttempt,
     clearCagnottePreference,

@@ -79,6 +79,7 @@ export function CheckoutSuccessPage() {
               {summary.cagnotteUse && (
                 <p>Financement prévu par cagnotte : {formatMoney(summary.cagnotteUse.amountCents / 100)}</p>
               )}
+              {summary.referralUse ? <p>Avantage parrainage : −{formatMoney(summary.referralUse.discountCents / 100)}</p> : null}
               {summary.financingVerificationRequired ? (
                 <p className="text-amber-800">
                   Vérification nécessaire : le montant hors cagnotte enregistré est incomplet ou incohérent.

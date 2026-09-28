@@ -27,6 +27,7 @@ export async function exerciseCagnotteSharedCheckout() {
         ...(used?{cagnotteUse:{amountCents:used,state:"reserved"}}:{}),summary:{items:[],subtotal:100,deliveryFee:0,deliveryMethod:"postal",discountAmount:0,appliedPromotions:[]}};};
     const noop=()=>{};
     const dependencies={cagnotteEnabled:CAGNOTTE_CHECKOUT_USE_DISPLAY_ENABLED,
+      referralEnabled:false,
       useCagnotteCheckout:(options)=>useCagnotteCheckout({...options,read:walletRead}),
       useCheckoutAttempt:(id)=>{const attempt=useCheckoutAttempt(id);return {...attempt,submit:input=>attempt.submit(input,send),retry:()=>attempt.retry(send)};},
       clearCagnottePreference:noop,quoteOrder,submitOrder:send,loadDeliveryZones:async()=>({zones:[]}),initialDeliveryZones:[],

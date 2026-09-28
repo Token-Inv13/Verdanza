@@ -1,4 +1,4 @@
-// Public editorial entries only. No wallet data, referral flag or service call.
+// Public editorial entries only. No wallet data or service call.
 type AdvantageBase = {
   id: "contest" | "loyalty" | "referral";
   eyebrow: string;
@@ -9,11 +9,11 @@ type AdvantageBase = {
 
 export type AdvantageEntry = AdvantageBase & (
   | { status: "active"; to: string; cta: string;
-      event: "advantages_contest_click" | "advantages_loyalty_click" }
+      event: "advantages_contest_click" | "advantages_loyalty_click" | "advantages_referral_click" }
   | { status: "soon"; to?: never; cta?: never; event?: never }
 );
 
-export function getAdvantagesEntries(loyaltyEnabled: boolean): AdvantageEntry[] {
+export function getAdvantagesEntries(loyaltyEnabled: boolean, referralEnabled = false): AdvantageEntry[] {
   return [
     {
       id: "contest", eyebrow: "Concours", title: "Concours Verdanza",
@@ -36,8 +36,10 @@ export function getAdvantagesEntries(loyaltyEnabled: boolean): AdvantageEntry[] 
     },
     {
       id: "referral", eyebrow: "Parrainage", title: "Parrainage Verdanza",
-      navigationLabel: "Parrainage", status: "soon",
-      description: "Le programme de parrainage Verdanza arrive prochainement.",
+      navigationLabel: "Parrainage",
+      ...(referralEnabled ? { status: "active" as const, to: "/compte/avantages", cta: "Voir mon parrainage",
+        description: "Retrouvez votre invitation et vos avantages dans votre espace client.", event: "advantages_referral_click" as const }
+        : { status: "soon" as const, description: "Le programme de parrainage Verdanza arrive prochainement." }),
     },
   ];
 }

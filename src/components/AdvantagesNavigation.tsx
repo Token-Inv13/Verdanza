@@ -4,8 +4,9 @@ import { NavLink, useLocation } from "react-router-dom";
 import { getAdvantagesEntries, isAdvantagesPath } from "../lib/advantages";
 
 // A disclosure containing normal links, not an ARIA menu requiring arrow-key navigation.
-export function AdvantagesNavigation({ loyaltyEnabled, onNavigate }: {
+export function AdvantagesNavigation({ loyaltyEnabled, referralEnabled = false, onNavigate }: {
   loyaltyEnabled: boolean;
+  referralEnabled?: boolean;
   onNavigate: (path: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -48,7 +49,7 @@ export function AdvantagesNavigation({ loyaltyEnabled, onNavigate }: {
       <div id={panelId} hidden={!open} className="advantages-navigation__panel">
         <ul>
           <li><NavLink to="/avantages" onClick={() => navigate("/avantages")}>Vue d’ensemble</NavLink></li>
-          {getAdvantagesEntries(loyaltyEnabled).filter((entry) => entry.id !== "loyalty" || entry.status === "active")
+          {getAdvantagesEntries(loyaltyEnabled, referralEnabled).filter((entry) => entry.id !== "loyalty" || entry.status === "active")
             .map((entry) => (
               <li key={entry.id}>
                 {entry.status === "active" ? (

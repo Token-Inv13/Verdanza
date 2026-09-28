@@ -30,6 +30,7 @@ import type {
   PromotionSelection,
 } from "../types";
 import type { CagnotteUseRequest } from "../types/cagnotte";
+import type { ReferralUseRequest } from "../types/referralCheckout";
 import type { PublicSubmissionSecurityContext } from "../lib/publicSubmissionSecurity";
 import {
   presentOrderFinancing,
@@ -63,6 +64,7 @@ export type CreateCheckoutOrderInput = {
     address: Address;
   };
   cagnotteUse?: CagnotteUseRequest;
+  referralUse?: ReferralUseRequest;
 };
 
 export type CheckoutOrderResult = {
@@ -73,6 +75,7 @@ export type CheckoutOrderResult = {
   orderStatus: OrderStatus;
   paymentInstructions?: string;
   analyticsRevocationToken?: string;
+  referralUse?: { discountCents: 500 };
   cagnotteUse?: {
     amountCents: number;
     state: "reserved";
@@ -112,12 +115,12 @@ export async function createCheckoutOrder(
   } = {},
 ): Promise<CheckoutOrderResult> {
   const authToken = await (dependencies.getToken ?? getFirebaseIdToken)();
-  if (input.cagnotteUse?.requestedCents && !authToken) {
+  if ((input.cagnotteUse?.requestedCents || input.referralUse?.requested) && !authToken) {
     throw new CreateOrderHttpError(
       "AUTH_REQUIRED",
       401,
       "refused",
-      "Votre session a expiré. Reconnectez-vous avant d’utiliser votre cagnotte.",
+      input.referralUse ? "Votre session a expiré. Reconnectez-vous avant d’utiliser votre avantage." : "Votre session a expiré. Reconnectez-vous avant d’utiliser votre cagnotte.",
     );
   }
   let response: Response;

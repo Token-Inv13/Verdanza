@@ -15,6 +15,7 @@ import { FlyerLandingPage } from "./pages/FlyerLandingPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ProductSheetsPage } from "./pages/ProductSheetsPage";
 import { CAGNOTTE_READ_DISPLAY_ENABLED } from "./config/cagnotteFeatures";
+import { REFERRAL_DISPLAY_CONFIGURATION } from "./config/referralFeatures";
 
 const AdminLayout = lazy(() =>
   import("./layouts/AdminLayout").then((module) => ({ default: module.AdminLayout })),
@@ -93,6 +94,7 @@ const ContestPage = lazy(() =>
 const AdvantagesPage = lazy(() =>
   import("./pages/AdvantagesPage").then((module) => ({ default: module.AdvantagesPage })),
 );
+const ReferralLinkPage = lazy(() => import("./pages/ReferralLinkPage").then((module) => ({ default: module.ReferralLinkPage })));
 const ContestPrizePage = lazy(() =>
   import("./pages/ContestPrizePage").then((module) => ({
     default: module.ContestPrizePage,
@@ -144,6 +146,7 @@ export function App() {
           <Route path="checkout/success" element={<CheckoutSuccessPage />} />
           <Route path="checkout/cancel" element={<CheckoutCancelPage />} />
           <Route element={<AccountAuthGate />}>
+            <Route path="parrainage/:code" element={<ReferralLinkPage />} />
             <Route path="compte" element={<AccountLayout />}>
               <Route index element={<AccountOverviewPage />} />
               <Route path="commandes" element={<AccountOrdersPage />} />
@@ -152,7 +155,7 @@ export function App() {
               <Route
                 path="avantages"
                 element={
-                  CAGNOTTE_READ_DISPLAY_ENABLED
+                  CAGNOTTE_READ_DISPLAY_ENABLED || REFERRAL_DISPLAY_CONFIGURATION.displayEnabled
                     ? <AccountAdvantagesPage />
                     : <Navigate to="/compte" replace />
                 }
