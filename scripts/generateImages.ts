@@ -120,6 +120,10 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" | "packaging" }
 > = {
+  "incertitude-mesure-arrondis-analyse-cbd": {
+    label: "Analyse CBD : incertitude et arrondis",
+    kind: "analysis",
+  },
   "emballage-cbd-contenant-fermeture": {
     label: "Emballage CBD : contenant et fermeture",
     kind: "packaging",
