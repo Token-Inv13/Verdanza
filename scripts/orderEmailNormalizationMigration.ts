@@ -5,8 +5,9 @@ import { isReferralOrderEmailHistoryReady, ORDER_EMAIL_MIGRATION_COLLECTION, ORD
 import { paymentIdentityEvidenceShape, paymentIdentityProtectionMatches, paymentIdentityProtectionRef, isValidReferralEmailIdentityClaim, REFERRAL_PAYMENT_IDENTITIES_COLLECTION } from "../api/_server/referralPaymentIdentity.js";
 import { isValidReferralEmailBlock, REFERRAL_EMAIL_BLOCKS_COLLECTION } from "../api/_server/referralEmailBlocks.js";
 import type { ReferralPaymentIdentityEvidence } from "../src/types/referral.js";
+import { assertReferralMaintenanceTarget, REFERRAL_MAINTENANCE_PROJECT } from "../api/_server/referralMaintenanceTarget.js";
 
-export const ORDER_EMAIL_MIGRATION_PROJECT = "verdanza-1f621";
+export const ORDER_EMAIL_MIGRATION_PROJECT = REFERRAL_MAINTENANCE_PROJECT;
 type Counts = { scannedOrders: number; usableEmails: number; alreadyNormalized: number; changesRequired: number; paidProductOrders: number; anomalies: number;
   scannedReferralRelations: number; unresolvedIdentityRelations: number; corruptReferralRelations: number; linkedRelationsWithPaidHistory: number;
   paymentIdentityEvidence: number; detachedPaymentIdentityEvidence: number; missingPaymentIdentityEvidence: number; unresolvedPaymentIdentityEvidence: number; corruptPaymentIdentityEvidence: number;
@@ -21,9 +22,7 @@ const blocked = (counts: Counts) => counts.anomalies > 0 || counts.unresolvedIde
 
 /** Guard applies to the injected engine too; local tests cannot fall back to Production. */
 export function assertOrderEmailMigrationTarget(input: { projectId: string; emulatorHost?: string; apply?: boolean; confirmation?: string }) {
-  if (input.emulatorHost !== undefined) {
-    if (input.projectId !== "demo-verdanza-cagnotte" || input.emulatorHost !== "127.0.0.1:18085") throw new Error("order_email_migration_target_invalid");
-  } else if (input.projectId !== ORDER_EMAIL_MIGRATION_PROJECT) throw new Error("order_email_migration_target_invalid");
+  assertReferralMaintenanceTarget(input);
   if (input.apply && input.confirmation !== ORDER_EMAIL_NORMALIZATION_VERSION) throw new Error("order_email_migration_confirmation_required");
 }
 

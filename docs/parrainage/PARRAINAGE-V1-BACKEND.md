@@ -1,5 +1,10 @@
 # Parrainage V1 — backend inert-first
 
+La [route de maintenance dry-run dédiée](PARRAINAGE-V1-MAINTENANCE-DRY-RUN.md)
+est fermée par défaut et indépendante de l'ouverture commerciale. Son moteur
+partagé n'est utilisé qu'en lecture seule par HTTP ; aucune maintenance
+Production n'est exécutée dans ce lot.
+
 Version commerciale figée : `referral-commercial-policy-v1`. Le parrain reçoit 1 000 centimes, le filleul obtient 500 centimes de remise, et la base de produits éligibles avant cette remise doit atteindre 5 000 centimes. Aucun calcul monétaire ne repose sur des euros flottants.
 
 ## Ouverture et sécurité
