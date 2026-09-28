@@ -37,14 +37,14 @@ const keyring = JSON.stringify({ activeVersion: "v1", keys: { v1: secret } });
 const uid = "checkout-referee";
 const actor = { uid: "checkout-admin", email: "admin@example.test" };
 const identity = async (id: string) => ({ uid: id, email: `${id}@example.test`, emailVerified: true, disabled: false });
-const collections = ["orders", "referralCodes", "products", "coupons", "deliveryZones", "referrals", "referralEmailClaims", "referralPaymentIdentities", "referralMigrations", "cagnotteWallets", "cagnotteMovements", "cagnotteAccruals", "cagnotteRefunds", "orderRefunds", "checkoutRequests", "orderSideEffects", "stockMovements", "productCosts", "analyticsOutbox", "adminUsers"];
+const collections = ["orders", "referralCodes", "products", "coupons", "deliveryZones", "referrals", "referralEmailClaims", "referralEmailBlocks", "referralPaymentIdentities", "referralMigrations", "cagnotteWallets", "cagnotteMovements", "cagnotteAccruals", "cagnotteRefunds", "orderRefunds", "checkoutRequests", "orderSideEffects", "stockMovements", "productCosts", "analyticsOutbox", "adminUsers"];
 let passed = 0;
 const transactionDepth = new AsyncLocalStorage<number>();
 async function test(name: string, run: () => Promise<void> | void) { await seed(); await run(); console.log(`OK ${++passed} - ${name}`); }
 async function capture() {
   return Promise.all(collections.map(async name => [name, (await db.collection(name).get()).docs.map(doc => ({ id: doc.id, value: doc.data(), time: doc.updateTime?.toMillis() }))]));
 }
-async function settlement() { return (await capture()).filter(([name]) => ["referrals", "referralEmailClaims", "referralPaymentIdentities", "cagnotteWallets", "cagnotteMovements", "cagnotteAccruals", "cagnotteRefunds", "orderRefunds"].includes(String(name))); }
+async function settlement() { return (await capture()).filter(([name]) => ["referrals", "referralEmailClaims", "referralEmailBlocks", "referralPaymentIdentities", "cagnotteWallets", "cagnotteMovements", "cagnotteAccruals", "cagnotteRefunds", "orderRefunds"].includes(String(name))); }
 async function seed(cents = 5000) {
   for (const name of collections) for (const doc of (await db.collection(name).get()).docs) await doc.ref.delete();
   await db.collection("products").doc("main").set({ name: "Synthetic", slug: "main", price: cents / 100, stock: 1000, isActive: true, category: "flowers", cultureType: "indoor" });
@@ -54,7 +54,7 @@ async function seed(cents = 5000) {
   await db.collection("referralEmailClaims").doc(referralEmailClaimId(secret, `${uid}@example.test`)).set({ schemaVersion: 1, programVersion: "referral-commercial-policy-v1", keyVersion: "v1", refereeUid: uid, referralId: uid, createdAtEpochMs: 2000 });
   await db.collection("referralMigrations").doc(ORDER_EMAIL_NORMALIZATION_VERSION).set({ schemaVersion: 1, version: ORDER_EMAIL_NORMALIZATION_VERSION, status: "complete", completedAtEpochMs: 3000,
     verifiedOrders: 0, verifiedPaidProductOrders: 0, verifiedReferralRelations: 1, verifiedUnresolvedIdentityRelations: 0, verifiedLinkedRelationsWithPaidHistory: 0,
-    verifiedPaymentIdentityEvidence: 0, verifiedDetachedPaymentIdentityEvidence: 0, verifiedMissingPaymentIdentityEvidence: 0, verifiedUnresolvedPaymentIdentityEvidence: 0, verifiedCorruptPaymentIdentityEvidence: 0 });
+    verifiedPaymentIdentityEvidence: 0, verifiedDetachedPaymentIdentityEvidence: 0, verifiedEmailClaims: 0, verifiedCorruptEmailClaims: 0, verifiedLegacyEmailBlocks: 0, verifiedCorruptLegacyEmailBlocks: 0, verifiedOrphanLegacyEmailBlocks: 0,  verifiedMissingPaymentIdentityEvidence: 0, verifiedUnresolvedPaymentIdentityEvidence: 0, verifiedCorruptPaymentIdentityEvidence: 0 });
   await db.collection("adminUsers").doc(actor.uid).set({ isActive: true });
 }
 const address = { firstName: "Test", lastName: "Client", line1: "1 rue Test", postalCode: "75001", city: "Paris", country: "FR" };
@@ -421,7 +421,7 @@ await test("reserved relation rejects other sponsor, allows same sponsor no-op a
 });
 await test("V5 accepts optional valid reservation and rejects its malformed or terminal variants", async () => {
   const c = await candidate(); const relation = (await relationRef().get()).data()!;
-  equal(ORDER_EMAIL_NORMALIZATION_VERSION, "order-email-normalization-v5"); equal(referralRelationIdentityHistoryStatus(uid, relation), "clear");
+  equal(ORDER_EMAIL_NORMALIZATION_VERSION, "order-email-normalization-v6"); equal(referralRelationIdentityHistoryStatus(uid, relation), "clear");
   const without = { ...relation }; delete without.checkoutReservation; equal(referralRelationIdentityHistoryStatus(uid, without), "clear");
   for (const reservation of [null, [], { ...relation.checkoutReservation, schemaVersion: 2 }, { ...relation.checkoutReservation, orderId: "bad/path" },
     { ...relation.checkoutReservation, checkoutRequestId: "bad" }, { ...relation.checkoutReservation, createdAtEpochMs: -1 }])
@@ -601,5 +601,31 @@ await test("normal request without referral remains unbound and preserves the le
   equal(doc.referralBeneficiaryId, undefined); equal(doc.referralApplied, undefined); equal(doc.cagnotteBeneficiaryId, undefined);
   const r = await create({ ...request, authToken: undefined }, { verifyToken: async () => { throw new Error("legacy unbound replay must not authenticate"); }, referralRuntime: () => { throw new Error("must not resolve"); } });
   equal(r.status, 200); equal(r.data.orderId, c.data.orderId);
+});
+const legacyCheckoutBlock = { schemaVersion: 1, programVersion: "referral-commercial-policy-v1", keyVersion: "v1",
+  policyVersion: "referral-legacy-email-block-v1", reason: "historical_paid_order_unverified_identity", createdAtEpochMs: 3000 };
+await test("legacy email block consumes quote right without claim or five-euro discount", async () => {
+  await db.collection("referralEmailBlocks").doc(referralEmailClaimId(secret, `${uid}@example.test`)).set(legacyCheckoutBlock);
+  const before = await capture(); const q = await quote(); equal(q.status, 200);
+  deepStrictEqual(q.data.referralUse, { quoteVersion: "referral-checkout-quote-v1", applied: false, reason: "right_consumed" });
+  deepStrictEqual(await capture(), before);
+});
+await test("legacy block inserted after quote rejects acceptance atomically", async () => {
+  const request = body(), q = await proposal(request);
+  await db.collection("referralEmailBlocks").doc(referralEmailClaimId(secret, `${uid}@example.test`)).set(legacyCheckoutBlock);
+  const before = await capture(), result = await create(accepted(request, q));
+  equal(result.status, 409); equal(result.data.code, "REFERRAL_QUOTE_CONFLICT"); deepStrictEqual(await capture(), before);
+});
+await test("legacy block appeared after order creation rejects discounted payment atomically", async () => {
+  const c = await candidate();
+  await db.collection("referralEmailBlocks").doc(referralEmailClaimId(secret, `${uid}@example.test`)).set(legacyCheckoutBlock);
+  const before = await capture();
+  await rejects(transition({ orderId: c.id, paymentStatus: "paid", finalPaymentMethod: "card_payment_link" }), { code: "prior_paid_order_detected" });
+  deepStrictEqual(await capture(), before);
+});
+await test("malformed legacy block fails closed with neutral identity error", async () => {
+  await db.collection("referralEmailBlocks").doc(referralEmailClaimId(secret, `${uid}@example.test`)).set({ ...legacyCheckoutBlock, ownerUid: uid });
+  const before = await capture(), result = await quote(); equal(result.status, 409); equal(result.data.code, "referral_identity_unavailable");
+  deepStrictEqual(await capture(), before);
 });
 console.log(`Referral checkout: ${passed} PASS`);

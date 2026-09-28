@@ -7,11 +7,16 @@ export const REFERRAL_MINIMUM_PRODUCTS_CENTS = 5000 as const;
 export type ReferralState = "linked" | "pending" | "rewarded" | "cancelled" | "reversed";
 export type ReferralCode = { schemaVersion: 1; programVersion: typeof REFERRAL_PROGRAM_VERSION; ownerUid: string; code: string; createdAtEpochMs: number };
 export type ReferralEmailClaim = { schemaVersion: 1; programVersion: typeof REFERRAL_PROGRAM_VERSION; keyVersion: string; refereeUid: string; referralId: string; createdAtEpochMs: number };
+export const REFERRAL_LEGACY_EMAIL_BLOCK_POLICY_VERSION = "referral-legacy-email-block-v1" as const;
+/** Denies a first-order advantage; never asserts an email owner. */
+export type ReferralEmailBlock = { schemaVersion: 1; programVersion: typeof REFERRAL_PROGRAM_VERSION; keyVersion: string;
+  policyVersion: typeof REFERRAL_LEGACY_EMAIL_BLOCK_POLICY_VERSION; reason: "historical_paid_order_unverified_identity"; createdAtEpochMs: number };
 export const REFERRAL_PAYMENT_IDENTITY_VERSION = "referral-payment-identity-v1" as const;
 export type ReferralPaymentIdentityReason = "runtime_closed" | "auth_unavailable" | "referee_email_unverified" | "keyring_unavailable" | "identity_unavailable";
 export type ReferralPaymentIdentityEvidence = {
   schemaVersion: 1; version: typeof REFERRAL_PAYMENT_IDENTITY_VERSION; orderId: string; customerUid: string; recordedAtEpochMs: number;
 } & ({ status: "claimed" | "protected_by_existing_claim"; claimId: string; keyVersion: string }
+  | { status: "blocked_by_legacy_email"; blockId: string; keyVersion: string; policyVersion: typeof REFERRAL_LEGACY_EMAIL_BLOCK_POLICY_VERSION }
   | { status: "unresolved"; reason: ReferralPaymentIdentityReason });
 export type ReferralRelinkEvent = { schemaVersion: 1; programVersion: typeof REFERRAL_PROGRAM_VERSION; type: "sponsor_relinked"; refereeUid: string; previousSponsorUid: string; nextSponsorUid: string; previousLinkedAtEpochMs: number; changedAtEpochMs: number; revision: number };
 export type ReferralOrderSnapshot = {

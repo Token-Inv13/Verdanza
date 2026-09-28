@@ -6,6 +6,7 @@ import { REFERRAL_CHECKOUT_QUOTE_VERSION, type ReferralCheckoutQuote, type Refer
 import { getReferralRuntime, ReferralConfigurationError, type ReferralRuntime } from "./referralRuntimeConfig.js";
 import { getReferralIdentity, type ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
 import { readCurrentPaymentIdentity, isValidReferralEmailIdentityClaim, type CurrentPaymentIdentity } from "./referralPaymentIdentity.js";
+import { readReferralEmailBlocks } from "./referralEmailBlocks.js";
 import { verifyFirebaseIdToken } from "./adminAuth.js";
 import { ReferralError, findPriorPaidProductOrder } from "./referralService.js";
 import { ORDER_EMAIL_MIGRATION_COLLECTION, ORDER_EMAIL_NORMALIZATION_VERSION, referralRelationIdentityHistoryStatus } from "./referralOrderEmailHistory.js";
@@ -84,6 +85,10 @@ export async function prepareReferralCheckout(input: { db: Firestore; transactio
   const base = lines.reduce((sum, line) => sum + line.eligibleBeforeReferralCents, 0);
   if (!Number.isSafeInteger(base) || base !== exactEuroCents(p.subtotal)) throw new ReferralError("referral_checkout_inconsistent");
   if (base < 5000) return none("below_threshold");
+  const aliases = context.identity.aliases!;
+  const blocks = await readReferralEmailBlocks(tx, db, aliases);
+  if (blocks.corrupt) throw new ReferralError("referral_identity_unavailable");
+  if (blocks.block) return none("right_consumed");
   const relationDoc = await tx.get(db.collection("referrals").doc(context.uid));
   if (!relationDoc.exists) return none("no_relation");
   const relation = relationDoc.data() as ReferralRelation;
@@ -94,7 +99,6 @@ export async function prepareReferralCheckout(input: { db: Firestore; transactio
   const history = await findPriorPaidProductOrder(tx, db, context.uid, null, context.identity.normalizedEmail, context.identity.normalizedEmail);
   if (history.kind === "found") return none("right_consumed");
   if (history.kind === "inconclusive") throw new ReferralError("referral_history_inconclusive");
-  const aliases = context.identity.aliases!;
   const claims = await tx.getAll(...aliases.map(alias => db.collection("referralEmailClaims").doc(alias.id)));
   let protectedEmail = false;
   for (let i = 0; i < claims.length; i++) {
@@ -118,6 +122,7 @@ export async function prepareReferralCheckout(input: { db: Firestore; transactio
     runtime: context.runtime, relation, marker: { facts: marker.data(), updateTime: marker.updateTime ? [marker.updateTime.seconds, marker.updateTime.nanoseconds] : null },
     products: productDocs.map(doc => ({ id: doc.id, stock: doc.data()?.stock, updateTime: doc.updateTime ? [doc.updateTime.seconds, doc.updateTime.nanoseconds] : null })),
     claims: claims.map((doc, i) => ({ alias: aliases[i], facts: doc.data() ?? null })),
+    blocks: blocks.docs.map((doc, i) => ({ alias: aliases[i], facts: doc.data() ?? null })),
     items: orderItems, allocation: snapshot.lines, delivery: { method: body.deliveryMethod, zone: body.deliveryZone ?? null,
       slot: body.deliverySlot ?? null, address: body.customer.address, cents: deliveryCents, status: p.deliveryFeeStatus },
     promotions: p.appliedPromotions, promotionDiscountCents: exactEuroCents(p.promotionDiscountTotal), referralDiscountCents: 500,

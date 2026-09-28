@@ -44,7 +44,7 @@ import {
 } from "./cagnotteProductionReadinessAssertions.js";
 
 const baseMain = "322f65895fb0a75479c92bc4a3054caa4073d2f8";
-const expectedRulesHash = "f90ea99267b4f422fd40ce62513e050f6649b2e92abc94ca0c89595769281c80";
+const expectedRulesHash = "fdec1209023b2ae16f699987e66dd9ecad3a46dc920a59345f10802e0439df12";
 const expectedEndpoints = [
   "admin-contests.ts",
   "admin-payment-links.ts",
@@ -545,7 +545,7 @@ await check("règles Firestore candidates et protections commandes", () => {
     "cagnotteRefunds",
     "referralCodes",
     "referrals",
-    "referralEmailClaims",
+    "referralEmailClaims", "referralEmailBlocks",
     "referralMigrations",
     "referralPaymentIdentities",
   ]) {

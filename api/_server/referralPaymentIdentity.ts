@@ -1,15 +1,17 @@
 import type { Firestore, Transaction } from "firebase-admin/firestore";
-import { REFERRAL_PAYMENT_IDENTITY_VERSION, REFERRAL_PROGRAM_VERSION,
+import { REFERRAL_PAYMENT_IDENTITY_VERSION, REFERRAL_PROGRAM_VERSION, REFERRAL_LEGACY_EMAIL_BLOCK_POLICY_VERSION,
   type ReferralEmailClaim, type ReferralPaymentIdentityEvidence, type ReferralPaymentIdentityReason } from "../../src/types/referral.js";
 import { normalizeReferralEmail, parseReferralEmailKeyring, referralEmailClaimAliases } from "./referralIdentity.js";
 import type { ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
+import { isValidReferralEmailBlock, readReferralEmailBlocks, REFERRAL_EMAIL_BLOCKS_COLLECTION } from "./referralEmailBlocks.js";
 
 export const REFERRAL_PAYMENT_IDENTITIES_COLLECTION = "referralPaymentIdentities";
 export type CurrentPaymentIdentity = {
   customerUid: string; reason?: ReferralPaymentIdentityReason; normalizedEmail?: string; activeKeyVersion?: string;
   aliases?: readonly { version: string; id: string }[];
 };
-export type PreparedEmailIdentityClaim = ({ status: "claimed" | "protected_by_existing_claim"; claimId: string; keyVersion: string }
+export type PreparedEmailIdentityProtection = ({ status: "claimed" | "protected_by_existing_claim"; claimId: string; keyVersion: string }
+  | { status: "blocked_by_legacy_email"; blockId: string; keyVersion: string; policyVersion: typeof REFERRAL_LEGACY_EMAIL_BLOCK_POLICY_VERSION }
   | { status: "unresolved"; reason: ReferralPaymentIdentityReason }) & {
     customerUid: string; newClaim?: { ref: FirebaseFirestore.DocumentReference; value: ReferralEmailClaim };
   };
@@ -42,10 +44,10 @@ export async function readCurrentPaymentIdentity(customerUid: string, getIdentit
 }
 
 /** Read phase only. All aliases are checked before choosing ownership or a lazy active-key migration. */
-export async function prepareReferralEmailIdentityClaim(input: { db: Firestore; transaction: Transaction; customerUid: string;
-  identity?: CurrentPaymentIdentity; recordedAtEpochMs: number }): Promise<PreparedEmailIdentityClaim> {
+export async function prepareReferralEmailIdentityProtection(input: { db: Firestore; transaction: Transaction; customerUid: string;
+  identity?: CurrentPaymentIdentity; recordedAtEpochMs: number }): Promise<PreparedEmailIdentityProtection> {
   const { customerUid, identity } = input;
-  const unresolved = (reason: ReferralPaymentIdentityReason): PreparedEmailIdentityClaim => ({ status: "unresolved", customerUid, reason });
+  const unresolved = (reason: ReferralPaymentIdentityReason): PreparedEmailIdentityProtection => ({ status: "unresolved", customerUid, reason });
   if (!identity || identity.customerUid !== customerUid) return unresolved("identity_unavailable");
   if (identity.reason) return unresolved(identity.reason);
   if (!identity.normalizedEmail || !identity.aliases?.length || !identity.activeKeyVersion || !instant(input.recordedAtEpochMs))
@@ -54,8 +56,11 @@ export async function prepareReferralEmailIdentityClaim(input: { db: Firestore; 
   if (aliases.some((alias) => !validClaimId(alias.id) || !validKeyVersion(alias.version))) return unresolved("identity_unavailable");
   const activeIndex = aliases.findIndex((alias) => alias.version === identity.activeKeyVersion);
   if (activeIndex < 0) return unresolved("keyring_unavailable");
+  const blocks = await readReferralEmailBlocks(input.transaction, input.db, aliases);
+  if (blocks.corrupt) return unresolved("identity_unavailable");
   const refs = aliases.map((alias) => input.db.collection("referralEmailClaims").doc(alias.id));
   const docs = await input.transaction.getAll(...refs);
+  if (blocks.block) return { status: "blocked_by_legacy_email", customerUid, ...blocks.block };
   for (let i = 0; i < docs.length; i++) {
     const claim = docs[i].data();
     if (docs[i].exists && !isValidReferralEmailIdentityClaim(claim, aliases[i].version)) return unresolved("identity_unavailable");
@@ -78,13 +83,25 @@ export function paymentIdentityEvidenceShape(value: FirebaseFirestore.DocumentDa
     return ["runtime_closed", "auth_unavailable", "referee_email_unverified", "keyring_unavailable", "identity_unavailable"].includes(value.reason) &&
       Object.keys(value).every((key) => [...base, "reason"].includes(key)) ? "unresolved" : "corrupt";
   }
+  if (value.status === "blocked_by_legacy_email") {
+    return validClaimId(value.blockId) && validKeyVersion(value.keyVersion) && value.policyVersion === REFERRAL_LEGACY_EMAIL_BLOCK_POLICY_VERSION &&
+      Object.keys(value).every((key) => [...base, "blockId", "keyVersion", "policyVersion"].includes(key)) ? "safe" : "corrupt";
+  }
   return ["claimed", "protected_by_existing_claim"].includes(value.status) && validClaimId(value.claimId) && validKeyVersion(value.keyVersion) &&
     Object.keys(value).every((key) => [...base, "claimId", "keyVersion"].includes(key)) ? "safe" : "corrupt";
 }
 
-export function paymentIdentityClaimMatches(evidence: ReferralPaymentIdentityEvidence, claim: FirebaseFirestore.DocumentData | undefined): boolean {
-  return evidence.status !== "unresolved" && isValidReferralEmailIdentityClaim(claim, evidence.keyVersion) &&
-    (evidence.status === "claimed" ? claim.refereeUid === evidence.customerUid : claim.refereeUid !== evidence.customerUid);
+export function paymentIdentityProtectionMatches(evidence: ReferralPaymentIdentityEvidence, protection: FirebaseFirestore.DocumentData | undefined): boolean {
+  if (evidence.status === "unresolved") return false;
+  if (evidence.status === "blocked_by_legacy_email") return evidence.policyVersion === REFERRAL_LEGACY_EMAIL_BLOCK_POLICY_VERSION &&
+    isValidReferralEmailBlock(protection, evidence.keyVersion);
+  return isValidReferralEmailIdentityClaim(protection, evidence.keyVersion) &&
+    (evidence.status === "claimed" ? protection.refereeUid === evidence.customerUid : protection.refereeUid !== evidence.customerUid);
+}
+
+export function paymentIdentityProtectionRef(db: Firestore, evidence: Exclude<ReferralPaymentIdentityEvidence, { status: "unresolved" }>) {
+  return evidence.status === "blocked_by_legacy_email" ? db.collection(REFERRAL_EMAIL_BLOCKS_COLLECTION).doc(evidence.blockId) :
+    db.collection("referralEmailClaims").doc(evidence.claimId);
 }
 
 /** Bounded positive payment proof. Claims and source orders are deliberately not required. */
@@ -107,11 +124,12 @@ export async function prepareReferralPaymentIdentity(input: { db: Firestore; tra
   operational: boolean; identity?: CurrentPaymentIdentity; recordedAtEpochMs: number }) {
   const ref = input.db.collection(REFERRAL_PAYMENT_IDENTITIES_COLLECTION).doc(input.orderId);
   await input.transaction.get(ref);
-  const claim: PreparedEmailIdentityClaim = input.operational ? await prepareReferralEmailIdentityClaim(input) :
+  const claim: PreparedEmailIdentityProtection = input.operational ? await prepareReferralEmailIdentityProtection(input) :
     { status: "unresolved", customerUid: input.customerUid, reason: "runtime_closed" };
   const evidence: ReferralPaymentIdentityEvidence = { schemaVersion: 1, version: REFERRAL_PAYMENT_IDENTITY_VERSION,
     orderId: input.orderId, customerUid: input.customerUid, recordedAtEpochMs: input.recordedAtEpochMs,
-    ...(claim.status === "unresolved" ? { status: claim.status, reason: claim.reason } :
+    ...(claim.status === "unresolved" ? { status: claim.status, reason: claim.reason } : claim.status === "blocked_by_legacy_email" ?
+      { status: claim.status, blockId: claim.blockId, keyVersion: claim.keyVersion, policyVersion: claim.policyVersion } :
       { status: claim.status, claimId: claim.claimId, keyVersion: claim.keyVersion }) };
   return { claim, evidence, write() {
     if (claim.newClaim) input.transaction.create(claim.newClaim.ref, claim.newClaim.value);
