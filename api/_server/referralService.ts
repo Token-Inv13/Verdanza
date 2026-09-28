@@ -5,6 +5,7 @@ import { newReferralCode, normalizeReferralEmail, referralEmailClaimAliases, typ
 import type { ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
 import { canonicalOrderEmail } from "./orderEmailIdentity.js";
 import { findPriorReferralPaymentIdentity } from "./referralPaymentIdentity.js";
+import { readReferralEmailBlocks } from "./referralEmailBlocks.js";
 import { referralRelationIdentityHistoryStatus, readReferralOrderEmailHistoryReady } from "./referralOrderEmailHistory.js";
 
 import { ReferralError } from "./referralErrors.js";
@@ -135,8 +136,12 @@ export async function linkReferral(input: { db: Firestore; user: VerifiedUser; c
   const relationRef = input.db.collection("referrals").doc(refereeUid);
   const claimRefs = aliases.map((alias) => input.db.collection("referralEmailClaims").doc(alias.id));
   return input.db.runTransaction(async (tx) => {
-    const [freshCode, freshOwner, relationDoc, ...claimDocs] = await tx.getAll(codeRef, ownerRef.doc(`owner_${sponsorUid}`), relationRef, ...claimRefs);
+    const [freshCode, freshOwner] = await tx.getAll(codeRef, ownerRef.doc(`owner_${sponsorUid}`));
     if (!freshCode.exists || freshCode.data()?.ownerUid !== sponsorUid || !freshOwner.exists || freshOwner.data()?.code !== input.code) throw new ReferralError("referral_code_conflict");
+    const blocks = await readReferralEmailBlocks(tx, input.db, aliases);
+    if (blocks.corrupt) throw new ReferralError("referral_identity_unavailable");
+    if (blocks.block) throw new ReferralError("referee_already_paid");
+    const [relationDoc, ...claimDocs] = await tx.getAll(relationRef, ...claimRefs);
     if (!await sponsorHasDeliveredPaidOrder(tx, input.db, sponsorUid)) throw new ReferralError("sponsor_ineligible", 403);
     await assertRefereeFirstPaidOrder(tx, input.db, refereeUid, input.user.email!.trim(), normalizedEmail);
     const existing = relationDoc.exists ? relationDoc.data() as ReferralRelation : null;

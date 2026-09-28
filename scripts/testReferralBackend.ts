@@ -1,4 +1,5 @@
 import { exerciseReferralReadModel } from "./testReferralReadModel.js";
+import { exerciseReferralLegacyEmailBlocks } from "./testReferralLegacyEmailBlocks.js";
 import { deepStrictEqual, equal, ok, rejects, throws } from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { CAGNOTTE_DEMO, connectCagnotteEmulator } from "./cagnotteEmulator.js";
@@ -168,7 +169,7 @@ const db = await connectCagnotteEmulator(CAGNOTTE_DEMO);
 const historyMarker = db.collection("referralMigrations").doc(ORDER_EMAIL_NORMALIZATION_VERSION);
 const completeHistoryMarker = { schemaVersion: 1, version: ORDER_EMAIL_NORMALIZATION_VERSION, status: "complete",
   completedAtEpochMs: 1000, verifiedOrders: 0, verifiedPaidProductOrders: 0, verifiedReferralRelations: 0, verifiedUnresolvedIdentityRelations: 0,
-  verifiedLinkedRelationsWithPaidHistory: 0, verifiedPaymentIdentityEvidence: 0, verifiedDetachedPaymentIdentityEvidence: 0,
+  verifiedLinkedRelationsWithPaidHistory: 0, verifiedPaymentIdentityEvidence: 0, verifiedDetachedPaymentIdentityEvidence: 0, verifiedEmailClaims: 0, verifiedCorruptEmailClaims: 0, verifiedLegacyEmailBlocks: 0, verifiedCorruptLegacyEmailBlocks: 0, verifiedOrphanLegacyEmailBlocks: 0,
   verifiedMissingPaymentIdentityEvidence: 0, verifiedUnresolvedPaymentIdentityEvidence: 0, verifiedCorruptPaymentIdentityEvidence: 0 };
 await historyMarker.set(completeHistoryMarker);
 // Restore only between independent commercial fixtures, after asserting the new closure.
@@ -332,7 +333,7 @@ const routeRelation = async (uid: string) => (await db.collection("referrals").d
 const routeMovements = async (orderId: string) => (await db.collection("cagnotteMovements").where("orderId", "==", orderId).get()).docs;
 const routeReferralMovements = async (orderId: string) => (await routeMovements(orderId)).filter((doc) =>
   String(doc.data().businessEvent).startsWith("referral_"));
-const capturePaymentState = async () => Promise.all(["orders", "referrals", "referralEmailClaims", "referralMigrations", "referralPaymentIdentities", "cagnotteWallets",
+const capturePaymentState = async () => Promise.all(["orders", "referrals", "referralEmailClaims", "referralEmailBlocks", "referralMigrations", "referralPaymentIdentities", "cagnotteWallets",
   "cagnotteReservations", "cagnotteMovements", "analyticsOutbox", "analyticsOperationalEvents", "products"].map(async (name) =>
   (await db.collection(name).get()).docs.map((doc) => ({ id: doc.id, data: doc.data(), updatedAt: doc.updateTime.toMillis() }))));
 async function createRouteCandidate(orderId: string, uid: string, code = codeB) {
@@ -1636,7 +1637,7 @@ await test("historique inconclusif refuse le paiement remisé et son replay sans
     total: 60, items: [{ productId: "fixture-product", quantity: 1 }] });
   await batch.commit();
   deepStrictEqual(await db.runTransaction((tx) => findPriorPaidProductOrder(tx, db, child.uid, id)), { kind: "inconclusive" });
-  const collections = ["orders", "referrals", "referralEmailClaims", "referralPaymentIdentities", "cagnotteWallets", "cagnotteReservations",
+  const collections = ["orders", "referrals", "referralEmailClaims", "referralEmailBlocks", "referralPaymentIdentities", "cagnotteWallets", "cagnotteReservations",
     "cagnotteMovements", "analyticsOutbox", "analyticsOperationalEvents", "products"];
   const capture = async () => Promise.all(collections.map(async (name) => (await db.collection(name).get())
     .docs.map((doc) => ({ id: doc.id, data: doc.data(), updatedAt: doc.updateTime.toMillis() }))));
@@ -1686,7 +1687,7 @@ const noMigrationDb = new Proxy(db, { get(target, property) {
   const value = Reflect.get(target, property, target);
   return typeof value === "function" ? value.bind(target) : value;
 } });
-const captureReferralState = async () => Promise.all(["referralCodes", "referrals", "referralEmailClaims", "cagnotteWallets",
+const captureReferralState = async () => Promise.all(["referralCodes", "referrals", "referralEmailClaims", "referralEmailBlocks", "cagnotteWallets",
   "cagnotteMovements"].map(async (name) => (await db.collection(name).get()).docs.map((doc) =>
     ({ id: doc.id, data: doc.data(), updatedAt: doc.updateTime.toMillis() }))));
 async function createUnrelatedOrder(id: string, customerId?: string) {
@@ -2171,7 +2172,7 @@ await test("settlement off refund/correction ignore le marker absent", async () 
 // Certificate maintenance is permitted even while every commercial referral access is forbidden.
 const noCommercialReferralDb = new Proxy(db, { get(target, property) {
   if (property === "collection") return (name: string) => {
-    if (["referralCodes", "referrals", "referralEmailClaims", "cagnotteWallets", "cagnotteMovements"].includes(name))
+    if (["referralCodes", "referrals", "referralEmailClaims", "referralEmailBlocks", "cagnotteWallets", "cagnotteMovements"].includes(name))
       throw new Error("unexpected_commercial_referral_access");
     return target.collection(name);
   };
@@ -3036,6 +3037,8 @@ await test("snapshot ajouté après préflight plain: identité parrain du lien 
 await db.recursiveDelete(db.collection("orders"));
 await db.recursiveDelete(db.collection("referrals"));
 await db.recursiveDelete(db.collection("referralPaymentIdentities"));
+await db.recursiveDelete(db.collection("referralEmailClaims"));
+await db.recursiveDelete(db.collection("referralEmailBlocks"));
 await historyMarker.delete();
 const migrationPaidOrder = { customerId: "migration-old-uid", orderType: "order", paymentStatus: "paid", total: 60,
   items: [{ productId: "fixture-product", quantity: 1 }] };
@@ -3079,7 +3082,7 @@ await test("migration dry-run paginée: compteurs exacts, zéro écriture", asyn
   deepStrictEqual(report.initial, { scannedOrders: 5, usableEmails: 5, alreadyNormalized: 1, changesRequired: 4,
     paidProductOrders: 4, anomalies: 0, changedOrders: 0, scannedReferralRelations: 0, unresolvedIdentityRelations: 0, corruptReferralRelations: 0,
     linkedRelationsWithPaidHistory: 0, paymentIdentityEvidence: 4, detachedPaymentIdentityEvidence: 0, missingPaymentIdentityEvidence: 0,
-    unresolvedPaymentIdentityEvidence: 0, corruptPaymentIdentityEvidence: 0 });
+    unresolvedPaymentIdentityEvidence: 0, corruptPaymentIdentityEvidence: 0, emailClaims: 1, corruptEmailClaims: 0, legacyEmailBlocks: 0, corruptLegacyEmailBlocks: 0, orphanLegacyEmailBlocks: 0 });
   equal(report.verification, null); equal(report.markerWritten, false); equal((await historyMarker.get()).exists, false);
   deepStrictEqual(await capturePaymentState(), before);
 });
@@ -3375,7 +3378,7 @@ for (const mode of ["absent", "off", "malformed"] as const) {
     deepStrictEqual(calls, { runtime: 1, auth: 0, keyring: 0 }); deepStrictEqual(await captureReferralState(), commercialBefore);
     equal((await db.collection("orders").doc(id).get()).data()?.paymentStatus, "paid");
     const marker = (await historyMarker.get()).data()!; equal(marker.status, "incomplete");
-    equal(marker.version, "order-email-normalization-v5"); equal(marker.invalidationReason, "payment_identity_unresolved");
+    equal(marker.version, "order-email-normalization-v6"); equal(marker.invalidationReason, "payment_identity_unresolved");
     equal(marker.invalidationRevision, mode === "off" ? 5 : 1); equal(marker.invalidatedAtEpochMs, Date.parse("2000-01-08T00:00:00.000Z"));
     const beforeReplay = await historyMarker.get(); const replay = payClosedIdentity(id, mode); await replay.result;
     equal(replay.calls.runtime, 0); const afterReplay = await historyMarker.get();
@@ -3839,4 +3842,5 @@ await test("V5 tombstone payé avec relation encore linked reste blocker supplé
   equal(report.initial.paymentIdentityEvidence, 1); equal(report.initial.detachedPaymentIdentityEvidence, 1);
 });
 await exerciseReferralReadModel(db, test);
+await exerciseReferralLegacyEmailBlocks(db, test);
 console.log(`Referral backend: ${passed} checks.`);

@@ -304,7 +304,7 @@ async function referralRefundFixture() {
   const keyringJson = JSON.stringify({ activeVersion: "v1", keys: { v1: "synthetic-refund-referral-secret-over-32-bytes" } });
   await db.collection("referralMigrations").doc(ORDER_EMAIL_NORMALIZATION_VERSION).set({ schemaVersion: 1,
     version: ORDER_EMAIL_NORMALIZATION_VERSION, status: "complete", completedAtEpochMs: 1000, verifiedOrders: 0, verifiedPaidProductOrders: 0,
-    verifiedReferralRelations: 0, verifiedUnresolvedIdentityRelations: 0, verifiedLinkedRelationsWithPaidHistory: 0, verifiedPaymentIdentityEvidence: 0, verifiedDetachedPaymentIdentityEvidence: 0,
+    verifiedReferralRelations: 0, verifiedUnresolvedIdentityRelations: 0, verifiedLinkedRelationsWithPaidHistory: 0, verifiedPaymentIdentityEvidence: 0, verifiedDetachedPaymentIdentityEvidence: 0, verifiedEmailClaims: 0, verifiedCorruptEmailClaims: 0, verifiedLegacyEmailBlocks: 0, verifiedCorruptLegacyEmailBlocks: 0, verifiedOrphanLegacyEmailBlocks: 0,
     verifiedMissingPaymentIdentityEvidence: 0, verifiedUnresolvedPaymentIdentityEvidence: 0, verifiedCorruptPaymentIdentityEvidence: 0 });
   await db.collection("orders").doc(`sponsor-eligibility-${f.id}`).set({ customerId: sponsorUid, customerEmail: `${sponsorUid}@example.test`,
     customerEmailNormalized: `${sponsorUid}@example.test`, orderStatus: "delivered", paymentStatus: "paid", total: 60,
@@ -330,7 +330,7 @@ async function referralRefundFixture() {
   return { f, relationRef, relation };
 }
 async function dumpReferralRefundState() {
-  return Promise.all([...collections, "referrals", "referralEmailClaims", "referralCodes", "referralMigrations", "referralPaymentIdentities"].map(async (name) =>
+  return Promise.all([...collections, "referrals", "referralEmailClaims", "referralEmailBlocks", "referralCodes", "referralMigrations", "referralPaymentIdentities"].map(async (name) =>
     (await db.collection(name).get()).docs.map((doc) => ({ id: doc.id, data: doc.data(), updateTime: doc.updateTime }))));
 }
 const refundConflictMessage = "Enregistrement non confirmé : vérification ou nouvelle prévisualisation nécessaire.";

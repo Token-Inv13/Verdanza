@@ -2,18 +2,22 @@ import { FieldPath, type Firestore, type QueryDocumentSnapshot } from "firebase-
 import { usableOrderEmail } from "../api/_server/orderEmailIdentity.js";
 import { hasHistoricalPaymentEvidence, isValidHistoricalPaymentInstant } from "../api/_server/referralService.js";
 import { isReferralOrderEmailHistoryReady, ORDER_EMAIL_MIGRATION_COLLECTION, ORDER_EMAIL_NORMALIZATION_VERSION, referralRelationIdentityHistoryStatus } from "../api/_server/referralOrderEmailHistory.js";
-import { paymentIdentityEvidenceShape, paymentIdentityClaimMatches, REFERRAL_PAYMENT_IDENTITIES_COLLECTION } from "../api/_server/referralPaymentIdentity.js";
+import { paymentIdentityEvidenceShape, paymentIdentityProtectionMatches, paymentIdentityProtectionRef, isValidReferralEmailIdentityClaim, REFERRAL_PAYMENT_IDENTITIES_COLLECTION } from "../api/_server/referralPaymentIdentity.js";
+import { isValidReferralEmailBlock, REFERRAL_EMAIL_BLOCKS_COLLECTION } from "../api/_server/referralEmailBlocks.js";
 import type { ReferralPaymentIdentityEvidence } from "../src/types/referral.js";
 
 export const ORDER_EMAIL_MIGRATION_PROJECT = "verdanza-1f621";
 type Counts = { scannedOrders: number; usableEmails: number; alreadyNormalized: number; changesRequired: number; paidProductOrders: number; anomalies: number;
   scannedReferralRelations: number; unresolvedIdentityRelations: number; corruptReferralRelations: number; linkedRelationsWithPaidHistory: number;
-  paymentIdentityEvidence: number; detachedPaymentIdentityEvidence: number; missingPaymentIdentityEvidence: number; unresolvedPaymentIdentityEvidence: number; corruptPaymentIdentityEvidence: number };
+  paymentIdentityEvidence: number; detachedPaymentIdentityEvidence: number; missingPaymentIdentityEvidence: number; unresolvedPaymentIdentityEvidence: number; corruptPaymentIdentityEvidence: number;
+  emailClaims: number; corruptEmailClaims: number; legacyEmailBlocks: number; corruptLegacyEmailBlocks: number; orphanLegacyEmailBlocks: number };
 const emptyCounts = (): Counts => ({ scannedOrders: 0, usableEmails: 0, alreadyNormalized: 0, changesRequired: 0, paidProductOrders: 0, anomalies: 0,
   scannedReferralRelations: 0, unresolvedIdentityRelations: 0, corruptReferralRelations: 0, linkedRelationsWithPaidHistory: 0,
-  paymentIdentityEvidence: 0, detachedPaymentIdentityEvidence: 0, missingPaymentIdentityEvidence: 0, unresolvedPaymentIdentityEvidence: 0, corruptPaymentIdentityEvidence: 0 });
+  paymentIdentityEvidence: 0, detachedPaymentIdentityEvidence: 0, missingPaymentIdentityEvidence: 0, unresolvedPaymentIdentityEvidence: 0, corruptPaymentIdentityEvidence: 0,
+  emailClaims: 0, corruptEmailClaims: 0, legacyEmailBlocks: 0, corruptLegacyEmailBlocks: 0, orphanLegacyEmailBlocks: 0 });
 const blocked = (counts: Counts) => counts.anomalies > 0 || counts.unresolvedIdentityRelations > 0 || counts.corruptReferralRelations > 0 || counts.linkedRelationsWithPaidHistory > 0 ||
-  counts.missingPaymentIdentityEvidence > 0 || counts.unresolvedPaymentIdentityEvidence > 0 || counts.corruptPaymentIdentityEvidence > 0;
+  counts.missingPaymentIdentityEvidence > 0 || counts.unresolvedPaymentIdentityEvidence > 0 || counts.corruptPaymentIdentityEvidence > 0 ||
+  counts.corruptEmailClaims > 0 || counts.corruptLegacyEmailBlocks > 0 || counts.orphanLegacyEmailBlocks > 0;
 
 /** Guard applies to the injected engine too; local tests cannot fall back to Production. */
 export function assertOrderEmailMigrationTarget(input: { projectId: string; emulatorHost?: string; apply?: boolean; confirmation?: string }) {
@@ -39,6 +43,7 @@ export async function migrateOrderEmailNormalization(input: {
     // Internal scan evidence only. Never return or log the customer identities.
     const paidProductCustomerIds = new Set<string>();
     const mismatchedEvidence = new Set<string>();
+    const referencedBlocks = new Set<string>();
     let changedOrders = 0;
     let cursor: QueryDocumentSnapshot | undefined;
     for (;;) {
@@ -98,14 +103,38 @@ export async function migrateOrderEmailNormalization(input: {
         if (shape === "corrupt" || mismatchedEvidence.has(doc.id) || bindingCorrupt) counts.corruptPaymentIdentityEvidence++;
         else if (shape === "unresolved") counts.unresolvedPaymentIdentityEvidence++;
         else {
-          const claim = await input.db.collection("referralEmailClaims").doc(evidence.claimId).get();
-          if (paymentIdentityClaimMatches(evidence as ReferralPaymentIdentityEvidence, claim.data())) {
+          const safe = evidence as Exclude<ReferralPaymentIdentityEvidence, { status: "unresolved" }>;
+          const protection = await paymentIdentityProtectionRef(input.db, safe).get();
+          if (paymentIdentityProtectionMatches(safe, protection.data())) {
             counts.paymentIdentityEvidence++;
             if (!order.exists) counts.detachedPaymentIdentityEvidence++;
+            if (safe.status === "blocked_by_legacy_email") referencedBlocks.add(safe.blockId);
           } else counts.corruptPaymentIdentityEvidence++;
         }
       }
       cursor = page.docs[page.docs.length - 1];
+    }
+    for (const collection of ["referralEmailClaims", REFERRAL_EMAIL_BLOCKS_COLLECTION]) {
+      cursor = undefined;
+      for (;;) {
+        let query = input.db.collection(collection).orderBy(FieldPath.documentId()).limit(pageSize);
+        if (cursor) query = query.startAfter(cursor);
+        const page = await query.get();
+        if (page.empty) break;
+        for (const doc of page.docs) {
+          const value = doc.data();
+          const validId = /^[a-f0-9]{64}$/.test(doc.id);
+          if (collection === "referralEmailClaims") {
+            counts.emailClaims++;
+            if (!validId || !isValidReferralEmailIdentityClaim(value, value.keyVersion)) counts.corruptEmailClaims++;
+          } else {
+            counts.legacyEmailBlocks++;
+            if (!validId || !isValidReferralEmailBlock(value, value.keyVersion)) counts.corruptLegacyEmailBlocks++;
+            if (!referencedBlocks.has(doc.id)) counts.orphanLegacyEmailBlocks++;
+          }
+        }
+        cursor = page.docs[page.docs.length - 1];
+      }
     }
     cursor = undefined;
     for (;;) {
@@ -158,6 +187,8 @@ export async function migrateOrderEmailNormalization(input: {
     existingMarker.data()?.verifiedPaidProductOrders !== verification.paidProductOrders ||
     existingMarker.data()?.verifiedReferralRelations !== verification.scannedReferralRelations ||
     existingMarker.data()?.verifiedPaymentIdentityEvidence !== verification.paymentIdentityEvidence ||
+    existingMarker.data()?.verifiedEmailClaims !== verification.emailClaims ||
+    existingMarker.data()?.verifiedLegacyEmailBlocks !== verification.legacyEmailBlocks ||
     existingMarker.data()?.verifiedDetachedPaymentIdentityEvidence !== verification.detachedPaymentIdentityEvidence;
   if (markerWritten) {
     const completedAtEpochMs = now();
@@ -168,7 +199,9 @@ export async function migrateOrderEmailNormalization(input: {
       verifiedReferralRelations: verification.scannedReferralRelations, verifiedUnresolvedIdentityRelations: 0,
       verifiedLinkedRelationsWithPaidHistory: 0, verifiedPaymentIdentityEvidence: verification.paymentIdentityEvidence,
       verifiedDetachedPaymentIdentityEvidence: verification.detachedPaymentIdentityEvidence,
-      verifiedMissingPaymentIdentityEvidence: 0, verifiedUnresolvedPaymentIdentityEvidence: 0, verifiedCorruptPaymentIdentityEvidence: 0 }, { lastUpdateTime: markerPrecondition! });
+      verifiedMissingPaymentIdentityEvidence: 0, verifiedUnresolvedPaymentIdentityEvidence: 0, verifiedCorruptPaymentIdentityEvidence: 0,
+      verifiedEmailClaims: verification.emailClaims, verifiedCorruptEmailClaims: 0, verifiedLegacyEmailBlocks: verification.legacyEmailBlocks,
+      verifiedCorruptLegacyEmailBlocks: 0, verifiedOrphanLegacyEmailBlocks: 0 }, { lastUpdateTime: markerPrecondition! });
     await batch.commit();
   } else {
     // A no-op replay must also reject an invalidation that raced with its scans.

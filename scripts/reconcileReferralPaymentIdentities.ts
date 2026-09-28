@@ -4,11 +4,13 @@ import { requireFirebaseAdminProjectId } from "./_firebaseAdminScript.js";
 import { ORDER_EMAIL_MIGRATION_PROJECT } from "./orderEmailNormalizationMigration.js";
 import { assertPaymentIdentityReconciliationTarget, reconcileReferralPaymentIdentities, REFERRAL_PAYMENT_IDENTITY_RECONCILIATION_VERSION } from "./referralPaymentIdentityReconciliation.js";
 import { parseReferralEmailKeyring } from "../api/_server/referralIdentity.js";
+import { REFERRAL_LEGACY_EMAIL_BLOCK_POLICY_VERSION } from "../src/types/referral.js";
 
 // No implicit Production target or emulator fallback. Emulator tests use the guarded injected engine.
 async function main() {
   const args = process.argv.slice(2);
-  const allowed = new Set(["--apply", `--confirm=${REFERRAL_PAYMENT_IDENTITY_RECONCILIATION_VERSION}`, `--project=${ORDER_EMAIL_MIGRATION_PROJECT}`]);
+  const policyArgument = `--legacy-email-block-policy=${REFERRAL_LEGACY_EMAIL_BLOCK_POLICY_VERSION}`;
+  const allowed = new Set(["--apply", `--confirm=${REFERRAL_PAYMENT_IDENTITY_RECONCILIATION_VERSION}`, `--project=${ORDER_EMAIL_MIGRATION_PROJECT}`, policyArgument]);
   if (args.some((arg) => !allowed.has(arg)) || !args.includes(`--project=${ORDER_EMAIL_MIGRATION_PROJECT}`) || process.env.FIRESTORE_EMULATOR_HOST)
     throw new Error("payment_identity_reconciliation_arguments_invalid");
   const apply = args.includes("--apply");
@@ -24,9 +26,10 @@ async function main() {
   const app = initializeApp({ projectId, credential }, "referral-payment-identity-reconciliation");
   const db = getFirestore(app);
   try {
-    const report = await reconcileReferralPaymentIdentities({ db, projectId, apply, confirmation, keyringJson });
+    const report = await reconcileReferralPaymentIdentities({ db, projectId, apply, confirmation, keyringJson,
+      legacyEmailBlockPolicyVersion: args.includes(policyArgument) ? REFERRAL_LEGACY_EMAIL_BLOCK_POLICY_VERSION : undefined });
     console.log(JSON.stringify(report)); // Counts only; never print identities, email aliases or SDK errors.
-    if (report.unresolved || report.corrupt || report.raced) process.exitCode = 1;
+    if (report.unresolved || report.legacyBlockUnresolved || report.corrupt || report.raced) process.exitCode = 1;
   } finally { try { await db.terminate(); } finally { await deleteApp(app); } }
 }
 try { await main(); }
