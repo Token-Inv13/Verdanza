@@ -1,3 +1,4 @@
+import { exerciseReferralReadModel } from "./testReferralReadModel.js";
 import { deepStrictEqual, equal, ok, rejects, throws } from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { CAGNOTTE_DEMO, connectCagnotteEmulator } from "./cagnotteEmulator.js";
@@ -259,8 +260,8 @@ await test("lien, claim, replay, changement avant paiement et projection privée
   const changed = await linkReferral({ ...args, code: codeB, getSponsorIdentity: activeIdentity });
   equal(changed.changed, true);
   const self = await readReferralSelf(db, user.uid);
-  deepStrictEqual(self, { code: null, relation: { state: "linked", paymentConfirmed: false, deliveryConfirmed: false } });
-  ok(!JSON.stringify(self).includes("sponsor"));
+  equal(self.version, "referral-self-v1"); equal(self.code, null); deepStrictEqual(self.relation, { state: "linked", paymentConfirmed: false, deliveryConfirmed: false, checkoutReserved: false });
+  ok(!JSON.stringify(self).includes("sponsorUid")); ok(!JSON.stringify(self).includes(sponsor.uid));
   await rejects(linkReferral({ ...args, user: { uid: "another-uid", email: user.email, emailVerified: true } }));
   await rejects(linkReferral({ ...args, user: sponsor }));
   await rejects(linkReferral({ ...args, user: { ...user, emailVerified: false } }));
@@ -1398,7 +1399,7 @@ await test("GET self ne divulgue pas le code d'un parrain devenu inéligible", a
     db: () => db, sponsorIdentity: activeIdentity, secret: () => keyringJson, now: () => 2000 });
   const response = { setHeader() {}, status(value: number) { status = value; return this; }, json(value: unknown) { body = value; } } as unknown as VercelResponseLike;
   await handler({ method: "GET", headers: { authorization: "Bearer fixture" } } as VercelRequestLike, response);
-  equal(status, 200); deepStrictEqual(body, { code: null, relation: null });
+  equal(status, 200); equal((body as { code: unknown }).code, null); equal((body as { relation: unknown }).relation, null);
 });
 
 for (const [suffix, firstHasSnapshot, resumedMode] of [
@@ -2140,7 +2141,7 @@ await test("GET self reste disponible sans marker et projection sans normalized 
   try {
     const before = await capturePaymentState();
     const self = await readReferralSelf(noMigrationDb, "referee-marker-complete");
-    deepStrictEqual(self, { code: null, relation: { state: "pending", paymentConfirmed: true, deliveryConfirmed: false } });
+    equal(self.version, "referral-self-v1"); equal(self.code, null); deepStrictEqual(self.relation, { state: "pending", paymentConfirmed: true, deliveryConfirmed: false, checkoutReserved: false });
     ok(!JSON.stringify(self).includes("email"));
     let status = 0; let payload: unknown;
     const handler = createReferralHandler({ runtime: () => program, verify: async () => ({ uid: "referee-marker-complete", email: "synthetic@example.test" }),
@@ -2927,7 +2928,7 @@ for (const runtime of [program, drain]) {
     deepStrictEqual((await db.collection("referralEmailClaims").doc(evidence.claimId).get()).data(), priorClaim.data());
     // The legacy order endpoint updates updatedAt on a replay, but identity and commercial state stay unchanged.
     deepStrictEqual(await wallet("sponsor-b"), financialBefore);
-    deepStrictEqual(await readReferralSelf(db, uid), { code: null, relation: null });
+    const self = await readReferralSelf(db, uid); equal(self.code, null); equal(self.relation, null);
   });
 }
 for (const otherOwner of [false, true]) {
@@ -3837,4 +3838,5 @@ await test("V5 tombstone payé avec relation encore linked reste blocker supplé
   const report = await runMigration(true); equal(report.markerComplete, false); equal(report.initial.linkedRelationsWithPaidHistory, 1);
   equal(report.initial.paymentIdentityEvidence, 1); equal(report.initial.detachedPaymentIdentityEvidence, 1);
 });
+await exerciseReferralReadModel(db, test);
 console.log(`Referral backend: ${passed} checks.`);

@@ -16,6 +16,7 @@ export function parseCheckoutSuccessSummary(raw: string, orderId: string) {
       paymentStatus?: "to_confirm" | "payment_link_sent" | "pending" | "paid" | "cancelled";
       orderStatus?: string;
       cagnotteUse?: { amountCents: number; state: "reserved" };
+      referralUse?: { discountCents: 500 };
     };
     if (parsed.orderId !== orderId || !Array.isArray(parsed.items)) return null;
     const total = Number(parsed.total ?? 0);
@@ -54,6 +55,7 @@ export function parseCheckoutSuccessSummary(raw: string, orderId: string) {
         ? parsed.cagnotteUse
         : undefined,
       financingVerificationRequired,
+      ...(parsed.referralUse?.discountCents === 500 ? { referralUse: { discountCents: 500 as const } } : {}),
     };
   } catch {
     return null;

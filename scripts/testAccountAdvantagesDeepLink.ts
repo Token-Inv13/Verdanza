@@ -35,7 +35,7 @@ visit(app, [], (node, ancestors) => {
 
   const element = attributeExpression(node.attributes, "element");
   assert.ok(element && ts.isConditionalExpression(element));
-  assert.equal(element.condition.getText(app), "CAGNOTTE_READ_DISPLAY_ENABLED");
+  assert.equal(element.condition.getText(app), "CAGNOTTE_READ_DISPLAY_ENABLED || REFERRAL_DISPLAY_CONFIGURATION.displayEnabled");
   assert.ok(ts.isJsxSelfClosingElement(element.whenTrue));
   assert.equal(element.whenTrue.tagName.getText(app), "AccountAdvantagesPage");
   assert.ok(ts.isJsxSelfClosingElement(element.whenFalse));
@@ -52,7 +52,7 @@ let conditionalMenuLinkCount = 0;
 visit(layout, [], (node, ancestors) => {
   if (!ts.isStringLiteral(node) || node.text !== path) return;
   const flagCondition = ancestors.find((parent): parent is ts.ConditionalExpression =>
-    ts.isConditionalExpression(parent) && parent.condition.getText(layout) === "CAGNOTTE_READ_DISPLAY_ENABLED",
+    ts.isConditionalExpression(parent) && parent.condition.getText(layout) === "CAGNOTTE_READ_DISPLAY_ENABLED || REFERRAL_DISPLAY_CONFIGURATION.displayEnabled",
   );
   assert.ok(flagCondition, "The account menu link must be gated by the read-display flag");
   assert.ok(node.pos >= flagCondition.whenTrue.pos && node.end <= flagCondition.whenTrue.end);

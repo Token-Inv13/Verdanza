@@ -85,6 +85,9 @@ try {
   const module = await vite.ssrLoadModule("/src/stripe-test/checkoutConfiguration.ts") as typeof import("../src/stripe-test/checkoutConfiguration.js");
   const config = module.createLocalTestCheckoutConfiguration();
   assert.equal(config.identity.user, null);
+  assert.equal(config.dependencies.referralEnabled, false);
+  await assert.rejects(config.dependencies.quoteOrder({ items: submission.items, deliveryMethod: "postal", referralUse: { requested: true } }), /test_referral_unavailable/);
+  await assert.rejects(config.dependencies.submitOrder({ ...submission, referralUse: { requested: true } }), /test_referral_unavailable/);
   assert.equal(config.identity.customerProfile, null);
   assert.equal(config.dependencies.showAccountLinks, false);
   assert.equal(config.dependencies.initialCustomer?.email, "checkout-test@example.invalid");

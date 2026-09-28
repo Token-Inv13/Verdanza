@@ -14,6 +14,7 @@ import { trackContactClick, trackCtaClick } from "../lib/analytics";
 import { getActiveSocialLinks } from "../lib/socialLinks";
 import { AdvantagesNavigation } from "../components/AdvantagesNavigation";
 import { CAGNOTTE_READ_DISPLAY_ENABLED } from "../config/cagnotteFeatures";
+import { REFERRAL_DISPLAY_CONFIGURATION } from "../config/referralFeatures";
 
 const navItems = [
   { label: "Accueil", to: "/" },
@@ -89,6 +90,7 @@ export function MainLayout() {
           <nav aria-label="Navigation principale" className="hidden items-center gap-4 text-sm text-forest/80 lg:flex xl:gap-6">
             {navItems.map((item) => item.to === "/avantages" ? (
               <AdvantagesNavigation key={`advantages-${pathname}`} loyaltyEnabled={CAGNOTTE_READ_DISPLAY_ENABLED}
+                referralEnabled={REFERRAL_DISPLAY_CONFIGURATION.displayEnabled}
                 onNavigate={(path) => trackCtaClick({
                   ctaId: ctaIdForPath("header_nav", path), ctaLocation: "header",
                   destinationPath: path, ctaCategory: ctaCategoryForPath(path),

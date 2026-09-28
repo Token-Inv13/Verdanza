@@ -9,6 +9,7 @@ import type {
   PromotionSelection,
 } from "../types";
 import type { CagnotteCheckoutQuote, CagnotteUseRequest } from "../types/cagnotte";
+import type { ReferralCheckoutQuote, ReferralUseRequest } from "../types/referralCheckout";
 import { getFirebaseIdToken } from "../lib/firebaseAuth";
 
 export type OrderQuote = {
@@ -32,6 +33,7 @@ export type OrderQuote = {
   giftPromotions?: GiftPromotionQuote[];
   promotionConflictMessage?: string;
   cagnotteUse?: CagnotteCheckoutQuote;
+  referralUse?: ReferralCheckoutQuote;
 };
 
 export class QuoteHttpError extends Error {
@@ -54,16 +56,18 @@ export async function quoteOrder(input: {
   email?: string;
   promotionSelections?: PromotionSelection[];
   cagnotteUse?: Pick<CagnotteUseRequest, "requestedCents">;
+  referralUse?: ReferralUseRequest;
 }, dependencies: {
   getToken?: typeof getFirebaseIdToken;
   fetch?: typeof fetch;
 } = {}) {
   const requestedCents = input.cagnotteUse?.requestedCents ?? 0;
-  const authToken = requestedCents > 0
+  const authenticatedRequest = requestedCents > 0 || input.referralUse?.requested === true;
+  const authToken = authenticatedRequest
     ? await (dependencies.getToken ?? getFirebaseIdToken)()
     : undefined;
-  if (requestedCents > 0 && !authToken) {
-    throw new QuoteHttpError("AUTH_REQUIRED", 401, "Votre session a expiré. Reconnectez-vous pour utiliser votre cagnotte.");
+  if (authenticatedRequest && !authToken) {
+    throw new QuoteHttpError("AUTH_REQUIRED", 401, input.referralUse ? "Votre session a expiré. Reconnectez-vous pour utiliser votre avantage." : "Votre session a expiré. Reconnectez-vous pour utiliser votre cagnotte.");
   }
   const response = await (dependencies.fetch ?? fetch)("/api/quote-order", {
     method: "POST",
@@ -76,7 +80,9 @@ export async function quoteOrder(input: {
       couponCode: input.couponCode?.trim() || undefined,
       email: input.email?.trim() || undefined,
       promotionSelections: input.promotionSelections,
-      ...(requestedCents > 0 ? { authToken, cagnotteUse: { requestedCents } } : {}),
+      ...(authenticatedRequest ? { authToken } : {}),
+      ...(requestedCents > 0 || (input.referralUse && input.cagnotteUse) ? { cagnotteUse: { requestedCents } } : {}),
+      ...(input.referralUse ? { referralUse: input.referralUse } : {}),
     }),
   });
   const payload = (await response.json().catch(() => ({}))) as

@@ -1,5 +1,6 @@
 import type { Firestore, Transaction } from "firebase-admin/firestore";
-import { REFERRAL_PROGRAM_VERSION, type ReferralCode, type ReferralEmailClaim, type ReferralRelation, type ReferralRelinkEvent } from "../../src/types/referral.js";
+import { REFERRAL_PROGRAM_VERSION, REFERRAL_SPONSOR_REWARD_CENTS, type ReferralCode, type ReferralEmailClaim, type ReferralRelation, type ReferralRelinkEvent } from "../../src/types/referral.js";
+import { REFERRAL_SELF_VERSION, type ReferralSelf } from "../../src/types/referralRead.js";
 import { newReferralCode, normalizeReferralEmail, referralEmailClaimAliases, type ReferralEmailKeyring } from "./referralIdentity.js";
 import type { ReferralSponsorIdentity } from "./referralSponsorIdentity.js";
 import { canonicalOrderEmail } from "./orderEmailIdentity.js";
@@ -169,11 +170,42 @@ export async function linkReferral(input: { db: Firestore; user: VerifiedUser; c
   });
 }
 
-export async function readReferralSelf(db: Firestore, refereeUid: string) {
+export const REFERRAL_SELF_SCAN_LIMIT = 100;
+export async function readReferralSelf(db: Firestore, refereeUid: string): Promise<ReferralSelf> {
   const id = uid(refereeUid);
-  const doc = await db.collection("referrals").doc(id).get();
-  if (!doc.exists) return { code: null, relation: null };
-  const relation = doc.data() as ReferralRelation;
-  if (relation.refereeUid !== id) throw new ReferralError("referral_relation_corrupt");
-  return { code: null, relation: { state: relation.state, paymentConfirmed: relation.paymentConfirmed, deliveryConfirmed: relation.deliveryConfirmed } };
+  return db.runTransaction(async (tx) => {
+    const doc = await tx.get(db.collection("referrals").doc(id));
+    const owner = await tx.get(db.collection("referralCodes").doc(`owner_${id}`));
+    const sponsored = await tx.get(db.collection("referrals").where("sponsorUid", "==", id).limit(REFERRAL_SELF_SCAN_LIMIT + 1));
+    if (sponsored.size > REFERRAL_SELF_SCAN_LIMIT) throw new ReferralError("referral_summary_inconclusive", 503);
+    let code: string | null = null;
+    if (owner.exists) {
+      const value = owner.data()!;
+      const valid = (v: FirebaseFirestore.DocumentData | undefined) => v?.schemaVersion === 1 &&
+        v.programVersion === REFERRAL_PROGRAM_VERSION && v.ownerUid === id && typeof v.code === "string" && CODE.test(v.code) &&
+        Number.isSafeInteger(v.createdAtEpochMs) && v.createdAtEpochMs >= 0;
+      if (!valid(value)) throw new ReferralError("referral_code_corrupt", 503);
+      const inverse = await tx.get(db.collection("referralCodes").doc(`code_${value.code}`));
+      if (!valid(inverse.data()) || inverse.data()?.code !== value.code || inverse.data()?.createdAtEpochMs !== value.createdAtEpochMs)
+        throw new ReferralError("referral_code_corrupt", 503);
+      // Preserve the existing protection for a sponsor who is no longer eligible.
+      if (await sponsorHasDeliveredPaidOrder(tx, db, id)) code = value.code;
+    }
+    const sponsorSummary: ReferralSelf["sponsorSummary"] = { referralsTotal: sponsored.size, linkedCount: 0, pendingCount: 0,
+      rewardedCount: 0, cancelledCount: 0, reversedCount: 0, pendingRewardCents: 0, validatedRewardCents: 0 };
+    for (const child of sponsored.docs) {
+      const relation = child.data() as ReferralRelation;
+      if (relation.sponsorUid !== id || referralRelationIdentityHistoryStatus(child.id, relation) === "corrupt")
+        throw new ReferralError("referral_relation_corrupt", 503);
+      sponsorSummary[`${relation.state}Count`]++;
+    }
+    sponsorSummary.pendingRewardCents = sponsorSummary.pendingCount * REFERRAL_SPONSOR_REWARD_CENTS;
+    sponsorSummary.validatedRewardCents = sponsorSummary.rewardedCount * REFERRAL_SPONSOR_REWARD_CENTS;
+    const relation = doc.exists ? doc.data() as ReferralRelation : null;
+    if (relation && referralRelationIdentityHistoryStatus(id, relation) === "corrupt") throw new ReferralError("referral_relation_corrupt", 503);
+    return { version: REFERRAL_SELF_VERSION, code, sponsorSummary, relation: relation ? {
+      state: relation.state, paymentConfirmed: relation.paymentConfirmed, deliveryConfirmed: relation.deliveryConfirmed,
+      checkoutReserved: Boolean(relation.checkoutReservation),
+    } : null };
+  });
 }

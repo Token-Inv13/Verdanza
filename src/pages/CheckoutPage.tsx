@@ -5,6 +5,9 @@ import { AddressAutocomplete } from "../components/AddressAutocomplete";
 import { GiftPromotionChooser } from "../components/GiftPromotionChooser";
 import { Seo } from "../components/Seo";
 import { CagnotteCheckoutPanel, CheckoutAttemptNotice } from "../components/cagnotte/CagnotteCheckoutPanel";
+import { ReferralCheckoutPanel } from "../components/referral/ReferralCheckoutPanel";
+import { useReferralCheckout } from "../hooks/useReferralCheckout";
+import { parseFrenchEuroCents } from "../services/cagnotteCheckoutService";
 import type { Address, DeliveryMethod, DeliveryZone, PreferredPaymentMethod } from "../types";
 import type { AddressSuggestion } from "../services/addressAutocompleteService";
 import { getCartStockIssues } from "../lib/cartStock";
@@ -237,6 +240,11 @@ export function CheckoutPage({ cart, identity, dependencies }: {
     identityKey: user?.uid ?? null,
     contextKey: cagnotteContextKey,
   });
+  const referralContextKey = `${quoteContextKey}|applied:${normalizedAppliedCouponCode}|entered:${normalizedCouponCode}`;
+  const referral = useReferralCheckout(dependencies.referralEnabled, user?.uid ?? null, referralContextKey);
+  const currentReferralContext = useRef({ key: referralContextKey, uid: user?.uid });
+  currentReferralContext.current = { key: referralContextKey, uid: user?.uid };
+  const referralAcceptanceRequired = referral.state.requested && !referral.state.acceptance;
   const checkoutAttempt = useCheckoutAttempt(checkoutIdentityKey);
   const attemptLocked = checkoutAttempt.state.phase === "submitting" ||
     checkoutAttempt.state.phase === "uncertain" ||
@@ -244,12 +252,12 @@ export function CheckoutPage({ cart, identity, dependencies }: {
   const cagnotteQuote = cagnotte.state.proposal?.cagnotteUse;
   const cagnotteAcceptanceRequired = cagnotte.state.selectionEnabled && !cagnotte.state.acceptance;
   const fallbackAcceptanceRequired = cagnotte.state.fallbackPhase === "ready" && !cagnotte.state.fallbackAccepted;
-  const acceptedPayableCents = cagnotte.state.acceptance?.acceptedPayableCents;
+  const acceptedPayableCents = referral.state.acceptance?.acceptedPayableCents ?? cagnotte.state.acceptance?.acceptedPayableCents;
   const serverQuoteReady = dependencies.cagnotteEnabled && cagnotte.state.selectionEnabled
     ? Boolean(cagnotte.state.proposal)
     : Boolean(cagnotte.state.fallbackQuote) || ordinaryServerQuoteReady;
 
-  function loadCagnotteQuote(requestedCents: number) {
+  function loadCagnotteQuote(requestedCents: number, includeReferral = true) {
     return quoteOrder({
       items,
       deliveryMethod,
@@ -259,7 +267,36 @@ export function CheckoutPage({ cart, identity, dependencies }: {
       email: customer.email,
       promotionSelections,
       cagnotteUse: { requestedCents },
+      ...(includeReferral && dependencies.referralEnabled && user && referral.controller.snapshot().requested ? { referralUse: { requested: true as const } } : {}),
+    }).catch((error: unknown) => {
+      if (error && typeof error === "object" && "code" in error && error.code === "REFERRAL_CAGNOTTE_CONFLICT") referral.controller.conflict();
+      throw error;
     });
+  }
+
+  function loadReferralQuote(requestedOverride?: number) {
+    const requestedCents = requestedOverride ?? (cagnotte.state.selectionEnabled
+      ? cagnotte.state.proposal?.cagnotteUse?.requestedCagnotteCents ?? parseFrenchEuroCents(cagnotte.state.amountInput) : 0);
+    return quoteOrder({ items, deliveryMethod,
+      deliveryZone: deliveryMethod === "local_express" ? resolvedDeliveryZoneId : POSTAL_DELIVERY_ZONE_ID,
+      address: quoteDeliveryAddress, couponCode: normalizedAppliedCouponCode || undefined,
+      email: customer.email, promotionSelections, cagnotteUse: { requestedCents }, referralUse: { requested: true } });
+  }
+
+  function chooseReferralWithoutWallet() {
+    cagnotte.setSelectionEnabled(false);
+    dependencies.clearCagnottePreference(user?.uid ?? null);
+    void referral.controller.requestQuote(() => loadReferralQuote(0));
+  }
+
+  function chooseWalletWithoutReferral() {
+    referral.controller.continueWithout();
+    void cagnotte.requestProposal((requested) => loadCagnotteQuote(requested, false));
+  }
+
+  function continueWithoutWallet() {
+    if (referral.state.requested) { chooseReferralWithoutWallet(); return; }
+    void cagnotte.continueWithout(loadOrdinaryCheckoutQuote);
   }
 
   function loadOrdinaryCheckoutQuote() {
@@ -641,7 +678,17 @@ export function CheckoutPage({ cart, identity, dependencies }: {
       }
       let finalQuote: OrderQuote;
       let cagnotteUse: CreateCheckoutOrderInput["cagnotteUse"];
-      if (dependencies.cagnotteEnabled && cagnotte.state.selectionEnabled) {
+      let referralUse: CreateCheckoutOrderInput["referralUse"];
+      const acceptedContext = { key: referralContextKey, uid: user?.uid };
+      if (referral.state.requested) {
+        if (!dependencies.referralEnabled || !user || !referral.state.acceptance) {
+          setError("Acceptez votre nouveau devis parrainage avant de créer la commande."); return;
+        }
+        const revalidated = await referral.controller.revalidate(() => loadReferralQuote());
+        if (!revalidated) { setError("Votre devis parrainage doit être vérifié et accepté à nouveau."); return; }
+        finalQuote = revalidated.quote;
+        referralUse = { requested: true, acceptance: revalidated.acceptance };
+      } else if (dependencies.cagnotteEnabled && cagnotte.state.selectionEnabled) {
         if (!cagnotte.state.acceptance) {
           throw new Error("Validez le montant de cagnotte et le reste à régler avant de créer la commande.");
         }
@@ -660,6 +707,9 @@ export function CheckoutPage({ cart, identity, dependencies }: {
       }
 
       const analyticsContext = await getGa4MeasurementContext().catch(() => null);
+      if (referralUse && (currentReferralContext.current.key !== acceptedContext.key || currentReferralContext.current.uid !== acceptedContext.uid)) {
+        referral.controller.invalidate(); setError("Les conditions ont changé. Acceptez un nouveau devis parrainage."); return;
+      }
       const orderRequest: CreateCheckoutOrderInput = {
         checkoutRequestId: checkoutAttempt.requestId,
         items,
@@ -681,6 +731,7 @@ export function CheckoutPage({ cart, identity, dependencies }: {
           address: deliveryAddress,
         },
         ...(cagnotteUse ? { cagnotteUse } : {}),
+        ...(referralUse ? { referralUse } : {}),
       };
       const result = await checkoutAttempt.submit(orderRequest);
       if (!result) return;
@@ -719,7 +770,7 @@ export function CheckoutPage({ cart, identity, dependencies }: {
     setIsSubmitting(true);
     try {
       const result = await checkoutAttempt.retry();
-      if (result) completeSuccessfulCheckout(result, cagnotte.state.proposal || activeQuote);
+      if (result) completeSuccessfulCheckout(result, referral.state.quote || cagnotte.state.proposal || activeQuote);
     } finally {
       formSubmissionLock.current = false;
       setIsSubmitting(false);
@@ -771,6 +822,7 @@ export function CheckoutPage({ cart, identity, dependencies }: {
       paymentStatus: result.paymentStatus,
       orderStatus: result.orderStatus,
       cagnotteUse: result.cagnotteUse,
+      ...(result.referralUse ? { referralUse: result.referralUse } : {}),
     });
     dependencies.clearCagnottePreference(user?.uid ?? null);
     dependencies.navigateSuccess(result.orderId);
@@ -1181,22 +1233,31 @@ export function CheckoutPage({ cart, identity, dependencies }: {
                 locked={attemptLocked || isSubmitting}
                 onToggle={(enabled) => {
                   if (enabled) {
+                    referral.controller.invalidate();
                     void cagnotte.requestMaximum(loadCagnotteQuote);
                     return;
                   }
-                  void cagnotte.continueWithout(loadOrdinaryCheckoutQuote);
+                  continueWithoutWallet();
                 }}
-                onAmountChange={cagnotte.setAmountInput}
-                onRequest={() => cagnotte.requestProposal(loadCagnotteQuote)}
-                onMaximum={() => cagnotte.requestMaximum(loadCagnotteQuote)}
+                onAmountChange={(amount) => { referral.controller.invalidate(); cagnotte.setAmountInput(amount); }}
+                onRequest={() => { referral.controller.invalidate(); return cagnotte.requestProposal(loadCagnotteQuote); }}
+                onMaximum={() => { referral.controller.invalidate(); return cagnotte.requestMaximum(loadCagnotteQuote); }}
                 onAccept={() => cagnotte.acceptProposal()}
-                onContinueWithout={() => void cagnotte.continueWithout(loadOrdinaryCheckoutQuote)}
+                onContinueWithout={continueWithoutWallet}
                 onAcceptWithout={() => cagnotte.acceptWithoutCagnotte()}
                 onRefreshWallet={() => void cagnotte.refreshWallet()}
               />
+              {dependencies.referralEnabled && user ? <ReferralCheckoutPanel state={referral.state} locked={attemptLocked || isSubmitting}
+                onCheck={() => void referral.controller.requestQuote(() => loadReferralQuote())}
+                onAccept={() => referral.controller.accept()}
+                onWithout={() => referral.controller.continueWithout()}
+                onChooseReferral={chooseReferralWithoutWallet} onChooseWallet={chooseWalletWithoutReferral} /> : null}
+              {referral.state.acceptance && referral.state.quote?.referralUse?.applied ? <p className="flex justify-between text-forest">
+                <span>Avantage parrainage</span><span>−{formatEuro(referral.state.quote.referralUse.referralDiscountCents / 100)}</span>
+              </p> : null}
               <p className="flex justify-between text-lg font-semibold text-forest">
                 <span>Total de la commande</span>
-                <span>{formatEuro(cagnotte.state.fallbackQuote?.total ?? cagnotte.state.proposal?.total ?? estimatedTotal)}</span>
+                <span>{formatEuro(referral.state.quote?.total ?? cagnotte.state.fallbackQuote?.total ?? cagnotte.state.proposal?.total ?? estimatedTotal)}</span>
               </p>
               {cagnotteQuote && (
                 <>
@@ -1271,6 +1332,7 @@ export function CheckoutPage({ cart, identity, dependencies }: {
                 !serverQuoteReady ||
                 !checkoutAttempt.requestId ||
                 cagnotteAcceptanceRequired ||
+                referralAcceptanceRequired ||
                 fallbackAcceptanceRequired ||
                 isBelowPostalMinimum ||
                 isBelowLocalMinimum

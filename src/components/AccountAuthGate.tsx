@@ -14,7 +14,7 @@ export function AccountAuthGate() {
   }
 
   if (!user) {
-    return <Navigate to="/connexion" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/connexion" replace state={{ from: location.pathname + location.search + location.hash }} />;
   }
 
   return <Outlet />;

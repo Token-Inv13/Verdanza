@@ -37,6 +37,7 @@ export type CheckoutAddressSearch = Pick<AddressAutocompleteCoordinator, "search
 export type CheckoutDependencies = {
   quoteOrder: typeof quoteOrder;
   cagnotteEnabled: boolean;
+  referralEnabled: boolean;
   useCagnotteCheckout: typeof useCagnotteCheckout;
   useCheckoutAttempt: (identityKey: string) => CheckoutAttempt;
   clearCagnottePreference: (identityKey: string | null) => void;
