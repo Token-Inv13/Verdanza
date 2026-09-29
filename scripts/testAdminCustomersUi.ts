@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { build, type Rollup } from "vite";
 import { chromium } from "playwright";
-import type { CustomerIdentity, CustomerMetadata, CustomerMutation, CustomerOrder, CustomerReferralRelation, CustomerSummary } from "../src/types/adminCustomers.js";
+import type { CustomerAudit, CustomerIdentity, CustomerMetadata, CustomerMutation, CustomerOrder, CustomerReferralRelation, CustomerSummary } from "../src/types/adminCustomers.js";
 declare global { interface Window { clientsFixture: { customers: CustomerIdentity[]; metadata: CustomerMetadata; requests: string[]; mutations: (CustomerMutation & { operationId: string })[]; summaryFail: boolean; conflict: boolean; referralActive: boolean; blocked: boolean; release: () => void } } }
 const mocks = fileURLToPath(new URL("./fixtures/adminV3Mocks.ts", import.meta.url)).replaceAll("\\", "/");
 const bundle = await build({ configFile: false, envFile: false, publicDir: false, logLevel: "error", esbuild: { jsx: "automatic" }, define: { "process.env.NODE_ENV": JSON.stringify("development"), "import.meta.env": "{}" },
@@ -63,6 +63,29 @@ try {
   await dialog().getByRole("button", { name: "Parrainage", exact: true }).click(); await dialog().getByText("Le programme de parrainage est désactivé.").waitFor(); pass("parrainage désactivé explicite");
   await dialog().getByRole("button", { name: "Activité", exact: true }).click(); for (const kind of ["favorites", "reviews", "comments"]) { await dialog().getByLabel("Type d’activité").selectOption(kind); await dialog().getByText(`${kind} événement réel`).waitFor(); assert.match(await dialog().innerText(), /Non disponible/); } pass("favoris, avis et commentaires réels, dates absentes honnêtes");
   await dialog().getByRole("button", { name: "Administration", exact: true }).click(); await dialog().getByLabel("Note interne privée").fill("Note privée V2"); await dialog().getByLabel("Tags, séparés par une virgule").fill("suivi, important"); await dialog().getByRole("button", { name: "Sauvegarder la note et les tags" }).click(); await dialog().getByRole("status").filter({ hasText: "Modification enregistrée" }).waitFor(); assert.equal(await page.evaluate(() => window.clientsFixture.metadata.note), "Note privée V2"); assert.match(await dialog().innerText(), /Note historique/); pass("sauvegarde explicite note/tags privés et audit, historique préservé");
+  await page.evaluate(() => {
+    const api = window.clientsFixture;
+    const entries: CustomerAudit[] = Array.from({ length: 23 }, (_, index) => ({ id: `audit-${index}`, action: `Action pagination ${index}`, adminUid: "fixture-admin", date: null, reason: "", before: {}, after: {} }));
+    const previousFetch = window.fetch;
+    window.fetch = async (url, options) => {
+      const query = new URL(String(url), "http://fixture.test").searchParams;
+      if (query.get("action") === "adminCustomerMetadata") {
+        api.requests.push("adminCustomerMetadata");
+        return Response.json({ ...api.metadata, audit: { items: query.get("cursor") ? entries.slice(20) : entries.slice(0, 20), nextCursor: query.get("cursor") ? null : "audit-page-2" } });
+      }
+      return previousFetch(url, options);
+    };
+  });
+  await dialog().getByLabel("Note interne privée").fill("Note avec journal paginé");
+  await dialog().getByRole("button", { name: "Sauvegarder la note et les tags" }).click();
+  const journal = dialog().getByRole("heading", { name: "Journal des nouvelles actions V2" }).locator("..");
+  await journal.getByText("Action pagination 19", { exact: false }).waitFor();
+  assert.equal(await journal.locator("li").count(), 20);
+  await journal.getByRole("button", { name: "Charger la suite" }).click();
+  await journal.getByText("Action pagination 22", { exact: false }).waitFor();
+  assert.equal(await journal.locator("li").count(), 23);
+  await journal.getByText("Action pagination 0 ·", { exact: false }).waitFor();
+  pass("journal paginé : les 20 premières entrées restent lors de l’ajout de la page 2");
   await dialog().getByLabel("Note interne privée").fill("Saisie conservée"); await page.evaluate(() => { window.clientsFixture.conflict = true; }); await dialog().getByRole("button", { name: "Sauvegarder la note et les tags" }).click(); await dialog().getByRole("alert").filter({ hasText: "La fiche a changé" }).waitFor(); assert.equal(await dialog().getByLabel("Note interne privée").inputValue(), "Saisie conservée"); await page.evaluate(() => { window.clientsFixture.conflict = false; }); pass("conflit visible, aucune perte de saisie");
   await dialog().getByLabel("Motif de l’action").fill("Archivage local"); const before = await page.evaluate(() => window.clientsFixture.mutations.length); await dialog().getByRole("button", { name: "Archiver", exact: true }).click(); const confirm = page.getByRole("dialog", { name: "Archiver ce client", exact: true }); await confirm.waitFor(); assert.equal(await page.evaluate(() => window.clientsFixture.mutations.length), before); await page.evaluate(() => { window.clientsFixture.blocked = true; }); await confirm.getByRole("button", { name: "Confirmer et continuer" }).click(); await page.waitForFunction((count) => window.clientsFixture.mutations.length > count, before); await page.keyboard.press("Escape"); assert.ok(await confirm.isVisible()); await page.evaluate(() => { window.clientsFixture.blocked = false; window.clientsFixture.release(); }); await confirm.waitFor({ state: "detached" }); await dialog().getByRole("button", { name: "Restaurer", exact: true }).waitFor(); pass("confirmation archivage, blocage durant mutation et restauration disponible");
   await dialog().getByRole("button", { name: "Restaurer", exact: true }).click(); await page.getByRole("dialog", { name: "Restaurer ce client" }).getByRole("button", { name: "Confirmer et continuer" }).click(); await page.getByRole("dialog", { name: "Restaurer ce client" }).waitFor({ state: "detached" });

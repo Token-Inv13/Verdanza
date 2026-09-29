@@ -4,6 +4,7 @@ import { readFile, mkdir } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { spawn } from "node:child_process";
+import { homedir } from "node:os";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -28,8 +29,7 @@ if (process.argv[2] === "--execute") {
       server.listen({ host: "127.0.0.1", port, exclusive: true }, () => server.close((error) => error ? reject(error) : accept()));
     });
   }
-  const cache = join(process.env.USERPROFILE || "", ".cache/firebase/emulators");
-  assert.ok(process.env.USERPROFILE, "Local emulator cache root missing");
+  const cache = join(homedir(), ".cache/firebase/emulators");
   const info = require("firebase-tools/lib/emulator/downloadableEmulatorInfo.json") as Record<string, {
     downloadPathRelativeToCacheDir: string; expectedChecksumSHA256: string;
   }>;
@@ -41,7 +41,7 @@ if (process.argv[2] === "--execute") {
   const isolatedConfig = resolve(root, "node_modules/.cache/admin-storage/config");
   await mkdir(isolatedConfig, { recursive: true });
   const env: NodeJS.ProcessEnv = {};
-  for (const key of ["PATH", "Path", "SystemRoot", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "COMSPEC", "PATHEXT", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "JAVA_HOME"]) {
+  for (const key of ["PATH", "Path", "SystemRoot", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "COMSPEC", "PATHEXT", "HOME", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "JAVA_HOME"]) {
     if (process.env[key]) env[key] = process.env[key];
   }
   Object.assign(env, {
