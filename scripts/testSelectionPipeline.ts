@@ -16,7 +16,8 @@ const test = async (name: string, run: () => Promise<unknown>) => { await run();
 const images = new Map<string, string>(); const pdfs = new Map<string, string>();
 const assets = { readImage: async () => Buffer.from([255, 216, 255]), saveImage: async (path: string, data: string) => { images.set(path, data); }, savePdf: async (path: string, item: ProductSelection) => { pdfs.set(path, item.id); } };
 function selection(): ProductSelection { const key = randomUUID(); return { ...emptySelection(), name: `Fleur ${key}`, publicName: `Fleur ${key}`, supplier: "Fournisseur privé", url: `https://originecbd.fr/${key}`, category: "Fleur", origin: "France", taste: "Fruité", aromas: "Fruit", intensity: "moyenne", aromaFamily: "fruite", appearance: "Compact", notes: "note confidentielle", prices: [{ format: "5 g", price: "9.99" }], commercial: { ...emptyCommercial(), description: "Une description de fleur assez longue, validée par l’admin.", pricePerGram: 4, initialStock: 25, seoTitle: "Fleur Verdanza", seoDescription: "Une description fruitée." }, economics: [{ id: "3g", label: "3 g", quantity: 3, unit: "g", cost: 5, costBasis: "HT", costSource: "manual", evidence: "manuel privé", capturedAt: "2026-09-28", finalPrice: 11 }] }; }
-async function setup() { const item = selection(); const operationId = randomUUID(); const operation = { action: "save", id: "", expectedRevision: 0, operationId, selection: item, imageBase64: "fixture-jpeg" }; const result = await commitPipeline(db, operation, admin, assets); return { result, operation, id: result.selection.id, ref: db.collection("productSelections").doc(result.selection.id), product: db.collection("products").doc(`selection-${result.selection.id}`) }; }
+async function setup(item = selection()) { const operationId = randomUUID(); const operation = { action: "save", id: "", expectedRevision: 0, operationId, selection: item, imageBase64: "fixture-jpeg" }; const result = await commitPipeline(db, operation, admin, assets); return { result, operation, id: result.selection.id, ref: db.collection("productSelections").doc(result.selection.id), product: db.collection("products").doc(`selection-${result.selection.id}`) }; }
+async function reservedSource(id: string) { const sources = await db.collection("selectionSources").where("selectionId", "==", id).get(); equal(sources.size, 1); return sources.docs[0].ref; }
 async function step(result: PipelineResult, action: PipelineAction, operationId = randomUUID()) { return commitPipeline(db, { action, id: result.selection.id, expectedRevision: result.selection.revision, operationId }, admin, assets); }
 async function prepared() { const f = await setup(); f.result = await step(await step(f.result, "validateSelection"), "prepareProduct"); return f; }
 async function catalogue() { const f = await prepared(); f.result = await step(f.result, "createCatalog"); return f; }
@@ -25,6 +26,56 @@ try {
   await test("URL → brouillon uniquement, zéro écritures Firestore et Storage", async () => { const before = (await db.collection("productSelections").get()).size; const count = images.size; const item = await extractSupplierPage("https://originecbd.fr/local-fixture", { resolve: async () => [{ address: "8.8.8.8", family: 4 }], request: async () => ({ status: 200, contentType: "text/html", body: "<h1>Fleur fixture</h1>", location: "" }) }); equal(item.id, ""); equal((await db.collection("productSelections").get()).size, before); equal(images.size, count); });
   await test("confirmation → sélection privée, nouvelle révision, image après confirmation", async () => { const f = await setup(); equal(f.result.selection.revision, 1); equal(f.result.workflow.revision, 1); equal((await f.ref.get()).data()?.notes, "note confidentielle"); ok(images.has(f.result.selection.imagePath)); equal((await f.product.get()).exists, false); });
   await test("sauvegarde rejouée et réponse perdue : même fiche, même image, même révision", async () => { const f = await setup(); const count = images.size; const replay = await commitPipeline(db, f.operation, admin, assets); equal(replay.selection.id, f.id); equal(replay.selection.revision, 1); equal(replay.replayed, true); equal(images.size, count); await rejects(commitPipeline(db, { ...f.operation, selection: { ...f.operation.selection, name: "changed" } }, admin, assets), (e: unknown) => e instanceof PipelineError && e.status === 409); });
+  await test("source inchangée : réservation conservée après édition", async () => {
+    const f = await setup(); const source = await reservedSource(f.id);
+    const saved = await commitPipeline(db, { action: "save", id: f.id, expectedRevision: 1, operationId: randomUUID(), selection: { ...f.result.selection, notes: "Édition sans changement de source" } }, admin, assets);
+    equal(saved.selection.revision, 2); equal((await reservedSource(f.id)).id, source.id); deepEqual((await source.get()).data(), { selectionId: f.id });
+  });
+  await test("URL A → B : ancienne source libérée et réutilisable, nouvelle réservée", async () => {
+    const f = await setup(); const oldSource = await reservedSource(f.id); const oldUrl = f.result.selection.url;
+    const saved = await commitPipeline(db, { action: "save", id: f.id, expectedRevision: 1, operationId: randomUUID(), selection: { ...f.result.selection, url: `${oldUrl}-updated` } }, admin, assets);
+    equal((await oldSource.get()).exists, false); ok((await reservedSource(f.id)).id !== oldSource.id); equal(saved.selection.url, `${oldUrl}-updated`);
+    const replacement = await setup({ ...selection(), url: oldUrl }); equal((await oldSource.get()).data()?.selectionId, replacement.id);
+  });
+  await test("fallback sans URL : changement de nom ou fournisseur libère l’ancienne clé", async () => {
+    for (const field of ["name", "supplier"] as const) {
+      const f = await setup({ ...selection(), url: "" }); const oldSource = await reservedSource(f.id);
+      const saved = await commitPipeline(db, { action: "save", id: f.id, expectedRevision: 1, operationId: randomUUID(), selection: { ...f.result.selection, [field]: `${f.result.selection[field]} updated` } }, admin, assets);
+      equal((await oldSource.get()).exists, false); ok((await reservedSource(f.id)).id !== oldSource.id); equal(saved.selection.url, "");
+      const replacement = await setup({ ...selection(), url: "", name: f.result.selection.name, supplier: f.result.selection.supplier }); equal((await oldSource.get()).data()?.selectionId, replacement.id);
+    }
+  });
+  await test("ancienne réservation appartenant à une autre sélection : aucune suppression", async () => {
+    const f = await setup(); const other = await setup(); const oldSource = await reservedSource(f.id); const foreign = { selectionId: other.id, marker: "foreign reservation" };
+    await oldSource.set(foreign);
+    await commitPipeline(db, { action: "save", id: f.id, expectedRevision: 1, operationId: randomUUID(), selection: { ...f.result.selection, url: `${f.result.selection.url}-updated` } }, admin, assets);
+    deepEqual((await oldSource.get()).data(), foreign); ok((await reservedSource(f.id)).id !== oldSource.id);
+  });
+  await test("collision sur nouvelle source : refus sans perdre réservation, fiche ou workflow", async () => {
+    const f = await setup(); const other = await setup(); const oldSource = await reservedSource(f.id); const newSource = await reservedSource(other.id); const operationId = randomUUID();
+    const before = (await f.ref.get()).data(); const workflow = db.collection("selectionWorkflows").doc(f.id); const beforeWorkflow = (await workflow.get()).data();
+    await rejects(commitPipeline(db, { action: "save", id: f.id, expectedRevision: 1, operationId, selection: { ...f.result.selection, url: other.result.selection.url } }, admin, assets), (error: unknown) => error instanceof PipelineError && error.status === 409 && /source possède déjà/.test(error.message));
+    deepEqual((await oldSource.get()).data(), { selectionId: f.id }); deepEqual((await newSource.get()).data(), { selectionId: other.id }); deepEqual((await f.ref.get()).data(), before); deepEqual((await workflow.get()).data(), beforeWorkflow); equal((await db.collection("selectionOperations").doc(operationId).get()).exists, false);
+  });
+  await test("changement de source concurrent et rejeu : une révision, aucun effet répété", async () => {
+    const f = await setup(); const oldSource = await reservedSource(f.id); const operationId = randomUUID();
+    const operation = { action: "save", id: f.id, expectedRevision: 1, operationId, selection: { ...f.result.selection, url: `${f.result.selection.url}-updated` } };
+    const results = await Promise.all([commitPipeline(db, operation, admin, assets), commitPipeline(db, operation, admin, assets)]);
+    equal(results.filter((result) => !result.replayed).length, 1); equal(results.filter((result) => result.replayed).length, 1); equal((await f.ref.get()).data()?.revision, 2); equal((await oldSource.get()).exists, false); const newSource = await reservedSource(f.id);
+    const replacement = await setup({ ...selection(), url: f.result.selection.url }); const replay = await commitPipeline(db, operation, admin, assets);
+    equal(replay.replayed, true); equal(replay.selection.revision, 2); equal((await oldSource.get()).data()?.selectionId, replacement.id); equal((await reservedSource(f.id)).id, newSource.id);
+  });
+  await test("ancienne sélection sans réservation : changement de source compatible", async () => {
+    const f = await setup(); const oldSource = await reservedSource(f.id); await oldSource.delete();
+    await commitPipeline(db, { action: "save", id: f.id, expectedRevision: 1, operationId: randomUUID(), selection: { ...f.result.selection, url: `${f.result.selection.url}-updated` } }, admin, assets);
+    equal((await oldSource.get()).exists, false); ok((await reservedSource(f.id)).id !== oldSource.id);
+  });
+  await test("échec du reçu après changement de source : réservations et fiche rollback", async () => {
+    const f = await setup(); const oldSource = await reservedSource(f.id); const before = (await f.ref.get()).data(); const workflow = db.collection("selectionWorkflows").doc(f.id); const beforeWorkflow = (await workflow.get()).data(); const operationId = randomUUID();
+    const failing = { collection: db.collection.bind(db), runTransaction: (callback: (tx: Transaction) => Promise<unknown>) => db.runTransaction((tx) => callback(new Proxy(tx, { get(target, key) { if (key === "create") return (ref: FirebaseFirestore.DocumentReference, data: FirebaseFirestore.DocumentData) => { if (ref.parent.id === "selectionOperations") throw new Error("receipt_failure"); return target.create(ref, data); }; const value = Reflect.get(target, key); return typeof value === "function" ? value.bind(target) : value; } }))) } as unknown as Firestore;
+    await rejects(commitPipeline(failing, { action: "save", id: f.id, expectedRevision: 1, operationId, selection: { ...f.result.selection, url: `${f.result.selection.url}-updated` } }, admin, assets), /receipt_failure/);
+    equal((await reservedSource(f.id)).id, oldSource.id); deepEqual((await oldSource.get()).data(), { selectionId: f.id }); deepEqual((await f.ref.get()).data(), before); deepEqual((await workflow.get()).data(), beforeWorkflow); equal((await db.collection("selectionOperations").doc(operationId).get()).exists, false);
+  });
   await test("révision N validée, édition prix/description/format invalide l’aval", async () => { const f = await prepared(); const saved = await commitPipeline(db, { action: "save", id: f.id, expectedRevision: 1, operationId: randomUUID(), selection: { ...f.result.selection, commercial: { ...f.result.selection.commercial!, pricePerGram: 5 }, description: "Modifiée" } }, admin, assets); equal(saved.selection.revision, 2); equal(saved.workflow.stale, true); equal(saved.workflow.selectionValidatedRevision, null); equal(saved.workflow.productPreparedRevision, null); await rejects(step(f.result, "createCatalog"), /Révision/); });
   await test("préparation produit privée, coûts/notes absents, aucune activation", async () => { const f = await prepared(); equal((await f.product.get()).exists, false); equal(f.result.workflow.draft?.isActive, false); equal(f.result.workflow.draft?.fixedPriceOptions?.[0].totalPrice, 11); const text = JSON.stringify(f.result.workflow.draft); for (const privateValue of ["note confidentielle", "Fournisseur privé", "originecbd.fr", "manuel privé"]) ok(!text.includes(privateValue)); });
   await test("catalogue créé inactif, référence atomique et projection publique propre", async () => { const f = await catalogue(); const p = (await f.product.get()).data()!; equal(p.isActive, false); equal(p.sourceSelectionId, f.id); equal(p.stock, 25); ok(p.internalReference); equal((await db.collection("productReferences").doc(p.internalReference).get()).data()?.productId, f.product.id); for (const key of ["notes", "prices", "supplier", "economics", "url", "attributes", "extraction"]) equal(key in p, false); });

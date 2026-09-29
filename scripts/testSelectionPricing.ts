@@ -19,7 +19,34 @@ test("arrondi, conditionnement et pertes configurés", () => { equal(recommendPr
 test("formats 1 g, 3 g, 5 g et prix final manuel", () => { for (const quantity of [1, 3, 5]) equal(recommendPrice({ ...row, quantity, cost: 2 * quantity }, policy).recommended, 4 * quantity); const r = recommendPrice({ ...row, finalPrice: 5 }, policy); equal(r.recommended, 4); equal(r.grossMargin, 3); equal(r.markRate, .6); equal(r.marginRate, 1.5); equal(r.contribution, 2.5); });
 const product = { id: "compare", isActive: true, category: "flowers", pricingPositioning: "premium", price: 4, fixedPriceMode: "manual", fixedPriceOptions: [{ id: "3g", quantityGrams: 3, totalPrice: 9, isActive: true }] } as Product;
 test("catalogue autoritatif, même quantité/catégorie/positionnement", () => { const r = compareCatalogue({ ...row, quantity: 3 }, "flowers", "premium", { available: true, products: [product, { ...product, category: "resins" }, { ...product, pricingPositioning: "standard" }, { ...product, isActive: false }] }); deepEqual(r.pricesPerGram, [3]); equal(compareCatalogue(row, "flowers", "premium", { available: true, products: [product] }).pricesPerGram.length, 0); });
-test("catalogue indisponible, aucun fallback ; positionnement inconnu exclu", () => { equal(compareCatalogue(row, "flowers", "premium", { available: false, products: [product] }).explanation, "Comparaison catalogue indisponible"); equal(compareCatalogue(row, "flowers", "standard", { available: true, products: [{ ...product, pricingPositioning: undefined, productTier: undefined }] }).pricesPerGram.length, 0); });
+test("catalogue indisponible sans fallback ; formats incompatibles exclus", () => { equal(compareCatalogue(row, "flowers", "premium", { available: false, products: [product] }).explanation, "Comparaison catalogue indisponible"); equal(compareCatalogue(row, "flowers", "standard", { available: true, products: [{ ...product, pricingPositioning: undefined, productTier: undefined }] }).pricesPerGram.length, 0); });
+test("produit historique actif sans tier ni positionnement : comparable standard", () => {
+  const historical = { id: "historical", isActive: true, category: "flowers", price: 4 } as Product;
+  deepEqual(compareCatalogue(row, "flowers", "standard", { available: true, products: [historical] }).pricesPerGram, [4]);
+  deepEqual(compareCatalogue(row, "flowers", "premium", { available: true, products: [historical] }).pricesPerGram, []);
+  const manual = { ...product, pricingPositioning: undefined, productTier: undefined };
+  deepEqual(compareCatalogue({ ...row, quantity: 3 }, "flowers", "standard", { available: true, products: [manual] }).pricesPerGram, [3]);
+});
+test("positionnement standard explicite : priorité inchangée sur le tier", () => {
+  for (const productTier of [undefined, "Premium", "Ultra premium"] as const) {
+    const standard = { ...product, pricingPositioning: "standard" as const, productTier };
+    deepEqual(compareCatalogue({ ...row, quantity: 3 }, "flowers", "standard", { available: true, products: [standard] }).pricesPerGram, [3]);
+    deepEqual(compareCatalogue({ ...row, quantity: 3 }, "flowers", "premium", { available: true, products: [standard] }).pricesPerGram, []);
+  }
+});
+test("tiers Premium et Ultra premium explicites : comparables premium uniquement", () => {
+  for (const productTier of ["Premium", "Ultra premium"] as const) {
+    const premium = { ...product, pricingPositioning: undefined, productTier };
+    deepEqual(compareCatalogue({ ...row, quantity: 3 }, "flowers", "premium", { available: true, products: [premium] }).pricesPerGram, [3]);
+    deepEqual(compareCatalogue({ ...row, quantity: 3 }, "flowers", "standard", { available: true, products: [premium] }).pricesPerGram, []);
+  }
+  deepEqual(compareCatalogue({ ...row, quantity: 3 }, "flowers", "premium", { available: true, products: [product] }).pricesPerGram, [3]);
+});
+test("fallback standard : produits inactifs, catégorie ou formats incompatibles exclus", () => {
+  const historical = { ...product, pricingPositioning: undefined, productTier: undefined };
+  deepEqual(compareCatalogue({ ...row, quantity: 3 }, "flowers", "standard", { available: true, products: [{ ...historical, isActive: false }, { ...historical, category: "resins" }, { ...historical, fixedPriceOptions: [{ id: "5g", quantityGrams: 5, totalPrice: 15, isActive: true }] }, { ...historical, fixedPriceOptions: [{ id: "3g", quantityGrams: 3, totalPrice: 9, isActive: false }] }, { ...historical, fixedPriceMode: "disabled", price: 0 }] }).pricesPerGram, []);
+  equal(compareCatalogue({ ...row, unit: "" }, "flowers", "standard", { available: true, products: [historical] }).available, false);
+});
 test("normalisation éditable, coûts web et unités ambiguës", () => { const item = prepareImportedSelection({ ...emptySelection(), name: "Fleur fixture", prices: [{ format: "Petit", price: "9.90" }, { format: "3 g", price: "12" }] }); equal(item.economics?.[0].quantity, null); equal(item.economics?.[1].quantity, 3); equal(item.economics?.[1].costSource, "web_unqualified"); equal(item.commercial?.pricePerGram, null); equal(item.intensity, ""); });
 const selection: ProductSelection = { ...emptySelection(), id: "fixture-123", name: "Fleur fixture", category: "Fleur", origin: "France", taste: "Fruité", aromas: "Fruit", aromaFamily: "fruite", intensity: "moyenne", appearance: "Compact", imagePath: "selection-images/fixture-123/12345678-1234-1234-1234-123456789012.jpg", notes: "secret", commercial: { ...emptyCommercial(), description: "Une description client assez longue pour la fiche.", pricePerGram: 4, initialStock: 25, seoTitle: "Fleur fixture", seoDescription: "Profil fruité" }, economics: [{ ...row, finalPrice: 4 }, { ...row, id: "3g", label: "3 g", quantity: 3, finalPrice: 11.4 }] };
 test("projection inactive sans sourcing, formats/prix admin préservés", () => { const p = preparePipelineProduct(selection); equal(p.isActive, false); equal(p.price, 4); equal(p.fixedPriceOptions?.[0].totalPrice, 11.4); equal(p.fixedPriceOptions?.[0].quantityGrams, 3); ok(!JSON.stringify(p).includes("secret")); ok(!("economics" in p)); });

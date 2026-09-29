@@ -143,6 +143,9 @@ export async function commitPipeline(db: Firestore, raw: unknown, admin: Admin, 
       const keyRef = db.collection("selectionSources").doc(sourceKey(input));
       const keySnap = await tx.get(keyRef);
       if (keySnap.exists && keySnap.data()?.selectionId !== id) throw new PipelineError("Cette source possède déjà une sélection. Ouvrez la fiche existante.", 409);
+      const previousKey = snap.exists ? sourceKey(item) : null;
+      const previousKeyRef = previousKey && previousKey !== keyRef.id ? db.collection("selectionSources").doc(previousKey) : null;
+      const previousKeySnap = previousKeyRef ? await tx.get(previousKeyRef) : null;
       if (!snap.exists) {
         const legacySelections = await tx.get(db.collection("productSelections").limit(500));
         if (legacySelections.size === 500) throw new PipelineError("Catalogue trop grand pour vérifier les doublons : utilisez une sélection existante.");
@@ -157,6 +160,7 @@ export async function commitPipeline(db: Firestore, raw: unknown, admin: Admin, 
       if (item.status !== "En boutique" && oldPublicRef) { tx.delete(oldPublicRef); item.publishedSlug = ""; item.publishedAt = ""; }
       if (item.status !== "En boutique" && current?.sourceSelectionId === id && current.isActive === true) tx.update(productRef, { isActive: false, updatedAt: FieldValue.serverTimestamp() });
       if (current?.sourceSelectionId === id && !current.selectionImagePath && priorImagePath) tx.update(productRef, { selectionImagePath: priorImagePath });
+      if (previousKeyRef && previousKeySnap?.data()?.selectionId === id) tx.delete(previousKeyRef);
       tx.set(keyRef, { selectionId: id });
     } else if (operation.action === "validateSelection") {
       const missing = selectionValidationMissing(item);

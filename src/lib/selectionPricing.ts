@@ -42,7 +42,7 @@ export function recommendPrice(row: EconomicFormat, policy: PricingPolicy | null
 }
 export function compareCatalogue(row: EconomicFormat, category: string, positioning: "standard" | "premium", catalogue: { available: boolean; products: Product[]; complete?: boolean }) {
   if (!catalogue.available || !row.quantity || row.unit !== "g") return { available: false, pricesPerGram: [] as number[], explanation: "Comparaison catalogue indisponible" };
-  const pricesPerGram = catalogue.products.filter((p) => p.isActive && p.category === category && (p.pricingPositioning || (p.productTier ? "premium" : null)) === positioning).flatMap((p) => {
+  const pricesPerGram = catalogue.products.filter((p) => p.isActive && p.category === category && (p.pricingPositioning || (p.productTier ? "premium" : "standard")) === positioning).flatMap((p) => {
     if (p.fixedPriceMode && p.fixedPriceMode !== "disabled") return resolveFixedPriceOptions(p).filter((o) => o.quantityGrams === row.quantity && Number.isFinite(o.totalPrice) && o.totalPrice > 0).map((o) => o.totalPrice / o.quantityGrams);
     return finite(p.price) && p.price > 0 ? [p.price] : [];
   });
