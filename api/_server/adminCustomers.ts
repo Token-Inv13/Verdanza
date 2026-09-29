@@ -7,6 +7,7 @@ import { sendJson, type VercelRequestLike, type VercelResponseLike } from "./htt
 import { REFERRAL_PROGRAM_VERSION, REFERRAL_SPONSOR_REWARD_CENTS } from "../../src/types/referral.js";
 import { commercialMetrics, customerStatus, knownDate, knownInteger, matchCustomerOrder, projectCustomerOrder } from "../../src/lib/adminCustomersV2.js";
 import { exactEuroCents } from "../../src/lib/orderFinancing.js";
+import { promotionBoundaryTimestamp } from "../../src/lib/promotionDates.js";
 import type { CustomerActivityItem, CustomerAudit, CustomerIdentity, CustomerLegacyLoyalty, CustomerMetadata, CustomerMutation, CustomerPage, CustomerReferralRelation, CustomerSummary } from "../../src/types/adminCustomers.js";
 
 type Data = Record<string, unknown>;
@@ -144,7 +145,7 @@ export async function commitCustomerMutation(db: Firestore, raw: unknown, adminU
       tx.create(db.collection("loyaltyMovements").doc(`admin-v2-${input.operationId}`), { customerId: current.id, points: input.targetPoints - current.points, reason: "admin_adjustment", createdBy: adminUid, createdAt: FieldValue.serverTimestamp() });
     } else {
       const coupon = await tx.get(db.collection("coupons").doc(input.couponId)); const data = coupon.data();
-      if (!coupon.exists || !data?.code || data.isActive !== true || data.archived === true || data.isArchived === true || (knownDate(data.endsAt) && Date.parse(knownDate(data.endsAt)!) < Date.now())) throw new AdminCustomerError("coupon_unavailable", "Code promo indisponible.");
+      if (!coupon.exists || !data?.code || data.isActive !== true || data.archived === true || data.isArchived === true || (knownDate(data.endsAt) && promotionBoundaryTimestamp(typeof data.endsAt === "string" ? data.endsAt : knownDate(data.endsAt), "end") < Date.now())) throw new AdminCustomerError("coupon_unavailable", "Code promo indisponible.");
       const assigned = Array.isArray(profile.data()?.assignedPromos) ? profile.data()!.assignedPromos as Data[] : [];
       if (assigned.some((promo) => promo.couponId === input.couponId && promo.isActive === true)) throw new AdminCustomerError("no_change", "Ce code est déjà attribué.");
       before.promoCount = assigned.length; after.promoCount = assigned.length + 1; after.couponId = input.couponId;

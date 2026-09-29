@@ -1,6 +1,6 @@
 import { equal, ok, rejects } from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { FieldValue, type Firestore, type Transaction } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, type Firestore, type Transaction } from "firebase-admin/firestore";
 import { connectCagnotteEmulator, CAGNOTTE_DEMO } from "./cagnotteEmulator.js";
 import { AdminCustomerError, commitCustomerMutation, createAdminCustomerHandler, parseCustomerMutation, readCustomerActivity, readCustomerIdentity, readCustomerLegacyLoyalty, readCustomerList, readCustomerMetadata, readCustomerOrders, readCustomerReferral, readCustomerSummary } from "../api/_server/adminCustomers.js";
 import { REFERRAL_CLOSED_RUNTIME } from "../api/_server/referralRuntimeConfig.js";
@@ -12,6 +12,48 @@ const invalid = (code: string) => (error: unknown) => error instanceof AdminCust
 const adminUid = "clients-admin";
 async function setup() { const key = `client-${randomUUID()}`; const ref = db.collection("customers").doc(key); await ref.set({ uid: key, displayName: "Alice locale", email: `${key}@example.test`, phone: "0601020304", status: "active", archived: false, hidden: false, loyaltyPoints: 7, orderCount: 999, totalSpent: 9999, internalNote: "ancienne note", role: "customer", createdAt: FieldValue.serverTimestamp() }); return { ref, customer: await readCustomerIdentity(db, key) }; }
 function operation(customerId: string, fields: Omit<Extract<CustomerMutation, { kind: "metadata" }>, "customerId" | "expectedRevision">, expectedRevision = 0) { return { customerId, expectedRevision, operationId: randomUUID(), ...fields }; }
+async function atTime<T>(instant: string, run: () => Promise<T>): Promise<T> {
+  const now = Date.parse(instant);
+  ok(Number.isFinite(now));
+  const originalNow = Date.now;
+  Date.now = () => now;
+  try { return await run(); } finally { Date.now = originalNow; }
+}
+async function promoFixture(fields: Record<string, unknown> = {}) {
+  const fixture = await setup();
+  const couponId = `coupon-${randomUUID()}`;
+  const coupon = db.collection("coupons").doc(couponId);
+  await coupon.set({ code: "CLIENT10", isActive: true, ...fields });
+  const input: Extract<CustomerMutation, { kind: "promo" }> & { operationId: string } = {
+    customerId: fixture.customer.id, expectedRevision: 0, operationId: randomUUID(),
+    kind: "promo", couponId, reason: "Suivi privé",
+  };
+  return { ...fixture, coupon, input };
+}
+async function assignPromoAt(fields: Record<string, unknown>, instant: string, allowed: boolean) {
+  const fixture = await promoFixture(fields);
+  const mutation = () => commitCustomerMutation(db, fixture.input, adminUid);
+  if (allowed) {
+    const result = await atTime(instant, mutation);
+    equal(result.revision, 1);
+    equal(result.replayed, false);
+  } else {
+    await rejects(atTime(instant, mutation), invalid("coupon_unavailable"));
+  }
+  const profile = (await fixture.ref.get()).data()!;
+  const meta = await readCustomerMetadata(db, fixture.customer, null);
+  equal(profile.assignedPromos?.length ?? 0, allowed ? 1 : 0);
+  equal(meta.revision, allowed ? 1 : 0);
+  equal(meta.audit.items.length, allowed ? 1 : 0);
+  equal(profile.internalNote, "ancienne note");
+  equal(JSON.stringify(profile).includes("Suivi privé"), false);
+  equal((await db.collection("customerAdminAudit").doc(fixture.input.operationId).get()).exists, allowed);
+  if (allowed) {
+    equal(profile.assignedPromos[0].couponId, fixture.input.couponId);
+    equal(profile.assignedPromos[0].assignedBy, adminUid);
+    equal(profile.assignedPromos[0].code, "CLIENT10");
+  }
+}
 async function call(action: string, token: string | null, params: Record<string, string> = {}, operationValue?: unknown) {
   let status = 200; let body: Record<string, unknown> = {}; const headers: Record<string, string> = {};
   const handler = createAdminCustomerHandler({ getDb: () => db, verifyToken: async (value) => ({ uid: value, email: null }), referralRuntime: () => REFERRAL_CLOSED_RUNTIME });
@@ -39,5 +81,79 @@ try {
   await test("parrainage actif et historique off : parrain, filleuls paginés, projection sans identité HMAC", async () => { const f = await setup(); await db.collection("referralCodes").doc(`owner_${f.customer.uid}`).set({ ownerUid: f.customer.uid, code: "EXISTING" }); await db.collection("referrals").doc(f.customer.uid).set({ refereeUid: f.customer.uid, sponsorUid: "sponsor", state: "linked", rewardCompartment: "none", linkedAtEpochMs: Date.now() - 1000, secret: "NEVER_PROJECT" }); const batch = db.batch(); for (let index = 0; index < 22; index++) batch.set(db.collection("referrals").doc(`${f.customer.id}-${index.toString().padStart(2, "0")}`), { schemaVersion: 1, programVersion: "referral-commercial-policy-v1", refereeUid: `child-${index}`, sponsorUid: f.customer.uid, state: "pending", qualifyingOrderId: "qualifier", rewardCompartment: "pending", linkedAtEpochMs: Date.now() - 1000 }); await batch.commit(); const runtime = { mode: "active" as const, operational: true, startsAtEpochMs: 1 }; const first = await readCustomerReferral(db, f.customer, null, runtime); equal(first.code, "EXISTING"); equal(first.sponsor?.sponsorUid, "sponsor"); equal(first.items.length, 20); equal(first.items[0].rewardCents, 1000); equal(JSON.stringify(first).includes("NEVER_PROJECT"), false); equal((await readCustomerReferral(db, f.customer, first.nextCursor, runtime)).items.length, 2); const off = await readCustomerReferral(db, f.customer, null, REFERRAL_CLOSED_RUNTIME); equal(off.mode, "off"); equal(off.items.length, 20); });
   await test("activité réelle limitée à l’UID, dates absentes et données sensibles omises", async () => { const f = await setup(); for (const [kind, collection] of [["favorites", "favorites"], ["reviews", "productReviews"], ["comments", "blogArticleComments"]] as const) { await db.collection(collection).doc(`${f.customer.id}-event`).set({ userId: f.customer.uid, productName: "Produit", text: "Commentaire réel", comment: "Avis réel", slug: "test", secret: "PRIVATE_OMITTED" }); await db.collection(collection).doc(`${f.customer.id}-foreign`).set({ userId: "other", customerEmail: f.customer.email }); const data = await readCustomerActivity(db, f.customer, kind, null); equal(data.items.length, 1); equal(data.items[0].date, null); equal(JSON.stringify(data).includes("PRIVATE_OMITTED"), false); } await rejects(readCustomerActivity(db, f.customer, "tracking", null), invalid("invalid_activity")); });
   await test("promotion existante : suivi uniquement, code vérifié, motif privé", async () => { const f = await setup(); const couponId = `coupon-${randomUUID()}`; await db.collection("coupons").doc(couponId).set({ code: "CLIENT10", isActive: true }); await commitCustomerMutation(db, { customerId: f.customer.id, expectedRevision: 0, operationId: randomUUID(), kind: "promo", couponId, reason: "Suivi privé" }, adminUid); const data = (await f.ref.get()).data()!; equal(data.assignedPromos[0].code, "CLIENT10"); equal(JSON.stringify(data.assignedPromos).includes("Suivi privé"), false); equal(data.internalNote, "ancienne note"); });
+  await test("coupon date-only : milieu de la dernière journée de Paris autorisé", async () => {
+    await assignPromoAt({ endsAt: "2026-09-29" }, "2026-09-29T12:00:00+02:00", true);
+  });
+  await test("coupon date-only : dernière milliseconde de la journée de Paris incluse", async () => {
+    await assignPromoAt({ endsAt: "2026-09-29" }, "2026-09-29T23:59:59.999+02:00", true);
+  });
+  await test("coupon date-only : première milliseconde du lendemain refusée sans mutation", async () => {
+    await assignPromoAt({ endsAt: "2026-09-29" }, "2026-09-30T00:00:00.000+02:00", false);
+  });
+  await test("coupon ISO explicite : timestamp exact inclus, milliseconde suivante refusée", async () => {
+    const fields = { endsAt: "2026-09-29T15:45:00.123+02:00" };
+    await assignPromoAt(fields, "2026-09-29T13:45:00.122Z", true);
+    await assignPromoAt(fields, "2026-09-29T13:45:00.123Z", true);
+    await assignPromoAt(fields, "2026-09-29T13:45:00.124Z", false);
+  });
+  await test("coupon sans expiration : attribution inchangée à horloge fixe", async () => {
+    await assignPromoAt({}, "2026-09-29T12:00:00+02:00", true);
+  });
+  await test("coupon inactif : refus conservé", async () => {
+    await assignPromoAt({ isActive: false, endsAt: "2026-09-29" }, "2026-09-29T12:00:00+02:00", false);
+  });
+  await test("coupon archived : refus conservé", async () => {
+    await assignPromoAt({ archived: true, endsAt: "2026-09-29" }, "2026-09-29T12:00:00+02:00", false);
+  });
+  await test("coupon isArchived : refus conservé", async () => {
+    await assignPromoAt({ isArchived: true, endsAt: "2026-09-29" }, "2026-09-29T12:00:00+02:00", false);
+  });
+  await test("coupon date-only en hiver : fin de journée de Paris à UTC+01 incluse", async () => {
+    const fields = { endsAt: "2026-12-15" };
+    await assignPromoAt(fields, "2026-12-15T12:00:00+01:00", true);
+    await assignPromoAt(fields, "2026-12-15T23:59:59.999+01:00", true);
+    await assignPromoAt(fields, "2026-12-16T00:00:00.000+01:00", false);
+  });
+  await test("coupon Timestamp Firestore : sémantique exacte historique conservée", async () => {
+    const fields = { endsAt: Timestamp.fromDate(new Date("2026-09-29T13:45:00.123Z")) };
+    await assignPromoAt(fields, "2026-09-29T13:45:00.123Z", true);
+    await assignPromoAt(fields, "2026-09-29T13:45:00.124Z", false);
+  });
+  await test("expiration zéro et date invalide : comportements historiques conservés", async () => {
+    await assignPromoAt({ endsAt: "1970-01-01T00:00:00.000Z" }, "2026-09-29T12:00:00+02:00", false);
+    await assignPromoAt({ endsAt: "invalid-date" }, "2026-09-29T12:00:00+02:00", true);
+  });
+  await test("coupon inexistant ou sans code : refus sans révision ni audit", async () => {
+    await assignPromoAt({ code: "" }, "2026-09-29T12:00:00+02:00", false);
+    const fixture = await promoFixture();
+    await fixture.coupon.delete();
+    await rejects(atTime("2026-09-29T12:00:00+02:00", () => commitCustomerMutation(db, fixture.input, adminUid)), invalid("coupon_unavailable"));
+    equal((await fixture.ref.get()).data()?.assignedPromos, undefined);
+    equal((await readCustomerMetadata(db, fixture.customer, null)).revision, 0);
+    equal((await db.collection("customerAdminAudit").doc(fixture.input.operationId).get()).exists, false);
+  });
+  await test("attribution : révision, rejeu après expiration, doublon et audit conservés", async () => {
+    const fixture = await promoFixture({ endsAt: "2026-09-29" });
+    await atTime("2026-09-29T12:00:00+02:00", () => commitCustomerMutation(db, fixture.input, adminUid));
+    await rejects(atTime("2026-09-29T12:00:00+02:00", () => commitCustomerMutation(db, { ...fixture.input, operationId: randomUUID() }, adminUid)), invalid("customer_conflict"));
+    await rejects(atTime("2026-09-29T12:00:00+02:00", () => commitCustomerMutation(db, { ...fixture.input, expectedRevision: 1, operationId: randomUUID() }, adminUid)), invalid("no_change"));
+    const replay = await atTime("2026-09-30T00:00:00.000+02:00", () => commitCustomerMutation(db, fixture.input, adminUid));
+    equal(replay.replayed, true);
+    equal(replay.revision, 1);
+    await rejects(atTime("2026-09-29T12:00:00+02:00", () => commitCustomerMutation(db, { ...fixture.input, reason: "Autre motif" }, adminUid)), invalid("operation_conflict"));
+    await rejects(atTime("2026-09-29T12:00:00+02:00", () => commitCustomerMutation(db, fixture.input, "other-admin")), invalid("operation_conflict"));
+    const meta = await readCustomerMetadata(db, fixture.customer, null);
+    equal(meta.revision, 1);
+    equal(meta.audit.items.length, 1);
+    equal((await fixture.ref.get()).data()?.assignedPromos.length, 1);
+    const audit = (await db.collection("customerAdminAudit").doc(fixture.input.operationId).get()).data()!;
+    equal(audit.adminUid, adminUid);
+    equal(audit.reason, "Suivi privé");
+    equal(audit.before.promoCount, 0);
+    equal(audit.after.promoCount, 1);
+  });
+  await test("attribution de suivi : startsAt et quota ne deviennent pas de nouvelles règles", async () => {
+    await assignPromoAt({ endsAt: "2026-09-29", startsAt: "2026-12-31", maxUses: 1, usedCount: 1 }, "2026-09-29T12:00:00+02:00", true);
+  });
   console.log(`${checks} groupes de contrôles API/transactions Clients V2 validés sur émulateur uniquement.`);
 } finally { await db.terminate(); }
