@@ -120,7 +120,7 @@ export default function AdminArchivesPage() {
             <div className="flex min-w-max gap-2">
               {adminArchiveCategories.map((category) => {
                 const state = states[category.key];
-                const count = state ? state.items.length : "...";
+                const count = state?.error ? "—" : state ? state.items.length : "...";
                 const isActive = activeCategory === category.key;
                 return (
                   <button
@@ -163,7 +163,7 @@ export default function AdminArchivesPage() {
             </label>
           </div>
           <p className="mt-3 text-xs text-ink/50">
-            Source : {activeState.source}. Les donnees sont chargees uniquement pour l'onglet consulte.
+            {activeState.error ? "Lecture indisponible." : `Source : ${activeState.source === "empty" ? "collection confirmée vide" : "base en ligne"}. Les données sont chargées uniquement pour l'onglet consulté.`}
           </p>
         </div>
 
@@ -182,7 +182,7 @@ export default function AdminArchivesPage() {
 
         {activeState.error && !activeState.loading && (
           <div className="m-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-            {activeState.error}
+            {activeState.error} <button type="button" className="font-semibold underline" onClick={() => void loadCategory(activeCategory)}>Réessayer la lecture</button>
           </div>
         )}
 
@@ -200,7 +200,7 @@ export default function AdminArchivesPage() {
           />
         )}
 
-        {!!visibleItems.length && (
+        {!activeState.error && !activeState.loading && !!visibleItems.length && (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] text-left text-sm">
               <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">

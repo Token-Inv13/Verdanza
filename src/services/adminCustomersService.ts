@@ -8,12 +8,11 @@ import type { CustomerMetadata, CustomerSummary } from "../types/adminCustomers"
 
 // Retained for the other admin sections. Clients V2 uses its bounded server list.
 export async function getAdminCustomersWithFallback() {
-  if (!db) return { customers: [], source: "empty" as const };
-  try {
-    const snapshot = await getDocs(query(collection(db, collections.customers), orderBy("updatedAt", "desc")));
-    const customers = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id }) as CustomerProfile);
-    return { customers, source: customers.length ? "firestore" as const : "empty" as const };
-  } catch (error) { console.warn("Unable to load Firestore customers", error); return { customers: [], source: "empty" as const }; }
+  if (!db) throw new Error("Base en ligne indisponible.");
+  const snapshot = await getDocs(query(collection(db, collections.customers), orderBy("updatedAt", "desc")));
+  if (snapshot.metadata?.fromCache) throw new Error("La liste des clients n'est pas confirmée par le serveur.");
+  const customers = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id }) as CustomerProfile);
+  return { customers, source: customers.length ? "firestore" as const : "empty" as const };
 }
 async function state(customer: CustomerProfile) {
   assertOrdinaryCustomerAdminMutationAllowed(customer);

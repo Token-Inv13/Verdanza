@@ -39,8 +39,10 @@ export function createMarketingAiClient(dependencies: { token: typeof getFirebas
   }
   return {
     status: async () => {
-      const result = await request<{ configured: boolean; maxProposals: number }>(endpoint);
-      if (typeof result.configured !== "boolean" || result.maxProposals !== 3) throw new MarketingAiApiError("Assistant IA indisponible.", "invalid_response");
+      const result = await request<{ configured: boolean; state: "disabled" | "missing_configuration" | "ready"; maxProposals: number }>(endpoint);
+      if (typeof result.configured !== "boolean" || !["disabled", "missing_configuration", "ready"].includes(result.state)
+        || result.configured !== (result.state === "ready") || result.maxProposals !== 3)
+        throw new MarketingAiApiError("Assistant IA indisponible.", "invalid_response");
       return result;
     },
     generate: (body: MarketingAiRequest) => generation(endpoint, body),

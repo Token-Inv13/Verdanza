@@ -66,7 +66,7 @@ declare global {
   interface Window {
     adminV3: typeof fixture;
     adminV3Product: typeof fixtureProduct;
-    renderAdminV3: (mode: "dialog" | "confirm" | "products" | "stocks" | "sidebar") => void;
+    renderAdminV3: (mode: "dialog" | "confirm" | "dashboard" | "products" | "stocks" | "comptabilite" | "parametres" | "sidebar") => void;
   }
 }
 window.adminV3 = fixture;
@@ -74,6 +74,6 @@ window.adminV3Product = fixtureProduct;
 window.renderAdminV3 = (mode) => {
   flushSync(() => root.render(<StrictMode key={mode}>
     {mode === "dialog" ? <DialogFixture /> : mode === "confirm" ? <ConfirmFixture /> : mode === "sidebar" ? <SidebarFixture /> :
-      <MemoryRouter><AdminPage section={mode === "stocks" ? "Stocks" : "Produits"} /></MemoryRouter>}
+      <MemoryRouter><AdminPage section={mode === "dashboard" ? "Dashboard" : mode === "stocks" ? "Stocks" : mode === "comptabilite" ? "Comptabilité" : mode === "parametres" ? "Paramètres" : "Produits"} /></MemoryRouter>}
   </StrictMode>));
 };

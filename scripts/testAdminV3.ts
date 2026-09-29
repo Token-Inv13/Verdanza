@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { build, type Rollup } from "vite";
@@ -48,7 +49,7 @@ try {
     XMLHttpRequest.prototype.open = () => { throw new Error("Unexpected fixture XHR"); };
   });
   await page.addScriptTag({ content: script.code });
-  async function mode(value: "dialog" | "confirm" | "products" | "sidebar") {
+  async function mode(value: "dialog" | "confirm" | "dashboard" | "products" | "stocks" | "comptabilite" | "parametres" | "sidebar") {
     await page.evaluate((next) => window.renderAdminV3(next), value);
   }
   async function visible(locator: Locator) { assert.ok(await locator.isVisible()); }
@@ -296,6 +297,10 @@ try {
   assert.equal(await marketing.getAttribute("aria-expanded"), "false");
   await community.click();
   await marketing.click();
+  for (const title of ["Tableau de bord", "Catalogue", "Commandes", "Marketing", "Communauté", "Contenu", "Gestion", "Paramètres"]) {
+    const group = nav.getByRole("button", { name: title, exact: true });
+    if (await group.getAttribute("aria-expanded") === "false") await group.click();
+  }
   const expected = ["/admin", "/admin/analytics", "/admin/selection", "/admin/produits", "/admin/stocks", "/admin/commandes", "/admin/clients", "/admin/livraisons", "/admin/marketing", "/admin/bannieres", "/admin/coupons", "/admin/concours", "/admin/avis", "/admin/commentaires-blog", "/admin/favoris", "/admin/archives", "/admin/comptabilite", "/admin/comptabilite?tab=achats", "/admin/comptabilite?tab=couts", "/admin/factures", "/admin/facturation", "/admin/parametres"];
   assert.deepEqual(await nav.getByRole("link").evaluateAll((links) => links.map((link) => link.getAttribute("href"))), expected);
   await community.click();
@@ -324,9 +329,41 @@ try {
   assert.match(appSource, /path="factures"[^\n]*Navigate to="\/admin\/comptabilite\?tab=factures"/);
   assert.match(appSource, /path="facturation"[\s\S]*?Navigate to="\/admin\/comptabilite\?tab=facturation"/);
   passed("sidebar: existing accounting tabs and redirects retained, only the current tab is active");
+  for (const section of ["dashboard", "products", "stocks", "comptabilite"] as const) {
+    await mode(section);
+    for (const viewport of [{ width: 1440, height: 1000 }, { width: 1280, height: 720 }, { width: 820, height: 900 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(viewport);
+      const layout = await page.evaluate(() => ({ pageWidth: document.documentElement.scrollWidth, viewport: innerWidth }));
+      assert.ok(layout.pageWidth <= layout.viewport, `${section} déborde à ${viewport.width}px (${layout.pageWidth}px)`);
+      if (process.env.ADMIN_V3_SHOTS_DIR && section === "dashboard" && [1440, 390].includes(viewport.width))
+        await page.screenshot({ path: path.join(process.env.ADMIN_V3_SHOTS_DIR, `dashboard-after-${viewport.width}.png`) });
+    }
+    passed(`${section}: 1440, 1280, 820 et 390 sans débordement horizontal`);
+  }
+  await page.evaluate(() => { window.adminV3.readFailure = "products"; });
+  await mode("dashboard");
+  await page.getByText("Données indisponibles.", { exact: true }).waitFor();
+  if (process.env.ADMIN_V3_SHOTS_DIR) await page.screenshot({ path: path.join(process.env.ADMIN_V3_SHOTS_DIR, "dashboard-read-error-390.png") });
+  assert.equal(await page.getByText("0 produit", { exact: false }).count(), 0);
+  assert.equal(await page.getByRole("button", { name: "Ajouter un produit" }).count(), 0);
+  await page.evaluate(() => { window.adminV3.recoverOnRefresh = true; });
+  await page.getByRole("button", { name: "Réessayer la lecture" }).click();
+  await page.getByText("Données indisponibles.", { exact: true }).waitFor({ state: "detached" });
+  passed("F2 : lecture principale refusée, aucun faux zéro ni mutation, retry rétablit le Dashboard");
+  await page.evaluate(() => { window.adminV3.readFailure = "delivery"; });
+  await mode("dashboard");
+  await page.getByText("Zones de livraison indisponibles.").waitFor();
+  assert.ok(await page.getByText("Vue rapide", { exact: true }).isVisible());
+  assert.ok(await page.getByRole("button", { name: "Recharger les données" }).isVisible());
+  passed("F2 : lecture secondaire refusée, Dashboard conservé avec warning et retry");
+  await page.evaluate(() => { window.adminV3.readFailure = ""; window.adminV3.emptyReal = true; });
+  await mode("products");
+  assert.equal(await page.getByText("Données indisponibles.", { exact: true }).count(), 0);
+  assert.ok(await page.getByText("Aucun produit pour le moment.").isVisible());
+  passed("F2 : vide serveur confirmé distinct de l'erreur");
   assert.deepEqual(unexpectedRequests, [], "No remote requests or non-fixture endpoints permitted");
   assert.deepEqual(errors, [], "No uncaught component errors");
 } finally {
   await browser.close();
 }
-console.log(`Admin V3: ${checks} scenarios passed, one fixed viewport, local mocks only.`);
+console.log(`Admin V3: ${checks} scenarios passed, local mocks only; four viewports checked for Dashboard, Products, Stocks and Accounting. Settings has its own UI suite.`);

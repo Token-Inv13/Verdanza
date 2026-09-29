@@ -253,21 +253,11 @@ export type CustomerOrderRow = {
 };
 
 export async function getAdminOrdersWithFallback() {
-  if (!db) return { orders: [], source: "empty" as const };
-  try {
-    const snapshot = await getDocs(
-      query(collection(db, collections.orders), orderBy("createdAt", "desc")),
-    );
-    const orders: AdminOrderRow[] = snapshot.docs.map((entry) =>
-      adminOrderRow({ id: entry.id, ...entry.data() } as Order));
-    return {
-      orders,
-      source: orders.length ? ("firestore" as const) : ("empty" as const),
-    };
-  } catch (error) {
-    console.warn("Unable to load Firestore orders", error);
-    return { orders: [], source: "empty" as const };
-  }
+  if (!db) throw new Error("Base en ligne indisponible.");
+  const snapshot = await getDocs(query(collection(db, collections.orders), orderBy("createdAt", "desc")));
+  if (snapshot.metadata?.fromCache) throw new Error("La liste des commandes n'est pas confirmée par le serveur.");
+  const orders: AdminOrderRow[] = snapshot.docs.map((entry) => adminOrderRow({ id: entry.id, ...entry.data() } as Order));
+  return { orders, source: orders.length ? ("firestore" as const) : ("empty" as const) };
 }
 
 export async function getAdminOrder(orderId: string): Promise<AdminOrderRow | null> {

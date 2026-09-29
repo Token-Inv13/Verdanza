@@ -157,8 +157,8 @@ export async function getFirestoreProducts(activeOnly = true) {
   const snapshot = await getDocs(productsQuery);
   // A cached snapshot cannot confirm current public stock or catalogue membership.
   // Keep the existing non-commercial fallback until the server confirms the data.
-  if (activeOnly && snapshot.metadata.fromCache) {
-    throw new Error("Public catalogue requires a server-confirmed snapshot.");
+  if (snapshot.metadata?.fromCache) {
+    throw new Error("Le catalogue nécessite une lecture confirmée par le serveur.");
   }
   return snapshot.docs
     .map((entry) => {
@@ -179,16 +179,8 @@ export async function getFirestoreProducts(activeOnly = true) {
 }
 
 export async function getAdminProductsWithFallback() {
-  try {
-    const firestoreProducts = await getFirestoreProducts(false);
-    return {
-      products: firestoreProducts.length ? firestoreProducts : getLocalProducts(false),
-      source: firestoreProducts.length ? ("firestore" as const) : ("local" as const),
-    };
-  } catch (error) {
-    logFirestoreFallback("Falling back to local admin products", error);
-    return { products: getLocalProducts(false), source: "local" as const };
-  }
+  const firestoreProducts = await getFirestoreProducts(false);
+  return { products: firestoreProducts, source: firestoreProducts.length ? ("firestore" as const) : ("empty" as const) };
 }
 
 export async function getProductsWithFallback(

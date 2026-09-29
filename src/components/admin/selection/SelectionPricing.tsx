@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AdminConfirmDialog } from "../AdminConfirmDialog";
 import { compareCatalogue, costSourceLabels, recommendPrice } from "../../../lib/selectionPricing";
 import { costSources, emptyCommercial, type EconomicFormat, type PipelineContext, type PricingPolicy } from "../../../types/selectionPipeline";
@@ -11,15 +11,28 @@ const rate = (v: number | null) => v === null ? "Indisponible" : `${(v * 100).to
 export function SelectionPricing({ item, onChange }: { item: ProductSelection; onChange: (item: ProductSelection) => void }) {
   const [context, setContext] = useState<PipelineContext | null>(null);
   const [policyFields, setPolicyFields] = useState<Record<string, string>>({});
+  const [contextState, setContextState] = useState<"loading" | "ready" | "error">("loading");
   const [policyConfirm, setPolicyConfirm] = useState<{ policy: PricingPolicy; operationId: string } | null>(null);
   const [policyError, setPolicyError] = useState("");
+  const contextVersion = useRef(0);
+  const invalidateContext = useCallback(() => { contextVersion.current++; }, []);
   const category = item.category === "Fleur" ? "flowers" : item.category === "Résine" ? "resins" : null;
   const positioning = item.commercial?.positioning || "standard";
-  useEffect(() => {
-    let current = true; setContext(null); setPolicyFields({});
-    if (item.id && category) void getSelectionPipeline(item.id, { category, positioning }).then((value) => { if (current) { setContext(value); setPolicyFields(value.policy ? Object.fromEntries(Object.entries(value.policy).map(([k, v]) => [k, String(v)])) : {}); } }).catch(() => { /* Explicitly unavailable, no fallback. */ });
-    return () => { current = false; };
-  }, [item.id, item.revision, category, positioning]);
+  const loadContext = useCallback(async () => {
+    const version = ++contextVersion.current;
+    setContext(null); setPolicyFields({}); setContextState("loading");
+    if (!item.id || !category) { setContextState("ready"); return; }
+    try {
+      const value = await getSelectionPipeline(item.id, { category, positioning });
+      if (version !== contextVersion.current) return;
+      setContext(value);
+      setPolicyFields(value.policy ? Object.fromEntries(Object.entries(value.policy).map(([key, value]) => [key, String(value)])) : {});
+      setContextState("ready");
+    } catch {
+      if (version === contextVersion.current) setContextState("error");
+    }
+  }, [item.id, category, positioning]);
+  useEffect(() => { void loadContext(); return invalidateContext; }, [loadContext, item.revision, invalidateContext]);
   const c = item.commercial || emptyCommercial();
   const policy = item.category !== "Autre" && context?.policy?.category === category && context.policy.positioning === c.positioning ? context.policy : null;
   const rows = item.economics || [];
@@ -27,6 +40,7 @@ export function SelectionPricing({ item, onChange }: { item: ProductSelection; o
   const commercial = (patch: Partial<typeof c>) => onChange({ ...item, commercial: { ...c, ...patch } });
   return <section className="space-y-4 rounded-xl border border-forest/15 bg-cream p-4 sm:col-span-2" aria-label="Prix conseillé Verdanza">
     <h3 className="font-display text-2xl">Prix conseillé Verdanza</h3>
+    {contextState === "error" && <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">Contexte de prix indisponible. Les coûts et la politique enregistrés ne peuvent pas être vérifiés. <button type="button" className="font-semibold underline" onClick={() => void loadContext()}>Recharger le contexte de prix</button></div>}
     <p className="text-xs leading-5">Coûts et recommandations privés. Le prix final reste votre décision. Aucune valeur fiscale ou marge cible n’est ajoutée automatiquement.</p>
     <div className="grid gap-3 sm:grid-cols-2">
       <label className="text-xs font-semibold">Positionnement<select className="input-field mt-1 w-full" value={c.positioning} onChange={(e) => commercial({ positioning: e.target.value as typeof c.positioning })}><option value="standard">Standard</option><option value="premium">Premium</option></select></label>
@@ -62,10 +76,11 @@ export function SelectionPricing({ item, onChange }: { item: ProductSelection; o
       <div className="grid gap-3 sm:grid-cols-2">{[["targetContributionRate", "Taux de contribution cible"], ["variableRate", "Taux de coûts variables"], ["packagingCost", "Conditionnement (€ / format)"], ["lossRate", "Taux de pertes"], ["taxRate", "Taux fiscal applicable"], ["roundingIncrement", "Pas d’arrondi (€)"]].map(([key, label]) => <label key={key} className="text-xs">{label}<input className="input-field mt-1 w-full" value={policyFields[key] || ""} onChange={(e) => setPolicyFields({ ...policyFields, [key]: e.target.value })} /></label>)}
         {[["costBasis", "Base économique", ["HT", "TTC"]], ["sellingBasis", "Base de vente", ["HT", "TTC"]], ["roundingMode", "Arrondi", ["up", "nearest"]]].map(([key, label, values]) => <label key={String(key)} className="text-xs">{label}<select className="input-field mt-1 w-full" value={policyFields[String(key)] || ""} onChange={(e) => setPolicyFields({ ...policyFields, [String(key)]: e.target.value })}><option value="">À définir</option>{(values as string[]).map((v) => <option key={v} value={v}>{v === "up" ? "Supérieur" : v === "nearest" ? "Plus proche" : v}</option>)}</select></label>)}
       </div>
-      <button type="button" className="btn-secondary mt-3" disabled={item.category === "Autre"} onClick={() => { const p = { ...policyFields, schemaVersion: 1, category, positioning: c.positioning, ...Object.fromEntries(["targetContributionRate", "variableRate", "packagingCost", "lossRate", "taxRate", "roundingIncrement"].map((k) => [k, number(policyFields[k] || "")])) }; setPolicyError(""); setPolicyConfirm({ policy: p as unknown as PricingPolicy, operationId: crypto.randomUUID() }); }}>Vérifier la politique</button>
+      <button type="button" className="btn-secondary mt-3" disabled={item.category === "Autre" || (Boolean(item.id) && contextState !== "ready")} onClick={() => { const p = { ...policyFields, schemaVersion: 1, category, positioning: c.positioning, ...Object.fromEntries(["targetContributionRate", "variableRate", "packagingCost", "lossRate", "taxRate", "roundingIncrement"].map((k) => [k, number(policyFields[k] || "")])) }; setPolicyError(""); setPolicyConfirm({ policy: p as unknown as PricingPolicy, operationId: crypto.randomUUID() }); }}>Vérifier la politique</button>
     </details>
     <AdminConfirmDialog open={Boolean(policyConfirm)} title="Confirmer la politique de prix privée" summary={policyConfirm && <div className="space-y-2"><p>{policyConfirm.policy.category === "flowers" ? "Fleurs" : "Résines"} · {policyConfirm.policy.positioning === "premium" ? "Premium" : "Standard"}</p><p>Contribution cible après frais variables : {rate(policyConfirm.policy.targetContributionRate)} · Frais variables : {rate(policyConfirm.policy.variableRate)}</p><p>Conditionnement : {euro(policyConfirm.policy.packagingCost)} / format · Pertes : {rate(policyConfirm.policy.lossRate)}</p><p>Coût : {policyConfirm.policy.costBasis || "à définir"} · Vente : {policyConfirm.policy.sellingBasis || "à définir"} · Fiscalité configurée : {rate(policyConfirm.policy.taxRate)}</p><p>Arrondi : {euro(policyConfirm.policy.roundingIncrement)}, {policyConfirm.policy.roundingMode === "up" ? "supérieur" : policyConfirm.policy.roundingMode === "nearest" ? "au plus proche" : "à définir"}</p></div>} warning="Cette politique s’applique à la catégorie et au positionnement indiqués. Elle ne change aucun prix final ni aucun produit public." error={policyError} onCancel={() => setPolicyConfirm(null)} onConfirm={async () => {
       if (!policyConfirm) return;
+      if (item.id && contextState !== "ready") { setPolicyError("Contexte de prix indisponible. Rechargez-le avant d'enregistrer la politique."); return; }
       try { const result = await saveSelectionPricingPolicy(policyConfirm.policy, policy, policyConfirm.operationId); setContext((v) => ({ ...(v || { workflow: {} as PipelineContext["workflow"], product: null, costs: [], catalogue: { available: false, products: [], complete: false } }), policy: result.policy })); setPolicyConfirm(null); } catch (error) { setPolicyError(error instanceof Error ? error.message : "Politique indisponible."); throw error; }
     }} />
   </section>;

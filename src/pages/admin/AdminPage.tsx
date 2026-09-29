@@ -315,6 +315,7 @@ export function AdminPage({ section }: { section: string }) {
     supplierPurchases,
     supplierPurchasesSource,
     supplierPurchasesError,
+    readErrors = {},
     isLoading,
     refresh,
     refreshOrder,
@@ -376,6 +377,28 @@ export function AdminPage({ section }: { section: string }) {
     () => buildDashboardMetrics(products, orders),
     [orders, products],
   );
+  const accountingTab = normalizeAccountingTab(searchParams.get("tab"));
+  const accountingRequirements: Record<AccountingTab, string[]> = {
+    synthese: ["products", "orders", "invoices", "billing", "costs", "purchases"],
+    marges: ["products", "orders", "costs", "purchases"],
+    achats: ["products", "purchases"],
+    couts: ["products", "costs", "purchases"],
+    factures: ["orders", "invoices", "billing"],
+    facturation: ["billing"],
+  };
+  const primaryKeys = section === "Dashboard" ? ["products", "orders"]
+    : ["Produits", "Stocks"].includes(section) ? ["products"]
+      : section === "Commandes" ? ["orders"]
+        : section === "Livraisons locales" ? ["delivery"]
+          : section === "Comptabilité" ? accountingRequirements[accountingTab] : [];
+  const relevantKeys = section === "Dashboard" ? [...primaryKeys, "delivery"]
+    : section === "Clients" ? ["coupons"]
+      : section === "Favoris produits" ? ["products"]
+        : section === "Comptabilité" ? accountingRequirements[accountingTab] : primaryKeys;
+  const relevantReadErrors = relevantKeys.map((key) => readErrors[key as keyof typeof readErrors]).filter((value): value is string => Boolean(value));
+  const primaryUnavailable = primaryKeys.some((key) => Boolean(readErrors[key as keyof typeof readErrors]));
+  const dataSection = ["Dashboard", "Produits", "Stocks", "Commandes", "Livraisons locales", "Comptabilité"].includes(section);
+  const showDataSection = !isLoading && !primaryUnavailable;
 
   function setMessage(text: string) {
     setMessageState({ text, scope: messageScope });
@@ -544,11 +567,8 @@ export function AdminPage({ section }: { section: string }) {
       isActive: key === "isActive" ? !product.isActive : product.isActive,
       isFeatured: key === "isFeatured" ? !product.isFeatured : product.isFeatured,
     };
-    if (productSource === "local") {
-      await upsertProduct({ ...product, ...flags });
-    } else {
-      await updateProductFlags(product, flags);
-    }
+    if (productSource !== "firestore") throw new Error("Produit non confirmé en base. Rechargez avant de modifier son état.");
+    await updateProductFlags(product, flags);
     await refresh();
   }
 
@@ -848,15 +868,17 @@ export function AdminPage({ section }: { section: string }) {
       )}
 
       {isLoading && <p className="mt-8 text-forest/70">Chargement des donnees...</p>}
+      {relevantReadErrors.length > 0 && <div role="alert" className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><strong>Lecture Admin incomplète.</strong><ul className="mt-1 list-disc pl-5">{relevantReadErrors.map((item) => <li key={item}>{item}</li>)}</ul><button type="button" className="mt-2 font-semibold underline" onClick={() => void refresh()}>Recharger les données</button></div>}
+      {dataSection && !isLoading && primaryUnavailable && <div role="alert" className="admin-card mt-5 border-red-200 bg-red-50 text-red-900"><strong>Données indisponibles.</strong><p className="mt-1 text-sm">Cette vue ne peut pas afficher de chiffres fiables. Les autres modules restent accessibles.</p><button type="button" className="btn-secondary mt-3" onClick={() => void refresh()}>Réessayer la lecture</button></div>}
 
-      {section === "Dashboard" && (
+      {section === "Dashboard" && showDataSection && (
         <>
           <section className="mt-6">
             <p className="text-xs uppercase tracking-[0.18em] text-champagne">
               Vue rapide
             </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {dashboardMetrics.map((metric) => (
+            {dashboardMetrics.filter((metric) => ["Règlements à suivre", "À préparer", "Produits actifs", "Stocks bas", "Ruptures"].includes(metric.label)).map((metric) => (
               <article
                 key={metric.label}
                 className="admin-card min-h-32 border-forest/10 bg-ivory/95"
@@ -870,7 +892,15 @@ export function AdminPage({ section }: { section: string }) {
             ))}
             </div>
           </section>
-          <section className="mt-6 grid gap-3 md:grid-cols-3">
+          <details className="admin-card mt-4"><summary className="cursor-pointer font-semibold text-forest">Autres indicateurs</summary>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {dashboardMetrics.filter((metric) => ["En livraison", "Stock total"].includes(metric.label)).map((metric) => (
+                <p key={metric.label} className="rounded-lg border border-forest/10 p-3 text-sm"><span>{metric.label}</span><strong className="ml-2 text-forest">{metric.value}</strong></p>
+              ))}
+            </div>
+          </details>
+          <details className="admin-card mt-4"><summary className="cursor-pointer font-semibold text-forest">Sources des données</summary>
+          <section className="mt-3 grid gap-3 md:grid-cols-3">
             <SourceCard label="Produits" value={productSource} count={products.length} />
             <SourceCard label="Commandes" value={orderSource} count={orders.length} />
             <SourceCard
@@ -879,6 +909,9 @@ export function AdminPage({ section }: { section: string }) {
               count={deliveryZones.length}
             />
           </section>
+          </details>
+          <details className="mt-6" open={dashboardMetrics.some((metric) => ["Règlements à suivre", "À préparer"].includes(metric.label) && Number(metric.value) > 0)}>
+            <summary className="cursor-pointer rounded-lg border border-forest/10 bg-ivory px-4 py-3 font-semibold text-forest">Suivi des commandes</summary>
           <AdminOrders
             orders={orders}
             orderSource={orderSource}
@@ -900,12 +933,13 @@ export function AdminPage({ section }: { section: string }) {
               await refresh();
             }}
           />
+          </details>
         </>
       )}
 
       {section === "Analytics" && <AdminAnalyticsPanel />}
 
-      {section === "Produits" && (
+      {section === "Produits" && showDataSection && (
         <section className="mt-8 min-w-0">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -949,7 +983,7 @@ export function AdminPage({ section }: { section: string }) {
         </section>
       )}
 
-      {section === "Stocks" && (
+      {section === "Stocks" && showDataSection && (
         <>
           <SourceLine source={productSource} />
           <AdminStocks onSnapshot={applyStockSnapshot}>
@@ -958,7 +992,7 @@ export function AdminPage({ section }: { section: string }) {
         </>
       )}
 
-      {section === "Commandes" && (
+      {section === "Commandes" && showDataSection && (
         <>
           <SourceLine source={orderSource} />
           <AdminOrders
@@ -991,7 +1025,7 @@ export function AdminPage({ section }: { section: string }) {
         </>
       )}
 
-      {section === "Livraisons locales" && (
+      {section === "Livraisons locales" && showDataSection && (
         <>
           <SourceLine source={deliverySource} />
           <DeliveryRulesSummary />
@@ -1054,7 +1088,7 @@ export function AdminPage({ section }: { section: string }) {
         </div>
       )}
 
-      {section === "Clients" && <CustomersTable coupons={coupons} />}
+      {section === "Clients" && <CustomersTable coupons={coupons} couponAvailable={couponSource === "firestore" || couponSource === "empty"} />}
 
       {section === "Favoris produits" && (
         <AdminFavoritesPanel products={products} />
@@ -1062,7 +1096,7 @@ export function AdminPage({ section }: { section: string }) {
 
       {section === "Avis clients" && <AdminReviewsPanel />}
 
-      {section === "Comptabilité" && (
+      {section === "Comptabilité" && showDataSection && (
         <AccountingPanel
           products={products}
           productCosts={productCosts}
@@ -1092,15 +1126,6 @@ export function AdminPage({ section }: { section: string }) {
         />
       )}
 
-      {["Parametres", "Paramètres"].includes(section) && (
-        <section className="admin-card mt-8">
-          <h2 className="font-display text-3xl text-forest">Module non affiche</h2>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-ink/65">
-            Cette section n'est pas exposee dans la navigation admin tant qu'elle
-            ne presente pas de donnees operationnelles utiles.
-          </p>
-        </section>
-      )}
     </div>
   );
 }
@@ -3191,6 +3216,7 @@ function AdminAnalyticsPanel() {
       });
       setAnalytics(payload);
     } catch (error) {
+      setAnalytics(null);
       setAnalyticsError(error instanceof Error ? error.message : "Analytics indisponible.");
     } finally {
       setIsLoadingAnalytics(false);
@@ -5173,7 +5199,7 @@ function AdminOrders({
 }: {
   orders: AdminOrderListItem[];
   invoices?: Invoice[];
-  orderSource: "firestore" | "empty";
+  orderSource: string;
   onCreateInvoice?: (orderId: string) => Promise<void>;
   onRefresh?: () => Promise<void>;
   onRefreshOrder?: (orderId: string) => Promise<void>;
@@ -5918,7 +5944,7 @@ function DesktopOrderCard({
 }: {
   order: AdminOrderListItem;
   invoice?: Invoice;
-  orderSource: "firestore" | "empty";
+  orderSource: string;
   paymentLinks: AdminPaymentLink[];
   onCreateInvoice?: (orderId: string) => Promise<void>;
   onUpdate: (orderId: string, data: AdminOrderUpdateInput) => Promise<void>;
@@ -6327,7 +6353,7 @@ function PaymentMethodAdminFields({
   onUpdate,
 }: {
   order: AdminOrderListItem;
-  orderSource: "firestore" | "empty";
+  orderSource: string;
   onUpdate: (orderId: string, data: AdminOrderUpdateInput) => Promise<void>;
 }) {
   return (
@@ -6395,7 +6421,7 @@ function PaymentLinkActions({
     paymentLinkDelivery?: PaymentLinkDeliverySummary;
     paymentLinkDeliveryHistory?: PaymentLinkDeliverySummary[];
   };
-  orderSource: "firestore" | "empty";
+  orderSource: string;
   paymentLinks: AdminPaymentLink[];
   onUpdate: (
     orderId: string,
@@ -6852,37 +6878,44 @@ function SourceCard({
   return (
     <article className="admin-card">
       <p className="text-sm text-ink/55">{label}</p>
-      <strong className="mt-2 block text-forest">{count} entrée(s)</strong>
+      <strong className="mt-2 block text-forest">{value === "error" ? "—" : count} {value === "error" ? "données indisponibles" : "entrée(s)"}</strong>
       <span className="text-xs text-ink/50">Source : {sourceLabel(value)}</span>
     </article>
   );
 }
 
 function SourceLine(props: { source: string }) {
-  void props;
-  return null;
+  if (props.source === "loading") return <p role="status" className="text-xs text-ink/60">Lecture de la source en cours…</p>;
+  if (props.source === "error") return <p role="alert" className="text-sm text-red-800">Données indisponibles : la lecture serveur a échoué.</p>;
+  if (props.source === "local") return <p role="status" className="text-sm text-amber-900">Modèle local non enregistré en base : vérification nécessaire avant utilisation.</p>;
+  return <p className="text-xs text-ink/60">Source : {sourceLabel(props.source)}</p>;
 }
 
 function sourceLabel(source: string) {
   if (source === "firestore") return "base en ligne";
-  if (source === "local") return "secours local";
-  if (source === "empty") return "aucune donnée";
+  if (source === "local") return "modèle local non enregistré";
+  if (source === "empty") return "aucune donnée confirmée en base";
+  if (source === "error") return "lecture indisponible";
   return source;
 }
 
 function AdminFavoritesPanel({ products }: { products: Product[] }) {
   const [stats, setStats] = useState<FavoriteProductStat[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    getAdminFavoriteStats()
-      .then(setStats)
-      .finally(() => setIsLoading(false));
+  const loadFavorites = useCallback(async () => {
+    setIsLoading(true); setError("");
+    try { setStats(await getAdminFavoriteStats()); }
+    catch { setStats([]); setError("Favoris indisponibles. La liste n'est pas vide : sa lecture a échoué."); }
+    finally { setIsLoading(false); }
   }, []);
+  useEffect(() => { void loadFavorites(); }, [loadFavorites]);
 
   if (isLoading) {
     return <p className="mt-8 text-forest/70">Chargement des favoris...</p>;
   }
+  if (error) return <div role="alert" className="admin-card mt-8 border-red-200 bg-red-50 text-red-900">{error}<button type="button" className="btn-secondary ml-3" onClick={() => void loadFavorites()}>Réessayer</button></div>;
 
   return (
     <section className="mt-8">
@@ -6930,11 +6963,17 @@ function AdminReviewsPanel() {
   const [reviews, setReviews] = useState<ProductReview[]>([]);
   const [filter, setFilter] = useState<"all" | ReviewStatus>("all");
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
 
   async function loadReviews() {
-    setIsLoading(true);
-    setReviews(await getAdminProductReviews());
-    setIsLoading(false);
+    setIsLoading(true); setError("");
+    try { setReviews(await getAdminProductReviews()); }
+    catch { setReviews([]); setError("Avis indisponibles. La lecture serveur a échoué."); }
+    finally { setIsLoading(false); }
+  }
+  async function changeReview(id: string, status: ReviewStatus) {
+    try { await updateReviewStatus(id, status); await loadReviews(); }
+    catch { setError("Modification de l'avis impossible. Rechargez les données avant de réessayer."); }
   }
 
   useEffect(() => {
@@ -6948,6 +6987,7 @@ function AdminReviewsPanel() {
   if (isLoading) {
     return <p className="mt-8 text-forest/70">Chargement des avis...</p>;
   }
+  if (error) return <div role="alert" className="admin-card mt-8 border-red-200 bg-red-50 text-red-900">{error}<button type="button" className="btn-secondary ml-3" onClick={() => void loadReviews()}>Réessayer</button></div>;
 
   return (
     <section className="mt-8">
@@ -7003,10 +7043,7 @@ function AdminReviewsPanel() {
                 <button
                   type="button"
                   className="btn-secondary"
-                  onClick={async () => {
-                    await updateReviewStatus(review.id, "internal");
-                    await loadReviews();
-                  }}
+                  onClick={() => void changeReview(review.id, "internal")}
                 >
                   Marquer comme lu
                 </button>
@@ -7014,20 +7051,14 @@ function AdminReviewsPanel() {
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={async () => {
-                  await updateReviewStatus(review.id, "approved");
-                  await loadReviews();
-                }}
+                onClick={() => void changeReview(review.id, "approved")}
               >
                 Valider en interne
               </button>
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={async () => {
-                  await updateReviewStatus(review.id, "rejected");
-                  await loadReviews();
-                }}
+                onClick={() => void changeReview(review.id, "rejected")}
               >
                 Rejeter
               </button>

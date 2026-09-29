@@ -73,6 +73,18 @@ export async function getDeliveryZonesWithFallback() {
   }
 }
 
+// The admin must display only server-confirmed zones. Public checkout keeps its
+// separate postal fallback in getDeliveryZonesWithFallback.
+export async function getAdminDeliveryZones() {
+  if (!db) throw new Error("Base en ligne indisponible.");
+  const snapshot = await getDocs(collection(db, collections.deliveryZones));
+  if (snapshot.metadata?.fromCache) throw new Error("Les zones de livraison ne sont pas confirmées par le serveur.");
+  const zones = snapshot.docs
+    .map((entry) => normalizeDeliveryZone({ id: entry.id, ...entry.data() } as DeliveryZone))
+    .sort((left, right) => Number(left.sortOrder || 0) - Number(right.sortOrder || 0));
+  return { zones, source: zones.length ? ("firestore" as const) : ("empty" as const) };
+}
+
 export async function seedInitialDeliveryZones() {
   if (!db) throw new Error("Firebase is not configured.");
   const database = db;

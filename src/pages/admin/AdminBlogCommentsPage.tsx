@@ -25,6 +25,7 @@ export default function AdminBlogCommentsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [readError, setReadError] = useState(false);
 
   const loadComments = useCallback(async (nextPage = page) => {
     setIsLoading(true);
@@ -39,8 +40,10 @@ export default function AdminBlogCommentsPage() {
       setComments(result.comments);
       setTotal(result.total);
       setPage(result.page);
+      setReadError(false);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Chargement des commentaires impossible.");
+      setReadError(true);
     } finally {
       setIsLoading(false);
     }
@@ -125,16 +128,16 @@ export default function AdminBlogCommentsPage() {
       </section>
 
       {message && <p className="rounded-md border border-forest/15 bg-cream px-4 py-3 text-sm text-forest" role="status">{message}</p>}
-      {error && <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error}</p>}
+      {error && <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error} {readError && <button type="button" className="ml-2 font-semibold underline" onClick={() => void loadComments(page)}>Réessayer la lecture</button>}</p>}
 
       <section className="min-w-0 overflow-hidden rounded-lg border border-forest/10 bg-ivory">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-forest/10 bg-cream/70 p-4">
-          <p className="text-sm text-ink/60">{total} commentaire(s)</p>
-          <p className="text-xs text-ink/50">Page {page} / {pageCount}</p>
+          <p className="text-sm text-ink/60">{readError || isLoading ? "—" : total} commentaire(s)</p>
+          <p className="text-xs text-ink/50">Page {readError ? "—" : page} / {readError ? "—" : pageCount}</p>
         </div>
         {isLoading && <Empty title="Chargement..." />}
-        {!isLoading && !comments.length && <Empty title="Aucun commentaire" />}
-        {!!comments.length && (
+        {!isLoading && !readError && !comments.length && <Empty title="Aucun commentaire" />}
+        {!isLoading && !readError && !!comments.length && (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1080px] text-left text-sm">
               <thead className="bg-cream text-xs uppercase tracking-[0.12em] text-forest/70">
@@ -215,7 +218,7 @@ export default function AdminBlogCommentsPage() {
             </table>
           </div>
         )}
-        {pageCount > 1 && (
+        {!readError && pageCount > 1 && (
           <div className="flex items-center justify-between border-t border-forest/10 p-4">
             <button className="btn-secondary min-h-9 px-3 py-2" disabled={page <= 1} onClick={() => void loadComments(page - 1)}>
               Précédent

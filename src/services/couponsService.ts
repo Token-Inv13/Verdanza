@@ -31,22 +31,11 @@ type CouponWriteOptions = {
 };
 
 export async function getCouponsWithFallback() {
-  if (!db) return { coupons: [], source: "empty" as const };
-  try {
-    const snapshot = await getDocs(
-      query(collection(db, collections.coupons), orderBy("code", "asc")),
-    );
-    const coupons = snapshot.docs.map(
-      (entry) => ({ id: entry.id, ...entry.data() }) as Coupon,
-    );
-    return {
-      coupons,
-      source: coupons.length ? ("firestore" as const) : ("empty" as const),
-    };
-  } catch (error) {
-    console.warn("Unable to load Firestore coupons", error);
-    return { coupons: [], source: "empty" as const };
-  }
+  if (!db) throw new Error("Base en ligne indisponible.");
+  const snapshot = await getDocs(query(collection(db, collections.coupons), orderBy("code", "asc")));
+  if (snapshot.metadata?.fromCache) throw new Error("La liste des promotions n'est pas confirmée par le serveur.");
+  const coupons = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() }) as Coupon);
+  return { coupons, source: coupons.length ? ("firestore" as const) : ("empty" as const) };
 }
 
 export async function upsertCoupon(input: CouponInput) {

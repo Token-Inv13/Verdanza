@@ -69,8 +69,9 @@ export async function createProductReview(input: {
 }
 
 export async function getAdminProductReviews() {
-  if (!db) return [];
+  if (!db) throw new Error("Base en ligne indisponible.");
   const snapshot = await getDocs(collection(db, collections.productReviews));
+  if (snapshot.metadata?.fromCache) throw new Error("Les avis ne sont pas confirmés par le serveur.");
   return snapshot.docs.map(
     (entry) => ({ id: entry.id, ...entry.data() }) as ProductReview,
   );

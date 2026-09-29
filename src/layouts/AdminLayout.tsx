@@ -29,7 +29,7 @@ import { Seo } from "../components/Seo";
 import { BrandLogo } from "../components/BrandLogo";
 import { AdminNavGroup, type AdminNavItem } from "../components/admin/AdminNavGroup";
 
-const adminNav: Array<{ title: string; collapsible?: boolean; items: AdminNavItem[] }> = [
+const adminNav: Array<{ title: string; items: AdminNavItem[] }> = [
   { title: "Tableau de bord", items: [
     { label: "Tableau de bord", to: "/admin", icon: BarChart3 },
     { label: "Analytics", to: "/admin/analytics", icon: LineChart },
@@ -44,13 +44,13 @@ const adminNav: Array<{ title: string; collapsible?: boolean; items: AdminNavIte
     { label: "Clients", to: "/admin/clients", icon: Users },
     { label: "Livraisons", to: "/admin/livraisons", icon: Truck },
   ] },
-  { title: "Marketing", collapsible: true, items: [
+  { title: "Marketing", items: [
     { label: "Vue d'ensemble", to: "/admin/marketing", icon: BarChart3 },
     { label: "Bannières", to: "/admin/bannieres", icon: Megaphone },
     { label: "Promotions", to: "/admin/coupons", icon: BadgePercent },
     { label: "Concours", to: "/admin/concours", icon: Trophy },
   ] },
-  { title: "Communauté", collapsible: true, items: [
+  { title: "Communauté", items: [
     { label: "Avis clients", to: "/admin/avis", icon: MessageSquare },
     { label: "Commentaires", to: "/admin/commentaires-blog", icon: MessagesSquare },
     { label: "Favoris", to: "/admin/favoris", icon: Heart },
@@ -58,12 +58,14 @@ const adminNav: Array<{ title: string; collapsible?: boolean; items: AdminNavIte
   { title: "Contenu", items: [
     { label: "Archives", to: "/admin/archives", icon: Archive },
   ] },
-  { title: "Paramètres / Gestion", items: [
+  { title: "Gestion", items: [
     { label: "Comptabilité", to: "/admin/comptabilite", icon: Calculator },
     { label: "Achats fournisseurs", to: "/admin/comptabilite?tab=achats", icon: ShoppingCart, accountingTab: "achats" },
     { label: "Coûts manuels", to: "/admin/comptabilite?tab=couts", icon: Wallet, accountingTab: "couts" },
     { label: "Factures", to: "/admin/factures", icon: FileText, accountingTab: "factures" },
     { label: "Facturation", to: "/admin/facturation", icon: FileText, accountingTab: "facturation" },
+  ] },
+  { title: "Paramètres", items: [
     { label: "Paramètres", to: "/admin/parametres", icon: Settings },
   ] },
 ];
@@ -125,9 +127,9 @@ export function AdminLayout() {
           </p>
           <p className="mt-2 break-all text-xs text-ivory/65">{adminUser?.email}</p>
         </div>
-        <nav aria-label="Navigation administration" className="my-5 min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
+        <nav aria-label="Navigation administration" className="scrollbar-hidden my-5 min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
           {adminNav.map((group) => (
-            <AdminNavGroup key={group.title} {...group} onNavigate={() => setIsMenuOpen(false)} />
+            <AdminNavGroup key={group.title} {...group} collapsible onNavigate={() => setIsMenuOpen(false)} />
           ))}
         </nav>
         <button

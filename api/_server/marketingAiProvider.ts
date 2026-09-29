@@ -87,3 +87,10 @@ export function configuredMarketingAiProvider(env: NodeJS.ProcessEnv = process.e
     || !env.OPENAI_API_KEY?.trim() || !env.MARKETING_AI_MODEL?.trim()) return null;
   return createOpenAiMarketingProvider(env.OPENAI_API_KEY.trim(), env.MARKETING_AI_MODEL.trim());
 }
+
+export function marketingAiConfigurationState(env: NodeJS.ProcessEnv = process.env): "disabled" | "missing_configuration" | "ready" {
+  if (env.MARKETING_AI_ENABLED !== "true") return "disabled";
+  if ((env.MARKETING_AI_PROVIDER && env.MARKETING_AI_PROVIDER !== "openai")
+    || !env.OPENAI_API_KEY?.trim() || !env.MARKETING_AI_MODEL?.trim()) return "missing_configuration";
+  return "ready";
+}
