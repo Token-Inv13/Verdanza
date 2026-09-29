@@ -2,6 +2,7 @@ import { chromium } from "playwright";
 import { blockExternalServices, gotoDomReady } from "./auditPageReady";
 import { allSeoRoutes, canonicalUrl } from "./seoRoutes";
 import { startAuditStaticServer } from "./auditStaticServer";
+import { installPublicAuditCatalog } from "./publicAuditCatalog.js";
 
 const routes = allSeoRoutes();
 const requestedBaseUrl = process.argv[2];
@@ -28,8 +29,9 @@ const sitemapXml = (await fetchPage(`${baseUrl}/sitemap.xml`)).html;
 const sitemapUrls = new Set([...sitemapXml.matchAll(/<loc>(.*?)<\/loc>/g)].map((match) => match[1]));
 
 const browser = await chromium.launch();
-const context = await browser.newContext({ serviceWorkers: "block" });
+const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: "block" });
 await blockExternalServices(context);
+await installPublicAuditCatalog(context);
 const page = await context.newPage();
 const rows = [];
 let unknownResponse = { status: 0, html: "" };

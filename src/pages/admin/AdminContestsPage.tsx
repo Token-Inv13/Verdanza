@@ -1,7 +1,7 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { AdminConfirmDialog } from "../../components/admin/AdminConfirmDialog";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, CircleSlash2, Gift, Plus, RefreshCw, Search, Shuffle } from "lucide-react";
 import {
-  createAdminContest,
   cancelAdminContestPrize,
   drawAdminContest,
   getAdminContestDetail,
@@ -9,11 +9,10 @@ import {
   listAdminContests,
   resendAdminContestPrizeInvitation,
   transitionAdminContest,
-  updateAdminContest,
   validateAdminContestWinner,
   type ContestAdminDetail,
 } from "../../services/contestsService";
-import type { Contest, ContestInput, ContestStatus } from "../../types/contests";
+import type { Contest, ContestStatus } from "../../types/contests";
 
 const statusLabels: Record<ContestStatus, string> = {
   draft: "Brouillon",
@@ -26,42 +25,21 @@ const statusLabels: Record<ContestStatus, string> = {
   cancelled: "Annulé",
 };
 
-function defaultContestInput(): ContestInput {
-  const now = new Date();
-  const start = new Date(now.getTime() + 60 * 60_000);
-  const end = new Date(start.getTime() + 7 * 24 * 60 * 60_000);
-  const draw = new Date(end.getTime() + 60 * 60_000);
-  return {
-    title: "Verdanza Weekly",
-    slug: "verdanza-weekly",
-    description: "Participez gratuitement au tirage au sort Verdanza Weekly.",
-    prizeValue: 30,
-    prizeType: "store_credit",
-    startAt: localDateTime(start),
-    endAt: localDateTime(end),
-    drawAt: localDateTime(draw),
-    rulesUrl: "",
-    rulesText:
-      "Participation gratuite et sans obligation d'achat. Une participation par personne et par adresse e-mail. Le gagnant est tiré au sort après la clôture puis validé par Verdanza.",
-    eligibilityConditions:
-      "Être majeur, résider en France métropolitaine et disposer d'une adresse e-mail valide.",
-    prizeExpirationDays: 30,
-  };
-}
-
-export default function AdminContestsPage() {
+export default function AdminContestsPage({ onPrepare }: { onPrepare: (contest?: Contest) => void }) {
   const [contests, setContests] = useState<Contest[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [detail, setDetail] = useState<ContestAdminDetail | null>(null);
-  const [mode, setMode] = useState<"list" | "form" | "detail">("list");
-  const [form, setForm] = useState<ContestInput>(defaultContestInput);
-  const [editingId, setEditingId] = useState("");
+  const [mode, setMode] = useState<"list" | "detail">("list");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  const [confirmation, setConfirmation] = useState<{ title: string; warning: string; run: (reason: string) => Promise<void>; requiresReason?: boolean; requiresDraw?: boolean } | null>(null);
+  const [reason, setReason] = useState("");
+  const [drawAcknowledgement, setDrawAcknowledgement] = useState("");
 
   const loadList = useCallback(async () => {
     setIsLoading(true);
@@ -107,127 +85,42 @@ export default function AdminContestsPage() {
     await loadDetail(contestId, 1, "");
   }
 
-  function openCreate() {
-    setEditingId("");
-    setForm(defaultContestInput());
-    setMode("form");
-    setMessage("");
-    setError("");
-  }
-
-  function openEdit(contest: Contest) {
-    setEditingId(contest.id);
-    setForm({
-      title: contest.title,
-      slug: contest.slug,
-      description: contest.description,
-      prizeValue: contest.prizeValue,
-      prizeType: contest.prizeType,
-      startAt: localDateTime(new Date(contest.startAt)),
-      endAt: localDateTime(new Date(contest.endAt)),
-      drawAt: localDateTime(new Date(contest.drawAt)),
-      rulesUrl: contest.rulesUrl || "",
-      rulesText: contest.rulesText || "",
-      eligibilityConditions: contest.eligibilityConditions,
-      prizeExpirationDays: contest.prizeExpirationDays,
-    });
-    setMode("form");
-    setError("");
-    setMessage("");
-  }
-
-  async function handleSave(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setIsSaving(true);
-    setError("");
-    try {
-      const payload = {
-        ...form,
-        startAt: new Date(form.startAt).toISOString(),
-        endAt: new Date(form.endAt).toISOString(),
-        drawAt: new Date(form.drawAt).toISOString(),
-      };
-      const result = editingId
-        ? await updateAdminContest(editingId, payload)
-        : await createAdminContest(payload);
-      setMessage(editingId ? "Concours mis à jour." : "Concours créé en brouillon.");
-      await loadList();
-      await openDetail(result.contest.id);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Enregistrement impossible.");
-    } finally {
-      setIsSaving(false);
-    }
+  function openCreate() { onPrepare(); }
+  function openEdit(contest: Contest) { onPrepare(contest); }
+  function confirmAction(value: NonNullable<typeof confirmation>) {
+    setReason(""); setDrawAcknowledgement(""); setConfirmation(value);
   }
 
   async function changeStatus(status: ContestStatus) {
     if (!detail) return;
-    if (!window.confirm(`Confirmer le passage vers « ${statusLabels[status]} » ?`)) return;
-    await runAction(async () => {
-      await transitionAdminContest(detail.contest.id, status);
-      setMessage(`Statut mis à jour : ${statusLabels[status]}.`);
-    });
+    if (["scheduled", "active"].includes(status)) { onPrepare(detail.contest); return; }
+    const id = detail.contest.id;
+    confirmAction({ title: `Passer le concours à ${statusLabels[status]}`, warning: "Le moteur concours vérifie la transition. Aucun tirage ni gain n'est déclenché par ce changement.", run: async () => runAction(async () => { await transitionAdminContest(id, status); setMessage(`Statut mis à jour : ${statusLabels[status]}.`); }) });
   }
-
   async function runDraw() {
     if (!detail) return;
-    const confirmation = window.prompt(
-      `Action irréversible : saisissez TIRAGE pour tirer au sort parmi ${detail.entryTotal} participation(s).`,
-    );
-    if (confirmation !== "TIRAGE") return;
-    await runAction(async () => {
-      const result = await drawAdminContest(detail.contest.id);
-      setMessage(`Tirage enregistré. Gagnant : ${result.winnerPublicId}.`);
-    });
+    const id = detail.contest.id;
+    confirmAction({ title: "Lancer le tirage", warning: `Le tirage sera enregistré parmi ${detail.entryTotal} participation(s). Saisissez TIRAGE pour confirmer cette action.`, requiresDraw: true, run: async () => runAction(async () => { const result = await drawAdminContest(id); setMessage(`Tirage enregistré. Gagnant : ${result.winnerPublicId}.`); }) });
   }
-
   async function validateWinner() {
-    if (!detail || !window.confirm("Valider définitivement ce gagnant et créer son bon unique ?")) return;
-    await runAction(async () => {
-      const result = await validateAdminContestWinner(detail.contest.id);
-      const emailState = result.emailDelivery
-        ? ` E-mail : ${result.emailDelivery.status}.`
-        : "";
-      const claimLink = result.claimUrl ? ` Lien généré : ${result.claimUrl}` : "";
-      setMessage(`Gagnant validé, code ${result.prize.code}.${emailState}${claimLink}`);
-    });
+    if (!detail) return;
+    const id = detail.contest.id;
+    confirmAction({ title: "Valider le gagnant et attribuer le gain", warning: "Cette action crée le bon unique protégé et peut envoyer l'invitation au gagnant. Elle reste séparée de l'activation Marketing.", run: async () => runAction(async () => { const result = await validateAdminContestWinner(id); const emailState = result.emailDelivery ? ` E-mail : ${result.emailDelivery.status}.` : ""; const claimLink = result.claimUrl ? ` Lien généré : ${result.claimUrl}` : ""; setMessage(`Gagnant validé, code ${result.prize.code}.${emailState}${claimLink}`); }) });
   }
-
   async function invalidateWinner() {
     if (!detail) return;
-    const reason = window.prompt("Motif obligatoire de l’invalidation :")?.trim() || "";
-    if (reason.length < 3) {
-      setError("Un motif d’invalidation explicite est obligatoire.");
-      return;
-    }
-    await runAction(async () => {
-      await invalidateAdminContestWinner(detail.contest.id, reason);
-      setMessage("Gagnant invalidé. Un nouveau tirage peut être lancé sans l’ancien gagnant.");
-    });
+    const id = detail.contest.id;
+    confirmAction({ title: "Invalider le gagnant", warning: "Un nouveau tirage pourra être lancé sans l'ancien gagnant. Le motif est obligatoire.", requiresReason: true, run: async (value) => runAction(async () => { await invalidateAdminContestWinner(id, value); setMessage("Gagnant invalidé. Un nouveau tirage peut être lancé sans l'ancien gagnant."); }) });
   }
-
   async function resendPrizeInvitation() {
-    const prize = detail?.prizes[0];
-    if (!detail || !prize) return;
-    if (!window.confirm("Renvoyer l’invitation ? L’ancien lien personnel sera immédiatement invalidé.")) return;
-    await runAction(async () => {
-      const result = await resendAdminContestPrizeInvitation(detail.contest.id, prize.id);
-      const reason = result.emailDelivery.reason ? ` (${result.emailDelivery.reason})` : "";
-      setMessage(`Invitation renouvelée. E-mail : ${result.emailDelivery.status}${reason}. Lien : ${result.claimUrl}`);
-    });
+    const prize = detail?.prizes[0]; if (!detail || !prize) return;
+    const id = detail.contest.id;
+    confirmAction({ title: "Renvoyer l'invitation", warning: "L'ancien lien personnel sera immédiatement invalidé. Cette action peut envoyer un email au gagnant.", run: async () => runAction(async () => { const result = await resendAdminContestPrizeInvitation(id, prize.id); const cause = result.emailDelivery.reason ? ` (${result.emailDelivery.reason})` : ""; setMessage(`Invitation renouvelée. E-mail : ${result.emailDelivery.status}${cause}. Lien : ${result.claimUrl}`); }) });
   }
-
   async function cancelPrize() {
-    if (!detail?.prizes[0]) return;
-    const reason = window.prompt("Motif obligatoire de l’annulation du gain :")?.trim() || "";
-    if (reason.length < 3) {
-      setError("Un motif d’annulation explicite est obligatoire.");
-      return;
-    }
-    await runAction(async () => {
-      await cancelAdminContestPrize(detail.contest.id, detail.prizes[0].id, reason);
-      setMessage("Gain annulé et coupon désactivé.");
-    });
+    const prize = detail?.prizes[0]; if (!detail || !prize) return;
+    const id = detail.contest.id;
+    confirmAction({ title: "Annuler le gain", warning: "Le coupon protégé sera désactivé. Le motif est obligatoire.", requiresReason: true, run: async (value) => runAction(async () => { await cancelAdminContestPrize(id, prize.id, value); setMessage("Gain annulé et coupon désactivé."); }) });
   }
 
   async function runAction(action: () => Promise<void>) {
@@ -240,6 +133,7 @@ export default function AdminContestsPage() {
       await Promise.all([loadDetail(detail.contest.id, page, search), loadList()]);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Action impossible.");
+      throw reason;
     } finally {
       setIsSaving(false);
     }
@@ -278,9 +172,6 @@ export default function AdminContestsPage() {
       {mode === "list" && (
         <ContestList contests={contests} isLoading={isLoading} onOpen={openDetail} onEdit={openEdit} onRefresh={loadList} />
       )}
-      {mode === "form" && (
-        <ContestForm form={form} editing={Boolean(editingId)} isSaving={isSaving} onChange={setForm} onSubmit={handleSave} />
-      )}
       {mode === "detail" && detail && (
         <div className="grid min-w-0 gap-6">
           <ContestConfiguration
@@ -307,6 +198,11 @@ export default function AdminContestsPage() {
           <AuditPanel detail={detail} />
         </div>
       )}
+      <AdminConfirmDialog open={Boolean(confirmation)} title={confirmation?.title || "Confirmer l'action concours"} warning={confirmation?.warning} summary={detail ? `${detail.contest.title} · ${statusLabels[detail.contest.status]} · ${formatDate(detail.contest.startAt)} → ${formatDate(detail.contest.endAt)} · lot ${formatEuro(detail.contest.prizeValue)}` : undefined}
+        pending={isSaving} confirmLabel="Confirmer cette action" confirmDisabled={Boolean((confirmation?.requiresReason && reason.trim().length < 3) || (confirmation?.requiresDraw && drawAcknowledgement !== "TIRAGE"))} onCancel={() => setConfirmation(null)} onConfirm={async () => { if (!confirmation) return; await confirmation.run(reason.trim()); setConfirmation(null); }}>
+        {confirmation?.requiresReason && <label className="text-sm">Motif obligatoire<textarea className="input-field mt-2" value={reason} onChange={(event) => setReason(event.target.value)} /></label>}
+        {confirmation?.requiresDraw && <label className="text-sm">Saisir TIRAGE<input className="input-field mt-2" value={drawAcknowledgement} onChange={(event) => setDrawAcknowledgement(event.target.value)} /></label>}
+      </AdminConfirmDialog>
     </section>
   );
 }
@@ -351,40 +247,6 @@ function ContestList({ contests, isLoading, onOpen, onEdit, onRefresh }: {
         </div>
       )}
     </section>
-  );
-}
-
-function ContestForm({ form, editing, isSaving, onChange, onSubmit }: {
-  form: ContestInput;
-  editing: boolean;
-  isSaving: boolean;
-  onChange: (value: ContestInput) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  const field = <K extends keyof ContestInput>(key: K, value: ContestInput[K]) => onChange({ ...form, [key]: value });
-  return (
-    <form className="admin-card grid gap-6" onSubmit={onSubmit}>
-      <div><h2 className="font-display text-3xl text-forest">{editing ? "Modifier le concours" : "Nouveau concours"}</h2><p className="mt-2 text-sm text-ink/60">La création produit toujours un brouillon. L’ouverture utilise une action de statut séparée.</p></div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Titre"><input className="input-field" value={form.title} onChange={(e) => field("title", e.target.value)} required /></Field>
-        <Field label="Slug"><input className="input-field" value={form.slug} onChange={(e) => field("slug", e.target.value)} required /></Field>
-      </div>
-      <Field label="Description"><textarea className="input-field min-h-28 resize-y" value={form.description} onChange={(e) => field("description", e.target.value)} required /></Field>
-      <div className="grid gap-4 md:grid-cols-3">
-        <Field label="Début"><input className="input-field" type="datetime-local" value={form.startAt} onChange={(e) => field("startAt", e.target.value)} required /></Field>
-        <Field label="Fin"><input className="input-field" type="datetime-local" value={form.endAt} onChange={(e) => field("endAt", e.target.value)} required /></Field>
-        <Field label="Tirage prévu"><input className="input-field" type="datetime-local" value={form.drawAt} onChange={(e) => field("drawAt", e.target.value)} required /></Field>
-      </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        <Field label="Type de lot"><select className="input-field" value={form.prizeType} onChange={() => field("prizeType", "store_credit")}><option value="store_credit">Bon / crédit Verdanza</option></select></Field>
-        <Field label="Valeur du lot (EUR)"><input className="input-field" type="number" min="0.01" step="0.01" value={form.prizeValue} onChange={(e) => field("prizeValue", Number(e.target.value))} required /></Field>
-        <Field label="Expiration du gain (jours)"><input className="input-field" type="number" min="1" max="365" value={form.prizeExpirationDays} onChange={(e) => field("prizeExpirationDays", Number(e.target.value))} required /></Field>
-      </div>
-      <Field label="Conditions d’éligibilité"><textarea className="input-field min-h-24 resize-y" value={form.eligibilityConditions} onChange={(e) => field("eligibilityConditions", e.target.value)} required /></Field>
-      <Field label="Lien vers le règlement (optionnel si texte ci-dessous)"><input className="input-field" type="url" value={form.rulesUrl || ""} onChange={(e) => field("rulesUrl", e.target.value)} /></Field>
-      <Field label="Règlement complet"><textarea className="input-field min-h-40 resize-y" value={form.rulesText || ""} onChange={(e) => field("rulesText", e.target.value)} /></Field>
-      <button className="btn-primary w-full sm:w-fit" disabled={isSaving}>{isSaving ? "Enregistrement..." : editing ? "Enregistrer les modifications" : "Créer le brouillon"}</button>
-    </form>
   );
 }
 
@@ -445,11 +307,9 @@ function AuditPanel({ detail }: { detail: ContestAdminDetail }) {
   return <section className="admin-card"><h2 className="font-display text-3xl text-forest">Journal d’audit</h2><p className="mt-1 text-sm text-ink/60">Événements sensibles en lecture seule.</p><div className="mt-5 grid gap-2">{detail.audits.map((audit) => <div key={audit.id} className="grid gap-1 rounded-md border border-forest/10 px-4 py-3 text-xs sm:grid-cols-[180px_1fr_220px]"><span>{formatDate(audit.createdAt)}</span><strong className="text-forest">{audit.action}</strong><span className="break-all text-ink/55">{audit.actorType} · {audit.actorId}</span>{audit.reason && <span className="sm:col-span-3 text-red-700">Motif : {audit.reason}</span>}</div>)}{!detail.audits.length && <p className="text-sm text-ink/55">Aucun événement.</p>}</div></section>;
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="grid gap-2 text-sm font-semibold text-forest">{label}{children}</label>; }
 function Info({ label, value }: { label: string; value: string }) { return <div><dt className="text-xs uppercase tracking-[0.12em] text-forest/55">{label}</dt><dd className="mt-1 break-words font-semibold text-forest">{value}</dd></div>; }
 function Empty({ title, description }: { title: string; description?: string }) { return <div className="p-10 text-center"><h3 className="font-display text-3xl text-forest">{title}</h3>{description && <p className="mt-2 text-sm text-ink/60">{description}</p>}</div>; }
 function StatusBadge({ status }: { status: ContestStatus }) { const tone = status === "active" || status === "completed" ? "border-forest/20 bg-forest/10 text-forest" : status === "cancelled" ? "border-red-200 bg-red-50 text-red-700" : "border-champagne/30 bg-cream text-forest"; return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${tone}`}>{statusLabels[status]}</span>; }
 function formatEuro(value: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value); }
-function formatDate(value?: string) { return value ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "Non communiqué"; }
-function localDateTime(date: Date) { const offset = date.getTimezoneOffset() * 60_000; return new Date(date.getTime() - offset).toISOString().slice(0, 16); }
+function formatDate(value?: string) { return value ? new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "Non communiqué"; }
 function shortId(value: string) { return value.length > 14 ? `${value.slice(0, 7)}…${value.slice(-5)}` : value; }

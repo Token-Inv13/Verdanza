@@ -68,7 +68,7 @@ export function buildCatalogProduct(item: ProductSelection, input: SelectionCata
     thcRate: "À renseigner", origin: item.origin,
     cultureType: catalogCulture(item.culture), aromas,
     tags: [item.molecule, item.intensity].filter(Boolean),
-    stock: input.stock, lowStockThreshold: 5, isActive: true, isFeatured: false,
+    stock: input.stock, lowStockThreshold: 5, isActive: false, isFeatured: false,
     seoTitle: `${name} | Verdanza`,
     seoDescription: shortDescription,
   };

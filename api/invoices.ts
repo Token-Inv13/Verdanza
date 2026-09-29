@@ -1,4 +1,6 @@
 import { orderFromSnapshot } from "./_server/orderProtection.js";
+import { handleAdminStock, isAdminStockRequest, stockQuantity } from "./_server/adminStock.js";
+import { handleAdminCustomer, isAdminCustomerRequest } from "./_server/adminCustomers.js";
 import {
   CAGNOTTE_PRODUCTION_FIXTURE_PRODUCT_ID,
   hasPersistedCagnotteProductionFixtureMarker,
@@ -99,6 +101,11 @@ export default async function handler(
   request: VercelRequestLike,
   response: VercelResponseLike,
 ) {
+  if (isAdminCustomerRequest(request)) return handleAdminCustomer(request, response);
+  if (isAdminStockRequest(request)) {
+    await handleAdminStock(request, response);
+    return;
+  }
   const method = request.method || "GET";
   if (!["GET", "POST"].includes(method)) {
     sendJson(response, { error: "Methode non autorisee." }, 405);
@@ -547,7 +554,7 @@ async function assertSupplierPurchaseProductsAllowed(
   }
 }
 
-async function upsertProductAdmin(db: FirebaseFirestore.Firestore, rawProduct: unknown) {
+export async function upsertProductAdmin(db: FirebaseFirestore.Firestore, rawProduct: unknown) {
   if (!rawProduct || typeof rawProduct !== "object") throw new Error("Produit invalide.");
   const input = rawProduct as Partial<Product>;
   const id = String(input.id || input.slug || "").trim();
@@ -583,6 +590,15 @@ async function upsertProductAdmin(db: FirebaseFirestore.Firestore, rawProduct: u
       ...payload,
       updatedAt: FieldValue.serverTimestamp(),
     };
+    // Existing quantities belong to checkout/cancellation and the stock API.
+    // Saving an old product form must never undo a concurrent sale.
+    if (snapshot.exists) {
+      delete update.stock;
+      delete update.lowStockThreshold;
+    } else {
+      update.stock = stockQuantity(input.stock, "Stock initial");
+      update.lowStockThreshold = stockQuantity(input.lowStockThreshold ?? 5, "Seuil initial");
+    }
     if (!snapshot.exists || !existingReference) {
       update.internalReference = await reserveProductInternalReference({
         db,

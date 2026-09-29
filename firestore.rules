@@ -26,7 +26,7 @@ service cloud.firestore {
 
     function adminProductOperationalFieldsOnly() {
       return request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(["isActive", "isFeatured", "stock", "lowStockThreshold", "updatedAt"]);
+        .hasOnly(["isActive", "isFeatured", "updatedAt"]);
     }
 
     match /products/{productId} {
@@ -46,6 +46,12 @@ service cloud.firestore {
     match /productSelectionSheets/{sheetId} {
       allow read, write: if false;
     }
+
+    // Workflow, drafts, operation receipts, source reservations and pricing remain server-only.
+    match /selectionWorkflows/{id} { allow read, write: if false; }
+    match /selectionOperations/{id} { allow read, write: if false; }
+    match /selectionSources/{id} { allow read, write: if false; }
+    match /selectionPricingPolicies/{id} { allow read, write: if false; }
 
     match /productReferences/{referenceId} {
       allow read: if isAdmin();
@@ -104,12 +110,20 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /customerAdminMetadata/{customerId} {
+      allow read, write: if false;
+    }
+    match /customerAdminAudit/{operationId} {
+      allow read, write: if false;
+    }
     match /stockMovements/{movementId} {
-      allow read, create, update, delete: if isAdmin();
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /loyaltyMovements/{movementId} {
-      allow read, create, update, delete: if isAdmin();
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /deliveryZones/{zoneId} {
@@ -120,12 +134,22 @@ service cloud.firestore {
     match /coupons/{couponId} {
       allow read: if isAdmin();
       allow create: if isAdmin()
-        && request.resource.data.get("source", "") != "contest";
+        && request.resource.data.get("source", "") != "contest"
+        && !request.resource.data.keys().hasAny(["contestId", "contestPrizeId", "redeemableByEmailHash"])
+        && request.resource.data.isActive == false
+        && request.resource.data.usedCount == 0;
       allow update: if isAdmin()
         && resource.data.get("source", "") != "contest"
-        && request.resource.data.get("source", "") != "contest";
+        && !resource.data.keys().hasAny(["contestId", "contestPrizeId", "redeemableByEmailHash"])
+        && request.resource.data.get("source", "") != "contest"
+        && request.resource.data.get("usedCount", 0) == resource.data.get("usedCount", 0)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["source", "contestId", "contestPrizeId", "redeemableByEmailHash"])
+        && request.resource.data.isActive == false
+        && (resource.data.get("isActive", false) == false
+          || request.resource.data.diff(resource.data).affectedKeys().hasOnly(["isActive", "isArchived", "archivedAt", "updatedAt"]));
       allow delete: if isAdmin()
-        && resource.data.get("source", "") != "contest";
+        && resource.data.get("source", "") != "contest"
+        && !resource.data.keys().hasAny(["contestId", "contestPrizeId", "redeemableByEmailHash"]);
     }
 
     // Les concours et leurs donnees personnelles sont servis exclusivement
@@ -158,8 +182,26 @@ service cloud.firestore {
       allow read: if isAdmin()
         || (resource.data.isActive == true
           && resource.data.isArchived == false);
-      allow create, update, delete: if isAdmin();
+      allow create: if isAdmin() && request.resource.data.isActive == false;
+      allow update: if isAdmin()
+        && ((request.resource.data.isActive == false
+          && (resource.data.get("isActive", false) == false
+            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(["isActive", "isArchived", "archivedAt", "updatedAt"])))
+          || (request.resource.data.isActive == resource.data.isActive
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["linkedCouponId", "deletedLinkedCouponId", "updatedAt"])
+            && request.resource.data.get("deletedLinkedCouponId", "") is string
+            && request.resource.data.get("deletedLinkedCouponId", "").size() > 0
+            && request.resource.data.linkedCouponId == request.resource.data.deletedLinkedCouponId
+            && !existsAfter(/databases/$(database)/documents/coupons/$(request.resource.data.linkedCouponId))));
+      allow delete: if isAdmin();
     }
+
+    // Private proposals, approvals, operation receipts and audits: backend admin only.
+    match /marketingDrafts/{id} { allow read, write: if false; }
+    match /marketingOperations/{id} { allow read, write: if false; }
+    match /marketingAuditLogs/{id} { allow read, write: if false; }
+    match /marketingCouponCodes/{id} { allow read, write: if false; }
+    match /marketingAiGenerations/{id} { allow read, write: if false; }
 
     match /invoices/{invoiceId} {
       allow read, create, update, delete: if isAdmin();

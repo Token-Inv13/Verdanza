@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, ty
 import { ArrowDownToLine, ArrowUpRight, Check, ChevronDown, FileText, Pencil, Plus, Search, X } from "lucide-react";
 import { Seo } from "../../components/Seo";
 import { getFirestoreProducts } from "../../services/productsService";
-import { catalogPublicationMissing } from "../../lib/selectionCatalog";
+import { AdminDialog } from "../../components/admin/AdminDialog";
+import { AdminConfirmDialog } from "../../components/admin/AdminConfirmDialog";
+import { SelectionPricing } from "../../components/admin/selection/SelectionPricing";
+import { SelectionWorkflow } from "../../components/admin/selection/SelectionWorkflow";
+import { emptyCommercial } from "../../types/selectionPipeline";
 import {
   costPerGram, emptySelection, normalizeSelection, publicationMissing,
   selectionAromaFamilies, selectionCategories, selectionIntensities, selectionPriorities,
@@ -10,7 +14,7 @@ import {
 } from "../../types/selection";
 import {
   downloadSelectionImage, downloadSelectionPdf, extractSelection, importSelections, listSelections,
-  publishSelection, publishSelectionToCatalog, saveSelection, unpublishSelection, uploadSelectionImage,
+  getSelectionPipeline, runSelectionPipeline, saveSelection,
 } from "../../services/selectionService";
 
 const money = (value: string | number) => {
@@ -25,7 +29,7 @@ const dedupe = (item: ProductSelection) => item.url
 const selectionTabs = ["Tous", ...selectionStatuses] as const;
 type SelectionTab = typeof selectionTabs[number];
 type SelectionSort = "name" | "recent" | "priority";
-type CatalogDraft = { id: string; price: string; stock: string; description: string };
+type SelectionConfirmation = { title: string; summary: React.ReactNode; warning?: string; run: () => Promise<void> };
 const stageDescriptions: Record<SelectionTab, string> = {
   Tous: "Toutes vos références, du premier repérage à la boutique.",
   "À explorer": "Les pistes à examiner avant de passer commande.",
@@ -52,7 +56,8 @@ export function AdminSelectionPage() {
   const [link, setLink] = useState("");
   const [detailId, setDetailId] = useState("");
   const [draft, setDraft] = useState<ProductSelection | null>(null);
-  const [catalogDraft, setCatalogDraft] = useState<CatalogDraft | null>(null);
+  const [confirmation, setConfirmation] = useState<SelectionConfirmation | null>(null);
+  const [localImage, setLocalImage] = useState<{ data: string; preview: string } | null>(null);
   const [pendingImport, setPendingImport] = useState<ProductSelection[]>([]);
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [catalogProducts, setCatalogProducts] = useState<Array<{ id: string; name: string; slug: string; category: string; price: number; stock: number; isActive: boolean }>>([]);
@@ -110,14 +115,14 @@ export function AdminSelectionPage() {
   }, [items, pendingImport]);
 
   useEffect(() => {
-    if (!detail && !draft) return;
+    if (!detail || draft || confirmation) return;
     closeButton.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { setCatalogDraft(null); setDetailId(""); setDraft(null); }
+      if (event.key === "Escape") { setDetailId(""); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [detail, draft, catalogDraft]);
+  }, [detail, draft, confirmation]);
 
   const action = async (run: () => Promise<void>) => {
     setBusy(true); setError(""); setMessage("");
@@ -130,7 +135,7 @@ export function AdminSelectionPage() {
     event.preventDefault();
     void action(async () => {
       const result = await extractSelection(link);
-      setDraft(result.selection);
+      setLocalImage(null); setDraft(result.selection);
       setLink("");
       setMessage("Informations récupérées. Vérifiez les formats, le type et les prix avant d'enregistrer.");
     });
@@ -151,29 +156,26 @@ export function AdminSelectionPage() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Fichier JSON invalide."); }
   };
 
+  const editSelection = (item: ProductSelection) => void action(async () => {
+    let value = { ...item };
+    if (!item.commercial && item.catalogProductId) {
+      const context = await getSelectionPipeline(item.id);
+      if (context.product) value = { ...item, commercial: { ...emptyCommercial(), description: context.product.shortDescription, pricePerGram: context.product.price, initialStock: context.product.stock, seoTitle: context.product.seoTitle, seoDescription: context.product.seoDescription, fixedPriceMode: context.product.fixedPriceMode || "disabled", fixedPriceOptions: context.product.fixedPriceOptions || [], positioning: context.product.productTier ? "premium" : "standard" } };
+    }
+    setLocalImage(null); setDraft(value);
+  });
   const saveDraft = (event: FormEvent) => {
-    event.preventDefault();
-    if (!draft) return;
-    const previous = items.find((item) => item.id === draft.id);
-    if (previous?.status === "En boutique" && draft.status !== "En boutique" &&
-      !window.confirm("Quitter En boutique retirera la fiche publique et désactivera le produit marchand créé depuis cette sélection. Continuer ?")) return;
-    void action(async () => {
-      const result = await saveSelection(draft);
-      setDraft(null);
-      setDetailId(result.selection.id);
-      setMessage("Sélection enregistrée.");
-      await Promise.all([refresh(), refreshCatalog()]);
+    event.preventDefault(); if (!draft) return;
+    const item = draft; const image = localImage?.data; const operationId = crypto.randomUUID();
+    setConfirmation({ title: item.id ? "Confirmer les modifications" : "Créer la sélection privée",
+      summary: <div className="space-y-2"><p><strong>{item.name}</strong> · {item.category} · {item.supplier || "Fournisseur à compléter"}</p><p className="break-all">Source : {item.url || "Saisie manuelle"}</p><p>{item.molecule} {item.rate} · {item.origin} · {item.culture}</p><p>Formats / prix fournisseur : {item.prices.map((r) => `${r.format} : ${r.price} €`).join(" · ") || "À compléter"}</p><p>Nom public : {selectionPublicName(item)} · Intensité : {item.intensity || "À compléter"} · Arômes : {item.aromas || "À compléter"}</p><p>Image : {image ? "Fichier local téléversé après confirmation" : item.imagePath ? "Image enregistrée conservée" : "À compléter"}</p><p>Étape métier : {item.status} · Données et notes privées</p></div>,
+      warning: "Les modifications invalident les validations du parcours. Quitter En boutique retire la fiche publique et désactive le produit créé depuis cette sélection.",
+      run: async () => { const result = await saveSelection(item, operationId, image); setDraft(null); setLocalImage(null); setDetailId(result.selection.id); setMessage("Sélection enregistrée. Les validations doivent correspondre à cette nouvelle révision."); await Promise.all([refresh(), refreshCatalog()]); },
     });
   };
-
   const changeStatus = (item: ProductSelection, next: ProductSelection["status"]) => {
-    if (item.status === "En boutique" && next !== "En boutique" &&
-      !window.confirm("Quitter En boutique retirera la fiche publique et désactivera le produit marchand créé depuis cette sélection. Continuer ?")) return;
-    void action(async () => {
-      await saveSelection({ ...item, status: next });
-      setMessage("Étape mise à jour.");
-      await Promise.all([refresh(), refreshCatalog()]);
-    });
+    const operationId = crypto.randomUUID();
+    setConfirmation({ title: "Confirmer l’étape de sélection", summary: <p>{item.name} : {item.status} → {next}</p>, warning: item.status === "En boutique" && next !== "En boutique" ? "La fiche publique sera retirée et le produit créé depuis cette sélection sera désactivé." : "Ce changement n’active aucun produit et invalide les validations courantes.", run: async () => { await saveSelection({ ...item, status: next }, operationId); await Promise.all([refresh(), refreshCatalog()]); setMessage("Étape de sélection mise à jour."); } });
   };
 
   const downloadPdf = (item: ProductSelection) => void action(async () => {
@@ -188,38 +190,13 @@ export function AdminSelectionPage() {
   });
 
   const publish = (item: ProductSelection) => {
-    const missing = publicationMissing(item);
-    if (missing.length) { setError(`À compléter : ${missing.join(", ")}.`); return; }
-    if (!window.confirm(`Publier la fiche de ${selectionPublicName(item)} sur verdanza.fr/fiches-produits ?`)) return;
-    void action(async () => {
-      await publishSelection(item.id);
-      setMessage("Fiche publiée dans la bibliothèque publique.");
-      await refresh();
-    });
+    const missing = publicationMissing(item); if (missing.length) { setError(`À compléter : ${missing.join(", ")}.`); return; }
+    const operationId = crypto.randomUUID();
+    setConfirmation({ title: "Publier la fiche publique / PDF", summary: <div><p>{selectionPublicName(item)} · {item.category} · {item.intensity} · {item.aromas}</p><p>Aspect : {item.appearance} · Image Verdanza · Révision {item.revision || 0}</p><p>Destination : bibliothèque de fiches publiques</p></div>, warning: "Cette action publie uniquement la fiche et le PDF. Elle n’active pas le produit boutique.", run: async () => { await runSelectionPipeline(item, "publishSheet", operationId); await refresh(); setMessage("Fiche publiée dans la bibliothèque publique."); } });
   };
-
   const unpublish = (item: ProductSelection) => {
-    if (!window.confirm(`Retirer la fiche de ${selectionPublicName(item)} de la page publique ?`)) return;
-    void action(async () => {
-      await unpublishSelection(item.id);
-      setMessage("Fiche retirée de la page publique.");
-      await refresh();
-    });
-  };
-
-  const submitCatalog = (event: FormEvent) => {
-    event.preventDefault();
-    if (!catalogDraft) return;
-    const price = Number(catalogDraft.price.replace(",", "."));
-    const stock = Number(catalogDraft.stock);
-    void action(async () => {
-      const result = await publishSelectionToCatalog(catalogDraft.id, {
-        price, stock, description: catalogDraft.description.trim(),
-      });
-      setCatalogDraft(null);
-      setMessage(`Produit mis en boutique dans ${result.category === "flowers" ? "Fleurs CBD" : "Résines CBD"}.`);
-      await Promise.all([refresh(), refreshCatalog()]);
-    });
+    const operationId = crypto.randomUUID();
+    setConfirmation({ title: "Retirer la fiche publique", summary: <p>{selectionPublicName(item)} · Fiche et PDF retirés de la bibliothèque</p>, warning: "Le produit boutique conserve son état actuel.", run: async () => { await runSelectionPipeline(item, "unpublishSheet", operationId); await refresh(); setMessage("Fiche retirée de la bibliothèque."); } });
   };
 
   const toggleCompare = (id: string) => setCompareIds((current) => current.includes(id)
@@ -249,7 +226,7 @@ export function AdminSelectionPage() {
             <h1 className="mt-2 font-display text-4xl leading-tight sm:text-5xl">Atelier de sélection</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-ivory/75">Suivez chaque référence, comparez vos choix et préparez les fiches destinées à la boutique.</p>
           </div>
-          <button type="button" className="relative inline-flex min-h-12 items-center gap-2 rounded-lg bg-ivory px-5 py-3 text-sm font-semibold text-forest shadow-sm transition hover:bg-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-champagne" onClick={() => setDraft(emptySelection())}>
+          <button type="button" className="relative inline-flex min-h-12 items-center gap-2 rounded-lg bg-ivory px-5 py-3 text-sm font-semibold text-forest shadow-sm transition hover:bg-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-champagne" onClick={() => { setLocalImage(null); setDraft(emptySelection()); }}>
             <Plus size={17} /> Ajouter un produit
           </button>
         </div>
@@ -283,10 +260,10 @@ export function AdminSelectionPage() {
             <strong>{pendingImport.length} références dans le fichier</strong> · {importDuplicates} doublon{importDuplicates > 1 ? "s" : ""} détecté{importDuplicates > 1 ? "s" : ""}.
             <p className="mt-1 text-ink/65">Les doublons seront ignorés. Aucune fiche publique ne sera créée par cet import.</p>
             <div className="mt-3 max-h-32 overflow-y-auto text-xs text-ink/70">{pendingImport.map((item, index) => <p key={`${item.name}-${index}`}>{item.name} · {item.supplier || "Fournisseur à renseigner"}</p>)}</div>
-            <div className="mt-3 flex flex-wrap gap-2"><button type="button" className="btn-primary" disabled={busy} onClick={() => void action(async () => {
-              const result = await importSelections(pendingImport); setPendingImport([]);
-              setMessage(`${result.imported} produits importés, ${result.skipped} ignorés.`); await refresh();
-            })}>Confirmer l'import</button>
+            <div className="mt-3 flex flex-wrap gap-2"><button type="button" className="btn-primary" disabled={busy} onClick={() => {
+              const rows = pendingImport; const operationId = crypto.randomUUID();
+              setConfirmation({ title: "Confirmer l’import privé", summary: <div><p>{rows.length} références · {importDuplicates} doublons détectés</p>{rows.map((item, index) => <p key={index}>{item.name} · {item.category} · {item.supplier} · {item.prices.map((r) => `${r.format} : ${r.price} €`).join(" / ")}</p>)}</div>, warning: "Aucun produit boutique, fichier Storage ou fiche publique ne sera créé.", run: async () => { const result = await importSelections(rows, operationId); setPendingImport([]); setMessage(`${result.imported} sélections importées, ${result.skipped} ignorées.`); await refresh(); } });
+            }}>Confirmer l'import</button>
             <button type="button" className="btn-secondary" onClick={() => setPendingImport([])}>Annuler</button></div>
           </div>}
         </div>}
@@ -329,7 +306,7 @@ export function AdminSelectionPage() {
           {loading ? <p className="py-12 text-center text-ink/60">Chargement des sélections…</p> :
             filtered.length === 0 ? <div className="mt-5 rounded-xl border border-dashed border-forest/20 bg-cream/50 px-5 py-12 text-center">
               <p className="font-display text-2xl">Aucune référence ici pour le moment</p><p className="mx-auto mt-2 max-w-md text-sm text-ink/60">{query || category !== "Tous" || priorityFilter !== "Tous" ? "Essayez une autre recherche ou effacez les filtres." : stageDescriptions[status]}</p>
-              {query || category !== "Tous" || priorityFilter !== "Tous" ? <button type="button" className="btn-secondary mt-5" onClick={() => { setQuery(""); setCategory("Tous"); setPriorityFilter("Tous"); }}>Effacer les filtres</button> : <button type="button" className="btn-secondary mt-5" onClick={() => setDraft(emptySelection())}><Plus size={16} /> Ajouter un produit</button>}
+              {query || category !== "Tous" || priorityFilter !== "Tous" ? <button type="button" className="btn-secondary mt-5" onClick={() => { setQuery(""); setCategory("Tous"); setPriorityFilter("Tous"); }}>Effacer les filtres</button> : <button type="button" className="btn-secondary mt-5" onClick={() => { setLocalImage(null); setDraft(emptySelection()); }}><Plus size={16} /> Ajouter un produit</button>}
             </div> : <>
               <div className="mt-5 grid gap-3 xl:hidden">{filtered.map((item) => <article key={item.id} className="rounded-xl border border-forest/10 bg-ivory p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3"><div className="flex flex-wrap gap-2"><CategoryBadge category={item.category} /><PriorityBadge priority={item.priority} /></div><button type="button" className="rounded-lg border border-forest/15 p-2 hover:bg-cream" aria-label={`Ouvrir la fiche ${item.name}`} onClick={() => setDetailId(item.id)}><ArrowUpRight size={17} /></button></div>
@@ -377,6 +354,7 @@ export function AdminSelectionPage() {
             <div className="grid overflow-hidden rounded-xl border border-forest/10 sm:grid-cols-5">{[
               ["Type", detail.category], ["Molécule", detail.molecule], ["Taux indiqué", detail.rate], ["Provenance", detail.origin], ["Culture", detail.culture],
             ].map(([label, value]) => <div key={label} className="border-b border-r border-forest/10 p-3"><p className="text-[0.65rem] font-bold uppercase tracking-[0.13em] text-forest/55">{label}</p><p className="mt-1 text-sm font-semibold">{value || "À renseigner"}</p></div>)}</div>
+            <SelectionWorkflow item={detail} onChanged={async () => { await Promise.all([refresh(), refreshCatalog()]); }} onEdit={() => editSelection(detail)} />
             <div className="mt-7 grid gap-7 lg:grid-cols-[1.4fr_0.8fr]">
               <div className="space-y-6">
                 <DetailSection title="En quelques mots"><p>{detail.description || "Description à compléter."}</p></DetailSection>
@@ -389,7 +367,6 @@ export function AdminSelectionPage() {
                 <div className="rounded-xl border border-forest/10 p-4"><h3 className="text-xs font-bold uppercase tracking-[0.14em]">Publication</h3><p className="mt-2 text-sm">{detail.publishedSlug ? detail.updatedAt > detail.publishedAt ? "Fiche modifiée depuis sa publication : mettez-la à jour" : "Fiche en ligne" : publicationMissing(detail).length ? `À compléter : ${publicationMissing(detail).join(", ")}` : "Prête à publier"}</p>{detail.publishedSlug && <a className="mt-2 inline-block text-sm underline" href="/fiches-produits" target="_blank" rel="noreferrer">Voir les fiches publiques ↗</a>}</div>
                 <div className="rounded-xl border border-forest/10 bg-[#f8faf6] p-4"><h3 className="text-xs font-bold uppercase tracking-[0.14em]">Boutique en ligne</h3>
                   {linkedCatalog ? <><p className="mt-2 text-sm font-semibold">{linkedCatalog.name}</p><p className="mt-1 text-xs text-ink/60">{linkedCatalog.category === "flowers" ? "Fleurs CBD" : "Résines CBD"} · {money(linkedCatalog.price)} / g · {linkedCatalog.stock} g en stock</p><p className={`mt-2 text-xs font-semibold ${linkedCatalog.isActive ? "text-forest" : "text-amber-800"}`}>{linkedCatalog.isActive ? "En ligne" : "Inactif"}</p>{linkedCatalog.isActive && <a className="mt-2 inline-block text-sm underline" href={`/produits/${linkedCatalog.slug}`} target="_blank" rel="noreferrer">Voir dans la boutique ↗</a>}</> : <p className="mt-2 text-sm text-ink/60">{detail.catalogProductId ? "Produit lié indisponible : vérifiez le catalogue." : "Pas encore publié dans la boutique."}</p>}
-                  {!linkedCatalog?.isActive && catalogPublicationMissing(detail).length > 0 && <p className="mt-2 text-xs text-amber-800">À compléter pour la boutique : {catalogPublicationMissing(detail).join(", ")}.</p>}
                   <a className="mt-2 inline-block text-xs underline" href="/admin/produits">Gérer les produits ↗</a>
                 </div>
                 {detail.url && <a href={detail.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm underline">Fiche fournisseur <ArrowUpRight size={15} /></a>}
@@ -400,30 +377,13 @@ export function AdminSelectionPage() {
             {detail.publishedSlug && <button type="button" className="btn-secondary" disabled={busy} onClick={() => unpublish(detail)}>Dépublier</button>}
             <button type="button" className="btn-secondary" disabled={busy || publicationMissing(detail).length > 0} onClick={() => publish(detail)}>{detail.publishedSlug ? "Mettre à jour la fiche" : "Publier la fiche"}</button>
             <button type="button" className="btn-secondary inline-flex items-center gap-2" disabled={busy || !detail.imagePath} onClick={() => downloadPdf(detail)}><FileText size={16} /> Créer le PDF</button>
-            {(!detail.catalogProductId || detail.catalogProductId === `selection-${detail.id}`) && !linkedCatalog?.isActive && <button type="button" className="btn-primary" disabled={busy || catalogPublicationMissing(detail).length > 0} title={catalogPublicationMissing(detail).length ? `À compléter : ${catalogPublicationMissing(detail).join(", ")}` : undefined} onClick={() => setCatalogDraft({ id: detail.id, price: linkedCatalog?.price ? String(linkedCatalog.price).replace(".", ",") : "", stock: linkedCatalog?.stock ? String(linkedCatalog.stock) : "", description: detail.description || "" })}>{linkedCatalog ? "Remettre en boutique" : "Mettre en boutique"}</button>}
-            <button type="button" className="btn-primary inline-flex items-center gap-2" onClick={() => setDraft({ ...detail })}><Pencil size={16} /> Modifier</button>
+            <button type="button" className="btn-primary inline-flex items-center gap-2" onClick={() => editSelection(detail)}><Pencil size={16} /> Modifier</button>
           </div>
         </section>
       </div>}
 
-      {catalogDraft && detail && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-forest/75 p-3" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setCatalogDraft(null); }}>
-        <section role="dialog" aria-modal="true" aria-labelledby="selection-catalog-title" className="w-full max-w-xl overflow-hidden rounded-2xl bg-ivory shadow-2xl">
-          <div className="bg-forest px-6 py-5 text-ivory"><p className="text-xs font-bold uppercase tracking-[0.18em] text-champagne">Publication marchande</p><h2 id="selection-catalog-title" className="mt-1 font-display text-3xl">{linkedCatalog ? "Remettre en boutique" : "Mettre en boutique"}</h2><p className="mt-2 text-sm text-ivory/75">{selectionPublicName(detail)} · {detail.category === "Fleur" ? "Fleurs CBD" : "Résines CBD"}</p></div>
-          <form className="space-y-4 p-6" onSubmit={submitCatalog}>
-            {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-            <p className="text-sm leading-6 text-ink/70">Le prix ci-dessous est le prix de vente au gramme. Les prix fournisseur ne sont jamais transférés au catalogue. La boutique utilisera le panier et les modes de paiement actuellement configurés sur le site.</p>
-            <div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold">Prix de vente / g (€)<input className="input-field mt-1 w-full" value={catalogDraft.price} inputMode="decimal" required placeholder="9,90" onChange={(event) => setCatalogDraft({ ...catalogDraft, price: event.target.value })} /></label><label className="text-xs font-semibold">Stock disponible (g)<input className="input-field mt-1 w-full" type="number" min="1" step="1" required value={catalogDraft.stock} onChange={(event) => setCatalogDraft({ ...catalogDraft, stock: event.target.value })} /></label></div>
-            <label className="block text-xs font-semibold">Description visible par les clients<textarea className="input-field mt-1 min-h-28 w-full" minLength={30} maxLength={1000} required value={catalogDraft.description} onChange={(event) => setCatalogDraft({ ...catalogDraft, description: event.target.value })} /></label>
-            <p className="rounded-lg border border-forest/10 bg-cream p-3 text-xs leading-5 text-ink/70">La fiche utilisera l’image Verdanza, les arômes, la provenance et le profil renseignés dans la sélection. Vous pourrez ensuite la modifier dans Admin → Produits. Les formats promotionnels ne sont pas activés automatiquement.</p>
-            <div className="flex justify-end gap-2 border-t border-forest/10 pt-4"><button type="button" className="btn-secondary" disabled={busy} onClick={() => setCatalogDraft(null)}>Annuler</button><button type="submit" className="btn-primary" disabled={busy}>{busy ? "Publication…" : "Confirmer la mise en boutique"}</button></div>
-          </form>
-        </section>
-      </div>}
-
-      {draft && <div className="fixed inset-0 z-50 flex justify-end bg-forest/55" onMouseDown={(event) => { if (event.target === event.currentTarget) setDraft(null); }}>
-        <section role="dialog" aria-modal="true" aria-labelledby="selection-edit-title" className="flex h-full w-full max-w-2xl flex-col bg-ivory shadow-2xl">
-          <div className="flex items-center justify-between border-b border-forest/10 px-5 py-4"><div><p className="text-[0.65rem] font-bold uppercase tracking-[0.17em] text-champagne">Fiche de sélection</p><h2 id="selection-edit-title" className="font-display text-3xl">{draft.id ? "Modifier le produit" : "Nouveau produit"}</h2></div><button ref={closeButton} type="button" className="rounded-md border p-2" aria-label="Fermer l'éditeur" onClick={() => setDraft(null)}><X size={18} /></button></div>
-          <form id="selection-form" className="grid flex-1 gap-4 overflow-y-auto p-5 sm:grid-cols-2" onSubmit={saveDraft}>
+      {draft && <AdminDialog open title={draft.id ? "Modifier la sélection" : "Nouvelle sélection privée"} description="Fournisseur, profil Verdanza, prix et publication" size="large" pending={busy} onClose={() => { setDraft(null); setLocalImage(null); }} footer={<><button type="button" className="btn-secondary" disabled={busy} onClick={() => { setDraft(null); setLocalImage(null); }}>Annuler</button><button type="submit" form="selection-form" className="btn-primary" disabled={busy}>Vérifier et enregistrer</button></>}>
+          <form id="selection-form" className="grid gap-4 sm:grid-cols-2" onSubmit={saveDraft}>
             {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800 sm:col-span-2">{error}</p>}
             {message && <p role="status" className="rounded-lg bg-[#eaf2e8] p-3 text-sm sm:col-span-2">{message}</p>}
             <Field label="Nom du produit *" value={draft.name} required onChange={(value) => setDraft({ ...draft, name: value })} wide />
@@ -447,6 +407,11 @@ export function AdminSelectionPage() {
             <SelectField label="Intensité" value={draft.intensity} values={["", ...selectionIntensities]} onChange={(value) => setDraft({ ...draft, intensity: value as ProductSelection["intensity"] })} />
             <SelectField label="Famille aromatique" value={draft.aromaFamily} values={["", ...selectionAromaFamilies]} onChange={(value) => setDraft({ ...draft, aromaFamily: value as ProductSelection["aromaFamily"] })} />
             <Field label="Aspect" value={draft.appearance} onChange={(value) => setDraft({ ...draft, appearance: value })} wide />
+            <TextArea label="Description client préparée" value={draft.commercial?.description || ""} onChange={(value) => setDraft({ ...draft, commercial: { ...(draft.commercial || emptyCommercial()), description: value } })} wide />
+            <Field label="Titre SEO" value={draft.commercial?.seoTitle || ""} onChange={(value) => setDraft({ ...draft, commercial: { ...(draft.commercial || emptyCommercial()), seoTitle: value } })} wide />
+            <TextArea label="Description SEO" value={draft.commercial?.seoDescription || ""} onChange={(value) => setDraft({ ...draft, commercial: { ...(draft.commercial || emptyCommercial()), seoDescription: value } })} wide />
+            <SelectionPricing item={draft} onChange={setDraft} />
+            {draft.extraction && <details className="sm:col-span-2 rounded-lg border p-3 text-xs"><summary>Sources et déductions ({draft.extraction.capturedAt})</summary>{Object.entries(draft.extraction.fields).map(([key, field]) => <p className="mt-2 break-words" key={key}><strong>{key}</strong> : {field.value} · {field.method === "inferred" ? "Déduit, à vérifier" : "Déclaré"} · {field.confidence === "limited" ? "confiance limitée" : "source explicite"} · {field.source}</p>)}</details>}
             <TextArea label="Notes de test / décision (privées)" value={draft.notes} onChange={(value) => setDraft({ ...draft, notes: value })} wide />
             <Field label="Note personnelle de 0 à 5" value={String(draft.rating)} type="number" onChange={(value) => setDraft({ ...draft, rating: Number(value) })} />
             <Field label="Lien image source (référence)" value={draft.imageUrl} type="url" onChange={(value) => setDraft({ ...draft, imageUrl: value })} />
@@ -456,15 +421,17 @@ export function AdminSelectionPage() {
                 {catalogProducts.map((product) => <option key={product.id} value={product.id}>{product.name}{product.isActive ? "" : " · inactif"}</option>)}
               </select>
             </label>
-            <div className="sm:col-span-2 rounded-lg border border-forest/10 bg-cream p-4 text-sm"><p className="font-semibold">Image de la fiche Verdanza</p><p className="mt-1 text-xs text-ink/60">Utilisez une image que Verdanza peut publier. Enregistrez d'abord le produit, puis ajoutez le fichier JPEG/PNG/WebP.</p>
-              {(draftImage || draft.imageUrl) && <img className="mt-3 max-h-40 max-w-full rounded-md object-contain" src={draftImage || draft.imageUrl} alt="Aperçu du produit" />}
+            <div className="sm:col-span-2 rounded-lg border border-forest/10 bg-cream p-4 text-sm"><p className="font-semibold">Image de la fiche Verdanza</p><p className="mt-1 text-xs text-ink/60">Choisissez une image que Verdanza peut publier. La prévisualisation reste locale jusqu’à la confirmation d’enregistrement.</p>
+              {(localImage?.preview || draftImage || draft.imageUrl) && <img className="mt-3 max-h-40 max-w-full rounded-md object-contain" src={localImage?.preview || draftImage || draft.imageUrl} alt="Aperçu du produit" />}
               {draft.imagePath && <p className="mt-2 inline-flex items-center gap-1 text-xs text-forest"><Check size={14} /> Image enregistrée</p>}
-              {draft.id && <input className="mt-3 block w-full text-xs" type="file" accept="image/jpeg,image/png,image/webp" aria-label="Ajouter une image produit" onChange={(event) => void handleImageFile(event, draft, setDraft, action, refresh)} />}
+              <input className="mt-3 block w-full text-xs" type="file" accept="image/jpeg,image/png,image/webp" aria-label="Ajouter une image produit" onChange={(event) => void prepareImageFile(event, setLocalImage, action)} />
             </div>
           </form>
-          <div className="flex justify-end gap-2 border-t border-forest/10 px-5 py-4"><button type="button" className="btn-secondary" onClick={() => setDraft(null)}>Annuler</button><button type="submit" form="selection-form" className="btn-primary" disabled={busy}>Enregistrer</button></div>
-        </section>
-      </div>}
+      </AdminDialog>}
+      <AdminConfirmDialog open={Boolean(confirmation)} title={confirmation?.title || "Confirmation"} summary={confirmation?.summary} warning={confirmation?.warning} pending={busy} onCancel={() => setConfirmation(null)} onConfirm={async () => {
+        if (!confirmation) return; setBusy(true); setError("");
+        try { await confirmation.run(); setConfirmation(null); } finally { setBusy(false); }
+      }}>{draft && <button type="button" className="text-sm underline" onClick={() => setConfirmation(null)}>Corriger avant confirmation</button>}</AdminConfirmDialog>
     </div>
   );
 }
@@ -504,34 +471,19 @@ function TextArea({ label, value, onChange, wide }: {
   return <label className={`block text-xs font-semibold ${wide ? "sm:col-span-2" : ""}`}>{label}<textarea className="input-field mt-1 min-h-24 w-full" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
-async function handleImageFile(event: ChangeEvent<HTMLInputElement>, item: ProductSelection,
-  setDraft: (value: ProductSelection) => void, action: (run: () => Promise<void>) => Promise<void>, refresh: () => Promise<void>) {
-  const file = event.target.files?.[0];
-  event.target.value = "";
-  if (!file) return;
+async function prepareImageFile(event: ChangeEvent<HTMLInputElement>, setLocalImage: (image: { data: string; preview: string }) => void, action: (run: () => Promise<void>) => Promise<void>) {
+  const file = event.target.files?.[0]; event.target.value = ""; if (!file) return;
   await action(async () => {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 8 * 1024 * 1024) throw new Error("Image JPEG/PNG/WebP de 8 Mo maximum requise.");
     const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, 1200 / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Image illisible.");
-    context.fillStyle = "#fff";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
+    const canvas = document.createElement("canvas"); canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d"); if (!context) { bitmap.close(); throw new Error("Image illisible."); }
+    context.fillStyle = "#fff"; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(bitmap, 0, 0, canvas.width, canvas.height); bitmap.close();
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
-    if (!blob || blob.size > 2_000_000) throw new Error("Image trop volumineuse après optimisation.");
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
-      reader.onerror = () => reject(new Error("Lecture de l'image impossible."));
-      reader.readAsDataURL(blob);
-    });
-    const result = await uploadSelectionImage(item.id, base64);
-    setDraft({ ...item, imagePath: result.imagePath, updatedAt: result.updatedAt });
-    await refresh();
+    if (!blob || blob.size > 2000000) throw new Error("Image trop volumineuse après optimisation.");
+    const preview = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error("Lecture de l’image impossible.")); reader.readAsDataURL(blob); });
+    setLocalImage({ data: preview.split(",")[1], preview });
   });
 }
 

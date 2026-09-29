@@ -1902,7 +1902,7 @@ async function openAdminOrders(page: Page, filter: "Toutes" | "Livrées") {
   const wasAlreadyOpen = safeUrl(page.url())?.pathname === "/admin/commandes";
   await goto(page, "/admin/commandes");
   assertPageActive(page);
-  await page.getByRole("heading", { name: "Commandes" }).waitFor({ timeout: 20_000 });
+  await page.getByRole("heading", { name: "Commandes", exact: true, level: 1 }).waitFor({ timeout: 20_000 });
   const loading = page.getByText("Chargement des donnees...", { exact: true });
   if (wasAlreadyOpen) {
     assertPageActive(page);

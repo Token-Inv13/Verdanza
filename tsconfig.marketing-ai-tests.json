@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": { "target": "ES2022", "lib": ["ES2023", "DOM", "DOM.Iterable"], "types": ["node", "vite/client"] },
+  "include": ["scripts/testMarketingAiUnit.ts", "scripts/testMarketingAiServer.ts", "scripts/testMarketingAiRules.ts", "scripts/testMarketingAiClient.ts", "scripts/testMarketingAiUi.ts"]
+}

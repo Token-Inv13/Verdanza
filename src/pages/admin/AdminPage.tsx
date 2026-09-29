@@ -1,6 +1,12 @@
+import { marketingLocalToIso, marketingLocalValue } from "../../lib/adminMarketingDates";
 import { FormEvent, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { MapPin } from "lucide-react";
+import { AdminDialog } from "../../components/admin/AdminDialog";
+import { AdminConfirmDialog } from "../../components/admin/AdminConfirmDialog";
+import { AdminStocks } from "../../components/admin/StockDialog";
+import { CustomersTable } from "../../components/admin/customers/CustomersTable";
+import { ProductEditor } from "../../components/admin/products/ProductEditor";
 import { OrderFinancingSummary } from "../../components/orders/OrderFinancingSummary";
 import {
   financingDisplayItems,
@@ -9,19 +15,16 @@ import {
   presentInvoiceFinancing,
   type OrderFinancingPresentation,
 } from "../../lib/orderFinancing";
-import { CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED, CAGNOTTE_READ_DISPLAY_ENABLED } from "../../config/cagnotteFeatures";
+import { CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED } from "../../config/cagnotteFeatures";
 import { useAdminData } from "../../hooks/useAdminData";
 import {
   deleteProductAdmin,
   updateProductFlags,
-  updateProductStock,
   upsertProduct,
   type ProductInput,
 } from "../../services/productsService";
 import {
   deleteProductImageByPath,
-  uploadProductImageAsset,
-  type ProductImageUploadProgress,
 } from "../../services/productImagesService";
 import {
   deleteCancelledOrder,
@@ -58,14 +61,6 @@ import {
   upsertPromoBanner,
   type PromoBannerInput,
 } from "../../services/promoBannersService";
-import {
-  adjustCustomerLoyalty,
-  assignPromoToCustomer,
-  getCustomerAdminDetails,
-  updateCustomerAdminStatus,
-  updateCustomerInternalNote,
-  type CustomerAdminDetails,
-} from "../../services/adminCustomersService";
 import {
   createInvoiceFromOrder,
   createManualInvoice,
@@ -109,16 +104,12 @@ import {
   updateReviewStatus,
 } from "../../services/reviewsService";
 
-const AdminCagnottePanel = CAGNOTTE_READ_DISPLAY_ENABLED
-  ? lazy(() => import("../../components/cagnotte/CagnottePanel").then((module) => ({ default: module.CagnottePanel })))
-  : null;
 const AdminCagnotteTools = CAGNOTTE_ADMIN_TOOLS_DISPLAY_ENABLED
   ? lazy(() => import("../../components/cagnotte/CagnotteAdminTools").then((module) => ({ default: module.CagnotteAdminTools })))
   : null;
 import type {
   BillingSettings,
   Coupon,
-  CustomerProfile,
   DeliveryZone,
   DeliveryZoneStatus,
   FinalPaymentMethod,
@@ -135,10 +126,7 @@ import type {
   PaymentStatus,
   Product,
   ProductCategory,
-  ProductImageAsset,
   ProductCost,
-  FixedPriceMode,
-  FixedPriceOption,
   PromoBanner,
   PromoBannerPlacement,
   PromoBannerType,
@@ -148,8 +136,6 @@ import type {
   SupplierPurchase,
   SupplierPurchaseLine,
   ProductReview,
-  ProductFavorite,
-  LoyaltyMovement,
   ReviewStatus,
   StatusHistoryEntry,
 } from "../../types";
@@ -191,15 +177,6 @@ import {
 } from "../../lib/productionFixtureMarker";
 import { buildDashboardMetrics } from "../../lib/adminDashboardMetrics";
 import {
-  buildCommercialCustomerEntries,
-  commercialAdminCustomers,
-  commercialAdminOrders,
-  commercialCustomerStats,
-  commercialCustomerStatus,
-  ordersForCommercialCustomer,
-  type CustomerComputedStats,
-} from "../../lib/adminCustomerCommercial";
-import {
   currentAccountingPeriodRange,
   previousAccountingPeriodRange,
   toAccountingDateInputValue,
@@ -218,19 +195,11 @@ import {
 } from "../../lib/tieredProductGifts";
 import { orderItemQuantityLabel } from "../../lib/orderLineDisplay";
 import {
-  FIXED_PRICE_POLICY_VERSION,
   fixedPriceOptionsForMode,
-  fixedPriceEffectiveUnitPrice,
-  fixedPriceOptionLabel,
-  isFixedPriceAdvantageous,
   normalizeFixedPriceMode,
-  resolveFixedPriceOptions,
   validateManualFixedPriceOptions,
 } from "../../lib/fixedPriceOptions";
 import {
-  PRODUCT_IMAGE_MAX_COUNT,
-  ensureSinglePrimary,
-  normalizeProductImages,
   syncProductPrimaryImage,
   validateProductImagesForProduct,
 } from "../../lib/productImages";
@@ -277,7 +246,7 @@ const emptyCoupon: CouponInput = {
   stackable: false,
   priority: 10,
   usedCount: 0,
-  isActive: true,
+  isActive: false,
   productIds: [],
   categories: [],
   giftTiers: [],
@@ -336,8 +305,6 @@ export function AdminPage({ section }: { section: string }) {
     couponSource,
     promoBanners,
     promoBannerSource,
-    customers,
-    customerSource,
     invoices,
     invoiceSource,
     billingSettings,
@@ -351,7 +318,8 @@ export function AdminPage({ section }: { section: string }) {
     isLoading,
     refresh,
     refreshOrder,
-  } = useAdminData();
+    applyStockSnapshot,
+  } = useAdminData(section === "Clients");
   const [searchParams] = useSearchParams();
   const messageScope =
     section === "Comptabilité"
@@ -361,6 +329,16 @@ export function AdminPage({ section }: { section: string }) {
   const message = messageState.scope === messageScope ? messageState.text : "";
   const [editingProduct, setEditingProduct] = useState<ProductInput>(emptyProduct);
   const [productImageStoragePathsToDelete, setProductImageStoragePathsToDelete] = useState<string[]>([]);
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [discardProductOpen, setDiscardProductOpen] = useState(false);
+  const [productPending, setProductPending] = useState(false);
+  const [productUploadBusy, setProductUploadBusy] = useState(false);
+  const [productError, setProductError] = useState("");
+  const productBaseline = useRef(JSON.stringify(emptyProduct));
+  const productOperation = useRef(false);
+  const productUploadOperation = useRef(false);
+  const productBusy = productPending || productUploadBusy;
+  const productDirty = JSON.stringify(editingProduct) !== productBaseline.current;
   const [editingCoupon, setEditingCoupon] = useState<CouponInput>(emptyCoupon);
   const [couponBannerAction, setCouponBannerAction] = useState<"none" | "create" | "link">("none");
   const [couponBannerTargetId, setCouponBannerTargetId] = useState("");
@@ -394,10 +372,6 @@ export function AdminPage({ section }: { section: string }) {
     [promoBanners],
   );
   const visibleInvoices = useMemo(() => visibleAdminInvoices(invoices), [invoices]);
-  const lowStockProducts = useMemo(
-    () => products.filter((product) => product.stock <= product.lowStockThreshold),
-    [products],
-  );
   const dashboardMetrics = useMemo(
     () => buildDashboardMetrics(products, orders),
     [orders, products],
@@ -407,14 +381,30 @@ export function AdminPage({ section }: { section: string }) {
     setMessageState({ text, scope: messageScope });
   }
 
-  function editProduct(product: Product) {
+  function editProduct(product: ProductInput) {
+    if (productOperation.current || productUploadOperation.current) return;
     setProductImageStoragePathsToDelete([]);
     setEditingProduct(product);
+    productBaseline.current = JSON.stringify(product);
+    setProductError("");
+    setProductDialogOpen(true);
   }
 
   function resetProductForm() {
     setProductImageStoragePathsToDelete([]);
     setEditingProduct(emptyProduct);
+    setProductDialogOpen(false);
+    setDiscardProductOpen(false);
+    setProductError("");
+  }
+
+  function requestProductClose() {
+    if (productOperation.current || productUploadOperation.current) return;
+    if (JSON.stringify(editingProduct) !== productBaseline.current) {
+      setDiscardProductOpen(true);
+    } else {
+      resetProductForm();
+    }
   }
 
   function editCoupon(coupon: CouponInput) {
@@ -444,7 +434,9 @@ export function AdminPage({ section }: { section: string }) {
 
   async function handleProductSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (productOperation.current || productUploadOperation.current) return;
     setMessage("");
+    setProductError("");
     const fixedPriceMode = normalizeFixedPriceMode(
       editingProduct.fixedPriceMode,
       editingProduct.category,
@@ -460,7 +452,7 @@ export function AdminPage({ section }: { section: string }) {
     } as Product);
     const blockingManualIssues = manualIssues.filter((issue) => issue.severity === "error");
     if (blockingManualIssues.length > 0) {
-      setMessage(`Formats prix fixe invalides : ${blockingManualIssues[0].message}`);
+      setProductError(`Formats prix fixe invalides : ${blockingManualIssues[0].message}`);
       return;
     }
     const productToSave = syncProductPrimaryImage({
@@ -474,40 +466,76 @@ export function AdminPage({ section }: { section: string }) {
     const productId = productToSave.id || productToSave.slug;
     const imageValidation = validateProductImagesForProduct(productId || "", productToSave.images || []);
     if (!imageValidation.ok) {
-      setMessage(imageValidation.errors[0]);
+      setProductError(imageValidation.errors[0]);
       return;
     }
-    const savedProductId = await upsertProduct(productToSave);
-    const pathsToDelete = productImageStoragePathsToDelete.slice();
-    if (pathsToDelete.length) {
-      await Promise.allSettled(
-        pathsToDelete.map((path) => deleteProductImageByPath(path, savedProductId)),
-      );
+    productOperation.current = true;
+    setProductPending(true);
+    let saved = false;
+    try {
+      const savedProductId = await upsertProduct(productToSave);
+      const pathsToDelete = productImageStoragePathsToDelete.slice();
+      if (pathsToDelete.length) {
+        await Promise.allSettled(
+          pathsToDelete.map((path) => deleteProductImageByPath(path, savedProductId)),
+        );
+      }
+      saved = true;
+      resetProductForm();
+      setMessage("Produit enregistre.");
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "Enregistrement produit impossible.";
+      setProductError(text);
+      setMessage(text);
+    } finally {
+      productOperation.current = false;
+      setProductPending(false);
     }
-    resetProductForm();
-    setMessage("Produit enregistre.");
-    await refresh();
+    if (saved) {
+      try {
+        await refresh();
+      } catch {
+        setMessage("Produit enregistre. Actualisation de la liste impossible ; rafraichissez les donnees.");
+      }
+    }
   }
 
   async function handleProductDelete(product: ProductInput, confirmationReference: string) {
+    if (productOperation.current || productUploadOperation.current) return;
     setMessage("");
+    setProductError("");
     if (!product.id) {
-      setMessage("Produit non enregistre: aucune suppression definitive possible.");
+      setProductError("Produit non enregistre: aucune suppression definitive possible.");
       return;
     }
+    productOperation.current = true;
+    setProductPending(true);
+    let deleted = false;
     try {
       const result = await deleteProductAdmin({
         productId: product.id,
         confirmationReference,
       });
-      resetProductForm();
       const storageWarning = result.storage?.failed?.length
         ? ` Nettoyage Storage partiel: ${result.storage.failed.length} fichier(s) non supprime(s).`
         : "";
+      deleted = true;
+      resetProductForm();
       setMessage(`Produit ${product.name} supprime definitivement.${storageWarning}`);
-      await refresh();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Suppression produit impossible.");
+      const text = error instanceof Error ? error.message : "Suppression produit impossible.";
+      setProductError(text);
+      setMessage(text);
+    } finally {
+      productOperation.current = false;
+      setProductPending(false);
+    }
+    if (deleted) {
+      try {
+        await refresh();
+      } catch {
+        setMessage("Produit supprime. Actualisation de la liste impossible ; rafraichissez les donnees.");
+      }
     }
   }
 
@@ -520,15 +548,6 @@ export function AdminPage({ section }: { section: string }) {
       await upsertProduct({ ...product, ...flags });
     } else {
       await updateProductFlags(product, flags);
-    }
-    await refresh();
-  }
-
-  async function handleStockChange(product: Product, stock: number, threshold: number) {
-    if (productSource === "local") {
-      await upsertProduct({ ...product, stock, lowStockThreshold: threshold });
-    } else {
-      await updateProductStock(product, stock, threshold);
     }
     await refresh();
   }
@@ -726,46 +745,6 @@ export function AdminPage({ section }: { section: string }) {
     await refresh();
   }
 
-  async function handleLoyaltyAdjustment(customer: CustomerProfile) {
-    const modeInput = window.prompt(
-      "Action points : add pour ajouter, remove pour retirer, set pour definir",
-      "add",
-    );
-    const mode = modeInput === "remove" || modeInput === "set" ? modeInput : "add";
-    const rawPoints = window.prompt(
-      mode === "set" ? "Nouveau solde de points" : "Nombre de points",
-      "0",
-    );
-    const points = Number(rawPoints);
-    if (!Number.isFinite(points) || points < 0 || (mode !== "set" && points === 0)) return;
-    const reason = window.prompt("Raison", "correction manuelle") || "correction manuelle";
-    const note = window.prompt("Note interne", "") || "";
-    const signedPoints = mode === "remove" ? -points : points;
-    await adjustCustomerLoyalty(customer, signedPoints, note, mode, reason);
-    setMessage("Points fidelite mis a jour.");
-    await refresh();
-  }
-
-  async function handleCustomerPromoAssignment(customer: CustomerProfile, couponId: string, note: string) {
-    const coupon = coupons.find((entry) => entry.id === couponId);
-    if (!coupon) {
-      setMessage("Code promo introuvable.");
-      return;
-    }
-    await assignPromoToCustomer(customer, coupon, note);
-    setMessage(`Code ${coupon.code} attribue a ${customer.displayName || customer.email || "ce client"}.`);
-    await refresh();
-  }
-
-  async function handleCustomerStatusUpdate(
-    customer: CustomerProfile,
-    data: { status?: CustomerProfile["status"]; archived?: boolean; hidden?: boolean },
-  ) {
-    await updateCustomerAdminStatus(customer, data);
-    setMessage("Fiche client mise a jour.");
-    await refresh();
-  }
-
   async function handleProductCostSave(productId: string, purchasePricePerGram: number | null) {
     await saveProductCostAdmin(productId, purchasePricePerGram);
     setMessage("Cout d'achat produit enregistre.");
@@ -927,43 +906,55 @@ export function AdminPage({ section }: { section: string }) {
       {section === "Analytics" && <AdminAnalyticsPanel />}
 
       {section === "Produits" && (
-        <div className="mt-8 grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
-          <ProductForm
-            product={editingProduct}
-            onChange={setEditingProduct}
-            onSubmit={handleProductSubmit}
-            onImageStoragePathRemoved={(path) =>
-              setProductImageStoragePathsToDelete((current) =>
-                current.includes(path) ? current : [...current, path],
-              )
-            }
-            onDeleteProduct={handleProductDelete}
+        <section className="mt-8 min-w-0">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm text-ink/65">Gérez vos produits et ouvrez une fiche pour la modifier.</p>
+              <SourceLine source={productSource} />
+            </div>
+            <button type="button" className="btn-primary" disabled={productBusy} onClick={() => editProduct(emptyProduct)}>
+              Ajouter un produit
+            </button>
+          </div>
+          <ProductTable
+            products={products}
+            onEdit={editProduct}
+            onFlagChange={handleFlagChange}
           />
-          <section className="min-w-0">
-            <SourceLine source={productSource} />
-            <ProductTable
-              products={products}
-              onEdit={editProduct}
-              onFlagChange={handleFlagChange}
-            />
-          </section>
-        </div>
+          {productDialogOpen && <AdminDialog open title={editingProduct.id ? "Modifier le produit" : "Ajouter un produit"}
+            description={editingProduct.name || "Renseignez les informations du produit."} size="xl" pending={productBusy}
+            onClose={requestProductClose} footer={<>
+              {productError && <p role="alert" className="w-full rounded-lg bg-red-50 p-3 text-sm text-red-800">{productError}</p>}
+              <span role="status" className="mr-auto text-sm text-ink/60">{productUploadBusy ? "Envoi des images…" : productPending ? "En cours…" : productDirty ? "Modifications non enregistrées" : ""}</span>
+              <button type="button" className="btn-secondary" disabled={productBusy} onClick={requestProductClose}>Annuler</button>
+              <button type="submit" form="admin-product-editor" className="btn-primary" disabled={productBusy}>
+                {productPending ? "En cours…" : "Enregistrer"}
+              </button>
+            </>}>
+            <ProductEditor formId="admin-product-editor" product={editingProduct} pending={productBusy}
+              onChange={setEditingProduct} onSubmit={handleProductSubmit}
+              onUploadBusyChange={(busy) => {
+                productUploadOperation.current = busy;
+                setProductUploadBusy(busy);
+              }}
+              onImageStoragePathRemoved={(path) => setProductImageStoragePathsToDelete((current) =>
+                current.includes(path) ? current : [...current, path])}
+              onDeleteProduct={handleProductDelete} />
+          </AdminDialog>}
+          {discardProductOpen && <AdminConfirmDialog open title="Abandonner les modifications ?"
+            description="Les modifications du formulaire n’ont pas été enregistrées."
+            summary={editingProduct.name || "Nouveau produit"} warning="Vos modifications seront perdues."
+            cancelLabel="Retour au formulaire" confirmLabel="Abandonner les modifications"
+            onCancel={() => setDiscardProductOpen(false)} onConfirm={resetProductForm} />}
+        </section>
       )}
 
       {section === "Stocks" && (
         <>
           <SourceLine source={productSource} />
-          <StockTable products={products} onStockChange={handleStockChange} />
-          <section className="mt-8 grid gap-4 md:grid-cols-2">
-            {lowStockProducts.map((product) => (
-              <article key={product.id} className="admin-card border-champagne/40">
-                <h2 className="font-display text-3xl text-forest">{product.name}</h2>
-                <p className="mt-2 text-sm text-ink/60">
-                  Stock {product.stock} g, seuil {product.lowStockThreshold} g.
-                </p>
-              </article>
-            ))}
-          </section>
+          <AdminStocks onSnapshot={applyStockSnapshot}>
+            {(open) => <StockTable products={products} onOpen={open} />}
+          </AdminStocks>
         </>
       )}
 
@@ -1063,24 +1054,7 @@ export function AdminPage({ section }: { section: string }) {
         </div>
       )}
 
-      {section === "Clients" && (
-        <>
-          <SourceLine source={customerSource} />
-          <CustomersTable
-            customers={customers}
-            orders={orders}
-            coupons={coupons}
-            onAdjustPoints={handleLoyaltyAdjustment}
-            onNote={async (customer, note) => {
-              await updateCustomerInternalNote(customer, note);
-              setMessage("Note client enregistree.");
-              await refresh();
-            }}
-            onAssignPromo={handleCustomerPromoAssignment}
-            onStatusUpdate={handleCustomerStatusUpdate}
-          />
-        </>
-      )}
+      {section === "Clients" && <CustomersTable coupons={coupons} />}
 
       {section === "Favoris produits" && (
         <AdminFavoritesPanel products={products} />
@@ -1126,642 +1100,6 @@ export function AdminPage({ section }: { section: string }) {
             ne presente pas de donnees operationnelles utiles.
           </p>
         </section>
-      )}
-    </div>
-  );
-}
-
-function ProductForm({
-  product,
-  onChange,
-  onSubmit,
-  onImageStoragePathRemoved,
-  onDeleteProduct,
-}: {
-  product: ProductInput;
-  onChange: (product: ProductInput) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onImageStoragePathRemoved: (path: string) => void;
-  onDeleteProduct: (product: ProductInput, confirmationReference: string) => Promise<void>;
-}) {
-  const [deleteConfirmation, setDeleteConfirmation] = useState("");
-  const canDeleteProduct = Boolean(product.id && product.internalReference);
-
-  useEffect(() => {
-    setDeleteConfirmation("");
-  }, [product.id]);
-
-  return (
-    <form onSubmit={onSubmit} className="admin-card min-w-0 h-fit">
-      <h2 className="font-display text-3xl text-forest">
-        {product.id ? "Éditer produit" : "Créer produit"}
-      </h2>
-      <div className="mt-5 grid gap-4">
-        <Input label="Nom" value={product.name} onChange={(name) => onChange({ ...product, name })} />
-        <Input
-          label="Slug"
-          value={product.slug}
-          onChange={(slug) => onChange({ ...product, slug })}
-        />
-        <label className="text-sm font-medium text-forest">
-          Categorie
-          <select
-            className="input-field mt-2"
-            value={product.category}
-            onChange={(event) =>
-              onChange({
-                ...product,
-                category: event.target.value as ProductCategory,
-              })
-            }
-          >
-            <option value="flowers">Fleurs CBD</option>
-            <option value="resins">Resines CBD</option>
-            <option value="oils">Huiles CBD</option>
-            <option value="packs">Packs</option>
-          </select>
-        </label>
-        <div className="rounded-md border border-forest/10 bg-cream/40 px-3 py-2 text-sm text-forest">
-          <span className="block text-xs uppercase tracking-[0.14em] text-ink/50">
-            Reference produit
-          </span>
-          <span className="mt-1 block font-mono text-base">
-            {product.internalReference ||
-              (product.id
-                ? "Une reference sera generee automatiquement a l'enregistrement"
-                : "Generee automatiquement a l'enregistrement")}
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <NumberInput
-            label="Prix / g"
-            value={product.price}
-            onChange={(price) => onChange({ ...product, price })}
-          />
-          <NumberInput
-            label="Prix promo"
-            value={product.compareAtPrice || 0}
-            onChange={(compareAtPrice) =>
-              onChange({ ...product, compareAtPrice: compareAtPrice || undefined })
-            }
-          />
-          <NumberInput
-            label="Stock"
-            value={product.stock}
-            onChange={(stock) => onChange({ ...product, stock })}
-          />
-          <NumberInput
-            label="Seuil faible"
-            value={product.lowStockThreshold}
-            onChange={(lowStockThreshold) =>
-              onChange({ ...product, lowStockThreshold })
-            }
-          />
-        </div>
-        <FixedPriceOptionsEditor
-          product={product}
-          onModeChange={(fixedPriceMode) =>
-            onChange({
-              ...product,
-              fixedPriceMode,
-              fixedPriceOptions:
-                fixedPriceOptionsForMode(fixedPriceMode, product.fixedPriceOptions),
-            })
-          }
-          onChange={(fixedPriceOptions) =>
-            onChange({
-              ...product,
-              fixedPriceMode: "manual",
-              fixedPriceOptions,
-            })
-          }
-        />
-        <Input
-          label="Description courte"
-          value={product.shortDescription}
-          onChange={(shortDescription) => onChange({ ...product, shortDescription })}
-        />
-        <Textarea
-          label="Description longue"
-          value={product.longDescription}
-          onChange={(longDescription) => onChange({ ...product, longDescription })}
-        />
-        <div className="grid grid-cols-3 gap-3">
-          <Input label="CBD" value={product.cbdRate} onChange={(cbdRate) => onChange({ ...product, cbdRate })} />
-          <Input label="CBG" value={product.cbgRate} onChange={(cbgRate) => onChange({ ...product, cbgRate })} />
-          <Input label="THC" value={product.thcRate} onChange={(thcRate) => onChange({ ...product, thcRate })} />
-        </div>
-        <Input label="Origine" value={product.origin} onChange={(origin) => onChange({ ...product, origin })} />
-        <Input label="Culture" value={product.cultureType} onChange={(cultureType) => onChange({ ...product, cultureType: cultureType as Product["cultureType"] })} />
-        <ProductImagesEditor
-          product={product}
-          onChange={(patch) => onChange({ ...product, ...patch })}
-          onStoragePathRemoved={onImageStoragePathRemoved}
-        />
-        <Input label="Aromes, separes par virgule" value={product.aromas.join(", ")} onChange={(aromas) => onChange({ ...product, aromas: normalizeList(aromas) })} />
-        <Input label="Tags, separes par virgule" value={product.tags.join(", ")} onChange={(tags) => onChange({ ...product, tags: normalizeList(tags) })} />
-        <Input label="SEO title" value={product.seoTitle} onChange={(seoTitle) => onChange({ ...product, seoTitle })} />
-        <Textarea label="SEO description" value={product.seoDescription} onChange={(seoDescription) => onChange({ ...product, seoDescription })} />
-        <div className="flex flex-wrap gap-4 text-sm text-forest">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={product.isActive}
-              onChange={(event) =>
-                onChange({ ...product, isActive: event.target.checked })
-              }
-            />
-            Actif
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={product.isFeatured}
-              onChange={(event) =>
-                onChange({ ...product, isFeatured: event.target.checked })
-              }
-            />
-            Mis en avant
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={product.qualitySealEnabled === true}
-              onChange={(event) =>
-                onChange({ ...product, qualitySealEnabled: event.target.checked })
-              }
-            />
-            <span>
-              Sceau qualité Verdanza
-              <span className="mt-0.5 block text-xs font-normal text-ink/55">
-                Affiche le sceau rond sur la carte et la fiche produit.
-              </span>
-            </span>
-          </label>
-        </div>
-        <button className="btn-primary" type="submit">
-          Enregistrer
-        </button>
-        {product.id && (
-          <div className="mt-6 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-900">
-            <h3 className="font-semibold">Supprimer definitivement le produit</h3>
-            <p className="mt-2 leading-6">
-              Action irreversible pour {product.name || "ce produit"}.
-              Reference actuelle : <span className="font-mono">{product.internalReference || "absente"}</span>.
-            </p>
-            {!product.internalReference && (
-              <p className="mt-2 font-semibold">
-                Suppression refusee tant que le produit ne possede pas de reference.
-              </p>
-            )}
-            {product.internalReference && (
-              <Input
-                label={`Saisissez ${product.internalReference} pour confirmer`}
-                value={deleteConfirmation}
-                onChange={setDeleteConfirmation}
-              />
-            )}
-            <button
-              type="button"
-              className="mt-3 rounded-md border border-red-300 bg-white px-4 py-2 font-semibold text-red-800 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!canDeleteProduct || deleteConfirmation !== product.internalReference}
-              onClick={() => void onDeleteProduct(product, deleteConfirmation)}
-            >
-              Supprimer definitivement le produit
-            </button>
-          </div>
-        )}
-      </div>
-    </form>
-  );
-}
-
-function ProductImagesEditor({
-  product,
-  onChange,
-  onStoragePathRemoved,
-}: {
-  product: ProductInput;
-  onChange: (patch: Pick<ProductInput, "images" | "image" | "imageAlt">) => void;
-  onStoragePathRemoved: (path: string) => void;
-}) {
-  const [uploadProgress, setUploadProgress] = useState<ProductImageUploadProgress | null>(null);
-  const [error, setError] = useState("");
-  const images = normalizeProductImages({
-    id: product.id || "",
-    name: product.name || "Produit",
-    image: product.image,
-    imageAlt: product.imageAlt,
-    images: product.images,
-  });
-  const targetProductId = product.id || product.slug || slugify(product.name || "");
-
-  function applyImages(nextImages: ProductImageAsset[]) {
-    const normalized = ensureSinglePrimary(nextImages);
-    const primary = normalized.find((image) => image.isPrimary) || normalized[0];
-    onChange({
-      images: normalized,
-      image: primary?.url || BRAND_PRODUCT_PLACEHOLDER,
-      imageAlt: primary?.alt || product.name || "Produit Verdanza",
-    });
-  }
-
-  async function handleFiles(files: FileList | null) {
-    setError("");
-    if (!files?.length) return;
-    if (!targetProductId) {
-      setError("Renseignez le nom ou le slug avant d'ajouter une image.");
-      return;
-    }
-    const incoming = Array.from(files);
-    if (images.length + incoming.length > PRODUCT_IMAGE_MAX_COUNT) {
-      setError(`Maximum ${PRODUCT_IMAGE_MAX_COUNT} images par produit.`);
-      return;
-    }
-    const uploaded: ProductImageAsset[] = [];
-    try {
-      for (const file of incoming) {
-        const image = await uploadProductImageAsset({
-          productId: targetProductId,
-          file,
-          alt: `${product.name || "Produit"} Verdanza`,
-          sortOrder: images.length + uploaded.length,
-          isPrimary: images.length + uploaded.length === 0,
-          onProgress: setUploadProgress,
-        });
-        uploaded.push(image);
-      }
-      applyImages([...images, ...uploaded]);
-      setUploadProgress(null);
-    } catch (uploadError) {
-      await Promise.allSettled(
-        uploaded
-          .filter((image) => image.storagePath)
-          .map((image) => deleteProductImageByPath(image.storagePath as string, targetProductId)),
-      );
-      setUploadProgress(null);
-      setError(uploadError instanceof Error ? uploadError.message : "Televersement impossible.");
-    }
-  }
-
-  function removeImage(image: ProductImageAsset) {
-    if (image.storagePath) onStoragePathRemoved(image.storagePath);
-    applyImages(images.filter((entry) => entry.id !== image.id));
-  }
-
-  function moveImage(index: number, direction: -1 | 1) {
-    const next = images.slice();
-    const target = index + direction;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
-    applyImages(next);
-  }
-
-  return (
-    <div className="rounded-md border border-forest/10 bg-cream p-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 className="font-semibold text-forest">Images produit</h3>
-          <p className="mt-1 text-xs leading-5 text-ink/60">
-            JPEG, PNG ou WebP. Maximum {PRODUCT_IMAGE_MAX_COUNT} images, optimisation WebP avant envoi.
-          </p>
-        </div>
-        <label className="btn-secondary min-h-9 cursor-pointer px-3 py-2 text-xs">
-          Ajouter
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            multiple
-            className="sr-only"
-            onChange={(event) => {
-              void handleFiles(event.target.files);
-              event.currentTarget.value = "";
-            }}
-          />
-        </label>
-      </div>
-      <div
-        className="mt-3 rounded-md border border-dashed border-forest/20 bg-ivory p-4 text-center text-xs text-ink/60"
-        onDragOver={(event) => event.preventDefault()}
-        onDrop={(event) => {
-          event.preventDefault();
-          void handleFiles(event.dataTransfer.files);
-        }}
-      >
-        Glissez-deposez des images ici.
-      </div>
-      {error && (
-        <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-800">
-          {error}
-        </p>
-      )}
-      {uploadProgress && (
-        <p className="mt-3 rounded-md border border-forest/10 bg-ivory p-3 text-xs text-forest">
-          {uploadProgress.fileName} - {uploadProgress.status} {uploadProgress.progress} %
-        </p>
-      )}
-      <div className="mt-4 grid gap-3">
-        {images.map((image, index) => (
-          <div key={image.id} className="rounded-md border border-forest/10 bg-ivory p-3">
-            <div className="flex gap-3">
-              <img
-                src={image.url}
-                alt=""
-                className="h-20 w-20 rounded-md border border-forest/10 object-cover"
-                loading="lazy"
-              />
-              <div className="min-w-0 flex-1 space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <AdminBadge tone={image.isPrimary ? "success" : "muted"}>
-                    {image.isPrimary ? "Principale" : `Image ${index + 1}`}
-                  </AdminBadge>
-                  <button
-                    type="button"
-                    className="text-xs font-semibold text-forest underline"
-                    onClick={() =>
-                      applyImages(images.map((entry) => ({ ...entry, isPrimary: entry.id === image.id })))
-                    }
-                  >
-                    Choisir comme principale
-                  </button>
-                  <button
-                    type="button"
-                    className="text-xs text-forest/70 underline disabled:opacity-40"
-                    disabled={index === 0}
-                    onClick={() => moveImage(index, -1)}
-                  >
-                    Monter
-                  </button>
-                  <button
-                    type="button"
-                    className="text-xs text-forest/70 underline disabled:opacity-40"
-                    disabled={index === images.length - 1}
-                    onClick={() => moveImage(index, 1)}
-                  >
-                    Descendre
-                  </button>
-                  <button
-                    type="button"
-                    className="text-xs text-red-700 underline"
-                    onClick={() => removeImage(image)}
-                  >
-                    Supprimer l'image
-                  </button>
-                </div>
-                <Input
-                  label="Texte alternatif"
-                  value={image.alt}
-                  onChange={(alt) =>
-                    applyImages(
-                      images.map((entry) => (entry.id === image.id ? { ...entry, alt } : entry)),
-                    )
-                  }
-                />
-              </div>
-            </div>
-          </div>
-        ))}
-        {!images.length && (
-          <p className="text-xs text-ink/55">
-            Aucune image configuree. Le placeholder existant sera utilise.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function FixedPriceOptionsEditor({
-  product,
-  onModeChange,
-  onChange,
-}: {
-  product: ProductInput;
-  onModeChange: (mode: FixedPriceMode) => void;
-  onChange: (options: FixedPriceOption[]) => void;
-}) {
-  const options = product.fixedPriceOptions || [];
-  const mode = normalizeFixedPriceMode(product.fixedPriceMode, product.category);
-  const resolvedOptions = resolveFixedPriceOptions({
-    ...product,
-    fixedPriceMode: mode,
-    isActive: product.isActive !== false,
-  } as Product);
-  const manualIssues = validateManualFixedPriceOptions({
-    ...product,
-    fixedPriceMode: mode,
-    fixedPriceOptions: options,
-  } as Product);
-  const duplicateActiveTotals = new Set(
-    options
-      .filter((option) => option.isActive)
-      .map((option) => `${option.quantityGrams}:${option.totalPrice}`)
-      .filter((key, index, all) => all.indexOf(key) !== index),
-  );
-
-  function updateOption(index: number, patch: Partial<FixedPriceOption>) {
-    const next = [...options];
-    next[index] = { ...next[index], ...patch };
-    onChange(next);
-  }
-
-  return (
-    <div className="rounded-md border border-forest/10 bg-cream p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-forest">Formats prix fixe</h3>
-          <p className="mt-1 text-xs leading-5 text-ink/60">
-            Politique automatique v{FIXED_PRICE_POLICY_VERSION}. Le stock reste toujours decremente en grammes.
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-3 md:grid-cols-3">
-        {(["automatic", "manual", "disabled"] as FixedPriceMode[]).map((entry) => (
-          <button
-            key={entry}
-            type="button"
-            className={
-              mode === entry
-                ? "rounded-md border border-forest bg-forest px-3 py-2 text-sm font-semibold text-ivory"
-                : "rounded-md border border-forest/15 bg-ivory px-3 py-2 text-sm font-semibold text-forest"
-            }
-            onClick={() => onModeChange(entry)}
-          >
-            {entry === "automatic"
-              ? "Automatique"
-              : entry === "manual"
-                ? "Manuel"
-                : "Desactive"}
-          </button>
-        ))}
-      </div>
-
-      {mode === "automatic" && (
-        <div className="mt-4 rounded-md border border-forest/10 bg-ivory p-3">
-          <p className="text-xs leading-5 text-ink/60">
-            Les formats sont recalcules depuis le prix au gramme actuel. Ils ne sont pas
-            stockes comme grille manuelle.
-          </p>
-          <FixedPriceOptionsPreview product={product as Product} options={resolvedOptions} />
-        </div>
-      )}
-
-      {mode === "disabled" && (
-        <p className="mt-4 rounded-md border border-forest/10 bg-ivory p-3 text-xs leading-5 text-ink/60">
-          Aucun bouton de format fixe ne sera affiche publiquement pour ce produit.
-        </p>
-      )}
-
-      {mode === "manual" && (
-        <>
-          <div className="mt-4 flex justify-end">
-            <button
-              type="button"
-              className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
-              onClick={() =>
-                onChange([
-                  ...options,
-                  {
-                    id: `format-${options.length + 1}`,
-                    totalPrice: 0,
-                    quantityGrams: 0,
-                    isActive: false,
-                    source: "manual",
-                    sortOrder: options.length,
-                  },
-                ])
-              }
-            >
-              Ajouter
-            </button>
-          </div>
-          {manualIssues.length > 0 && (
-            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
-              {manualIssues.map((issue) => (
-                <p key={`${issue.optionId || "global"}-${issue.message}`}>
-                  {issue.message}
-                </p>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-      {mode === "manual" && (
-        <div className="mt-4 grid gap-3">
-        {options.length === 0 && (
-          <p className="text-xs text-ink/55">Aucun format prix fixe configure.</p>
-        )}
-        {options.map((option, index) => {
-          const duplicateKey = `${option.quantityGrams}:${option.totalPrice}`;
-          const isDuplicateActive = option.isActive && duplicateActiveTotals.has(duplicateKey);
-          const isAdvantageous = isFixedPriceAdvantageous(product as Product, option);
-          return (
-            <div key={`${option.id}-${index}`} className="rounded-md border border-forest/10 bg-ivory p-3">
-              <div className="grid gap-3 md:grid-cols-4">
-                <Input
-                  label="Identifiant"
-                  value={option.id}
-                  onChange={(id) => updateOption(index, { id })}
-                />
-                <Input
-                  label="Libelle"
-                  value={option.label || ""}
-                  onChange={(label) => updateOption(index, { label })}
-                  placeholder={fixedPriceOptionLabel(option)}
-                />
-                <NumberInput
-                  label="Prix total"
-                  value={option.totalPrice}
-                  onChange={(totalPrice) => updateOption(index, { totalPrice })}
-                />
-                <NumberInput
-                  label="Grammes"
-                  value={option.quantityGrams}
-                  onChange={(quantityGrams) =>
-                    updateOption(index, { quantityGrams: Math.floor(quantityGrams) })
-                  }
-                />
-              </div>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-forest/70">
-                <label className="flex items-center gap-2 font-medium">
-                  <input
-                    type="checkbox"
-                    checked={option.isActive}
-                    onChange={(event) => updateOption(index, { isActive: event.target.checked })}
-                  />
-                  Actif
-                </label>
-                <span>
-                  Prix effectif : {fixedPriceEffectiveUnitPrice(option).toFixed(2).replace(".", ",")} EUR/g
-                  {isAdvantageous ? " - avantageux" : ""}
-                </span>
-                <button
-                  type="button"
-                  className="text-red-700 underline"
-                  onClick={() => onChange(options.filter((_, optionIndex) => optionIndex !== index))}
-                >
-                  Supprimer ce format
-                </button>
-              </div>
-              {option.isActive && !isAdvantageous && (
-                <p className="mt-2 text-xs text-amber-800">
-                  Ce format actif n'est pas moins cher que le prix au gramme actuel.
-                </p>
-              )}
-              {isDuplicateActive && (
-                <p className="mt-2 text-xs text-red-700">
-                  Un format actif identique existe deja pour ce produit.
-                </p>
-              )}
-            </div>
-          );
-        })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FixedPriceOptionsPreview({
-  product,
-  options,
-}: {
-  product: Product;
-  options: ReturnType<typeof resolveFixedPriceOptions>;
-}) {
-  if (options.length === 0) {
-    return (
-      <p className="mt-3 text-xs text-amber-800">
-        Aucun format automatique coherent pour le prix et la categorie actuels.
-      </p>
-    );
-  }
-
-  return (
-    <div className="mt-3 grid gap-2">
-      {options.map((option) => (
-        <div
-          key={option.id}
-          className="rounded-md border border-forest/10 bg-cream p-3 text-xs text-forest"
-        >
-          <p className="font-semibold">{fixedPriceOptionLabel(option)}</p>
-          <p className="mt-1 text-forest/70">
-            Prix effectif : {fixedPriceEffectiveUnitPrice(option).toFixed(2).replace(".", ",")} EUR/g
-          </p>
-          <p className="text-forest/70">
-            Economie : {option.savingAmount.toFixed(2).replace(".", ",")} EUR (
-            {(option.savingRate * 100).toFixed(1).replace(".", ",")} %)
-          </p>
-          <p className="text-forest/60">
-            Politique v{option.policyVersion || FIXED_PRICE_POLICY_VERSION} - {option.id}
-          </p>
-        </div>
-      ))}
-      {!product.isActive && (
-        <p className="text-xs text-amber-800">
-          Produit inactif : aucun format ne sera affiche publiquement.
-        </p>
       )}
     </div>
   );
@@ -1954,7 +1292,7 @@ function ProductTable({
                 </td>
                 <td className="px-4 py-4">
                   <button className="btn-secondary min-h-9 px-3 py-2" onClick={() => onEdit(product)}>
-                    Editer
+                    Modifier
                   </button>
                 </td>
               </tr>
@@ -1966,17 +1304,7 @@ function ProductTable({
   );
 }
 
-function StockTable({
-  products,
-  onStockChange,
-}: {
-  products: Product[];
-  onStockChange: (
-    product: Product,
-    stock: number,
-    threshold: number,
-  ) => Promise<void>;
-}) {
+function StockTable({ products, onOpen }: { products: Product[]; onOpen: (id: string) => void }) {
   const [filter, setFilter] = useState<StockFilter>("all");
   const [search, setSearch] = useState("");
   const stockFilters = buildStockFilters(products);
@@ -2021,26 +1349,13 @@ function StockTable({
         />
       )}
       {visibleProducts.map((product) => (
-        <StockRow key={product.id} product={product} onStockChange={onStockChange} />
+        <StockRow key={product.id} product={product} onOpen={onOpen} />
       ))}
     </section>
   );
 }
 
-function StockRow({
-  product,
-  onStockChange,
-}: {
-  product: Product;
-  onStockChange: (
-    product: Product,
-    stock: number,
-    threshold: number,
-  ) => Promise<void>;
-}) {
-  const [stock, setStock] = useState(product.stock);
-  const [threshold, setThreshold] = useState(product.lowStockThreshold);
-
+function StockRow({ product, onOpen }: { product: Product; onOpen: (id: string) => void }) {
   return (
     <article className="admin-card grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_100px_110px_auto] md:items-end">
       <div className="flex items-center gap-3">
@@ -2051,7 +1366,7 @@ function StockRow({
           loading="lazy"
         />
         <div>
-          <h2 className="font-display text-xl leading-tight text-forest">{product.name}</h2>
+          <h2 className="font-display text-xl leading-tight text-forest"><button type="button" className="text-left underline-offset-4 hover:underline" onClick={() => onOpen(product.id)}>{product.name}</button></h2>
           <span className="text-xs font-mono text-ink/50">
             {product.internalReference || "Reference a attribuer"}
           </span>
@@ -2066,13 +1381,13 @@ function StockRow({
           </div>
         </div>
       </div>
-      <NumberInput label="Stock" value={stock} onChange={setStock} />
-      <NumberInput label="Seuil" value={threshold} onChange={setThreshold} />
+      <p className="text-sm">Stock <strong>{product.stock}</strong></p>
+      <p className="text-sm">Seuil <strong>{product.lowStockThreshold}</strong></p>
       <button
         className="btn-primary min-h-10 px-4 py-2 text-sm"
-        onClick={() => void onStockChange(product, stock, threshold)}
+        type="button" onClick={() => onOpen(product.id)}
       >
-        Enregistrer
+        Modifier
       </button>
     </article>
   );
@@ -2607,7 +1922,7 @@ function DeliveryZoneRow({
   );
 }
 
-function CouponForm({
+export function CouponForm({
   coupon,
   products,
   banners,
@@ -2617,7 +1932,9 @@ function CouponForm({
   onBannerActionChange,
   onBannerTargetIdChange,
   onSubmit,
+  privateMode = false,
 }: {
+  privateMode?: boolean;
   coupon: CouponInput;
   products: Product[];
   banners: PromoBanner[];
@@ -2669,11 +1986,11 @@ function CouponForm({
             <option value="tiered_product_gift">Cadeau produit par paliers</option>
           </select>
         </label>
-        <Input
+        {!privateMode && <Input
           label="Identifiant Firestore"
           value={coupon.id || ""}
           onChange={(id) => onChange({ ...coupon, id: id.trim().toLowerCase() || undefined })}
-        />
+        />}
         <div>
           <Input
             label="Code promo"
@@ -2743,20 +2060,21 @@ function CouponForm({
         </p>}
         <Input
           label="Date et heure de début (Europe/Paris)"
-          value={promotionDateTimeLocalValue(coupon.startsAt)}
+          value={privateMode ? marketingLocalValue(coupon.startsAt) : promotionDateTimeLocalValue(coupon.startsAt)}
           onChange={(startsAt) =>
-            onChange({ ...coupon, startsAt: startsAt ? promotionDateTimeLocalToIso(startsAt) : undefined })
+            onChange({ ...coupon, startsAt: startsAt ? (privateMode ? marketingLocalToIso(startsAt) : promotionDateTimeLocalToIso(startsAt)) : undefined })
           }
           type="datetime-local"
         />
         <Input
           label="Date et heure de fin (Europe/Paris)"
-          value={promotionDateTimeLocalValue(coupon.endsAt)}
+          value={privateMode ? marketingLocalValue(coupon.endsAt, "end") : promotionDateTimeLocalValue(coupon.endsAt)}
           onChange={(endsAt) =>
-            onChange({ ...coupon, endsAt: endsAt ? promotionDateTimeLocalToIso(endsAt) : undefined })
+            onChange({ ...coupon, endsAt: endsAt ? (privateMode ? marketingLocalToIso(endsAt) : promotionDateTimeLocalToIso(endsAt)) : undefined })
           }
           type="datetime-local"
         />
+        {!privateMode && <>
         <label className="flex items-center gap-2 text-sm text-forest">
           <input
             type="checkbox"
@@ -2765,6 +2083,7 @@ function CouponForm({
           />
           Actif
         </label>
+        </>}
         <label className="flex items-center gap-2 text-sm text-forest">
           <input
             type="checkbox"
@@ -2780,6 +2099,7 @@ function CouponForm({
         {isTieredGift && (
           <TieredGiftEditor coupon={coupon} products={products} onChange={onChange} />
         )}
+        {!privateMode && <>
         <label className="text-sm font-medium text-forest">
           Banniere associee
           <select
@@ -2813,6 +2133,7 @@ function CouponForm({
             </select>
           </label>
         )}
+        </>}
         <button
           className="btn-secondary min-h-10 justify-between px-3 py-2 text-sm"
           type="button"
@@ -2903,7 +2224,7 @@ function CouponForm({
             />
             <NumberInput
               label="Priorite"
-              value={coupon.priority || 10}
+              value={coupon.priority ?? 10}
               onChange={(priority) => onChange({ ...coupon, priority })}
             />
             <label className="flex items-center gap-2 text-sm text-forest">
@@ -2914,11 +2235,7 @@ function CouponForm({
               />
               Cumulable plus tard
             </label>
-            <NumberInput
-              label="Utilisations actuelles"
-              value={coupon.usedCount || 0}
-              onChange={(usedCount) => onChange({ ...coupon, usedCount })}
-            />
+            <p className="text-sm text-ink/60">Utilisations actuelles : {coupon.usedCount || 0} · compteur serveur en lecture seule.</p>
             {!isTieredGift && (
               <>
             <Input
@@ -2943,7 +2260,7 @@ function CouponForm({
           </div>
         )}
         <button className="btn-primary" type="submit">
-          Enregistrer la promotion
+          {privateMode ? "Enregistrer le brouillon privé" : "Enregistrer la promotion"}
         </button>
       </div>
     </form>
@@ -3401,12 +2718,16 @@ function BannerPlacementSelector({
   );
 }
 
-function PromoBannerForm({
+export function PromoBannerForm({
   banner,
   coupons,
   onChange,
   onSubmit,
+  privateMode = false,
+  campaignMode = false,
 }: {
+  privateMode?: boolean;
+  campaignMode?: boolean;
   banner: PromoBannerInput;
   coupons: Coupon[];
   onChange: (banner: PromoBannerInput) => void;
@@ -3453,14 +2774,14 @@ function PromoBannerForm({
         <div className="grid grid-cols-2 gap-3">
           <Input
             label="Début (Europe/Paris)"
-            value={promotionDateTimeLocalValue(banner.startsAt)}
-            onChange={(startsAt) => onChange({ ...banner, startsAt: startsAt ? promotionDateTimeLocalToIso(startsAt) : undefined })}
+            value={privateMode ? marketingLocalValue(banner.startsAt) : promotionDateTimeLocalValue(banner.startsAt)}
+            onChange={(startsAt) => onChange({ ...banner, startsAt: startsAt ? (privateMode ? marketingLocalToIso(startsAt) : promotionDateTimeLocalToIso(startsAt)) : undefined })}
             type="datetime-local"
           />
           <Input
             label="Fin (Europe/Paris)"
-            value={promotionDateTimeLocalValue(banner.endsAt)}
-            onChange={(endsAt) => onChange({ ...banner, endsAt: endsAt ? promotionDateTimeLocalToIso(endsAt) : undefined })}
+            value={privateMode ? marketingLocalValue(banner.endsAt, "end") : promotionDateTimeLocalValue(banner.endsAt)}
+            onChange={(endsAt) => onChange({ ...banner, endsAt: endsAt ? (privateMode ? marketingLocalToIso(endsAt) : promotionDateTimeLocalToIso(endsAt)) : undefined })}
             type="datetime-local"
           />
         </div>
@@ -3474,6 +2795,7 @@ function PromoBannerForm({
           value={banner.buttonUrl || ""}
           onChange={(buttonUrl) => onChange({ ...banner, buttonUrl })}
         />
+        {campaignMode ? <p className="text-sm text-forest">La bannière sera reliée à la promotion de cette campagne.</p> : <>
         <label className="text-sm font-medium text-forest">
           Promotion liee optionnelle
           <select
@@ -3508,6 +2830,8 @@ function PromoBannerForm({
             })
           }
         />
+        </>}
+        {!privateMode && <>
         <label className="flex items-center gap-2 text-sm text-forest">
           <input
             type="checkbox"
@@ -3516,6 +2840,7 @@ function PromoBannerForm({
           />
           Active
         </label>
+        </>}
         <div className="rounded-md border border-champagne/30 bg-cream p-4">
           <p className="text-xs uppercase tracking-[0.14em] text-champagne">Apercu</p>
           <div className={`mt-3 rounded-md border p-4 ${adminBannerPreviewClass(banner.variant)}`}>
@@ -3591,7 +2916,7 @@ function PromoBannerForm({
           </div>
         )}
         <button className="btn-primary" type="submit">
-          Enregistrer la banniere
+          {privateMode ? "Enregistrer le brouillon privé" : "Enregistrer la banniere"}
         </button>
       </div>
     </form>
@@ -3824,679 +3149,6 @@ function PromoBannerCard({
       </div>
     </article>
   );
-}
-
-function CustomersTable({
-  customers,
-  orders,
-  coupons,
-  onAdjustPoints,
-  onNote,
-  onAssignPromo,
-  onStatusUpdate,
-}: {
-  customers: CustomerProfile[];
-  orders: AdminOrderRow[];
-  coupons: Coupon[];
-  onAdjustPoints: (customer: CustomerProfile) => Promise<void>;
-  onNote: (customer: CustomerProfile, note: string) => Promise<void>;
-  onAssignPromo: (customer: CustomerProfile, couponId: string, note: string) => Promise<void>;
-  onStatusUpdate: (
-    customer: CustomerProfile,
-    data: { status?: CustomerProfile["status"]; archived?: boolean; hidden?: boolean },
-  ) => Promise<void>;
-}) {
-  const commercialCustomers = useMemo(
-    () => commercialAdminCustomers(customers),
-    [customers],
-  );
-  const commercialOrders = useMemo(
-    () => commercialAdminOrders(orders),
-    [orders],
-  );
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<CustomerFilter>("active");
-  const [sort, setSort] = useState<CustomerSort>("lastOrder");
-  const [selectedCustomerId, setSelectedCustomerId] = useState(
-    commercialCustomers[0]?.id || "",
-  );
-  const [promoCouponId, setPromoCouponId] = useState(coupons[0]?.id || "");
-  const [promoNote, setPromoNote] = useState("");
-  const [details, setDetails] = useState<CustomerAdminDetails>({
-    loyaltyMovements: [],
-    favorites: [],
-    reviews: [],
-  });
-  const selectedCustomer =
-    commercialCustomers.find((customer) => customer.id === selectedCustomerId) ||
-    commercialCustomers[0];
-  const selectedOrders = selectedCustomer
-    ? ordersForCommercialCustomer(commercialOrders, selectedCustomer)
-    : [];
-  const selectedStats = selectedCustomer
-    ? commercialCustomerStats(selectedCustomer, selectedOrders)
-    : null;
-
-  useEffect(() => {
-    if (!commercialCustomers.some((customer) => customer.id === selectedCustomerId)) {
-      setSelectedCustomerId(commercialCustomers[0]?.id || "");
-    }
-  }, [commercialCustomers, selectedCustomerId]);
-
-  useEffect(() => {
-    if (!selectedCustomer) {
-      setDetails({ loyaltyMovements: [], favorites: [], reviews: [] });
-      return;
-    }
-    let cancelled = false;
-    void getCustomerAdminDetails(selectedCustomer).then((nextDetails) => {
-      if (!cancelled) setDetails(nextDetails);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedCustomer]);
-
-  const enrichedCustomers = useMemo(
-    () => buildCommercialCustomerEntries(commercialCustomers, commercialOrders),
-    [commercialCustomers, commercialOrders],
-  );
-
-  const visibleCustomers = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-    return enrichedCustomers
-      .filter(({ customer, orders: customerOrders, stats }) => {
-        const haystack = [
-          customer.displayName,
-          customer.email,
-          customer.phone,
-          customer.internalNote,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        if (normalizedSearch && !haystack.includes(normalizedSearch)) return false;
-        if (filter === "archived") return customer.archived === true || customer.status === "archived";
-        if (customer.archived || customer.hidden) return false;
-        if (filter === "loyal") return commercialCustomerStatus(customer, customerOrders).label === "Fidele";
-        if (filter === "new") return commercialCustomerStatus(customer, customerOrders).label === "Nouveau";
-        if (filter === "withOrders") return customerOrders.length > 0;
-        if (filter === "withoutOrders") return customerOrders.length === 0;
-        if (filter === "withNote") return Boolean(customer.internalNote?.trim());
-        if (filter === "withPromo") return Boolean(customer.assignedPromos?.some((promo) => promo.isActive));
-        if (filter === "watch") return customer.status === "watch";
-        if (filter === "all") return true;
-        return stats.status.label !== "Archive";
-      })
-      .sort((left, right) => sortCustomers(left, right, sort));
-  }, [enrichedCustomers, filter, search, sort]);
-
-  return (
-    <section className="mt-8 space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminStatCard label="Clients" value={String(commercialCustomers.length)} detail="Profils en base" />
-        <AdminStatCard
-          label="Avec commandes"
-          value={String(enrichedCustomers.filter((entry) => entry.orders.length > 0).length)}
-          detail="Historique disponible"
-        />
-        <AdminStatCard
-          label="Clients fideles"
-          value={String(enrichedCustomers.filter((entry) => entry.stats.status.label === "Fidele").length)}
-          detail="3 commandes ou plus"
-        />
-        <AdminStatCard
-          label="Promos attribuees"
-          value={String(commercialCustomers.reduce((sum, customer) => sum + (customer.assignedPromos?.length || 0), 0))}
-          detail="Suivi interne"
-        />
-      </div>
-
-      <div className="rounded-lg border border-forest/10 bg-ivory p-4">
-        <div className="grid gap-3 lg:grid-cols-[1fr_220px_220px]">
-          <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-forest/60">
-            Recherche
-            <input
-              className="input-field mt-2"
-              value={search}
-              onChange={(event) => setSearch(event.currentTarget.value)}
-              placeholder="Nom, email, telephone, note"
-            />
-          </label>
-          <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-forest/60">
-            Filtre
-            <select
-              className="input-field mt-2"
-              value={filter}
-              onChange={(event) => setFilter(event.currentTarget.value as CustomerFilter)}
-            >
-              {customerFilters.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-forest/60">
-            Tri
-            <select
-              className="input-field mt-2"
-              value={sort}
-              onChange={(event) => setSort(event.currentTarget.value as CustomerSort)}
-            >
-              <option value="lastOrder">Derniere commande</option>
-              <option value="totalSpent">Total depense</option>
-              <option value="orderCount">Nombre de commandes</option>
-              <option value="loyalty">Points fidelite</option>
-              <option value="name">Alphabetique</option>
-            </select>
-          </label>
-        </div>
-      </div>
-
-      {!commercialCustomers.length && (
-        <AdminEmptyState
-          title="Aucun client pour le moment."
-          description="Les profils clients apparaitront ici apres inscription ou commande connectee."
-        />
-      )}
-      {!!commercialCustomers.length && (
-        <div className="grid gap-5 2xl:grid-cols-[minmax(360px,520px)_1fr]">
-          <div className="space-y-3">
-            {!visibleCustomers.length && (
-              <AdminEmptyState
-                title="Aucun client pour ce filtre."
-                description="Changez de filtre ou consultez tous les clients."
-                action={
-                  <button className="btn-secondary mt-3" onClick={() => setFilter("all")} type="button">
-                    Voir tous
-                  </button>
-                }
-              />
-            )}
-            {visibleCustomers.map(({ customer, stats }) => {
-              const status = stats.status;
-              const selected = selectedCustomer?.id === customer.id;
-              return (
-                <article
-                  key={customer.id}
-                  className={`rounded-lg border p-3 transition ${
-                    selected
-                      ? "border-champagne bg-cream shadow-sm"
-                      : "border-forest/10 bg-ivory hover:border-champagne/60"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <strong className="block truncate text-forest">
-                        {customer.displayName || "Client sans nom"}
-                      </strong>
-                      <span className="mt-1 block break-all text-xs text-ink/60">
-                        {customer.email || "Email non renseigne"}
-                      </span>
-                      <span className="block text-xs text-ink/60">
-                        {customer.phone || "Telephone non renseigne"}
-                      </span>
-                    </div>
-                    <AdminBadge tone={status.tone}>{status.label}</AdminBadge>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink/60">
-                    <span>Commandes : {stats.orderCount}</span>
-                    <span>Total : {formatEuro(stats.totalSpent)} EUR</span>
-                    <span>Derniere : {stats.lastOrderLabel}</span>
-                    <span>Points : {customer.loyaltyPoints || 0}</span>
-                  </div>
-                  {customer.internalNote && (
-                    <p className="mt-2 line-clamp-2 rounded-md bg-ivory px-3 py-2 text-xs text-ink/65">
-                      {customer.internalNote}
-                    </p>
-                  )}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
-                      type="button"
-                      onClick={() => setSelectedCustomerId(customer.id)}
-                    >
-                      Voir fiche
-                    </button>
-                    <button
-                      className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
-                      type="button"
-                      onClick={() => void onAdjustPoints(customer)}
-                    >
-                      Ajuster points
-                    </button>
-                    <button
-                      className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
-                      type="button"
-                      onClick={() => void onStatusUpdate(customer, { archived: true, status: "archived" })}
-                    >
-                      Archiver
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-
-          {selectedCustomer && selectedStats && (
-            <CustomerDetailPanel
-              customer={selectedCustomer}
-              orders={selectedOrders}
-              stats={selectedStats}
-              coupons={coupons}
-              details={details}
-              promoCouponId={promoCouponId}
-              promoNote={promoNote}
-              onPromoCouponChange={setPromoCouponId}
-              onPromoNoteChange={setPromoNote}
-              onAssignPromo={async () => {
-                if (!promoCouponId) return;
-                await onAssignPromo(selectedCustomer, promoCouponId, promoNote);
-                setPromoNote("");
-              }}
-              onAdjustPoints={() => onAdjustPoints(selectedCustomer)}
-              onNote={(note) => onNote(selectedCustomer, note)}
-              onStatusUpdate={(data) => onStatusUpdate(selectedCustomer, data)}
-            />
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
-
-type CustomerFilter =
-  | "active"
-  | "all"
-  | "new"
-  | "loyal"
-  | "watch"
-  | "withOrders"
-  | "withoutOrders"
-  | "withNote"
-  | "withPromo"
-  | "archived";
-
-type CustomerSort = "lastOrder" | "totalSpent" | "orderCount" | "loyalty" | "name";
-
-const customerFilters: { value: CustomerFilter; label: string }[] = [
-  { value: "active", label: "Actifs" },
-  { value: "new", label: "Nouveaux" },
-  { value: "loyal", label: "Fideles" },
-  { value: "watch", label: "A suivre" },
-  { value: "withOrders", label: "Avec commandes" },
-  { value: "withoutOrders", label: "Sans commande" },
-  { value: "withNote", label: "Avec note" },
-  { value: "withPromo", label: "Avec promo" },
-  { value: "archived", label: "Archives" },
-  { value: "all", label: "Tous" },
-];
-
-function CustomerDetailPanel({
-  customer,
-  orders,
-  stats,
-  coupons,
-  details,
-  promoCouponId,
-  promoNote,
-  onPromoCouponChange,
-  onPromoNoteChange,
-  onAssignPromo,
-  onAdjustPoints,
-  onNote,
-  onStatusUpdate,
-}: {
-  customer: CustomerProfile;
-  orders: AdminOrderRow[];
-  stats: CustomerComputedStats;
-  coupons: Coupon[];
-  details: CustomerAdminDetails;
-  promoCouponId: string;
-  promoNote: string;
-  onPromoCouponChange: (couponId: string) => void;
-  onPromoNoteChange: (note: string) => void;
-  onAssignPromo: () => Promise<void>;
-  onAdjustPoints: () => Promise<void>;
-  onNote: (note: string) => Promise<void>;
-  onStatusUpdate: (data: {
-    status?: CustomerProfile["status"];
-    archived?: boolean;
-    hidden?: boolean;
-  }) => Promise<void>;
-}) {
-  const [draftNote, setDraftNote] = useState(customer.internalNote || "");
-
-  useEffect(() => {
-    setDraftNote(customer.internalNote || "");
-  }, [customer.id, customer.internalNote]);
-
-  return (
-    <article className="rounded-lg border border-forest/10 bg-ivory p-3 shadow-sm lg:p-4">
-      <div className="flex flex-col justify-between gap-3 border-b border-forest/10 pb-3 xl:flex-row xl:items-start">
-        <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-champagne">Fiche client</p>
-          <h2 className="mt-1 font-display text-2xl text-forest">
-            {customer.displayName || "Client sans nom"}
-          </h2>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <AdminBadge tone={stats.status.tone}>{stats.status.label}</AdminBadge>
-            {customer.archived && <AdminBadge tone="muted">Archive</AdminBadge>}
-            {customer.hidden && <AdminBadge tone="muted">Masque</AdminBadge>}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button className="btn-secondary min-h-9 px-3 py-1.5 text-xs" type="button" onClick={onAdjustPoints}>
-            Ajuster points
-          </button>
-          {customer.archived || customer.hidden ? (
-            <button
-              className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
-              type="button"
-              onClick={() => void onStatusUpdate({ archived: false, hidden: false, status: "active" })}
-            >
-              Restaurer
-            </button>
-          ) : (
-            <>
-              <button
-                className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
-                type="button"
-                onClick={() => void onStatusUpdate({ hidden: true })}
-              >
-                Masquer
-              </button>
-              <button
-                className="btn-secondary min-h-9 px-3 py-1.5 text-xs"
-                type="button"
-                onClick={() => void onStatusUpdate({ archived: true, status: "archived" })}
-              >
-                Archiver
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-        <MiniCustomerMetric label="Commandes" value={String(stats.orderCount)} />
-        <MiniCustomerMetric label="Total depense" value={`${formatEuro(stats.totalSpent)} EUR`} />
-        <MiniCustomerMetric label="Panier moyen" value={`${formatEuro(stats.averageCart)} EUR`} />
-        <MiniCustomerMetric label="Derniere commande" value={stats.lastOrderLabel} />
-      </div>
-
-      {AdminCagnottePanel && (
-        <div className="mt-4">
-          <Suspense fallback={null}>
-            <AdminCagnottePanel
-              enabled={CAGNOTTE_READ_DISPLAY_ENABLED}
-              identityKey={customer.uid}
-              scope="admin"
-              targetUid={customer.uid}
-              customerLabel={customer.displayName || customer.email || customer.uid}
-            />
-          </Suspense>
-        </div>
-      )}
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        <section className="rounded-lg border border-forest/10 bg-cream p-3">
-          <h3 className="font-semibold text-forest">Informations generales</h3>
-          <dl className="mt-3 space-y-1.5 text-sm text-ink/70">
-            <InfoRow label="Email" value={customer.email || "Email non renseigne"} />
-            <InfoRow label="Telephone" value={customer.phone || "Telephone non renseigne"} />
-            <InfoRow label="Compte cree" value={formatAdminDate(customer.createdAt) || "Non renseigne"} />
-            <InfoRow label="Derniere mise a jour" value={formatAdminDate(customer.updatedAt) || "Non renseigne"} />
-            <InfoRow label="Points fidelite" value={`${customer.loyaltyPoints || 0} point(s)`} />
-          </dl>
-          <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.14em] text-forest/60">
-            Statut client
-            <select
-              className="input-field mt-2"
-              value={customer.status || stats.status.value}
-              onChange={(event) =>
-                void onStatusUpdate({ status: event.currentTarget.value as CustomerProfile["status"] })
-              }
-            >
-              <option value="new">Nouveau</option>
-              <option value="active">Actif</option>
-              <option value="loyal">Fidele</option>
-              <option value="watch">A suivre</option>
-              <option value="archived">Archive</option>
-            </select>
-          </label>
-        </section>
-
-        <section className="rounded-lg border border-forest/10 bg-cream p-3">
-          <h3 className="font-semibold text-forest">Note interne</h3>
-          <textarea
-            className="input-field mt-3 min-h-20"
-            value={draftNote}
-            onChange={(event) => setDraftNote(event.currentTarget.value)}
-            placeholder="Client prefere livraison locale le soir, a rappeler avant expedition..."
-          />
-          <button className="btn-primary mt-3 min-h-10 px-4 py-2 text-sm" type="button" onClick={() => void onNote(draftNote)}>
-            Enregistrer note
-          </button>
-          <div className="mt-4 space-y-2">
-            {(customer.internalNotes || []).slice(-3).reverse().map((note, index) => (
-              <p key={`${note.createdAt || index}-${index}`} className="rounded-md bg-ivory px-3 py-2 text-xs text-ink/65">
-                {note.note}
-                <span className="mt-1 block text-ink/45">{formatAdminDate(note.createdAt)}</span>
-              </p>
-            ))}
-            {!customer.internalNotes?.length && (
-              <p className="text-sm text-ink/55">Aucune note historisee.</p>
-            )}
-          </div>
-        </section>
-      </div>
-
-      <section className="mt-4 rounded-lg border border-forest/10 bg-cream p-3">
-        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
-          <div>
-            <h3 className="font-semibold text-forest">Promos attribuees</h3>
-            <p className="mt-1 text-sm text-ink/60">
-              Suivi interne uniquement. Cela ne limite pas automatiquement le code a ce client.
-            </p>
-          </div>
-          <div className="grid gap-2 md:grid-cols-[220px_1fr_auto]">
-            <select
-              className="input-field"
-              value={promoCouponId}
-              onChange={(event) => onPromoCouponChange(event.currentTarget.value)}
-            >
-              {coupons.map((coupon) => (
-                <option key={coupon.id} value={coupon.id}>
-                  {coupon.code}
-                </option>
-              ))}
-            </select>
-            <input
-              className="input-field"
-              value={promoNote}
-              onChange={(event) => onPromoNoteChange(event.currentTarget.value)}
-              placeholder="Note attribution"
-            />
-            <button className="btn-secondary min-h-10 px-3 py-2 text-xs" type="button" onClick={() => void onAssignPromo()}>
-              Attribuer
-            </button>
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {(customer.assignedPromos || []).map((promo) => (
-            <span key={`${promo.code}-${promo.assignedAt}`} className="rounded-full border border-forest/10 bg-ivory px-3 py-2 text-xs text-forest">
-              {promo.code} {promo.isActive ? "actif" : "inactif"}
-            </span>
-          ))}
-          {!customer.assignedPromos?.length && (
-            <p className="text-sm text-ink/55">Aucune promo attribuee.</p>
-          )}
-        </div>
-      </section>
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        <CustomerOrdersPanel orders={orders} />
-        <CustomerSignalsPanel
-          favorites={details.favorites}
-          reviews={details.reviews}
-          loyaltyMovements={details.loyaltyMovements}
-          customer={customer}
-        />
-      </div>
-    </article>
-  );
-}
-
-function CustomerOrdersPanel({ orders }: { orders: AdminOrderRow[] }) {
-  return (
-    <section className="rounded-lg border border-forest/10 bg-cream p-4">
-      <h3 className="font-semibold text-forest">Historique commandes</h3>
-      {!orders.length && <p className="mt-3 text-sm text-ink/55">Aucune commande liee.</p>}
-      <div className="mt-3 space-y-3">
-        {orders.slice(0, 8).map((order) => (
-          <article key={order.id} className="rounded-md border border-forest/10 bg-ivory p-3">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <strong className="block text-sm text-forest">{order.id}</strong>
-                <span className="text-xs text-ink/55">{formatAdminDate(order.createdAt)}</span>
-              </div>
-              <strong className="text-sm text-forest">{order.total}</strong>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <AdminBadge tone={orderStatusTone(order.orderStatus)}>{orderStatusLabel(order.orderStatus)}</AdminBadge>
-              <AdminBadge tone={paymentStatusTone(order.paymentStatus)}>{paymentStatusLabel(order.paymentStatus)}</AdminBadge>
-              <AdminBadge tone={order.deliveryMethod === "postal" ? "neutral" : "gold"}>
-                {order.deliveryMethod === "postal" ? "Postale" : "Locale"}
-              </AdminBadge>
-            </div>
-            <p className="mt-2 text-xs text-ink/60">
-              {order.items.map(formatOrderItemLine).join(", ") || "Produits non renseignes"}
-            </p>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function CustomerSignalsPanel({
-  favorites,
-  reviews,
-  loyaltyMovements,
-  customer,
-}: {
-  favorites: ProductFavorite[];
-  reviews: ProductReview[];
-  loyaltyMovements: LoyaltyMovement[];
-  customer: CustomerProfile;
-}) {
-  return (
-    <section className="rounded-lg border border-forest/10 bg-cream p-4">
-      <h3 className="font-semibold text-forest">Favoris, avis et fidelite</h3>
-      <div className="mt-4 space-y-4">
-        <div>
-          <h4 className="text-xs font-semibold uppercase tracking-[0.14em] text-forest/60">Favoris</h4>
-          {favorites.length ? (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {favorites.slice(0, 8).map((favorite) => (
-                <span key={favorite.id} className="rounded-full border border-forest/10 bg-ivory px-3 py-2 text-xs text-forest">
-                  {favorite.productName}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-ink/55">Aucun favori.</p>
-          )}
-        </div>
-        <div>
-          <h4 className="text-xs font-semibold uppercase tracking-[0.14em] text-forest/60">Avis internes</h4>
-          {reviews.length ? (
-            <div className="mt-2 space-y-2">
-              {reviews.slice(0, 3).map((review) => (
-                <p key={review.id} className="rounded-md bg-ivory px-3 py-2 text-xs text-ink/65">
-                  <strong className="text-forest">{review.productName} - {review.rating}/5</strong>
-                  <span className="mt-1 block">{review.comment}</span>
-                </p>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-ink/55">Aucun avis client.</p>
-          )}
-        </div>
-        <div>
-          <h4 className="text-xs font-semibold uppercase tracking-[0.14em] text-forest/60">Mouvements fidelite</h4>
-          {loyaltyMovements.length || customer.loyaltyHistory?.length ? (
-            <div className="mt-2 space-y-2">
-              {(customer.loyaltyHistory || []).slice(-3).reverse().map((entry, index) => (
-                <p key={`${entry.createdAt || index}-${index}`} className="rounded-md bg-ivory px-3 py-2 text-xs text-ink/65">
-                  {entry.reason} : {entry.previousBalance} {"->"} {entry.nextBalance} point(s)
-                  <span className="mt-1 block text-ink/45">{formatAdminDate(entry.createdAt)}</span>
-                </p>
-              ))}
-              {!customer.loyaltyHistory?.length &&
-                loyaltyMovements.slice(0, 3).map((movement) => (
-                  <p key={movement.id} className="rounded-md bg-ivory px-3 py-2 text-xs text-ink/65">
-                    {movement.points > 0 ? "+" : ""}
-                    {movement.points} point(s) - {movement.note || movement.reason}
-                  </p>
-                ))}
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-ink/55">Aucun mouvement fidelite.</p>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function AdminStatCard({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return (
-    <div className="rounded-lg border border-forest/10 bg-ivory p-4">
-      <span className="text-sm text-ink/55">{label}</span>
-      <strong className="mt-2 block font-display text-3xl text-forest">{value}</strong>
-      <span className="mt-1 block text-xs text-ink/55">{detail}</span>
-    </div>
-  );
-}
-
-function MiniCustomerMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-forest/10 bg-ivory px-3 py-2">
-      <span className="block text-[11px] uppercase tracking-[0.12em] text-forest/50">{label}</span>
-      <strong className="mt-1 block text-sm text-forest">{value}</strong>
-    </div>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid grid-cols-[120px_1fr] gap-3">
-      <dt className="text-ink/45">{label}</dt>
-      <dd className="break-words text-forest">{value}</dd>
-    </div>
-  );
-}
-
-function sortCustomers(
-  left: { customer: CustomerProfile; stats: CustomerComputedStats },
-  right: { customer: CustomerProfile; stats: CustomerComputedStats },
-  sort: CustomerSort,
-) {
-  if (sort === "totalSpent") return right.stats.totalSpent - left.stats.totalSpent;
-  if (sort === "orderCount") return right.stats.orderCount - left.stats.orderCount;
-  if (sort === "loyalty") {
-    return Number(right.customer.loyaltyPoints || 0) - Number(left.customer.loyaltyPoints || 0);
-  }
-  if (sort === "name") {
-    return (left.customer.displayName || left.customer.email || "").localeCompare(
-      right.customer.displayName || right.customer.email || "",
-      "fr",
-    );
-  }
-  return right.stats.lastOrderAt - left.stats.lastOrderAt;
 }
 
 function BillingWarning({ settings }: { settings: BillingSettings }) {
@@ -6528,12 +5180,14 @@ function AdminOrders({
   onUpdate: (orderId: string, data: AdminOrderUpdateInput) => Promise<void>;
   onDelete: (orderId: string) => Promise<void>;
 }) {
-  const [filter, setFilter] = useState("active");
+  const [orderParams] = useSearchParams();
+  const focusedOrderId = orderParams.get("search") || "";
+  const [filter, setFilter] = useState(focusedOrderId ? "all" : "active");
   const [paymentLinks, setPaymentLinks] = useState<AdminPaymentLink[]>([]);
   const [paymentLinkMessage, setPaymentLinkMessage] = useState("");
   const [emailRetrying, setEmailRetrying] = useState("");
   const invoiceByOrderId = new Map(invoices.map((invoice) => [invoice.orderId, invoice]));
-  const filteredOrders = orders.filter((order) => orderMatchesAdminFilter(order, filter));
+  const filteredOrders = orders.filter((order) => (!focusedOrderId || order.id === focusedOrderId) && orderMatchesAdminFilter(order, filter));
   const filterGroups = [
     {
       label: "Traitement",

@@ -15,7 +15,9 @@ import { getProductCostsAdmin } from "../services/productCostsService";
 import { getSupplierPurchasesAdmin } from "../services/supplierPurchasesService";
 import type { BillingSettings, Coupon, CustomerProfile, DeliveryZone, Invoice, Product, ProductCost, PromoBanner, SupplierPurchase } from "../types";
 
-export function useAdminData() {
+import type { StockSnapshot } from "../types/adminStock";
+
+export function useAdminData(clientsView = false) {
   const [products, setProducts] = useState<Product[]>([]);
   const [productSource, setProductSource] = useState<"firestore" | "local">("local");
   const [orders, setOrders] = useState<AdminOrderRow[]>([]);
@@ -44,6 +46,13 @@ export function useAdminData() {
   const refresh = useCallback(async () => {
     setIsLoading(true);
     if (!isAuthReady) return;
+    if (clientsView) {
+      const couponResult = await getCouponsWithFallback();
+      setCoupons(couponResult.coupons);
+      setCouponSource(couponResult.source);
+      setIsLoading(false);
+      return;
+    }
     const [
       productResult,
       orderResult,
@@ -110,7 +119,12 @@ export function useAdminData() {
       setSupplierPurchasesError(supplierPurchaseResult.error);
     }
     setIsLoading(false);
-  }, [isAuthReady]);
+  }, [isAuthReady, clientsView]);
+
+  const applyStockSnapshot = useCallback((snapshot: StockSnapshot) => {
+    setProducts((current) => current.map((product) => product.id === snapshot.productId
+      ? { ...product, stock: snapshot.stock, lowStockThreshold: snapshot.lowStockThreshold } : product));
+  }, []);
 
   const refreshOrder = useCallback(async (orderId: string) => {
     const order = await getAdminOrder(orderId);
@@ -170,5 +184,6 @@ export function useAdminData() {
     isLoading,
     refresh,
     refreshOrder,
+    applyStockSnapshot,
   };
 }

@@ -100,6 +100,11 @@ expectScript("test:referral-maintenance", "node --import tsx scripts/runCagnotte
 expectScript("test:referral-checkout", "node --import tsx scripts/runCagnotteLedgerTests.ts --referral-checkout-only");
 expectScript("test:referral-client", "node --import tsx scripts/testReferralClient.ts && node --import tsx scripts/testReferralClientUi.tsx");
 expectScript("typecheck:referral-client-tests", "tsc --noEmit -p tsconfig.referral-client-tests.json --incremental false");
+expectScript("test:marketing-ai-unit", "node --import tsx --import ./scripts/cagnotteNetworkGuard.ts scripts/testMarketingAiUnit.ts");
+expectScript("test:marketing-ai-client", "node --import tsx --import ./scripts/cagnotteNetworkGuard.ts scripts/testMarketingAiClient.ts");
+expectScript("test:marketing-ai", "node --import tsx scripts/runCagnotteLedgerTests.ts --marketing-ai-only");
+expectScript("test:marketing-ai-ui", "node --import tsx scripts/testMarketingAiUi.ts");
+expectScript("typecheck:marketing-ai-tests", "tsc --noEmit -p tsconfig.marketing-ai-tests.json --incremental false");
 requireValue(
   [
     "npm run prepare:cagnotte-firestore-emulator && node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",

@@ -22,7 +22,6 @@ import { normalizeLegacyInternalReferences } from "../lib/productReferences";
 import { syncProductPrimaryImage } from "../lib/productImages";
 import {
   assertOrdinaryProductAdminMutationAllowed,
-  ordinaryProductStockMutation,
 } from "../lib/productionFixtureMarker";
 import type { Product } from "../types";
 
@@ -156,6 +155,11 @@ export async function getFirestoreProducts(activeOnly = true) {
       )
     : collection(db, collections.products);
   const snapshot = await getDocs(productsQuery);
+  // A cached snapshot cannot confirm current public stock or catalogue membership.
+  // Keep the existing non-commercial fallback until the server confirms the data.
+  if (activeOnly && snapshot.metadata.fromCache) {
+    throw new Error("Public catalogue requires a server-confirmed snapshot.");
+  }
   return snapshot.docs
     .map((entry) => {
       const firestoreProduct = {
@@ -280,20 +284,6 @@ export async function updateProductFlags(
   assertOrdinaryProductAdminMutationAllowed(product);
   await updateDoc(doc(db, collections.products, product.id), {
     ...flags,
-    updatedAt: serverTimestamp(),
-  });
-}
-
-export async function updateProductStock(
-  product: Product,
-  stock: number,
-  lowStockThreshold: number,
-) {
-  const mutation = ordinaryProductStockMutation(product, stock, lowStockThreshold);
-  if (!db) throw new Error("Firebase is not configured.");
-  await updateDoc(doc(db, collections.products, mutation.productId), {
-    stock: mutation.stock,
-    lowStockThreshold: mutation.lowStockThreshold,
     updatedAt: serverTimestamp(),
   });
 }

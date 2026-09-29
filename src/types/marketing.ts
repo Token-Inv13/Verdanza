@@ -1,0 +1,71 @@
+import type { Coupon, Product, PromoBanner } from "./index.js";
+import type { Contest, ContestInput } from "./contests.js";
+import type { MarketingAiProvenance } from "./marketingAi.js";
+
+export type MarketingKind = "promotion" | "banner" | "contest" | "campaign";
+export type MarketingState = "draft" | "reviewed" | "approved" | "materialized" | "activated" | "archived";
+export type PromotionConfiguration = Omit<Coupon, "id" | "usedCount" | "isActive" | "createdAt" | "updatedAt" | "archivedAt" | "source" | "contestId" | "contestPrizeId" | "redeemableByEmailHash">;
+export type BannerConfiguration = Omit<PromoBanner, "id" | "isActive" | "createdAt" | "updatedAt" | "archivedAt" | "deletedLinkedCouponId" | "promotionSummary">;
+export type MarketingParameters = {
+  couponDocumentId?: string;
+  promotion?: PromotionConfiguration;
+  banner?: BannerConfiguration;
+  contest?: ContestInput;
+};
+export type MarketingReferences = { couponId?: string; bannerId?: string; contestId?: string };
+export type MarketingDraft = {
+  id: string;
+  kind: MarketingKind;
+  title: string;
+  origin: "manual" | "ai";
+  ai?: MarketingAiProvenance;
+  parameters: MarketingParameters;
+  references: MarketingReferences;
+  baseFingerprints: Partial<Record<keyof MarketingReferences, string>>;
+  revision: number;
+  state: MarketingState;
+  reviewedRevision?: number;
+  approvedRevision?: number;
+  materializedRevision?: number;
+  activatedRevision?: number;
+  approval?: { actorId: string; at: string; revision: number };
+  authorId: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+export type MarketingAudit = {
+  id: string;
+  draftId: string;
+  kind: MarketingKind;
+  revision: number;
+  action: MarketingAction;
+  event: string;
+  actorId: string;
+  operationId: string;
+  references: MarketingReferences;
+  createdAt: string;
+  contestAuditCollection?: "contestAuditLogs";
+};
+export type MarketingAction = "save" | "review" | "approve" | "materialize" | "activate" | "deactivate" | "archive";
+export type MarketingOperation = {
+  action: MarketingAction;
+  operationId: string;
+  draftId: string;
+  expectedRevision: number;
+  kind?: MarketingKind;
+  title?: string;
+  parameters?: MarketingParameters;
+  references?: MarketingReferences;
+  baseFingerprints?: MarketingDraft["baseFingerprints"];
+  aiSource?: { generationId: string; proposalId: string };
+};
+export type MarketingResult = { draft: MarketingDraft; operationId: string; replayed: boolean };
+export type MarketingContext = {
+  drafts: MarketingDraft[];
+  coupons: Coupon[];
+  banners: PromoBanner[];
+  contests: Contest[];
+  products: Product[];
+  fingerprints: Record<string, string>;
+};

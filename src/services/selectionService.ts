@@ -1,5 +1,6 @@
 import { getFirebaseIdToken } from "../lib/firebaseAuth";
 import type { ProductSelection } from "../types/selection";
+import type { PipelineAction, PipelineContext, PricingPolicy } from "../types/selectionPipeline";
 
 async function selectionRequest<T>(body?: Record<string, unknown>, query = ""): Promise<T> {
   const token = await getFirebaseIdToken();
@@ -18,34 +19,29 @@ export async function listSelections() {
   return selectionRequest<{ selections: ProductSelection[] }>();
 }
 
-export async function saveSelection(selection: ProductSelection) {
-  return selectionRequest<{ selection: ProductSelection }>({ action: "save", selection });
+export async function saveSelection(selection: ProductSelection, operationId = crypto.randomUUID(), imageBase64?: string) {
+  return selectionRequest<{ selection: ProductSelection }>({ action: "pipeline", operation: { action: "save", operationId, id: selection.id, expectedRevision: selection.revision || 0, selection, ...(imageBase64 ? { imageBase64 } : {}) } });
 }
 
-export async function importSelections(selections: ProductSelection[]) {
-  return selectionRequest<{ imported: number; skipped: number }>({ action: "import", selections });
+export async function importSelections(selections: ProductSelection[], operationId = crypto.randomUUID()) {
+  return selectionRequest<{ imported: number; skipped: number }>({ action: "import", selections, operationId });
 }
 
 export async function extractSelection(url: string) {
   return selectionRequest<{ selection: ProductSelection }>({ action: "extract", url });
 }
 
-export async function uploadSelectionImage(id: string, imageBase64: string) {
-  return selectionRequest<{ imagePath: string; updatedAt: string }>({ action: "uploadImage", id, imageBase64 });
+export async function getSelectionPipeline(id: string, pricing?: { category: "flowers" | "resins"; positioning: "standard" | "premium" }) {
+  const suffix = pricing ? `&pricingCategory=${pricing.category}&positioning=${pricing.positioning}` : "";
+  return selectionRequest<PipelineContext>(undefined, `?action=pipeline&id=${encodeURIComponent(id)}${suffix}`);
 }
 
-export async function publishSelection(id: string) {
-  return selectionRequest<{ slug: string; pdfUrl: string }>({ action: "publish", id });
+export async function runSelectionPipeline(item: ProductSelection, action: Exclude<PipelineAction, "save">, operationId: string) {
+  return selectionRequest<{ selection: ProductSelection }>({ action: "pipeline", operation: { action, id: item.id, expectedRevision: item.revision || 0, operationId } });
 }
 
-export async function publishSelectionToCatalog(id: string, catalog: { price: number; stock: number; description: string }) {
-  return selectionRequest<{ productId: string; slug: string; category: "flowers" | "resins" }>(
-    { action: "publishCatalog", id, catalog },
-  );
-}
-
-export async function unpublishSelection(id: string) {
-  return selectionRequest<{ ok: boolean }>({ action: "unpublish", id });
+export async function saveSelectionPricingPolicy(policy: PricingPolicy, expectedPolicy: PricingPolicy | null, operationId: string) {
+  return selectionRequest<{ policy: PricingPolicy }>({ action: "pipelinePolicy", policy, expectedPolicy, operationId });
 }
 
 export async function downloadSelectionPdf(id: string) {

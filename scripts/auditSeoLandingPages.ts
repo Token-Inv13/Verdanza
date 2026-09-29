@@ -53,7 +53,7 @@ const pages = [
     descriptionIncludes: ["résines CBD", "livraison"],
     h2: ["Besoin d'aide pour comparer ?"],
     links: ["/blog"],
-    textMarkers: ["texture", "CBG", "Disponible"],
+    textMarkers: ["texture", "profils sélectionnés avec soin", "Disponible"],
   },
   {
     path: "/livraison-locale",

@@ -1,0 +1,12 @@
+import { Link } from "react-router-dom";
+import type { MarketingContext } from "../../../types/marketing";
+import { bannerState, promotionState } from "../../../lib/marketingBusinessStatus";
+
+export function MarketingOverview({ context }: { context: MarketingContext }) {
+  const rows = [
+    { type: "Promotions", active: context.coupons.filter((p) => p.source !== "contest" && promotionState(p) === "Active").length, scheduled: context.coupons.filter((p) => p.source !== "contest" && promotionState(p) === "Programmée").length, drafts: context.coupons.filter((p) => p.source !== "contest" && ["Inactive", "Modèle"].includes(promotionState(p))).length, finished: context.coupons.filter((p) => p.source !== "contest" && ["Archivée", "Terminée", "Limite atteinte"].includes(promotionState(p))).length },
+    { type: "Bannières", active: context.banners.filter((b) => bannerState(b, context.coupons) === "Active").length, scheduled: context.banners.filter((b) => bannerState(b, context.coupons) === "Programmée").length, drafts: context.banners.filter((b) => !["Active", "Programmée", "Archivée", "Expirée"].includes(bannerState(b, context.coupons))).length, finished: context.banners.filter((b) => ["Archivée", "Expirée"].includes(bannerState(b, context.coupons))).length },
+    { type: "Concours", active: context.contests.filter((c) => c.status === "active").length, scheduled: context.contests.filter((c) => c.status === "scheduled").length, drafts: context.contests.filter((c) => c.status === "draft").length, finished: context.contests.filter((c) => !["active", "scheduled", "draft"].includes(c.status)).length },
+  ];
+  return <section className="admin-card"><h2 className="font-display text-3xl text-forest">Vue d'ensemble</h2><div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{["Module", "Actifs", "Programmés", "Inactifs / modèles / bloqués", "Terminés / archivés"].map((label) => <th key={label} className="p-2 font-medium">{label}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.type} className="border-t border-forest/10">{[row.type, row.active, row.scheduled, row.drafts, row.finished].map((value, i) => <td key={i} className="p-2">{value}</td>)}</tr>)}</tbody></table></div><p className="mt-3 text-xs text-ink/60">Les bannières bloquées par leur promotion liée sont détaillées dans Bannières. Les tirages et gagnants en attente restent accessibles dans Concours.</p><Link className="btn-secondary mt-3 min-h-9 px-3 py-1" to="/admin/concours">Ouvrir les concours</Link></section>;
+}

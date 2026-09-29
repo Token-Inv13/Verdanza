@@ -7,6 +7,7 @@ import { homeHeroImageVariant, homeHeroMobileImageVariant, homeHeroTabletImageVa
   productImageVariants, staticImageVariants } from "../src/lib/generatedImageVariants";
 import { blockExternalServices, gotoDomReady } from "./auditPageReady";
 import { startAuditStaticServer } from "./auditStaticServer";
+import { installPublicAuditCatalog } from "./publicAuditCatalog.js";
 
 type PublicImage = {
   url: string;
@@ -229,6 +230,7 @@ async function auditRuntimeHero() {
         window.localStorage.setItem("verdanza-age-confirmed", "true");
       });
       await blockExternalServices(context);
+      await installPublicAuditCatalog(context);
       await context.route("**/api/public-promo-banners", (route) => route.abort());
       const page = await context.newPage();
       page.on("request", (request) => {

@@ -1,3 +1,5 @@
+import { normalizeCommercial, normalizeEconomics, normalizeCapture, type CommercialPreparation, type EconomicFormat, type SupplierCapture } from "./selectionPipeline.js";
+
 export const selectionStatuses = [
   "À explorer", "À commander", "À tester", "Testé", "Retenu", "En boutique", "Écarté",
 ] as const;
@@ -43,6 +45,10 @@ export type ProductSelection = {
   publishedAt: string;
   publishedSlug: string;
   catalogProductId: string;
+  revision?: number;
+  commercial?: CommercialPreparation;
+  economics?: EconomicFormat[];
+  extraction?: SupplierCapture;
 };
 
 export function emptySelection(): ProductSelection {
@@ -93,6 +99,10 @@ export function normalizeSelection(raw: unknown): ProductSelection {
     prices, importedAt: text("importedAt", 40), updatedAt: text("updatedAt", 40),
     publishedAt: text("publishedAt", 40), publishedSlug: text("publishedSlug", 100),
     catalogProductId: text("catalogProductId", 100),
+    revision: Number.isSafeInteger(value.revision) && Number(value.revision) >= 0 ? Number(value.revision) : 0,
+    ...(value.commercial ? { commercial: normalizeCommercial(value.commercial) } : {}),
+    ...(value.economics ? { economics: normalizeEconomics(value.economics) } : {}),
+    ...(value.extraction ? { extraction: normalizeCapture(value.extraction) } : {}),
   };
 }
 

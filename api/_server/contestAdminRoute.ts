@@ -4,7 +4,6 @@ import {
   ContestError,
   contestCollections,
   cancelContestPrize,
-  createContest,
   getAdminContestDetail,
   invalidateContestWinner,
   listAdminContests,
@@ -12,7 +11,6 @@ import {
   rotateContestPrizeClaimToken,
   serializeContestResponse,
   transitionContest,
-  updateContest,
   validateContestWinner,
 } from "./contests.js";
 import { sendContestPrizeEmail } from "./email.js";
@@ -23,11 +21,16 @@ import {
   type VercelResponseLike,
 } from "./http.js";
 import type { ContestPrize, ContestStatus } from "../../src/types/contests.js";
+import { handleMarketingAdmin } from "./marketingAdmin.js";
+import { handleMarketingAiAdmin } from "./marketingAi.js";
 
 export async function handleAdminContests(
   request: VercelRequestLike,
   response: VercelResponseLike,
 ) {
+  const query = new URL(request.url || "/", "https://verdanza.local").searchParams;
+  if (query.get("action") === "marketing") return handleMarketingAdmin(request, response);
+  if (query.get("action") === "marketing-ai") return handleMarketingAiAdmin(request, response);
   if (!request.method || !["GET", "POST"].includes(request.method)) {
     sendJson(response, { error: "Methode non autorisee." }, 405);
     return;
@@ -69,16 +72,13 @@ export async function handleAdminContests(
     const action = String(body.action || "");
     const contestId = String(body.contestId || "").trim();
     if (action === "create") {
-      const contest = await createContest(db, body.contest, actor);
-      sendJson(response, serializeContestResponse({ contest }), 201);
-      return;
+      throw new ContestError("Préparez la création dans Marketing et confirmez sa révision.", 409, "marketing_workflow_required");
     }
     if (action === "update") {
-      const contest = await updateContest(db, contestId, body.contest, actor);
-      sendJson(response, serializeContestResponse({ contest }));
-      return;
+      throw new ContestError("Préparez la modification dans Marketing et confirmez sa révision.", 409, "marketing_workflow_required");
     }
     if (action === "transition") {
+      if (["active", "scheduled"].includes(String(body.status))) throw new ContestError("L'activation nécessite un brouillon Marketing approuvé.", 409, "marketing_workflow_required");
       const contest = await transitionContest(
         db,
         contestId,

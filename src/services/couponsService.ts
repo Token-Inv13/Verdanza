@@ -95,7 +95,8 @@ export function buildCouponWritePayload(
     stackable: input.stackable === true,
     priority: Number(input.priority || 10),
     maxUses: input.maxUses ? Number(input.maxUses) : clearValue,
-    usedCount: Number(input.usedCount || 0),
+    // Usage belongs to checkout. A configuration update must never replay a stale count.
+    ...(options.includeCreatedAt ? { usedCount: 0 } : {}),
     startsAt: input.startsAt || clearValue,
     endsAt: input.endsAt || clearValue,
     isActive: Boolean(input.isActive),

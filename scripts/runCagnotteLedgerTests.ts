@@ -9,7 +9,6 @@ import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import {
   assertCagnotteEmulatorAvailable,
-  CAGNOTTE_DEMO,
   createCagnotteTestEnvironment,
   validateCagnotteEmulatorTarget,
 } from "./cagnotteEmulator.js";
@@ -19,11 +18,12 @@ import {
 } from "./firestoreEmulatorProcessDiagnostics.js";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const localHome = resolve(root, "node_modules/.cache/cagnotte/home");
+const localHome = resolve(root, "scripts/node_modules/.cache/cagnotte/home");
 await mkdir(localHome, { recursive: true });
-const env = createCagnotteTestEnvironment(process.env, localHome);
+const secondaryPort = ["--product-pipeline-only", "--product-pipeline-regressions", "--marketing-only", "--marketing-ai-only"].some((option) => process.argv.includes(option));
+const env = createCagnotteTestEnvironment(process.env, localHome, secondaryPort);
 const config = JSON.parse(await readFile(resolve(root, "firebase.cagnotte.local.json"), "utf8"));
-const target = { projectId: config.cagnotteTest.projectId, ...config.emulators.firestore };
+const target = { projectId: config.cagnotteTest.projectId, ...config.emulators.firestore, ...(secondaryPort ? { port: 18086 } : {}) };
 validateCagnotteEmulatorTarget(target);
 if (config.firestore.rules !== "firestore.cagnotte.local.rules" || config.cagnotteTest.emulatorVersion !== "1.22.0") {
   throw new Error("Configuration locale inattendue.");
@@ -31,6 +31,12 @@ if (config.firestore.rules !== "firestore.cagnotte.local.rules" || config.cagnot
 
 const allowedOptions = new Set([
   "--unit-only",
+  "--admin-stock-only",
+  "--admin-customers-only",
+  "--marketing-only",
+  "--marketing-ai-only",
+  "--product-pipeline-only",
+  "--product-pipeline-regressions",
   "--reservations-only",
   "--regularization-only",
   "--orders-only",
@@ -79,24 +85,28 @@ if (mode === "ledger" || mode === "--unit-only") {
 }
 if (mode === "--unit-only") process.exit(0);
 
-const jar = resolve(root, "node_modules/.cache/cagnotte/cloud-firestore-emulator-v1.22.0.jar");
+let jar = resolve(root, "node_modules/.cache/cagnotte/cloud-firestore-emulator-v1.22.0.jar");
 let jarBytes: Buffer;
 try {
   jarBytes = await readFile(jar);
 } catch (error) {
   if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-    throw new Error("Prérequis local absent : émulateur Firestore 1.22.0 introuvable. Exécutez explicitement `npm run prepare:cagnotte-firestore-emulator` avant les vérifications.");
+    // Reuse the official local cache without downloading or changing dependencies.
+    if (!process.env.USERPROFILE) throw error;
+    jar = resolve(process.env.USERPROFILE, ".cache/firebase/emulators/cloud-firestore-emulator-v1.22.0.jar");
+    jarBytes = await readFile(jar);
+  } else {
+    throw error;
   }
-  throw error;
 }
 const digest = createHash("sha256").update(jarBytes).digest("hex");
 if (digest !== "9b6498b7f62714d67f48f59b3818883cd682dbcd46b9f59511de81c97bb5166c") {
   throw new Error("Prérequis local invalide : empreinte inattendue pour l’émulateur Firestore 1.22.0. Exécutez explicitement `npm run prepare:cagnotte-firestore-emulator` avant les vérifications.");
 }
-const rulesPath = resolve(root, mode === "--security-only" || mode === "--server-security-only" ? "firestore.rules" : config.firestore.rules);
+const rulesPath = resolve(root, mode === "--security-only" || mode === "--server-security-only" || (mode === "--admin-stock-only" || mode === "--admin-customers-only" || (mode === "--marketing-only" || mode === "--marketing-ai-only" || mode === "--product-pipeline-only" || mode === "--product-pipeline-regressions")) ? "firestore.rules" : config.firestore.rules);
 const rules = await readFile(rulesPath);
 if (!rules.length) throw new Error(mode === "--security-only" ? "Fichier complet de règles absent/vide." : "Règles locales de test absentes ou vides.");
-if (mode === "--security-only" || mode === "--server-security-only") {
+if (mode === "--security-only" || mode === "--server-security-only" || mode === "--admin-stock-only" || mode === "--admin-customers-only" || (mode === "--marketing-only" || mode === "--marketing-ai-only" || mode === "--product-pipeline-only" || mode === "--product-pipeline-regressions")) {
   console.log(`Règles candidates : ${rulesPath}\nSHA-256 : ${createHash("sha256").update(rules).digest("hex")}`);
 }
 
@@ -176,7 +186,7 @@ try {
       throw firestoreEmulatorStartupError("exit", diagnosticContext(state.exitCode, state.signal));
     }
     try {
-      await assertCagnotteEmulatorAvailable(CAGNOTTE_DEMO);
+      await assertCagnotteEmulatorAvailable(target);
       ready = true;
       break;
     } catch {
@@ -195,6 +205,32 @@ try {
     throw firestoreEmulatorStartupError("timeout", diagnosticContext());
   }
   console.log(`Émulateur officiel 1.22.0 : ${target.projectId}, ${target.host}:${target.port}, PID ${emulator.pid}.`);
+  if (mode === "--marketing-only") {
+    await run("scripts/testMarketingServer.ts");
+    await run("scripts/testMarketingRules.ts");
+  }
+  if (mode === "--marketing-ai-only") {
+    await run("scripts/testMarketingAiServer.ts");
+    await run("scripts/testMarketingAiRules.ts");
+  }
+  if (mode === "--product-pipeline-regressions") {
+    await run("scripts/testAdminStock.ts");
+    await run("scripts/testAdminStockRules.ts");
+    await run("scripts/testAdminCustomers.ts");
+    await run("scripts/testAdminCustomersRules.ts");
+  }
+  if (mode === "--product-pipeline-only") {
+    await run("scripts/testSelectionPipeline.ts");
+    await run("scripts/testSelectionPipelineRules.ts");
+  }
+  if (mode === "--admin-customers-only") {
+    await run("scripts/testAdminCustomers.ts");
+    await run("scripts/testAdminCustomersRules.ts");
+  }
+  if (mode === "--admin-stock-only") {
+    await run("scripts/testAdminStock.ts");
+    await run("scripts/testAdminStockRules.ts");
+  }
   if (mode === "ledger") await run("scripts/testCagnotteLedger.ts", ["--emulator"]);
   if (mode === "--reservations-only") await run("scripts/testCagnotteReservations.ts");
   if (mode === "--regularization-only") await run("scripts/testCagnotteRegularization.ts");

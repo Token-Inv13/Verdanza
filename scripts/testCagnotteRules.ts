@@ -1,11 +1,16 @@
 import { equal, rejects } from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { initializeTestEnvironment } from "@firebase/rules-unit-testing";
-import { collection, collectionGroup, deleteDoc, deleteField, doc, getDoc, getDocs, increment, query, setDoc, setLogLevel, updateDoc, where, writeBatch } from "firebase/firestore";
 import { cagnotteProductionFixtureMarker } from "../src/lib/cagnotteProductionFixtureIdentity.js";
 import { assertCagnotteEmulatorAvailable, CAGNOTTE_DEMO, validateCagnotteTestEnvironment } from "./cagnotteEmulator.js";
+
+// Use the same SDK instance as rules-unit-testing, including in isolated caches.
+const require = createRequire(import.meta.url);
+const { initializeTestEnvironment } = require("@firebase/rules-unit-testing") as typeof import("@firebase/rules-unit-testing");
+const rulesRequire = createRequire(require.resolve("@firebase/rules-unit-testing"));
+const { collection, collectionGroup, deleteDoc, deleteField, doc, getDoc, getDocs, increment, query, setDoc, setLogLevel, updateDoc, where, writeBatch } = rulesRequire("firebase/firestore") as typeof import("firebase/firestore");
 
 validateCagnotteTestEnvironment(process.env);
 await assertCagnotteEmulatorAvailable(CAGNOTTE_DEMO);
@@ -180,12 +185,15 @@ try {
     await updateDoc(doc(a, "customers/client-a"), { displayName: "Synthetic updated" });
     await denied(getDoc(doc(b, "customers/client-a")));
   });
-  await test("Non regression", "admin ordinary create/update/delete, product stock", async () => {
+  await test("Non regression", "admin ordinary create/update/delete, product flags and server-only stock", async () => {
     const ref = doc(admin, "orders/admin-ordinary"); await setDoc(ref, ordinary);
     await updateDoc(ref, { paymentStatus: "paid", internalNote: "Synthetic" });
     await setDoc(ref, { ...ordinary, orderStatus: "cancelled" }); await deleteDoc(ref);
-    await updateDoc(doc(admin, "products/public"), { stock: 9 });
+    await updateDoc(doc(admin, "products/public"), { isFeatured: true });
+    await denied(updateDoc(doc(admin, "products/public"), { stock: 9 }));
+    await denied(updateDoc(doc(admin, "products/public"), { lowStockThreshold: 3 }));
     await denied(updateDoc(doc(a, "products/public"), { stock: 999 }));
+    equal((await getDoc(doc(admin, "products/public"))).data()?.stock, 10);
   });
   for (const [name, ctx] of profiles.slice(0, 3)) {
     await test("Non regression", `${name} ordinary writes still denied`, async () => {

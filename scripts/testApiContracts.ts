@@ -144,13 +144,15 @@ function testFunctionInventoryAndSecuritySources() {
     "invoices.ts",
     "order-refunds.ts",
     "quote-order.ts",
+    "referral.ts",
     "retry-order-emails.ts",
     "retry-order-purchase-analytics.ts",
     "revoke-order-analytics.ts",
+    "selection.ts",
     "send-payment-link.ts",
     "update-order-status.ts",
   ]);
-  assert.equal(functions.length, 18);
+  assert.equal(functions.length, 20);
 
   for (const file of [
     "api/_server/contestAdminRoute.ts",
@@ -160,6 +162,11 @@ function testFunctionInventoryAndSecuritySources() {
     "api/_server/sendPaymentLinkRoute.ts",
     "api/_server/orderRefundRoute.ts",
     "api/_server/cagnotteReadRoute.ts",
+    "api/_server/adminStock.ts",
+    "api/_server/adminCustomers.ts",
+    "api/_server/selectionPipeline.ts",
+    "api/_server/marketingAdmin.ts",
+    "api/_server/marketingAi.ts",
   ]) {
     assert.match(
       readFileSync(resolve(file), "utf8"),
@@ -197,4 +204,4 @@ await testEndpointContracts();
 testRewriteConfiguration();
 testFunctionInventoryAndSecuritySources();
 
-console.log("Direct API endpoint contract tests passed (18 functions)");
+console.log("Direct API endpoint contract tests passed (20 functions)");

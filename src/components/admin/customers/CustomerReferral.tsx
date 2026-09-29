@@ -1,0 +1,10 @@
+import { available } from "../../../lib/adminCustomersV2";
+import type { CustomerReferralPage, CustomerReferralRelation } from "../../../types/adminCustomers";
+import { MoreButton, ResourceState } from "./CustomerResource";
+import { useCustomerPage } from "../../../hooks/useAdminCustomerResource";
+import { centsLabel, dateLabel } from "../../../lib/adminCustomersV2";
+function Relation({ item }: { item: CustomerReferralRelation }) { return <article className="rounded-xl border border-forest/15 p-4 text-sm"><p>Parrain : {available(item.sponsorUid)} · Filleul : {available(item.refereeUid)}</p><p className="mt-2">État : {available(item.state)} · {dateLabel(item.date)}</p><p>Commande qualifiante : {available(item.orderId)}</p><p>Récompense du programme : {centsLabel(item.rewardCents)} · {available(item.compartment)}</p>{item.reason && <p className="mt-2 text-amber-800">Motif enregistré : {item.reason}</p>}</article>; }
+export function CustomerReferral({ customerId }: { customerId: string }) {
+  const resource = useCustomerPage<CustomerReferralRelation, CustomerReferralPage>("adminCustomerReferral", customerId);
+  return <div className="space-y-4"><ResourceState pending={resource.pending} error={resource.error} onRetry={resource.reload} />{resource.data && <>{resource.data.mode === "off" && <p>Le programme de parrainage est désactivé. Les relations déjà enregistrées restent consultables.</p>}<p>Mode : {resource.data.mode} · Code existant : {available(resource.data.code)}</p><h3 className="font-semibold">Parrain de ce client</h3>{resource.data.sponsor ? <Relation item={resource.data.sponsor} /> : <p>Aucune relation enregistrée.</p>}<h3 className="font-semibold">Filleuls</h3>{!resource.items.length && <p>Aucun historique disponible.</p>}{resource.items.map((item) => <Relation key={item.id} item={item} />)}<MoreButton cursor={resource.nextCursor} pending={resource.pending} onClick={() => void resource.loadMore()} /><p className="text-sm text-ink/65">Lecture seule. La récompense indiquée décrit le montant du programme et le compartiment enregistré ; le ledger cagnotte fait foi pour les mouvements financiers.</p></>}</div>;
+}

@@ -7,6 +7,7 @@ import { syncBuiltinESMExports } from "node:module";
 
 let unexpected = 0;
 let expected = false;
+const dedicatedPort = process.env.CAGNOTTE_TEST_SECONDARY_PORT === "1" ? 18086 : 18085;
 function block(): never {
   if (!expected) unexpected += 1;
   throw new Error("TEST_NETWORK_BLOCKED: only the dedicated numeric loopback endpoint is permitted.");
@@ -16,7 +17,7 @@ net.Socket.prototype.connect = new Proxy(net.Socket.prototype.connect, {
     const normalized = Array.isArray(args[0]) ? args[0] : args;
     const first = normalized[0];
     const options = first && typeof first === "object" ? first as { host?: string; port?: unknown } : { port: first, host: normalized[1] };
-    if (options.host !== "127.0.0.1" || Number(options.port) !== 18085) block();
+    if (options.host !== "127.0.0.1" || Number(options.port) !== dedicatedPort) block();
     return Reflect.apply(target, receiver, args);
   },
 });
@@ -34,13 +35,13 @@ dns.promises.lookup = new Proxy(dns.promises.lookup, {
 });
 const allowedHttpTarget = (value: unknown) => {
   try {
-    if (value instanceof URL) return value.hostname === "127.0.0.1" && value.port === "18085";
+    if (value instanceof URL) return value.hostname === "127.0.0.1" && value.port === String(dedicatedPort);
     if (typeof value === "string") {
       const url = new URL(value);
-      return url.hostname === "127.0.0.1" && url.port === "18085";
+      return url.hostname === "127.0.0.1" && url.port === String(dedicatedPort);
     }
     const options = value as { hostname?: string; host?: string; port?: unknown } | undefined;
-    return (options?.hostname ?? options?.host) === "127.0.0.1" && Number(options?.port) === 18085;
+    return (options?.hostname ?? options?.host) === "127.0.0.1" && Number(options?.port) === dedicatedPort;
   } catch {
     return false;
   }
