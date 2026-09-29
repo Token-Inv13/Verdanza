@@ -1,7 +1,7 @@
-import { addDoc, collection, getDocs, orderBy, query, serverTimestamp, where } from "firebase/firestore";
+import { collection, getDocs, orderBy, query, where } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { collections } from "./collections";
-import type { StockMovement, StockMovementType } from "../types";
+import type { StockMovement } from "../types";
 
 export async function getStockMovements(productId?: string) {
   if (!db) return [];
@@ -13,19 +13,4 @@ export async function getStockMovements(productId?: string) {
   return snapshot.docs.map(
     (entry) => ({ id: entry.id, ...entry.data() }) as StockMovement,
   );
-}
-
-export async function createStockMovement(data: {
-  productId: string;
-  productName: string;
-  type: StockMovementType;
-  quantity: number;
-  note?: string;
-  createdBy?: string;
-}) {
-  if (!db) throw new Error("Firebase is not configured.");
-  await addDoc(collection(db, collections.stockMovements), {
-    ...data,
-    createdAt: serverTimestamp(),
-  });
 }

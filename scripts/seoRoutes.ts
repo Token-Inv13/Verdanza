@@ -214,6 +214,7 @@ export const staticSeoRoutes: SeoRoute[] = [
   { path: "/admin/favoris", kind: "admin", component: "AdminPage(Favoris)", indexable: false },
   { path: "/admin/avis", kind: "admin", component: "AdminPage(Avis)", indexable: false },
   { path: "/admin/coupons", kind: "admin", component: "AdminPage(Coupons)", indexable: false },
+  { path: "/admin/marketing", kind: "admin", component: "AdminMarketingPage", indexable: false },
   { path: "/admin/bannieres", kind: "admin", component: "AdminPage(Bannieres)", indexable: false },
   { path: "/admin/archives", kind: "admin", component: "AdminArchivesPage", indexable: false },
   { path: "/admin/concours", kind: "admin", component: "AdminContestsPage", indexable: false },

@@ -15,6 +15,7 @@ service firebase.storage {
     function adminByEmail() {
       return signedIn()
         && request.auth.token.email != null
+        && request.auth.token.email_verified == true
         && firestore.exists(/databases/(default)/documents/adminUsers/$(request.auth.token.email))
         && firestore.get(/databases/(default)/documents/adminUsers/$(request.auth.token.email)).data.isActive == true;
     }

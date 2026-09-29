@@ -21,6 +21,8 @@ export type ProductionFixtureMarker = Readonly<{
 export type Product = {
   id: string;
   sourceSelectionId?: string;
+  pricingPositioning?: "standard" | "premium";
+  selectionImagePath?: string;
   internalReference?: string;
   legacyInternalReferences?: string[];
   slug: string;

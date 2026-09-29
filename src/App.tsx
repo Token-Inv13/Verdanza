@@ -100,7 +100,7 @@ const ContestPrizePage = lazy(() =>
     default: module.ContestPrizePage,
   })),
 );
-const AdminContestsPage = lazy(() => import("./pages/admin/AdminContestsPage"));
+const AdminMarketingPage = lazy(() => import("./pages/admin/AdminMarketingPage"));
 const AdminBlogCommentsPage = lazy(() => import("./pages/admin/AdminBlogCommentsPage"));
 
 export function App() {
@@ -188,9 +188,10 @@ export function App() {
             <Route path="clients" element={<AdminPage section="Clients" />} />
             <Route path="favoris" element={<AdminPage section="Favoris produits" />} />
             <Route path="avis" element={<AdminPage section="Avis clients" />} />
-            <Route path="coupons" element={<AdminPage section="Coupons" />} />
-            <Route path="bannieres" element={<AdminPage section="Bannieres" />} />
-            <Route path="concours" element={<AdminContestsPage />} />
+            <Route path="marketing" element={<AdminMarketingPage />} />
+            <Route path="coupons" element={<AdminMarketingPage view="promotions" />} />
+            <Route path="bannieres" element={<AdminMarketingPage view="banners" />} />
+            <Route path="concours" element={<AdminMarketingPage view="contests" />} />
             <Route path="commentaires-blog" element={<AdminBlogCommentsPage />} />
             <Route path="archives" element={<AdminArchivesPage />} />
             <Route path="factures" element={<Navigate to="/admin/comptabilite?tab=factures" replace />} />

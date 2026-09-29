@@ -49,9 +49,40 @@ const fullAudits = [
   "audit:seo-hosts",
 ];
 
+const adminV3Tests = [
+  "test:admin-v3",
+  "test:admin-stock",
+  "test:admin-stock-client",
+  "test:admin-storage",
+  "test:admin-stock-ui",
+  "test:admin-customers",
+  "test:admin-customers-unit",
+  "test:admin-customers-ui",
+  "test:selection-pipeline",
+  "test:selection-pipeline-regressions",
+  "test:selection-extraction",
+  "test:selection-pricing",
+  "test:selection-public-library",
+  "test:selection-pipeline-ui",
+  "test:marketing",
+  "test:marketing-client",
+  "test:marketing-ui",
+  "typecheck:marketing-ai-tests",
+  "test:marketing-ai-unit",
+  "test:marketing-ai",
+  "test:marketing-ai-client",
+  "test:marketing-ai-ui",
+  "test:public-catalog-runtime"
+];
+
+expectScript("verify:admin-v3", chain(adminV3Tests));
+expectScript("test:admin-customers-ui", "npm run typecheck:admin-customers-tests && node --import tsx scripts/testAdminCustomersUi.ts && node --import tsx scripts/testAdminCustomerAuditUi.ts");
+expectScript("typecheck:admin-customers-tests", "tsc --noEmit --moduleResolution Bundler --module ESNext --target ES2022 --jsx react-jsx --esModuleInterop --skipLibCheck --strict --types node,vite/client scripts/testAdminCustomersUi.ts scripts/testAdminCustomerAuditUi.ts scripts/fixtures/adminCustomerAuditFixture.tsx");
+expectScript("prepare:admin-storage-emulators", "node scripts/prepareAdminStorageEmulators.mjs");
+
 expectScript(
   "verify",
-  "npm run verify:local-safety && npm run lint && npm run typecheck && npm run typecheck:cagnotte-interactive && npm run typecheck:api && npm run typecheck:referral-maintenance && npm run typecheck:referral-client-tests && npm run test:firebase-admin-compatibility && npm run test:firebase-auth-error-contract && npm run test:blog-engagement && npm run test:cagnotte-runtime-config && npm run verify:cagnotte-interactive-isolation && npm run test:cagnotte-interactive-reliability && npm run test:cagnotte-interactive-diagnostics && npm run test:cagnotte-runtime-diagnostics && npm run test:cagnotte-rate-limit-windows && npm run test:cagnotte-interactive && npm run test:cagnotte-admin-storage && npm run test:cagnotte-admin-ui && npm run test:cagnotte-emulator-diagnostics && npm run test:cagnotte-read && npm run test:order-refunds && npm run test:cagnotte-payment-links && npm run test:cagnotte-security && npm run test:cagnotte-checkout-use && npm run test:referral-backend && npm run test:referral-maintenance && npm run test:referral-checkout && npm run test:referral-client && npm run test:cagnotte-v1-recipe && npm run verify:cagnotte-production-readiness && npm run test:core && npm run build:local && npm run audit:local-essential",
+  "npm run verify:local-safety && npm run lint && npm run typecheck && npm run typecheck:cagnotte-interactive && npm run typecheck:api && npm run typecheck:referral-maintenance && npm run typecheck:referral-client-tests && npm run test:firebase-admin-compatibility && npm run test:firebase-auth-error-contract && npm run test:blog-engagement && npm run test:cagnotte-runtime-config && npm run verify:cagnotte-interactive-isolation && npm run test:cagnotte-interactive-reliability && npm run test:cagnotte-interactive-diagnostics && npm run test:cagnotte-runtime-diagnostics && npm run test:cagnotte-rate-limit-windows && npm run test:cagnotte-interactive && npm run test:cagnotte-admin-storage && npm run test:cagnotte-admin-ui && npm run test:cagnotte-emulator-diagnostics && npm run test:cagnotte-read && npm run test:order-refunds && npm run test:cagnotte-payment-links && npm run test:cagnotte-security && npm run test:cagnotte-checkout-use && npm run test:referral-backend && npm run test:referral-maintenance && npm run test:referral-checkout && npm run test:referral-client && npm run test:cagnotte-v1-recipe && npm run verify:cagnotte-production-readiness && npm run test:core && npm run build:local && npm run audit:local-essential && npm run verify:admin-v3",
 );
 expectScript(
   "verify:full",
@@ -100,6 +131,11 @@ expectScript("test:referral-maintenance", "node --import tsx scripts/runCagnotte
 expectScript("test:referral-checkout", "node --import tsx scripts/runCagnotteLedgerTests.ts --referral-checkout-only");
 expectScript("test:referral-client", "node --import tsx scripts/testReferralClient.ts && node --import tsx scripts/testReferralClientUi.tsx");
 expectScript("typecheck:referral-client-tests", "tsc --noEmit -p tsconfig.referral-client-tests.json --incremental false");
+expectScript("test:marketing-ai-unit", "node --import tsx --import ./scripts/cagnotteNetworkGuard.ts scripts/testMarketingAiUnit.ts");
+expectScript("test:marketing-ai-client", "node --import tsx --import ./scripts/cagnotteNetworkGuard.ts scripts/testMarketingAiClient.ts");
+expectScript("test:marketing-ai", "node --import tsx scripts/runCagnotteLedgerTests.ts --marketing-ai-only");
+expectScript("test:marketing-ai-ui", "node --import tsx scripts/testMarketingAiUi.ts");
+expectScript("typecheck:marketing-ai-tests", "tsc --noEmit -p tsconfig.marketing-ai-tests.json --incremental false");
 requireValue(
   [
     "npm run prepare:cagnotte-firestore-emulator && node --import tsx scripts/runCagnotteLedgerTests.ts --refunds-only",
@@ -241,6 +277,7 @@ for (const testFile of [
 }
 
 const excluded = [
+  "prepare:admin-storage-emulators",
   "build",
   "postdeploy:check",
   "sitemap",

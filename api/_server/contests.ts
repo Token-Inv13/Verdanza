@@ -182,7 +182,7 @@ export function validateContestInput(value: unknown): ContestInput {
     startAt,
     endAt,
     drawAt,
-    rulesUrl,
+    rulesUrl: rulesUrl || "",
     rulesText,
     eligibilityConditions,
     prizeExpirationDays,
@@ -196,34 +196,41 @@ export async function createContest(
 ) {
   const input = validateContestInput(rawInput);
   const contestRef = db.collection(contestCollections.contests).doc();
-  const counterRef = db.collection("counters").doc("contest-sequence");
-  await db.runTransaction(async (transaction) => {
-    const counter = await transaction.get(counterRef);
-    const sequenceNumber = Number(counter.data()?.value || 0) + 1;
-    const payload = {
-      ...input,
-      sequenceNumber,
-      status: "draft" satisfies ContestStatus,
-      entryCount: 0,
-      createdBy: actor.actorId,
-      updatedBy: actor.actorId,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    };
-    transaction.set(contestRef, payload);
-    transaction.set(
-      counterRef,
-      { value: sequenceNumber, updatedAt: FieldValue.serverTimestamp() },
-      { merge: true },
-    );
-    writeAudit(transaction, db, {
-      action: "contest_created",
-      contestId: contestRef.id,
-      ...actor,
-      after: auditContestConfiguration(payload),
-    });
-  });
+  await db.runTransaction((transaction) => createContestInTransaction(transaction, db, contestRef, input, actor));
   return getContest(db, contestRef.id);
+}
+
+// Shared transaction entry points keep Marketing orchestration inside the native engine.
+export async function createContestInTransaction(
+  transaction: FirebaseFirestore.Transaction, db: FirebaseFirestore.Firestore,
+  contestRef: FirebaseFirestore.DocumentReference, rawInput: unknown, actor: Actor,
+) {
+  const input = validateContestInput(rawInput);
+  const counterRef = db.collection("counters").doc("contest-sequence");
+  const counter = await transaction.get(counterRef);
+  const sequenceNumber = Number(counter.data()?.value || 0) + 1;
+  const payload = {
+    ...input,
+    sequenceNumber,
+    status: "draft" satisfies ContestStatus,
+    entryCount: 0,
+    createdBy: actor.actorId,
+    updatedBy: actor.actorId,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  transaction.set(contestRef, payload);
+  transaction.set(
+    counterRef,
+    { value: sequenceNumber, updatedAt: FieldValue.serverTimestamp() },
+    { merge: true },
+  );
+  writeAudit(transaction, db, {
+    action: "contest_created",
+    contestId: contestRef.id,
+    ...actor,
+    after: auditContestConfiguration(payload),
+  });
 }
 
 export async function updateContest(
@@ -233,32 +240,38 @@ export async function updateContest(
   actor: Actor,
 ) {
   const input = validateContestInput(rawInput);
-  const ref = db.collection(contestCollections.contests).doc(contestId);
-  await db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(ref);
-    if (!snapshot.exists) throw new ContestError("Concours introuvable.", 404);
-    const existing = document<Contest>(snapshot);
-    if (!(["draft", "scheduled"] as ContestStatus[]).includes(existing.status)) {
-      throw new ContestError(
-        "La configuration est verrouillee apres l'ouverture du concours.",
-        409,
-        "contest_configuration_locked",
-      );
-    }
-    transaction.update(ref, {
-      ...input,
-      updatedBy: actor.actorId,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    writeAudit(transaction, db, {
-      action: "contest_updated",
-      contestId,
-      ...actor,
-      before: auditContestConfiguration(existing),
-      after: auditContestConfiguration({ ...existing, ...input }),
-    });
-  });
+  await db.runTransaction((transaction) => updateContestInTransaction(transaction, db, contestId, input, actor));
   return getContest(db, contestId);
+}
+
+export async function updateContestInTransaction(
+  transaction: FirebaseFirestore.Transaction, db: FirebaseFirestore.Firestore,
+  contestId: string, rawInput: unknown, actor: Actor,
+) {
+  const input = validateContestInput(rawInput);
+  const ref = db.collection(contestCollections.contests).doc(contestId);
+  const snapshot = await transaction.get(ref);
+  if (!snapshot.exists) throw new ContestError("Concours introuvable.", 404);
+  const existing = document<Contest>(snapshot);
+  if (!(["draft", "scheduled"] as ContestStatus[]).includes(existing.status)) {
+    throw new ContestError(
+      "La configuration est verrouillee apres l'ouverture du concours.",
+      409,
+      "contest_configuration_locked",
+    );
+  }
+  transaction.update(ref, {
+    ...input,
+    updatedBy: actor.actorId,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  writeAudit(transaction, db, {
+    action: "contest_updated",
+    contestId,
+    ...actor,
+    before: auditContestConfiguration(existing),
+    after: auditContestConfiguration({ ...existing, ...input }),
+  });
 }
 
 export async function transitionContest(
@@ -268,50 +281,66 @@ export async function transitionContest(
   actor: Actor,
   now = new Date(),
 ) {
+  await db.runTransaction((transaction) => transitionContestInTransaction(transaction, db, contestId, nextStatus, actor, now));
+  return getContest(db, contestId);
+}
+
+export async function transitionContestInTransaction(
+  transaction: FirebaseFirestore.Transaction, db: FirebaseFirestore.Firestore,
+  contestId: string, nextStatus: ContestStatus, actor: Actor, now = new Date(),
+  configuration?: ContestInput,
+) {
   if (!contestStatuses.includes(nextStatus)) throw new ContestError("Statut de concours invalide.");
   const ref = db.collection(contestCollections.contests).doc(contestId);
   const controlRef = db.collection(contestCollections.controls).doc(globalControlId);
-  await db.runTransaction(async (transaction) => {
-    const [snapshot, control] = await Promise.all([
-      transaction.get(ref),
-      transaction.get(controlRef),
-    ]);
-    if (!snapshot.exists) throw new ContestError("Concours introuvable.", 404);
-    const contest = document<Contest>(snapshot);
-    assertTransition(contest, nextStatus, now);
-    if (nextStatus === "active") {
-      const activeContestId = String(control.data()?.activeContestId || "");
-      if (activeContestId && activeContestId !== contestId) {
-        throw new ContestError(
-          "Un autre concours est deja actif.",
-          409,
-          "another_contest_active",
-        );
-      }
-      transaction.set(controlRef, {
-        activeContestId: contestId,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-    } else if (
-      (nextStatus === "closed" || nextStatus === "cancelled") &&
-      control.data()?.activeContestId === contestId
-    ) {
-      transaction.delete(controlRef);
+  const [snapshot, control] = await Promise.all([
+    transaction.get(ref),
+    transaction.get(controlRef),
+  ]);
+  if (!snapshot.exists) throw new ContestError("Concours introuvable.", 404);
+  const contest = document<Contest>(snapshot);
+  const input = configuration ? validateContestInput(configuration) : undefined;
+  if (input && !["draft", "scheduled"].includes(contest.status)) {
+    throw new ContestError("La configuration est verrouillee apres l'ouverture du concours.", 409, "contest_configuration_locked");
+  }
+  assertTransition({ ...contest, ...input }, nextStatus, now);
+  if (nextStatus === "active") {
+    const activeContestId = String(control.data()?.activeContestId || "");
+    if (activeContestId && activeContestId !== contestId) {
+      throw new ContestError(
+        "Un autre concours est deja actif.",
+        409,
+        "another_contest_active",
+      );
     }
-    transaction.update(ref, {
-      status: nextStatus,
-      updatedBy: actor.actorId,
+    transaction.set(controlRef, {
+      activeContestId: contestId,
       updatedAt: FieldValue.serverTimestamp(),
     });
-    writeAudit(transaction, db, {
-      action: nextStatus === "closed" ? "contest_closed" : "status_changed",
-      contestId,
-      ...actor,
-      before: { status: contest.status },
-      after: { status: nextStatus },
-    });
+  } else if (
+    (nextStatus === "closed" || nextStatus === "cancelled") &&
+    control.data()?.activeContestId === contestId
+  ) {
+    transaction.delete(controlRef);
+  }
+  transaction.update(ref, {
+    ...input,
+    status: nextStatus,
+    updatedBy: actor.actorId,
+    updatedAt: FieldValue.serverTimestamp(),
   });
-  return getContest(db, contestId);
+  if (input) writeAudit(transaction, db, {
+    action: "contest_updated", contestId, ...actor,
+    before: auditContestConfiguration(contest),
+    after: auditContestConfiguration({ ...contest, ...input }),
+  });
+  writeAudit(transaction, db, {
+    action: nextStatus === "closed" ? "contest_closed" : "status_changed",
+    contestId,
+    ...actor,
+    before: { status: contest.status },
+    after: { status: nextStatus },
+  });
 }
 
 export async function synchronizeContestLifecycle(

@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, extname, relative, resolve } from "node:path";
+import type { VercelRequestLike } from "../api/_server/http.js";
 import cagnotteHandler from "../api/cagnotte.js";
 import orderRefundHandler from "../api/order-refunds.js";
 import { buildCagnotteOrderEnrollment, prepareOrderCagnotteTransition } from "../api/_server/cagnotteOrders.js";
@@ -44,7 +45,10 @@ import {
 } from "./cagnotteProductionReadinessAssertions.js";
 
 const baseMain = "322f65895fb0a75479c92bc4a3054caa4073d2f8";
-const expectedRulesHash = "fdec1209023b2ae16f699987e66dd9ecad3a46dc920a59345f10802e0439df12";
+const historicalRulesCommit = "eb35d8dcc7383528e6f4e7b53eebe02ce9bb413d";
+const historicalRulesHash = "f90ea99267b4f422fd40ce62513e050f6649b2e92abc94ca0c89595769281c80";
+// Reviewed cumulative Admin V3 and legacy referral email-block rules; retain the exact-file guard and baseline proof.
+const expectedRulesHash = "02ece4445ed5a2b24a1d4b4b24914739f5ba66f82ef1605bb062df4d614a68c4";
 const expectedEndpoints = [
   "admin-contests.ts",
   "admin-payment-links.ts",
@@ -78,10 +82,12 @@ const secretSignatures = [
   /\b(?:vercel_|vcp_)[0-9A-Za-z_-]{20,}\b/i,
   /\bgh[opusr]_[0-9A-Za-z]{30,}\b/,
   /\bsk_live_[0-9A-Za-z]{20,}\b/,
+  /\bsk-(?:proj-|svcacct-)?[0-9A-Za-z_-]{32,}\b/,
   /\bGOCSPX-[0-9A-Za-z_-]{20,}\b/,
   /Bearer\s+[0-9A-Za-z._-]{32,}/,
 ];
 const sensitiveEnvironmentTemplateKeys = new Set([
+  "OPENAI_API_KEY",
   "RESEND_API_KEY",
   "TWILIO_ACCOUNT_SID",
   "TWILIO_AUTH_TOKEN",
@@ -314,8 +320,8 @@ await check("mode fermé sans écritures cagnotte ni fallback silencieux", async
   const ordinary = await prepareOrderCagnotteTransition({
     db: forbiddenDb as never,
     transaction: forbiddenDb as never,
-    order: { id: "ordinary", orderStatus: "pending", paymentStatus: "pending" } as never,
-    nextOrderStatus: "processing",
+    order: { id: "ordinary", orderStatus: "new", paymentStatus: "pending" } as never,
+    nextOrderStatus: "preparing",
     nextPaymentStatus: "pending",
   });
   assert.equal(ordinary, null);
@@ -331,7 +337,7 @@ await check("mode fermé sans écritures cagnotte ni fallback silencieux", async
 await check("rate-limit fermé ciblé disponible sans changer le défaut historique", async () => {
   const base = {
     route: "/api/create-order" as const,
-    request: { method: "POST", headers: {} },
+    request: request("POST", "/api/create-order"),
     email: "",
     authenticated: true,
     secret: "",
@@ -565,6 +571,8 @@ await check("documentation opérationnelle conserve l ordre inert-first et le dr
 });
 
 await check("règles Firestore candidates et protections commandes", () => {
+  const historicalRules = git(["show", `${historicalRulesCommit}:firestore.rules`]).replace(/\r\n/g, "\n").replace(/\r/g, "\n") + "\n";
+  assert.equal(createHash("sha256").update(historicalRules, "utf8").digest("hex"), historicalRulesHash);
   const rulesBytes = readFileSync(resolve("firestore.rules"));
   const rules = rulesBytes.toString("utf8").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   assert.equal(createHash("sha256").update(rules, "utf8").digest("hex"), expectedRulesHash);
@@ -582,6 +590,14 @@ await check("règles Firestore candidates et protections commandes", () => {
   ]) {
     assert.match(rules, new RegExp(`match /${collection}/\\{document=\\*\\*\\} \\{ allow read, write: if false; \\}`));
   }
+  for (const collection of [
+    "selectionWorkflows", "selectionOperations", "selectionSources", "selectionPricingPolicies",
+    "customerAdminMetadata", "customerAdminAudit", "marketingDrafts", "marketingOperations",
+    "marketingAuditLogs", "marketingCouponCodes", "marketingAiGenerations",
+  ]) {
+    assert.match(rules, new RegExp(`match /${collection}/\\{\\w+\\}\\s*\\{\\s*allow read, write: if false;\\s*\\}`));
+  }
+  assert.match(rules, /hasOnly\(\["isActive", "isFeatured", "updatedAt"\]\)/);
   assert.match(
     rules,
     /match \/customers\/\{customerId\} \{[\s\S]*?allow create:[\s\S]*?!request\.resource\.data\.keys\(\)\.hasAny\(\["productionFixture"\]\)[\s\S]*?allow update:/,
@@ -595,6 +611,13 @@ await check("index candidat exact raccordé localement dans firebase.json", () =
   const candidate = JSON.parse(read("firestore.cagnotte-read.indexes.json"));
   assert.deepEqual(candidate, {
     indexes: [{
+      collectionGroup: "stockMovements", queryScope: "COLLECTION",
+      fields: [
+        { fieldPath: "productId", order: "ASCENDING" },
+        { fieldPath: "createdAt", order: "DESCENDING" },
+        { fieldPath: "__name__", order: "DESCENDING" },
+      ],
+    }, {
       collectionGroup: "cagnotteMovements",
       queryScope: "COLLECTION",
       fields: [
@@ -616,6 +639,18 @@ await check("index candidat exact raccordé localement dans firebase.json", () =
         { fieldPath: "paymentStatus", order: "ASCENDING" },
         { fieldPath: "orderStatus", order: "ASCENDING" },
       ],
+    }, ...[
+      ["orders", "customerId"], ["orders", "customerEmail"],
+      ["orders", "customerEmailNormalized"], ["orders", "customerPhone"],
+      ["favorites", "userId"], ["productReviews", "userId"],
+      ["blogArticleComments", "userId"], ["loyaltyMovements", "customerId"],
+      ["referrals", "sponsorUid"], ["customerAdminAudit", "customerId"],
+    ].map(([collectionGroup, fieldPath]) => ({
+      collectionGroup, queryScope: "COLLECTION",
+      fields: [{ fieldPath, order: "ASCENDING" }, { fieldPath: "__name__", order: "ASCENDING" }],
+    })), {
+      collectionGroup: "products", queryScope: "COLLECTION",
+      fields: [{ fieldPath: "isActive", order: "ASCENDING" }, { fieldPath: "category", order: "ASCENDING" }],
     }],
     fieldOverrides: [],
   });
@@ -674,6 +709,9 @@ await check("régressions du contrôle strict du modèle .env.example", () => {
   assert.deepEqual(findVersionedSecretContentFindings([
     { file: allowedRootEnvironmentTemplate, source: "RESEND_API_KEY=\"synthetic-non-empty-value\"" },
   ]), [`${allowedRootEnvironmentTemplate}:non-empty-sensitive-field:RESEND_API_KEY`]);
+  assert.deepEqual(findVersionedSecretContentFindings([
+    { file: allowedRootEnvironmentTemplate, source: "OPENAI_API_KEY=\"synthetic-non-empty-value\"" },
+  ]), [`${allowedRootEnvironmentTemplate}:non-empty-sensitive-field:OPENAI_API_KEY`]);
   assert.deepEqual(findVersionedSecretContentFindings([
     {
       file: allowedRootEnvironmentTemplate,
@@ -830,7 +868,7 @@ function assertHistoricalCagnotteBaselineAvailable(commit: string) {
 }
 
 function request(method: string, url: string, body?: unknown, authorization?: string) {
-  return { method, url, body, headers: authorization ? { authorization } : {} };
+  return { method, url, body, headers: authorization ? { authorization } : {} } as unknown as VercelRequestLike;
 }
 
 function restoreEnvironment(name: string, value: string | undefined) {

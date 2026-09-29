@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import { useState } from "react";
 import {
   Archive,
@@ -6,6 +6,9 @@ import {
   BadgePercent,
   Boxes,
   Calculator,
+  FileText,
+  Settings,
+  Wallet,
   LineChart,
   LogOut,
   Heart,
@@ -24,24 +27,45 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { Seo } from "../components/Seo";
 import { BrandLogo } from "../components/BrandLogo";
+import { AdminNavGroup, type AdminNavItem } from "../components/admin/AdminNavGroup";
 
-const adminNav = [
-  { label: "Dashboard", to: "/admin", icon: BarChart3 },
-  { label: "Analytics", to: "/admin/analytics", icon: LineChart },
-  { label: "Produits", to: "/admin/produits", icon: Package },
-  { label: "Sélection", to: "/admin/selection", icon: ScanSearch },
-  { label: "Stocks", to: "/admin/stocks", icon: Boxes },
-  { label: "Commandes", to: "/admin/commandes", icon: ShoppingCart },
-  { label: "Livraisons", to: "/admin/livraisons", icon: Truck },
-  { label: "Promos", to: "/admin/coupons", icon: BadgePercent },
-  { label: "Bannieres", to: "/admin/bannieres", icon: Megaphone },
-  { label: "Concours", to: "/admin/concours", icon: Trophy },
-  { label: "Commentaires", to: "/admin/commentaires-blog", icon: MessagesSquare },
-  { label: "Archives", to: "/admin/archives", icon: Archive },
-  { label: "Comptabilité", to: "/admin/comptabilite", icon: Calculator },
-  { label: "Clients", to: "/admin/clients", icon: Users },
-  { label: "Favoris", to: "/admin/favoris", icon: Heart },
-  { label: "Avis clients", to: "/admin/avis", icon: MessageSquare },
+const adminNav: Array<{ title: string; collapsible?: boolean; items: AdminNavItem[] }> = [
+  { title: "Tableau de bord", items: [
+    { label: "Tableau de bord", to: "/admin", icon: BarChart3 },
+    { label: "Analytics", to: "/admin/analytics", icon: LineChart },
+  ] },
+  { title: "Catalogue", items: [
+    { label: "Sélection", to: "/admin/selection", icon: ScanSearch },
+    { label: "Produits", to: "/admin/produits", icon: Package },
+    { label: "Stocks", to: "/admin/stocks", icon: Boxes },
+  ] },
+  { title: "Commandes", items: [
+    { label: "Commandes", to: "/admin/commandes", icon: ShoppingCart },
+    { label: "Clients", to: "/admin/clients", icon: Users },
+    { label: "Livraisons", to: "/admin/livraisons", icon: Truck },
+  ] },
+  { title: "Marketing", collapsible: true, items: [
+    { label: "Vue d'ensemble", to: "/admin/marketing", icon: BarChart3 },
+    { label: "Bannières", to: "/admin/bannieres", icon: Megaphone },
+    { label: "Promotions", to: "/admin/coupons", icon: BadgePercent },
+    { label: "Concours", to: "/admin/concours", icon: Trophy },
+  ] },
+  { title: "Communauté", collapsible: true, items: [
+    { label: "Avis clients", to: "/admin/avis", icon: MessageSquare },
+    { label: "Commentaires", to: "/admin/commentaires-blog", icon: MessagesSquare },
+    { label: "Favoris", to: "/admin/favoris", icon: Heart },
+  ] },
+  { title: "Contenu", items: [
+    { label: "Archives", to: "/admin/archives", icon: Archive },
+  ] },
+  { title: "Paramètres / Gestion", items: [
+    { label: "Comptabilité", to: "/admin/comptabilite", icon: Calculator },
+    { label: "Achats fournisseurs", to: "/admin/comptabilite?tab=achats", icon: ShoppingCart, accountingTab: "achats" },
+    { label: "Coûts manuels", to: "/admin/comptabilite?tab=couts", icon: Wallet, accountingTab: "couts" },
+    { label: "Factures", to: "/admin/factures", icon: FileText, accountingTab: "factures" },
+    { label: "Facturation", to: "/admin/facturation", icon: FileText, accountingTab: "facturation" },
+    { label: "Paramètres", to: "/admin/parametres", icon: Settings },
+  ] },
 ];
 
 export function AdminLayout() {
@@ -77,7 +101,7 @@ export function AdminLayout() {
       )}
       <aside
         className={`fixed inset-y-0 left-0 z-40 flex w-[280px] flex-col border-r border-forest/10 bg-forest p-5 text-ivory transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-auto lg:translate-x-0 ${
-          isMenuOpen ? "translate-x-0" : "-translate-x-full"
+          isMenuOpen ? "visible translate-x-0" : "invisible -translate-x-full lg:visible"
         }`}
       >
         <div className="flex items-center justify-between gap-3">
@@ -101,28 +125,13 @@ export function AdminLayout() {
           </p>
           <p className="mt-2 break-all text-xs text-ivory/65">{adminUser?.email}</p>
         </div>
-        <nav className="mt-5 grid gap-1">
-          {adminNav.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/admin"}
-              onClick={() => setIsMenuOpen(false)}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-md border border-transparent px-3 py-2.5 text-sm font-medium transition ${
-                  isActive
-                    ? "border-champagne/40 bg-ivory text-forest shadow-sm"
-                    : "text-ivory/80 hover:bg-ivory/10 hover:text-ivory"
-                }`
-              }
-            >
-              <item.icon size={17} />
-              {item.label}
-            </NavLink>
+        <nav aria-label="Navigation administration" className="my-5 min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
+          {adminNav.map((group) => (
+            <AdminNavGroup key={group.title} {...group} onNavigate={() => setIsMenuOpen(false)} />
           ))}
         </nav>
         <button
-          className="mt-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-ivory/20 px-3 py-2 text-sm font-medium text-ivory/80 hover:bg-ivory/10"
+          className="mt-auto inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-ivory/20 px-3 py-2 text-sm font-medium text-ivory/80 hover:bg-ivory/10"
           onClick={() => void signOut()}
         >
           <LogOut size={16} />

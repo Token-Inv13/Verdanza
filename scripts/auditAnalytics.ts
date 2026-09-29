@@ -3,6 +3,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname, resolve } from "node:path";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import { isLocalResourceUrl } from "./auditPageReady";
+import { installPublicAuditCatalog } from "./publicAuditCatalog.js";
 
 const distDir = resolve("dist");
 const srcDir = resolve("src");
@@ -178,9 +179,10 @@ async function auditRuntimeConsent() {
   const browser = await chromium.launch();
 
   try {
-    const context = await browser.newContext();
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: "block" });
     const googleRequests: GoogleRequestLog = { gtm: [], ga4: [] };
     await installGoogleRequestMock(context, googleRequests);
+    await installPublicAuditCatalog(context);
 
     await assertFreshSession(context, baseUrl, googleRequests);
     await assertRejectFlow(context, baseUrl, googleRequests);
@@ -226,7 +228,7 @@ async function assertRejectFlow(context: BrowserContext, baseUrl: string, google
   if (googleRequests.gtm.length || googleRequests.ga4.length) failures.push("Google request fired after reject all");
   if ((await analyticsCookieCount(context)) !== 0) failures.push("_ga cookie exists after reject all");
   await page.goto(`${baseUrl}/panier`, { waitUntil: "load" });
-  if (!(await page.getByRole("heading", { name: "Panier" }).count())) {
+  if (!(await page.getByRole("heading", { name: "Panier", exact: true }).waitFor({ timeout: 5000 }).then(() => true).catch(() => false))) {
     failures.push("cart page is not usable after reject all");
   }
   await page.close();
@@ -318,7 +320,7 @@ async function assertAcceptAndWithdrawFlow(context: BrowserContext, baseUrl: str
 }
 
 async function assertKnownVisitorFlow(browser: Browser, baseUrl: string) {
-  const context = await browser.newContext();
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: "block" });
   await context.addInitScript(() => {
     window.localStorage.setItem("verdanza-age-confirmed", "true");
     window.localStorage.setItem(
@@ -332,6 +334,8 @@ async function assertKnownVisitorFlow(browser: Browser, baseUrl: string) {
   });
   const googleRequests: GoogleRequestLog = { gtm: [], ga4: [] };
   await installGoogleRequestMock(context, googleRequests);
+
+  await installPublicAuditCatalog(context);
 
   const page = await context.newPage();
   await page.goto(`${baseUrl}/admin`, { waitUntil: "load" });
@@ -595,12 +599,10 @@ async function assertPageScrollable(page: Page, label: string) {
   }
 
   await page.evaluate(() => {
-    window.scrollTo(0, 0);
-    if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+    window.scrollTo({ top: 0, behavior: "instant" });
   });
   await page.evaluate(() => {
-    window.scrollTo(0, 500);
-    if (document.scrollingElement) document.scrollingElement.scrollTop = 500;
+    window.scrollTo({ top: 500, behavior: "instant" });
   });
   await page.waitForTimeout(100);
   const afterScrollTo = await page.evaluate(() =>

@@ -123,7 +123,7 @@ jobs:
 
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -157,6 +157,9 @@ jobs:
 
       - name: Prepare cagnotte Firestore emulator
         run: npm run prepare:cagnotte-firestore-emulator
+
+      - name: Prepare Admin Storage emulators
+        run: npm run prepare:admin-storage-emulators
 
       - name: Install Chromium
         run: npx --no-install playwright install --with-deps chromium

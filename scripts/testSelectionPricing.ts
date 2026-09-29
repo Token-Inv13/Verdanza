@@ -1,0 +1,59 @@
+import { equal, ok, throws, deepEqual } from "node:assert/strict";
+import { compareCatalogue, recommendPrice, validatePricingPolicy } from "../src/lib/selectionPricing.js";
+import { prepareImportedSelection, preparePipelineProduct, supplierCostCandidates } from "../src/lib/selectionPipeline.js";
+import { emptySelection, type ProductSelection } from "../src/types/selection.js";
+import { emptyCommercial, type EconomicFormat, type PricingPolicy } from "../src/types/selectionPipeline.js";
+import type { Product, SupplierPurchase } from "../src/types/index.js";
+import { resolveFixedPriceOptions } from "../src/lib/fixedPriceOptions.js";
+let checks = 0; const test = (name: string, run: () => void) => { run(); checks++; console.log(`PASS ${name}`); };
+const policy: PricingPolicy = { schemaVersion: 1, category: "flowers", positioning: "premium", targetContributionRate: .4, variableRate: .1, packagingCost: 0, lossRate: 0, costBasis: "HT", sellingBasis: "HT", taxRate: 0, roundingIncrement: .01, roundingMode: "up" };
+const row: EconomicFormat = { id: "1g", label: "1 g", quantity: 1, unit: "g", cost: 2, costBasis: "HT", costSource: "verified_offer", evidence: "Offre fixture vérifiée", capturedAt: "2026-09-28", finalPrice: null };
+test("offre vérifiée, formule, marge brute et contribution", () => { const r = recommendPrice(row, policy); equal(r.recommended, 4); equal(r.grossMargin, 2); equal(r.contribution, 1.6); equal(r.contribution! / r.recommended!, policy.targetContributionRate); equal(r.markRate, .5); equal(r.marginRate, 1); equal(r.confidence, "qualified"); });
+test("pondéré, achat connu et manuel clairement qualifiés", () => { for (const costSource of ["weighted_cost", "recent_purchase", "manual"] as const) { const r = recommendPrice({ ...row, costSource }, policy); equal(r.recommended, 4); equal(r.confidence, costSource === "manual" ? "limited" : "qualified"); } });
+test("prix web non qualifié jamais coût vérifié", () => equal(recommendPrice({ ...row, costSource: "web_unqualified" }, policy).recommended, null));
+test("coût, source, date, unité, quantité et politique manquants", () => { for (const patch of [{ cost: null }, { quantity: null }, { unit: "" as const }, { evidence: "" }, { capturedAt: "" }]) equal(recommendPrice({ ...row, ...patch }, policy).recommended, null); equal(recommendPrice(row, null).recommended, null); });
+test("HT/TTC inconnue ou incompatible", () => { equal(recommendPrice({ ...row, costBasis: "TTC" }, policy).recommended, null); equal(recommendPrice({ ...row, costBasis: "" }, policy).recommended, null); throws(() => validatePricingPolicy({ ...policy, costBasis: "TTC", sellingBasis: "HT" })); });
+test("fiscalité configurée et indicateurs cohérents en base HT", () => { const r = recommendPrice(row, { ...policy, sellingBasis: "TTC", taxRate: .2 }); equal(r.recommended, 4.8); equal(r.markRate, .5); });
+test("dénominateur et configurations invalides", () => { for (const patch of [{ targetContributionRate: .9 }, { variableRate: 1 }, { lossRate: 1 }, { roundingIncrement: .015 }, { taxRate: null }]) { throws(() => validatePricingPolicy({ ...policy, ...patch })); equal(recommendPrice(row, { ...policy, ...patch } as PricingPolicy).recommended, null); } });
+test("arrondi, conditionnement et pertes configurés", () => { equal(recommendPrice({ ...row, cost: 2.01 }, { ...policy, roundingIncrement: .5 }).recommended, 4.5); equal(recommendPrice({ ...row, cost: 2.01 }, { ...policy, roundingIncrement: .5, roundingMode: "nearest" }).recommended, 4); equal(recommendPrice(row, { ...policy, lossRate: .2, packagingCost: .5 }).economicCost, 3); });
+test("formats 1 g, 3 g, 5 g et prix final manuel", () => { for (const quantity of [1, 3, 5]) equal(recommendPrice({ ...row, quantity, cost: 2 * quantity }, policy).recommended, 4 * quantity); const r = recommendPrice({ ...row, finalPrice: 5 }, policy); equal(r.recommended, 4); equal(r.grossMargin, 3); equal(r.markRate, .6); equal(r.marginRate, 1.5); equal(r.contribution, 2.5); });
+const product = { id: "compare", isActive: true, category: "flowers", pricingPositioning: "premium", price: 4, fixedPriceMode: "manual", fixedPriceOptions: [{ id: "3g", quantityGrams: 3, totalPrice: 9, isActive: true }] } as Product;
+test("catalogue autoritatif, même quantité/catégorie/positionnement", () => { const r = compareCatalogue({ ...row, quantity: 3 }, "flowers", "premium", { available: true, products: [product, { ...product, category: "resins" }, { ...product, pricingPositioning: "standard" }, { ...product, isActive: false }] }); deepEqual(r.pricesPerGram, [3]); equal(compareCatalogue(row, "flowers", "premium", { available: true, products: [product] }).pricesPerGram.length, 0); });
+test("catalogue indisponible sans fallback ; formats incompatibles exclus", () => { equal(compareCatalogue(row, "flowers", "premium", { available: false, products: [product] }).explanation, "Comparaison catalogue indisponible"); equal(compareCatalogue(row, "flowers", "standard", { available: true, products: [{ ...product, pricingPositioning: undefined, productTier: undefined }] }).pricesPerGram.length, 0); });
+test("produit historique actif sans tier ni positionnement : comparable standard", () => {
+  const historical = { id: "historical", isActive: true, category: "flowers", price: 4 } as Product;
+  deepEqual(compareCatalogue(row, "flowers", "standard", { available: true, products: [historical] }).pricesPerGram, [4]);
+  deepEqual(compareCatalogue(row, "flowers", "premium", { available: true, products: [historical] }).pricesPerGram, []);
+  const manual = { ...product, pricingPositioning: undefined, productTier: undefined };
+  deepEqual(compareCatalogue({ ...row, quantity: 3 }, "flowers", "standard", { available: true, products: [manual] }).pricesPerGram, [3]);
+});
+test("positionnement standard explicite : priorité inchangée sur le tier", () => {
+  for (const productTier of [undefined, "Premium", "Ultra premium"] as const) {
+    const standard = { ...product, pricingPositioning: "standard" as const, productTier };
+    deepEqual(compareCatalogue({ ...row, quantity: 3 }, "flowers", "standard", { available: true, products: [standard] }).pricesPerGram, [3]);
+    deepEqual(compareCatalogue({ ...row, quantity: 3 }, "flowers", "premium", { available: true, products: [standard] }).pricesPerGram, []);
+  }
+});
+test("tiers Premium et Ultra premium explicites : comparables premium uniquement", () => {
+  for (const productTier of ["Premium", "Ultra premium"] as const) {
+    const premium = { ...product, pricingPositioning: undefined, productTier };
+    deepEqual(compareCatalogue({ ...row, quantity: 3 }, "flowers", "premium", { available: true, products: [premium] }).pricesPerGram, [3]);
+    deepEqual(compareCatalogue({ ...row, quantity: 3 }, "flowers", "standard", { available: true, products: [premium] }).pricesPerGram, []);
+  }
+  deepEqual(compareCatalogue({ ...row, quantity: 3 }, "flowers", "premium", { available: true, products: [product] }).pricesPerGram, [3]);
+});
+test("fallback standard : produits inactifs, catégorie ou formats incompatibles exclus", () => {
+  const historical = { ...product, pricingPositioning: undefined, productTier: undefined };
+  deepEqual(compareCatalogue({ ...row, quantity: 3 }, "flowers", "standard", { available: true, products: [{ ...historical, isActive: false }, { ...historical, category: "resins" }, { ...historical, fixedPriceOptions: [{ id: "5g", quantityGrams: 5, totalPrice: 15, isActive: true }] }, { ...historical, fixedPriceOptions: [{ id: "3g", quantityGrams: 3, totalPrice: 9, isActive: false }] }, { ...historical, fixedPriceMode: "disabled", price: 0 }] }).pricesPerGram, []);
+  equal(compareCatalogue({ ...row, unit: "" }, "flowers", "standard", { available: true, products: [historical] }).available, false);
+});
+test("normalisation éditable, coûts web et unités ambiguës", () => { const item = prepareImportedSelection({ ...emptySelection(), name: "Fleur fixture", prices: [{ format: "Petit", price: "9.90" }, { format: "3 g", price: "12" }] }); equal(item.economics?.[0].quantity, null); equal(item.economics?.[1].quantity, 3); equal(item.economics?.[1].costSource, "web_unqualified"); equal(item.commercial?.pricePerGram, null); equal(item.intensity, ""); });
+const selection: ProductSelection = { ...emptySelection(), id: "fixture-123", name: "Fleur fixture", category: "Fleur", origin: "France", taste: "Fruité", aromas: "Fruit", aromaFamily: "fruite", intensity: "moyenne", appearance: "Compact", imagePath: "selection-images/fixture-123/12345678-1234-1234-1234-123456789012.jpg", notes: "secret", commercial: { ...emptyCommercial(), description: "Une description client assez longue pour la fiche.", pricePerGram: 4, initialStock: 25, seoTitle: "Fleur fixture", seoDescription: "Profil fruité" }, economics: [{ ...row, finalPrice: 4 }, { ...row, id: "3g", label: "3 g", quantity: 3, finalPrice: 11.4 }] };
+test("projection inactive sans sourcing, formats/prix admin préservés", () => { const p = preparePipelineProduct(selection); equal(p.isActive, false); equal(p.price, 4); equal(p.fixedPriceOptions?.[0].totalPrice, 11.4); equal(p.fixedPriceOptions?.[0].quantityGrams, 3); ok(!JSON.stringify(p).includes("secret")); ok(!("economics" in p)); });
+test("formats ambigus ou prix incomplets refusés", () => { throws(() => preparePipelineProduct({ ...selection, economics: [{ ...row, quantity: null, finalPrice: 10 }] })); throws(() => preparePipelineProduct({ ...selection, economics: [{ ...row, quantity: 1.5, finalPrice: 10 }] })); });
+test("formats retenus incomplets ou prix 1 g incohérent bloqués", () => { throws(() => preparePipelineProduct({ ...selection, economics: [{ ...row, finalPrice: null }] }), /prix final/); throws(() => preparePipelineProduct({ ...selection, economics: [{ ...row, finalPrice: 5 }] }), /prix par gramme/); });
+test("fixedPriceOptions historiques conservées", () => { const c = { ...selection.commercial!, fixedPriceMode: "automatic" as const, fixedPriceOptions: product.fixedPriceOptions! }; const p = preparePipelineProduct({ ...selection, economics: [], commercial: c }); equal(p.fixedPriceMode, "automatic"); deepEqual(p.fixedPriceOptions, product.fixedPriceOptions); });
+test("formats automatiques historiques sans options stockées", () => { const c = { ...selection.commercial!, fixedPriceMode: "automatic" as const, fixedPriceOptions: [] }; const p = preparePipelineProduct({ ...selection, economics: [], commercial: c }); equal(p.fixedPriceMode, "automatic"); deepEqual(p.fixedPriceOptions, []); const active = { ...p, isActive: true }; const options = resolveFixedPriceOptions(active); ok(options.length > 0); ok(compareCatalogue({ ...row, quantity: options[0].quantityGrams }, "flowers", "standard", { available: true, products: [active] }).pricesPerGram.length > 0); throws(() => preparePipelineProduct({ ...selection, economics: [], commercial: { ...c, fixedPriceMode: "manual" } }), /format actif/); });
+test("grilles manuelles validées par les règles commerciales existantes", () => { for (const finalPrice of [12, 13, 8]) throws(() => preparePipelineProduct({ ...selection, economics: [{ ...row, id: "3g", quantity: 3, finalPrice }] }), /Formats fixes/); });
+test("candidats achats validés uniquement, bases séparées, jamais rapprochement incertain", () => { const purchase = { id: "purchase-fixture", status: "validated", invoiceDate: "2026-09-28", costBase: "HT", lines: [{ productId: "linked", matchConfidence: "confirmed", quantityGrams: 10, netCostAmount: 20 }] } as SupplierPurchase; const candidates = supplierCostCandidates([purchase, { ...purchase, status: "draft" }, { ...purchase, lines: [{ ...purchase.lines[0], matchConfidence: "suggested" }] }], "linked", [row]); equal(candidates.length, 2); equal(candidates[0].cost, 2); equal(candidates[0].costSource, "weighted_cost"); });
+console.log(`${checks} groupes prix/normalisation déterministes validés.`);

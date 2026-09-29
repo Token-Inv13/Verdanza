@@ -1,17 +1,17 @@
 import { request } from "node:http";
 import type { Firestore } from "firebase-admin/firestore";
 
-export const CAGNOTTE_DEMO = Object.freeze({ projectId: "demo-verdanza-cagnotte", host: "127.0.0.1", port: 18085 });
+export const CAGNOTTE_DEMO = Object.freeze({ projectId: "demo-verdanza-cagnotte", host: "127.0.0.1", port: process.env.CAGNOTTE_TEST_SECONDARY_PORT === "1" ? 18086 : 18085 });
 export type CagnotteEmulatorTarget = { projectId: string; host: string; port: number };
 
 /** Exact allowlist: no DNS resolution, alternate project, inherited endpoint or remote fallback. */
 export function validateCagnotteEmulatorTarget(target: CagnotteEmulatorTarget) {
-  if (target.projectId !== CAGNOTTE_DEMO.projectId || target.host !== CAGNOTTE_DEMO.host || target.port !== CAGNOTTE_DEMO.port) {
+  if (target.projectId !== CAGNOTTE_DEMO.projectId || target.host !== CAGNOTTE_DEMO.host || ![18085, 18086].includes(target.port)) {
     throw new Error("ISOLATION: projet/hôte/port de démonstration requis.");
   }
 }
 
-export function createCagnotteTestEnvironment(inherited: NodeJS.ProcessEnv, localHome: string): NodeJS.ProcessEnv {
+export function createCagnotteTestEnvironment(inherited: NodeJS.ProcessEnv, localHome: string, secondaryPort = false): NodeJS.ProcessEnv {
   const systemRoot = inherited.SystemRoot ?? "C:\\Windows";
   return {
     PATH: inherited.PATH ?? "", SystemRoot: systemRoot,
@@ -21,7 +21,8 @@ export function createCagnotteTestEnvironment(inherited: NodeJS.ProcessEnv, loca
     LOGONSERVER: "local-test", SYSTEMDRIVE: systemRoot.slice(0, 2),
     USERDOMAIN: "local-test", USERNAME: "cagnotte-test", WINDIR: systemRoot,
     GCLOUD_PROJECT: CAGNOTTE_DEMO.projectId,
-    FIRESTORE_EMULATOR_HOST: `${CAGNOTTE_DEMO.host}:${CAGNOTTE_DEMO.port}`,
+    FIRESTORE_EMULATOR_HOST: `${CAGNOTTE_DEMO.host}:${secondaryPort ? 18086 : 18085}`,
+    CAGNOTTE_TEST_SECONDARY_PORT: secondaryPort ? "1" : "0",
     CAGNOTTE_TEST_SANDBOX: "1",
     METADATA_SERVER_DETECTION: "none",
   };
@@ -31,6 +32,7 @@ export function validateCagnotteTestEnvironment(environment: NodeJS.ProcessEnv) 
   const allowed = new Set(Object.keys(createCagnotteTestEnvironment({}, "unused")).map((key) => key.toUpperCase()));
   if (Object.keys(environment).some((key) => !allowed.has(key.toUpperCase())) ||
     environment.CAGNOTTE_TEST_SANDBOX !== "1" || environment.GCLOUD_PROJECT !== CAGNOTTE_DEMO.projectId ||
+    !["0", "1"].includes(environment.CAGNOTTE_TEST_SECONDARY_PORT || "") ||
     environment.FIRESTORE_EMULATOR_HOST !== `${CAGNOTTE_DEMO.host}:${CAGNOTTE_DEMO.port}` ||
     environment.METADATA_SERVER_DETECTION !== "none") {
     throw new Error("ISOLATION: lancer les tests via le processus à environnement limité.");
