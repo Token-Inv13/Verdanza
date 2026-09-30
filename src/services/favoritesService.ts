@@ -54,8 +54,9 @@ export async function removeFavorite(userId: string, productId: string) {
 }
 
 export async function getAdminFavoriteStats() {
-  if (!db) return [];
+  if (!db) throw new Error("Base en ligne indisponible.");
   const snapshot = await getDocs(collection(db, collections.favorites));
+  if (snapshot.metadata?.fromCache) throw new Error("Les favoris ne sont pas confirmés par le serveur.");
   const stats = new Map<string, FavoriteProductStat>();
   snapshot.docs.forEach((entry) => {
     const favorite = entry.data() as ProductFavorite;

@@ -30,7 +30,7 @@ try {
     if (url.pathname !== "/api/admin-contests") return route.fulfill({ status: 404, body: "" });
     const action = url.searchParams.get("action");
     if (action === "marketing-ai") {
-      if (req.method() === "GET") { const id = url.searchParams.get("generationId"); return route.fulfill({ json: id ? generations.get(id) : { configured, maxProposals: 3 } }); }
+      if (req.method() === "GET") { const id = url.searchParams.get("generationId"); return route.fulfill({ json: id ? generations.get(id) : { configured, state: configured ? "ready" : "disabled", maxProposals: 3 } }); }
       const body = req.postDataJSON() as MarketingAiRequest; requests.push(body);
       if (nextError) { const code = nextError; nextError = ""; return route.fulfill({ status: 429, json: { code, error: "Quota IA fixture atteint." } }); }
       let generation = generations.get(body.generationId);
@@ -74,6 +74,7 @@ try {
   await page.addScriptTag({ content: script.code });
   const assistant = page.getByRole("region", { name: "Assistant IA", exact: true });
   await assistant.getByRole("button", { name: "Générer des propositions", exact: true }).waitFor(); await assistant.getByLabel(/^Objectif/).fill("Mettre en avant les résines");
+  await assistant.getByText("Options avancées", { exact: true }).click();
   await assistant.getByLabel("Nombre de propositions", { exact: true }).selectOption("1"); await assistant.getByLabel("Type de proposition", { exact: true }).selectOption("campaign");
   await assistant.getByRole("button", { name: "Générer des propositions", exact: true }).evaluate((b: HTMLButtonElement) => { b.click(); b.click(); });
   await assistant.getByRole("button", { name: "Reprendre la génération conservée", exact: true }).waitFor(); assert.equal(providerCalls, 1); assert.equal(requests.length, 1); assert.equal(operations.length, 0); pass("brief / génération double clic : un seul appel, aucune opération métier");
@@ -96,14 +97,15 @@ try {
   await page.getByRole("button", { name: "Activer cette révision", exact: true }).click(); await page.getByRole("dialog", { name: "Activer cette révision", exact: true }).getByRole("button", { name: "Confirmer et activer", exact: true }).click(); await page.getByText("Activation confirmée", { exact: true }).waitFor(); assert.equal(activations, 1); pass("seule la confirmation humaine finale active la campagne");
   editor = page.getByRole("dialog", { name: "Campagne promotion + bannière — révision 1", exact: true }); await editor.getByRole("button", { name: "Fermer la fenêtre", exact: true }).click();
   assert.equal(await card.getByRole("button", { name: "Créer le brouillon", exact: true }).isEnabled(), false); pass("proposition déjà choisie : aucune seconde création de brouillon");
+  await assistant.getByText("Options avancées", { exact: true }).click();
   await assistant.getByLabel(/^Objectif/).fill("Proposer d'autres idées"); await assistant.getByLabel("Nombre de propositions", { exact: true }).selectOption("3"); await assistant.getByLabel("Périmètre produits", { exact: true }).selectOption("category"); await assistant.getByLabel("Catégorie", { exact: true }).selectOption("resins");
   await assistant.getByLabel("Période", { exact: true }).selectOption("fixed"); await assistant.getByLabel("Début imposé (Europe/Paris)", { exact: true }).fill("2026-09-29T14:00"); await assistant.getByLabel("Fin imposée (Europe/Paris)", { exact: true }).fill("2026-10-04T14:00");
   await assistant.getByRole("button", { name: "Générer de nouvelles propositions", exact: true }).click(); await assistant.getByRole("article", { name: "Découverte résines 3", exact: true }).waitFor();
   assert.equal(await assistant.getByRole("article").count(), 4); assert.equal(context.drafts.length, 1); assert.equal(requests.at(-1)?.brief.period?.startsAt, "2026-09-29T12:00:00.000Z"); pass("régénération 3 propositions : anciennes idées et brouillon préservés, ciblage et dates Paris");
   await page.getByRole("button", { name: "Nouveau chargement fixture", exact: true }).click(); await assistant.getByRole("article", { name: "Découverte résines 3", exact: true }).waitFor(); assert.equal(await assistant.getByRole("article").count(), 4); assert.equal(providerCalls, 2); pass("historique relu après rechargement sans appel fournisseur");
   nextError = "ai_quota"; await assistant.getByLabel(/^Objectif/).fill("Nouvelle idée"); await assistant.getByRole("button", { name: "Générer de nouvelles propositions", exact: true }).click(); await assistant.getByRole("alert").filter({ hasText: "Quota IA" }).waitFor(); assert.equal(await assistant.getByRole("button", { name: "Reprendre la génération conservée", exact: true }).count(), 0); assert.equal(await assistant.getByRole("article").count(), 4); pass("quota explicite sans boucle de reprise ni perte des propositions");
-  configured = false; await page.getByRole("button", { name: "Nouveau chargement fixture", exact: true }).click(); await assistant.getByText("Assistant IA non configuré ou indisponible", { exact: false }).waitFor(); assert.equal(await assistant.getByRole("button", { name: "Générer de nouvelles propositions", exact: true }).isEnabled(), false);
-  await page.getByRole("button", { name: "Préparer promotion", exact: true }).click(); await page.getByRole("dialog", { name: "Promotion — nouveau brouillon", exact: true }).waitFor(); pass("IA non configurée : formulaires et workflow manuel disponibles");
+  configured = false; await page.getByRole("button", { name: "Nouveau chargement fixture", exact: true }).click(); await assistant.getByText("Assistant IA désactivé", { exact: false }).waitFor(); assert.equal(await assistant.getByRole("button", { name: "Générer de nouvelles propositions", exact: true }).count(), 0);
+  await page.getByRole("button", { name: "Créer", exact: true }).click(); await page.getByRole("button", { name: "Préparer promotion", exact: true }).click(); await page.getByRole("dialog", { name: "Promotion — nouveau brouillon", exact: true }).waitFor(); pass("IA désactivée : formulaire masqué et workflow manuel disponible");
   assert.deepEqual(errors, []); assert.deepEqual(unexpected, []); pass("aucune erreur navigateur, aucun service externe, fixture unique sans navigation réelle");
   console.log(`${checks} scénarios UI Assistant IA validés sur un seul viewport simulé.`);
 } finally { await browser.close(); }

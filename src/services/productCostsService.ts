@@ -3,7 +3,7 @@ import type { ProductCost } from "../types";
 
 export async function getProductCostsAdmin() {
   const token = await getFirebaseIdToken();
-  if (!token) return { costs: [], source: "empty" as const };
+  if (!token) throw new Error("Connexion admin requise pour lire les coûts produits.");
   const response = await fetch("/api/invoices?action=productCosts", {
     headers: { authorization: `Bearer ${token}` },
   });

@@ -30,22 +30,11 @@ export type PromoBannerInput = Omit<PromoBanner, "id" | "createdAt" | "updatedAt
 type CouponBannerLinkInput = Pick<Coupon, "code" | "label"> & { id?: string };
 
 export async function getPromoBannersWithFallback() {
-  if (!db) return { banners: [], source: "empty" as const };
-  try {
-    const snapshot = await getDocs(
-      query(collection(db, collections.promoBanners), orderBy("priority", "asc")),
-    );
-    const banners = snapshot.docs.map(
-      (entry) => normalizePromoBanner({ id: entry.id, ...entry.data() } as PromoBanner),
-    );
-    return {
-      banners,
-      source: banners.length ? ("firestore" as const) : ("empty" as const),
-    };
-  } catch (error) {
-    logFirestoreFallback("Unable to load Firestore promo banners", error);
-    return { banners: [], source: "empty" as const };
-  }
+  if (!db) throw new Error("Base en ligne indisponible.");
+  const snapshot = await getDocs(query(collection(db, collections.promoBanners), orderBy("priority", "asc")));
+  if (snapshot.metadata?.fromCache) throw new Error("La liste des bannières n'est pas confirmée par le serveur.");
+  const banners = snapshot.docs.map((entry) => normalizePromoBanner({ id: entry.id, ...entry.data() } as PromoBanner));
+  return { banners, source: banners.length ? ("firestore" as const) : ("empty" as const) };
 }
 
 export async function getPublicPromoBanners() {

@@ -29,5 +29,7 @@ export function useCustomerPage<T, P extends CustomerPage<T> = CustomerPage<T>>(
     catch (cause) { if (alive.current) setError(cause instanceof Error ? cause.message : "Page indisponible."); }
     finally { inFlight.current = false; if (alive.current) setPending(false); }
   }
-  return { ...resource, items: [...(resource.data?.items || []), ...more], nextCursor: cursor, error: resource.error || error, pending: resource.pending || pending, loadMore };
+  return { ...resource, items: [...(resource.data?.items || []), ...more], nextCursor: cursor,
+    error: resource.error || error, primaryError: resource.error, pageError: error,
+    pending: resource.pending || pending, primaryPending: resource.pending, pagePending: pending, loadMore };
 }

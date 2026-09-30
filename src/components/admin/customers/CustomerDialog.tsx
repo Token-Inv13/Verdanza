@@ -12,7 +12,7 @@ import { ResourceState } from "./CustomerResource";
 import { useCustomerRead } from "../../../hooks/useAdminCustomerResource";
 
 const tabs = ["Vue générale", "Commandes", "Fidélité", "Parrainage", "Activité", "Administration"] as const;
-export function CustomerDialog({ customer, coupons, onClose, onChanged, onSummary }: { customer: CustomerIdentity; coupons: Coupon[]; onClose: () => void; onChanged: () => void; onSummary: (summary: CustomerSummary) => void }) {
+export function CustomerDialog({ customer, coupons, couponAvailable = true, onClose, onChanged, onSummary }: { customer: CustomerIdentity; coupons: Coupon[]; couponAvailable?: boolean; onClose: () => void; onChanged: () => void; onSummary: (summary: CustomerSummary) => void }) {
   const summary = useCustomerRead<CustomerSummary>("adminCustomerSummary", customer.id);
   const [tab, setTab] = useState(0), [visited, setVisited] = useState([0]), [busy, setBusy] = useState(false);
   useEffect(() => { if (summary.data) onSummary(summary.data); }, [summary.data, onSummary]);
@@ -22,8 +22,9 @@ export function CustomerDialog({ customer, coupons, onClose, onChanged, onSummar
   return <AdminDialog open title={current.name || current.email || "Fiche client"} size="xl" pending={busy} onClose={onClose} description={<span className="break-all">{current.email || "Non disponible"} · {current.archived ? "archived" : current.status || "Non disponible"} · #{current.id.slice(0, 12)}{current.hidden ? " · Masqué" : ""}</span>}>
     <nav aria-label="Sections de la fiche client" className="mb-5 flex flex-wrap gap-2">{tabs.map((label, index) => <button key={label} type="button" aria-current={tab === index ? "page" : undefined} disabled={busy} className={tab === index ? "btn-primary" : "btn-secondary"} onClick={() => changeTab(index)}>{label}</button>)}</nav>
     <ResourceState pending={summary.pending} error={summary.error} onRetry={summary.reload} />
-    {summary.data && tabs.map((label, index) => visited.includes(index) && <section key={label} hidden={tab !== index} aria-label={label}>
-      {index === 0 && <CustomerOverview summary={summary.data!} />}{index === 1 && <CustomerOrders customerId={customer.id} />}{index === 2 && <CustomerLoyalty customer={current} />}{index === 3 && <CustomerReferral customerId={customer.id} />}{index === 4 && <CustomerActivity customerId={customer.id} />}{index === 5 && <CustomerAdministration customer={current} coupons={coupons} onChanged={changed} onBusy={setBusy} />}
+    {summary.pending && summary.data && <p role="status" className="mb-3 text-xs text-amber-900">Données précédemment chargées : mise à jour en cours.</p>}
+    {summary.data && !summary.error && tabs.map((label, index) => visited.includes(index) && <section key={label} hidden={tab !== index} aria-label={label} aria-busy={summary.pending}>
+      {index === 0 && <CustomerOverview summary={summary.data!} />}{index === 1 && <CustomerOrders customerId={customer.id} />}{index === 2 && <CustomerLoyalty customer={current} />}{index === 3 && <CustomerReferral customerId={customer.id} />}{index === 4 && <CustomerActivity customerId={customer.id} />}{index === 5 && <CustomerAdministration customer={current} coupons={coupons} couponAvailable={couponAvailable} parentPending={summary.pending} onChanged={changed} onBusy={setBusy} />}
     </section>)}
   </AdminDialog>;
 }

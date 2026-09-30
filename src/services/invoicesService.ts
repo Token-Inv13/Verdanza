@@ -48,36 +48,24 @@ export const defaultBillingSettings: BillingSettings = {
 };
 
 export async function getInvoicesWithFallback() {
-  if (!db) return { invoices: [], source: "empty" as const };
-  try {
-    const snapshot = await getDocs(
-      query(collection(db, collections.invoices), orderBy("createdAt", "desc")),
-    );
-    return {
-      invoices: snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() }) as Invoice),
-      source: snapshot.empty ? ("empty" as const) : ("firestore" as const),
-    };
-  } catch (error) {
-    console.warn("Unable to load invoices", error);
-    return { invoices: [], source: "empty" as const };
-  }
+  if (!db) throw new Error("Base en ligne indisponible.");
+  const snapshot = await getDocs(query(collection(db, collections.invoices), orderBy("createdAt", "desc")));
+  if (snapshot.metadata?.fromCache) throw new Error("La liste des factures n'est pas confirmée par le serveur.");
+  return {
+    invoices: snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() }) as Invoice),
+    source: snapshot.empty ? ("empty" as const) : ("firestore" as const),
+  };
 }
 
 export async function getBillingSettings() {
-  if (!db) return { settings: defaultBillingSettings, source: "local" as const };
-  try {
-    const snapshot = await getDoc(doc(db, collections.settings, "billing"));
-    if (!snapshot.exists()) {
-      return { settings: defaultBillingSettings, source: "local" as const };
-    }
-    return {
-      settings: { ...defaultBillingSettings, ...snapshot.data(), id: "billing" } as BillingSettings,
-      source: "firestore" as const,
-    };
-  } catch (error) {
-    console.warn("Unable to load billing settings", error);
-    return { settings: defaultBillingSettings, source: "local" as const };
-  }
+  if (!db) throw new Error("Base en ligne indisponible.");
+  const snapshot = await getDoc(doc(db, collections.settings, "billing"));
+  if (snapshot.metadata?.fromCache) throw new Error("Les paramètres de facturation ne sont pas confirmés par le serveur.");
+  if (!snapshot.exists()) return { settings: defaultBillingSettings, source: "local" as const };
+  return {
+    settings: { ...defaultBillingSettings, ...snapshot.data(), id: "billing" } as BillingSettings,
+    source: "firestore" as const,
+  };
 }
 
 export async function saveBillingSettings(settings: BillingSettings) {

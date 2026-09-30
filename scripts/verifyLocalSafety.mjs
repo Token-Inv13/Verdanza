@@ -51,6 +51,9 @@ const fullAudits = [
 
 const adminV3Tests = [
   "test:admin-v3",
+  "test:admin-nav-ui",
+  "test:admin-settings-ui",
+  "test:admin-read-states-ui",
   "test:admin-stock",
   "test:admin-stock-client",
   "test:admin-storage",

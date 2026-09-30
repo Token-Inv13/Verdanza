@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { loadFirebaseAuthApi } from "../lib/firebaseAuth";
-import { getDeliveryZonesWithFallback } from "../services/deliveryZonesService";
+import { getAdminDeliveryZones } from "../services/deliveryZonesService";
 import { getAdminCustomersWithFallback } from "../services/adminCustomersService";
 import { getCouponsWithFallback } from "../services/couponsService";
 import { getPromoBannersWithFallback } from "../services/promoBannersService";
@@ -17,39 +17,52 @@ import type { BillingSettings, Coupon, CustomerProfile, DeliveryZone, Invoice, P
 
 import type { StockSnapshot } from "../types/adminStock";
 
+type ReadSource = "loading" | "firestore" | "empty" | "local" | "error";
+type ReadKey = "products" | "orders" | "delivery" | "coupons" | "banners" | "customers" | "invoices" | "billing" | "costs" | "purchases";
+type ReadErrors = Partial<Record<ReadKey, string>>;
+async function captured<T>(promise: Promise<T>, message: string): Promise<{ result: T; error: "" } | { result: null; error: string }> {
+  try { return { result: await promise, error: "" }; }
+  catch { return { result: null, error: message }; }
+}
+
 export function useAdminData(clientsView = false) {
   const [products, setProducts] = useState<Product[]>([]);
-  const [productSource, setProductSource] = useState<"firestore" | "local">("local");
+  const [productSource, setProductSource] = useState<ReadSource>("loading");
   const [orders, setOrders] = useState<AdminOrderRow[]>([]);
-  const [orderSource, setOrderSource] = useState<"firestore" | "empty">("empty");
+  const [orderSource, setOrderSource] = useState<ReadSource>("loading");
   const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
-  const [deliverySource, setDeliverySource] = useState<"firestore" | "local">("local");
+  const [deliverySource, setDeliverySource] = useState<ReadSource>("loading");
   const [coupons, setCoupons] = useState<Coupon[]>([]);
-  const [couponSource, setCouponSource] = useState<"firestore" | "empty">("empty");
+  const [couponSource, setCouponSource] = useState<ReadSource>("loading");
   const [promoBanners, setPromoBanners] = useState<PromoBanner[]>([]);
-  const [promoBannerSource, setPromoBannerSource] = useState<"firestore" | "empty">("empty");
+  const [promoBannerSource, setPromoBannerSource] = useState<ReadSource>("loading");
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
-  const [customerSource, setCustomerSource] = useState<"firestore" | "empty">("empty");
+  const [customerSource, setCustomerSource] = useState<ReadSource>("loading");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [invoiceSource, setInvoiceSource] = useState<"firestore" | "empty">("empty");
+  const [invoiceSource, setInvoiceSource] = useState<ReadSource>("loading");
   const [billingSettings, setBillingSettings] = useState<BillingSettings>(defaultBillingSettings);
-  const [billingSource, setBillingSource] = useState<"firestore" | "local">("local");
+  const [billingSource, setBillingSource] = useState<ReadSource>("loading");
   const [productCosts, setProductCosts] = useState<ProductCost[]>([]);
-  const [productCostsSource, setProductCostsSource] = useState<"firestore" | "empty" | "error">("empty");
+  const [productCostsSource, setProductCostsSource] = useState<ReadSource>("loading");
   const [productCostsError, setProductCostsError] = useState("");
   const [supplierPurchases, setSupplierPurchases] = useState<SupplierPurchase[]>([]);
-  const [supplierPurchasesSource, setSupplierPurchasesSource] = useState<"firestore" | "empty" | "error">("empty");
+  const [supplierPurchasesSource, setSupplierPurchasesSource] = useState<ReadSource>("loading");
   const [supplierPurchasesError, setSupplierPurchasesError] = useState("");
+  const [readErrors, setReadErrors] = useState<ReadErrors>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const requestVersion = useRef(0);
 
   const refresh = useCallback(async () => {
+    const version = ++requestVersion.current;
     setIsLoading(true);
     if (!isAuthReady) return;
     if (clientsView) {
-      const couponResult = await getCouponsWithFallback();
-      setCoupons(couponResult.coupons);
-      setCouponSource(couponResult.source);
+      const couponResult = await captured(getCouponsWithFallback(), "Promotions associées aux clients indisponibles.");
+      if (version !== requestVersion.current) return;
+      setCoupons(couponResult.result?.coupons ?? []);
+      setCouponSource(couponResult.result?.source ?? "error");
+      setReadErrors(couponResult.error ? { coupons: couponResult.error } : {});
       setIsLoading(false);
       return;
     }
@@ -65,59 +78,46 @@ export function useAdminData(clientsView = false) {
       productCostResult,
       supplierPurchaseResult,
     ] = await Promise.all([
-      getAdminProductsWithFallback(),
-      getAdminOrdersWithFallback(),
-      getDeliveryZonesWithFallback(),
-      getCouponsWithFallback(),
-      getPromoBannersWithFallback(),
-      getAdminCustomersWithFallback(),
-      getInvoicesWithFallback(),
-      getBillingSettings(),
-      getProductCostsAdmin()
-        .then((result) => ({ result, error: "" }))
-        .catch((error) => ({
-          result: null,
-          error: error instanceof Error ? error.message : "Couts produits indisponibles.",
-        })),
-      getSupplierPurchasesAdmin()
-        .then((result) => ({ result, error: "" }))
-        .catch((error) => ({
-          result: null,
-          error: error instanceof Error ? error.message : "Achats fournisseurs indisponibles.",
-        })),
+      captured(getAdminProductsWithFallback(), "Produits indisponibles."),
+      captured(getAdminOrdersWithFallback(), "Commandes indisponibles."),
+      captured(getAdminDeliveryZones(), "Zones de livraison indisponibles."),
+      captured(getCouponsWithFallback(), "Promotions indisponibles."),
+      captured(getPromoBannersWithFallback(), "Bannières indisponibles."),
+      captured(getAdminCustomersWithFallback(), "Clients indisponibles."),
+      captured(getInvoicesWithFallback(), "Factures indisponibles."),
+      captured(getBillingSettings(), "Paramètres de facturation indisponibles."),
+      captured(getProductCostsAdmin(), "Coûts produits indisponibles."),
+      captured(getSupplierPurchasesAdmin(), "Achats fournisseurs indisponibles."),
     ]);
-    setProducts(productResult.products);
-    setProductSource(productResult.source);
-    setOrders(orderResult.orders);
-    setOrderSource(orderResult.source);
-    setDeliveryZones(deliveryResult.zones);
-    setDeliverySource(deliveryResult.source);
-    setCoupons(couponResult.coupons);
-    setCouponSource(couponResult.source);
-    setPromoBanners(promoBannerResult.banners);
-    setPromoBannerSource(promoBannerResult.source);
-    setCustomers(customerResult.customers);
-    setCustomerSource(customerResult.source);
-    setInvoices(invoiceResult.invoices);
-    setInvoiceSource(invoiceResult.source);
-    setBillingSettings(billingResult.settings);
-    setBillingSource(billingResult.source);
-    if (productCostResult.result) {
-      setProductCosts(productCostResult.result.costs);
-      setProductCostsSource(productCostResult.result.source);
-      setProductCostsError("");
-    } else {
-      setProductCostsSource("error");
-      setProductCostsError(productCostResult.error);
-    }
-    if (supplierPurchaseResult.result) {
-      setSupplierPurchases(supplierPurchaseResult.result.purchases);
-      setSupplierPurchasesSource(supplierPurchaseResult.result.source);
-      setSupplierPurchasesError("");
-    } else {
-      setSupplierPurchasesSource("error");
-      setSupplierPurchasesError(supplierPurchaseResult.error);
-    }
+    if (version !== requestVersion.current) return;
+    setProducts(productResult.result?.products ?? []);
+    setProductSource(productResult.result?.source ?? "error");
+    setOrders(orderResult.result?.orders ?? []);
+    setOrderSource(orderResult.result?.source ?? "error");
+    setDeliveryZones(deliveryResult.result?.zones ?? []);
+    setDeliverySource(deliveryResult.result?.source ?? "error");
+    setCoupons(couponResult.result?.coupons ?? []);
+    setCouponSource(couponResult.result?.source ?? "error");
+    setPromoBanners(promoBannerResult.result?.banners ?? []);
+    setPromoBannerSource(promoBannerResult.result?.source ?? "error");
+    setCustomers(customerResult.result?.customers ?? []);
+    setCustomerSource(customerResult.result?.source ?? "error");
+    setInvoices(invoiceResult.result?.invoices ?? []);
+    setInvoiceSource(invoiceResult.result?.source ?? "error");
+    setBillingSettings(billingResult.result?.settings ?? defaultBillingSettings);
+    setBillingSource(billingResult.result?.source ?? "error");
+    setProductCosts(productCostResult.result?.costs ?? []);
+    setProductCostsSource(productCostResult.result?.source ?? "error");
+    setProductCostsError(productCostResult.error);
+    setSupplierPurchases(supplierPurchaseResult.result?.purchases ?? []);
+    setSupplierPurchasesSource(supplierPurchaseResult.result?.source ?? "error");
+    setSupplierPurchasesError(supplierPurchaseResult.error);
+    setReadErrors(Object.fromEntries([
+      ["products", productResult.error], ["orders", orderResult.error], ["delivery", deliveryResult.error],
+      ["coupons", couponResult.error], ["banners", promoBannerResult.error], ["customers", customerResult.error],
+      ["invoices", invoiceResult.error], ["billing", billingResult.error], ["costs", productCostResult.error],
+      ["purchases", supplierPurchaseResult.error],
+    ].filter((entry) => entry[1])) as ReadErrors);
     setIsLoading(false);
   }, [isAuthReady, clientsView]);
 
@@ -150,7 +150,7 @@ export function useAdminData(clientsView = false) {
       unsubscribe = firebaseAuth.onAuthStateChanged(auth, () => {
         setIsAuthReady(true);
       });
-    });
+    }).catch(() => { if (!cancelled) setIsAuthReady(true); });
 
     return () => {
       cancelled = true;
@@ -181,6 +181,7 @@ export function useAdminData(clientsView = false) {
     supplierPurchases,
     supplierPurchasesSource,
     supplierPurchasesError,
+    readErrors,
     isLoading,
     refresh,
     refreshOrder,

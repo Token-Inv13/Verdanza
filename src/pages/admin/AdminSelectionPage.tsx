@@ -44,6 +44,8 @@ const stageDescriptions: Record<SelectionTab, string> = {
 export function AdminSelectionPage() {
   const [items, setItems] = useState<ProductSelection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [listState, setListState] = useState<"loading" | "ready" | "error">("loading");
+  const [listError, setListError] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -61,32 +63,38 @@ export function AdminSelectionPage() {
   const [pendingImport, setPendingImport] = useState<ProductSelection[]>([]);
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [catalogProducts, setCatalogProducts] = useState<Array<{ id: string; name: string; slug: string; category: string; price: number; stock: number; isActive: boolean }>>([]);
+  const [catalogState, setCatalogState] = useState<"loading" | "ready" | "error">("loading");
   const fileInput = useRef<HTMLInputElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const tabButtons = useRef<Array<HTMLButtonElement | null>>([]);
 
   const refresh = useCallback(async () => {
+    setLoading(true); setListState("loading");
     try {
       const result = await listSelections();
       setItems(result.selections);
-      setError("");
+      setListError(""); setListState("ready");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Chargement impossible.");
+      setItems([]); setListError(cause instanceof Error ? cause.message : "Chargement impossible."); setListState("error");
     } finally {
       setLoading(false);
     }
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
   const refreshCatalog = useCallback(async () => {
-    const products = await getFirestoreProducts(false);
-    setCatalogProducts(products.map((product) => ({
-      id: product.id, name: product.name, slug: product.slug, category: product.category,
-      price: product.price, stock: product.stock, isActive: product.isActive !== false,
-    })));
+    setCatalogState("loading");
+    try {
+      const products = await getFirestoreProducts(false);
+      setCatalogProducts(products.map((product) => ({
+        id: product.id, name: product.name, slug: product.slug, category: product.category,
+        price: product.price, stock: product.stock, isActive: product.isActive !== false,
+      })));
+      setCatalogState("ready");
+    } catch {
+      setCatalogProducts([]); setCatalogState("error");
+    }
   }, []);
-  useEffect(() => {
-    void refreshCatalog().catch(() => { /* Selection remains usable if the commercial catalogue is unavailable. */ });
-  }, [refreshCatalog]);
+  useEffect(() => { void refreshCatalog(); }, [refreshCatalog]);
 
   const detail = items.find((item) => item.id === detailId) || null;
   const linkedCatalog = catalogProducts.find((product) => product.id === detail?.catalogProductId);
@@ -166,6 +174,8 @@ export function AdminSelectionPage() {
   });
   const saveDraft = (event: FormEvent) => {
     event.preventDefault(); if (!draft) return;
+    if (listState !== "ready") { setError("Sélections indisponibles. Rechargez-les avant d'enregistrer."); return; }
+    if (draft.status === "En boutique" && catalogState !== "ready") { setError("Catalogue commercial indisponible. Rechargez-le avant d'enregistrer une sélection En boutique."); return; }
     const item = draft; const image = localImage?.data; const operationId = crypto.randomUUID();
     setConfirmation({ title: item.id ? "Confirmer les modifications" : "Créer la sélection privée",
       summary: <div className="space-y-2"><p><strong>{item.name}</strong> · {item.category} · {item.supplier || "Fournisseur à compléter"}</p><p className="break-all">Source : {item.url || "Saisie manuelle"}</p><p>{item.molecule} {item.rate} · {item.origin} · {item.culture}</p><p>Formats / prix fournisseur : {item.prices.map((r) => `${r.format} : ${r.price} €`).join(" · ") || "À compléter"}</p><p>Nom public : {selectionPublicName(item)} · Intensité : {item.intensity || "À compléter"} · Arômes : {item.aromas || "À compléter"}</p><p>Image : {image ? "Fichier local téléversé après confirmation" : item.imagePath ? "Image enregistrée conservée" : "À compléter"}</p><p>Étape métier : {item.status} · Données et notes privées</p></div>,
@@ -174,6 +184,7 @@ export function AdminSelectionPage() {
     });
   };
   const changeStatus = (item: ProductSelection, next: ProductSelection["status"]) => {
+    if (next === "En boutique" && catalogState !== "ready") { setError("Catalogue commercial indisponible. Rechargez-le avant de confirmer cette étape."); return; }
     const operationId = crypto.randomUUID();
     setConfirmation({ title: "Confirmer l’étape de sélection", summary: <p>{item.name} : {item.status} → {next}</p>, warning: item.status === "En boutique" && next !== "En boutique" ? "La fiche publique sera retirée et le produit créé depuis cette sélection sera désactivé." : "Ce changement n’active aucun produit et invalide les validations courantes.", run: async () => { await saveSelection({ ...item, status: next }, operationId); await Promise.all([refresh(), refreshCatalog()]); setMessage("Étape de sélection mise à jour."); } });
   };
@@ -226,15 +237,15 @@ export function AdminSelectionPage() {
             <h1 className="mt-2 font-display text-4xl leading-tight sm:text-5xl">Atelier de sélection</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-ivory/75">Suivez chaque référence, comparez vos choix et préparez les fiches destinées à la boutique.</p>
           </div>
-          <button type="button" className="relative inline-flex min-h-12 items-center gap-2 rounded-lg bg-ivory px-5 py-3 text-sm font-semibold text-forest shadow-sm transition hover:bg-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-champagne" onClick={() => { setLocalImage(null); setDraft(emptySelection()); }}>
+          <button type="button" className="relative inline-flex min-h-12 items-center gap-2 rounded-lg bg-ivory px-5 py-3 text-sm font-semibold text-forest shadow-sm transition hover:bg-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-champagne" disabled={listState !== "ready"} onClick={() => { setLocalImage(null); setDraft(emptySelection()); }}>
             <Plus size={17} /> Ajouter un produit
           </button>
         </div>
         <div className="relative mt-6 flex flex-wrap gap-x-8 gap-y-3 border-t border-ivory/15 pt-5 text-sm">
-          <span><strong className="mr-2 font-display text-2xl leading-none">{items.length}</strong><span className="text-ivory/70">produits suivis</span></span>
-          <span><strong className="mr-2 font-display text-2xl leading-none">{stageCounts["À tester"]}</strong><span className="text-ivory/70">à tester</span></span>
-          <span><strong className="mr-2 font-display text-2xl leading-none">{stageCounts.Retenu}</strong><span className="text-ivory/70">retenus</span></span>
-          <span><strong className="mr-2 font-display text-2xl leading-none">{stageCounts["En boutique"]}</strong><span className="text-ivory/70">en boutique</span></span>
+          <span><strong className="mr-2 font-display text-2xl leading-none">{listState === "ready" ? items.length : "—"}</strong><span className="text-ivory/70">produits suivis</span></span>
+          <span><strong className="mr-2 font-display text-2xl leading-none">{listState === "ready" ? stageCounts["À tester"] : "—"}</strong><span className="text-ivory/70">à tester</span></span>
+          <span><strong className="mr-2 font-display text-2xl leading-none">{listState === "ready" ? stageCounts.Retenu : "—"}</strong><span className="text-ivory/70">retenus</span></span>
+          <span><strong className="mr-2 font-display text-2xl leading-none">{listState === "ready" ? stageCounts["En boutique"] : "—"}</strong><span className="text-ivory/70">en boutique</span></span>
         </div>
       </header>
 
@@ -253,14 +264,14 @@ export function AdminSelectionPage() {
           <p className="mt-2 text-xs text-ink/55">Les informations proposées par le fournisseur restent à vérifier avant enregistrement.</p>
           <div className="mt-4 flex flex-wrap gap-2 border-t border-forest/10 pt-4">
             <button type="button" className="btn-secondary inline-flex items-center gap-2" onClick={() => fileInput.current?.click()}><ArrowDownToLine size={16} /> Importer JSON</button>
-            <button type="button" className="btn-secondary" disabled={!items.length} onClick={() => downloadJson(items)}>Exporter JSON</button>
+            <button type="button" className="btn-secondary" disabled={listState !== "ready" || !items.length} onClick={() => downloadJson(items)}>Exporter JSON</button>
             <input ref={fileInput} className="sr-only" type="file" accept="application/json,.json" onChange={(event) => void handleFile(event)} />
           </div>
           {pendingImport.length > 0 && <div className="mt-4 rounded-lg border border-champagne/40 bg-cream p-4 text-sm">
             <strong>{pendingImport.length} références dans le fichier</strong> · {importDuplicates} doublon{importDuplicates > 1 ? "s" : ""} détecté{importDuplicates > 1 ? "s" : ""}.
             <p className="mt-1 text-ink/65">Les doublons seront ignorés. Aucune fiche publique ne sera créée par cet import.</p>
             <div className="mt-3 max-h-32 overflow-y-auto text-xs text-ink/70">{pendingImport.map((item, index) => <p key={`${item.name}-${index}`}>{item.name} · {item.supplier || "Fournisseur à renseigner"}</p>)}</div>
-            <div className="mt-3 flex flex-wrap gap-2"><button type="button" className="btn-primary" disabled={busy} onClick={() => {
+            <div className="mt-3 flex flex-wrap gap-2"><button type="button" className="btn-primary" disabled={busy || listState !== "ready"} onClick={() => {
               const rows = pendingImport; const operationId = crypto.randomUUID();
               setConfirmation({ title: "Confirmer l’import privé", summary: <div><p>{rows.length} références · {importDuplicates} doublons détectés</p>{rows.map((item, index) => <p key={index}>{item.name} · {item.category} · {item.supplier} · {item.prices.map((r) => `${r.format} : ${r.price} €`).join(" / ")}</p>)}</div>, warning: "Aucun produit boutique, fichier Storage ou fiche publique ne sera créé.", run: async () => { const result = await importSelections(rows, operationId); setPendingImport([]); setMessage(`${result.imported} sélections importées, ${result.skipped} ignorées.`); await refresh(); } });
             }}>Confirmer l'import</button>
@@ -270,6 +281,8 @@ export function AdminSelectionPage() {
       </section>
 
       {(error || message) && <div role={error ? "alert" : "status"} className={`mt-4 rounded-lg px-4 py-3 text-sm ${error ? "bg-red-50 text-red-800" : "bg-[#eaf2e8] text-forest"}`}>{error || message}</div>}
+      {listState === "error" && <div role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">Sélections indisponibles : {listError} <button type="button" className="font-semibold underline" onClick={() => void refresh()}>Recharger les sélections</button></div>}
+      {catalogState === "error" && <div role="alert" className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">Catalogue commercial indisponible. Les liens produit ne peuvent pas être vérifiés. <button type="button" className="font-semibold underline" onClick={() => void refreshCatalog()}>Recharger le catalogue commercial</button></div>}
 
       <section className="mt-5 overflow-hidden rounded-2xl border border-forest/10 bg-ivory shadow-sm" aria-label="Catalogue de sélection">
         <div className="px-5 pb-4 pt-6 sm:px-7">
@@ -279,14 +292,14 @@ export function AdminSelectionPage() {
         <div className="border-y border-forest/10 bg-[#eef1ea] px-3 py-2 sm:px-5">
           <div role="tablist" aria-label="Étapes des sélections" className="flex gap-1 overflow-x-auto pb-1" style={{ scrollbarWidth: "thin" }}>
             {selectionTabs.map((entry, index) => <button key={entry} ref={(node) => { tabButtons.current[index] = node; }} id={`selection-tab-${index}`} type="button" role="tab" aria-selected={status === entry} aria-controls="selection-results" tabIndex={status === entry ? 0 : -1} onClick={() => setStatus(entry)} onKeyDown={(event) => handleTabKey(event, index)} className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-champagne ${status === entry ? "bg-forest text-ivory shadow-sm" : "text-forest/75 hover:bg-ivory hover:text-forest"}`}>
-              <span>{entry === "Tous" ? "Toutes" : entry}</span><span className={`rounded-full px-2 py-0.5 text-[0.7rem] font-bold ${status === entry ? "bg-ivory/15 text-ivory" : "bg-forest/10 text-forest/70"}`}>{entry === "Tous" ? items.length : stageCounts[entry]}</span>
+              <span>{entry === "Tous" ? "Toutes" : entry}</span><span className={`rounded-full px-2 py-0.5 text-[0.7rem] font-bold ${status === entry ? "bg-ivory/15 text-ivory" : "bg-forest/10 text-forest/70"}`}>{listState === "ready" ? entry === "Tous" ? items.length : stageCounts[entry] : "—"}</span>
             </button>)}
           </div>
         </div>
         <div id="selection-results" role="tabpanel" aria-labelledby={`selection-tab-${selectionTabs.indexOf(status)}`} tabIndex={0} className="px-5 pb-6 pt-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-champagne sm:px-7">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div><h3 className="font-display text-2xl">{status === "Tous" ? "Toutes les sélections" : status}</h3><p className="mt-1 text-sm text-ink/60">{stageDescriptions[status]}</p></div>
-            <span className="rounded-full bg-cream px-3 py-1.5 text-xs font-semibold text-forest/80">{filtered.length} résultat{filtered.length === 1 ? "" : "s"}</span>
+            <span className="rounded-full bg-cream px-3 py-1.5 text-xs font-semibold text-forest/80">{listState === "ready" ? `${filtered.length} résultat${filtered.length === 1 ? "" : "s"}` : "Données indisponibles"}</span>
           </div>
           <div className="mt-5 grid gap-3 rounded-xl border border-forest/10 bg-[#faf9f5] p-3 sm:grid-cols-2 xl:grid-cols-[minmax(14rem,1fr)_minmax(9rem,auto)_minmax(9rem,auto)_minmax(11rem,auto)] sm:p-4">
             <label className="block text-[0.7rem] font-bold uppercase tracking-[0.12em] text-forest/60 sm:col-span-2 xl:col-span-1">Rechercher
@@ -303,7 +316,7 @@ export function AdminSelectionPage() {
             </label>
           </div>
           {(query || category !== "Tous" || priorityFilter !== "Tous") && <button type="button" className="mt-3 text-xs font-semibold text-forest underline decoration-champagne underline-offset-4" onClick={() => { setQuery(""); setCategory("Tous"); setPriorityFilter("Tous"); }}>Effacer les filtres</button>}
-          {loading ? <p className="py-12 text-center text-ink/60">Chargement des sélections…</p> :
+          {loading ? <p className="py-12 text-center text-ink/60">Chargement des sélections…</p> : listState === "error" ? <p className="py-12 text-center text-red-800">Données indisponibles. Rechargez les sélections.</p> :
             filtered.length === 0 ? <div className="mt-5 rounded-xl border border-dashed border-forest/20 bg-cream/50 px-5 py-12 text-center">
               <p className="font-display text-2xl">Aucune référence ici pour le moment</p><p className="mx-auto mt-2 max-w-md text-sm text-ink/60">{query || category !== "Tous" || priorityFilter !== "Tous" ? "Essayez une autre recherche ou effacez les filtres." : stageDescriptions[status]}</p>
               {query || category !== "Tous" || priorityFilter !== "Tous" ? <button type="button" className="btn-secondary mt-5" onClick={() => { setQuery(""); setCategory("Tous"); setPriorityFilter("Tous"); }}>Effacer les filtres</button> : <button type="button" className="btn-secondary mt-5" onClick={() => { setLocalImage(null); setDraft(emptySelection()); }}><Plus size={16} /> Ajouter un produit</button>}
@@ -350,7 +363,8 @@ export function AdminSelectionPage() {
           <div className="overflow-y-auto p-6 sm:p-9">
             {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
             {message && <p role="status" className="mb-4 rounded-lg bg-[#eaf2e8] p-3 text-sm">{message}</p>}
-            {(detailImage || detail.imageUrl) && <img className="mb-6 max-h-56 w-full rounded-xl bg-cream object-contain" src={detailImage || detail.imageUrl} alt={detail.name} />}
+            {(detailImage.url || detail.imageUrl) && <img className="mb-6 max-h-56 w-full rounded-xl bg-cream object-contain" src={detailImage.url || detail.imageUrl} alt={detail.name} />}
+            {detailImage.error && <p role="alert" className="mb-3 text-sm text-amber-900">Image privée indisponible. L’image fournisseur reste affichée si elle existe. <button type="button" className="font-semibold underline" onClick={detailImage.retry}>Recharger l’image privée</button></p>}
             <div className="grid overflow-hidden rounded-xl border border-forest/10 sm:grid-cols-5">{[
               ["Type", detail.category], ["Molécule", detail.molecule], ["Taux indiqué", detail.rate], ["Provenance", detail.origin], ["Culture", detail.culture],
             ].map(([label, value]) => <div key={label} className="border-b border-r border-forest/10 p-3"><p className="text-[0.65rem] font-bold uppercase tracking-[0.13em] text-forest/55">{label}</p><p className="mt-1 text-sm font-semibold">{value || "À renseigner"}</p></div>)}</div>
@@ -366,7 +380,7 @@ export function AdminSelectionPage() {
                 <div className="rounded-xl border border-forest/10 p-4"><h3 className="text-xs font-bold uppercase tracking-[0.14em]">Notes privées</h3><p className="mt-3 whitespace-pre-wrap text-sm text-ink/70">{detail.notes || "Aucune note pour le moment."}</p></div>
                 <div className="rounded-xl border border-forest/10 p-4"><h3 className="text-xs font-bold uppercase tracking-[0.14em]">Publication</h3><p className="mt-2 text-sm">{detail.publishedSlug ? detail.updatedAt > detail.publishedAt ? "Fiche modifiée depuis sa publication : mettez-la à jour" : "Fiche en ligne" : publicationMissing(detail).length ? `À compléter : ${publicationMissing(detail).join(", ")}` : "Prête à publier"}</p>{detail.publishedSlug && <a className="mt-2 inline-block text-sm underline" href="/fiches-produits" target="_blank" rel="noreferrer">Voir les fiches publiques ↗</a>}</div>
                 <div className="rounded-xl border border-forest/10 bg-[#f8faf6] p-4"><h3 className="text-xs font-bold uppercase tracking-[0.14em]">Boutique en ligne</h3>
-                  {linkedCatalog ? <><p className="mt-2 text-sm font-semibold">{linkedCatalog.name}</p><p className="mt-1 text-xs text-ink/60">{linkedCatalog.category === "flowers" ? "Fleurs CBD" : "Résines CBD"} · {money(linkedCatalog.price)} / g · {linkedCatalog.stock} g en stock</p><p className={`mt-2 text-xs font-semibold ${linkedCatalog.isActive ? "text-forest" : "text-amber-800"}`}>{linkedCatalog.isActive ? "En ligne" : "Inactif"}</p>{linkedCatalog.isActive && <a className="mt-2 inline-block text-sm underline" href={`/produits/${linkedCatalog.slug}`} target="_blank" rel="noreferrer">Voir dans la boutique ↗</a>}</> : <p className="mt-2 text-sm text-ink/60">{detail.catalogProductId ? "Produit lié indisponible : vérifiez le catalogue." : "Pas encore publié dans la boutique."}</p>}
+                  {catalogState === "error" ? <p className="mt-2 text-sm text-amber-900">État du produit lié indisponible : rechargez le catalogue commercial.</p> : linkedCatalog ? <><p className="mt-2 text-sm font-semibold">{linkedCatalog.name}</p><p className="mt-1 text-xs text-ink/60">{linkedCatalog.category === "flowers" ? "Fleurs CBD" : "Résines CBD"} · {money(linkedCatalog.price)} / g · {linkedCatalog.stock} g en stock</p><p className={`mt-2 text-xs font-semibold ${linkedCatalog.isActive ? "text-forest" : "text-amber-800"}`}>{linkedCatalog.isActive ? "En ligne" : "Inactif"}</p>{linkedCatalog.isActive && <a className="mt-2 inline-block text-sm underline" href={`/produits/${linkedCatalog.slug}`} target="_blank" rel="noreferrer">Voir dans la boutique ↗</a>}</> : <p className="mt-2 text-sm text-ink/60">{detail.catalogProductId ? "Produit lié introuvable dans le catalogue confirmé." : "Pas encore publié dans la boutique."}</p>}
                   <a className="mt-2 inline-block text-xs underline" href="/admin/produits">Gérer les produits ↗</a>
                 </div>
                 {detail.url && <a href={detail.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm underline">Fiche fournisseur <ArrowUpRight size={15} /></a>}
@@ -416,20 +430,25 @@ export function AdminSelectionPage() {
             <Field label="Note personnelle de 0 à 5" value={String(draft.rating)} type="number" onChange={(value) => setDraft({ ...draft, rating: Number(value) })} />
             <Field label="Lien image source (référence)" value={draft.imageUrl} type="url" onChange={(value) => setDraft({ ...draft, imageUrl: value })} />
             <label className="block text-xs font-semibold sm:col-span-2">Produit de la boutique lié (facultatif)
-              <select className="input-field mt-1 w-full" value={draft.catalogProductId} onChange={(event) => setDraft({ ...draft, catalogProductId: event.target.value })}>
+              <select className="input-field mt-1 w-full" value={draft.catalogProductId} disabled={catalogState !== "ready"} onChange={(event) => setDraft({ ...draft, catalogProductId: event.target.value })}>
                 <option value="">Aucun produit lié</option>
+                {draft.catalogProductId && !catalogProducts.some((product) => product.id === draft.catalogProductId) && <option value={draft.catalogProductId}>Produit lié actuel (non vérifié)</option>}
                 {catalogProducts.map((product) => <option key={product.id} value={product.id}>{product.name}{product.isActive ? "" : " · inactif"}</option>)}
               </select>
+              {catalogState === "error" && <span className="mt-1 block font-normal text-amber-900">Catalogue commercial indisponible : modification du lien bloquée.</span>}
             </label>
             <div className="sm:col-span-2 rounded-lg border border-forest/10 bg-cream p-4 text-sm"><p className="font-semibold">Image de la fiche Verdanza</p><p className="mt-1 text-xs text-ink/60">Choisissez une image que Verdanza peut publier. La prévisualisation reste locale jusqu’à la confirmation d’enregistrement.</p>
-              {(localImage?.preview || draftImage || draft.imageUrl) && <img className="mt-3 max-h-40 max-w-full rounded-md object-contain" src={localImage?.preview || draftImage || draft.imageUrl} alt="Aperçu du produit" />}
+              {(localImage?.preview || draftImage.url || draft.imageUrl) && <img className="mt-3 max-h-40 max-w-full rounded-md object-contain" src={localImage?.preview || draftImage.url || draft.imageUrl} alt="Aperçu du produit" />}
+              {draftImage.error && <p role="alert" className="mt-2 text-xs text-amber-900">Image privée indisponible. La référence fournisseur ne confirme pas cette image. <button type="button" className="font-semibold underline" onClick={draftImage.retry}>Recharger l’image privée</button></p>}
               {draft.imagePath && <p className="mt-2 inline-flex items-center gap-1 text-xs text-forest"><Check size={14} /> Image enregistrée</p>}
               <input className="mt-3 block w-full text-xs" type="file" accept="image/jpeg,image/png,image/webp" aria-label="Ajouter une image produit" onChange={(event) => void prepareImageFile(event, setLocalImage, action)} />
             </div>
           </form>
       </AdminDialog>}
       <AdminConfirmDialog open={Boolean(confirmation)} title={confirmation?.title || "Confirmation"} summary={confirmation?.summary} warning={confirmation?.warning} pending={busy} onCancel={() => setConfirmation(null)} onConfirm={async () => {
-        if (!confirmation) return; setBusy(true); setError("");
+        if (!confirmation) return;
+        if (draft?.status === "En boutique" && catalogState !== "ready") { setError("Catalogue commercial indisponible. Rechargez-le avant d'enregistrer une sélection En boutique."); setConfirmation(null); return; }
+        setBusy(true); setError("");
         try { await confirmation.run(); setConfirmation(null); } finally { setBusy(false); }
       }}>{draft && <button type="button" className="text-sm underline" onClick={() => setConfirmation(null)}>Corriger avant confirmation</button>}</AdminConfirmDialog>
     </div>
@@ -517,8 +536,10 @@ function AttributesField({ value, onChange }: { value: Record<string, string>; o
 
 function useSelectionImage(id: string, path: string) {
   const [url, setUrl] = useState("");
+  const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    setUrl("");
+    setUrl(""); setError(false);
     if (!id || !path) return;
     let active = true;
     let objectUrl = "";
@@ -526,8 +547,8 @@ function useSelectionImage(id: string, path: string) {
       objectUrl = URL.createObjectURL(blob);
       if (active) setUrl(objectUrl);
       else URL.revokeObjectURL(objectUrl);
-    }).catch(() => { /* The original supplier image remains an optional fallback. */ });
+    }).catch(() => { if (active) setError(true); });
     return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [id, path]);
-  return url;
+  }, [id, path, attempt]);
+  return { url, error, retry: () => setAttempt((value) => value + 1) };
 }

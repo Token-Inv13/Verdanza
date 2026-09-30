@@ -1,7 +1,7 @@
 import { deepEqual, equal, ok, rejects, throws } from "node:assert/strict";
 import { validateMarketingAiBrief, validateMarketingAiProposals } from "../api/_server/marketingAiContract.js";
 import { marketingAiProductContext } from "../api/_server/marketingAi.js";
-import { configuredMarketingAiProvider, createOpenAiMarketingProvider, MarketingAiError, marketingAiLimits } from "../api/_server/marketingAiProvider.js";
+import { configuredMarketingAiProvider, createOpenAiMarketingProvider, marketingAiConfigurationState, MarketingAiError, marketingAiLimits } from "../api/_server/marketingAiProvider.js";
 import { MARKETING_AI_POLICY, MARKETING_AI_PROMPT_VERSION, validateAiSchema } from "../api/_server/marketingAiSchema.js";
 import { aiBrief, aiContext, aiPayload } from "./fixtures/marketingAiData.js";
 let checks = 0;
@@ -73,5 +73,8 @@ await test("adaptateur : refus, troncature, JSON invalide, sortie excessive, quo
 await test("clé, modèle ou opt-in manquants : fournisseur désactivé, aucun appel réel", () => {
   for (const env of [{}, { MARKETING_AI_ENABLED: "true" }, { OPENAI_API_KEY: "fixture", MARKETING_AI_ENABLED: "true" }, { OPENAI_API_KEY: "fixture", MARKETING_AI_MODEL: "fixture" }, { OPENAI_API_KEY: "fixture", MARKETING_AI_MODEL: "fixture", MARKETING_AI_ENABLED: "true", MARKETING_AI_PROVIDER: "unsupported" }]) equal(configuredMarketingAiProvider(env), null);
   ok(configuredMarketingAiProvider({ OPENAI_API_KEY: "fixture", MARKETING_AI_MODEL: "fixture", MARKETING_AI_ENABLED: "true" }));
+  equal(marketingAiConfigurationState({}), "disabled");
+  equal(marketingAiConfigurationState({ MARKETING_AI_ENABLED: "true" }), "missing_configuration");
+  equal(marketingAiConfigurationState({ OPENAI_API_KEY: "fixture", MARKETING_AI_MODEL: "fixture", MARKETING_AI_ENABLED: "true" }), "ready");
 });
 console.log(`${checks} groupes contrat / provider / minimisation IA validés avec transport simulé.`);

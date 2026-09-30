@@ -32,31 +32,35 @@ export default function AdminContestsPage({ onPrepare }: { onPrepare: (contest?:
   const [mode, setMode] = useState<"list" | "detail">("list");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isListLoading, setIsListLoading] = useState(true);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [listReadError, setListReadError] = useState("");
+  const [detailReadError, setDetailReadError] = useState("");
 
   const [confirmation, setConfirmation] = useState<{ title: string; warning: string; run: (reason: string) => Promise<void>; requiresReason?: boolean; requiresDraw?: boolean } | null>(null);
   const [reason, setReason] = useState("");
   const [drawAcknowledgement, setDrawAcknowledgement] = useState("");
 
   const loadList = useCallback(async () => {
-    setIsLoading(true);
-    setError("");
+    setIsListLoading(true);
+    setListReadError("");
     try {
       const result = await listAdminContests();
       setContests(result.contests);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Chargement impossible.");
+      setListReadError(reason instanceof Error ? reason.message : "Chargement impossible.");
     } finally {
-      setIsLoading(false);
+      setIsListLoading(false);
     }
   }, []);
 
   const loadDetail = useCallback(async (contestId: string, nextPage = page, nextSearch = search) => {
-    setIsLoading(true);
-    setError("");
+    setIsDetailLoading(true);
+    setDetailReadError("");
+    setSelectedId(contestId);
     try {
       const result = await getAdminContestDetail({
         contestId,
@@ -65,11 +69,11 @@ export default function AdminContestsPage({ onPrepare }: { onPrepare: (contest?:
         search: nextSearch,
       });
       setDetail(result);
-      setSelectedId(contestId);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Détail du concours indisponible.");
+      setDetailReadError(reason instanceof Error ? reason.message : "Détail du concours indisponible.");
+      setDetail(null);
     } finally {
-      setIsLoading(false);
+      setIsDetailLoading(false);
     }
   }, [page, search]);
 
@@ -79,6 +83,7 @@ export default function AdminContestsPage({ onPrepare }: { onPrepare: (contest?:
 
   async function openDetail(contestId: string) {
     setMode("detail");
+    setActionError("");
     setPage(1);
     setSearch("");
     setMessage("");
@@ -126,13 +131,13 @@ export default function AdminContestsPage({ onPrepare }: { onPrepare: (contest?:
   async function runAction(action: () => Promise<void>) {
     if (!detail) return;
     setIsSaving(true);
-    setError("");
+    setActionError("");
     setMessage("");
     try {
       await action();
       await Promise.all([loadDetail(detail.contest.id, page, search), loadList()]);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Action impossible.");
+      setActionError(reason instanceof Error ? reason.message : "Action impossible.");
       throw reason;
     } finally {
       setIsSaving(false);
@@ -143,6 +148,10 @@ export default function AdminContestsPage({ onPrepare }: { onPrepare: (contest?:
     () => Math.max(1, Math.ceil((detail?.entryTotal || 0) / (detail?.pageSize || 50))),
     [detail],
   );
+  const isLoading = mode === "list" ? isListLoading : isDetailLoading;
+  const readErrorMessage = mode === "list" ? listReadError : detailReadError;
+  const readError = Boolean(readErrorMessage);
+  const error = readErrorMessage || actionError;
 
   return (
     <section className="grid min-w-0 gap-6">
@@ -156,7 +165,7 @@ export default function AdminContestsPage({ onPrepare }: { onPrepare: (contest?:
         </div>
         <div className="flex flex-wrap gap-2">
           {mode !== "list" && (
-            <button className="btn-secondary min-h-10 px-4 py-2" type="button" onClick={() => setMode("list")}>
+            <button className="btn-secondary min-h-10 px-4 py-2" type="button" onClick={() => { setMode("list"); setActionError(""); void loadList(); }}>
               <ArrowLeft size={16} /> Liste
             </button>
           )}
@@ -167,12 +176,12 @@ export default function AdminContestsPage({ onPrepare }: { onPrepare: (contest?:
       </header>
 
       {message && <div className="rounded-md border border-forest/15 bg-cream px-4 py-3 text-sm text-forest" role="status">{message}</div>}
-      {error && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error}</div>}
+      {error && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error} {readError && <button type="button" className="ml-2 font-semibold underline" onClick={() => void (mode === "list" ? loadList() : loadDetail(selectedId))}>Réessayer la lecture</button>}</div>}
 
       {mode === "list" && (
-        <ContestList contests={contests} isLoading={isLoading} onOpen={openDetail} onEdit={openEdit} onRefresh={loadList} />
+        <ContestList contests={contests} isLoading={isLoading} readError={readError} onOpen={openDetail} onEdit={openEdit} onRefresh={loadList} />
       )}
-      {mode === "detail" && detail && (
+      {mode === "detail" && detail && !isLoading && !readError && (
         <div className="grid min-w-0 gap-6">
           <ContestConfiguration
             detail={detail}
@@ -207,9 +216,10 @@ export default function AdminContestsPage({ onPrepare }: { onPrepare: (contest?:
   );
 }
 
-function ContestList({ contests, isLoading, onOpen, onEdit, onRefresh }: {
+function ContestList({ contests, isLoading, readError, onOpen, onEdit, onRefresh }: {
   contests: Contest[];
   isLoading: boolean;
+  readError: boolean;
   onOpen: (id: string) => void;
   onEdit: (contest: Contest) => void;
   onRefresh: () => Promise<void>;
@@ -217,14 +227,14 @@ function ContestList({ contests, isLoading, onOpen, onEdit, onRefresh }: {
   return (
     <section className="min-w-0 overflow-hidden rounded-lg border border-forest/10 bg-ivory">
       <div className="flex items-center justify-between border-b border-forest/10 bg-cream/70 p-4">
-        <p className="text-sm text-ink/60">{contests.length} concours</p>
+        <p className="text-sm text-ink/60">{readError || isLoading ? "—" : contests.length} concours</p>
         <button className="btn-secondary min-h-9 px-3 py-2" type="button" onClick={() => void onRefresh()}>
           <RefreshCw size={15} /> Rafraîchir
         </button>
       </div>
       {isLoading && <Empty title="Chargement..." />}
-      {!isLoading && !contests.length && <Empty title="Aucun concours" description="Créez le premier concours Verdanza." />}
-      {!!contests.length && (
+      {!isLoading && !readError && !contests.length && <Empty title="Aucun concours" description="Créez le premier concours Verdanza." />}
+      {!isLoading && !readError && !!contests.length && (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[960px] text-left text-sm">
             <thead className="bg-cream text-xs uppercase tracking-[0.12em] text-forest/70">

@@ -9,7 +9,7 @@ export type SupplierInvoiceAnalysisResult = SupplierInvoiceParseResult & {
 
 export async function getSupplierPurchasesAdmin() {
   const token = await getFirebaseIdToken();
-  if (!token) return { purchases: [], source: "empty" as const };
+  if (!token) throw new Error("Connexion admin requise pour lire les achats fournisseurs.");
   const response = await fetch("/api/invoices?action=supplierPurchases", {
     headers: { authorization: `Bearer ${token}` },
   });

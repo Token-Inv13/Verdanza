@@ -7,7 +7,7 @@ import { sendJson, type VercelRequestLike, type VercelResponseLike } from "./htt
 import { serializeContestResponse } from "./contests.js";
 import { validateMarketingAiBrief, validateMarketingAiProposals } from "./marketingAiContract.js";
 import { MARKETING_AI_PROMPT_VERSION } from "./marketingAiSchema.js";
-import { configuredMarketingAiProvider, MarketingAiError, marketingAiLimits, type MarketingAiProvider } from "./marketingAiProvider.js";
+import { configuredMarketingAiProvider, marketingAiConfigurationState, MarketingAiError, marketingAiLimits, type MarketingAiProvider } from "./marketingAiProvider.js";
 import { marketingAiCollection } from "./marketingAiDraft.js";
 import { activeFixedPriceOptions, fixedPriceOptionPublicLabel } from "../../src/lib/fixedPriceOptions.js";
 import type { Product } from "../../src/types/index.js";
@@ -117,7 +117,9 @@ export async function handleMarketingAiAdmin(request: VercelRequestLike, respons
     const provider = dependencies.provider === undefined ? configuredMarketingAiProvider() : dependencies.provider;
     if (request.method === "GET") {
       const generationId = new URL(request.url || "/", "https://verdanza.local").searchParams.get("generationId");
-      if (!generationId) return sendJson(response, { configured: Boolean(provider), maxProposals: marketingAiLimits.maxProposals });
+      if (!generationId) return sendJson(response, { configured: Boolean(provider),
+        state: provider ? "ready" : marketingAiConfigurationState() === "disabled" ? "disabled" : "missing_configuration",
+        maxProposals: marketingAiLimits.maxProposals });
       if (!uuid.test(generationId)) throw new MarketingAiError("Identifiant invalide.", "invalid_brief");
       const snap = await db.collection(marketingAiCollection).doc(generationId).get();
       if (!snap.exists) throw new MarketingAiError("Génération introuvable.", "ai_generation_missing", 404);

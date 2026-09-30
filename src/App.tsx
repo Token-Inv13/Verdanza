@@ -27,6 +27,7 @@ const AdminPage = lazy(() =>
   import("./pages/admin/AdminPage").then((module) => ({ default: module.AdminPage })),
 );
 const AdminArchivesPage = lazy(() => import("./pages/admin/AdminArchivesPage"));
+const AdminSettingsPage = lazy(() => import("./pages/admin/AdminSettingsPage"));
 const AdminAuthGate = lazy(() =>
   import("./components/AdminAuthGate").then((module) => ({ default: module.AdminAuthGate })),
 );
@@ -200,7 +201,7 @@ export function App() {
               path="facturation"
               element={<Navigate to="/admin/comptabilite?tab=facturation" replace />}
             />
-            <Route path="parametres" element={<AdminPage section="Paramètres" />} />
+            <Route path="parametres" element={<AdminSettingsPage />} />
           </Route>
         </Route>
         <Route path="*" element={<NotFoundPage />} />

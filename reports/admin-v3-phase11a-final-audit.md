@@ -1,0 +1,77 @@
+# Admin V3 — Phase 11A : simplification et audit de raccordement
+
+> État historique avant les corrections 11A.1. Le verdict final et la matrice de raccordement actualisée figurent dans `reports/admin-v3-phase11a1-certification.md`.
+
+Base : `origin/main` à `c63b5963c03a2dd714eef85ad6fbf626ec354eec` (29 septembre 2026). Branche locale : `codex/admin-v3-final-polish`. Inspection statique des routes, composants, services et endpoints ; tests locaux avec mocks/émulateurs. Cette inspection ne prouve pas à elle seule une lecture ou écriture réussie en Production.
+
+## Changements UX de cette phase
+
+- La sidebar masque la barre native avec `scrollbar-width: none` et `::-webkit-scrollbar`, tout en conservant `overflow-y: auto` et l'accès clavier. Ses huit groupes sont rabattables ; seul le groupe actif est ouvert initialement. Le drawer mobile se ferme après navigation.
+- `Gestion` (Comptabilité, Achats fournisseurs, Coûts manuels, Factures, Facturation) et `Paramètres` sont deux groupes distincts. Les routes et les onglets comptables existants restent identiques.
+- Le Dashboard met en avant règlements et préparations à suivre, produits actifs, stocks bas et ruptures. Les autres métriques, les sources et le suivi détaillé des commandes restent accessibles à la demande.
+- Marketing présente d'abord l'état des campagnes, une action `Créer`, les brouillons et l'accès IA. Les compteurs distinguent inactifs/modèles, bannières bloquées et brouillons de concours ; une vue sans brouillon le dit explicitement. Les listes détaillées restent sur les pages Promotions, Bannières et Concours. L'édition reste dans un dialogue. Lorsque l'IA est OFF, son formulaire est masqué ; l'API de statut distingue désormais `disabled` de `missing_configuration` sans exposer de secret.
+
+## Matrice des 22 entrées de navigation
+
+`A` = route protégée par `AdminAuthGate` (Firebase Auth + appartenance active à `adminUsers`). Pour les API, l'authentification serveur est indiquée lorsqu'elle existe. `R/E` = lecture/écriture raccordée dans le code. `—` = pas d'écriture attendue depuis cet écran. Les états qualifient le raccordement observé dans le code, pas une recette métier en Production.
+
+| Entrée | Route et composant | Service client → endpoint ; source | R/E, auth, test | État |
+|---|---|---|---|---|
+| Dashboard | `/admin` → `AdminPage(Dashboard)` | `useAdminData` → produits, commandes, livraisons, factures ; Firestore et secours local | R + actions commandes, A ; `test:admin-v3` | PARTIEL : sources/erreurs masquées (F2) |
+| Analytics | `/admin/analytics` → `AdminPage` / `AdminAnalyticsPanel` | `adminAnalyticsService` → `/api/invoices?action=analytics` ; agrégats serveur | R/—, A + serveur ; `test:admin-analytics` | CONNECTÉ (code) |
+| Sélection | `/admin/selection` → `AdminSelectionPage` | `selectionService` → `/api/selection` ; `productSelections`, `products`, images Storage | R/E, A + serveur ; `test:selection-pipeline`, `test:selection-pipeline-ui` | CONNECTÉ (code) ; lecture catalogue liée avalée silencieusement (F3) |
+| Produits | `/admin/produits` → `AdminPage(Produits)` | `productsService`, images → Firestore `products`, Storage, `/api/invoices` pour opérations protégées | R/E, A + serveur pour opérations ; `test:admin-v3`, `test:admin-products-responsive` | PARTIEL : secours local et source invisible (F2) |
+| Stocks | `/admin/stocks` → `AdminPage(Stocks)` | liste `productsService`, détail/mutation `adminStockService` → `/api/invoices?action=adminStockRead/adminStockStatus` ; `products`, mouvements | R/E transactionnelle, A + serveur ; `test:admin-stock`, `test:admin-stock-ui` | PARTIEL : liste produits en secours local possible (F2) |
+| Commandes | `/admin/commandes` → `AdminPage(Commandes)` | `ordersService` → Firestore `orders`, actions admin serveur | R/E, A ; `test:admin-v3` | PARTIEL : erreur de lecture assimilée à zéro commande (F2) |
+| Clients | `/admin/clients` → `AdminPage(Clients)` / `CustomersTable` | `adminCustomersV2Service` → `/api/invoices?action=adminCustomersList` et actions associées ; `customers`, commandes et profils agrégés | R/E, A + serveur ; `test:admin-customers-ui` | CONNECTÉ (code) ; lecture coupons auxiliaire en secours vide possible (F2) |
+| Livraisons | `/admin/livraisons` → `AdminPage(Livraisons locales)` | `deliveryZonesService` → Firestore `deliveryZones`, liste locale de secours | R/E, A ; `test:admin-v3` | PARTIEL : secours local et source invisible (F2) |
+| Marketing | `/admin/marketing` → `AdminMarketingPage(overview)` | `marketingService` → `/api/admin-contests?action=marketing` ; `marketingDrafts`, `marketingOperations`, `marketingAuditLogs`, objets métier | R/E avec confirmations, A + serveur ; `test:marketing-ui` | CONNECTÉ (code) ; IA séparée OFF |
+| Bannières | `/admin/bannieres` → `AdminMarketingPage(banners)` | même service Marketing ; Firestore `promoBanners`, brouillons | R/E, A + serveur ; `test:marketing-ui` | CONNECTÉ (code) |
+| Promotions | `/admin/coupons` → `AdminMarketingPage(promotions)` | même service Marketing ; Firestore `coupons`, brouillons | R/E, A + serveur ; `test:marketing-ui` | CONNECTÉ (code) |
+| Concours | `/admin/concours` → `AdminMarketingPage(contests)` / `AdminContestsPage` | `marketingService` et concours → `/api/admin-contests` ; Firestore `contests`, participants | R/E avec confirmation du tirage, A + serveur ; `test:marketing-ui`, `test:contests` | CONNECTÉ (code) |
+| Avis | `/admin/avis` → `AdminPage` / `AdminReviewsPanel` | `reviewsService` → Firestore `productReviews` | R/E (modération), A + règles Firestore ; `test:admin-v3` vérifie la route seulement | CONNECTÉ (code), test UI dédié à compléter |
+| Commentaires | `/admin/commentaires-blog` → `AdminBlogCommentsPage` | `blogEngagementService` → `/api/blog-interactions?action=adminComments` ; commentaires Firestore | R/E (modération/suppression), A + serveur ; `test:blog-engagement` | CONNECTÉ (code) |
+| Favoris | `/admin/favoris` → `AdminPage` / `AdminFavoritesPanel` | `favoritesService` → Firestore `favorites` ; rapprochement `products` | R/—, A + règles Firestore ; `test:admin-v3` vérifie la route seulement | CONNECTÉ (code), test UI dédié à compléter |
+| Archives | `/admin/archives` → `AdminArchivesPage` | `adminArchivesService` → commandes, coupons, bannières, factures ; restauration de commande via `ordersService` | R/E limitée aux commandes admissibles, A ; `test:admin-archives` | PARTIEL : lectures auxiliaires peuvent masquer les erreurs (F2) |
+| Comptabilité | `/admin/comptabilite` → `AdminPage` / `AccountingPanel` | `useAdminData`, `invoicesService`, `productCostsService`, `supplierPurchasesService` ; Firestore et `/api/invoices` | R/E, A + serveur selon action ; `test:admin-v3`, tests factures/coûts | PARTIEL : factures et paramètres de secours silencieux (F2) |
+| Achats fournisseurs | `/admin/comptabilite?tab=achats` → `AccountingPanel` | `supplierPurchasesService` → `/api/invoices`, analyse PDF → `/api/analyze-supplier-invoice` ; achats et alias | R/E, A + serveur ; `test:supplier-purchases`, `test:supplier-invoice-import` | CONNECTÉ (code) |
+| Coûts manuels | `/admin/comptabilite?tab=couts` → `AccountingPanel` | `productCostsService` → `/api/invoices?action=productCosts` ; coûts produits | R/E, A + serveur ; `test:admin-v3` vérifie l'onglet seulement | CONNECTÉ (code), recette action dédiée à compléter |
+| Factures | `/admin/factures` → redirection `/admin/comptabilite?tab=factures` | `invoicesService` → `/api/invoices` ; Firestore `invoices`, PDF/email | R/E, A + serveur ; `test:customer-invoices` | PARTIEL : erreur de liste présentée comme liste vide (F2) |
+| Facturation | `/admin/facturation` → redirection `/admin/comptabilite?tab=facturation` | `invoicesService` → Firestore `settings/billing` ; `/api/invoices` pour émission | R/E, A ; `test:customer-invoices` | PARTIEL : paramètres locaux de secours sans alerte (F2) |
+| Paramètres | `/admin/parametres` → `AdminPage(Paramètres)` | Aucun service métier propre ; composant statique | —/—, A ; aucune recette fonctionnelle | PLACEHOLDER (F1) |
+
+Toutes les destinations de la sidebar figurent dans `App.tsx` ; Factures et Facturation sont des redirections intentionnelles vers les onglets comptables. Aucun lien mort n'a été identifié dans cette navigation. Les tests cités ne constituent pas tous une recette bout en bout des données Production.
+
+## Anomalies distinctes
+
+- **F1 — P2, Paramètres exposé mais vide.** `src/layouts/AdminLayout.tsx:69` expose `/admin/parametres` ; `src/pages/admin/AdminPage.tsx:1109` affiche « Module non affiche » et affirme à tort que la section n'est pas dans la navigation. Aucune lecture ni écriture de paramètres n'est proposée. Décision produit nécessaire : définir le contenu attendu ou retirer explicitement cette entrée lors d'une phase autorisée. Aucun module métier n'a été inventé ici.
+- **F2 — P2, état des lectures admin ambigu.** `src/services/productsService.ts:181-190` retourne les produits locaux après une erreur Firestore ou une collection vide ; les services commandes, factures, coupons, bannières et clients retournent parfois une liste vide ; livraisons et facturation ont aussi un secours local (`src/services/invoicesService.ts:66-79`). `useAdminData` consomme ces états ; `SourceLine` dans `src/pages/admin/AdminPage.tsx:6873-6875` retourne `null`. Une panne peut donc ressembler à un stock valide, à aucune commande ou à des paramètres de facturation courants. Prévoir un état d'erreur distinct et visible et interdire toute décision métier fondée sur un secours non confirmé. Aucun fallback ni règle métier n'a été modifié en 11A.
+- **F3 — P2 à instruire, lectures auxiliaires Sélection silencieuses.** `src/pages/admin/AdminSelectionPage.tsx:88` ignore l'échec de `refreshCatalog()` ; la liste de sélection reste disponible, mais le rapprochement avec le catalogue commercial peut manquer sans explication. `src/components/admin/selection/SelectionPricing.tsx:20` ignore aussi l'échec de lecture du contexte de pipeline/prix et laisse ce contexte à `null`. Tester ces scénarios d'erreur et rendre la dépendance visible avant une décision de publication depuis l'Atelier.
+
+La recherche des handlers vides et `TODO` fonctionnels sur les routes a surtout relevé `SourceLine` (F2) et le placeholder Paramètres (F1). Les parcours Marketing manuels, IA et stock ont des handlers et endpoints effectifs. Cela n'équivaut pas à prouver chaque action en Production.
+
+## Assistant Marketing IA — chaîne et état OFF
+
+`MarketingAiAssistant` appelle `marketingAiService`, qui envoie un token Firebase à `/api/admin-contests?action=marketing-ai`. Le backend vérifie `adminUsers` via `assertAdminUser`, projette uniquement les produits actifs, disponibles et valides de Firestore `products`, applique quotas, délai et idempotence, puis appelle le provider OpenAI Responses seulement sur un POST de génération. La requête utilise `store:false` et un schéma de sortie contrôlé. Le résultat et l'historique sont conservés dans `marketingAiGenerations`. Une proposition peut devenir un brouillon privé Marketing, avec revue, approbation, matérialisation inactive et activation humaine séparées ; la provenance IA reste associée au brouillon.
+
+**IA TECHNIQUEMENT PRÊTE : OUI pour le code et les tests simulés ; appel fournisseur réel non qualifié.** L'Admin Production affichait l'état OFF (`configured: false`) lors de l'inspection. Vérification en lecture seule du projet Vercel `verdanza`, onglet *Environment Variables* : la recherche `MARKETING_AI` ne retournait aucune variable de projet ; `OPENAI_API_KEY` ne retournait aucun résultat ; l'onglet *Shared* indiquait qu'aucune variable partagée n'était liée au projet. Les quatre contrôles serveur expliquent l'état OFF observé : `MARKETING_AI_ENABLED` est absent, donc le provider est désactivé ; `MARKETING_AI_MODEL` et `OPENAI_API_KEY` sont également absents. `MARKETING_AI_PROVIDER` est optionnel et absent. Seuls les noms, la portée et l'absence ont été lus, jamais une valeur. Le nouveau statut de 11A distingue `disabled` et `missing_configuration`, mais il n'est pas déployé. L'activation en 11B exige d'ajouter une clé OpenAI et un modèle aux variables Production, de choisir explicitement l'activation de `MARKETING_AI_ENABLED`, puis une recette fournisseur contrôlée. Aucune clé n'a été lue, créée ni utilisée.
+
+## Validation et limites
+
+`verify:local-safety`, `lint`, `typecheck`, `typecheck:api`, `build:local`, `verify:admin-v3`, `test:admin-nav-ui` et `git diff --check` passent. Le build a produit 86 pages HTML pré-rendues localement. La suite Admin V3 comprend les tests stock, Clients, Sélection, Marketing et IA avec mocks/émulateurs ; aucun appel fournisseur IA ni écriture Firebase Production.
+
+Recette responsive locale à 1440×1000, 1280×720, 820×900 et 390×844 : sidebar, Dashboard, Produits, Stocks, Comptabilité, Paramètres, Marketing, Clients et Sélection sans débordement horizontal détecté. Le test sidebar valide huit groupes, ouverture initiale du groupe actif, clavier, séparation Gestion/Paramètres, fermeture du drawer mobile, `overflow-y: auto`, style de barre masquée et défilement à la molette une fois tous les groupes ouverts. Cette recette utilise Chromium et des fixtures isolées ; le comportement physique trackpad/tactile et le rendu Firefox/WebKit restent à confirmer sur appareil/navigateur. Les captures locales `sidebar-after-1440.png`, `sidebar-after-390.png`, `dashboard-after-1440.png`, `dashboard-after-390.png`, `marketing-after-1440.png`, `marketing-after-390.png`, `selection-after-1440.png`, `selection-after-390.png`, `clients-after-1440.png` et `clients-after-390.png` se trouvent dans le dossier d'artefacts de la phase, hors dépôt. L'état « avant » Marketing a été constaté et capturé en lecture seule sur l'Admin Production, sans création d'artefact versionné.
+
+Les tests de fixture ne prouvent pas chaque action métier en Production. En particulier, F1 à F3 nécessitent une décision et une recette ciblée avant une clôture définitive.
+
+## Fichiers et état Git
+
+Fichiers UX : `src/layouts/AdminLayout.tsx`, `src/styles/index.css`, `src/pages/admin/AdminPage.tsx`, `src/pages/admin/AdminMarketingPage.tsx`, `src/components/admin/marketing/MarketingOverview.tsx`, `src/components/admin/marketing/MarketingAiAssistant.tsx`.
+
+Contrat de statut IA : `api/_server/marketingAi.ts`, `api/_server/marketingAiProvider.ts`, `src/services/marketingAiService.ts`.
+
+Tests et fixtures : `package.json`, `scripts/fixtures/adminV3Fixture.tsx`, `scripts/fixtures/marketingFixture.tsx`, `scripts/fixtures/adminNavFixture.tsx`, `scripts/fixtures/adminNavMocks.tsx`, `scripts/testAdminCustomersUi.ts`, `scripts/testAdminV3.ts`, `scripts/testAdminNavUi.ts`, `scripts/testMarketingAiUi.ts`, `scripts/testMarketingAiUnit.ts`, `scripts/testMarketingUi.ts`, `scripts/testSelectionPipelineUi.ts`.
+
+Rapport : `reports/admin-v3-phase11a-final-audit.md`. Ces 22 fichiers sont les seuls changements de ce worktree. Branche `codex/admin-v3-final-polish`, HEAD `c63b5963c03a2dd714eef85ad6fbf626ec354eec`, identique à `origin/main` au contrôle final ; celui-ci est donc ancêtre du HEAD. Aucun fichier stagé ni conflit ; `git diff --check` passe. Aucun commit, push, merge ou déploiement n'a été fait pour 11A, car les défauts P2 empêchent le verdict READY.
+
+Verdict : **BLOCKED**, car F1 et F2 sont des défauts métier distincts, tandis que F3 nécessite une recette d'erreur ciblée. L'état OFF IA, lui, est expliqué et reste volontairement inchangé.

@@ -24,6 +24,7 @@ export const fixture = {
   removed: [] as string[], uploads: 0, confirmations: 0, refreshes: 0,
   flags: [] as unknown[], stocks: [] as unknown[],
   blocked: "", failure: "", refreshFailure: false, release: () => {},
+  readFailure: "" as "" | "products" | "delivery", emptyReal: false, recoverOnRefresh: false,
 };
 
 async function operation(kind: string) {
@@ -59,16 +60,18 @@ const billingSettings = {};
 export function useAdminData() {
   const [products, setProducts] = useState([fixtureProduct, noReference]);
   return {
-    products,
-    applyStockSnapshot: (snapshot: StockSnapshot) => setProducts((current) => current.map((product) => product.id === snapshot.productId ? { ...product, stock: snapshot.stock, lowStockThreshold: snapshot.lowStockThreshold } : product)), productSource: "firestore",
-    orders: [], orderSource: "empty", deliveryZones: [], deliverySource: "local",
+    products: fixture.readFailure === "products" || fixture.emptyReal ? [] : products,
+    applyStockSnapshot: (snapshot: StockSnapshot) => setProducts((current) => current.map((product) => product.id === snapshot.productId ? { ...product, stock: snapshot.stock, lowStockThreshold: snapshot.lowStockThreshold } : product)), productSource: fixture.readFailure === "products" ? "error" : fixture.emptyReal ? "empty" : "firestore",
+    orders: [], orderSource: "empty", deliveryZones: [], deliverySource: fixture.readFailure === "delivery" ? "error" : "empty",
     coupons: [], couponSource: "empty", promoBanners: [], promoBannerSource: "empty",
     customers: [], customerSource: "empty", invoices: [], invoiceSource: "empty",
     billingSettings, billingSource: "local", productCosts: [], productCostsSource: "empty", productCostsError: "",
     supplierPurchases: [], supplierPurchasesSource: "empty", supplierPurchasesError: "", isLoading: false,
+    readErrors: fixture.readFailure === "products" ? { products: "Produits indisponibles." } : fixture.readFailure === "delivery" ? { delivery: "Zones de livraison indisponibles." } : {},
     refresh: async () => {
       fixture.refreshes += 1;
       if (fixture.refreshFailure) throw new Error("Actualisation refusée");
+      if (fixture.recoverOnRefresh) { fixture.readFailure = ""; fixture.recoverOnRefresh = false; setProducts((current) => [...current]); }
     }, refreshOrder: async () => {},
   };
 }
