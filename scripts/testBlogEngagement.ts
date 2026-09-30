@@ -310,6 +310,44 @@ test("l'acces administrateur est protege par token et adminUsers", () => {
   assert.match(source, /assertAdminUser\(db, token, dependencies\.verifyToken\)/);
 });
 
+test("la liste Admin sans slug garde auth, vide confirme et pagination", async () => {
+  const raw = new FakeFirestore();
+  raw.documents.set("adminUsers/admin-fixture", { isActive: true });
+  const handler = createBlogInteractionsHandler({
+    getDb: () => raw as unknown as FirebaseFirestore.Firestore,
+    verifyToken: async (token) => ({ uid: token === "admin" ? "admin-fixture" : "visitor", email: null }),
+  });
+  async function get(url: string, token?: string) {
+    let status = 200;
+    let body: unknown;
+    const response = {
+      setHeader() {}, status(code: number) { status = code; return this; }, json(value: unknown) { body = value; },
+    } as unknown as VercelResponseLike;
+    await handler({ method: "GET", url, headers: token ? { authorization: `Bearer ${token}` } : {} } as VercelRequestLike, response);
+    return { status, body };
+  }
+  const route = "/api/blog-interactions?action=adminComments&status=pending&page=1&pageSize=50";
+  assert.equal((await get(route)).status, 401);
+  assert.equal((await get(route, "visitor")).status, 403);
+  assert.deepEqual(await get(route, "admin"), {
+    status: 200, body: { comments: [], total: 0, page: 1, pageSize: 50 },
+  });
+  const first = await createPendingComment(raw as unknown as FirebaseFirestore.Firestore, {
+    slug, userId: "reader-one", displayName: "Camille", text: "Premier commentaire de test.",
+  });
+  await createPendingComment(raw as unknown as FirebaseFirestore.Firestore, {
+    slug: publishedBlogArticleSlugs[1], userId: "reader-two", displayName: "Noa", text: "Second commentaire de test.",
+  });
+  const page = await get("/api/blog-interactions?action=adminComments&status=pending&page=1&pageSize=1", "admin");
+  assert.equal(page.status, 200);
+  assert.equal((page.body as { total: number }).total, 2);
+  assert.equal((page.body as { comments: unknown[] }).comments.length, 1);
+  const filtered = await get(`/api/blog-interactions?action=adminComments&slug=${slug}`, "admin");
+  assert.equal(filtered.status, 200);
+  assert.equal((filtered.body as { comments: Array<{ id: string }> }).comments[0]?.id, first.id);
+  assert.equal((await get("/api/blog-interactions?action=summary", "admin")).status, 404);
+});
+
 test("le partage conserve le partage natif et les deux fallbacks de copie", () => {
   const source = readFileSync("src/components/BlogEngagement.tsx", "utf8");
   assert.match(source, /navigator\.share/);

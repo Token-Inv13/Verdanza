@@ -119,6 +119,7 @@ function testRewriteConfiguration() {
   for (const source of removedRewriteSources) {
     assert.equal(rewrites.has(source), false, `obsolete rewrite remains for ${source}`);
   }
+  assert.equal(rewrites.has("/api/blog-interactions"), false, "Blog API must resolve to its Function entrypoint");
   assert.equal(
     rewrites.get("/api/public-promo-banners"),
     "/api/quote-order?publicPromoBanners=1",
@@ -144,6 +145,7 @@ function testFunctionInventoryAndSecuritySources() {
     "invoices.ts",
     "order-refunds.ts",
     "quote-order.ts",
+    "referral-maintenance.ts",
     "referral.ts",
     "retry-order-emails.ts",
     "retry-order-purchase-analytics.ts",
@@ -152,7 +154,7 @@ function testFunctionInventoryAndSecuritySources() {
     "send-payment-link.ts",
     "update-order-status.ts",
   ]);
-  assert.equal(functions.length, 20);
+  assert.equal(functions.length, 21);
 
   for (const file of [
     "api/_server/contestAdminRoute.ts",
@@ -204,4 +206,4 @@ await testEndpointContracts();
 testRewriteConfiguration();
 testFunctionInventoryAndSecuritySources();
 
-console.log("Direct API endpoint contract tests passed (20 functions)");
+console.log("Direct API endpoint contract tests passed (21 functions)");

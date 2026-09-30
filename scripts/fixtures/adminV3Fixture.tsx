@@ -61,19 +61,28 @@ export function SidebarFixture() {
   </MemoryRouter>;
 }
 
+type ResponsiveMode = "analytics" | "achats" | "couts";
+export function ResponsiveFixture({ mode }: { mode: ResponsiveMode }) {
+  const location = mode === "analytics" ? "/admin/analytics" : `/admin/comptabilite?tab=${mode}`;
+  return <MemoryRouter initialEntries={[location]}><Routes><Route path="/admin" element={<AdminLayout />}>
+    <Route path="analytics" element={<AdminPage section="Analytics" />} />
+    <Route path="comptabilite" element={<AdminPage section="Comptabilité" />} />
+  </Route></Routes></MemoryRouter>;
+}
+
 const root = createRoot(document.getElementById("root")!);
 declare global {
   interface Window {
     adminV3: typeof fixture;
     adminV3Product: typeof fixtureProduct;
-    renderAdminV3: (mode: "dialog" | "confirm" | "dashboard" | "products" | "stocks" | "comptabilite" | "parametres" | "sidebar") => void;
+    renderAdminV3: (mode: "dialog" | "confirm" | "dashboard" | "products" | "stocks" | "comptabilite" | "parametres" | "sidebar" | ResponsiveMode) => void;
   }
 }
 window.adminV3 = fixture;
 window.adminV3Product = fixtureProduct;
 window.renderAdminV3 = (mode) => {
   flushSync(() => root.render(<StrictMode key={mode}>
-    {mode === "dialog" ? <DialogFixture /> : mode === "confirm" ? <ConfirmFixture /> : mode === "sidebar" ? <SidebarFixture /> :
+    {mode === "dialog" ? <DialogFixture /> : mode === "confirm" ? <ConfirmFixture /> : mode === "sidebar" ? <SidebarFixture /> : mode === "analytics" || mode === "achats" || mode === "couts" ? <ResponsiveFixture mode={mode} /> :
       <MemoryRouter><AdminPage section={mode === "dashboard" ? "Dashboard" : mode === "stocks" ? "Stocks" : mode === "comptabilite" ? "Comptabilité" : mode === "parametres" ? "Paramètres" : "Produits"} /></MemoryRouter>}
   </StrictMode>));
 };
