@@ -175,6 +175,7 @@ export function AdminSelectionPage() {
   const saveDraft = (event: FormEvent) => {
     event.preventDefault(); if (!draft) return;
     if (listState !== "ready") { setError("Sélections indisponibles. Rechargez-les avant d'enregistrer."); return; }
+    if (draft.status === "En boutique" && catalogState !== "ready") { setError("Catalogue commercial indisponible. Rechargez-le avant d'enregistrer une sélection En boutique."); return; }
     const item = draft; const image = localImage?.data; const operationId = crypto.randomUUID();
     setConfirmation({ title: item.id ? "Confirmer les modifications" : "Créer la sélection privée",
       summary: <div className="space-y-2"><p><strong>{item.name}</strong> · {item.category} · {item.supplier || "Fournisseur à compléter"}</p><p className="break-all">Source : {item.url || "Saisie manuelle"}</p><p>{item.molecule} {item.rate} · {item.origin} · {item.culture}</p><p>Formats / prix fournisseur : {item.prices.map((r) => `${r.format} : ${r.price} €`).join(" · ") || "À compléter"}</p><p>Nom public : {selectionPublicName(item)} · Intensité : {item.intensity || "À compléter"} · Arômes : {item.aromas || "À compléter"}</p><p>Image : {image ? "Fichier local téléversé après confirmation" : item.imagePath ? "Image enregistrée conservée" : "À compléter"}</p><p>Étape métier : {item.status} · Données et notes privées</p></div>,
@@ -445,7 +446,9 @@ export function AdminSelectionPage() {
           </form>
       </AdminDialog>}
       <AdminConfirmDialog open={Boolean(confirmation)} title={confirmation?.title || "Confirmation"} summary={confirmation?.summary} warning={confirmation?.warning} pending={busy} onCancel={() => setConfirmation(null)} onConfirm={async () => {
-        if (!confirmation) return; setBusy(true); setError("");
+        if (!confirmation) return;
+        if (draft?.status === "En boutique" && catalogState !== "ready") { setError("Catalogue commercial indisponible. Rechargez-le avant d'enregistrer une sélection En boutique."); setConfirmation(null); return; }
+        setBusy(true); setError("");
         try { await confirmation.run(); setConfirmation(null); } finally { setBusy(false); }
       }}>{draft && <button type="button" className="text-sm underline" onClick={() => setConfirmation(null)}>Corriger avant confirmation</button>}</AdminConfirmDialog>
     </div>

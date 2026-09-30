@@ -79,8 +79,12 @@ try {
   await page.getByRole("button", { name: `Ouvrir la fiche ${selections[0].name}` }).first().click();
   await page.getByRole("button", { name: "Modifier", exact: true }).click();
   assert.ok(await page.getByLabel("Produit lié", { exact: false }).isDisabled());
+  await page.getByRole("dialog", { name: "Modifier la sélection" }).getByRole("button", { name: "Vérifier et enregistrer" }).click();
+  assert.ok(await page.getByRole("dialog", { name: "Modifier la sélection" }).getByRole("alert").filter({ hasText: "Catalogue commercial indisponible" }).isVisible());
+  assert.equal(operations.length, writesBeforeFailures);
+  assert.equal(await page.getByRole("dialog", { name: "Confirmer les modifications" }).count(), 0);
   await page.getByRole("dialog", { name: "Modifier la sélection" }).getByRole("button", { name: "Annuler" }).click();
-  pass("F3 A : catalogue auxiliaire refusé, warning local, liste utilisable, lien non modifiable");
+  pass("F3 A : catalogue auxiliaire refusé, warning local, liste utilisable, lien et édition En boutique bloqués");
   pricingFailure = true;
   await page.evaluate(() => window.reloadSelectionFixture());
   await page.getByRole("button", { name: "Recharger le catalogue commercial" }).waitFor();
