@@ -32,34 +32,34 @@ export default function AdminContestsPage({ onPrepare }: { onPrepare: (contest?:
   const [mode, setMode] = useState<"list" | "detail">("list");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isListLoading, setIsListLoading] = useState(true);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const [readError, setReadError] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const [listReadError, setListReadError] = useState("");
+  const [detailReadError, setDetailReadError] = useState("");
 
   const [confirmation, setConfirmation] = useState<{ title: string; warning: string; run: (reason: string) => Promise<void>; requiresReason?: boolean; requiresDraw?: boolean } | null>(null);
   const [reason, setReason] = useState("");
   const [drawAcknowledgement, setDrawAcknowledgement] = useState("");
 
   const loadList = useCallback(async () => {
-    setIsLoading(true);
-    setError("");
+    setIsListLoading(true);
+    setListReadError("");
     try {
       const result = await listAdminContests();
       setContests(result.contests);
-      setReadError(false);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Chargement impossible.");
-      setReadError(true);
+      setListReadError(reason instanceof Error ? reason.message : "Chargement impossible.");
     } finally {
-      setIsLoading(false);
+      setIsListLoading(false);
     }
   }, []);
 
   const loadDetail = useCallback(async (contestId: string, nextPage = page, nextSearch = search) => {
-    setIsLoading(true);
-    setError("");
+    setIsDetailLoading(true);
+    setDetailReadError("");
     setSelectedId(contestId);
     try {
       const result = await getAdminContestDetail({
@@ -69,13 +69,11 @@ export default function AdminContestsPage({ onPrepare }: { onPrepare: (contest?:
         search: nextSearch,
       });
       setDetail(result);
-      setReadError(false);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Détail du concours indisponible.");
+      setDetailReadError(reason instanceof Error ? reason.message : "Détail du concours indisponible.");
       setDetail(null);
-      setReadError(true);
     } finally {
-      setIsLoading(false);
+      setIsDetailLoading(false);
     }
   }, [page, search]);
 
@@ -85,6 +83,7 @@ export default function AdminContestsPage({ onPrepare }: { onPrepare: (contest?:
 
   async function openDetail(contestId: string) {
     setMode("detail");
+    setActionError("");
     setPage(1);
     setSearch("");
     setMessage("");
@@ -132,13 +131,13 @@ export default function AdminContestsPage({ onPrepare }: { onPrepare: (contest?:
   async function runAction(action: () => Promise<void>) {
     if (!detail) return;
     setIsSaving(true);
-    setError("");
+    setActionError("");
     setMessage("");
     try {
       await action();
       await Promise.all([loadDetail(detail.contest.id, page, search), loadList()]);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Action impossible.");
+      setActionError(reason instanceof Error ? reason.message : "Action impossible.");
       throw reason;
     } finally {
       setIsSaving(false);
@@ -149,6 +148,10 @@ export default function AdminContestsPage({ onPrepare }: { onPrepare: (contest?:
     () => Math.max(1, Math.ceil((detail?.entryTotal || 0) / (detail?.pageSize || 50))),
     [detail],
   );
+  const isLoading = mode === "list" ? isListLoading : isDetailLoading;
+  const readErrorMessage = mode === "list" ? listReadError : detailReadError;
+  const readError = Boolean(readErrorMessage);
+  const error = readErrorMessage || actionError;
 
   return (
     <section className="grid min-w-0 gap-6">
@@ -162,7 +165,7 @@ export default function AdminContestsPage({ onPrepare }: { onPrepare: (contest?:
         </div>
         <div className="flex flex-wrap gap-2">
           {mode !== "list" && (
-            <button className="btn-secondary min-h-10 px-4 py-2" type="button" onClick={() => { setMode("list"); void loadList(); }}>
+            <button className="btn-secondary min-h-10 px-4 py-2" type="button" onClick={() => { setMode("list"); setActionError(""); void loadList(); }}>
               <ArrowLeft size={16} /> Liste
             </button>
           )}
