@@ -74,9 +74,9 @@ export const handleBlogInteractions = createBlogInteractionsHandler({ getDb: get
 async function handleGet(request: VercelRequestLike, response: VercelResponseLike, dependencies: BlogInteractionDependencies) {
   const query = new URL(request.url || "/", "https://verdanza.local").searchParams;
   const action = query.get("action") || "summary";
-  const slug = assertKnownSlug(query.get("slug") || "");
   const db = dependencies.getDb();
   if (action === "summary") {
+    const slug = assertKnownSlug(query.get("slug") || "");
     sendJson(response, await getBlogEngagementSummary(db, {
       slug,
       browserId: query.get("browserId") || "",
@@ -84,6 +84,7 @@ async function handleGet(request: VercelRequestLike, response: VercelResponseLik
     return;
   }
   if (action === "comments") {
+    const slug = assertKnownSlug(query.get("slug") || "");
     sendJson(response, await listApprovedComments(db, {
       slug,
       page: Number(query.get("page") || 1),

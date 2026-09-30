@@ -4,6 +4,8 @@ export const adminReadStates = {
   detailFailAfterMutation: false, holdListOnce: false,
   releaseList: null as (() => void) | null,
 };
+export async function getFirebaseIdToken() { return "fixture-admin-token"; }
+export async function getCurrentFirebaseUser() { return { uid: "fixture-admin", displayName: "Admin fixture" }; }
 let contestStatus: "draft" | "cancelled" = "draft";
 const contest = () => ({
   id: "contest-fixture", sequenceNumber: 1, title: "Concours fixture", slug: "concours-fixture",

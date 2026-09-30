@@ -3230,8 +3230,8 @@ function AdminAnalyticsPanel() {
   const summary = analytics?.summary;
 
   return (
-    <section className="mt-8 grid gap-6">
-      <div className="admin-card">
+    <section className="mt-8 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
+      <div className="admin-card min-w-0">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.16em] text-champagne">
@@ -3386,7 +3386,7 @@ function AnalyticsMetricCard({
 
 function AnalyticsRealtimePanel({ analytics }: { analytics: AdminAnalyticsResponse }) {
   return (
-    <section className="admin-card">
+    <section className="admin-card min-w-0">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.16em] text-champagne">Temps reel</p>
@@ -3396,7 +3396,7 @@ function AnalyticsRealtimePanel({ analytics }: { analytics: AdminAnalyticsRespon
           {formatInteger(analytics.realtime.activeUsers30Minutes)}
         </strong>
       </div>
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+      <div className="mt-5 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
         <AnalyticsSimpleList title="Pages actives" rows={analytics.realtime.pages} />
         <AnalyticsSimpleList title="Sources principales" rows={analytics.realtime.sources} />
       </div>
@@ -3412,15 +3412,15 @@ function AnalyticsSimpleList({
   rows: { name: string; activeUsers: number }[];
 }) {
   return (
-    <div className="rounded-md border border-forest/10 bg-cream p-4">
+    <div className="min-w-0 rounded-md border border-forest/10 bg-cream p-4">
       <h3 className="font-display text-2xl text-forest">{title}</h3>
       {!rows.length ? (
         <p className="mt-2 text-sm text-ink/60">Aucune donnee disponible.</p>
       ) : (
         <ul className="mt-3 grid gap-2 text-sm">
           {rows.map((row) => (
-            <li key={row.name} className="flex items-center justify-between gap-3">
-              <span className="truncate">{row.name}</span>
+            <li key={row.name} className="flex min-w-0 items-center justify-between gap-3">
+              <span className="min-w-0 truncate">{row.name}</span>
               <AdminBadge tone="gold">{formatInteger(row.activeUsers)}</AdminBadge>
             </li>
           ))}
@@ -3436,10 +3436,10 @@ function AnalyticsAcquisitionPanel({
   rows: AdminAnalyticsResponse["acquisition"];
 }) {
   return (
-    <section className="admin-card">
+    <section className="admin-card min-w-0">
       <p className="text-xs uppercase tracking-[0.16em] text-champagne">Acquisition</p>
       <h2 className="font-display text-3xl text-forest">Sources de trafic</h2>
-      <div className="mt-5 grid gap-4 xl:grid-cols-3">
+      <div className="mt-5 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-3">
         <AnalyticsNamedTable title="Groupes de canaux" rows={rows.channels} />
         <AnalyticsNamedTable title="Source / support" rows={rows.sourceMediums} />
         <AnalyticsNamedTable title="Campagnes" rows={rows.campaigns} />
@@ -3456,7 +3456,7 @@ function AnalyticsNamedTable({
   rows: AdminAnalyticsNamedRow[];
 }) {
   return (
-    <div className="overflow-x-auto rounded-md border border-forest/10">
+    <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-forest/10">
       <table className="w-full min-w-[520px] text-left text-sm">
         <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
           <tr>
@@ -3611,10 +3611,10 @@ function AnalyticsDeliveryPanel({
   rows: AdminAnalyticsResponse["delivery"];
 }) {
   return (
-    <section className="admin-card">
+    <section className="admin-card min-w-0">
       <p className="text-xs uppercase tracking-[0.16em] text-champagne">Livraison</p>
       <h2 className="font-display text-3xl text-forest">Choix client</h2>
-      <div className="mt-5 grid gap-4 lg:grid-cols-3">
+      <div className="mt-5 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-3">
         <AnalyticsCountTable title="Methodes" rows={rows.methods} />
         <AnalyticsCountTable title="Zones locales" rows={rows.localZones} />
         <AnalyticsCountTable title="Reglements selectionnes" rows={rows.paymentMethods} />
@@ -3625,7 +3625,7 @@ function AnalyticsDeliveryPanel({
 
 function AnalyticsCountTable({ title, rows }: { title: string; rows: AdminAnalyticsDeliveryRow[] }) {
   return (
-    <div className="overflow-x-auto rounded-md border border-forest/10">
+    <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-forest/10">
       <table className="w-full min-w-[360px] text-left text-sm">
         <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
           <tr>
@@ -3684,11 +3684,11 @@ function AnalyticsTableSection({
   children: ReactNode;
 }) {
   return (
-    <section className="admin-card">
+    <section className="admin-card min-w-0 max-w-full">
       <p className="text-xs uppercase tracking-[0.16em] text-champagne">{eyebrow}</p>
       <h2 className="font-display text-3xl text-forest">{title}</h2>
       {description && <p className="mt-2 max-w-4xl text-sm leading-6 text-ink/60">{description}</p>}
-      <div className="mt-5 overflow-x-auto">{children}</div>
+      <div className="mt-5 min-w-0 max-w-full overflow-x-auto">{children}</div>
     </section>
   );
 }
@@ -3885,8 +3885,8 @@ function AccountingPanel({
   }
 
   return (
-    <section className="mt-8 grid gap-6">
-      <div className="overflow-x-auto rounded-lg border border-forest/10 bg-ivory p-2">
+    <section className="mt-8 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
+      <div className="min-w-0 max-w-full overflow-x-auto rounded-lg border border-forest/10 bg-ivory p-2">
         <div className="flex min-w-max gap-2" role="tablist" aria-label="Navigation comptabilité">
           {accountingTabs.map((tab, index) => {
             const selected = selectedAccountingTab === tab.value;
@@ -4129,7 +4129,7 @@ function AccountingPanel({
         id="accounting-panel-achats"
         role="tabpanel"
         aria-labelledby="accounting-tab-achats"
-        className="admin-card"
+        className="admin-card min-w-0 max-w-full"
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -4175,7 +4175,7 @@ function AccountingPanel({
         id="accounting-panel-couts"
         role="tabpanel"
         aria-labelledby="accounting-tab-couts"
-        className="admin-card"
+        className="admin-card min-w-0 max-w-full"
       >
         <SourceLine source={productCostsSource} />
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -4216,7 +4216,7 @@ function AccountingPanel({
             </button>
           ))}
         </div>
-        <div className="mt-5 overflow-x-auto">
+        <div className="mt-5 min-w-0 max-w-full overflow-x-auto">
           <table className="w-full min-w-[1180px] text-left text-sm">
             <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
               <tr>
@@ -4420,7 +4420,7 @@ function SupplierPurchaseForm({
   return (
     <>
     <SupplierInvoiceImportPanel onUseDraft={onImportedPurchase} />
-    <form className="mt-5 rounded-lg border border-forest/10 bg-cream p-4" onSubmit={handleSubmit}>
+    <form className="mt-5 min-w-0 max-w-full rounded-lg border border-forest/10 bg-cream p-4" onSubmit={handleSubmit}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h3 className="font-display text-2xl text-forest">
@@ -4452,7 +4452,7 @@ function SupplierPurchaseForm({
           </select>
         </label>
       </div>
-      <div className="mt-4 overflow-x-auto">
+      <div className="mt-4 min-w-0 max-w-full overflow-x-auto">
         <table className="w-full min-w-[920px] text-left text-sm">
           <thead className="bg-ivory text-xs uppercase tracking-[0.14em] text-forest/70">
             <tr>
@@ -4695,7 +4695,7 @@ function SupplierPurchasesTable({
   }
 
   return (
-    <div className="mt-5 overflow-x-auto">
+    <div className="mt-5 min-w-0 max-w-full overflow-x-auto">
       <table className="w-full min-w-[980px] text-left text-sm">
         <thead className="bg-cream text-xs uppercase tracking-[0.14em] text-forest/70">
           <tr>

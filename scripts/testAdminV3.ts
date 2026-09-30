@@ -13,7 +13,7 @@ const bundle = await build({
   esbuild: { jsx: "automatic" },
   define: { "process.env.NODE_ENV": JSON.stringify("development"), "import.meta.env": "{}" },
   plugins: [{ name: "admin-v3-local-mocks", enforce: "pre", resolveId(source) {
-    if (/\/(productsService|productImagesService|useAdminData|AuthContext|firebase)(\.[jt]sx?)?$/.test(source)) return mocksPath;
+    if (/\/(productsService|productImagesService|useAdminData|AuthContext|firebase|adminAnalyticsService)(\.[jt]sx?)?$/.test(source)) return mocksPath;
   } }],
   build: { write: false, minify: false, lib: { entry: fixturePath, name: "AdminV3Fixture", formats: ["iife"] },
     rollupOptions: { output: { inlineDynamicImports: true } } },
@@ -49,7 +49,7 @@ try {
     XMLHttpRequest.prototype.open = () => { throw new Error("Unexpected fixture XHR"); };
   });
   await page.addScriptTag({ content: script.code });
-  async function mode(value: "dialog" | "confirm" | "dashboard" | "products" | "stocks" | "comptabilite" | "parametres" | "sidebar") {
+  async function mode(value: "dialog" | "confirm" | "dashboard" | "products" | "stocks" | "comptabilite" | "parametres" | "sidebar" | "analytics" | "achats" | "couts") {
     await page.evaluate((next) => window.renderAdminV3(next), value);
   }
   async function visible(locator: Locator) { assert.ok(await locator.isVisible()); }
@@ -361,6 +361,37 @@ try {
   assert.equal(await page.getByText("Données indisponibles.", { exact: true }).count(), 0);
   assert.ok(await page.getByText("Aucun produit pour le moment.").isVisible());
   passed("F2 : vide serveur confirmé distinct de l'erreur");
+
+  for (const [section, ready, tableSelector] of [
+    ["analytics", "Sources de trafic", ".admin-card table"],
+    ["achats", "#accounting-panel-achats", "#accounting-panel-achats table"],
+    ["couts", "#accounting-panel-couts", "#accounting-panel-couts table"],
+  ] as const) {
+    await mode(section);
+    if (ready.startsWith("#")) await page.locator(ready).waitFor();
+    else await page.getByRole("heading", { name: ready }).waitFor();
+    for (const viewport of [{ width: 390, height: 844 }, { width: 820, height: 900 }, { width: 1280, height: 720 }, { width: 1440, height: 1000 }]) {
+      await page.setViewportSize(viewport);
+      const geometry = await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth, body: document.body.scrollWidth,
+        offenders: [...document.querySelectorAll("main *")].filter((element) => element.getBoundingClientRect().right > innerWidth + 2)
+          .slice(0, 8).map((element) => ({ tag: element.tagName, className: String(element.className).slice(0, 100), width: Math.round(element.getBoundingClientRect().width) })) }));
+      assert.ok(geometry.document <= geometry.viewport && geometry.body <= geometry.viewport,
+        `${section} global overflow at ${viewport.width}px: ${JSON.stringify(geometry)}`);
+      if (viewport.width === 390) {
+        const table = page.locator(tableSelector).first();
+        const scroll = await table.evaluate((element) => {
+          const wrapper = element.parentElement as HTMLElement;
+          wrapper.scrollLeft = wrapper.scrollWidth;
+          const lastHeader = element.querySelector("thead th:last-child")!;
+          return { scrollable: wrapper.scrollWidth > wrapper.clientWidth,
+            lastColumnRight: lastHeader.getBoundingClientRect().right, wrapperRight: wrapper.getBoundingClientRect().right };
+        });
+        assert.ok(scroll.scrollable, `${section} table must remain internally scrollable at 390px`);
+        assert.ok(scroll.lastColumnRight <= scroll.wrapperRight + 1, `${section} final table column must be reachable`);
+      }
+    }
+    passed(`${section}: filled data at 390/820/1280/1440, no global overflow and local table scroll`);
+  }
   assert.deepEqual(unexpectedRequests, [], "No remote requests or non-fixture endpoints permitted");
   assert.deepEqual(errors, [], "No uncaught component errors");
 } finally {

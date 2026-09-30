@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { StockSnapshot } from "../../src/types/adminStock";
 import type { Product, ProductImageAsset } from "../../src/types";
 import type { ProductInput } from "../../src/services/productsService";
+import type { AdminAnalyticsResponse } from "../../src/types/adminAnalytics";
 
 const imageUrl = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect width='20' height='20' fill='green'/%3E%3C/svg%3E";
 export const fixtureProduct: Product = {
@@ -92,3 +93,27 @@ export async function confirmFixture() {
 export async function getFirebaseIdToken() { return "fixture-admin-token"; }
 export async function getCurrentFirebaseUser() { return { uid: "fixture-admin", getIdToken: getFirebaseIdToken }; }
 export async function loadFirebaseAuthApi(): Promise<never> { throw new Error("Unexpected fixture Auth access"); }
+
+export async function getAdminAnalytics(): Promise<AdminAnalyticsResponse> {
+  const longPath = `/guides/${"fiche-analytique-tres-longue-".repeat(8)}`;
+  return {
+    configured: true,
+    range: { startDate: "2026-09-01", endDate: "2026-09-30", label: "30 jours" },
+    fetchedAt: "2026-09-30T12:00:00.000Z",
+    freshness: { standardTtlSeconds: 3600, realtimeTtlSeconds: 60 },
+    summary: { activeUsers: 20, newUsers: 5, sessions: 25, pageViews: 40, engagementRate: 0.6,
+      averageEngagementDurationSeconds: 80, orderSubmittedCount: 2, sessionToOrderRate: 0.08,
+      orderSubmittedValue: 42, purchaseCount: 1, purchaseRevenue: 22 },
+    acquisition: { channels: [{ name: "Recherche organique", users: 10, sessions: 12, ordersSubmitted: 1, conversionRate: 0.08 }],
+      sourceMediums: [{ name: "google / organic", users: 10, sessions: 12, ordersSubmitted: 1, conversionRate: 0.08 }],
+      campaigns: [{ name: "Campagne fixture", users: 10, sessions: 12, ordersSubmitted: 1, conversionRate: 0.08 }] },
+    pages: [{ path: longPath, title: "Guide fixture", views: 10, users: 8, engagementRate: 0.6, averageEngagementDurationSeconds: 80 }],
+    funnel: [{ eventName: "view_item", label: "Vue article", count: 10, rateFromPrevious: null, rateFromStart: 1 }],
+    products: [{ name: "Produit fixture", views: 10, addToCart: 2, favorites: 1, ordersSubmitted: 1, paidPurchases: 1 }],
+    content: [{ path: longPath, title: "Guide fixture", views: 8, articleViews: 8, progress50: 4, progress90: 2, shopClicks: 1 }],
+    delivery: { methods: [{ name: "Local", count: 2 }], localZones: [{ name: "Aix", count: 2 }], paymentMethods: [{ name: "Carte", count: 2 }] },
+    devices: [{ device: "mobile", users: 12, sessions: 14, engagementRate: 0.5 }],
+    realtime: { activeUsers30Minutes: 2, pages: [{ name: longPath, activeUsers: 2 }], sources: [{ name: "direct", activeUsers: 2 }] },
+    notices: [],
+  };
+}
