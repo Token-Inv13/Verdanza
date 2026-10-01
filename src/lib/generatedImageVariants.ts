@@ -335,506 +335,506 @@ export const staticImageVariants: Record<string, ResponsiveImageVariant> = {
     width: 1774,
     height: 440,
   },
-  "/images/blog/trichomes-fleurs-cbd-observation-1x1.webp": {
-    src: "/images/blog/trichomes-fleurs-cbd-observation-1x1.webp",
-    srcSet: "/images/blog/trichomes-fleurs-cbd-observation-1x1.webp 800w",
+  "/images/blog/trichomes-fleurs-cbd-observation-editorial-1x1.webp": {
+    src: "/images/blog/trichomes-fleurs-cbd-observation-editorial-1x1.webp",
+    srcSet: "/images/blog/trichomes-fleurs-cbd-observation-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/trichomes-fleurs-cbd-observation-4x3.webp": {
-    src: "/images/blog/trichomes-fleurs-cbd-observation-4x3.webp",
-    srcSet: "/images/blog/trichomes-fleurs-cbd-observation-4x3.webp 1040w",
+  "/images/blog/trichomes-fleurs-cbd-observation-editorial-4x3.webp": {
+    src: "/images/blog/trichomes-fleurs-cbd-observation-editorial-4x3.webp",
+    srcSet: "/images/blog/trichomes-fleurs-cbd-observation-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/trichomes-fleurs-cbd-observation-16x9.webp": {
-    src: "/images/blog/trichomes-fleurs-cbd-observation-16x9.webp",
-    srcSet: "/images/blog/trichomes-fleurs-cbd-observation-16x9.webp 1600w",
+  "/images/blog/trichomes-fleurs-cbd-observation-editorial-16x9.webp": {
+    src: "/images/blog/trichomes-fleurs-cbd-observation-editorial-16x9.webp",
+    srcSet: "/images/blog/trichomes-fleurs-cbd-observation-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/incertitude-mesure-arrondis-analyse-cbd-1x1.webp": {
-    src: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-1x1.webp",
-    srcSet: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-1x1.webp 800w",
+  "/images/blog/incertitude-mesure-arrondis-analyse-cbd-editorial-1x1.webp": {
+    src: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-editorial-1x1.webp",
+    srcSet: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/incertitude-mesure-arrondis-analyse-cbd-4x3.webp": {
-    src: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-4x3.webp",
-    srcSet: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-4x3.webp 1040w",
+  "/images/blog/incertitude-mesure-arrondis-analyse-cbd-editorial-4x3.webp": {
+    src: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-editorial-4x3.webp",
+    srcSet: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/incertitude-mesure-arrondis-analyse-cbd-16x9.webp": {
-    src: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-16x9.webp",
-    srcSet: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-16x9.webp 1600w",
+  "/images/blog/incertitude-mesure-arrondis-analyse-cbd-editorial-16x9.webp": {
+    src: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-editorial-16x9.webp",
+    srcSet: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/emballage-cbd-contenant-fermeture-1x1.webp": {
-    src: "/images/blog/emballage-cbd-contenant-fermeture-1x1.webp",
-    srcSet: "/images/blog/emballage-cbd-contenant-fermeture-1x1.webp 800w",
+  "/images/blog/emballage-cbd-contenant-fermeture-editorial-1x1.webp": {
+    src: "/images/blog/emballage-cbd-contenant-fermeture-editorial-1x1.webp",
+    srcSet: "/images/blog/emballage-cbd-contenant-fermeture-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/emballage-cbd-contenant-fermeture-4x3.webp": {
-    src: "/images/blog/emballage-cbd-contenant-fermeture-4x3.webp",
-    srcSet: "/images/blog/emballage-cbd-contenant-fermeture-4x3.webp 1040w",
+  "/images/blog/emballage-cbd-contenant-fermeture-editorial-4x3.webp": {
+    src: "/images/blog/emballage-cbd-contenant-fermeture-editorial-4x3.webp",
+    srcSet: "/images/blog/emballage-cbd-contenant-fermeture-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/emballage-cbd-contenant-fermeture-16x9.webp": {
-    src: "/images/blog/emballage-cbd-contenant-fermeture-16x9.webp",
-    srcSet: "/images/blog/emballage-cbd-contenant-fermeture-16x9.webp 1600w",
+  "/images/blog/emballage-cbd-contenant-fermeture-editorial-16x9.webp": {
+    src: "/images/blog/emballage-cbd-contenant-fermeture-editorial-16x9.webp",
+    srcSet: "/images/blog/emballage-cbd-contenant-fermeture-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/analyse-cbd-nd-lod-loq-1x1.webp": {
-    src: "/images/blog/analyse-cbd-nd-lod-loq-1x1.webp",
-    srcSet: "/images/blog/analyse-cbd-nd-lod-loq-1x1.webp 800w",
+  "/images/blog/analyse-cbd-nd-lod-loq-editorial-1x1.webp": {
+    src: "/images/blog/analyse-cbd-nd-lod-loq-editorial-1x1.webp",
+    srcSet: "/images/blog/analyse-cbd-nd-lod-loq-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/analyse-cbd-nd-lod-loq-4x3.webp": {
-    src: "/images/blog/analyse-cbd-nd-lod-loq-4x3.webp",
-    srcSet: "/images/blog/analyse-cbd-nd-lod-loq-4x3.webp 1040w",
+  "/images/blog/analyse-cbd-nd-lod-loq-editorial-4x3.webp": {
+    src: "/images/blog/analyse-cbd-nd-lod-loq-editorial-4x3.webp",
+    srcSet: "/images/blog/analyse-cbd-nd-lod-loq-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/analyse-cbd-nd-lod-loq-16x9.webp": {
-    src: "/images/blog/analyse-cbd-nd-lod-loq-16x9.webp",
-    srcSet: "/images/blog/analyse-cbd-nd-lod-loq-16x9.webp 1600w",
+  "/images/blog/analyse-cbd-nd-lod-loq-editorial-16x9.webp": {
+    src: "/images/blog/analyse-cbd-nd-lod-loq-editorial-16x9.webp",
+    srcSet: "/images/blog/analyse-cbd-nd-lod-loq-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/isolat-spectre-large-complet-cbd-1x1.webp": {
-    src: "/images/blog/isolat-spectre-large-complet-cbd-1x1.webp",
-    srcSet: "/images/blog/isolat-spectre-large-complet-cbd-1x1.webp 800w",
+  "/images/blog/isolat-spectre-large-complet-cbd-editorial-1x1.webp": {
+    src: "/images/blog/isolat-spectre-large-complet-cbd-editorial-1x1.webp",
+    srcSet: "/images/blog/isolat-spectre-large-complet-cbd-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/isolat-spectre-large-complet-cbd-4x3.webp": {
-    src: "/images/blog/isolat-spectre-large-complet-cbd-4x3.webp",
-    srcSet: "/images/blog/isolat-spectre-large-complet-cbd-4x3.webp 1040w",
+  "/images/blog/isolat-spectre-large-complet-cbd-editorial-4x3.webp": {
+    src: "/images/blog/isolat-spectre-large-complet-cbd-editorial-4x3.webp",
+    srcSet: "/images/blog/isolat-spectre-large-complet-cbd-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/isolat-spectre-large-complet-cbd-16x9.webp": {
-    src: "/images/blog/isolat-spectre-large-complet-cbd-16x9.webp",
-    srcSet: "/images/blog/isolat-spectre-large-complet-cbd-16x9.webp 1600w",
+  "/images/blog/isolat-spectre-large-complet-cbd-editorial-16x9.webp": {
+    src: "/images/blog/isolat-spectre-large-complet-cbd-editorial-16x9.webp",
+    srcSet: "/images/blog/isolat-spectre-large-complet-cbd-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/reception-commande-cbd-verifications-1x1.webp": {
-    src: "/images/blog/reception-commande-cbd-verifications-1x1.webp",
-    srcSet: "/images/blog/reception-commande-cbd-verifications-1x1.webp 800w",
+  "/images/blog/reception-commande-cbd-verifications-editorial-1x1.webp": {
+    src: "/images/blog/reception-commande-cbd-verifications-editorial-1x1.webp",
+    srcSet: "/images/blog/reception-commande-cbd-verifications-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/reception-commande-cbd-verifications-4x3.webp": {
-    src: "/images/blog/reception-commande-cbd-verifications-4x3.webp",
-    srcSet: "/images/blog/reception-commande-cbd-verifications-4x3.webp 1040w",
+  "/images/blog/reception-commande-cbd-verifications-editorial-4x3.webp": {
+    src: "/images/blog/reception-commande-cbd-verifications-editorial-4x3.webp",
+    srcSet: "/images/blog/reception-commande-cbd-verifications-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/reception-commande-cbd-verifications-16x9.webp": {
-    src: "/images/blog/reception-commande-cbd-verifications-16x9.webp",
-    srcSet: "/images/blog/reception-commande-cbd-verifications-16x9.webp 1600w",
+  "/images/blog/reception-commande-cbd-verifications-editorial-16x9.webp": {
+    src: "/images/blog/reception-commande-cbd-verifications-editorial-16x9.webp",
+    srcSet: "/images/blog/reception-commande-cbd-verifications-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-1x1.webp": {
-    src: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-1x1.webp",
-    srcSet: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-1x1.webp 800w",
+  "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-editorial-1x1.webp": {
+    src: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-editorial-1x1.webp",
+    srcSet: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-4x3.webp": {
-    src: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-4x3.webp",
-    srcSet: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-4x3.webp 1040w",
+  "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-editorial-4x3.webp": {
+    src: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-editorial-4x3.webp",
+    srcSet: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-16x9.webp": {
-    src: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-16x9.webp",
-    srcSet: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-16x9.webp 1600w",
+  "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-editorial-16x9.webp": {
+    src: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-editorial-16x9.webp",
+    srcSet: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/manucure-fleurs-cbd-feuilles-tiges-1x1.webp": {
-    src: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-1x1.webp",
-    srcSet: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-1x1.webp 800w",
+  "/images/blog/manucure-fleurs-cbd-feuilles-tiges-editorial-1x1.webp": {
+    src: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-editorial-1x1.webp",
+    srcSet: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/manucure-fleurs-cbd-feuilles-tiges-4x3.webp": {
-    src: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-4x3.webp",
-    srcSet: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-4x3.webp 1040w",
+  "/images/blog/manucure-fleurs-cbd-feuilles-tiges-editorial-4x3.webp": {
+    src: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-editorial-4x3.webp",
+    srcSet: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/manucure-fleurs-cbd-feuilles-tiges-16x9.webp": {
-    src: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-16x9.webp",
-    srcSet: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-16x9.webp 1600w",
+  "/images/blog/manucure-fleurs-cbd-feuilles-tiges-editorial-16x9.webp": {
+    src: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-editorial-16x9.webp",
+    srcSet: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/photos-fleurs-cbd-lumiere-echelle-1x1.webp": {
-    src: "/images/blog/photos-fleurs-cbd-lumiere-echelle-1x1.webp",
-    srcSet: "/images/blog/photos-fleurs-cbd-lumiere-echelle-1x1.webp 800w",
+  "/images/blog/photos-fleurs-cbd-lumiere-echelle-editorial-1x1.webp": {
+    src: "/images/blog/photos-fleurs-cbd-lumiere-echelle-editorial-1x1.webp",
+    srcSet: "/images/blog/photos-fleurs-cbd-lumiere-echelle-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/photos-fleurs-cbd-lumiere-echelle-4x3.webp": {
-    src: "/images/blog/photos-fleurs-cbd-lumiere-echelle-4x3.webp",
-    srcSet: "/images/blog/photos-fleurs-cbd-lumiere-echelle-4x3.webp 1040w",
+  "/images/blog/photos-fleurs-cbd-lumiere-echelle-editorial-4x3.webp": {
+    src: "/images/blog/photos-fleurs-cbd-lumiere-echelle-editorial-4x3.webp",
+    srcSet: "/images/blog/photos-fleurs-cbd-lumiere-echelle-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/photos-fleurs-cbd-lumiere-echelle-16x9.webp": {
-    src: "/images/blog/photos-fleurs-cbd-lumiere-echelle-16x9.webp",
-    srcSet: "/images/blog/photos-fleurs-cbd-lumiere-echelle-16x9.webp 1600w",
+  "/images/blog/photos-fleurs-cbd-lumiere-echelle-editorial-16x9.webp": {
+    src: "/images/blog/photos-fleurs-cbd-lumiere-echelle-editorial-16x9.webp",
+    srcSet: "/images/blog/photos-fleurs-cbd-lumiere-echelle-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/calibre-fleurs-cbd-taille-tetes-1x1.webp": {
-    src: "/images/blog/calibre-fleurs-cbd-taille-tetes-1x1.webp",
-    srcSet: "/images/blog/calibre-fleurs-cbd-taille-tetes-1x1.webp 800w",
+  "/images/blog/calibre-fleurs-cbd-taille-tetes-editorial-1x1.webp": {
+    src: "/images/blog/calibre-fleurs-cbd-taille-tetes-editorial-1x1.webp",
+    srcSet: "/images/blog/calibre-fleurs-cbd-taille-tetes-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/calibre-fleurs-cbd-taille-tetes-4x3.webp": {
-    src: "/images/blog/calibre-fleurs-cbd-taille-tetes-4x3.webp",
-    srcSet: "/images/blog/calibre-fleurs-cbd-taille-tetes-4x3.webp 1040w",
+  "/images/blog/calibre-fleurs-cbd-taille-tetes-editorial-4x3.webp": {
+    src: "/images/blog/calibre-fleurs-cbd-taille-tetes-editorial-4x3.webp",
+    srcSet: "/images/blog/calibre-fleurs-cbd-taille-tetes-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/calibre-fleurs-cbd-taille-tetes-16x9.webp": {
-    src: "/images/blog/calibre-fleurs-cbd-taille-tetes-16x9.webp",
-    srcSet: "/images/blog/calibre-fleurs-cbd-taille-tetes-16x9.webp 1600w",
+  "/images/blog/calibre-fleurs-cbd-taille-tetes-editorial-16x9.webp": {
+    src: "/images/blog/calibre-fleurs-cbd-taille-tetes-editorial-16x9.webp",
+    srcSet: "/images/blog/calibre-fleurs-cbd-taille-tetes-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/origine-variete-lot-cbd-differences-1x1.webp": {
-    src: "/images/blog/origine-variete-lot-cbd-differences-1x1.webp",
-    srcSet: "/images/blog/origine-variete-lot-cbd-differences-1x1.webp 800w",
+  "/images/blog/origine-variete-lot-cbd-differences-editorial-1x1.webp": {
+    src: "/images/blog/origine-variete-lot-cbd-differences-editorial-1x1.webp",
+    srcSet: "/images/blog/origine-variete-lot-cbd-differences-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/origine-variete-lot-cbd-differences-4x3.webp": {
-    src: "/images/blog/origine-variete-lot-cbd-differences-4x3.webp",
-    srcSet: "/images/blog/origine-variete-lot-cbd-differences-4x3.webp 1040w",
+  "/images/blog/origine-variete-lot-cbd-differences-editorial-4x3.webp": {
+    src: "/images/blog/origine-variete-lot-cbd-differences-editorial-4x3.webp",
+    srcSet: "/images/blog/origine-variete-lot-cbd-differences-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/origine-variete-lot-cbd-differences-16x9.webp": {
-    src: "/images/blog/origine-variete-lot-cbd-differences-16x9.webp",
-    srcSet: "/images/blog/origine-variete-lot-cbd-differences-16x9.webp 1600w",
+  "/images/blog/origine-variete-lot-cbd-differences-editorial-16x9.webp": {
+    src: "/images/blog/origine-variete-lot-cbd-differences-editorial-16x9.webp",
+    srcSet: "/images/blog/origine-variete-lot-cbd-differences-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/signes-alteration-fleurs-resines-cbd-1x1.webp": {
-    src: "/images/blog/signes-alteration-fleurs-resines-cbd-1x1.webp",
-    srcSet: "/images/blog/signes-alteration-fleurs-resines-cbd-1x1.webp 800w",
+  "/images/blog/signes-alteration-fleurs-resines-cbd-editorial-1x1.webp": {
+    src: "/images/blog/signes-alteration-fleurs-resines-cbd-editorial-1x1.webp",
+    srcSet: "/images/blog/signes-alteration-fleurs-resines-cbd-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/signes-alteration-fleurs-resines-cbd-4x3.webp": {
-    src: "/images/blog/signes-alteration-fleurs-resines-cbd-4x3.webp",
-    srcSet: "/images/blog/signes-alteration-fleurs-resines-cbd-4x3.webp 1040w",
+  "/images/blog/signes-alteration-fleurs-resines-cbd-editorial-4x3.webp": {
+    src: "/images/blog/signes-alteration-fleurs-resines-cbd-editorial-4x3.webp",
+    srcSet: "/images/blog/signes-alteration-fleurs-resines-cbd-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/signes-alteration-fleurs-resines-cbd-16x9.webp": {
-    src: "/images/blog/signes-alteration-fleurs-resines-cbd-16x9.webp",
-    srcSet: "/images/blog/signes-alteration-fleurs-resines-cbd-16x9.webp 1600w",
+  "/images/blog/signes-alteration-fleurs-resines-cbd-editorial-16x9.webp": {
+    src: "/images/blog/signes-alteration-fleurs-resines-cbd-editorial-16x9.webp",
+    srcSet: "/images/blog/signes-alteration-fleurs-resines-cbd-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-1x1.webp": {
-    src: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-1x1.webp",
-    srcSet: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-1x1.webp 800w",
+  "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-editorial-1x1.webp": {
+    src: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-editorial-1x1.webp",
+    srcSet: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-4x3.webp": {
-    src: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-4x3.webp",
-    srcSet: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-4x3.webp 1040w",
+  "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-editorial-4x3.webp": {
+    src: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-editorial-4x3.webp",
+    srcSet: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-16x9.webp": {
-    src: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-16x9.webp",
-    srcSet: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-16x9.webp 1600w",
+  "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-editorial-16x9.webp": {
+    src: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-editorial-16x9.webp",
+    srcSet: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/etiquette-numero-lot-cbd-tracabilite-1x1.webp": {
-    src: "/images/blog/etiquette-numero-lot-cbd-tracabilite-1x1.webp",
-    srcSet: "/images/blog/etiquette-numero-lot-cbd-tracabilite-1x1.webp 800w",
+  "/images/blog/etiquette-numero-lot-cbd-tracabilite-editorial-1x1.webp": {
+    src: "/images/blog/etiquette-numero-lot-cbd-tracabilite-editorial-1x1.webp",
+    srcSet: "/images/blog/etiquette-numero-lot-cbd-tracabilite-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/etiquette-numero-lot-cbd-tracabilite-4x3.webp": {
-    src: "/images/blog/etiquette-numero-lot-cbd-tracabilite-4x3.webp",
-    srcSet: "/images/blog/etiquette-numero-lot-cbd-tracabilite-4x3.webp 1040w",
+  "/images/blog/etiquette-numero-lot-cbd-tracabilite-editorial-4x3.webp": {
+    src: "/images/blog/etiquette-numero-lot-cbd-tracabilite-editorial-4x3.webp",
+    srcSet: "/images/blog/etiquette-numero-lot-cbd-tracabilite-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/etiquette-numero-lot-cbd-tracabilite-16x9.webp": {
-    src: "/images/blog/etiquette-numero-lot-cbd-tracabilite-16x9.webp",
-    srcSet: "/images/blog/etiquette-numero-lot-cbd-tracabilite-16x9.webp 1600w",
+  "/images/blog/etiquette-numero-lot-cbd-tracabilite-editorial-16x9.webp": {
+    src: "/images/blog/etiquette-numero-lot-cbd-tracabilite-editorial-16x9.webp",
+    srcSet: "/images/blog/etiquette-numero-lot-cbd-tracabilite-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/aspect-resine-cbd-texture-couleur-1x1.webp": {
-    src: "/images/blog/aspect-resine-cbd-texture-couleur-1x1.webp",
-    srcSet: "/images/blog/aspect-resine-cbd-texture-couleur-1x1.webp 800w",
+  "/images/blog/aspect-resine-cbd-texture-couleur-editorial-1x1.webp": {
+    src: "/images/blog/aspect-resine-cbd-texture-couleur-editorial-1x1.webp",
+    srcSet: "/images/blog/aspect-resine-cbd-texture-couleur-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/aspect-resine-cbd-texture-couleur-4x3.webp": {
-    src: "/images/blog/aspect-resine-cbd-texture-couleur-4x3.webp",
-    srcSet: "/images/blog/aspect-resine-cbd-texture-couleur-4x3.webp 1040w",
+  "/images/blog/aspect-resine-cbd-texture-couleur-editorial-4x3.webp": {
+    src: "/images/blog/aspect-resine-cbd-texture-couleur-editorial-4x3.webp",
+    srcSet: "/images/blog/aspect-resine-cbd-texture-couleur-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/aspect-resine-cbd-texture-couleur-16x9.webp": {
-    src: "/images/blog/aspect-resine-cbd-texture-couleur-16x9.webp",
-    srcSet: "/images/blog/aspect-resine-cbd-texture-couleur-16x9.webp 1600w",
+  "/images/blog/aspect-resine-cbd-texture-couleur-editorial-16x9.webp": {
+    src: "/images/blog/aspect-resine-cbd-texture-couleur-editorial-16x9.webp",
+    srcSet: "/images/blog/aspect-resine-cbd-texture-couleur-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/aspect-fleur-cbd-couleur-structure-1x1.webp": {
-    src: "/images/blog/aspect-fleur-cbd-couleur-structure-1x1.webp",
-    srcSet: "/images/blog/aspect-fleur-cbd-couleur-structure-1x1.webp 800w",
+  "/images/blog/aspect-fleur-cbd-couleur-structure-editorial-1x1.webp": {
+    src: "/images/blog/aspect-fleur-cbd-couleur-structure-editorial-1x1.webp",
+    srcSet: "/images/blog/aspect-fleur-cbd-couleur-structure-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/aspect-fleur-cbd-couleur-structure-4x3.webp": {
-    src: "/images/blog/aspect-fleur-cbd-couleur-structure-4x3.webp",
-    srcSet: "/images/blog/aspect-fleur-cbd-couleur-structure-4x3.webp 1040w",
+  "/images/blog/aspect-fleur-cbd-couleur-structure-editorial-4x3.webp": {
+    src: "/images/blog/aspect-fleur-cbd-couleur-structure-editorial-4x3.webp",
+    srcSet: "/images/blog/aspect-fleur-cbd-couleur-structure-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/aspect-fleur-cbd-couleur-structure-16x9.webp": {
-    src: "/images/blog/aspect-fleur-cbd-couleur-structure-16x9.webp",
-    srcSet: "/images/blog/aspect-fleur-cbd-couleur-structure-16x9.webp 1600w",
+  "/images/blog/aspect-fleur-cbd-couleur-structure-editorial-16x9.webp": {
+    src: "/images/blog/aspect-fleur-cbd-couleur-structure-editorial-16x9.webp",
+    srcSet: "/images/blog/aspect-fleur-cbd-couleur-structure-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/terpenes-profils-aromatiques-cbd-1x1.webp": {
-    src: "/images/blog/terpenes-profils-aromatiques-cbd-1x1.webp",
-    srcSet: "/images/blog/terpenes-profils-aromatiques-cbd-1x1.webp 800w",
+  "/images/blog/terpenes-profils-aromatiques-cbd-editorial-1x1.webp": {
+    src: "/images/blog/terpenes-profils-aromatiques-cbd-editorial-1x1.webp",
+    srcSet: "/images/blog/terpenes-profils-aromatiques-cbd-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/terpenes-profils-aromatiques-cbd-4x3.webp": {
-    src: "/images/blog/terpenes-profils-aromatiques-cbd-4x3.webp",
-    srcSet: "/images/blog/terpenes-profils-aromatiques-cbd-4x3.webp 1040w",
+  "/images/blog/terpenes-profils-aromatiques-cbd-editorial-4x3.webp": {
+    src: "/images/blog/terpenes-profils-aromatiques-cbd-editorial-4x3.webp",
+    srcSet: "/images/blog/terpenes-profils-aromatiques-cbd-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/terpenes-profils-aromatiques-cbd-16x9.webp": {
-    src: "/images/blog/terpenes-profils-aromatiques-cbd-16x9.webp",
-    srcSet: "/images/blog/terpenes-profils-aromatiques-cbd-16x9.webp 1600w",
+  "/images/blog/terpenes-profils-aromatiques-cbd-editorial-16x9.webp": {
+    src: "/images/blog/terpenes-profils-aromatiques-cbd-editorial-16x9.webp",
+    srcSet: "/images/blog/terpenes-profils-aromatiques-cbd-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/cbd-conduite-france-1x1.webp": {
-    src: "/images/blog/cbd-conduite-france-1x1.webp",
-    srcSet: "/images/blog/cbd-conduite-france-1x1.webp 800w",
+  "/images/blog/cbd-conduite-france-editorial-1x1.webp": {
+    src: "/images/blog/cbd-conduite-france-editorial-1x1.webp",
+    srcSet: "/images/blog/cbd-conduite-france-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/cbd-conduite-france-4x3.webp": {
-    src: "/images/blog/cbd-conduite-france-4x3.webp",
-    srcSet: "/images/blog/cbd-conduite-france-4x3.webp 1040w",
+  "/images/blog/cbd-conduite-france-editorial-4x3.webp": {
+    src: "/images/blog/cbd-conduite-france-editorial-4x3.webp",
+    srcSet: "/images/blog/cbd-conduite-france-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/cbd-conduite-france-16x9.webp": {
-    src: "/images/blog/cbd-conduite-france-16x9.webp",
-    srcSet: "/images/blog/cbd-conduite-france-16x9.webp 1600w",
+  "/images/blog/cbd-conduite-france-editorial-16x9.webp": {
+    src: "/images/blog/cbd-conduite-france-editorial-16x9.webp",
+    srcSet: "/images/blog/cbd-conduite-france-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/denominations-cbd-cbn-cbg-1x1.webp": {
-    src: "/images/blog/denominations-cbd-cbn-cbg-1x1.webp",
-    srcSet: "/images/blog/denominations-cbd-cbn-cbg-1x1.webp 800w",
+  "/images/blog/denominations-cbd-cbn-cbg-editorial-1x1.webp": {
+    src: "/images/blog/denominations-cbd-cbn-cbg-editorial-1x1.webp",
+    srcSet: "/images/blog/denominations-cbd-cbn-cbg-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/denominations-cbd-cbn-cbg-4x3.webp": {
-    src: "/images/blog/denominations-cbd-cbn-cbg-4x3.webp",
-    srcSet: "/images/blog/denominations-cbd-cbn-cbg-4x3.webp 1040w",
+  "/images/blog/denominations-cbd-cbn-cbg-editorial-4x3.webp": {
+    src: "/images/blog/denominations-cbd-cbn-cbg-editorial-4x3.webp",
+    srcSet: "/images/blog/denominations-cbd-cbn-cbg-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/denominations-cbd-cbn-cbg-16x9.webp": {
-    src: "/images/blog/denominations-cbd-cbn-cbg-16x9.webp",
-    srcSet: "/images/blog/denominations-cbd-cbn-cbg-16x9.webp 1600w",
+  "/images/blog/denominations-cbd-cbn-cbg-editorial-16x9.webp": {
+    src: "/images/blog/denominations-cbd-cbn-cbg-editorial-16x9.webp",
+    srcSet: "/images/blog/denominations-cbd-cbn-cbg-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/conserver-fleurs-resines-cbd-1x1.webp": {
-    src: "/images/blog/conserver-fleurs-resines-cbd-1x1.webp",
-    srcSet: "/images/blog/conserver-fleurs-resines-cbd-1x1.webp 800w",
+  "/images/blog/conserver-fleurs-resines-cbd-editorial-1x1.webp": {
+    src: "/images/blog/conserver-fleurs-resines-cbd-editorial-1x1.webp",
+    srcSet: "/images/blog/conserver-fleurs-resines-cbd-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/conserver-fleurs-resines-cbd-4x3.webp": {
-    src: "/images/blog/conserver-fleurs-resines-cbd-4x3.webp",
-    srcSet: "/images/blog/conserver-fleurs-resines-cbd-4x3.webp 1040w",
+  "/images/blog/conserver-fleurs-resines-cbd-editorial-4x3.webp": {
+    src: "/images/blog/conserver-fleurs-resines-cbd-editorial-4x3.webp",
+    srcSet: "/images/blog/conserver-fleurs-resines-cbd-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/conserver-fleurs-resines-cbd-16x9.webp": {
-    src: "/images/blog/conserver-fleurs-resines-cbd-16x9.webp",
-    srcSet: "/images/blog/conserver-fleurs-resines-cbd-16x9.webp 1600w",
+  "/images/blog/conserver-fleurs-resines-cbd-editorial-16x9.webp": {
+    src: "/images/blog/conserver-fleurs-resines-cbd-editorial-16x9.webp",
+    srcSet: "/images/blog/conserver-fleurs-resines-cbd-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/comment-lire-analyse-cbd-1x1.webp": {
-    src: "/images/blog/comment-lire-analyse-cbd-1x1.webp",
-    srcSet: "/images/blog/comment-lire-analyse-cbd-1x1.webp 800w",
+  "/images/blog/comment-lire-analyse-cbd-editorial-1x1.webp": {
+    src: "/images/blog/comment-lire-analyse-cbd-editorial-1x1.webp",
+    srcSet: "/images/blog/comment-lire-analyse-cbd-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/comment-lire-analyse-cbd-4x3.webp": {
-    src: "/images/blog/comment-lire-analyse-cbd-4x3.webp",
-    srcSet: "/images/blog/comment-lire-analyse-cbd-4x3.webp 1040w",
+  "/images/blog/comment-lire-analyse-cbd-editorial-4x3.webp": {
+    src: "/images/blog/comment-lire-analyse-cbd-editorial-4x3.webp",
+    srcSet: "/images/blog/comment-lire-analyse-cbd-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/comment-lire-analyse-cbd-16x9.webp": {
-    src: "/images/blog/comment-lire-analyse-cbd-16x9.webp",
-    srcSet: "/images/blog/comment-lire-analyse-cbd-16x9.webp 1600w",
+  "/images/blog/comment-lire-analyse-cbd-editorial-16x9.webp": {
+    src: "/images/blog/comment-lire-analyse-cbd-editorial-16x9.webp",
+    srcSet: "/images/blog/comment-lire-analyse-cbd-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/fleur-cbd-ou-resine-cbd-1x1.webp": {
-    src: "/images/blog/fleur-cbd-ou-resine-cbd-1x1.webp",
-    srcSet: "/images/blog/fleur-cbd-ou-resine-cbd-1x1.webp 800w",
+  "/images/blog/fleur-cbd-ou-resine-cbd-differences-editorial-1x1.webp": {
+    src: "/images/blog/fleur-cbd-ou-resine-cbd-differences-editorial-1x1.webp",
+    srcSet: "/images/blog/fleur-cbd-ou-resine-cbd-differences-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/fleur-cbd-ou-resine-cbd-4x3.webp": {
-    src: "/images/blog/fleur-cbd-ou-resine-cbd-4x3.webp",
-    srcSet: "/images/blog/fleur-cbd-ou-resine-cbd-4x3.webp 1040w",
+  "/images/blog/fleur-cbd-ou-resine-cbd-differences-editorial-4x3.webp": {
+    src: "/images/blog/fleur-cbd-ou-resine-cbd-differences-editorial-4x3.webp",
+    srcSet: "/images/blog/fleur-cbd-ou-resine-cbd-differences-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/fleur-cbd-ou-resine-cbd-16x9.webp": {
-    src: "/images/blog/fleur-cbd-ou-resine-cbd-16x9.webp",
-    srcSet: "/images/blog/fleur-cbd-ou-resine-cbd-16x9.webp 1600w",
+  "/images/blog/fleur-cbd-ou-resine-cbd-differences-editorial-16x9.webp": {
+    src: "/images/blog/fleur-cbd-ou-resine-cbd-differences-editorial-16x9.webp",
+    srcSet: "/images/blog/fleur-cbd-ou-resine-cbd-differences-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/choisir-fleur-cbd-profil-aromatique-1x1.webp": {
-    src: "/images/blog/choisir-fleur-cbd-profil-aromatique-1x1.webp",
-    srcSet: "/images/blog/choisir-fleur-cbd-profil-aromatique-1x1.webp 800w",
+  "/images/blog/choisir-fleur-cbd-profil-aromatique-editorial-1x1.webp": {
+    src: "/images/blog/choisir-fleur-cbd-profil-aromatique-editorial-1x1.webp",
+    srcSet: "/images/blog/choisir-fleur-cbd-profil-aromatique-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/choisir-fleur-cbd-profil-aromatique-4x3.webp": {
-    src: "/images/blog/choisir-fleur-cbd-profil-aromatique-4x3.webp",
-    srcSet: "/images/blog/choisir-fleur-cbd-profil-aromatique-4x3.webp 1040w",
+  "/images/blog/choisir-fleur-cbd-profil-aromatique-editorial-4x3.webp": {
+    src: "/images/blog/choisir-fleur-cbd-profil-aromatique-editorial-4x3.webp",
+    srcSet: "/images/blog/choisir-fleur-cbd-profil-aromatique-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/choisir-fleur-cbd-profil-aromatique-16x9.webp": {
-    src: "/images/blog/choisir-fleur-cbd-profil-aromatique-16x9.webp",
-    srcSet: "/images/blog/choisir-fleur-cbd-profil-aromatique-16x9.webp 1600w",
+  "/images/blog/choisir-fleur-cbd-profil-aromatique-editorial-16x9.webp": {
+    src: "/images/blog/choisir-fleur-cbd-profil-aromatique-editorial-16x9.webp",
+    srcSet: "/images/blog/choisir-fleur-cbd-profil-aromatique-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,
   },
-  "/images/blog/indoor-greenhouse-hydroponique-1x1.webp": {
-    src: "/images/blog/indoor-greenhouse-hydroponique-1x1.webp",
-    srcSet: "/images/blog/indoor-greenhouse-hydroponique-1x1.webp 800w",
+  "/images/blog/indoor-greenhouse-hydroponique-differences-editorial-1x1.webp": {
+    src: "/images/blog/indoor-greenhouse-hydroponique-differences-editorial-1x1.webp",
+    srcSet: "/images/blog/indoor-greenhouse-hydroponique-differences-editorial-1x1.webp 800w",
     sizes: "(min-width: 1024px) 420px, 92vw",
     width: 800,
     height: 800,
   },
-  "/images/blog/indoor-greenhouse-hydroponique-4x3.webp": {
-    src: "/images/blog/indoor-greenhouse-hydroponique-4x3.webp",
-    srcSet: "/images/blog/indoor-greenhouse-hydroponique-4x3.webp 1040w",
+  "/images/blog/indoor-greenhouse-hydroponique-differences-editorial-4x3.webp": {
+    src: "/images/blog/indoor-greenhouse-hydroponique-differences-editorial-4x3.webp",
+    srcSet: "/images/blog/indoor-greenhouse-hydroponique-differences-editorial-4x3.webp 1040w",
     sizes: "(min-width: 1024px) 520px, 92vw",
     width: 1040,
     height: 780,
   },
-  "/images/blog/indoor-greenhouse-hydroponique-16x9.webp": {
-    src: "/images/blog/indoor-greenhouse-hydroponique-16x9.webp",
-    srcSet: "/images/blog/indoor-greenhouse-hydroponique-16x9.webp 1600w",
+  "/images/blog/indoor-greenhouse-hydroponique-differences-editorial-16x9.webp": {
+    src: "/images/blog/indoor-greenhouse-hydroponique-differences-editorial-16x9.webp",
+    srcSet: "/images/blog/indoor-greenhouse-hydroponique-differences-editorial-16x9.webp 1600w",
     sizes: "100vw",
     width: 1600,
     height: 900,

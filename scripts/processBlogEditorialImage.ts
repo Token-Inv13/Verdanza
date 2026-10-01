@@ -24,7 +24,7 @@ const targets = [
 
 const slug = argument("slug");
 const source = argument("source");
-const outputBase = argument("base") || slug;
+const outputBase = argument("base") || `${slug}-editorial`;
 
 if (!slug || !/^[a-z0-9-]+$/.test(slug)) {
   throw new Error("Provide a kebab-case --slug value.");

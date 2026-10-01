@@ -25,6 +25,6 @@ Create a high-resolution master without embedded text, then import it with:
 npm run images:blog-editorial -- --slug=<article-slug> --source=<absolute-master-path>
 ```
 
-Use `--base=<existing-image-base>` when an established image URL must be preserved. Optional `--square-position`, `--landscape-position`, and `--wide-position` values allow deliberate reframing. Outputs are WebP at 800x800, 1040x780, and 1600x900. The card formats match their two-times display size and every file stays below the 240 KB audit limit.
+The default output base is `<article-slug>-editorial`. When replacing a published image, pass a new versioned `--base` instead of reusing its public URL so CDN caches cannot retain the previous artwork. Optional `--square-position`, `--landscape-position`, and `--wide-position` values allow deliberate reframing. Outputs are WebP at 800x800, 1040x780, and 1600x900. The card formats match their two-times display size and every file stays below the 240 KB audit limit.
 
 Run `npm run images:generate` after import. The generator registers and validates the editorial files without replacing them. Legacy synthetic blog artwork is disabled by default; it is available only for a deliberate emergency run with `VERDANZA_ALLOW_LEGACY_BLOG_ARTWORK=1`.

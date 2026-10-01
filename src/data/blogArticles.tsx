@@ -20,9 +20,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/trichomes-fleurs-cbd-observation-1x1.webp",
-      landscape: "/images/blog/trichomes-fleurs-cbd-observation-4x3.webp",
-      wide: "/images/blog/trichomes-fleurs-cbd-observation-16x9.webp",
+      square: "/images/blog/trichomes-fleurs-cbd-observation-editorial-1x1.webp",
+      landscape: "/images/blog/trichomes-fleurs-cbd-observation-editorial-4x3.webp",
+      wide: "/images/blog/trichomes-fleurs-cbd-observation-editorial-16x9.webp",
     },
     relatedSlugs: [
       "aspect-fleur-cbd-couleur-structure",
@@ -303,9 +303,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "8 min",
     status: "published",
     images: {
-      square: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-1x1.webp",
-      landscape: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-4x3.webp",
-      wide: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-16x9.webp",
+      square: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-editorial-1x1.webp",
+      landscape: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-editorial-4x3.webp",
+      wide: "/images/blog/incertitude-mesure-arrondis-analyse-cbd-editorial-16x9.webp",
     },
     relatedSlugs: [
       "analyse-cbd-nd-lod-loq",
@@ -605,9 +605,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/emballage-cbd-contenant-fermeture-1x1.webp",
-      landscape: "/images/blog/emballage-cbd-contenant-fermeture-4x3.webp",
-      wide: "/images/blog/emballage-cbd-contenant-fermeture-16x9.webp",
+      square: "/images/blog/emballage-cbd-contenant-fermeture-editorial-1x1.webp",
+      landscape: "/images/blog/emballage-cbd-contenant-fermeture-editorial-4x3.webp",
+      wide: "/images/blog/emballage-cbd-contenant-fermeture-editorial-16x9.webp",
     },
     relatedSlugs: [
       "conserver-fleurs-resines-cbd",
@@ -862,9 +862,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/analyse-cbd-nd-lod-loq-1x1.webp",
-      landscape: "/images/blog/analyse-cbd-nd-lod-loq-4x3.webp",
-      wide: "/images/blog/analyse-cbd-nd-lod-loq-16x9.webp",
+      square: "/images/blog/analyse-cbd-nd-lod-loq-editorial-1x1.webp",
+      landscape: "/images/blog/analyse-cbd-nd-lod-loq-editorial-4x3.webp",
+      wide: "/images/blog/analyse-cbd-nd-lod-loq-editorial-16x9.webp",
     },
     relatedSlugs: [
       "pourcentage-mg-g-ppm-analyse-cbd",
@@ -1144,9 +1144,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/isolat-spectre-large-complet-cbd-1x1.webp",
-      landscape: "/images/blog/isolat-spectre-large-complet-cbd-4x3.webp",
-      wide: "/images/blog/isolat-spectre-large-complet-cbd-16x9.webp",
+      square: "/images/blog/isolat-spectre-large-complet-cbd-editorial-1x1.webp",
+      landscape: "/images/blog/isolat-spectre-large-complet-cbd-editorial-4x3.webp",
+      wide: "/images/blog/isolat-spectre-large-complet-cbd-editorial-16x9.webp",
     },
     relatedSlugs: [
       "comment-lire-analyse-cbd",
@@ -1491,9 +1491,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/reception-commande-cbd-verifications-1x1.webp",
-      landscape: "/images/blog/reception-commande-cbd-verifications-4x3.webp",
-      wide: "/images/blog/reception-commande-cbd-verifications-16x9.webp",
+      square: "/images/blog/reception-commande-cbd-verifications-editorial-1x1.webp",
+      landscape: "/images/blog/reception-commande-cbd-verifications-editorial-4x3.webp",
+      wide: "/images/blog/reception-commande-cbd-verifications-editorial-16x9.webp",
     },
     relatedSlugs: [
       "etiquette-numero-lot-cbd-tracabilite",
@@ -1760,9 +1760,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "8 min",
     status: "published",
     images: {
-      square: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-1x1.webp",
-      landscape: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-4x3.webp",
-      wide: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-16x9.webp",
+      square: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-editorial-1x1.webp",
+      landscape: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-editorial-4x3.webp",
+      wide: "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-editorial-16x9.webp",
     },
     relatedSlugs: [
       "comment-lire-analyse-cbd",
@@ -2023,9 +2023,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-1x1.webp",
-      landscape: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-4x3.webp",
-      wide: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-16x9.webp",
+      square: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-editorial-1x1.webp",
+      landscape: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-editorial-4x3.webp",
+      wide: "/images/blog/manucure-fleurs-cbd-feuilles-tiges-editorial-16x9.webp",
     },
     relatedSlugs: [
       "aspect-fleur-cbd-couleur-structure",
@@ -2276,9 +2276,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/photos-fleurs-cbd-lumiere-echelle-1x1.webp",
-      landscape: "/images/blog/photos-fleurs-cbd-lumiere-echelle-4x3.webp",
-      wide: "/images/blog/photos-fleurs-cbd-lumiere-echelle-16x9.webp",
+      square: "/images/blog/photos-fleurs-cbd-lumiere-echelle-editorial-1x1.webp",
+      landscape: "/images/blog/photos-fleurs-cbd-lumiere-echelle-editorial-4x3.webp",
+      wide: "/images/blog/photos-fleurs-cbd-lumiere-echelle-editorial-16x9.webp",
     },
     relatedSlugs: [
       "aspect-fleur-cbd-couleur-structure",
@@ -2556,9 +2556,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/calibre-fleurs-cbd-taille-tetes-1x1.webp",
-      landscape: "/images/blog/calibre-fleurs-cbd-taille-tetes-4x3.webp",
-      wide: "/images/blog/calibre-fleurs-cbd-taille-tetes-16x9.webp",
+      square: "/images/blog/calibre-fleurs-cbd-taille-tetes-editorial-1x1.webp",
+      landscape: "/images/blog/calibre-fleurs-cbd-taille-tetes-editorial-4x3.webp",
+      wide: "/images/blog/calibre-fleurs-cbd-taille-tetes-editorial-16x9.webp",
     },
     relatedSlugs: [
       "aspect-fleur-cbd-couleur-structure",
@@ -2841,9 +2841,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/origine-variete-lot-cbd-differences-1x1.webp",
-      landscape: "/images/blog/origine-variete-lot-cbd-differences-4x3.webp",
-      wide: "/images/blog/origine-variete-lot-cbd-differences-16x9.webp",
+      square: "/images/blog/origine-variete-lot-cbd-differences-editorial-1x1.webp",
+      landscape: "/images/blog/origine-variete-lot-cbd-differences-editorial-4x3.webp",
+      wide: "/images/blog/origine-variete-lot-cbd-differences-editorial-16x9.webp",
     },
     relatedSlugs: [
       "etiquette-numero-lot-cbd-tracabilite",
@@ -3039,9 +3039,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/signes-alteration-fleurs-resines-cbd-1x1.webp",
-      landscape: "/images/blog/signes-alteration-fleurs-resines-cbd-4x3.webp",
-      wide: "/images/blog/signes-alteration-fleurs-resines-cbd-16x9.webp",
+      square: "/images/blog/signes-alteration-fleurs-resines-cbd-editorial-1x1.webp",
+      landscape: "/images/blog/signes-alteration-fleurs-resines-cbd-editorial-4x3.webp",
+      wide: "/images/blog/signes-alteration-fleurs-resines-cbd-editorial-16x9.webp",
     },
     relatedSlugs: [
       "conserver-fleurs-resines-cbd",
@@ -3322,9 +3322,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-1x1.webp",
-      landscape: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-4x3.webp",
-      wide: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-16x9.webp",
+      square: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-editorial-1x1.webp",
+      landscape: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-editorial-4x3.webp",
+      wide: "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-editorial-16x9.webp",
     },
     relatedSlugs: [
       "comment-lire-analyse-cbd",
@@ -3634,9 +3634,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/etiquette-numero-lot-cbd-tracabilite-1x1.webp",
-      landscape: "/images/blog/etiquette-numero-lot-cbd-tracabilite-4x3.webp",
-      wide: "/images/blog/etiquette-numero-lot-cbd-tracabilite-16x9.webp",
+      square: "/images/blog/etiquette-numero-lot-cbd-tracabilite-editorial-1x1.webp",
+      landscape: "/images/blog/etiquette-numero-lot-cbd-tracabilite-editorial-4x3.webp",
+      wide: "/images/blog/etiquette-numero-lot-cbd-tracabilite-editorial-16x9.webp",
     },
     relatedSlugs: [
       "comment-lire-analyse-cbd",
@@ -3894,9 +3894,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/aspect-resine-cbd-texture-couleur-1x1.webp",
-      landscape: "/images/blog/aspect-resine-cbd-texture-couleur-4x3.webp",
-      wide: "/images/blog/aspect-resine-cbd-texture-couleur-16x9.webp",
+      square: "/images/blog/aspect-resine-cbd-texture-couleur-editorial-1x1.webp",
+      landscape: "/images/blog/aspect-resine-cbd-texture-couleur-editorial-4x3.webp",
+      wide: "/images/blog/aspect-resine-cbd-texture-couleur-editorial-16x9.webp",
     },
     relatedSlugs: [
       "fleur-cbd-ou-resine-cbd-differences",
@@ -4145,9 +4145,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/aspect-fleur-cbd-couleur-structure-1x1.webp",
-      landscape: "/images/blog/aspect-fleur-cbd-couleur-structure-4x3.webp",
-      wide: "/images/blog/aspect-fleur-cbd-couleur-structure-16x9.webp",
+      square: "/images/blog/aspect-fleur-cbd-couleur-structure-editorial-1x1.webp",
+      landscape: "/images/blog/aspect-fleur-cbd-couleur-structure-editorial-4x3.webp",
+      wide: "/images/blog/aspect-fleur-cbd-couleur-structure-editorial-16x9.webp",
     },
     relatedSlugs: [
       "indoor-greenhouse-hydroponique-differences",
@@ -4397,9 +4397,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/terpenes-profils-aromatiques-cbd-1x1.webp",
-      landscape: "/images/blog/terpenes-profils-aromatiques-cbd-4x3.webp",
-      wide: "/images/blog/terpenes-profils-aromatiques-cbd-16x9.webp",
+      square: "/images/blog/terpenes-profils-aromatiques-cbd-editorial-1x1.webp",
+      landscape: "/images/blog/terpenes-profils-aromatiques-cbd-editorial-4x3.webp",
+      wide: "/images/blog/terpenes-profils-aromatiques-cbd-editorial-16x9.webp",
     },
     relatedSlugs: [
       "choisir-fleur-cbd-profil-aromatique",
@@ -4617,9 +4617,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/cbd-conduite-france-1x1.webp",
-      landscape: "/images/blog/cbd-conduite-france-4x3.webp",
-      wide: "/images/blog/cbd-conduite-france-16x9.webp",
+      square: "/images/blog/cbd-conduite-france-editorial-1x1.webp",
+      landscape: "/images/blog/cbd-conduite-france-editorial-4x3.webp",
+      wide: "/images/blog/cbd-conduite-france-editorial-16x9.webp",
     },
     relatedSlugs: [
       "denominations-cbd-cbn-cbg",
@@ -4900,9 +4900,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "6 min",
     status: "published",
     images: {
-      square: "/images/blog/denominations-cbd-cbn-cbg-1x1.webp",
-      landscape: "/images/blog/denominations-cbd-cbn-cbg-4x3.webp",
-      wide: "/images/blog/denominations-cbd-cbn-cbg-16x9.webp",
+      square: "/images/blog/denominations-cbd-cbn-cbg-editorial-1x1.webp",
+      landscape: "/images/blog/denominations-cbd-cbn-cbg-editorial-4x3.webp",
+      wide: "/images/blog/denominations-cbd-cbn-cbg-editorial-16x9.webp",
     },
     relatedSlugs: [
       "comment-lire-analyse-cbd",
@@ -5163,9 +5163,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/conserver-fleurs-resines-cbd-1x1.webp",
-      landscape: "/images/blog/conserver-fleurs-resines-cbd-4x3.webp",
-      wide: "/images/blog/conserver-fleurs-resines-cbd-16x9.webp",
+      square: "/images/blog/conserver-fleurs-resines-cbd-editorial-1x1.webp",
+      landscape: "/images/blog/conserver-fleurs-resines-cbd-editorial-4x3.webp",
+      wide: "/images/blog/conserver-fleurs-resines-cbd-editorial-16x9.webp",
     },
     relatedSlugs: [
       "comment-lire-analyse-cbd",
@@ -5420,9 +5420,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "8 min",
     status: "published",
     images: {
-      square: "/images/blog/comment-lire-analyse-cbd-1x1.webp",
-      landscape: "/images/blog/comment-lire-analyse-cbd-4x3.webp",
-      wide: "/images/blog/comment-lire-analyse-cbd-16x9.webp",
+      square: "/images/blog/comment-lire-analyse-cbd-editorial-1x1.webp",
+      landscape: "/images/blog/comment-lire-analyse-cbd-editorial-4x3.webp",
+      wide: "/images/blog/comment-lire-analyse-cbd-editorial-16x9.webp",
     },
     relatedSlugs: [
       "fleur-cbd-ou-resine-cbd-differences",
@@ -5711,9 +5711,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/fleur-cbd-ou-resine-cbd-1x1.webp",
-      landscape: "/images/blog/fleur-cbd-ou-resine-cbd-4x3.webp",
-      wide: "/images/blog/fleur-cbd-ou-resine-cbd-16x9.webp",
+      square: "/images/blog/fleur-cbd-ou-resine-cbd-differences-editorial-1x1.webp",
+      landscape: "/images/blog/fleur-cbd-ou-resine-cbd-differences-editorial-4x3.webp",
+      wide: "/images/blog/fleur-cbd-ou-resine-cbd-differences-editorial-16x9.webp",
     },
     relatedSlugs: [
       "indoor-greenhouse-hydroponique-differences",
@@ -5950,9 +5950,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "7 min",
     status: "published",
     images: {
-      square: "/images/blog/choisir-fleur-cbd-profil-aromatique-1x1.webp",
-      landscape: "/images/blog/choisir-fleur-cbd-profil-aromatique-4x3.webp",
-      wide: "/images/blog/choisir-fleur-cbd-profil-aromatique-16x9.webp",
+      square: "/images/blog/choisir-fleur-cbd-profil-aromatique-editorial-1x1.webp",
+      landscape: "/images/blog/choisir-fleur-cbd-profil-aromatique-editorial-4x3.webp",
+      wide: "/images/blog/choisir-fleur-cbd-profil-aromatique-editorial-16x9.webp",
     },
     relatedSlugs: [
       "terpenes-profils-aromatiques-cbd",
@@ -6144,9 +6144,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "8 min",
     status: "published",
     images: {
-      square: "/images/blog/indoor-greenhouse-hydroponique-1x1.webp",
-      landscape: "/images/blog/indoor-greenhouse-hydroponique-4x3.webp",
-      wide: "/images/blog/indoor-greenhouse-hydroponique-16x9.webp",
+      square: "/images/blog/indoor-greenhouse-hydroponique-differences-editorial-1x1.webp",
+      landscape: "/images/blog/indoor-greenhouse-hydroponique-differences-editorial-4x3.webp",
+      wide: "/images/blog/indoor-greenhouse-hydroponique-differences-editorial-16x9.webp",
     },
     relatedSlugs: [
       "fleur-cbd-ou-resine-cbd-differences",
