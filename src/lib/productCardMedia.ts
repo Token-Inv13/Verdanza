@@ -5,6 +5,10 @@ type ProductCardMedia = { src: string; alt: string };
 // Visual-only choices from the existing product photography. Commerce and
 // ProductPage imagery continue to use the product supplied by Firestore.
 export const productCardMediaBySlug: Record<string, ProductCardMedia> = {
+  "blue-dream-cbd": {
+    src: "/Fiche produit/Blue%20Dream/bl.webp",
+    alt: "Ensemble de fleurs Blue Dream CBD Verdanza sur fond clair",
+  },
   "cookie-kush-indoor": {
     src: "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-pile.webp",
     alt: "Ensemble de fleurs Cookie Kush Indoor Verdanza sur fond clair",

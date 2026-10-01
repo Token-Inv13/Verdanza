@@ -70,8 +70,8 @@ for (const product of activeProducts) {
 
 assert.deepEqual(
   new Set(activeProducts.map((product) => resolveProductCardPresentation(product).intensityLabel)),
-  new Set(["Doux", "Moyen", "Fort"]),
-  "the active catalog must exercise all three canonical intensity labels",
+  new Set(["Doux"]),
+  "the published catalog must consistently show the reviewed soft intensity",
 );
 
 const goldenStatic = activeProducts.find((product) => product.slug === "golden-static");

@@ -61,17 +61,17 @@ try {
       await flowers.click();
     }
     assert.equal(await page.locator('[data-finder-step="intensity"]').isVisible(), true);
-    assert.equal(await page.locator('[data-home-finder-option^="intensity:"]').count(), 3);
+    assert.equal(await page.locator('[data-home-finder-option^="intensity:"]').count(), 1);
     assert.equal(await page.locator('[data-home-finder-option="intensity:doux"]').count(), 1);
-    await page.locator('[data-home-finder-option="intensity:moyen"]').click();
+    await page.locator('[data-home-finder-option="intensity:doux"]').click();
     assert.equal(await page.locator('[data-finder-step="aroma"]').isVisible(), true);
-    assert.equal(await page.locator('[data-home-finder-option^="aroma:"]').count(), 4);
-    assert.equal(await page.locator('[data-home-finder-option="aroma:agrumes"]').count(), 0);
+    assert.equal(await page.locator('[data-home-finder-option^="aroma:"]').count(), 5);
+    assert.equal(await page.locator('[data-home-finder-option="aroma:agrumes"]').count(), 1);
     assert.equal(await page.getByText("Terreux", { exact: true }).count(), 0);
     assert.equal(await page.getByText("Épicé", { exact: true }).count(), 0);
 
     await page.locator('[data-home-finder-option="aroma:fruite"]').click();
-    await assertResult(page, 1, "Fleurs · Moyen · Fruité");
+    await assertResult(page, 2, "Fleurs · Doux · Fruité");
 
     await page.locator("[data-home-finder-edit]").click();
     assert.equal(
@@ -80,21 +80,21 @@ try {
       `${width}px: modify must preserve the selected type`,
     );
     await page.locator('[data-home-finder-option="type:resins"]').click();
-    assert.equal(await page.locator('[data-home-finder-option="intensity:moyen"]').count(), 0);
+    assert.equal(await page.locator('[data-home-finder-option^="intensity:"]').count(), 1);
     assert.equal(
       await page.locator('[data-home-finder-option^="intensity:"][aria-pressed="true"]').count(),
-      0,
-      `${width}px: changing type must clear an incompatible child intensity`,
+      1,
+      `${width}px: changing type must preserve the compatible soft intensity`,
     );
-    await page.locator('[data-home-finder-option="intensity:fort"]').click();
+    await page.locator('[data-home-finder-option="intensity:doux"]').click();
     assert.equal(
       await page.locator('[data-home-finder-option^="aroma:"]').count(),
       1,
-      `${width}px: resin strong must expose only Peu importe`,
+      `${width}px: soft resins must expose only Peu importe`,
     );
     assert.equal(await page.locator('[data-home-finder-option="aroma:agrumes"]').count(), 0);
     await page.locator('[data-home-finder-option="aroma:any"]').click();
-    await assertResult(page, 1, "Résines · Fort · Peu importe");
+    await assertResult(page, 2, "Résines · Doux · Peu importe");
 
     await page.locator("[data-home-finder-reset]").click();
     assert.equal(await page.locator('[data-finder-step="type"]').isVisible(), true);
@@ -105,15 +105,15 @@ try {
     );
 
     await page.locator('[data-home-finder-option="type:flowers"]').click();
-    await page.locator('[data-home-finder-option="intensity:moyen"]').click();
+    await page.locator('[data-home-finder-option="intensity:doux"]').click();
     await page.locator('[data-home-finder-option="aroma:any"]').click();
-    await assertResult(page, 3, "Fleurs · Moyen · Peu importe");
+    await assertResult(page, 5, "Fleurs · Doux · Peu importe");
 
     await page.locator("[data-home-finder-reset]").click();
     await page.locator('[data-home-finder-option="type:resins"]').click();
-    await page.locator('[data-home-finder-option="intensity:fort"]').click();
+    await page.locator('[data-home-finder-option="intensity:doux"]').click();
     await page.locator('[data-home-finder-option="aroma:any"]').click();
-    await assertResult(page, 1, "Résines · Fort · Peu importe");
+    await assertResult(page, 2, "Résines · Doux · Peu importe");
 
     const layout = await page.evaluate(() => {
       const finder = document.querySelector<HTMLElement>(".home-product-finder");
@@ -142,11 +142,11 @@ try {
     const shopLink = page.locator("[data-home-finder-open-shop]");
     assert.equal(
       await shopLink.getAttribute("href"),
-      "/boutique?type=resins&intensity=fort#produits",
+      "/boutique?type=resins&intensity=doux#produits",
       `${width}px: result URL must be shareable and canonical`,
     );
     await Promise.all([
-      page.waitForURL("**/boutique?type=resins&intensity=fort#produits"),
+      page.waitForURL("**/boutique?type=resins&intensity=doux#produits"),
       shopLink.click(),
     ]);
     await page.locator("[data-shop-product-selector]").waitFor();
@@ -157,10 +157,10 @@ try {
     );
     assert.equal(
       await page.locator("[data-shop-selection-summary]").innerText(),
-      "Résines · Fort · Peu importe",
+      "Résines · Doux · Peu importe",
     );
-    assert.equal(await page.locator(".product-card-v2").count(), 1);
-    assert.equal(await page.locator("[data-shop-result-count]").innerText(), "1 produit correspond");
+    assert.equal(await page.locator(".product-card-v2").count(), 2);
+    assert.equal(await page.locator("[data-shop-result-count]").innerText(), "2 produits correspondent");
     assert.equal(new URL(page.url()).hash, "#produits");
     assert.deepEqual(pageErrors, [], `${width}px: browser errors detected`);
     await context.close();

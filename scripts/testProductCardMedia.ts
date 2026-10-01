@@ -8,6 +8,9 @@ import { productCardMediaBySlug, resolveProductCardMedia } from "../src/lib/prod
 import { getLocalProducts } from "../src/services/productsService";
 
 const activeProducts = getLocalProducts();
+const blueDream = getLocalProducts(false).find((product) => product.slug === "blue-dream-cbd");
+assert.ok(blueDream, "the Firestore-published Blue Dream needs a local card source");
+const cardProducts = [...activeProducts, blueDream];
 // Validate the committed pipeline rather than a temporary image-generation report.
 const generator = readFileSync("scripts/generateImages.ts", "utf8");
 const cropDeclaration = generator.match(/const goldenStaticCardCrop: ImageCrop = \{ left: (\d+), top: (\d+), width: (\d+), height: (\d+) \}/);
@@ -17,15 +20,15 @@ const goldenCrop = { left: Number(cropDeclaration[1]), top: Number(cropDeclarati
 assert.equal(activeProducts.length, 7, "the seven active products need card media");
 assert.deepEqual(
   Object.keys(productCardMediaBySlug).sort(),
-  activeProducts.map((product) => product.slug).sort(),
-  "card-media choices cover only the active catalog",
+  cardProducts.map((product) => product.slug).sort(),
+  "card-media choices cover the seven fallback products and Firestore-published Blue Dream",
 );
 
 function publicFile(url: string) {
   return resolve("public", decodeURIComponent(url).replace(/^\//, ""));
 }
 
-for (const product of activeProducts) {
+for (const product of cardProducts) {
   const media = resolveProductCardMedia(product);
   assert.ok(media.src && media.alt, `${product.name}: a photo and useful alt text are required`);
   assert.ok(existsSync(publicFile(media.src)), `${product.name}: card source is missing`);
@@ -50,6 +53,10 @@ for (const product of activeProducts) {
   const gallery = normalizeProductImages(product);
   assert.equal(gallery[0]?.url, product.image, `${product.name}: ProductPage primary image must not change`);
   assert.ok(gallery.some((image) => image.url === media.src), `${product.name}: card photo must come from the existing gallery`);
+  if (product.slug === "blue-dream-cbd") {
+    assert.equal(media.src, "/Fiche produit/Blue%20Dream/bl.webp");
+    assert.notEqual(media.src, product.image, "the macro must remain ProductPage-only");
+  }
   if (media.src !== product.image) {
     assert.ok(
       statSync(publicFile(optimized.src)).size < statSync(publicFile(productImageVariants[product.image].card.src)).size,
@@ -80,4 +87,4 @@ for (const product of activeProducts) {
   }
 }
 
-console.log("PASS ProductCard media: seven existing WebP sources, responsive 320/640 variants, no upscale, original galleries, smaller dedicated payloads, and Golden Static fully in frame.");
+console.log("PASS ProductCard media: eight published-product WebP sources, responsive 320/640 variants, no upscale, original galleries, smaller dedicated payloads, and Golden Static fully in frame.");

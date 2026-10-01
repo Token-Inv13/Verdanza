@@ -64,7 +64,15 @@ try {
     "the card uses its dedicated distant photo",
   );
   assert.equal(await card.locator('ul[aria-label^="Profil aromatique"] li').count(), 3);
-  assert.match(await card.getByRole("img", { name: "Intensité fort" }).getAttribute("aria-label") || "", /fort/);
+  assert.match(await card.getByRole("img", { name: "Intensité doux" }).getAttribute("aria-label") || "", /doux/);
+  await page.evaluate("window.setFixture({overrides:{slug:'blue-dream-cbd',name:'Blue Dream',aromas:['Citron','Pin','Fruit doux']}})");
+  await page.waitForFunction(() => document.querySelector('.product-card-v2__image')?.getAttribute('data-source')?.includes('Blue%20Dream/bl.webp'));
+  assert.equal(
+    await card.locator("img.product-card-v2__image").getAttribute("data-source"),
+    "/Fiche produit/Blue%20Dream/bl.webp",
+    "Blue Dream must use its full-product photo on the card",
+  );
+  assert.match(await card.getByRole("img", { name: "Intensité doux" }).getAttribute("aria-label") || "", /doux/);
   await page.evaluate("window.setFixture({})");
   await page.waitForFunction(() => document.querySelector('.product-card-v2__image')?.getAttribute('data-source') === '/fixture.webp');
   const format = card.getByRole("combobox");

@@ -10,7 +10,7 @@ import { expressDeliveryBannerFixture as banner } from "./fixtures/expressDelive
 
 const widths = [390, 430, 768, 1280];
 const routes = ["/", "/boutique", "/fleurs-cbd", "/resines-cbd",
-  "/boutique?type=flowers&intensity=moyen&aroma=fruite#produits"];
+  "/boutique?type=flowers&intensity=doux&aroma=fruite#produits"];
 const screenshotDir = join(tmpdir(), "verdanza-phase6b-qa-20260926");
 mkdirSync(screenshotDir, { recursive: true });
 const measurements: unknown[] = [];

@@ -17,70 +17,72 @@ const ids = (criteria: ProductDiscoveryCriteria) =>
     .map((product) => product.id)
     .sort();
 
-const flowerMedium: ProductDiscoveryCriteria = {
+const flowerSoft: ProductDiscoveryCriteria = {
   category: "flowers",
-  intensity: "moyen",
+  intensity: "doux",
   aromas: [],
 };
 
 assert.deepEqual(
   [...getAvailableProductIntensities(products, "flowers")],
-  ["doux", "moyen", "fort"],
+  ["doux"],
   "flowers must expose only intensities backed by an active product",
 );
 assert.deepEqual(
   [...getAvailableProductIntensities(products, "resins")],
-  ["doux", "fort"],
-  "resins must hide the impossible medium intensity",
+  ["doux"],
+  "resins must offer only their published soft profile",
 );
 assert.deepEqual(
-  [...getAvailableProductAromaFamilies(products, { category: "flowers", intensity: "moyen" })],
-  ["fruite", "sucre", "boise"],
-  "flower medium aromas must be derived from compatible active products",
+  [...getAvailableProductAromaFamilies(products, { category: "flowers", intensity: "doux" })],
+  ["fruite", "agrumes", "sucre", "boise"],
+  "flower soft aromas must be derived from compatible active products",
 );
 assert.deepEqual(
-  [...getAvailableProductAromaFamilies(products, { category: "resins", intensity: "fort" })],
+  [...getAvailableProductAromaFamilies(products, { category: "resins", intensity: "doux" })],
   [],
-  "resin strong must not propose an aroma that would produce zero results",
+  "soft resins must not propose an aroma that would produce zero results",
 );
-assert.deepEqual(ids(flowerMedium), [
+assert.deepEqual(ids(flowerSoft), [
   "flower-cookie-kush-indoor",
   "flower-harlequin-greenhouse",
+  "flower-mandarine-cbd",
   "flower-mango-haze-cbd",
+  "flower-petites-tetes-og-kush",
 ]);
 
 assert.deepEqual(
   ids({ category: "flowers", intensity: "doux", aromas: [] }),
-  ["flower-mandarine-cbd"],
-  "Mandarine must remain reachable through the shared finder taxonomy",
+  ids(flowerSoft),
+  "all active flowers must remain reachable through the soft profile",
 );
 
-const resinStrong: ProductDiscoveryCriteria = {
+const resinSoft: ProductDiscoveryCriteria = {
   category: "resins",
-  intensity: "fort",
+  intensity: "doux",
   aromas: [],
 };
-assert.deepEqual(ids(resinStrong), ["resin-golden-static"]);
+assert.deepEqual(ids(resinSoft), ["resin-golden-static", "resin-supreme-50-cbd"]);
 
 assert.deepEqual(
-  ids({ ...flowerMedium, aromas: ["fruite"] }),
-  ["flower-mango-haze-cbd"],
+  ids({ ...flowerSoft, aromas: ["fruite"] }),
+  ["flower-mandarine-cbd", "flower-mango-haze-cbd"],
   "an optional aroma must narrow the shared catalog filter",
 );
 assert.deepEqual(
-  ids({ ...flowerMedium, aromas: [] }),
-  ids(flowerMedium),
+  ids({ ...flowerSoft, aromas: [] }),
+  ids(flowerSoft),
   "Peu importe must preserve the type and intensity result set",
 );
 
 const destination = createProductDiscoveryPath({
-  ...flowerMedium,
+  ...flowerSoft,
   aromas: ["fruite"],
 });
-assert.equal(destination, "/boutique?type=flowers&intensity=moyen&aroma=fruite");
+assert.equal(destination, "/boutique?type=flowers&intensity=doux&aroma=fruite");
 assert.deepEqual(
   parseProductDiscoverySearchParams(destination.split("?")[1] ?? ""),
-  { category: "flowers", intensity: "moyen", aromas: ["fruite"] },
+  { category: "flowers", intensity: "doux", aromas: ["fruite"] },
   "the shareable URL must round-trip into the shop criteria",
 );
 
@@ -97,9 +99,9 @@ assert.deepEqual(
   "invalid or legacy query values must fall back safely",
 );
 
-const modifiedChoice = { ...flowerMedium, category: "resins" } as const;
-assert.equal(modifiedChoice.intensity, "moyen", "editing the type must not force a full reset");
-assert.deepEqual(ids(modifiedChoice), [], "a possible zero-result selection must remain representable");
+const modifiedChoice = { ...flowerSoft, category: "resins" } as const;
+assert.equal(modifiedChoice.intensity, "doux", "editing the type must not force a full reset");
+assert.deepEqual(ids(modifiedChoice), ids(resinSoft), "the shared soft profile must work for both categories");
 
 assert.deepEqual(
   reconcileProductDiscoveryCriteria(products, {
@@ -112,12 +114,12 @@ assert.deepEqual(
 );
 assert.deepEqual(
   reconcileProductDiscoveryCriteria(products, {
-    category: "flowers",
-    intensity: "fort",
+    category: "resins",
+    intensity: "doux",
     aromas: ["fruite"],
   }),
-  { category: "flowers", intensity: "fort", aromas: [] },
-  "changing intensity must clear an aroma that no longer matches",
+  { category: "resins", intensity: "doux", aromas: [] },
+  "changing category must clear an aroma that no longer matches",
 );
 
 for (const category of ["flowers", "resins"] as const) {

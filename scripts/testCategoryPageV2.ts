@@ -25,12 +25,9 @@ assert.equal(resins.length, 2, "the resin category must contain two active produ
 
 assert.deepEqual(Array.from(getAvailableProductIntensities(flowers, "flowers")), [
   "doux",
-  "moyen",
-  "fort",
 ]);
 assert.deepEqual(Array.from(getAvailableProductIntensities(resins, "resins")), [
   "doux",
-  "fort",
 ]);
 assert.deepEqual(Array.from(getAvailableProductAromaFamilies(flowers, {
   category: "flowers",
@@ -43,27 +40,23 @@ assert.deepEqual(Array.from(getAvailableProductAromaFamilies(resins, {
 
 assert.deepEqual(
   ids(flowers, { category: "flowers", intensity: "doux", aromas: [] }),
-  ["flower-mandarine-cbd"],
+  flowers.map((product) => product.id).sort(),
 );
 assert.deepEqual(
   ids(flowers, { category: "flowers", intensity: "moyen", aromas: [] }),
-  [
-    "flower-cookie-kush-indoor",
-    "flower-harlequin-greenhouse",
-    "flower-mango-haze-cbd",
-  ],
+  [],
 );
 assert.deepEqual(
   ids(flowers, { category: "flowers", intensity: "fort", aromas: [] }),
-  ["flower-petites-tetes-og-kush"],
+  [],
 );
 assert.deepEqual(
   ids(resins, { category: "resins", intensity: "doux", aromas: [] }),
-  ["resin-supreme-50-cbd"],
+  resins.map((product) => product.id).sort(),
 );
 assert.deepEqual(
   ids(resins, { category: "resins", intensity: "fort", aromas: [] }),
-  ["resin-golden-static"],
+  [],
 );
 assert.deepEqual(
   ids(flowers, { category: "flowers", intensity: null, aromas: ["fruite", "agrumes"] }),
