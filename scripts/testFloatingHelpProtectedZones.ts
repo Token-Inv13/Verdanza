@@ -43,7 +43,7 @@ try {
 
       await gotoDomReady(
         page,
-        `${server.baseUrl}/boutique?type=flowers&intensity=moyen&aroma=fruite#produits`,
+        `${server.baseUrl}/boutique?type=flowers&intensity=doux&aroma=fruite#produits`,
       );
       await page.locator('[data-shop-selector-mode="compact"]').waitFor();
       await assertControl(page, '[data-shop-selector-edit]', `${label} Boutique modifier`);

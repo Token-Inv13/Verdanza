@@ -52,6 +52,20 @@ const strongIntensitySignals = ["intense", "puissant", "profond", "tonique", "pr
 const softIntensitySignals = ["leger", "delicat", "doux", "subtil"];
 const intensityOnlySignals = new Set([...strongIntensitySignals, ...softIntensitySignals]);
 
+// Editorial intensity for the eight products currently published in the shop.
+// Keep the canonical intensity vocabulary; unknown/future products still use
+// the aroma-based inference below until their profile is explicitly reviewed.
+const storefrontIntensityBySlug: Partial<Record<string, ProductIntensity>> = {
+  "blue-dream-cbd": "doux",
+  "cookie-kush-indoor": "doux",
+  "golden-static": "doux",
+  "harlequin-greenhouse": "doux",
+  "mandarine-cbd": "doux",
+  "mango-haze-cbd": "doux",
+  "petites-tetes-og-kush": "doux",
+  "supreme-50-cbd": "doux",
+};
+
 const aromaFamilySignals: Record<ProductAromaFamily, string[]> = {
   fruite: ["fruite", "fruit", "mangue", "mango", "raisin", "pasteque", "exotique"],
   agrumes: ["agrume", "citron", "orange", "mandarine"],
@@ -61,7 +75,8 @@ const aromaFamilySignals: Record<ProductAromaFamily, string[]> = {
   boise: ["boise", "sous-bois", "pin"],
 };
 
-export function resolveProductIntensity(aromas: string[]): ProductIntensity {
+export function resolveProductIntensity(aromas: string[], slug?: string): ProductIntensity {
+  if (slug && storefrontIntensityBySlug[slug]) return storefrontIntensityBySlug[slug];
   const normalized = aromas.map(normalizeProductTaxonomyValue);
   if (normalized.some((aroma) => strongIntensitySignals.some((signal) => aroma.includes(signal)))) {
     return "fort";

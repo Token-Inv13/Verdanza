@@ -24,7 +24,7 @@ export function createInitialProductDiscoveryCriteria(): ProductDiscoveryCriteri
 export function resolveProductDiscoveryProfile(product: Product) {
   return {
     category: product.category,
-    intensity: resolveProductIntensity(product.aromas),
+    intensity: resolveProductIntensity(product.aromas, product.slug),
     aromaFamilies: resolveProductAromaFamilies(product.aromas),
   };
 }

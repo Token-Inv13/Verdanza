@@ -58,7 +58,7 @@ try {
       await page.locator("[data-category-intensity]").evaluateAll((buttons) =>
         buttons.map((button) => button.getAttribute("data-category-intensity")),
       ),
-      ["all", "doux", "moyen", "fort"],
+      ["all", "doux"],
       `${width}px: flowers must expose only available intensities`,
     );
     assert.equal(await page.locator("[data-category-aroma-toggle]").count(), 1);
@@ -89,12 +89,15 @@ try {
     assert.equal(layout.firstImageFilter, "none", `${width}px: ProductCard image must stay crisp`);
     assert.equal(layout.cardColumns, width < 640 ? 1 : width < 1024 ? 2 : 3);
 
-    const mediumButton = page.locator('[data-category-intensity="moyen"]');
-    await mediumButton.focus();
+    const softButton = page.locator('[data-category-intensity="doux"]');
+    await softButton.focus();
     await page.keyboard.press("Enter");
-    await waitForSearch(page, "?intensity=moyen");
-    await waitForProductCardCount(page, 3);
-    assert.equal(await mediumButton.getAttribute("aria-pressed"), "true");
+    await waitForSearch(page, "?intensity=doux");
+    await waitForProductCardCount(page, 5);
+    await page.waitForFunction(() =>
+      document.querySelector('[data-category-intensity="doux"]')?.getAttribute("aria-pressed") === "true",
+    );
+    assert.equal(await softButton.getAttribute("aria-pressed"), "true");
 
     const aromaToggle = page.locator("[data-category-aroma-toggle]");
     await aromaToggle.focus();
@@ -107,8 +110,8 @@ try {
       ["fruite", "agrumes", "sucre", "boise"],
     );
     await page.locator('[data-category-aroma="fruite"]').click();
-    await waitForSearch(page, "?intensity=moyen&aroma=fruite");
-    await waitForProductCardCount(page, 1);
+    await waitForSearch(page, "?intensity=doux&aroma=fruite");
+    await waitForProductCardCount(page, 2);
     assert.equal(
       await page.locator('link[rel="canonical"]').getAttribute("href"),
       "https://verdanza.fr/fleurs-cbd",
@@ -116,11 +119,11 @@ try {
     );
 
     await page.goBack({ waitUntil: "domcontentloaded" });
-    await waitForSearch(page, "?intensity=moyen");
-    await waitForProductCardCount(page, 3);
+    await waitForSearch(page, "?intensity=doux");
+    await waitForProductCardCount(page, 5);
     await page.goForward({ waitUntil: "domcontentloaded" });
-    await waitForSearch(page, "?intensity=moyen&aroma=fruite");
-    await waitForProductCardCount(page, 1);
+    await waitForSearch(page, "?intensity=doux&aroma=fruite");
+    await waitForProductCardCount(page, 2);
 
     await page.locator("[data-category-filter-reset]").click();
     await waitForSearch(page, "");
@@ -146,7 +149,7 @@ try {
       await page.locator("[data-category-intensity]").evaluateAll((buttons) =>
         buttons.map((button) => button.getAttribute("data-category-intensity")),
       ),
-      ["all", "doux", "fort"],
+      ["all", "doux"],
       `${width}px: resins must expose only available intensities`,
     );
     assert.equal(await page.locator("[data-category-aroma-toggle]").count(), 0);

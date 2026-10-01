@@ -27,7 +27,7 @@ export function productCategoryLabel(category: ProductCategory) {
 }
 
 export function resolveProductCardPresentation(product: Product): ProductCardPresentation {
-  const intensity = resolveProductIntensity(product.aromas);
+  const intensity = resolveProductIntensity(product.aromas, product.slug);
   const aromaProfile = product.aromas
     .filter((aroma) => !isIntensityOnlyAroma(aroma))
     .slice(0, 3);

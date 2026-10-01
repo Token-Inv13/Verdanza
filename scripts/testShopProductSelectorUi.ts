@@ -50,17 +50,17 @@ try {
       "true",
     );
 
-    await gotoDomReady(page, `${server.baseUrl}/boutique?type=flowers&intensity=moyen`);
-    await assertCompactSelection(page, "Fleurs · Moyen · Peu importe", 3);
+    await gotoDomReady(page, `${server.baseUrl}/boutique?type=flowers&intensity=doux`);
+    await assertCompactSelection(page, "Fleurs · Doux · Peu importe", 5);
 
-    await gotoDomReady(page, `${server.baseUrl}/boutique?type=resins&intensity=fort`);
-    await assertCompactSelection(page, "Résines · Fort · Peu importe", 1);
+    await gotoDomReady(page, `${server.baseUrl}/boutique?type=resins&intensity=doux`);
+    await assertCompactSelection(page, "Résines · Doux · Peu importe", 2);
 
     await gotoDomReady(
       page,
-      `${server.baseUrl}/boutique?type=flowers&intensity=moyen&aroma=fruite`,
+      `${server.baseUrl}/boutique?type=flowers&intensity=doux&aroma=fruite`,
     );
-    await assertCompactSelection(page, "Fleurs · Moyen · Fruité", 1);
+    await assertCompactSelection(page, "Fleurs · Doux · Fruité", 2);
 
     const editButton = page.locator("[data-shop-selector-edit]");
     assert.equal(await editButton.getAttribute("aria-expanded"), "false");
@@ -72,7 +72,7 @@ try {
       "true",
     );
     assert.equal(
-      await page.locator('[data-selector-option="shop-intensity:moyen"]').getAttribute("aria-pressed"),
+      await page.locator('[data-selector-option="shop-intensity:doux"]').getAttribute("aria-pressed"),
       "true",
     );
     assert.equal(
@@ -84,15 +84,15 @@ try {
     await waitForProductCardCount(page, 0);
     assert.equal(
       new URL(page.url()).search,
-      "?type=resins&intensity=moyen&aroma=fruite",
+      "?type=resins&intensity=doux&aroma=fruite",
       `${width}px: edits must keep the URL synchronized`,
     );
     assert.equal(await page.locator("[data-shop-result-count]").innerText(), "0 produits correspondent");
 
-    await page.locator('[data-selector-option="shop-intensity:fort"]').click();
+    await page.locator('[data-selector-step="3"] > button').click();
     await page.locator('[data-selector-option="shop-aroma:fruite"]').click();
-    await waitForProductCardCount(page, 1);
-    assert.equal(new URL(page.url()).search, "?type=resins&intensity=fort");
+    await waitForProductCardCount(page, 2);
+    assert.equal(new URL(page.url()).search, "?type=resins&intensity=doux");
 
     await page.locator("[data-shop-selector-reset]").click();
     await page.waitForURL(`${server.baseUrl}/boutique`);
@@ -101,13 +101,13 @@ try {
     assert.equal(new URL(page.url()).hash, "", `${width}px: reset must remove the anchor`);
 
     await gotoDomReady(page, `${server.baseUrl}/boutique`);
-    await gotoDomReady(page, `${server.baseUrl}/boutique?type=resins&intensity=fort`);
+    await gotoDomReady(page, `${server.baseUrl}/boutique?type=resins&intensity=doux`);
     await assertShopMode(page, "compact");
     await page.goBack({ waitUntil: "domcontentloaded" });
     await assertShopMode(page, "full");
     await waitForProductCardCount(page, 7);
     await page.goForward({ waitUntil: "domcontentloaded" });
-    await assertCompactSelection(page, "Résines · Fort · Peu importe", 1);
+    await assertCompactSelection(page, "Résines · Doux · Peu importe", 2);
 
     await gotoDomReady(page, `${server.baseUrl}/boutique?type=resins&intensity=moyen`);
     await assertCompactSelection(page, "Résines · Moyen · Peu importe", 0);
@@ -123,8 +123,8 @@ try {
     await assertShopMode(page, "full");
     await waitForProductCardCount(page, 7);
 
-    await gotoDomReady(page, `${server.baseUrl}/boutique?type=resins&intensity=fort#produits`);
-    await assertCompactSelection(page, "Résines · Fort · Peu importe", 1);
+    await gotoDomReady(page, `${server.baseUrl}/boutique?type=resins&intensity=doux#produits`);
+    await assertCompactSelection(page, "Résines · Doux · Peu importe", 2);
 
     const layout = await page.evaluate(() => {
       const card = document.querySelector<HTMLElement>(".product-card-v2");

@@ -296,6 +296,13 @@ export const productCardImageVariants: Record<string, ResponsiveImageVariant> = 
     sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
     width: 640,
     height: 640,
+  },
+  "/Fiche produit/Blue%20Dream/bl.webp": {
+    src: "/images/products/blue-dream-cbd-editorial-card-640.webp",
+    srcSet: "/images/products/blue-dream-cbd-editorial-card-320.webp 320w, /images/products/blue-dream-cbd-editorial-card-640.webp 640w",
+    sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
+    width: 640,
+    height: 640,
   }
 };
 

@@ -5,6 +5,7 @@ import {
   createInitialProductDiscoveryCriteria,
   filterProductsByDiscoveryCriteria,
   getAvailableProductAromaFamilies,
+  getAvailableProductIntensities,
   hasCompleteProductDiscoveryCriteria,
   parseProductDiscoverySearchParams,
   type ProductDiscoveryCriteria,
@@ -12,7 +13,9 @@ import {
 import {
   productIntensityLabels,
   productIntensityValues,
+  resolveProductIntensity,
 } from "../src/lib/productTaxonomy";
+import { resolveProductCardPresentation } from "../src/lib/productPresentation";
 import { getLocalProducts } from "../src/services/productsService";
 
 const products = getLocalProducts();
@@ -28,19 +31,16 @@ assert.equal(ids(initial).length, 7, "initial state must show the complete activ
 assert.equal(ids({ ...initial, category: "flowers" }).length, 5, "Fleurs must keep five products");
 assert.equal(ids({ ...initial, category: "resins" }).length, 2, "Résines must keep two products");
 
-assert.deepEqual(ids({ ...initial, intensity: "doux" }), [
-  "flower-mandarine-cbd",
-  "resin-supreme-50-cbd",
-]);
-assert.deepEqual(ids({ ...initial, intensity: "moyen" }), [
-  "flower-cookie-kush-indoor",
-  "flower-harlequin-greenhouse",
-  "flower-mango-haze-cbd",
-]);
-assert.deepEqual(ids({ ...initial, intensity: "fort" }), [
-  "flower-petites-tetes-og-kush",
-  "resin-golden-static",
-]);
+assert.deepEqual(ids({ ...initial, intensity: "doux" }), ids(initial));
+assert.deepEqual(ids({ ...initial, intensity: "moyen" }), []);
+assert.deepEqual(ids({ ...initial, intensity: "fort" }), []);
+assert.deepEqual([...getAvailableProductIntensities(products)], ["doux"]);
+assert.ok(products.every((product) => resolveProductCardPresentation(product).intensityLabel === "Doux"));
+const blueDream = getLocalProducts(false).find((product) => product.slug === "blue-dream-cbd");
+assert.ok(blueDream, "Blue Dream is published in Firestore despite its inactive static fallback");
+assert.equal(resolveProductCardPresentation(blueDream).intensity, "doux");
+assert.equal(resolveProductIntensity(["Puissant"], "unrelated-future-product"), "fort",
+  "unreviewed future products must retain aroma-based inference");
 
 assert.deepEqual(
   ids({ ...initial, aromas: ["fruite"] }),
@@ -58,8 +58,8 @@ assert.deepEqual(
 );
 assert.deepEqual(
   ids({ ...initial, category: "resins", intensity: "fort" }),
-  ["resin-golden-static"],
-  "type and intensity must combine strictly",
+  [],
+  "a non-matching intensity must not misclassify a published resin",
 );
 assert.deepEqual(
   ids({ ...initial, category: "resins", intensity: "moyen" }),
@@ -119,5 +119,5 @@ assert.ok(
 );
 
 console.log(
-  "Shop selector tests passed: initial catalog, categories, three intensities, aroma OR, combined filters, reset, zero results and out-of-stock behavior.",
+  "Shop selector tests passed: seven static and eight published intensity profiles, categories, aroma OR, filters, reset, zero results and out-of-stock behavior.",
 );
