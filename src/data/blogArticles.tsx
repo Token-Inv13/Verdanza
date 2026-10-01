@@ -1134,13 +1134,13 @@ export const blogArticles: BlogArticle[] = [
     title: "Isolat, spectre large ou complet : comprendre les mentions CBD",
     seoTitle: "Isolat et spectres CBD : comprendre les mentions | Verdanza",
     description:
-      "Isolat, spectre large et spectre complet : comprenez ce que ces mentions CBD décrivent, leurs limites et les points à vérifier sur une analyse de lot.",
+      "Isolat, spectre large et spectre complet : comprendre ces termes commerciaux non normalisés, leurs limites et leur distinction avec le statut Novel Food.",
     excerpt:
-      "Les mentions isolat, spectre large et spectre complet décrivent des compositions différentes, mais elles ne remplacent ni une liste d'ingrédients ni une analyse de lot.",
+      "Isolat, spectre large et spectre complet sont des termes commerciaux non normalisés : ils ne remplacent ni une analyse de lot ni l'examen du cadre réglementaire applicable.",
     category: "Guide qualité",
     authorName: "Rédaction Verdanza",
     datePublished: "2026-09-17T12:40:00+02:00",
-    dateModified: "2026-09-17T12:40:00+02:00",
+    dateModified: "2026-10-01T18:41:04+02:00",
     readingTime: "7 min",
     status: "published",
     images: {
@@ -1174,10 +1174,10 @@ export const blogArticles: BlogArticle[] = [
         text: (
           <>
             Les expressions « isolat », « spectre large » et « spectre complet »
-            apparaissent sur des extraits et des produits CBD. Elles donnent un
-            premier repère sur la famille de constituants annoncée, mais ne
-            décrivent pas à elles seules la composition exacte, la pureté ou la
-            qualité d'un lot.
+            sont des termes commerciaux non normalisés. Leur usage peut varier
+            d'un fabricant à l'autre. Elles donnent un premier repère sur la
+            famille de constituants annoncée, mais ne décrivent pas à elles seules
+            la composition exacte, la pureté ou la qualité d'un lot.
           </>
         ),
       },
@@ -1185,10 +1185,11 @@ export const blogArticles: BlogArticle[] = [
         type: "note",
         text: (
           <>
-            Ces mentions commerciales ne constituent pas une analyse. Pour
-            vérifier un produit, il faut les rapprocher de la liste
-            d'ingrédients, du numéro de lot et d'un bulletin d'analyse lié à ce
-            même lot.
+            Ces mentions commerciales ne constituent ni une analyse, ni une
+            catégorie réglementaire, ni une autorisation de mise sur le marché.
+            Pour vérifier un produit, il faut les rapprocher de sa destination,
+            de sa liste d'ingrédients, de son numéro de lot et d'un bulletin
+            d'analyse lié à ce même lot.
           </>
         ),
       },
@@ -1231,6 +1232,38 @@ export const blogArticles: BlogArticle[] = [
             ],
           ],
         },
+      },
+      {
+        type: "heading",
+        id: "terminologie-statut-reglementaire",
+        text: "Terminologie commerciale et statut réglementaire : deux questions distinctes",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une dénomination comme « spectre large » décrit une composition
+            annoncée. Elle ne détermine pas le statut réglementaire du produit.
+            Ce statut dépend notamment de sa présentation, de sa destination et
+            des règles applicables à la catégorie concernée.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Pour une denrée alimentaire ou un complément alimentaire, il faut
+            examiner séparément le règlement européen relatif aux nouveaux
+            aliments, dit « Novel Food ». Une consultation officielle publiée par
+            la Commission européenne classe le CBD isolé et les extraits de CBD
+            destinés à l'alimentation comme nouveaux aliments. En France, le
+            ministère de l'Agriculture rappelle que les denrées incorporant du CBD
+            ne disposent pas, à ce jour, d'une autorisation permettant leur mise
+            sur le marché alimentaire. Le mot « isolat » ou la mention d'un
+            spectre ne change pas cette analyse réglementaire.
+          </>
+        ),
       },
       {
         type: "heading",
@@ -1380,6 +1413,48 @@ export const blogArticles: BlogArticle[] = [
             dans des unités comparables.
           </>
         ),
+      },
+      {
+        type: "heading",
+        id: "sources-officielles",
+        text: "Sources officielles",
+      },
+      {
+        type: "paragraph",
+        text: "Sources consultées le 1er octobre 2026.",
+      },
+      {
+        type: "list",
+        items: [
+          <a
+            href="https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32015R2283"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            EUR-Lex - Règlement (UE) 2015/2283 relatif aux nouveaux aliments
+          </a>,
+          <a
+            href="https://food.ec.europa.eu/document/download/59f11822-d51b-4f43-a6af-1453c8120b60_en?filename=novel-food_consult-status_cbd-isolate-extract.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Commission européenne - Statut Novel Food du CBD isolé et des extraits de CBD
+          </a>,
+          <a
+            href="https://agriculture.gouv.fr/node/110883"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Ministère de l'Agriculture - Denrées alimentaires contenant du CBD
+          </a>,
+          <a
+            href="https://agriculture.gouv.fr/les-nouveaux-aliments-definition-et-procedure-dautorisation"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Ministère de l'Agriculture - Définition et autorisation des nouveaux aliments
+          </a>,
+        ],
       },
       {
         type: "links",
@@ -4538,7 +4613,7 @@ export const blogArticles: BlogArticle[] = [
     category: "Guide CBD",
     authorName: "Rédaction Verdanza",
     datePublished: "2026-07-23T16:27:36+02:00",
-    dateModified: "2026-07-23T16:27:36+02:00",
+    dateModified: "2026-10-01T18:41:04+02:00",
     readingTime: "7 min",
     status: "published",
     images: {
@@ -4759,7 +4834,7 @@ export const blogArticles: BlogArticle[] = [
       },
       {
         type: "paragraph",
-        text: "Sources consultées le 23 juillet 2026.",
+        text: "Sources consultées le 1er octobre 2026.",
       },
       {
         type: "list",
@@ -4772,7 +4847,7 @@ export const blogArticles: BlogArticle[] = [
             Légifrance - Arrêté du 30 décembre 2021 relatif au chanvre
           </a>,
           <a
-            href="https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000051877265"
+            href="https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000039099666"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -4786,7 +4861,7 @@ export const blogArticles: BlogArticle[] = [
             Légifrance - Code de la route, articles L235-1 à L235-5
           </a>,
           <a
-            href="https://www.courdecassation.fr/publications/bulletin-des-arrets-de-la-chambre-criminelle/numero-6-juin-2023/circulation-routiere"
+            href="https://www.courdecassation.fr/decision/6492974417c95e05dbf9ded3"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -4815,13 +4890,13 @@ export const blogArticles: BlogArticle[] = [
     title: "CBD, CBN, CBG : comprendre les dénominations",
     seoTitle: "CBD, CBN, CBG : comprendre les dénominations | Verdanza",
     description:
-      "Guide simple pour comprendre les principales dénominations du CBD : CBD, CBG, CBN, THC, formes acides, terpènes et lecture des fiches produits.",
+      "Guide simple pour distinguer CBD, CBG, CBN, THC, formes acides, profil cannabinoïde et cadre alimentaire Novel Food.",
     excerpt:
       "CBD, CBN, CBG, THC, CBDA ou THCA : ces sigles ne disent pas tous la même chose. Voici comment les lire sans confondre nom, taux et promesse d'effet.",
     category: "Guide CBD",
     authorName: "Rédaction Verdanza",
     datePublished: "2026-07-21T09:00:00+02:00",
-    dateModified: "2026-07-21T09:00:00+02:00",
+    dateModified: "2026-10-01T18:41:04+02:00",
     readingTime: "6 min",
     status: "published",
     images: {
@@ -4895,7 +4970,7 @@ export const blogArticles: BlogArticle[] = [
             [
               "THC",
               "Tétrahydrocannabinol",
-              "Le cannabinoïde encadré par la réglementation. Côté client, le point important reste le respect du seuil légal applicable.",
+              "Un cannabinoïde classé comme stupéfiant. La matrice, la valeur mesurée et la règle applicable doivent être identifiées sans transposer un seuil d'un usage à un autre.",
             ],
             [
               "CBDA / THCA",
@@ -4916,8 +4991,8 @@ export const blogArticles: BlogArticle[] = [
           <>
             Un sigle n'est pas une promesse. Il indique une information de
             composition ou de lecture produit. Pour choisir, il faut aussi
-            regarder l'origine, la culture, l'état du lot, le statut de stock et
-            les informations de conformité disponibles.
+            regarder l'origine, la culture, l'état du lot et les informations de
+            conformité disponibles.
           </>
         ),
       },
@@ -4941,6 +5016,34 @@ export const blogArticles: BlogArticle[] = [
       },
       {
         type: "heading",
+        id: "profil-cannabinoide-cadre-alimentaire",
+        text: "Profil cannabinoïde et cadre alimentaire : deux lectures séparées",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Un profil cannabinoïde décrit les molécules recherchées et les valeurs
+            mesurées dans un échantillon. Il ne constitue pas une autorisation pour
+            présenter le produit comme une denrée alimentaire ou un complément
+            alimentaire. Pour ces usages, le statut doit être vérifié au regard du
+            règlement européen sur les nouveaux aliments.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Le règlement Novel Food ne classe pas un produit selon le seul sigle
+            CBD, CBN ou CBG affiché sur une fiche. La substance, le procédé, la
+            destination alimentaire et l'existence d'une autorisation doivent être
+            examinés ensemble. Une dénomination commerciale ne suffit pas.
+          </>
+        ),
+      },
+      {
+        type: "heading",
         id: "fiche-produit",
         text: "Ce qu'il faut regarder sur une fiche produit",
       },
@@ -4949,27 +5052,26 @@ export const blogArticles: BlogArticle[] = [
         items: [
           "la catégorie : fleur CBD, résine CBD ou autre format ;",
           "le ou les cannabinoïdes annoncés par le fournisseur ;",
-          "le THC, qui doit rester sous le seuil légal applicable ;",
+          "la valeur de THC, son unité, la matrice analysée et la règle applicable ;",
           "l'origine et le mode de culture lorsqu'ils sont renseignés ;",
-          "le statut du produit : disponible, stock limité, victime de son succès ou en arrivage ;",
           "les arômes décrits, qui aident souvent davantage au choix que les seuls sigles.",
         ],
       },
       {
         type: "heading",
         id: "rester-prudent",
-        text: "Pourquoi rester prudent avec les effets annoncés ?",
+        text: "Pourquoi les sigles ne décrivent-ils pas un effet ?",
       },
       {
         type: "paragraph",
         text: (
           <>
             Les dénominations comme CBD, CBN ou CBG ne suffisent pas à prédire un
-            ressenti. Les autorités sanitaires rappellent aussi que les produits à
-            base de CBD peuvent poser question lorsqu'ils sont mélangés avec
-            certains médicaments ou lorsqu'ils contiennent d'autres substances non
-            attendues. En cas de doute, il vaut mieux demander un avis
-            professionnel plutôt que se fier à une promesse commerciale.
+            ressenti ou un résultat. L'ANSM rappelle par ailleurs que le CBD est
+            susceptible d'interagir avec des médicaments. Cette information de
+            sécurité ne constitue pas une promesse d'effet : en cas de prise de
+            médicaments ou de doute, il convient de solliciter un professionnel
+            de santé.
           </>
         ),
       },
@@ -4983,12 +5085,54 @@ export const blogArticles: BlogArticle[] = [
         text: (
           <>
             Pour un achat en boutique, la meilleure lecture reste souvent la plus
-            simple : commencer par la catégorie, vérifier le statut du produit,
-            lire le profil aromatique, puis consulter les informations techniques
-            disponibles. Les sigles apportent un repère utile, mais ils ne
-            remplacent pas une fiche produit claire.
+            simple : commencer par la catégorie, lire le profil aromatique, puis
+            consulter les informations techniques et de conformité disponibles.
+            Les sigles apportent un repère utile, mais ils ne remplacent pas une
+            fiche produit claire ni l'examen du statut réglementaire correspondant.
           </>
         ),
+      },
+      {
+        type: "heading",
+        id: "sources-officielles",
+        text: "Sources officielles",
+      },
+      {
+        type: "paragraph",
+        text: "Sources consultées le 1er octobre 2026.",
+      },
+      {
+        type: "list",
+        items: [
+          <a
+            href="https://ansm.sante.fr/actualites/melanger-cbd-et-medicaments-ce-nest-jamais-anodin"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            ANSM - CBD et médicaments : risques d'interactions
+          </a>,
+          <a
+            href="https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32015R2283"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            EUR-Lex - Règlement (UE) 2015/2283 relatif aux nouveaux aliments
+          </a>,
+          <a
+            href="https://agriculture.gouv.fr/node/110883"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Ministère de l'Agriculture - Denrées alimentaires contenant du CBD
+          </a>,
+          <a
+            href="https://food.ec.europa.eu/food-safety/novel-food/novel-food-status-catalogue_en?prefLang=fr"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Commission européenne - Catalogue du statut des nouveaux aliments
+          </a>,
+        ],
       },
       {
         type: "links",
@@ -5796,13 +5940,13 @@ export const blogArticles: BlogArticle[] = [
     seoTitle:
       "Comment choisir une fleur CBD selon son profil aromatique ? | Verdanza",
     description:
-      "Guide pour lire un profil aromatique de fleur CBD : familles de notes, intensité, texture, culture et fiche produit avant de comparer.",
+      "Méthode pratique pour choisir une fleur CBD selon ses préférences aromatiques, comparer deux fiches et vérifier les informations utiles.",
     excerpt:
-      "Comprendre les familles aromatiques aide à choisir une fleur CBD selon ses préférences, sans réduire la décision au taux ou au discours commercial.",
+      "Une méthode en quatre étapes pour transformer une préférence aromatique en critères de comparaison concrets, sans promesse d'effet.",
     category: "Guide fleurs",
     authorName: "Rédaction Verdanza",
     datePublished: "2026-07-14T19:22:37+02:00",
-    dateModified: "2026-07-14T19:22:37+02:00",
+    dateModified: "2026-10-01T18:41:04+02:00",
     readingTime: "7 min",
     status: "published",
     images: {
@@ -5811,12 +5955,16 @@ export const blogArticles: BlogArticle[] = [
       wide: "/images/blog/choisir-fleur-cbd-profil-aromatique-16x9.webp",
     },
     relatedSlugs: [
+      "terpenes-profils-aromatiques-cbd",
       "fleur-cbd-ou-resine-cbd-differences",
       "comment-lire-analyse-cbd",
-      "indoor-greenhouse-hydroponique-differences",
     ],
     links: [
       { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+      {
+        to: "/blog/terpenes-profils-aromatiques-cbd",
+        label: "Comprendre les terpènes et profils aromatiques",
+      },
       { to: "/blog/fleur-cbd-ou-resine-cbd-differences", label: "Comparer fleur et résine" },
       { to: "/blog/comment-lire-analyse-cbd", label: "Lire une analyse" },
       { to: "/qualite-conformite", label: "Qualité et conformité" },
@@ -5826,140 +5974,138 @@ export const blogArticles: BlogArticle[] = [
         type: "paragraph",
         text: (
           <>
-            Le profil aromatique d’une fleur CBD décrit l’ensemble des notes que
-            l’on perçoit au premier nez puis à l’ouverture de la fiche produit.
-            Il ne s’agit pas d’une promesse abstraite : la lecture se fait
-            référence par référence, avec des nuances qui peuvent varier selon
-            la culture, la présentation et le lot affiché.
+            Ce guide sert à passer d'une préférence aromatique à un choix pratique
+            entre plusieurs fleurs CBD. Pour comprendre ce que sont les terpènes,
+            les familles de notes et les limites de cette lecture, consultez
+            d'abord le guide de référence sur les {" "}
+            <Link to="/blog/terpenes-profils-aromatiques-cbd">
+              terpènes et profils aromatiques CBD
+            </Link>.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Ici, l'objectif n'est pas d'expliquer à nouveau les familles
+            aromatiques. Il s'agit de construire une courte liste de critères,
+            puis de comparer les fiches produit sur une base cohérente. Aucun
+            arôme ne permet de prévoir un effet.
           </>
         ),
       },
       {
         type: "heading",
-        id: "comprendre-le-profil-aromatique",
-        text: "Comprendre le profil aromatique",
+        id: "etape-1-preference",
+        text: "Étape 1 : formuler votre préférence en trois critères",
       },
       {
         type: "paragraph",
         text: (
           <>
-            Un profil aromatique regroupe plusieurs familles de notes. Une fleur
-            peut être décrite comme agrumée, florale, boisée, terreuse, résineuse
-            ou plus gourmande. L’intérêt n’est pas de classer les fleurs dans un
-            ordre de valeur, mais de savoir quelle direction aromatique vous
-            recherchez avant de comparer deux fiches.
+            Avant d'ouvrir le catalogue, notez une direction dominante, un niveau
+            d'intensité et un contraste souhaité. Par exemple : une dominante
+            agrumée, une intensité nette et un fond végétal discret. Cette phrase
+            courte évite de choisir uniquement à partir d'un nom de variété ou
+            d'un taux affiché.
           </>
         ),
       },
       {
-        type: "heading",
-        id: "grandes-familles-aromatiques",
-        text: "Les grandes familles aromatiques",
-      },
-      {
         type: "table",
         table: {
-          caption: "Repères simples pour lire un profil aromatique de fleur CBD.",
-          headers: ["Famille", "Ce que l’on perçoit souvent", "Ce que cela aide à comparer"],
+          caption: "Trois critères pratiques à fixer avant de comparer des fleurs CBD.",
+          headers: ["Critère", "Question à se poser", "Exemple de formulation"],
           rows: [
             [
-              "Agrumée",
-              "Des notes fraîches, vives et parfois zestées.",
-              "Utile si vous cherchez une impression légère et dynamique.",
+              "Direction dominante",
+              "Quelle famille doit apparaître en premier dans la description ?",
+              "Agrumée, florale, boisée, terreuse ou gourmande.",
             ],
             [
-              "Florale",
-              "Des nuances douces, rondes ou délicates.",
-              "Permet de repérer des fleurs plus aériennes ou élégantes.",
+              "Intensité",
+              "Préférez-vous une description franche ou plus nuancée ?",
+              "Nette, modérée ou discrète.",
             ],
             [
-              "Boisée",
-              "Des accents secs, nets ou plus profonds.",
-              "Aide à comparer les fleurs au caractère plus structuré.",
-            ],
-            [
-              "Terreuse",
-              "Des notes plus sombres, minérales ou végétales.",
-              "Donne une idée d’un profil plus ancré et moins sucré.",
-            ],
-            [
-              "Gourmande",
-              "Des sensations rondes, sucrées ou plus enveloppantes.",
-              "Intéressant pour comparer les fleurs au rendu plus ample.",
+              "Contraste",
+              "Souhaitez-vous une seule direction ou une note secondaire marquée ?",
+              "Agrumée avec un fond boisé, ou florale sans contraste prononcé.",
             ],
           ],
         },
       },
       {
         type: "heading",
-        id: "intensite-et-equilibre",
-        text: "Intensité et équilibre",
+        id: "etape-2-selection",
+        text: "Étape 2 : présélectionner sur la description, pas sur le nom",
       },
       {
         type: "paragraph",
         text: (
           <>
-            Deux fleurs peuvent partager une même famille aromatique tout en
-            offrant des intensités différentes. L’une peut paraître nette et
-            directe, l’autre plus complexe et progressive. Pour choisir
-            correctement, il faut donc regarder l’équilibre global, la finesse
-            des notes et la manière dont elles sont décrites sur la fiche.
+            Les noms de variétés ne forment pas un vocabulaire sensoriel stable.
+            Retenez deux ou trois références dont la description correspond à vos
+            critères, puis vérifiez si les notes annoncées sont suffisamment
+            précises pour être comparées. Une formule vague ne doit pas être
+            complétée par supposition.
           </>
         ),
       },
       {
         type: "heading",
-        id: "lire-les-indications",
-        text: "Lire les indications de la fiche",
+        id: "etape-3-verifications",
+        text: "Étape 3 : vérifier les informations qui complètent le choix",
       },
       {
         type: "list",
         items: [
-          "la famille aromatique mise en avant ;",
-          "la description textuelle du rendu ;",
-          "le mode de culture ou la méthode de présentation ;",
-          "les taux ou mesures seulement lorsqu’ils sont explicitement indiqués ;",
-          "la cohérence entre le texte, la catégorie et le certificat d’analyse.",
+          "confirmer qu'il s'agit bien d'une fleur et identifier le lot ou la référence ;",
+          "lire l'origine et le mode de culture lorsqu'ils sont renseignés ;",
+          "observer la structure et la présentation sans en déduire une qualité automatique ;",
+          "séparer les données mesurées du vocabulaire commercial ;",
+          "vérifier la cohérence entre la fiche, l'étiquette et l'analyse disponible.",
         ],
       },
       {
         type: "heading",
-        id: "texture-et-sensation",
-        text: "Texture et sensation d’ensemble",
+        id: "etape-4-comparaison",
+        text: "Étape 4 : départager deux références comparables",
       },
       {
         type: "paragraph",
         text: (
           <>
-            La perception aromatique ne se résume pas au parfum. La texture, la
-            densité visuelle et la structure du produit influencent aussi la
-            lecture de la fiche. Une fleur plus compacte, plus aérée ou plus
-            résineuse n’évoque pas le même ensemble sensoriel, même si la famille
-            aromatique reste proche.
+            Ouvrez les deux fiches côte à côte. Commencez par la direction
+            aromatique dominante, puis comparez l'intensité annoncée et les notes
+            secondaires. Utilisez ensuite l'origine, la culture, l'aspect et les
+            documents de lot comme critères de vérification, pas comme promesses
+            de résultat.
           </>
         ),
       },
       {
         type: "heading",
-        id: "comparer-deux-fleurs",
-        text: "Comparer deux fleurs sans se tromper",
+        id: "erreurs-eviter",
+        text: "Trois erreurs à éviter au moment du choix",
       },
       {
-        type: "paragraph",
-        text: (
-          <>
-            Pour comparer proprement, ouvrez deux fiches côte à côte et vérifiez
-            d’abord ce qui est écrit, puis ce qui est mesuré. La catégorie
-            <Link to="/fleurs-cbd"> fleurs CBD</Link> donne le point d’entrée,
-            tandis que <Link to="/blog/comment-lire-analyse-cbd">l’analyse de CBD</Link>
-            aide à distinguer les données techniques du texte commercial.
-          </>
-        ),
+        type: "list",
+        items: [
+          "déduire un effet à partir d'un arôme ou d'un terpène ;",
+          "considérer qu'un taux plus élevé garantit un meilleur profil aromatique ;",
+          "transformer le mode de culture, la densité ou la couleur en classement automatique.",
+        ],
       },
       {
         type: "links",
         title: "Aller plus loin",
         links: [
+          {
+            to: "/blog/terpenes-profils-aromatiques-cbd",
+            label: "Comprendre les terpènes et profils aromatiques",
+          },
           { to: "/fleurs-cbd", label: "Comparer les fleurs CBD" },
           { to: "/blog/comment-lire-analyse-cbd", label: "Lire une analyse" },
           { to: "/blog/fleur-cbd-ou-resine-cbd-differences", label: "Fleur ou résine" },
@@ -5974,10 +6120,10 @@ export const blogArticles: BlogArticle[] = [
       {
         type: "list",
         items: [
-          "le profil aromatique se lit référence par référence ;",
-          "les grandes familles aident à comparer sans simplifier à l’excès ;",
-          "la fiche produit et l’analyse restent les meilleures bases de lecture ;",
-          "la texture complète la perception, mais ne remplace pas la description.",
+          "formuler trois critères avant d'ouvrir le catalogue rend la comparaison plus cohérente ;",
+          "la description de la fiche compte davantage que le seul nom de variété ;",
+          "les données de lot servent à vérifier la fiche, pas à prédire un effet ;",
+          "le guide sur les terpènes reste la référence pour comprendre le vocabulaire aromatique.",
         ],
       },
     ],
