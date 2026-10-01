@@ -6,6 +6,289 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "trichomes-fleurs-cbd-observation",
+    title: "Trichomes des fleurs CBD : ce que l'on peut réellement observer",
+    seoTitle: "Trichomes des fleurs CBD : guide d'observation | Verdanza",
+    description:
+      "Découvrez comment observer les trichomes d'une fleur CBD, les distinguer d'autres éléments visibles et comprendre les limites d'un examen à l'œil nu.",
+    excerpt:
+      "Les trichomes participent à l'aspect givré des fleurs, mais leur visibilité ne suffit pas à déterminer la composition, la fraîcheur ou la qualité d'un lot.",
+    category: "Guide qualité",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-10-01T13:47:00+02:00",
+    dateModified: "2026-10-01T13:47:00+02:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/trichomes-fleurs-cbd-observation-1x1.webp",
+      landscape: "/images/blog/trichomes-fleurs-cbd-observation-4x3.webp",
+      wide: "/images/blog/trichomes-fleurs-cbd-observation-16x9.webp",
+    },
+    relatedSlugs: [
+      "aspect-fleur-cbd-couleur-structure",
+      "photos-fleurs-cbd-lumiere-echelle",
+      "comment-lire-analyse-cbd",
+    ],
+    links: [
+      { to: "/fleurs-cbd", label: "Découvrir les fleurs CBD" },
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/aspect-fleur-cbd-couleur-structure",
+        label: "Observer la structure d'une fleur",
+      },
+      {
+        to: "/blog/photos-fleurs-cbd-lumiere-echelle",
+        label: "Lire une photo de fleur CBD",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Sur une fleur CBD, de très petites structures peuvent produire un
+            aspect brillant, poudreux ou givré. Une partie de ces structures
+            correspond aux trichomes glandulaires de la plante. Leur observation
+            apporte des informations visuelles, mais elle ne remplace ni
+            l'identification du lot ni son analyse.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Une fleur très brillante n'est pas automatiquement plus riche en CBD.
+            La teneur en cannabinoïdes se vérifie sur une analyse reliée au lot,
+            et non à partir d'une impression visuelle.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "definition-trichomes",
+        text: "Que sont les trichomes visibles sur une fleur ?",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les trichomes sont des structures présentes à la surface de
+            différentes parties de la plante. Certains sont glandulaires et
+            présentent une petite tête portée par une tige. À l'œil nu, ils se
+            fondent souvent dans un reflet général. Une loupe ou une photo macro
+            permet davantage de distinguer leur forme.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Leur répartition n'est pas parfaitement uniforme. Les bractées et
+            les petites feuilles proches de la fleur peuvent paraître plus
+            couvertes que des tiges ou des zones davantage manipulées.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "echelles-observation",
+        text: "Ce que l'on voit selon le niveau de grossissement",
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Repères pour observer une fleur à différentes échelles.",
+          headers: ["Observation", "Ce qui peut être visible", "Limite principale"],
+          rows: [
+            [
+              "À l'œil nu",
+              "Reflets, aspect givré et répartition générale sur la surface.",
+              "Les structures individuelles restent difficiles à identifier.",
+            ],
+            [
+              "Avec une loupe",
+              "Petites têtes, tiges et zones où les trichomes sont plus nombreux.",
+              "La lumière et la mise au point modifient fortement l'impression.",
+            ],
+            [
+              "En photo macro",
+              "Détails localisés et comparaison d'une même zone dans de bonnes conditions.",
+              "Une image serrée ne représente pas nécessairement toute la fleur ni tout le lot.",
+            ],
+            [
+              "Sur une photo produit",
+              "Aspect général si l'échelle, la netteté et la lumière sont cohérentes.",
+              "La compression, les retouches et les reflets peuvent masquer les détails.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "lumiere",
+        text: "La lumière change fortement l'aspect des trichomes",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une lumière directe crée des points brillants, tandis qu'une lumière
+            diffuse révèle plus régulièrement les reliefs. Une balance des blancs
+            incorrecte peut aussi déplacer les teintes vers le jaune, le bleu ou
+            le gris. Pour comparer deux images, il faut donc tenir compte de la
+            source lumineuse, de l'angle et du grossissement.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "observer sous une lumière neutre et régulière ;",
+          "éviter de conclure à partir d'un reflet isolé ;",
+          "comparer des zones similaires de la fleur ;",
+          "conserver la même distance et le même grossissement ;",
+          "regarder plusieurs fleurs lorsqu'un lot en contient plusieurs.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "confusions",
+        text: "Trichomes, fibres, poussière et particules : éviter les confusions",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les trichomes ne sont pas les seuls petits éléments visibles. Des
+            fibres végétales, fragments de feuilles, grains de pollen, poussières
+            ou particules provenant de l'emballage peuvent aussi apparaître sur
+            une photographie. Leur forme, leur implantation et leur répartition
+            donnent davantage d'indices que leur couleur seule.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Différences visuelles à examiner sans tirer de conclusion hâtive.",
+          headers: ["Élément observé", "Aspect possible", "Vérification utile"],
+          rows: [
+            [
+              "Trichomes glandulaires",
+              "Petites structures répétées, souvent fixées à la surface végétale.",
+              "Observer plusieurs zones avec une loupe ou une macro nette.",
+            ],
+            [
+              "Fibres végétales",
+              "Filaments plus longs intégrés à la structure de la fleur.",
+              "Suivre leur continuité avec les tissus végétaux.",
+            ],
+            [
+              "Particules libres",
+              "Points ou fragments posés de manière irrégulière.",
+              "Examiner l'emballage et comparer différentes zones sans manipuler excessivement.",
+            ],
+            [
+              "Duvet ou réseau inhabituel",
+              "Structure diffuse, filamenteuse ou localisée qui ne ressemble pas aux reliefs habituels.",
+              "Mettre le produit de côté et demander l'avis du vendeur en cas de doute.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Une photographie ne permet pas d'identifier avec certitude une
+            altération. En cas d'aspect inhabituel, il est plus prudent de
+            conserver le lot et son emballage, puis de contacter le vendeur.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "manipulation",
+        text: "La manipulation peut modifier l'aspect de surface",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les frottements contre l'emballage, le transport et les manipulations
+            répétées peuvent détacher ou écraser une partie des structures de
+            surface. Les zones externes ne présentent donc pas toujours le même
+            aspect que les parties moins exposées. Cette différence visuelle ne
+            permet pas, à elle seule, de reconstituer l'historique du produit.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "limites-observation",
+        text: "Ce que l'observation des trichomes ne permet pas de mesurer",
+      },
+      {
+        type: "list",
+        items: [
+          "la teneur exacte en CBD, THC ou autres cannabinoïdes ;",
+          "la conformité réglementaire du lot ;",
+          "l'identité variétale avec certitude ;",
+          "la date de récolte ou la durée de stockage ;",
+          "l'absence de contaminants invisibles ;",
+          "la qualité globale à partir d'une seule zone photographiée.",
+        ],
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Pour connaître la composition, il faut consulter un bulletin
+            d'analyse correspondant au numéro de lot. Le guide sur la {" "}
+            <Link to="/blog/comment-lire-analyse-cbd">
+              lecture d'une analyse CBD
+            </Link>{" "}
+            explique les informations à rapprocher de l'étiquette.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "checklist",
+        text: "Une méthode simple pour observer sans surinterpréter",
+      },
+      {
+        type: "list",
+        items: [
+          "commencer par l'aspect général de la fleur ;",
+          "utiliser une lumière diffuse et une surface propre ;",
+          "examiner plusieurs zones avec un grossissement modéré ;",
+          "distinguer les éléments fixés des particules libres ;",
+          "comparer avec les photos du même lot lorsqu'elles existent ;",
+          "relier toute conclusion sur la composition à une analyse, pas à l'image ;",
+          "documenter un aspect inhabituel avant de contacter le vendeur.",
+        ],
+      },
+      {
+        type: "links",
+        title: "Approfondir l'observation des fleurs CBD",
+        links: [
+          { to: "/fleurs-cbd", label: "Explorer les fleurs CBD" },
+          {
+            to: "/blog/aspect-fleur-cbd-couleur-structure",
+            label: "Couleur et structure d'une fleur",
+          },
+          {
+            to: "/blog/photos-fleurs-cbd-lumiere-echelle",
+            label: "Lumière et échelle sur les photos",
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "incertitude-mesure-arrondis-analyse-cbd",
     title: "Analyse CBD : comprendre l'incertitude de mesure et les arrondis",
     seoTitle: "Analyse CBD : incertitude et arrondis | Verdanza",

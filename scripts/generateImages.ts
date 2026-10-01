@@ -120,6 +120,14 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" | "packaging" }
 > = {
+  "trichomes-fleurs-cbd-observation": {
+    label: "Trichomes des fleurs CBD",
+    sources: [
+      "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
+      "/Fiche produit/Amnesia/amnesia_hydro_zoom.webp",
+      "/Fiche produit/Blue%20Dream/BlueDream.webp",
+    ],
+  },
   "incertitude-mesure-arrondis-analyse-cbd": {
     label: "Analyse CBD : incertitude et arrondis",
     kind: "analysis",
