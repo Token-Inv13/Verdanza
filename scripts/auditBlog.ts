@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import sharp from "sharp";
@@ -22,6 +23,7 @@ if (published.length !== 24) failures.push(`published article count ${published.
 expectUnique("slugs", published.map((article) => article.slug));
 expectUnique("SEO titles", published.map((article) => article.seoTitle));
 expectUnique("descriptions", published.map((article) => article.description));
+auditUniqueBlogImages();
 expectEqualSet(
   "published blog slug registry",
   published.map((article) => article.slug),
@@ -61,6 +63,23 @@ function auditBlogIndex() {
   for (const article of published) {
     if (!main.includes(blogArticlePath(article))) failures.push(`/blog missing article link ${article.slug}`);
   }
+}
+
+function auditUniqueBlogImages() {
+  const urls = published.flatMap((article) => [
+    article.images.square,
+    article.images.landscape,
+    article.images.wide,
+  ]);
+  expectUnique("blog image paths", urls);
+
+  const hashes: string[] = [];
+  for (const url of urls) {
+    const file = resolve(publicDir, url.replace(/^\/+/, ""));
+    if (!existsSync(file)) continue;
+    hashes.push(createHash("sha256").update(readFileSync(file)).digest("hex"));
+  }
+  expectUnique("blog image file hashes", hashes);
 }
 
 async function auditArticle(article: (typeof published)[number]) {

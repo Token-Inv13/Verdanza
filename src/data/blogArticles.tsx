@@ -4900,9 +4900,9 @@ export const blogArticles: BlogArticle[] = [
     readingTime: "6 min",
     status: "published",
     images: {
-      square: "/images/blog/comment-lire-analyse-cbd-1x1.webp",
-      landscape: "/images/blog/comment-lire-analyse-cbd-4x3.webp",
-      wide: "/images/blog/comment-lire-analyse-cbd-16x9.webp",
+      square: "/images/blog/denominations-cbd-cbn-cbg-1x1.webp",
+      landscape: "/images/blog/denominations-cbd-cbn-cbg-4x3.webp",
+      wide: "/images/blog/denominations-cbd-cbn-cbg-16x9.webp",
     },
     relatedSlugs: [
       "comment-lire-analyse-cbd",

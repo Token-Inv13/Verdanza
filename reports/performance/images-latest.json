@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-25T12:58:49.682Z",
+  "generatedAt": "2026-10-01T18:17:43.305Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -32,7 +32,33 @@
           "height": 713,
           "bytes": 212306
         }
-      ]
+      ],
+      "dedicatedCard": {
+        "sourceUrl": "/Fiche produit/Golden static/Composition-ezgif.com-resize.webp",
+        "sourceBytes": 361200,
+        "sourceWidth": 713,
+        "sourceHeight": 713,
+        "crop": {
+          "left": 0,
+          "top": 67,
+          "width": 713,
+          "height": 615
+        },
+        "variants": [
+          {
+            "src": "/images/products/golden-static-editorial-card-320.webp",
+            "width": 320,
+            "height": 276,
+            "bytes": 1744
+          },
+          {
+            "src": "/images/products/golden-static-editorial-card-640.webp",
+            "width": 640,
+            "height": 552,
+            "bytes": 6864
+          }
+        ]
+      }
     },
     {
       "productId": "resin-supreme-purple-cbd",
@@ -131,11 +157,31 @@
           "height": 713,
           "bytes": 164838
         }
-      ]
+      ],
+      "dedicatedCard": {
+        "sourceUrl": "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-pile.webp",
+        "sourceBytes": 46920,
+        "sourceWidth": 713,
+        "sourceHeight": 713,
+        "variants": [
+          {
+            "src": "/images/products/cookie-kush-indoor-editorial-card-320.webp",
+            "width": 320,
+            "height": 320,
+            "bytes": 6506
+          },
+          {
+            "src": "/images/products/cookie-kush-indoor-editorial-card-640.webp",
+            "width": 640,
+            "height": 640,
+            "bytes": 23342
+          }
+        ]
+      }
     },
     {
       "productId": "flower-petites-tetes-og-kush",
-      "productName": "Petites Têtes OG Kush",
+      "productName": "OG Kush",
       "sourceUrl": "/Fiche produit/Petite tetes OG Kush ( sous serre)/PTOGKush_zoom.webp",
       "sourceFile": "public/Fiche produit/Petite tetes OG Kush ( sous serre)/PTOGKush_zoom.webp",
       "sourceBytes": 251988,
@@ -164,7 +210,27 @@
           "height": 713,
           "bytes": 199636
         }
-      ]
+      ],
+      "dedicatedCard": {
+        "sourceUrl": "/Fiche produit/Petite tetes OG Kush ( sous serre)/PTOGKush_pile.webp",
+        "sourceBytes": 48838,
+        "sourceWidth": 713,
+        "sourceHeight": 712,
+        "variants": [
+          {
+            "src": "/images/products/petites-tetes-og-kush-editorial-card-320.webp",
+            "width": 320,
+            "height": 320,
+            "bytes": 6636
+          },
+          {
+            "src": "/images/products/petites-tetes-og-kush-editorial-card-640.webp",
+            "width": 640,
+            "height": 639,
+            "bytes": 23104
+          }
+        ]
+      }
     },
     {
       "productId": "flower-harlequin-greenhouse",
@@ -197,7 +263,27 @@
           "height": 713,
           "bytes": 188968
         }
-      ]
+      ],
+      "dedicatedCard": {
+        "sourceUrl": "/Fiche produit/Harlequin (sous-serre)/harlequin_pile.webp",
+        "sourceBytes": 50800,
+        "sourceWidth": 713,
+        "sourceHeight": 713,
+        "variants": [
+          {
+            "src": "/images/products/harlequin-greenhouse-editorial-card-320.webp",
+            "width": 320,
+            "height": 320,
+            "bytes": 7242
+          },
+          {
+            "src": "/images/products/harlequin-greenhouse-editorial-card-640.webp",
+            "width": 640,
+            "height": 640,
+            "bytes": 24032
+          }
+        ]
+      }
     },
     {
       "productId": "resin-la-mousse",
@@ -333,7 +419,7 @@
     },
     {
       "productId": "flower-mango-haze-cbd",
-      "productName": "Mango Haze CBD",
+      "productName": "Mango Haze",
       "sourceUrl": "/Fiche produit/Mango%20Haze/MangoHaze.webp",
       "sourceFile": "public/Fiche produit/Mango Haze/MangoHaze.webp",
       "sourceBytes": 166436,
@@ -362,11 +448,31 @@
           "height": 713,
           "bytes": 126962
         }
-      ]
+      ],
+      "dedicatedCard": {
+        "sourceUrl": "/Fiche produit/Mango%20Haze/mango.webp",
+        "sourceBytes": 69566,
+        "sourceWidth": 713,
+        "sourceHeight": 713,
+        "variants": [
+          {
+            "src": "/images/products/mango-haze-cbd-editorial-card-320.webp",
+            "width": 320,
+            "height": 320,
+            "bytes": 10214
+          },
+          {
+            "src": "/images/products/mango-haze-cbd-editorial-card-640.webp",
+            "width": 640,
+            "height": 640,
+            "bytes": 36476
+          }
+        ]
+      }
     },
     {
       "productId": "flower-mandarine-cbd",
-      "productName": "Mandarine CBD",
+      "productName": "Mandarine",
       "sourceUrl": "/Fiche produit/Mandarine/mandarine_zoom.webp",
       "sourceFile": "public/Fiche produit/Mandarine/mandarine_zoom.webp",
       "sourceBytes": 229500,
@@ -395,7 +501,27 @@
           "height": 713,
           "bytes": 185918
         }
-      ]
+      ],
+      "dedicatedCard": {
+        "sourceUrl": "/Fiche produit/Mandarine/Mandarine_pile.webp",
+        "sourceBytes": 60164,
+        "sourceWidth": 713,
+        "sourceHeight": 713,
+        "variants": [
+          {
+            "src": "/images/products/mandarine-cbd-editorial-card-320.webp",
+            "width": 320,
+            "height": 320,
+            "bytes": 8386
+          },
+          {
+            "src": "/images/products/mandarine-cbd-editorial-card-640.webp",
+            "width": 640,
+            "height": 640,
+            "bytes": 29366
+          }
+        ]
+      }
     },
     {
       "productId": "flower-amnesia-cbd-hydroponique",
@@ -461,7 +587,27 @@
           "height": 713,
           "bytes": 141648
         }
-      ]
+      ],
+      "dedicatedCard": {
+        "sourceUrl": "/Fiche produit/Blue%20Dream/bl.webp",
+        "sourceBytes": 84738,
+        "sourceWidth": 713,
+        "sourceHeight": 713,
+        "variants": [
+          {
+            "src": "/images/products/blue-dream-cbd-editorial-card-320.webp",
+            "width": 320,
+            "height": 320,
+            "bytes": 13462
+          },
+          {
+            "src": "/images/products/blue-dream-cbd-editorial-card-640.webp",
+            "width": 640,
+            "height": 640,
+            "bytes": 45632
+          }
+        ]
+      }
     },
     {
       "productId": "flower-plutonium-cbd-hydroponique",
@@ -528,104 +674,625 @@
       ]
     },
     {
-      "sourceUrl": "/verdanza-badge.png",
-      "sourceFile": "public/verdanza-badge.png",
-      "sourceBytes": 1098904,
-      "sourceWidth": 1254,
-      "sourceHeight": 1254,
-      "format": "png",
+      "sourceUrl": "/images/hero-editorial-desktop.webp",
+      "sourceFile": "public/images/hero-editorial-desktop.webp",
+      "sourceBytes": 696844,
+      "sourceWidth": 1774,
+      "sourceHeight": 438,
+      "format": "webp",
       "hasAlpha": false,
+      "crop": {
+        "left": 740,
+        "top": 0,
+        "width": 1034,
+        "height": 438
+      },
       "variants": [
         {
-          "src": "/images/brand/verdanza-badge-age-112.webp",
-          "width": 112,
-          "height": 112,
-          "bytes": 2572
+          "src": "/images/hero-editorial-desktop-560.webp",
+          "width": 560,
+          "height": 237,
+          "bytes": 19110
         },
         {
-          "src": "/images/brand/verdanza-badge-age-224.webp",
-          "width": 224,
-          "height": 224,
-          "bytes": 7244
+          "src": "/images/hero-editorial-desktop-704.webp",
+          "width": 704,
+          "height": 298,
+          "bytes": 24502
+        },
+        {
+          "src": "/images/hero-editorial-desktop-1034.webp",
+          "width": 1034,
+          "height": 438,
+          "bytes": 49216
         }
       ]
     },
     {
-      "sourceUrl": "/verdanza-logo.png",
-      "sourceFile": "public/verdanza-logo.png",
-      "sourceBytes": 961345,
-      "sourceWidth": 1672,
-      "sourceHeight": 941,
-      "format": "png",
+      "sourceUrl": "/images/hero-editorial-desktop.webp",
+      "sourceFile": "public/images/hero-editorial-desktop.webp",
+      "sourceBytes": 696844,
+      "sourceWidth": 1774,
+      "sourceHeight": 438,
+      "format": "webp",
       "hasAlpha": false,
       "variants": [
         {
-          "src": "/images/brand/verdanza-logo-180.webp",
-          "width": 180,
-          "height": 101,
-          "bytes": 1756
+          "src": "/images/hero-editorial-tablet-768.webp",
+          "width": 768,
+          "height": 190,
+          "bytes": 14756
         },
         {
-          "src": "/images/brand/verdanza-logo-320.webp",
-          "width": 320,
-          "height": 180,
-          "bytes": 5330
+          "src": "/images/hero-editorial-tablet-1024.webp",
+          "width": 1024,
+          "height": 253,
+          "bytes": 20436
+        },
+        {
+          "src": "/images/hero-editorial-tablet-1280.webp",
+          "width": 1280,
+          "height": 316,
+          "bytes": 25520
+        }
+      ]
+    },
+    {
+      "sourceUrl": "/images/hero-editorial-mobile.webp",
+      "sourceFile": "public/images/hero-editorial-mobile.webp",
+      "sourceBytes": 646232,
+      "sourceWidth": 1774,
+      "sourceHeight": 440,
+      "format": "webp",
+      "hasAlpha": false,
+      "variants": [
+        {
+          "src": "/images/hero-editorial-mobile-400.webp",
+          "width": 400,
+          "height": 99,
+          "bytes": 4088
+        },
+        {
+          "src": "/images/hero-editorial-mobile-800.webp",
+          "width": 800,
+          "height": 198,
+          "bytes": 12354
+        },
+        {
+          "src": "/images/hero-editorial-mobile-1280.webp",
+          "width": 1280,
+          "height": 317,
+          "bytes": 26524
+        },
+        {
+          "src": "/images/hero-editorial-mobile-1774.webp",
+          "width": 1774,
+          "height": 440,
+          "bytes": 47152
         }
       ]
     }
   ],
   "blogImages": [
     {
+      "articleSlug": "trichomes-fleurs-cbd-observation",
+      "articleTitle": "Trichomes des fleurs CBD : ce que l'on peut réellement observer",
+      "artDirection": "verdanza-editorial",
+      "sources": [
+        "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
+        "/Fiche produit/Amnesia/amnesia_hydro_zoom.webp",
+        "/Fiche produit/Blue%20Dream/BlueDream.webp"
+      ],
+      "variants": [
+        {
+          "src": "/images/blog/trichomes-fleurs-cbd-observation-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 108362
+        },
+        {
+          "src": "/images/blog/trichomes-fleurs-cbd-observation-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 138372
+        },
+        {
+          "src": "/images/blog/trichomes-fleurs-cbd-observation-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 167860
+        }
+      ]
+    },
+    {
+      "articleSlug": "incertitude-mesure-arrondis-analyse-cbd",
+      "articleTitle": "Analyse CBD : comprendre l'incertitude de mesure et les arrondis",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/incertitude-mesure-arrondis-analyse-cbd-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 42596
+        },
+        {
+          "src": "/images/blog/incertitude-mesure-arrondis-analyse-cbd-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 59428
+        },
+        {
+          "src": "/images/blog/incertitude-mesure-arrondis-analyse-cbd-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 82816
+        }
+      ]
+    },
+    {
+      "articleSlug": "emballage-cbd-contenant-fermeture",
+      "articleTitle": "Emballage CBD : comprendre le rôle du contenant et de la fermeture",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/emballage-cbd-contenant-fermeture-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 35100
+        },
+        {
+          "src": "/images/blog/emballage-cbd-contenant-fermeture-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 50726
+        },
+        {
+          "src": "/images/blog/emballage-cbd-contenant-fermeture-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 71918
+        }
+      ]
+    },
+    {
+      "articleSlug": "analyse-cbd-nd-lod-loq",
+      "articleTitle": "Analyse CBD : comprendre ND, LOD et LOQ",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/analyse-cbd-nd-lod-loq-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 40178
+        },
+        {
+          "src": "/images/blog/analyse-cbd-nd-lod-loq-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 51374
+        },
+        {
+          "src": "/images/blog/analyse-cbd-nd-lod-loq-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 66610
+        }
+      ]
+    },
+    {
+      "articleSlug": "isolat-spectre-large-complet-cbd",
+      "articleTitle": "Isolat, spectre large ou complet : comprendre les mentions CBD",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/isolat-spectre-large-complet-cbd-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 48416
+        },
+        {
+          "src": "/images/blog/isolat-spectre-large-complet-cbd-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 65172
+        },
+        {
+          "src": "/images/blog/isolat-spectre-large-complet-cbd-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 90518
+        }
+      ]
+    },
+    {
+      "articleSlug": "reception-commande-cbd-verifications",
+      "articleTitle": "Réception d'une commande CBD : les vérifications utiles",
+      "artDirection": "verdanza-editorial",
+      "sources": [
+        "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
+        "/Fiche produit/Golden static/goldenstatic.webp",
+        "/Fiche produit/Mango%20Haze/MangoHaze.webp"
+      ],
+      "variants": [
+        {
+          "src": "/images/blog/reception-commande-cbd-verifications-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 47454
+        },
+        {
+          "src": "/images/blog/reception-commande-cbd-verifications-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 54930
+        },
+        {
+          "src": "/images/blog/reception-commande-cbd-verifications-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 69664
+        }
+      ]
+    },
+    {
+      "articleSlug": "pourcentage-mg-g-ppm-analyse-cbd",
+      "articleTitle": "Analyse CBD : comprendre %, mg/g et ppm sans se tromper",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 46258
+        },
+        {
+          "src": "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 58118
+        },
+        {
+          "src": "/images/blog/pourcentage-mg-g-ppm-analyse-cbd-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 72076
+        }
+      ]
+    },
+    {
+      "articleSlug": "manucure-fleurs-cbd-feuilles-tiges",
+      "articleTitle": "Manucure des fleurs CBD : que montrent feuilles, tiges et coupe ?",
+      "artDirection": "verdanza-editorial",
+      "sources": [
+        "/Fiche produit/Mango%20Haze/MangoHaze.webp",
+        "/Fiche produit/Mandarine/mandarine_zoom.webp",
+        "/Fiche produit/Plutonium/zoom.webp"
+      ],
+      "variants": [
+        {
+          "src": "/images/blog/manucure-fleurs-cbd-feuilles-tiges-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 68474
+        },
+        {
+          "src": "/images/blog/manucure-fleurs-cbd-feuilles-tiges-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 80882
+        },
+        {
+          "src": "/images/blog/manucure-fleurs-cbd-feuilles-tiges-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 103180
+        }
+      ]
+    },
+    {
+      "articleSlug": "photos-fleurs-cbd-lumiere-echelle",
+      "articleTitle": "Photos de fleurs CBD : comment les lire sans surinterpréter ?",
+      "artDirection": "verdanza-editorial",
+      "sources": [
+        "/Fiche produit/Amnesia/amnesia_hydro_zoom.webp",
+        "/Fiche produit/Blue%20Dream/BlueDream.webp",
+        "/Fiche produit/Petite tetes OG Kush ( sous serre)/PTOGKush_pile.webp"
+      ],
+      "variants": [
+        {
+          "src": "/images/blog/photos-fleurs-cbd-lumiere-echelle-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 34624
+        },
+        {
+          "src": "/images/blog/photos-fleurs-cbd-lumiere-echelle-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 43660
+        },
+        {
+          "src": "/images/blog/photos-fleurs-cbd-lumiere-echelle-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 59262
+        }
+      ]
+    },
+    {
+      "articleSlug": "calibre-fleurs-cbd-taille-tetes",
+      "articleTitle": "Calibre des fleurs CBD : que dit vraiment la taille des têtes ?",
+      "artDirection": "verdanza-editorial",
+      "sources": [
+        "/Fiche produit/Petite tetes OG Kush ( sous serre)/PTOGKush_pile.webp",
+        "/Fiche produit/Harlequin (sous-serre)/harlequin_zoom.webp",
+        "/Fiche produit/Mandarine/mandarine_zoom.webp"
+      ],
+      "variants": [
+        {
+          "src": "/images/blog/calibre-fleurs-cbd-taille-tetes-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 70300
+        },
+        {
+          "src": "/images/blog/calibre-fleurs-cbd-taille-tetes-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 83424
+        },
+        {
+          "src": "/images/blog/calibre-fleurs-cbd-taille-tetes-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 98926
+        }
+      ]
+    },
+    {
+      "articleSlug": "origine-variete-lot-cbd-differences",
+      "articleTitle": "Origine, variété et lot CBD : trois informations à ne pas confondre",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/origine-variete-lot-cbd-differences-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 53310
+        },
+        {
+          "src": "/images/blog/origine-variete-lot-cbd-differences-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 81130
+        },
+        {
+          "src": "/images/blog/origine-variete-lot-cbd-differences-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 120206
+        }
+      ]
+    },
+    {
+      "articleSlug": "signes-alteration-fleurs-resines-cbd",
+      "articleTitle": "Fleurs et résines CBD : repérer les signes d'altération",
+      "artDirection": "verdanza-editorial",
+      "sources": [
+        "/Fiche produit/Mandarine/mandarine_zoom.webp",
+        "/Fiche produit/Golden static/goldenstatic.webp",
+        "/Fiche produit/Creamy%20Piatella/piatella.webp"
+      ],
+      "variants": [
+        {
+          "src": "/images/blog/signes-alteration-fleurs-resines-cbd-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 55694
+        },
+        {
+          "src": "/images/blog/signes-alteration-fleurs-resines-cbd-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 73602
+        },
+        {
+          "src": "/images/blog/signes-alteration-fleurs-resines-cbd-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 95014
+        }
+      ]
+    },
+    {
+      "articleSlug": "infusions-feuilles-chanvre-reglement-ue-2027",
+      "articleTitle": "Infusions de feuilles de chanvre : ce que change le règlement européen en 2027",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 40940
+        },
+        {
+          "src": "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 56844
+        },
+        {
+          "src": "/images/blog/infusions-feuilles-chanvre-reglement-ue-2027-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 78482
+        }
+      ]
+    },
+    {
+      "articleSlug": "etiquette-numero-lot-cbd-tracabilite",
+      "articleTitle": "Étiquette et numéro de lot CBD : comment vérifier la traçabilité ?",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/etiquette-numero-lot-cbd-tracabilite-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 36144
+        },
+        {
+          "src": "/images/blog/etiquette-numero-lot-cbd-tracabilite-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 49886
+        },
+        {
+          "src": "/images/blog/etiquette-numero-lot-cbd-tracabilite-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 71552
+        }
+      ]
+    },
+    {
+      "articleSlug": "aspect-resine-cbd-texture-couleur",
+      "articleTitle": "Résine CBD : comment lire texture, couleur et présentation ?",
+      "artDirection": "verdanza-editorial",
+      "sources": [
+        "/Fiche produit/Golden static/goldenstatic.webp",
+        "/Fiche produit/La%20mousse/mousse1.webp",
+        "/Fiche produit/Creamy%20Piatella/piatella.webp"
+      ],
+      "variants": [
+        {
+          "src": "/images/blog/aspect-resine-cbd-texture-couleur-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 77256
+        },
+        {
+          "src": "/images/blog/aspect-resine-cbd-texture-couleur-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 106716
+        },
+        {
+          "src": "/images/blog/aspect-resine-cbd-texture-couleur-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 146162
+        }
+      ]
+    },
+    {
+      "articleSlug": "aspect-fleur-cbd-couleur-structure",
+      "articleTitle": "Fleur CBD : comment lire son aspect sans surinterpréter ?",
+      "artDirection": "verdanza-editorial",
+      "sources": [
+        "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
+        "/Fiche produit/Harlequin (sous-serre)/harlequin_zoom.webp",
+        "/Fiche produit/Mandarine/mandarine_zoom.webp"
+      ],
+      "variants": [
+        {
+          "src": "/images/blog/aspect-fleur-cbd-couleur-structure-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 66684
+        },
+        {
+          "src": "/images/blog/aspect-fleur-cbd-couleur-structure-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 93108
+        },
+        {
+          "src": "/images/blog/aspect-fleur-cbd-couleur-structure-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 126940
+        }
+      ]
+    },
+    {
+      "articleSlug": "terpenes-profils-aromatiques-cbd",
+      "articleTitle": "Terpènes et profils aromatiques CBD : comment les lire ?",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/terpenes-profils-aromatiques-cbd-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 82660
+        },
+        {
+          "src": "/images/blog/terpenes-profils-aromatiques-cbd-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 118314
+        },
+        {
+          "src": "/images/blog/terpenes-profils-aromatiques-cbd-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 168160
+        }
+      ]
+    },
+    {
       "articleSlug": "cbd-conduite-france",
       "articleTitle": "CBD et conduite en France : ce qu'il faut savoir",
+      "artDirection": "verdanza-editorial",
       "variants": [
         {
           "src": "/images/blog/cbd-conduite-france-1x1.webp",
-          "width": 900,
-          "height": 900,
-          "bytes": 16310
+          "width": 800,
+          "height": 800,
+          "bytes": 35430
         },
         {
           "src": "/images/blog/cbd-conduite-france-4x3.webp",
-          "width": 1200,
-          "height": 900,
-          "bytes": 17446
+          "width": 1040,
+          "height": 780,
+          "bytes": 44286
         },
         {
           "src": "/images/blog/cbd-conduite-france-16x9.webp",
           "width": 1600,
           "height": 900,
-          "bytes": 18650
+          "bytes": 59246
         }
       ]
     },
     {
       "articleSlug": "denominations-cbd-cbn-cbg",
       "articleTitle": "CBD, CBN, CBG : comprendre les dénominations",
+      "artDirection": "verdanza-editorial",
       "variants": [
         {
-          "src": "/images/blog/comment-lire-analyse-cbd-1x1.webp",
-          "width": 900,
-          "height": 900,
-          "bytes": 14492
+          "src": "/images/blog/denominations-cbd-cbn-cbg-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 52340
         },
         {
-          "src": "/images/blog/comment-lire-analyse-cbd-4x3.webp",
-          "width": 1200,
-          "height": 900,
-          "bytes": 15184
+          "src": "/images/blog/denominations-cbd-cbn-cbg-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 70454
         },
         {
-          "src": "/images/blog/comment-lire-analyse-cbd-16x9.webp",
+          "src": "/images/blog/denominations-cbd-cbn-cbg-16x9.webp",
           "width": 1600,
           "height": 900,
-          "bytes": 16064
+          "bytes": 95282
         }
       ]
     },
     {
       "articleSlug": "conserver-fleurs-resines-cbd",
       "articleTitle": "Comment conserver fleurs et résines CBD ?",
+      "artDirection": "verdanza-editorial",
       "sources": [
         "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
         "/Fiche produit/Golden static/goldenstatic.webp",
@@ -634,51 +1301,53 @@
       "variants": [
         {
           "src": "/images/blog/conserver-fleurs-resines-cbd-1x1.webp",
-          "width": 900,
-          "height": 900,
-          "bytes": 113472
+          "width": 800,
+          "height": 800,
+          "bytes": 41490
         },
         {
           "src": "/images/blog/conserver-fleurs-resines-cbd-4x3.webp",
-          "width": 1200,
-          "height": 900,
-          "bytes": 144398
+          "width": 1040,
+          "height": 780,
+          "bytes": 54528
         },
         {
           "src": "/images/blog/conserver-fleurs-resines-cbd-16x9.webp",
           "width": 1600,
           "height": 900,
-          "bytes": 184068
+          "bytes": 70486
         }
       ]
     },
     {
       "articleSlug": "comment-lire-analyse-cbd",
       "articleTitle": "Comment lire une analyse de CBD ?",
+      "artDirection": "verdanza-editorial",
       "variants": [
         {
           "src": "/images/blog/comment-lire-analyse-cbd-1x1.webp",
-          "width": 900,
-          "height": 900,
-          "bytes": 14492
+          "width": 800,
+          "height": 800,
+          "bytes": 57856
         },
         {
           "src": "/images/blog/comment-lire-analyse-cbd-4x3.webp",
-          "width": 1200,
-          "height": 900,
-          "bytes": 15184
+          "width": 1040,
+          "height": 780,
+          "bytes": 72956
         },
         {
           "src": "/images/blog/comment-lire-analyse-cbd-16x9.webp",
           "width": 1600,
           "height": 900,
-          "bytes": 16064
+          "bytes": 95256
         }
       ]
     },
     {
       "articleSlug": "fleur-cbd-ou-resine-cbd-differences",
       "articleTitle": "Fleur CBD ou résine CBD : quelles différences ?",
+      "artDirection": "verdanza-editorial",
       "sources": [
         "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
         "/Fiche produit/Golden static/goldenstatic.webp",
@@ -687,51 +1356,53 @@
       "variants": [
         {
           "src": "/images/blog/fleur-cbd-ou-resine-cbd-1x1.webp",
-          "width": 900,
-          "height": 900,
-          "bytes": 110928
+          "width": 800,
+          "height": 800,
+          "bytes": 64504
         },
         {
           "src": "/images/blog/fleur-cbd-ou-resine-cbd-4x3.webp",
-          "width": 1200,
-          "height": 900,
-          "bytes": 141932
+          "width": 1040,
+          "height": 780,
+          "bytes": 92664
         },
         {
           "src": "/images/blog/fleur-cbd-ou-resine-cbd-16x9.webp",
           "width": 1600,
           "height": 900,
-          "bytes": 181530
+          "bytes": 124580
         }
       ]
     },
     {
       "articleSlug": "choisir-fleur-cbd-profil-aromatique",
       "articleTitle": "Comment choisir une fleur CBD selon son profil aromatique ?",
+      "artDirection": "verdanza-editorial",
       "variants": [
         {
           "src": "/images/blog/choisir-fleur-cbd-profil-aromatique-1x1.webp",
-          "width": 900,
-          "height": 900,
-          "bytes": 15178
+          "width": 800,
+          "height": 800,
+          "bytes": 62428
         },
         {
           "src": "/images/blog/choisir-fleur-cbd-profil-aromatique-4x3.webp",
-          "width": 1200,
-          "height": 900,
-          "bytes": 16766
+          "width": 1040,
+          "height": 780,
+          "bytes": 83230
         },
         {
           "src": "/images/blog/choisir-fleur-cbd-profil-aromatique-16x9.webp",
           "width": 1600,
           "height": 900,
-          "bytes": 18626
+          "bytes": 97560
         }
       ]
     },
     {
       "articleSlug": "indoor-greenhouse-hydroponique-differences",
       "articleTitle": "Indoor, greenhouse ou hydroponique : comprendre les méthodes de culture",
+      "artDirection": "verdanza-editorial",
       "sources": [
         "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
         "/Fiche produit/Harlequin (sous-serre)/harlequin_zoom.webp",
@@ -740,21 +1411,21 @@
       "variants": [
         {
           "src": "/images/blog/indoor-greenhouse-hydroponique-1x1.webp",
-          "width": 900,
-          "height": 900,
-          "bytes": 116540
+          "width": 800,
+          "height": 800,
+          "bytes": 105302
         },
         {
           "src": "/images/blog/indoor-greenhouse-hydroponique-4x3.webp",
-          "width": 1200,
-          "height": 900,
-          "bytes": 152910
+          "width": 1040,
+          "height": 780,
+          "bytes": 139410
         },
         {
           "src": "/images/blog/indoor-greenhouse-hydroponique-16x9.webp",
           "width": 1600,
           "height": 900,
-          "bytes": 199954
+          "bytes": 171910
         }
       ]
     }
@@ -762,9 +1433,10 @@
   "totals": {
     "productSourceBytes": 2164456,
     "productCardLargestBytes": 1160236,
+    "productCardSelectedLargestBytes": 547834,
     "productDetailBytes": 1718692,
-    "staticSourceBytes": 2197587,
-    "staticLargestBytes": 114692,
-    "blogImageBytes": 1540188
+    "staticSourceBytes": 2177258,
+    "staticLargestBytes": 224006,
+    "blogImageBytes": 5600680
   }
 }

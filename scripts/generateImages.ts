@@ -59,6 +59,7 @@ const brandOutputDir = resolve(publicDir, "images/brand");
 const blogOutputDir = resolve(publicDir, "images/blog");
 const reportPath = resolve("reports/performance/images-latest.json");
 const manifestPath = resolve("src/lib/generatedImageVariants.ts");
+const allowLegacyBlogArtwork = process.env.VERDANZA_ALLOW_LEGACY_BLOG_ARTWORK === "1";
 const productCardVariants: Variant[] = [
   { name: "card-320", width: 320, quality: 78 },
   { name: "card-640", width: 640, quality: 80 },
@@ -262,8 +263,8 @@ const blogImageSources: Record<
   },
 };
 const blogRatios = [
-  { key: "square", suffix: "1x1", width: 900, height: 900, sizes: "(min-width: 1024px) 420px, 92vw" },
-  { key: "landscape", suffix: "4x3", width: 1200, height: 900, sizes: "(min-width: 1024px) 520px, 92vw" },
+  { key: "square", suffix: "1x1", width: 800, height: 800, sizes: "(min-width: 1024px) 420px, 92vw" },
+  { key: "landscape", suffix: "4x3", width: 1040, height: 780, sizes: "(min-width: 1024px) 520px, 92vw" },
   { key: "wide", suffix: "16x9", width: 1600, height: 900, sizes: "100vw" },
 ] as const;
 
@@ -410,8 +411,16 @@ for (const article of blogArticles) {
   const generated = [];
   for (const ratio of blogRatios) {
     const outputUrl = article.images[ratio.key];
-    const output =
-      sourceSet.kind === "analysis"
+    const outputFile = publicPath(outputUrl);
+    const output = existsSync(outputFile)
+      ? await registerEditorialBlogImage({
+          outputUrl,
+          expectedWidth: ratio.width,
+          expectedHeight: ratio.height,
+        })
+      : !allowLegacyBlogArtwork
+        ? throwMissingEditorialBlogImage(article.slug, outputUrl)
+        : sourceSet.kind === "analysis"
         ? await generateAnalysisBlogImage({
             outputUrl,
             label: sourceSet.label,
@@ -458,6 +467,7 @@ for (const article of blogArticles) {
   blogReport.push({
     articleSlug: article.slug,
     articleTitle: article.title,
+    artDirection: "verdanza-editorial",
     sources: sourceSet.sources,
     variants: generated,
   });
@@ -570,6 +580,40 @@ async function generateProductVariants(
         crop,
       ),
     ),
+  );
+}
+
+async function registerEditorialBlogImage({
+  outputUrl,
+  expectedWidth,
+  expectedHeight,
+}: {
+  outputUrl: string;
+  expectedWidth: number;
+  expectedHeight: number;
+}): Promise<GeneratedVariant> {
+  const outputFile = publicPath(outputUrl);
+  const metadata = await sharp(outputFile).metadata();
+  const width = metadata.width || 0;
+  const height = metadata.height || 0;
+  if (metadata.format !== "webp") {
+    throw new Error(`Editorial blog image must be WebP: ${outputUrl}`);
+  }
+  if (width !== expectedWidth || height !== expectedHeight) {
+    throw new Error(
+      `Editorial blog image dimensions changed for ${outputUrl}: ${width}x${height}, expected ${expectedWidth}x${expectedHeight}`,
+    );
+  }
+  const bytes = readFileSync(outputFile).length;
+  if (bytes > 240 * 1024) {
+    throw new Error(`Editorial blog image exceeds 240 KB: ${outputUrl} (${kb(bytes)} KB)`);
+  }
+  return { src: outputUrl, width, height, bytes };
+}
+
+function throwMissingEditorialBlogImage(articleSlug: string, outputUrl: string): never {
+  throw new Error(
+    `Missing editorial artwork for ${articleSlug}: ${outputUrl}. Import a master with npm run images:blog-editorial.`,
   );
 }
 

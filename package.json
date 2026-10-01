@@ -26,6 +26,7 @@
     "audit:local-full": "npm run audit:blog && npm run audit:seo-landing-pages && npm run audit:performance && npm run audit:images && npm run audit:analytics && npm run audit:analytics-purchase && npm run audit:seo && npm run audit:structured-data && npm run audit:seo-hosts",
     "analyze:bundle": "node --import tsx scripts/analyzeBundle.ts",
     "images:generate": "node --import tsx scripts/generateImages.ts",
+    "images:blog-editorial": "node --import tsx scripts/processBlogEditorialImage.ts",
     "audit:seo-hosts": "node --import tsx scripts/auditSeoHosts.ts",
     "indexnow": "node --import tsx scripts/submitIndexNow.ts",
     "indexnow:verify": "node --import tsx scripts/verifyIndexNow.ts",
