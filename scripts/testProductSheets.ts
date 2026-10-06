@@ -4,7 +4,11 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { extname, join, relative, resolve } from "node:path";
 import { chromium } from "playwright";
 import sharp from "sharp";
-import { productSheets } from "../src/data/productSheets";
+import {
+  availableProductSheets,
+  productSheets,
+  temporarilyUnavailableProductSheets,
+} from "../src/data/productSheets";
 import { blockExternalServices, gotoDomReady } from "./auditPageReady";
 import { startAuditStaticServer } from "./auditStaticServer";
 
@@ -12,11 +16,11 @@ const publicDir = resolve("public");
 const distDir = resolve("dist");
 const expectedPdfHashes: Record<string, string> = {
   biscotti: "78edaec3b2539d6a35bc1e58f4c47bfdae5af0dfd6bd850259595c3df441bdb4",
-  "blue-dream": "efea9187ff3407cfd7a2a21af127bea9dbcfc9178d8d8be62cbfbe2091898899",
+  "blue-dream": "8d786f1595a06faa206dffc5f012a3223a6826fdd5348beae1f5e247bba6b850",
   "lemon-skunk": "f0243ab36f3a0558a9bd7c25dbd9a5b9c99552d37f9a5e2c36859c2f845a19d2",
   mimosa: "dd3e0c3ab48758e1735d175fc52bafce233022ed276c960c3c0b47e594bc937d",
   "watermelon-candy": "8d381cb07a4cbfa906018d9a8defdeee67e5baaec421f514670d5ef8c4dff409",
-  "zkittlez-og": "bf9ee2a140a1a56bb80484d54fbe63328cd5a9d7b82f15b1590da3fda85f85cc",
+  "zkittlez-og": "f9712a0f61708a8d56e32fbf6582dcdcab7faf1135bf22ecd15123323bd878e5",
   "le-mousseux": "ec55e382f3e638c1c4e8a2d1ef50dfecdc031f45c9367447a0f412c31fa6476c",
   kief: "79de3490c076dfcf5fb4f3e1b73d74c0dcbe42a20cbe65aca44b54ed3a54bb5b",
   libanais: "b665cdcb3c14c5c38a0367c417bab601d04ceaf54f47fecd9abdf19426e37bdf",
@@ -26,9 +30,10 @@ const expectedPdfHashes: Record<string, string> = {
   "ice-o-lator": "c513e2b57d3080b1fbf630b5bff3a8f4ffbeb218f4d1f2475e640bad6383799b",
   "black-afghan": "f74405b9bfba36144747a61e4130262029d1b137b1f36002e78a8d5bd04cff93",
   marocain: "2053a14770fe1ba56a01b73f305741c36edc36b422402bf1c353819dde06a712",
+  "golden-static": "f3fe5936db10482008cee0b5a3fb6977eb563697c90e66ac3ea7b045486103b5",
 };
 
-assert.equal(productSheets.length, 14, "the library must contain exactly 14 active sheets");
+assert.equal(productSheets.length, 15, "the retained library must contain exactly 15 sheets");
 assert.equal(
   productSheets.filter((sheet) => sheet.selectionProfile.category === "flower").length,
   7,
@@ -36,8 +41,8 @@ assert.equal(
 );
 assert.equal(
   productSheets.filter((sheet) => sheet.selectionProfile.category === "resin").length,
-  7,
-  "the library must contain seven resins",
+  8,
+  "the retained library must contain eight resins",
 );
 assert.equal(
   new Set(productSheets.map((sheet) => sheet.slug)).size,
@@ -45,9 +50,14 @@ assert.equal(
   "product sheet slugs must be unique",
 );
 assert.deepEqual(
-  productSheets.filter((sheet) => sheet.selectionProfile.category === "resin").map((sheet) => sheet.name),
-  ["Kief", "Libanais", "Black Butter", "Mousseux Skywalker", "Ice-o-Lator", "Black Afghan", "Marocain"],
-  "the active resin library must use the published names",
+  availableProductSheets.map((sheet) => sheet.name),
+  ["Blue Dream", "Skittle Plus", "Mousseux Skywalker", "Ice-o-Lator", "Black Afghan", "Marocain", "Golden Static"],
+  "the active library must contain only references currently represented in the shop",
+);
+assert.deepEqual(
+  temporarilyUnavailableProductSheets.map((sheet) => sheet.name),
+  ["Biscotti", "Lemon Skunk", "Mimosa", "Watermelon Candy", "Zkittlez OG", "Kief", "Libanais", "Black Butter"],
+  "unavailable references must remain retained in the documentary library",
 );
 assert.equal(productSheets.some((sheet) => sheet.slug === "le-mousseux"), false, "the retired sheet must not be listed");
 
@@ -92,8 +102,8 @@ const publicPdfFiles = walkFiles(join(publicDir, "fiches-produits")).filter(
 const distPdfFiles = walkFiles(join(distDir, "fiches-produits")).filter(
   (file) => extname(file).toLowerCase() === ".pdf",
 );
-assert.equal(publicPdfFiles.length, 15, "public tree must retain 14 active PDFs and one legacy PDF");
-assert.equal(distPdfFiles.length, 15, "build tree must retain 14 active PDFs and one legacy PDF");
+assert.equal(publicPdfFiles.length, 16, "public tree must retain 15 listed PDFs and one legacy PDF");
+assert.equal(distPdfFiles.length, 16, "build tree must retain 15 listed PDFs and one legacy PDF");
 for (const root of [publicDir, distDir]) {
   const legacyPdf = join(root, "fiches-produits", "le-mousseux", "verdanza-le-mousseux.pdf");
   assert.equal(sha256(legacyPdf), expectedPdfHashes["le-mousseux"], "the retired PDF must remain available at its old URL");
@@ -122,8 +132,8 @@ assert.match(
 assert.equal(metaContent(routeHtml, "robots"), "noindex,follow", "robots must be noindex,follow");
 assert.equal(
   [...routeHtml.matchAll(/href=["'][^"']+\.pdf["']/gi)].length,
-  7,
-  "the prerendered route must link the seven default flower PDFs; the seven resins are exposed by the client-side tab",
+  10,
+  "the prerendered route must link two available flowers and eight retained unavailable sheets",
 );
 assert.doesNotMatch(routeHtml, /"@type"\s*:\s*"Product"/i, "Product schema must not be present");
 assert.doesNotMatch(routeHtml, /production-v5\.1/i, "internal production path leaked into HTML");
@@ -355,7 +365,7 @@ try {
   await server.close();
 }
 
-console.log("Product sheets tests passed: 14 active sheets, one retained legacy PDF, SEO and sitemap integrity.");
+console.log("Product sheets tests passed: 7 available sheets, 8 retained unavailable sheets, one legacy PDF, SEO and sitemap integrity.");
 
 function sha256(path: string) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");

@@ -40,5 +40,6 @@ export function publicSelectionView(entry: PublishedSelectionSheet): ProductShee
     selectionProfile: entry.selectionProfile,
     pdfUrl: `/api/selection?action=asset&slug=${slug}&kind=pdf`,
     previewUrl: `/api/selection?action=asset&slug=${slug}&kind=image`,
+    availability: "available",
   };
 }

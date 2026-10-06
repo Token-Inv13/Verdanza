@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { productSheets, type ProductSheet } from "../src/data/productSheets";
+import {
+  availableProductSheets,
+  productSheets,
+  temporarilyUnavailableProductSheets,
+  type ProductSheet,
+} from "../src/data/productSheets";
 import {
   changeProductSelectorCategory,
   createInitialProductSelectorChoices,
@@ -12,11 +17,11 @@ import {
 
 const expectedProfiles = {
   biscotti: ["flower", "moyen", ["sucre", "terreux", "epice"]],
-  "blue-dream": ["flower", "fort", ["agrumes", "terreux", "boise"]],
+  "blue-dream": ["flower", "doux", ["agrumes", "terreux", "boise"]],
   "lemon-skunk": ["flower", "fort", ["agrumes", "sucre", "epice"]],
   mimosa: ["flower", "moyen", ["agrumes", "fruite", "sucre"]],
   "watermelon-candy": ["flower", "doux", ["fruite", "sucre", "terreux"]],
-  "zkittlez-og": ["flower", "fort", ["fruite", "sucre", "agrumes"]],
+  "zkittlez-og": ["flower", "moyen", ["fruite", "sucre", "agrumes"]],
   "skittle-plus": ["flower", "fort", ["agrumes", "sucre", "fruite"]],
   kief: ["resin", "fort", ["terreux", "epice", "boise"]],
   libanais: ["resin", "fort", ["terreux", "epice", "boise"]],
@@ -25,9 +30,20 @@ const expectedProfiles = {
   "ice-o-lator": ["resin", "moyen", ["fruite", "epice", "sucre"]],
   "black-afghan": ["resin", "moyen", ["terreux", "sucre", "fruite"]],
   marocain: ["resin", "fort", ["boise", "agrumes", "epice"]],
+  "golden-static": ["resin", "fort", ["terreux", "boise"]],
 } as const;
 
-assert.equal(productSheets.length, 14, "all fourteen active profiles must be represented");
+assert.equal(productSheets.length, 15, "all fifteen retained profiles must be represented");
+assert.deepEqual(
+  availableProductSheets.map((sheet) => sheet.slug),
+  ["blue-dream", "skittle-plus", "mousseux-skywalker", "ice-o-lator", "black-afghan", "marocain", "golden-static"],
+  "only references currently represented in the shop may feed the selector",
+);
+assert.deepEqual(
+  temporarilyUnavailableProductSheets.map((sheet) => sheet.slug),
+  ["biscotti", "lemon-skunk", "mimosa", "watermelon-candy", "zkittlez-og", "kief", "libanais", "black-butter"],
+  "temporarily unavailable sheets must remain retained outside the selector",
+);
 for (const sheet of productSheets) {
   const expected = expectedProfiles[sheet.slug as keyof typeof expectedProfiles];
   assert.ok(expected, `${sheet.slug}: normalized V6 profile is missing`);
@@ -40,23 +56,23 @@ for (const sheet of productSheets) {
   assert.equal("ambiences" in sheet.selectionProfile, false, `${sheet.slug}: ambience leaked into selectionProfile`);
 }
 
-const flowerMedium: ProductSelectorChoices = { category: "flower", intensity: "moyen", aroma: "any" };
-const flowerMatches = rankProductSheets(flowerMedium);
+const flowerSoft: ProductSelectorChoices = { category: "flower", intensity: "doux", aroma: "any" };
+const flowerMatches = rankProductSheets(flowerSoft);
 assert.deepEqual(
   flowerMatches.map((match) => match.sheet.slug),
-  ["biscotti", "mimosa"],
-  "flower + medium must return only exact V6 intensity matches in stable source order",
+  ["blue-dream"],
+  "flower + soft must return only the available exact match",
 );
 assert.ok(
   flowerMatches.every((match) => match.sheet.selectionProfile.category === "flower"),
   "flower selection must never return a resin",
 );
 
-const resinStrong = { ...flowerMedium, category: "resin", intensity: "fort" } as const;
+const resinStrong = { ...flowerSoft, category: "resin", intensity: "fort" } as const;
 const resinMatches = rankProductSheets(resinStrong);
 assert.deepEqual(
   resinMatches.map((match) => match.sheet.slug),
-  ["kief", "libanais", "mousseux-skywalker", "marocain"],
+  ["mousseux-skywalker", "marocain", "golden-static"],
   "resin + strong must return only exact V6 intensity matches",
 );
 assert.ok(
@@ -65,23 +81,23 @@ assert.ok(
 );
 
 assert.deepEqual(
-  rankProductSheets({ ...flowerMedium, aroma: "fruite" }).map((match) => match.sheet.slug),
-  ["mimosa", "biscotti"],
+  rankProductSheets({ ...flowerSoft, aroma: "fruite" }).map((match) => match.sheet.slug),
+  ["blue-dream"],
   "aroma must refine exact type/intensity matches",
 );
 assert.deepEqual(
-  rankProductSheets({ ...flowerMedium, aroma: "boise" }).map((match) => match.sheet.slug),
-  ["biscotti", "mimosa"],
+  rankProductSheets({ ...flowerSoft, aroma: "boise" }).map((match) => match.sheet.slug),
+  ["blue-dream"],
   "missing aroma match must fall back to exact type/intensity matches",
 );
 assert.deepEqual(
-  rankProductSheets({ ...flowerMedium, aroma: "any" }).map((match) => match.sheet.slug),
+  rankProductSheets({ ...flowerSoft, aroma: "any" }).map((match) => match.sheet.slug),
   flowerMatches.map((match) => match.sheet.slug),
   "Peu importe must preserve stable exact-match order",
 );
 assert.deepEqual(
   rankProductSheets({ category: "flower", intensity: "fort", aroma: "fruite" }).map((match) => match.sheet.slug),
-  ["zkittlez-og", "skittle-plus", "blue-dream", "lemon-skunk"],
+  ["skittle-plus"],
   "a matching aroma must rank first without changing intensity",
 );
 assert.deepEqual(
@@ -92,8 +108,8 @@ assert.deepEqual(
 
 assert.deepEqual(
   [...getAvailableProductSheetIntensities("flower")].sort(),
-  ["doux", "fort", "moyen"],
-  "all three flower intensities must be available from product profiles",
+  ["doux", "fort"],
+  "flower intensities must be derived from available product profiles only",
 );
 assert.deepEqual(
   [...getAvailableProductSheetIntensities("resin")].sort(),
@@ -115,10 +131,10 @@ assert.deepEqual(
 );
 assert.deepEqual(
   changeProductSelectorCategory(
-    { category: "flower", intensity: "moyen", aroma: "sucre" },
+    { category: "flower", intensity: "fort", aroma: "sucre" },
     "resin",
   ),
-  { category: "resin", intensity: "moyen", aroma: null },
+  { category: "resin", intensity: "fort", aroma: null },
   "changing type may preserve a compatible intensity but must require aroma confirmation again",
 );
 
@@ -126,11 +142,11 @@ const exactSelectionCases: Array<{
   choices: ProductSelectorChoices;
   expected: string[];
 }> = [
-  { choices: { category: "flower", intensity: "doux", aroma: "any" }, expected: ["watermelon-candy"] },
-  { choices: { category: "flower", intensity: "moyen", aroma: "any" }, expected: ["biscotti", "mimosa"] },
-  { choices: { category: "flower", intensity: "fort", aroma: "any" }, expected: ["blue-dream", "lemon-skunk", "zkittlez-og", "skittle-plus"] },
-  { choices: { category: "resin", intensity: "moyen", aroma: "any" }, expected: ["black-butter", "ice-o-lator", "black-afghan"] },
-  { choices: { category: "resin", intensity: "fort", aroma: "any" }, expected: ["kief", "libanais", "mousseux-skywalker", "marocain"] },
+  { choices: { category: "flower", intensity: "doux", aroma: "any" }, expected: ["blue-dream"] },
+  { choices: { category: "flower", intensity: "moyen", aroma: "any" }, expected: [] },
+  { choices: { category: "flower", intensity: "fort", aroma: "any" }, expected: ["skittle-plus"] },
+  { choices: { category: "resin", intensity: "moyen", aroma: "any" }, expected: ["ice-o-lator", "black-afghan"] },
+  { choices: { category: "resin", intensity: "fort", aroma: "any" }, expected: ["mousseux-skywalker", "marocain", "golden-static"] },
 ];
 for (const { choices, expected } of exactSelectionCases) {
   assert.deepEqual(rankProductSheets(choices).map((match) => match.sheet.slug), expected);
@@ -142,12 +158,12 @@ const aromaCases: Array<{
   intensity: ProductSelectorChoices["intensity"];
   first: string;
 }> = [
-  { aroma: "fruite", category: "flower", intensity: "fort", first: "zkittlez-og" },
-  { aroma: "agrumes", category: "flower", intensity: "fort", first: "blue-dream" },
-  { aroma: "sucre", category: "flower", intensity: "moyen", first: "biscotti" },
-  { aroma: "terreux", category: "resin", intensity: "fort", first: "kief" },
-  { aroma: "epice", category: "resin", intensity: "fort", first: "kief" },
-  { aroma: "boise", category: "resin", intensity: "fort", first: "kief" },
+  { aroma: "fruite", category: "flower", intensity: "fort", first: "skittle-plus" },
+  { aroma: "agrumes", category: "flower", intensity: "doux", first: "blue-dream" },
+  { aroma: "sucre", category: "resin", intensity: "moyen", first: "ice-o-lator" },
+  { aroma: "terreux", category: "resin", intensity: "fort", first: "golden-static" },
+  { aroma: "epice", category: "resin", intensity: "fort", first: "mousseux-skywalker" },
+  { aroma: "boise", category: "resin", intensity: "fort", first: "mousseux-skywalker" },
 ];
 for (const { aroma, category, intensity, first } of aromaCases) {
   assert.equal(rankProductSheets({ aroma, category, intensity })[0]?.sheet.slug, first, `${aroma}: matching aroma must rank first`);
@@ -155,18 +171,18 @@ for (const { aroma, category, intensity, first } of aromaCases) {
 
 assert.deepEqual(
   rankProductSheets({ category: "resin", intensity: "moyen", aroma: "any" }).map((match) => match.sheet.slug),
-  ["black-butter", "ice-o-lator", "black-afghan"],
+  ["ice-o-lator", "black-afghan"],
   "changing type must recalculate within the new category",
 );
 assert.deepEqual(
   rankProductSheets({ category: "flower", intensity: "doux", aroma: "any" }).map((match) => match.sheet.slug),
-  ["watermelon-candy"],
+  ["blue-dream"],
   "changing intensity must recalculate without fallback",
 );
 
-assert.equal(matchesRequiredSelection(sheet("biscotti"), flowerMedium), true);
-assert.equal(matchesRequiredSelection(sheet("mimosa"), flowerMedium), true);
-assert.equal(matchesRequiredSelection(sheet("watermelon-candy"), flowerMedium), false);
+assert.equal(matchesRequiredSelection(sheet("blue-dream"), flowerSoft), true);
+assert.equal(matchesRequiredSelection(sheet("biscotti"), flowerSoft), false);
+assert.equal(matchesRequiredSelection(sheet("watermelon-candy"), flowerSoft), true);
 assert.equal(matchesSelectedAroma(sheet("mimosa"), "fruite"), true);
 assert.equal(matchesSelectedAroma(sheet("mimosa"), "any"), false);
 
@@ -181,12 +197,12 @@ assert.deepEqual(
 
 const stableTieSheets = [cloneAs("first"), cloneAs("second")];
 assert.deepEqual(
-  rankProductSheets({ category: "flower", intensity: "fort", aroma: "any" }, stableTieSheets).map((match) => match.sheet.slug),
+  rankProductSheets({ category: "flower", intensity: "doux", aroma: "any" }, stableTieSheets).map((match) => match.sheet.slug),
   ["first", "second"],
   "equal matches must preserve source order",
 );
 
-console.log("Product selector tests passed: 14 active profiles, strict type/intensity, aroma refinement, fallback, reset and stable ranking.");
+console.log("Product selector tests passed: 7 available and 8 retained profiles, strict availability/type/intensity, aroma refinement, reset and stable ranking.");
 
 function sheet(slug: string) {
   const value = productSheets.find((candidate) => candidate.slug === slug);

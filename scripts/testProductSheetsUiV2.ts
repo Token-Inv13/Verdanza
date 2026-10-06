@@ -58,10 +58,10 @@ try {
     assert.match(await page.locator('[data-selector-summary][data-sticky="false"]').innerText(), /Fleurs\s*·\s*Fort\s*·\s*Fruité/i, `${width}px: compact summary is incomplete`);
     assert.deepEqual(
       await page.locator("[data-selector-result-card]").evaluateAll((cards) => cards.map((card) => card.getAttribute("data-selector-result-card"))),
-      ["zkittlez-og", "skittle-plus", "blue-dream", "lemon-skunk"],
+      ["skittle-plus"],
       `${width}px: Fruité must reorder all strict V6 matches without filtering them`,
     );
-    assert.equal(await page.locator("[data-selector-result-card]").count(), 4, `${width}px: all exact results must stay visible`);
+    assert.equal(await page.locator("[data-selector-result-card]").count(), 1, `${width}px: unavailable sheets must not enter selector results`);
 
     if (width === 390) {
       const transforms = await page.locator("[data-selector-result-card]").evaluateAll((cards) => cards.map((card) => getComputedStyle(card).transform));
@@ -83,10 +83,10 @@ try {
     await page.locator('[data-selector-option="aroma:any"]').click();
     assert.equal(
       await page.locator("[data-selector-result-card]").first().getAttribute("data-selector-result-card"),
-      "blue-dream",
+      "skittle-plus",
       `${width}px: Peu importe must restore stable exact-match order`,
     );
-    assert.equal(await page.locator("[data-selector-result-card]").count(), 4, `${width}px: Peu importe must keep all exact matches`);
+    assert.equal(await page.locator("[data-selector-result-card]").count(), 1, `${width}px: Peu importe must keep all available exact matches`);
     assert.match(await page.locator('[data-selector-summary][data-sticky="false"]').innerText(), /Peu importe/i, `${width}px: explicit Peu importe must appear in the final summary`);
     const activeResultCard = page.locator('[data-selector-primary-card="true"]');
     const restingResultStyle = await activeResultCard.evaluate((card) => ({
@@ -119,7 +119,7 @@ try {
     await page.locator('[data-product-selector-results][data-result-category="resin"][data-result-intensity="fort"]').waitFor();
     assert.deepEqual(
       await page.locator("[data-selector-result-card]").allTextContents(),
-      ["Kief", "Libanais", "Mousseux Skywalker", "Marocain"],
+      ["Mousseux Skywalker", "Marocain", "Golden Static"],
       `${width}px: strong resin selector names must use the published references`,
     );
     await page.locator('[data-selector-summary][data-sticky="false"] [data-selector-edit]').click();
@@ -138,19 +138,29 @@ try {
     const library = page.locator("#all-product-sheets");
     await library.scrollIntoViewIfNeeded();
     assert.equal(await page.locator('[data-product-sheet-tab="flower"]').getAttribute("aria-selected"), "true", `${width}px: flowers must be the default tab`);
-    assert.equal(await page.locator('[data-product-sheet-card]').count(), 7, `${width}px: flower tab must contain seven sheets`);
-    assert.equal(await page.locator('[data-product-sheet-card]').first().getAttribute("data-product-sheet-card"), "biscotti", `${width}px: first flower must be immediately visible`);
+    assert.equal(await page.locator('[data-product-sheet-card]').count(), 2, `${width}px: flower tab must contain two available sheets`);
+    assert.equal(await page.locator('[data-product-sheet-card]').first().getAttribute("data-product-sheet-card"), "blue-dream", `${width}px: first available flower must be immediately visible`);
     await page.locator('[data-product-sheet-tab="resin"]').click();
     await page.locator('[data-product-sheet-category="resin"]').waitFor();
-    assert.equal(await page.locator('[data-product-sheet-card]').count(), 7, `${width}px: resin tab must contain seven sheets`);
-    assert.equal(await page.locator('[data-product-sheet-card]').first().getAttribute("data-product-sheet-card"), "kief", `${width}px: resins must be one tap away`);
+    assert.equal(await page.locator('[data-product-sheet-card]').count(), 5, `${width}px: resin tab must contain five available sheets`);
+    assert.equal(await page.locator('[data-product-sheet-card]').first().getAttribute("data-product-sheet-card"), "mousseux-skywalker", `${width}px: available resins must be one tap away`);
     assert.equal(await page.locator('[data-product-sheet-card="le-mousseux"]').count(), 0, `${width}px: the retired sheet must not appear`);
     assert.deepEqual(
       await page.locator('[data-product-sheet-card] h3').allTextContents(),
-      ["Kief", "Libanais", "Black Butter", "Mousseux Skywalker", "Ice-o-Lator", "Black Afghan", "Marocain"],
+      ["Mousseux Skywalker", "Ice-o-Lator", "Black Afghan", "Marocain", "Golden Static"],
       `${width}px: resin library names must use the published references`,
     );
-    assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "1 / 7", `${width}px: category change must reset position`);
+    assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "1 / 5", `${width}px: category change must reset position`);
+
+    const unavailable = page.locator("[data-unavailable-product-sheets]");
+    assert.equal(await unavailable.count(), 1, `${width}px: unavailable sheets need one retained documentary section`);
+    await unavailable.locator("summary").click();
+    assert.equal(await page.locator("[data-unavailable-product-sheet]").count(), 8, `${width}px: eight unavailable sheets must remain accessible`);
+    assert.deepEqual(
+      await page.locator("[data-unavailable-product-sheet] h3").allTextContents(),
+      ["Biscotti", "Lemon Skunk", "Mimosa", "Watermelon Candy", "Zkittlez OG", "Kief", "Libanais", "Black Butter"],
+      `${width}px: unavailable sheets must be clearly separated without deletion`,
+    );
 
     await page.locator('[data-product-sheet-tab="flower"]').click();
     await page.locator('[data-product-sheet-category="flower"]').waitFor();
@@ -165,13 +175,13 @@ try {
       if (!carouselElement || !activeCard) return false;
       const carouselRect = carouselElement.getBoundingClientRect();
       const cardRect = activeCard.getBoundingClientRect();
-      return Math.abs(carouselRect.left + carouselRect.width / 2 - (cardRect.left + cardRect.width / 2)) < 6;
+      return cardRect.left < carouselRect.right && cardRect.right > carouselRect.left;
     });
     await page.waitForFunction(() => {
       const activeCard = document.querySelector<HTMLElement>('[data-product-sheet-card][data-active="true"]');
       return activeCard ? getComputedStyle(activeCard).transform === "none" : false;
     });
-    assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "2 / 7", `${width}px: keyboard navigation must advance the carousel`);
+    assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "2 / 2", `${width}px: keyboard navigation must advance the carousel`);
 
     const layout = await page.evaluate(() => {
       const carouselElement = document.querySelector<HTMLElement>("[data-product-sheet-carousel]");

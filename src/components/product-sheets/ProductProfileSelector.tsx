@@ -10,7 +10,7 @@ import {
   productSheetAromaFamilyLabels,
   productSheetCategoryLabels,
   productSheetIntensityLabels,
-  productSheets,
+  availableProductSheets,
   type ProductSheet,
   type ProductSheetAromaFamily,
   type ProductSheetCategory,
@@ -31,7 +31,7 @@ const aromaOptions = Object.entries(productSheetAromaFamilyLabels) as Array<
   [ProductSheetAromaFamily, string]
 >;
 
-export function ProductProfileSelector({ sheets = productSheets }: { sheets?: ProductSheet[] }) {
+export function ProductProfileSelector({ sheets = availableProductSheets }: { sheets?: ProductSheet[] }) {
   const [choices, setChoices] = useState<ProductSelectorChoices>(
     createInitialProductSelectorChoices,
   );

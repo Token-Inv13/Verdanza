@@ -1,5 +1,5 @@
 import {
-  productSheets,
+  availableProductSheets,
   type ProductSheet,
   type ProductSheetAromaFamily,
   type ProductSheetCategory,
@@ -27,7 +27,7 @@ export function createInitialProductSelectorChoices(): ProductSelectorChoices {
 
 export function getAvailableProductSheetIntensities(
   category: ProductSheetCategory | null,
-  sheets: ProductSheet[] = productSheets,
+  sheets: ProductSheet[] = availableProductSheets,
 ): Set<ProductSheetIntensity> {
   if (!category) return new Set();
 
@@ -41,7 +41,7 @@ export function getAvailableProductSheetIntensities(
 export function changeProductSelectorCategory(
   choices: ProductSelectorChoices,
   category: ProductSheetCategory,
-  sheets: ProductSheet[] = productSheets,
+  sheets: ProductSheet[] = availableProductSheets,
 ): ProductSelectorChoices {
   const availableIntensities = getAvailableProductSheetIntensities(category, sheets);
 
@@ -81,7 +81,7 @@ export function matchesSelectedAroma(
 
 export function rankProductSheets(
   choices: ProductSelectorChoices,
-  sheets: ProductSheet[] = productSheets,
+  sheets: ProductSheet[] = availableProductSheets,
 ): ProductSheetMatch[] {
   if (!choices.category || !choices.intensity || !choices.aroma) return [];
 

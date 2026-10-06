@@ -15,6 +15,8 @@ export type ProductSelectionProfile = {
   aromaFamilies: ProductSheetAromaFamily[];
 };
 
+export type ProductSheetAvailability = "available" | "temporarily-unavailable";
+
 export type ProductSheet = {
   name: string;
   slug: string;
@@ -22,6 +24,7 @@ export type ProductSheet = {
   selectionProfile: ProductSelectionProfile;
   pdfUrl: string;
   previewUrl: string;
+  availability: ProductSheetAvailability;
 };
 
 export const productSheetCategoryLabels: Record<ProductSheetCategory, string> = {
@@ -40,14 +43,16 @@ export const productSheets: ProductSheet[] = [
     selectionProfile: { category: "flower", intensity: "moyen", aromaFamilies: ["sucre", "terreux", "epice"] },
     pdfUrl: "/fiches-produits/biscotti/verdanza-biscotti.pdf",
     previewUrl: "/images/fiches-produits/biscotti.webp",
+    availability: "temporarily-unavailable",
   },
   {
     name: "Blue Dream",
     slug: "blue-dream",
     aromas: ["Agrumes", "Pin", "Terreux"],
-    selectionProfile: { category: "flower", intensity: "fort", aromaFamilies: ["agrumes", "terreux", "boise"] },
+    selectionProfile: { category: "flower", intensity: "doux", aromaFamilies: ["agrumes", "terreux", "boise"] },
     pdfUrl: "/fiches-produits/blue-dream/verdanza-blue-dream.pdf",
     previewUrl: "/images/fiches-produits/blue-dream.webp",
+    availability: "available",
   },
   {
     name: "Lemon Skunk",
@@ -56,6 +61,7 @@ export const productSheets: ProductSheet[] = [
     selectionProfile: { category: "flower", intensity: "fort", aromaFamilies: ["agrumes", "sucre", "epice"] },
     pdfUrl: "/fiches-produits/lemon-skunk/verdanza-lemon-skunk.pdf",
     previewUrl: "/images/fiches-produits/lemon-skunk.webp",
+    availability: "temporarily-unavailable",
   },
   {
     name: "Mimosa",
@@ -64,6 +70,7 @@ export const productSheets: ProductSheet[] = [
     selectionProfile: { category: "flower", intensity: "moyen", aromaFamilies: ["agrumes", "fruite", "sucre"] },
     pdfUrl: "/fiches-produits/mimosa/verdanza-mimosa.pdf",
     previewUrl: "/images/fiches-produits/mimosa.webp",
+    availability: "temporarily-unavailable",
   },
   {
     name: "Watermelon Candy",
@@ -72,14 +79,16 @@ export const productSheets: ProductSheet[] = [
     selectionProfile: { category: "flower", intensity: "doux", aromaFamilies: ["fruite", "sucre", "terreux"] },
     pdfUrl: "/fiches-produits/watermelon-candy/verdanza-watermelon-candy.pdf",
     previewUrl: "/images/fiches-produits/watermelon-candy.webp",
+    availability: "temporarily-unavailable",
   },
   {
     name: "Zkittlez OG",
     slug: "zkittlez-og",
     aromas: ["Fruité", "Sucré", "Bonbon"],
-    selectionProfile: { category: "flower", intensity: "fort", aromaFamilies: ["fruite", "sucre", "agrumes"] },
+    selectionProfile: { category: "flower", intensity: "moyen", aromaFamilies: ["fruite", "sucre", "agrumes"] },
     pdfUrl: "/fiches-produits/zkittlez-og/verdanza-zkittlez-og.pdf",
     previewUrl: "/images/fiches-produits/zkittlez-og.webp",
+    availability: "temporarily-unavailable",
   },
   {
     name: "Skittle Plus",
@@ -88,6 +97,7 @@ export const productSheets: ProductSheet[] = [
     selectionProfile: { category: "flower", intensity: "fort", aromaFamilies: ["agrumes", "sucre", "fruite"] },
     pdfUrl: "/fiches-produits/skittle-plus/verdanza-skittle-plus.pdf",
     previewUrl: "/images/fiches-produits/skittle-plus.webp",
+    availability: "available",
   },
   {
     name: "Kief",
@@ -96,6 +106,7 @@ export const productSheets: ProductSheet[] = [
     selectionProfile: { category: "resin", intensity: "fort", aromaFamilies: ["terreux", "epice", "boise"] },
     pdfUrl: "/fiches-produits/kief/verdanza-kief.pdf",
     previewUrl: "/images/fiches-produits/kief.webp",
+    availability: "temporarily-unavailable",
   },
   {
     name: "Libanais",
@@ -104,6 +115,7 @@ export const productSheets: ProductSheet[] = [
     selectionProfile: { category: "resin", intensity: "fort", aromaFamilies: ["terreux", "epice", "boise"] },
     pdfUrl: "/fiches-produits/libanais/verdanza-libanais.pdf",
     previewUrl: "/images/fiches-produits/libanais.webp",
+    availability: "temporarily-unavailable",
   },
   {
     name: "Black Butter",
@@ -112,6 +124,7 @@ export const productSheets: ProductSheet[] = [
     selectionProfile: { category: "resin", intensity: "moyen", aromaFamilies: ["terreux", "boise", "sucre"] },
     pdfUrl: "/fiches-produits/black-butter/verdanza-black-butter.pdf",
     previewUrl: "/images/fiches-produits/black-butter.webp",
+    availability: "temporarily-unavailable",
   },
   {
     name: "Mousseux Skywalker",
@@ -120,6 +133,7 @@ export const productSheets: ProductSheet[] = [
     selectionProfile: { category: "resin", intensity: "fort", aromaFamilies: ["boise", "agrumes", "epice"] },
     pdfUrl: "/fiches-produits/mousseux-skywalker/verdanza-mousseux-skywalker.pdf",
     previewUrl: "/images/fiches-produits/mousseux-skywalker.webp",
+    availability: "available",
   },
   {
     name: "Ice-o-Lator",
@@ -128,6 +142,7 @@ export const productSheets: ProductSheet[] = [
     selectionProfile: { category: "resin", intensity: "moyen", aromaFamilies: ["fruite", "epice", "sucre"] },
     pdfUrl: "/fiches-produits/ice-o-lator/verdanza-ice-o-lator.pdf",
     previewUrl: "/images/fiches-produits/ice-o-lator.webp",
+    availability: "available",
   },
   {
     name: "Black Afghan",
@@ -136,6 +151,7 @@ export const productSheets: ProductSheet[] = [
     selectionProfile: { category: "resin", intensity: "moyen", aromaFamilies: ["terreux", "sucre", "fruite"] },
     pdfUrl: "/fiches-produits/black-afghan/verdanza-black-afghan.pdf",
     previewUrl: "/images/fiches-produits/black-afghan.webp",
+    availability: "available",
   },
   {
     name: "Marocain",
@@ -144,5 +160,23 @@ export const productSheets: ProductSheet[] = [
     selectionProfile: { category: "resin", intensity: "fort", aromaFamilies: ["boise", "agrumes", "epice"] },
     pdfUrl: "/fiches-produits/marocain/verdanza-marocain.pdf",
     previewUrl: "/images/fiches-produits/marocain.webp",
+    availability: "available",
+  },
+  {
+    name: "Golden Static",
+    slug: "golden-static",
+    aromas: ["Puissant", "Herbacé", "Végétal", "Authentique"],
+    selectionProfile: { category: "resin", intensity: "fort", aromaFamilies: ["terreux", "boise"] },
+    pdfUrl: "/fiches-produits/golden-static/verdanza-golden-static.pdf",
+    previewUrl: "/images/fiches-produits/golden-static.webp",
+    availability: "available",
   },
 ];
+
+export const availableProductSheets = productSheets.filter(
+  (sheet) => sheet.availability === "available",
+);
+
+export const temporarilyUnavailableProductSheets = productSheets.filter(
+  (sheet) => sheet.availability === "temporarily-unavailable",
+);

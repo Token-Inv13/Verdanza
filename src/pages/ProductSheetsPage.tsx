@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 import { ProductProfileSelector } from "../components/product-sheets/ProductProfileSelector";
-import { ProductSheetBrowser } from "../components/product-sheets/ProductSheetBrowser";
+import {
+  ProductSheetBrowser,
+  TemporarilyUnavailableProductSheets,
+} from "../components/product-sheets/ProductSheetBrowser";
 import { productSheets, type ProductSheet } from "../data/productSheets";
 import {
   parseProductIntensity,
@@ -53,11 +56,20 @@ function normalizePublicSheet(value: unknown): ProductSheet | null {
     selectionProfile: { category, intensity, aromaFamilies },
     pdfUrl: sheet.pdfUrl,
     previewUrl: sheet.previewUrl,
+    availability: "available",
   };
 }
 
 export function ProductSheetsPage() {
   const [sheets, setSheets] = useState<ProductSheet[]>(productSheets);
+  const availableSheets = useMemo(
+    () => sheets.filter((sheet) => sheet.availability === "available"),
+    [sheets],
+  );
+  const unavailableSheets = useMemo(
+    () => sheets.filter((sheet) => sheet.availability === "temporarily-unavailable"),
+    [sheets],
+  );
   useEffect(() => {
     const controller = new AbortController();
     void fetch("/api/selection?action=library", { signal: controller.signal })
@@ -106,7 +118,7 @@ export function ProductSheetsPage() {
       </header>
 
       <div className="container-page pt-6 sm:pt-10 lg:pt-12">
-        <ProductProfileSelector sheets={sheets} />
+        <ProductProfileSelector sheets={availableSheets} />
 
         <section
           id="all-product-sheets"
@@ -128,7 +140,8 @@ export function ProductSheetsPage() {
             </p>
           </div>
 
-          <ProductSheetBrowser library={sheets} />
+          <ProductSheetBrowser library={availableSheets} />
+          <TemporarilyUnavailableProductSheets library={unavailableSheets} />
         </section>
       </div>
     </main>
