@@ -15,16 +15,15 @@ export type ProductSelectionProfile = {
   aromaFamilies: ProductSheetAromaFamily[];
 };
 
-export type ProductSheetAvailability = "available" | "temporarily-unavailable";
-
 export type ProductSheet = {
+  productId: string;
   name: string;
   slug: string;
   aromas: string[];
   selectionProfile: ProductSelectionProfile;
   pdfUrl: string;
   previewUrl: string;
-  availability: ProductSheetAvailability;
+  availability: "available";
 };
 
 export const productSheetCategoryLabels: Record<ProductSheetCategory, string> = {
@@ -35,148 +34,89 @@ export const productSheetCategoryLabels: Record<ProductSheetCategory, string> = 
 export const productSheetIntensityLabels = productIntensityLabels;
 export const productSheetAromaFamilyLabels = productAromaFamilyLabels;
 
+// Public library linked one-to-one to the products currently published in the shop.
+// Historical sheets remain in their documentary archives, outside the active UI.
 export const productSheets: ProductSheet[] = [
   {
-    name: "Biscotti",
-    slug: "biscotti",
-    aromas: ["Sucré", "Terreux", "Épicé"],
-    selectionProfile: { category: "flower", intensity: "moyen", aromaFamilies: ["sucre", "terreux", "epice"] },
-    pdfUrl: "/fiches-produits/biscotti/verdanza-biscotti.pdf",
-    previewUrl: "/images/fiches-produits/biscotti.webp",
-    availability: "temporarily-unavailable",
-  },
-  {
+    productId: "flower-blue-dream-cbd",
     name: "Blue Dream",
-    slug: "blue-dream",
-    aromas: ["Agrumes", "Pin", "Terreux"],
-    selectionProfile: { category: "flower", intensity: "doux", aromaFamilies: ["agrumes", "terreux", "boise"] },
-    pdfUrl: "/fiches-produits/blue-dream/verdanza-blue-dream.pdf",
-    previewUrl: "/images/fiches-produits/blue-dream.webp",
+    slug: "blue-dream-cbd",
+    aromas: ["Citron", "Pin", "Fruit doux"],
+    selectionProfile: { category: "flower", intensity: "doux", aromaFamilies: ["agrumes", "boise", "fruite"] },
+    pdfUrl: "/fiches-produits/blue-dream-cbd/verdanza-blue-dream-cbd.pdf",
+    previewUrl: "/images/fiches-produits/blue-dream-cbd.webp",
     availability: "available",
   },
   {
-    name: "Lemon Skunk",
-    slug: "lemon-skunk",
-    aromas: ["Citron", "Agrumes", "Acidulé"],
-    selectionProfile: { category: "flower", intensity: "fort", aromaFamilies: ["agrumes", "sucre", "epice"] },
-    pdfUrl: "/fiches-produits/lemon-skunk/verdanza-lemon-skunk.pdf",
-    previewUrl: "/images/fiches-produits/lemon-skunk.webp",
-    availability: "temporarily-unavailable",
-  },
-  {
-    name: "Mimosa",
-    slug: "mimosa",
-    aromas: ["Agrumes", "Orange", "Fruité"],
-    selectionProfile: { category: "flower", intensity: "moyen", aromaFamilies: ["agrumes", "fruite", "sucre"] },
-    pdfUrl: "/fiches-produits/mimosa/verdanza-mimosa.pdf",
-    previewUrl: "/images/fiches-produits/mimosa.webp",
-    availability: "temporarily-unavailable",
-  },
-  {
-    name: "Watermelon Candy",
-    slug: "watermelon-candy",
-    aromas: ["Pastèque", "Sucré", "Fruité"],
-    selectionProfile: { category: "flower", intensity: "doux", aromaFamilies: ["fruite", "sucre", "terreux"] },
-    pdfUrl: "/fiches-produits/watermelon-candy/verdanza-watermelon-candy.pdf",
-    previewUrl: "/images/fiches-produits/watermelon-candy.webp",
-    availability: "temporarily-unavailable",
-  },
-  {
-    name: "Zkittlez OG",
-    slug: "zkittlez-og",
-    aromas: ["Fruité", "Sucré", "Bonbon"],
-    selectionProfile: { category: "flower", intensity: "moyen", aromaFamilies: ["fruite", "sucre", "agrumes"] },
-    pdfUrl: "/fiches-produits/zkittlez-og/verdanza-zkittlez-og.pdf",
-    previewUrl: "/images/fiches-produits/zkittlez-og.webp",
-    availability: "temporarily-unavailable",
-  },
-  {
-    name: "Skittle Plus",
-    slug: "skittle-plus",
-    aromas: ["Citron", "Bonbon", "Diesel"],
-    selectionProfile: { category: "flower", intensity: "fort", aromaFamilies: ["agrumes", "sucre", "fruite"] },
-    pdfUrl: "/fiches-produits/skittle-plus/verdanza-skittle-plus.pdf",
-    previewUrl: "/images/fiches-produits/skittle-plus.webp",
+    productId: "flower-cookie-kush-indoor",
+    name: "Cookie Kush Indoor",
+    slug: "cookie-kush-indoor",
+    aromas: ["Sucré", "Sirupeux", "Gourmand"],
+    selectionProfile: { category: "flower", intensity: "doux", aromaFamilies: ["sucre"] },
+    pdfUrl: "/fiches-produits/cookie-kush-indoor/verdanza-cookie-kush-indoor.pdf",
+    previewUrl: "/images/fiches-produits/cookie-kush-indoor.webp",
     availability: "available",
   },
   {
-    name: "Kief",
-    slug: "kief",
-    aromas: ["Terreux", "Épicé", "Boisé"],
-    selectionProfile: { category: "resin", intensity: "fort", aromaFamilies: ["terreux", "epice", "boise"] },
-    pdfUrl: "/fiches-produits/kief/verdanza-kief.pdf",
-    previewUrl: "/images/fiches-produits/kief.webp",
-    availability: "temporarily-unavailable",
-  },
-  {
-    name: "Libanais",
-    slug: "libanais",
-    aromas: ["Épicé", "Terreux", "Boisé"],
-    selectionProfile: { category: "resin", intensity: "fort", aromaFamilies: ["terreux", "epice", "boise"] },
-    pdfUrl: "/fiches-produits/libanais/verdanza-libanais.pdf",
-    previewUrl: "/images/fiches-produits/libanais.webp",
-    availability: "temporarily-unavailable",
-  },
-  {
-    name: "Black Butter",
-    slug: "black-butter",
-    aromas: ["Terreux", "Boisé", "Sous-bois"],
-    selectionProfile: { category: "resin", intensity: "moyen", aromaFamilies: ["terreux", "boise", "sucre"] },
-    pdfUrl: "/fiches-produits/black-butter/verdanza-black-butter.pdf",
-    previewUrl: "/images/fiches-produits/black-butter.webp",
-    availability: "temporarily-unavailable",
-  },
-  {
-    name: "Mousseux Skywalker",
-    slug: "mousseux-skywalker",
-    aromas: ["Pin", "Boisé", "Agrumes"],
-    selectionProfile: { category: "resin", intensity: "fort", aromaFamilies: ["boise", "agrumes", "epice"] },
-    pdfUrl: "/fiches-produits/mousseux-skywalker/verdanza-mousseux-skywalker.pdf",
-    previewUrl: "/images/fiches-produits/mousseux-skywalker.webp",
+    productId: "flower-harlequin-greenhouse",
+    name: "Harlequin Greenhouse",
+    slug: "harlequin-greenhouse",
+    aromas: ["Musc", "Sous-bois", "Notes torréfiées"],
+    selectionProfile: { category: "flower", intensity: "doux", aromaFamilies: ["terreux", "boise"] },
+    pdfUrl: "/fiches-produits/harlequin-greenhouse/verdanza-harlequin-greenhouse.pdf",
+    previewUrl: "/images/fiches-produits/harlequin-greenhouse.webp",
     availability: "available",
   },
   {
-    name: "Ice-o-Lator",
-    slug: "ice-o-lator",
-    aromas: ["Floral", "Fruits mûrs", "Épicé"],
-    selectionProfile: { category: "resin", intensity: "moyen", aromaFamilies: ["fruite", "epice", "sucre"] },
-    pdfUrl: "/fiches-produits/ice-o-lator/verdanza-ice-o-lator.pdf",
-    previewUrl: "/images/fiches-produits/ice-o-lator.webp",
+    productId: "flower-mandarine-cbd",
+    name: "Mandarine",
+    slug: "mandarine-cbd",
+    aromas: ["Mandarine", "Agrumes", "Citron"],
+    selectionProfile: { category: "flower", intensity: "doux", aromaFamilies: ["agrumes", "fruite"] },
+    pdfUrl: "/fiches-produits/mandarine-cbd/verdanza-mandarine-cbd.pdf",
+    previewUrl: "/images/fiches-produits/mandarine-cbd.webp",
     availability: "available",
   },
   {
-    name: "Black Afghan",
-    slug: "black-afghan",
-    aromas: ["Terreux", "Sucré", "Fruits rouges"],
-    selectionProfile: { category: "resin", intensity: "moyen", aromaFamilies: ["terreux", "sucre", "fruite"] },
-    pdfUrl: "/fiches-produits/black-afghan/verdanza-black-afghan.pdf",
-    previewUrl: "/images/fiches-produits/black-afghan.webp",
+    productId: "flower-mango-haze-cbd",
+    name: "Mango Haze",
+    slug: "mango-haze-cbd",
+    aromas: ["Sucré", "Fruité", "Acidulé"],
+    selectionProfile: { category: "flower", intensity: "doux", aromaFamilies: ["sucre", "fruite"] },
+    pdfUrl: "/fiches-produits/mango-haze-cbd/verdanza-mango-haze-cbd.pdf",
+    previewUrl: "/images/fiches-produits/mango-haze-cbd.webp",
     availability: "available",
   },
   {
-    name: "Marocain",
-    slug: "marocain",
-    aromas: ["Boisé", "Agrumes", "Épicé"],
-    selectionProfile: { category: "resin", intensity: "fort", aromaFamilies: ["boise", "agrumes", "epice"] },
-    pdfUrl: "/fiches-produits/marocain/verdanza-marocain.pdf",
-    previewUrl: "/images/fiches-produits/marocain.webp",
+    productId: "flower-petites-tetes-og-kush",
+    name: "OG Kush",
+    slug: "petites-tetes-og-kush",
+    aromas: ["Menthe fraîche", "Agrumes", "Fraîcheur végétale"],
+    selectionProfile: { category: "flower", intensity: "doux", aromaFamilies: ["agrumes"] },
+    pdfUrl: "/fiches-produits/petites-tetes-og-kush/verdanza-petites-tetes-og-kush.pdf",
+    previewUrl: "/images/fiches-produits/petites-tetes-og-kush.webp",
     availability: "available",
   },
   {
+    productId: "resin-golden-static",
     name: "Golden Static",
     slug: "golden-static",
-    aromas: ["Puissant", "Herbacé", "Végétal", "Authentique"],
-    selectionProfile: { category: "resin", intensity: "fort", aromaFamilies: ["terreux", "boise"] },
+    aromas: ["Herbacé", "Végétal", "Authentique"],
+    selectionProfile: { category: "resin", intensity: "doux", aromaFamilies: ["terreux", "boise"] },
     pdfUrl: "/fiches-produits/golden-static/verdanza-golden-static.pdf",
     previewUrl: "/images/fiches-produits/golden-static.webp",
     availability: "available",
   },
+  {
+    productId: "resin-supreme-50-cbd",
+    name: "Suprême 50 % CBD",
+    slug: "supreme-50-cbd",
+    aromas: ["Floral", "Raffiné"],
+    selectionProfile: { category: "resin", intensity: "doux", aromaFamilies: [] },
+    pdfUrl: "/fiches-produits/supreme-50-cbd/verdanza-supreme-50-cbd.pdf",
+    previewUrl: "/images/fiches-produits/supreme-50-cbd.webp",
+    availability: "available",
+  },
 ];
 
-export const availableProductSheets = productSheets.filter(
-  (sheet) => sheet.availability === "available",
-);
-
-export const temporarilyUnavailableProductSheets = productSheets.filter(
-  (sheet) => sheet.availability === "temporarily-unavailable",
-);
+export const availableProductSheets = productSheets;

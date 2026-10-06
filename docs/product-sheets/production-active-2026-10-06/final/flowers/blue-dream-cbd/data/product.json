@@ -1,0 +1,37 @@
+{
+  "product_id": "flower-blue-dream-cbd",
+  "slug": "blue-dream-cbd",
+  "name": "Blue Dream",
+  "category": "flower",
+  "aromas": [
+    "Citron",
+    "Pin",
+    "Fruit doux"
+  ],
+  "aroma_families": [
+    "agrumes",
+    "boise",
+    "fruite"
+  ],
+  "image": "public/Fiche produit/Blue Dream/bl.webp",
+  "appearance_title": "ASPECT",
+  "appearance_short": "Compacte · Résineuse · Soigneusement manucurée",
+  "aroma_description": "Un profil frais associant citron, pin et une touche fruitée douce.",
+  "selectionProfile": {
+    "category": "flower",
+    "intensity": "doux",
+    "aromaFamilies": [
+      "agrumes",
+      "boise",
+      "fruite"
+    ]
+  },
+  "source_image": "public/Fiche produit/Blue Dream/bl.webp",
+  "source_image_sha256": "65f9eb1d3d9a029abde6c71128f342701f1e13f6a7c05c655594e8dc67d93b7e",
+  "source_image_dimensions": [
+    713,
+    713
+  ],
+  "ai_generated": false,
+  "source": "catalogue boutique Verdanza"
+}

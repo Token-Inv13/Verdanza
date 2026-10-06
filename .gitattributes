@@ -1,1 +1,2 @@
 public/fiches-produits/*/*.pdf -diff
+docs/product-sheets/**/*.pdf -diff

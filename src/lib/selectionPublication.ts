@@ -36,6 +36,7 @@ export function publicSelectionEntry(item: ProductSelection, slug: string, pdfPa
 export function publicSelectionView(entry: PublishedSelectionSheet): ProductSheet {
   const slug = encodeURIComponent(entry.slug);
   return {
+    productId: entry.selectionId,
     name: entry.name, slug: entry.slug, aromas: entry.aromas,
     selectionProfile: entry.selectionProfile,
     pdfUrl: `/api/selection?action=asset&slug=${slug}&kind=pdf`,

@@ -1,0 +1,35 @@
+{
+  "product_id": "flower-mango-haze-cbd",
+  "slug": "mango-haze-cbd",
+  "name": "Mango Haze",
+  "category": "flower",
+  "aromas": [
+    "Sucré",
+    "Fruité",
+    "Acidulé"
+  ],
+  "aroma_families": [
+    "sucre",
+    "fruite"
+  ],
+  "image": "public/Fiche produit/Mango Haze/mango.webp",
+  "appearance_title": "ASPECT",
+  "appearance_short": "Fleur hydroponique · Manucure à la main",
+  "aroma_description": "Un profil gourmand, fruité et acidulé à l'expression aromatique nette.",
+  "selectionProfile": {
+    "category": "flower",
+    "intensity": "doux",
+    "aromaFamilies": [
+      "sucre",
+      "fruite"
+    ]
+  },
+  "source_image": "public/Fiche produit/Mango Haze/mango.webp",
+  "source_image_sha256": "15950dad4f1e5976c15e52b1c0af9ff0bc19650a0f456f79e4aa2ceee6507a41",
+  "source_image_dimensions": [
+    713,
+    713
+  ],
+  "ai_generated": false,
+  "source": "catalogue boutique Verdanza"
+}

@@ -30,17 +30,20 @@ try {
   page.on("pageerror", (error) => errors.push(error.message));
   await gotoDomReady(page, `${server.baseUrl}/fiches-produits`);
   await page.locator('[data-product-sheet-tab="resin"]').click();
-  await page.locator('[data-product-sheet-card="resine-ajoutee"]').waitFor();
+  await page.locator('[data-product-sheet-card="golden-static"]').waitFor();
   assert.equal(await page.locator('[data-product-sheet-card="le-mousseux"]').count(), 0);
-  assert.equal(await page.locator('[data-product-sheet-card="resine-ajoutee"] a[href*="kind=pdf"]').count(), 1);
+  assert.equal(await page.locator('[data-product-sheet-card="resine-ajoutee"]').count(), 0);
   await page.locator('[data-selector-option="category:resin"]').click();
   assert.equal(await page.locator('[data-selector-option="intensity:doux"]').isDisabled(), false);
   await page.locator('[data-selector-option="intensity:doux"]').click();
-  await page.locator('[data-selector-option="aroma:sucre"]').click();
-  await page.locator('[data-selector-result-card="resine-ajoutee"]').waitFor();
+  await page.locator('[data-selector-option="aroma:any"]').click();
+  assert.deepEqual(
+    await page.locator('[data-selector-result-card]').evaluateAll((cards) => cards.map((card) => card.getAttribute('data-selector-result-card'))),
+    ["golden-static", "supreme-50-cbd"],
+  );
   assert.deepEqual(errors, []);
   await context.close();
-  console.log("Dynamic public sheet appears in library and recommendation selector without exposing private data.");
+  console.log("The public sheet library remains pinned to the audited shop catalogue and ignores unrelated dynamic publication entries.");
 } finally {
   await browser.close();
   await server.close();

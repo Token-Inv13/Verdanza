@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import {
   availableProductSheets,
   productSheetIntensityLabels,
@@ -192,80 +192,6 @@ export function ProductSheetBrowser({ library = availableProductSheets }: { libr
         </div>
       </div>
     </div>
-  );
-}
-
-export function TemporarilyUnavailableProductSheets({
-  library,
-}: {
-  library: ProductSheet[];
-}) {
-  if (library.length === 0) return null;
-
-  return (
-    <details
-      className="group mt-10 rounded-xl border border-forest/10 bg-cream/45 shadow-sm sm:mt-12"
-      data-unavailable-product-sheets
-    >
-      <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 rounded-xl px-4 py-3 text-forest focus:outline-none focus:ring-2 focus:ring-champagne focus:ring-offset-2 sm:px-6 [&::-webkit-details-marker]:hidden">
-        <span>
-          <span className="block text-xs font-semibold uppercase tracking-[0.16em] text-champagne">
-            Archives accessibles
-          </span>
-          <span className="mt-1 block font-display text-2xl leading-tight">
-            Fiches temporairement indisponibles
-          </span>
-        </span>
-        <ChevronDown aria-hidden="true" className="shrink-0 transition-transform duration-200 group-open:rotate-180" size={20} />
-      </summary>
-
-      <div className="border-t border-forest/10 px-4 py-5 sm:px-6 sm:py-6">
-        <p className="max-w-3xl text-sm leading-6 text-ink/60">
-          Ces références ne sont pas proposées dans la boutique actuellement. Leurs fiches restent conservées ici à titre documentaire.
-        </p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {library.map((sheet) => (
-            <article
-              key={sheet.slug}
-              className="rounded-lg border border-forest/10 bg-ivory p-4"
-              data-unavailable-product-sheet={sheet.slug}
-            >
-              <div className="flex items-start gap-3">
-                <img
-                  src={sheet.previewUrl}
-                  alt=""
-                  width={96}
-                  height={133}
-                  loading="lazy"
-                  decoding="async"
-                  className="h-[6.9rem] w-20 shrink-0 rounded-md border border-forest/10 bg-cream object-cover"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-forest/50">
-                    Temporairement indisponible
-                  </p>
-                  <h3 className="mt-1 font-display text-xl leading-tight text-forest">{sheet.name}</h3>
-                  <p className="mt-1 text-xs leading-5 text-ink/55">{sheet.aromas.join(" · ")}</p>
-                  <p className="mt-2 text-xs font-semibold text-forest">
-                    Intensité {productSheetIntensityLabels[sheet.selectionProfile.intensity]}
-                  </p>
-                </div>
-              </div>
-              <a
-                href={sheet.pdfUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-forest/15 px-3 py-2 text-sm font-semibold text-forest transition hover:bg-cream focus:outline-none focus:ring-2 focus:ring-champagne focus:ring-offset-2"
-                aria-label={`Consulter la fiche archivée ${sheet.name} (PDF, nouvel onglet)`}
-              >
-                Consulter la fiche
-                <ExternalLink aria-hidden="true" size={14} />
-              </a>
-            </article>
-          ))}
-        </div>
-      </div>
-    </details>
   );
 }
 

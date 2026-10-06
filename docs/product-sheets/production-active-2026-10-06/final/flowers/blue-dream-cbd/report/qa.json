@@ -1,0 +1,37 @@
+{
+  "product": "Blue Dream",
+  "status": "PASS",
+  "geometry": {
+    "overflow": 0,
+    "clipping": 0,
+    "collision": 0,
+    "safe_zone_mm": 5
+  },
+  "standard": {
+    "pages": 2,
+    "boxes": "PASS",
+    "extractable_text": true,
+    "fonts": 4,
+    "type3": 0,
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "full_page_raster": false
+  },
+  "print_safe": {
+    "pages": 2,
+    "boxes": "PASS",
+    "extractable_text": false,
+    "fonts": 0,
+    "type3": 0,
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "full_page_raster": false
+  },
+  "photo_box_points": [
+    87.874,
+    161.575,
+    138.898,
+    138.898
+  ],
+  "photo_effective_ppi": 369.6
+}

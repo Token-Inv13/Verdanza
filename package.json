@@ -50,6 +50,7 @@
     "test:product-page-v2": "node --import tsx scripts/testProductPageV2.tsx",
     "test:product-page-v2-ui": "node --import tsx scripts/testProductPageV2Ui.ts",
     "test:product-sheets": "node --import tsx scripts/testProductSheets.ts",
+    "test:product-sheet-catalog-sync": "node --import tsx scripts/testProductSheetCatalogSync.ts",
     "test:admin-selection": "tsc --noEmit --moduleResolution NodeNext --module NodeNext --target ES2022 --esModuleInterop --skipLibCheck --strict --types node api/selection.ts api/_server/selectionRoute.ts api/_server/selectionPdf.ts && node --import tsx scripts/testAdminSelectionIntegration.ts",
     "test:selection-public-library": "node --import tsx scripts/testSelectionPublicLibrary.ts",
     "test:product-sheet-selector": "node --import tsx scripts/testProductSheetSelector.ts",

@@ -1,92 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 import { ProductProfileSelector } from "../components/product-sheets/ProductProfileSelector";
-import {
-  ProductSheetBrowser,
-  TemporarilyUnavailableProductSheets,
-} from "../components/product-sheets/ProductSheetBrowser";
-import { productSheets, type ProductSheet } from "../data/productSheets";
-import {
-  parseProductIntensity,
-  productAromaFamilyValues,
-  type ProductAromaFamily,
-} from "../lib/productTaxonomy";
-
-type PublicSheetCandidate = Omit<Partial<ProductSheet>, "selectionProfile"> & {
-  selectionProfile?: {
-    category?: unknown;
-    intensity?: unknown;
-    aromaFamilies?: unknown;
-  };
-};
-
-const retiredPublicSheetSlugs = new Set(["le-mousseux"]);
-
-function normalizePublicSheet(value: unknown): ProductSheet | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const sheet = value as PublicSheetCandidate;
-  const profile = sheet.selectionProfile;
-  const intensity = parseProductIntensity(profile?.intensity);
-  const category = profile?.category;
-  const aromaFamilies = Array.isArray(profile?.aromaFamilies)
-    ? profile.aromaFamilies.filter(
-        (family): family is ProductAromaFamily =>
-          typeof family === "string" &&
-          productAromaFamilyValues.includes(family as ProductAromaFamily),
-      )
-    : [];
-  if (
-    typeof sheet.name !== "string" ||
-    typeof sheet.slug !== "string" ||
-    !Array.isArray(sheet.aromas) ||
-    !sheet.aromas.every((aroma) => typeof aroma === "string") ||
-    typeof sheet.pdfUrl !== "string" ||
-    typeof sheet.previewUrl !== "string" ||
-    (category !== "flower" && category !== "resin") ||
-    !intensity ||
-    aromaFamilies.length === 0
-  ) {
-    return null;
-  }
-  return {
-    name: sheet.name,
-    slug: sheet.slug,
-    aromas: sheet.aromas,
-    selectionProfile: { category, intensity, aromaFamilies },
-    pdfUrl: sheet.pdfUrl,
-    previewUrl: sheet.previewUrl,
-    availability: "available",
-  };
-}
+import { ProductSheetBrowser } from "../components/product-sheets/ProductSheetBrowser";
+import { productSheets } from "../data/productSheets";
 
 export function ProductSheetsPage() {
-  const [sheets, setSheets] = useState<ProductSheet[]>(productSheets);
-  const availableSheets = useMemo(
-    () => sheets.filter((sheet) => sheet.availability === "available"),
-    [sheets],
-  );
-  const unavailableSheets = useMemo(
-    () => sheets.filter((sheet) => sheet.availability === "temporarily-unavailable"),
-    [sheets],
-  );
-  useEffect(() => {
-    const controller = new AbortController();
-    void fetch("/api/selection?action=library", { signal: controller.signal })
-      .then(async (response) => response.ok ? response.json() as Promise<{ sheets?: unknown[] }> : { sheets: [] })
-      .then((result) => {
-        if (!Array.isArray(result.sheets)) return;
-        const seen = new Set(productSheets.map((sheet) => sheet.slug));
-        const additions = result.sheets.flatMap((candidate) => {
-          const sheet = normalizePublicSheet(candidate);
-          if (!sheet || seen.has(sheet.slug) || retiredPublicSheetSlugs.has(sheet.slug)) return [];
-          seen.add(sheet.slug);
-          return [sheet];
-        });
-        setSheets([...productSheets, ...additions]);
-      }).catch(() => { /* Keep the validated static library when the API is unavailable. */ });
-    return () => controller.abort();
-  }, []);
   return (
     <main className="overflow-x-clip pb-20">
       <Seo
@@ -118,7 +36,7 @@ export function ProductSheetsPage() {
       </header>
 
       <div className="container-page pt-6 sm:pt-10 lg:pt-12">
-        <ProductProfileSelector sheets={availableSheets} />
+        <ProductProfileSelector sheets={productSheets} />
 
         <section
           id="all-product-sheets"
@@ -140,8 +58,7 @@ export function ProductSheetsPage() {
             </p>
           </div>
 
-          <ProductSheetBrowser library={availableSheets} />
-          <TemporarilyUnavailableProductSheets library={unavailableSheets} />
+          <ProductSheetBrowser library={productSheets} />
         </section>
       </div>
     </main>

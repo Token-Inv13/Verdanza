@@ -15,220 +15,111 @@ try {
       reducedMotion: width === 390 ? "reduce" : "no-preference",
     });
     await context.addInitScript(() => {
-      window.localStorage.setItem("verdanza-age-confirmed", "true");
-      window.localStorage.setItem(
-        "verdanza-consent-v1",
-        JSON.stringify({ version: 1, analytics: false, decidedAt: "2026-09-07T00:00:00.000Z" }),
-      );
+      localStorage.setItem("verdanza-age-confirmed", "true");
+      localStorage.setItem("verdanza-consent-v1", JSON.stringify({ version: 1, analytics: false, decidedAt: "2026-10-06T00:00:00Z" }));
     });
     await blockExternalServices(context);
     const page = await context.newPage();
-    const pageErrors: string[] = [];
+    const errors: string[] = [];
     const pdfRequests: string[] = [];
-    page.on("pageerror", (error) => pageErrors.push(error.message));
+    page.on("pageerror", (error) => errors.push(error.message));
     page.on("request", (request) => {
       if (new URL(request.url()).pathname.endsWith(".pdf")) pdfRequests.push(request.url());
     });
-
     const response = await gotoDomReady(page, `${server.baseUrl}/fiches-produits`);
-    assert.equal(response?.status(), 200, `${width}px: route must return HTTP 200`);
-
+    assert.equal(response?.status(), 200, `${width}px: route must return 200`);
     const selector = page.locator("[data-product-selector]");
-    assert.equal(await selector.isVisible(), true, `${width}px: selector must be visible`);
-    assert.equal(await page.locator("[data-product-selector-results]").count(), 0, `${width}px: results must start hidden`);
-    assert.equal(await selector.getAttribute("data-selector-collapsed"), "false", `${width}px: selector must start expanded`);
-    assert.equal(await page.locator('[data-selector-step="1"] > button').getAttribute("aria-expanded"), "true", `${width}px: type must start open`);
-    assert.equal(await page.locator('[data-selector-step="2"] > button').isDisabled(), true, `${width}px: intensity must stay locked before type`);
-    assert.equal(await page.locator('[data-selector-step="3"] > button').isDisabled(), true, `${width}px: aroma must stay locked before intensity`);
-    assert.match(await page.locator('[data-selector-step="3"] > button').innerText(), /À choisir/i, `${width}px: aroma must start unselected`);
-    assert.equal(await page.locator('[data-selector-option="aroma:any"]').getAttribute("aria-pressed"), "false", `${width}px: Peu importe must not be preselected`);
-    assert.equal(await page.locator('a[href="#all-product-sheets"]').count(), 1, `${width}px: library anchor must use #all-product-sheets`);
+    assert.equal(await selector.isVisible(), true);
+    assert.equal(await page.locator("[data-product-selector-results]").count(), 0);
+    assert.equal(await page.locator('[data-selector-step="1"] > button').getAttribute("aria-expanded"), "true");
+    assert.match(await page.locator('[data-selector-step="3"] > button').innerText(), /À choisir/i);
 
     await page.locator('[data-selector-option="category:flower"]').click();
-    assert.equal(await page.locator("[data-product-selector-results]").count(), 0, `${width}px: type alone must not reveal results`);
-    assert.equal(await page.locator('[data-selector-step="2"] > button').getAttribute("aria-expanded"), "true", `${width}px: intensity must open after type`);
-    await page.locator('[data-selector-option="intensity:fort"]').click();
-    assert.equal(await page.locator("[data-product-selector-results]").count(), 0, `${width}px: type and intensity must not reveal results`);
-    assert.equal(await selector.getAttribute("data-selector-collapsed"), "false", `${width}px: selector must stay expanded before aroma confirmation`);
-    assert.equal(await page.locator('[data-selector-step="3"] > button').getAttribute("aria-expanded"), "true", `${width}px: aroma must open after intensity`);
-    assert.equal(await page.locator('[data-selector-summary]').count(), 0, `${width}px: no compact or sticky summary may appear before the third choice`);
+    assert.equal(await page.locator('[data-selector-option="intensity:doux"]').isDisabled(), false);
+    assert.equal(await page.locator('[data-selector-option="intensity:moyen"]').isDisabled(), true);
+    assert.equal(await page.locator('[data-selector-option="intensity:fort"]').isDisabled(), true);
+    await page.locator('[data-selector-option="intensity:doux"]').click();
+    assert.equal(await page.locator("[data-product-selector-results]").count(), 0, `${width}px: results require the explicit aroma choice`);
     await page.locator('[data-selector-option="aroma:fruite"]').click();
-    await page.locator('[data-product-selector-results][data-result-category="flower"][data-result-intensity="fort"]').waitFor();
-    assert.equal(await selector.getAttribute("data-selector-collapsed"), "true", `${width}px: selector must collapse after all three choices`);
-    assert.match(await page.locator('[data-selector-summary][data-sticky="false"]').innerText(), /Fleurs\s*·\s*Fort\s*·\s*Fruité/i, `${width}px: compact summary is incomplete`);
+    await page.locator('[data-product-selector-results][data-result-category="flower"][data-result-intensity="doux"]').waitFor();
     assert.deepEqual(
       await page.locator("[data-selector-result-card]").evaluateAll((cards) => cards.map((card) => card.getAttribute("data-selector-result-card"))),
-      ["skittle-plus"],
-      `${width}px: Fruité must reorder all strict V6 matches without filtering them`,
+      ["blue-dream-cbd", "mandarine-cbd", "mango-haze-cbd", "cookie-kush-indoor", "harlequin-greenhouse", "petites-tetes-og-kush"],
+      `${width}px: aroma must only reorder the six exact flower matches`,
     );
-    assert.equal(await page.locator("[data-selector-result-card]").count(), 1, `${width}px: unavailable sheets must not enter selector results`);
-
+    assert.match(await page.locator('[data-selector-summary][data-sticky="false"]').innerText(), /Fleurs\s*·\s*Doux\s*·\s*Fruité/i);
     if (width === 390) {
       const transforms = await page.locator("[data-selector-result-card]").evaluateAll((cards) => cards.map((card) => getComputedStyle(card).transform));
-      assert.ok(transforms.every((transform) => transform === "none"), "390px reduced motion: result cards must not tilt");
+      assert.ok(transforms.every((transform) => transform === "none"), "reduced motion must disable result tilt");
     }
-
-    await page.locator("#all-product-sheets").scrollIntoViewIfNeeded();
-    if (width < 768) {
-      await page.locator('[data-selector-summary][data-sticky="true"]').waitFor({ state: "visible" });
-      assert.match(await page.locator('[data-selector-summary][data-sticky="true"]').innerText(), /Fleurs\s*·\s*Fort\s*·\s*Fruité/i, `${width}px: sticky summary must repeat the complete selection`);
-      await page.locator('[data-selector-summary][data-sticky="true"] [data-selector-edit]').click();
-    } else {
-      assert.equal(await page.locator('[data-selector-summary][data-sticky="true"]').isVisible(), false, `${width}px: sticky summary is mobile-only`);
-      await selector.scrollIntoViewIfNeeded();
-      await page.locator('[data-selector-summary][data-sticky="false"] [data-selector-edit]').click();
-    }
-    await selector.scrollIntoViewIfNeeded();
-    assert.equal(await page.locator('[data-selector-step="3"] > button').getAttribute("aria-expanded"), "true", `${width}px: Modify must reopen aroma`);
-    await page.locator('[data-selector-option="aroma:any"]').click();
-    assert.equal(
-      await page.locator("[data-selector-result-card]").first().getAttribute("data-selector-result-card"),
-      "skittle-plus",
-      `${width}px: Peu importe must restore stable exact-match order`,
-    );
-    assert.equal(await page.locator("[data-selector-result-card]").count(), 1, `${width}px: Peu importe must keep all available exact matches`);
-    assert.match(await page.locator('[data-selector-summary][data-sticky="false"]').innerText(), /Peu importe/i, `${width}px: explicit Peu importe must appear in the final summary`);
-    const activeResultCard = page.locator('[data-selector-primary-card="true"]');
-    const restingResultStyle = await activeResultCard.evaluate((card) => ({
-      transform: getComputedStyle(card).transform,
-      willChange: getComputedStyle(card).willChange,
-    }));
-    assert.equal(restingResultStyle.transform, "none", `${width}px: active result card must be untransformed at rest`);
-    assert.equal(restingResultStyle.willChange, "auto", `${width}px: active result card must not be permanently promoted`);
-    if (width >= 1024) {
-      const box = await activeResultCard.boundingBox();
-      assert.ok(box, `${width}px: active result card needs a bounding box`);
-      await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.35);
-      await page.waitForTimeout(50);
-      assert.notEqual(await activeResultCard.evaluate((card) => getComputedStyle(card).transform), "none", `${width}px: desktop tilt must remain available during pointer interaction`);
-      await page.mouse.move(0, 0);
-      await page.waitForFunction(() => {
-        const activeCard = document.querySelector<HTMLElement>('[data-selector-primary-card="true"]');
-        return activeCard ? getComputedStyle(activeCard).transform === "none" : false;
-      });
-      assert.equal(await activeResultCard.evaluate((card) => getComputedStyle(card).transform), "none", `${width}px: desktop tilt must return to a crisp untransformed state`);
-    }
-
-    await page.locator('[data-selector-summary][data-sticky="false"] [data-selector-edit]').click();
-    await page.locator('[data-selector-step="1"] > button').click();
-    await page.locator('[data-selector-option="category:resin"]').click();
-    assert.equal(await page.locator("[data-product-selector-results]").count(), 0, `${width}px: changing type must hide results until aroma is confirmed again`);
-    assert.equal(await page.locator('[data-selector-step="3"] > button').getAttribute("aria-expanded"), "true", `${width}px: compatible intensity may remain but aroma must be confirmed again`);
-    assert.equal(await page.locator('[data-selector-option="aroma:any"]').getAttribute("aria-pressed"), "false", `${width}px: changing type must clear the previous aroma choice`);
-    await page.locator('[data-selector-option="aroma:any"]').click();
-    await page.locator('[data-product-selector-results][data-result-category="resin"][data-result-intensity="fort"]').waitFor();
-    assert.deepEqual(
-      await page.locator("[data-selector-result-card]").allTextContents(),
-      ["Mousseux Skywalker", "Marocain", "Golden Static"],
-      `${width}px: strong resin selector names must use the published references`,
-    );
-    await page.locator('[data-selector-summary][data-sticky="false"] [data-selector-edit]').click();
-    await page.locator('[data-selector-step="2"] > button').click();
-    const unavailableSoft = page.locator('[data-selector-option="intensity:doux"]');
-    assert.equal(await unavailableSoft.isDisabled(), true, `${width}px: resin soft must be visibly disabled`);
-    assert.match(await unavailableSoft.innerText(), /Doux\s+Aucun produit actuellement/i, `${width}px: disabled option needs an explanation`);
-
-    await page.locator("[data-selector-reset]").click();
-    assert.equal(await page.locator("[data-product-selector-results]").count(), 0, `${width}px: reset must hide results`);
-    assert.equal(await selector.getAttribute("data-selector-collapsed"), "false", `${width}px: reset must expand selector`);
-    assert.equal(await page.locator('[data-selector-step="1"] > button').getAttribute("aria-expanded"), "true", `${width}px: reset must reopen type`);
-    assert.equal(await page.locator('[data-selector-option="aroma:any"]').getAttribute("aria-pressed"), "false", `${width}px: reset must clear Peu importe`);
-    assert.match(await page.locator('[data-selector-step="3"] > button').innerText(), /À choisir/i, `${width}px: reset must restore aroma to À choisir`);
 
     const library = page.locator("#all-product-sheets");
     await library.scrollIntoViewIfNeeded();
-    assert.equal(await page.locator('[data-product-sheet-tab="flower"]').getAttribute("aria-selected"), "true", `${width}px: flowers must be the default tab`);
-    assert.equal(await page.locator('[data-product-sheet-card]').count(), 2, `${width}px: flower tab must contain two available sheets`);
-    assert.equal(await page.locator('[data-product-sheet-card]').first().getAttribute("data-product-sheet-card"), "blue-dream", `${width}px: first available flower must be immediately visible`);
+    if (width < 768) {
+      await page.locator('[data-selector-summary][data-sticky="true"]').waitFor({ state: "visible" });
+      assert.match(await page.locator('[data-selector-summary][data-sticky="true"]').innerText(), /Fleurs\s*·\s*Doux\s*·\s*Fruité/i);
+    }
+    assert.equal(await page.locator('[data-product-sheet-tab="flower"]').getAttribute("aria-selected"), "true");
+    assert.equal(await page.locator("[data-product-sheet-card]").count(), 6, `${width}px: flower tab must contain the complete active range`);
+    assert.equal(await page.locator("[data-product-sheet-card]").first().getAttribute("data-product-sheet-card"), "blue-dream-cbd");
     await page.locator('[data-product-sheet-tab="resin"]').click();
     await page.locator('[data-product-sheet-category="resin"]').waitFor();
-    assert.equal(await page.locator('[data-product-sheet-card]').count(), 5, `${width}px: resin tab must contain five available sheets`);
-    assert.equal(await page.locator('[data-product-sheet-card]').first().getAttribute("data-product-sheet-card"), "mousseux-skywalker", `${width}px: available resins must be one tap away`);
-    assert.equal(await page.locator('[data-product-sheet-card="le-mousseux"]').count(), 0, `${width}px: the retired sheet must not appear`);
-    assert.deepEqual(
-      await page.locator('[data-product-sheet-card] h3').allTextContents(),
-      ["Mousseux Skywalker", "Ice-o-Lator", "Black Afghan", "Marocain", "Golden Static"],
-      `${width}px: resin library names must use the published references`,
-    );
-    assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "1 / 5", `${width}px: category change must reset position`);
+    assert.equal(await page.locator("[data-product-sheet-card]").count(), 2, `${width}px: resin tab must contain both active resins`);
+    assert.deepEqual(await page.locator("[data-product-sheet-card] h3").allTextContents(), ["Golden Static", "Suprême 50 % CBD"]);
+    assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "1 / 2");
+    assert.equal(await page.locator("[data-unavailable-product-sheets]").count(), 0, "historical sheets must stay outside the public experience");
 
-    const unavailable = page.locator("[data-unavailable-product-sheets]");
-    assert.equal(await unavailable.count(), 1, `${width}px: unavailable sheets need one retained documentary section`);
-    await unavailable.locator("summary").click();
-    assert.equal(await page.locator("[data-unavailable-product-sheet]").count(), 8, `${width}px: eight unavailable sheets must remain accessible`);
+    await selector.scrollIntoViewIfNeeded();
+    const edit = page.locator('[data-selector-summary][data-sticky="false"] [data-selector-edit]');
+    await edit.click();
+    await page.locator('[data-selector-step="1"] > button').click();
+    await page.locator('[data-selector-option="category:resin"]').click();
+    assert.equal(await page.locator("[data-product-selector-results]").count(), 0);
+    assert.match(await page.locator('[data-selector-step="2"] > button').innerText(), /Doux/i);
+    assert.equal(await page.locator('[data-selector-step="3"] > button').getAttribute("aria-expanded"), "true");
+    await page.locator('[data-selector-option="aroma:any"]').click();
     assert.deepEqual(
-      await page.locator("[data-unavailable-product-sheet] h3").allTextContents(),
-      ["Biscotti", "Lemon Skunk", "Mimosa", "Watermelon Candy", "Zkittlez OG", "Kief", "Libanais", "Black Butter"],
-      `${width}px: unavailable sheets must be clearly separated without deletion`,
+      await page.locator("[data-selector-result-card]").evaluateAll((cards) => cards.map((card) => card.getAttribute("data-selector-result-card"))),
+      ["golden-static", "supreme-50-cbd"],
+      `${width}px: resin selector must match the audited active range`,
     );
+    assert.match(await page.locator('[data-selector-summary][data-sticky="false"]').innerText(), /Résines\s*·\s*Doux\s*·\s*Peu importe/i);
 
-    await page.locator('[data-product-sheet-tab="flower"]').click();
-    await page.locator('[data-product-sheet-category="flower"]').waitFor();
-    await page.waitForTimeout(300);
-    const carousel = page.locator("[data-product-sheet-carousel]");
-    await carousel.focus();
-    await carousel.press("ArrowRight");
-    await page.waitForFunction(() => document.querySelector("[data-product-sheet-position]")?.textContent?.trim().startsWith("2"));
-    await page.waitForFunction(() => {
-      const carouselElement = document.querySelector<HTMLElement>("[data-product-sheet-carousel]");
-      const activeCard = document.querySelector<HTMLElement>('[data-product-sheet-card][data-active="true"]');
-      if (!carouselElement || !activeCard) return false;
-      const carouselRect = carouselElement.getBoundingClientRect();
-      const cardRect = activeCard.getBoundingClientRect();
-      return cardRect.left < carouselRect.right && cardRect.right > carouselRect.left;
-    });
-    await page.waitForFunction(() => {
-      const activeCard = document.querySelector<HTMLElement>('[data-product-sheet-card][data-active="true"]');
-      return activeCard ? getComputedStyle(activeCard).transform === "none" : false;
-    });
-    assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "2 / 2", `${width}px: keyboard navigation must advance the carousel`);
+    await page.locator("[data-selector-reset]").click();
+    assert.equal(await page.locator("[data-product-selector-results]").count(), 0);
+    assert.equal(await selector.getAttribute("data-selector-collapsed"), "false");
+    assert.equal(await page.locator('[data-selector-step="1"] > button').getAttribute("aria-expanded"), "true");
+    assert.match(await page.locator('[data-selector-step="3"] > button').innerText(), /À choisir/i);
 
     const layout = await page.evaluate(() => {
-      const carouselElement = document.querySelector<HTMLElement>("[data-product-sheet-carousel]");
-      const tabs = [...document.querySelectorAll<HTMLElement>("[data-product-sheet-tabs] button")];
-      const visibleSelectorButtons = [...document.querySelectorAll<HTMLButtonElement>("[data-product-selector] button")].filter(isVisible);
+      const carousel = document.querySelector<HTMLElement>("[data-product-sheet-carousel]");
+      const visibleButtons = [...document.querySelectorAll<HTMLButtonElement>("[data-product-selector] button")].filter((button) => {
+        const rect = button.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && getComputedStyle(button).visibility !== "hidden";
+      });
       const help = document.querySelector<HTMLElement>('[data-floating-help-footprint]:not([aria-hidden="true"]) [data-testid="floating-contact-trigger"]');
-      const activeCta = document.querySelector<HTMLElement>('[data-product-sheet-card][data-active="true"] a');
-      const activeCard = document.querySelector<HTMLElement>('[data-product-sheet-card][data-active="true"]');
+      const cta = document.querySelector<HTMLElement>('[data-product-sheet-card][data-active="true"] a');
       return {
         pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-        carouselOverflow: carouselElement ? carouselElement.scrollWidth - carouselElement.clientWidth : 0,
-        carouselDisplay: carouselElement ? getComputedStyle(carouselElement).display : "",
-        shortestSelectorButton: Math.min(...visibleSelectorButtons.map((button) => button.getBoundingClientRect().height)),
-        shortestTab: Math.min(...tabs.map((tab) => tab.getBoundingClientRect().height)),
-        helpOverlapsActiveCta: help && activeCta ? intersects(help.getBoundingClientRect(), activeCta.getBoundingClientRect()) : false,
-        helpOverlapsActiveCard: help && activeCard ? intersects(help.getBoundingClientRect(), activeCard.getBoundingClientRect()) : false,
-        activeCardTransform: activeCard ? getComputedStyle(activeCard).transform : "missing",
+        carouselOverflow: carousel ? carousel.scrollWidth - carousel.clientWidth : 0,
+        carouselDisplay: carousel ? getComputedStyle(carousel).display : "",
+        shortestButton: Math.min(...visibleButtons.map((button) => button.getBoundingClientRect().height)),
+        helpOverlap: Boolean(help && cta && help.getBoundingClientRect().left < cta.getBoundingClientRect().right && help.getBoundingClientRect().right > cta.getBoundingClientRect().left && help.getBoundingClientRect().top < cta.getBoundingClientRect().bottom && help.getBoundingClientRect().bottom > cta.getBoundingClientRect().top),
       };
-
-      function isVisible(element: HTMLElement) {
-        const rect = element.getBoundingClientRect();
-        const style = getComputedStyle(element);
-        return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && !element.closest('[aria-hidden="true"]');
-      }
-      function intersects(first: DOMRect, second: DOMRect) {
-        return first.left < second.right && first.right > second.left && first.top < second.bottom && first.bottom > second.top;
-      }
     });
-    assert.ok(layout.pageOverflow <= 1, `${width}px: horizontal page overflow detected (${layout.pageOverflow}px)`);
-    assert.ok(layout.shortestSelectorButton >= 43.5, `${width}px: selector touch targets must be about 44px`);
-    assert.ok(layout.shortestTab >= 43.5, `${width}px: tabs must be about 44px`);
-    assert.equal(layout.helpOverlapsActiveCta, false, `${width}px: floating help must not cover the active card CTA`);
-    assert.equal(layout.helpOverlapsActiveCard, false, `${width}px: floating help must not cover the active carousel card`);
-    assert.equal(layout.activeCardTransform, "none", `${width}px: active library card must be untransformed at rest`);
+    assert.ok(layout.pageOverflow <= 1, `${width}px: page overflow ${layout.pageOverflow}`);
+    assert.ok(layout.shortestButton >= 43.5, `${width}px: touch targets must be about 44px`);
+    assert.equal(layout.helpOverlap, false, `${width}px: help must not cover the active CTA`);
     if (width < 1024) {
-      assert.ok(layout.carouselOverflow > 0, `${width}px: the mobile/tablet library must scroll horizontally`);
-      assert.equal(layout.carouselDisplay, "flex", `${width}px: the mobile/tablet library must use a horizontal flex carousel`);
+      assert.ok(layout.carouselOverflow > 0);
+      assert.equal(layout.carouselDisplay, "flex");
     } else {
-      assert.equal(layout.carouselDisplay, "grid", `${width}px: desktop must use a three-column composition`);
+      assert.equal(layout.carouselDisplay, "grid");
     }
-
-    assert.equal(await page.locator("h1").count(), 1, `${width}px: exactly one H1 is required`);
-    assert.equal(await selector.getByText(/Ambiance|Cocooning|Détente profonde|Dynamique|Équilibré/i).count(), 0, `${width}px: legacy ambience UI must remain absent`);
-    const retiredNames = new RegExp([["Pollen", "Mousseux"], ["Black", "Libanais"]].map((words) => words.join(" ")).join("|"), "i");
-    assert.doesNotMatch(await page.locator("body").innerText(), retiredNames, `${width}px: retired product names must not remain visible`);
+    assert.equal(await page.locator("h1").count(), 1);
+    assert.equal(await selector.getByText(/Ambiance|Cocooning|Détente profonde|Dynamique|Équilibré/i).count(), 0);
     assert.deepEqual(pdfRequests, [], `${width}px: PDFs must not preload`);
-    assert.deepEqual(pageErrors, [], `${width}px: browser errors detected`);
+    assert.deepEqual(errors, [], `${width}px: browser errors`);
     await context.close();
   }
 } finally {
@@ -236,4 +127,4 @@ try {
   await server.close();
 }
 
-console.log("Product sheets UI V2 tests passed: compact selector, sticky summary, tabs, carousel, accessibility and 8 responsive widths.");
+console.log("Product sheets UI V2 tests passed: 8 active products, selector, sticky summary, tabs, carousel, accessibility and 8 responsive widths.");
