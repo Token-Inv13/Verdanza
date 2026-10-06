@@ -18,6 +18,8 @@ type PublicSheetCandidate = Omit<Partial<ProductSheet>, "selectionProfile"> & {
   };
 };
 
+const retiredPublicSheetSlugs = new Set(["le-mousseux"]);
+
 function normalizePublicSheet(value: unknown): ProductSheet | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const sheet = value as PublicSheetCandidate;
@@ -65,7 +67,7 @@ export function ProductSheetsPage() {
         const seen = new Set(productSheets.map((sheet) => sheet.slug));
         const additions = result.sheets.flatMap((candidate) => {
           const sheet = normalizePublicSheet(candidate);
-          if (!sheet || seen.has(sheet.slug)) return [];
+          if (!sheet || seen.has(sheet.slug) || retiredPublicSheetSlugs.has(sheet.slug)) return [];
           seen.add(sheet.slug);
           return [sheet];
         });
