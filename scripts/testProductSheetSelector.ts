@@ -17,13 +17,18 @@ const expectedProfiles = {
   mimosa: ["flower", "moyen", ["agrumes", "fruite", "sucre"]],
   "watermelon-candy": ["flower", "doux", ["fruite", "sucre", "terreux"]],
   "zkittlez-og": ["flower", "fort", ["fruite", "sucre", "agrumes"]],
+  "skittle-plus": ["flower", "fort", ["agrumes", "sucre", "fruite"]],
   "le-mousseux": ["resin", "fort", ["terreux", "boise", "agrumes"]],
   kief: ["resin", "fort", ["terreux", "epice", "boise"]],
   libanais: ["resin", "fort", ["terreux", "epice", "boise"]],
   "black-butter": ["resin", "moyen", ["terreux", "boise", "sucre"]],
+  "mousseux-skywalker": ["resin", "fort", ["boise", "agrumes", "epice"]],
+  "ice-o-lator": ["resin", "moyen", ["fruite", "epice", "sucre"]],
+  "black-afghan": ["resin", "moyen", ["terreux", "sucre", "fruite"]],
+  marocain: ["resin", "fort", ["boise", "agrumes", "epice"]],
 } as const;
 
-assert.equal(productSheets.length, 10, "all ten V6 profiles must be represented");
+assert.equal(productSheets.length, 15, "all fifteen profiles must be represented");
 for (const sheet of productSheets) {
   const expected = expectedProfiles[sheet.slug as keyof typeof expectedProfiles];
   assert.ok(expected, `${sheet.slug}: normalized V6 profile is missing`);
@@ -52,7 +57,7 @@ const resinStrong = { ...flowerMedium, category: "resin", intensity: "fort" } as
 const resinMatches = rankProductSheets(resinStrong);
 assert.deepEqual(
   resinMatches.map((match) => match.sheet.slug),
-  ["le-mousseux", "kief", "libanais"],
+  ["le-mousseux", "kief", "libanais", "mousseux-skywalker", "marocain"],
   "resin + strong must return only exact V6 intensity matches",
 );
 assert.ok(
@@ -77,7 +82,7 @@ assert.deepEqual(
 );
 assert.deepEqual(
   rankProductSheets({ category: "flower", intensity: "fort", aroma: "fruite" }).map((match) => match.sheet.slug),
-  ["zkittlez-og", "blue-dream", "lemon-skunk"],
+  ["zkittlez-og", "skittle-plus", "blue-dream", "lemon-skunk"],
   "a matching aroma must rank first without changing intensity",
 );
 assert.deepEqual(
@@ -124,9 +129,9 @@ const exactSelectionCases: Array<{
 }> = [
   { choices: { category: "flower", intensity: "doux", aroma: "any" }, expected: ["watermelon-candy"] },
   { choices: { category: "flower", intensity: "moyen", aroma: "any" }, expected: ["biscotti", "mimosa"] },
-  { choices: { category: "flower", intensity: "fort", aroma: "any" }, expected: ["blue-dream", "lemon-skunk", "zkittlez-og"] },
-  { choices: { category: "resin", intensity: "moyen", aroma: "any" }, expected: ["black-butter"] },
-  { choices: { category: "resin", intensity: "fort", aroma: "any" }, expected: ["le-mousseux", "kief", "libanais"] },
+  { choices: { category: "flower", intensity: "fort", aroma: "any" }, expected: ["blue-dream", "lemon-skunk", "zkittlez-og", "skittle-plus"] },
+  { choices: { category: "resin", intensity: "moyen", aroma: "any" }, expected: ["black-butter", "ice-o-lator", "black-afghan"] },
+  { choices: { category: "resin", intensity: "fort", aroma: "any" }, expected: ["le-mousseux", "kief", "libanais", "mousseux-skywalker", "marocain"] },
 ];
 for (const { choices, expected } of exactSelectionCases) {
   assert.deepEqual(rankProductSheets(choices).map((match) => match.sheet.slug), expected);
@@ -151,7 +156,7 @@ for (const { aroma, category, intensity, first } of aromaCases) {
 
 assert.deepEqual(
   rankProductSheets({ category: "resin", intensity: "moyen", aroma: "any" }).map((match) => match.sheet.slug),
-  ["black-butter"],
+  ["black-butter", "ice-o-lator", "black-afghan"],
   "changing type must recalculate within the new category",
 );
 assert.deepEqual(
@@ -182,7 +187,7 @@ assert.deepEqual(
   "equal matches must preserve source order",
 );
 
-console.log("Product selector V6 tests passed: 10 profiles, strict type/intensity, aroma refinement, fallback, reset and stable ranking.");
+console.log("Product selector tests passed: 15 profiles, strict type/intensity, aroma refinement, fallback, reset and stable ranking.");
 
 function sheet(slug: string) {
   const value = productSheets.find((candidate) => candidate.slug === slug);
