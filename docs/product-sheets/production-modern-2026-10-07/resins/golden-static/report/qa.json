@@ -1,0 +1,56 @@
+{
+  "product": "Golden Static",
+  "status": "PASS",
+  "geometry": {
+    "overflow": 0,
+    "clipping": 0,
+    "collision": 0,
+    "safe_zone_mm": 5
+  },
+  "standard": {
+    "pages": 2,
+    "boxes": "PASS",
+    "extractable_text": true,
+    "fonts": 4,
+    "type3": 0,
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "full_page_raster": false,
+    "raster_images_per_page": [
+      1,
+      0
+    ]
+  },
+  "print_safe": {
+    "pages": 2,
+    "boxes": "PASS",
+    "extractable_text": false,
+    "fonts": 0,
+    "type3": 0,
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "full_page_raster": false,
+    "raster_images_per_page": [
+      1,
+      0
+    ]
+  },
+  "source_guard": {
+    "status": "PASS",
+    "expected": "public/Fiche produit/Golden static/Composition-ezgif.com-resize.webp",
+    "forbidden": "public/Fiche produit/Golden static/goldenstatic.webp",
+    "actual_sha256": "8cc588388bd397e14ac8f02e025737109332a5ad0eeb6a8b80cbe7d16e3f2436",
+    "forbidden_sha256": "8eaae7494d40beee0c27d0459873219efdc0e1771142a18b070a43b32d50e1ff",
+    "dimensions": [
+      713,
+      713
+    ]
+  },
+  "photo_box_points": [
+    87.874,
+    158.74,
+    138.898,
+    138.898
+  ],
+  "photo_effective_ppi": 369.6
+}

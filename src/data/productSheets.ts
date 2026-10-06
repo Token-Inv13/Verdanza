@@ -23,7 +23,7 @@ export type ProductSheet = {
   selectionProfile: ProductSelectionProfile;
   pdfUrl: string;
   previewUrl: string;
-  availability: "available";
+  availability: "available" | "planned";
 };
 
 export const productSheetCategoryLabels: Record<ProductSheetCategory, string> = {
@@ -34,8 +34,8 @@ export const productSheetCategoryLabels: Record<ProductSheetCategory, string> = 
 export const productSheetIntensityLabels = productIntensityLabels;
 export const productSheetAromaFamilyLabels = productAromaFamilyLabels;
 
-// Public library linked one-to-one to the products currently published in the shop.
-// Historical sheets remain in their documentary archives, outside the active UI.
+// Public documentary library. Planned sheets stay visible here without entering
+// the shop catalogue or the profile selector.
 export const productSheets: ProductSheet[] = [
   {
     productId: "flower-blue-dream-cbd",
@@ -43,8 +43,8 @@ export const productSheets: ProductSheet[] = [
     slug: "blue-dream-cbd",
     aromas: ["Citron", "Pin", "Fruit doux"],
     selectionProfile: { category: "flower", intensity: "doux", aromaFamilies: ["agrumes", "boise", "fruite"] },
-    pdfUrl: "/fiches-produits/blue-dream-cbd/verdanza-blue-dream-cbd.pdf",
-    previewUrl: "/images/fiches-produits/blue-dream-cbd.webp",
+    pdfUrl: "/fiches-produits/blue-dream-cbd/verdanza-blue-dream-cbd-modern-20261007.pdf",
+    previewUrl: "/images/fiches-produits/blue-dream-cbd-modern-20261007.webp",
     availability: "available",
   },
   {
@@ -53,8 +53,8 @@ export const productSheets: ProductSheet[] = [
     slug: "cookie-kush-indoor",
     aromas: ["Sucré", "Sirupeux", "Gourmand"],
     selectionProfile: { category: "flower", intensity: "doux", aromaFamilies: ["sucre"] },
-    pdfUrl: "/fiches-produits/cookie-kush-indoor/verdanza-cookie-kush-indoor.pdf",
-    previewUrl: "/images/fiches-produits/cookie-kush-indoor.webp",
+    pdfUrl: "/fiches-produits/cookie-kush-indoor/verdanza-cookie-kush-indoor-modern-20261007.pdf",
+    previewUrl: "/images/fiches-produits/cookie-kush-indoor-modern-20261007.webp",
     availability: "available",
   },
   {
@@ -63,8 +63,8 @@ export const productSheets: ProductSheet[] = [
     slug: "harlequin-greenhouse",
     aromas: ["Musc", "Sous-bois", "Notes torréfiées"],
     selectionProfile: { category: "flower", intensity: "doux", aromaFamilies: ["terreux", "boise"] },
-    pdfUrl: "/fiches-produits/harlequin-greenhouse/verdanza-harlequin-greenhouse.pdf",
-    previewUrl: "/images/fiches-produits/harlequin-greenhouse.webp",
+    pdfUrl: "/fiches-produits/harlequin-greenhouse/verdanza-harlequin-greenhouse-modern-20261007.pdf",
+    previewUrl: "/images/fiches-produits/harlequin-greenhouse-modern-20261007.webp",
     availability: "available",
   },
   {
@@ -73,8 +73,8 @@ export const productSheets: ProductSheet[] = [
     slug: "mandarine-cbd",
     aromas: ["Mandarine", "Agrumes", "Citron"],
     selectionProfile: { category: "flower", intensity: "doux", aromaFamilies: ["agrumes", "fruite"] },
-    pdfUrl: "/fiches-produits/mandarine-cbd/verdanza-mandarine-cbd.pdf",
-    previewUrl: "/images/fiches-produits/mandarine-cbd.webp",
+    pdfUrl: "/fiches-produits/mandarine-cbd/verdanza-mandarine-cbd-modern-20261007.pdf",
+    previewUrl: "/images/fiches-produits/mandarine-cbd-modern-20261007.webp",
     availability: "available",
   },
   {
@@ -83,8 +83,8 @@ export const productSheets: ProductSheet[] = [
     slug: "mango-haze-cbd",
     aromas: ["Sucré", "Fruité", "Acidulé"],
     selectionProfile: { category: "flower", intensity: "doux", aromaFamilies: ["sucre", "fruite"] },
-    pdfUrl: "/fiches-produits/mango-haze-cbd/verdanza-mango-haze-cbd.pdf",
-    previewUrl: "/images/fiches-produits/mango-haze-cbd.webp",
+    pdfUrl: "/fiches-produits/mango-haze-cbd/verdanza-mango-haze-cbd-modern-20261007.pdf",
+    previewUrl: "/images/fiches-produits/mango-haze-cbd-modern-20261007.webp",
     availability: "available",
   },
   {
@@ -93,8 +93,8 @@ export const productSheets: ProductSheet[] = [
     slug: "petites-tetes-og-kush",
     aromas: ["Menthe fraîche", "Agrumes", "Fraîcheur végétale"],
     selectionProfile: { category: "flower", intensity: "doux", aromaFamilies: ["agrumes"] },
-    pdfUrl: "/fiches-produits/petites-tetes-og-kush/verdanza-petites-tetes-og-kush.pdf",
-    previewUrl: "/images/fiches-produits/petites-tetes-og-kush.webp",
+    pdfUrl: "/fiches-produits/petites-tetes-og-kush/verdanza-petites-tetes-og-kush-modern-20261007.pdf",
+    previewUrl: "/images/fiches-produits/petites-tetes-og-kush-modern-20261007.webp",
     availability: "available",
   },
   {
@@ -103,8 +103,8 @@ export const productSheets: ProductSheet[] = [
     slug: "golden-static",
     aromas: ["Herbacé", "Végétal", "Authentique"],
     selectionProfile: { category: "resin", intensity: "doux", aromaFamilies: ["terreux", "boise"] },
-    pdfUrl: "/fiches-produits/golden-static/verdanza-golden-static.pdf",
-    previewUrl: "/images/fiches-produits/golden-static.webp",
+    pdfUrl: "/fiches-produits/golden-static/verdanza-golden-static-modern-20261007.pdf",
+    previewUrl: "/images/fiches-produits/golden-static-modern-20261007.webp",
     availability: "available",
   },
   {
@@ -113,10 +113,51 @@ export const productSheets: ProductSheet[] = [
     slug: "supreme-50-cbd",
     aromas: ["Floral", "Raffiné"],
     selectionProfile: { category: "resin", intensity: "doux", aromaFamilies: [] },
-    pdfUrl: "/fiches-produits/supreme-50-cbd/verdanza-supreme-50-cbd.pdf",
-    previewUrl: "/images/fiches-produits/supreme-50-cbd.webp",
+    pdfUrl: "/fiches-produits/supreme-50-cbd/verdanza-supreme-50-cbd-modern-20261007.pdf",
+    previewUrl: "/images/fiches-produits/supreme-50-cbd-modern-20261007.webp",
     availability: "available",
+  },
+  {
+    productId: "flower-skittle-plus",
+    name: "Skittle Plus",
+    slug: "skittle-plus",
+    aromas: ["Citron", "Bonbon", "Diesel"],
+    selectionProfile: { category: "flower", intensity: "fort", aromaFamilies: ["agrumes", "sucre", "fruite"] },
+    pdfUrl: "/fiches-produits/skittle-plus/verdanza-skittle-plus-modern-20261007.pdf",
+    previewUrl: "/images/fiches-produits/skittle-plus-modern-20261007.webp",
+    availability: "planned",
+  },
+  {
+    productId: "resin-black-afghan",
+    name: "Black Afghan",
+    slug: "black-afghan",
+    aromas: ["Terreux", "Sucré", "Fruits rouges"],
+    selectionProfile: { category: "resin", intensity: "moyen", aromaFamilies: ["terreux", "sucre", "fruite"] },
+    pdfUrl: "/fiches-produits/black-afghan/verdanza-black-afghan-modern-20261007.pdf",
+    previewUrl: "/images/fiches-produits/black-afghan-modern-20261007.webp",
+    availability: "planned",
+  },
+  {
+    productId: "resin-ice-o-lator",
+    name: "Ice-o-Lator",
+    slug: "ice-o-lator",
+    aromas: ["Floral", "Fruits mûrs", "Épicé"],
+    selectionProfile: { category: "resin", intensity: "moyen", aromaFamilies: ["fruite", "epice", "sucre"] },
+    pdfUrl: "/fiches-produits/ice-o-lator/verdanza-ice-o-lator-modern-20261007.pdf",
+    previewUrl: "/images/fiches-produits/ice-o-lator-modern-20261007.webp",
+    availability: "planned",
+  },
+  {
+    productId: "resin-mousseux-skywalker",
+    name: "Mousseux Skywalker",
+    slug: "mousseux-skywalker",
+    aromas: ["Pin", "Boisé", "Agrumes"],
+    selectionProfile: { category: "resin", intensity: "fort", aromaFamilies: ["boise", "agrumes", "epice"] },
+    pdfUrl: "/fiches-produits/mousseux-skywalker/verdanza-mousseux-skywalker-modern-20261007.pdf",
+    previewUrl: "/images/fiches-produits/mousseux-skywalker-modern-20261007.webp",
+    availability: "planned",
   },
 ];
 
-export const availableProductSheets = productSheets;
+export const availableProductSheets = productSheets.filter((sheet) => sheet.availability === "available");
+export const plannedProductSheets = productSheets.filter((sheet) => sheet.availability === "planned");

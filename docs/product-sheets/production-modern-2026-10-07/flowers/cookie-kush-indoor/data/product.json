@@ -1,0 +1,41 @@
+{
+  "product_id": "flower-cookie-kush-indoor",
+  "slug": "cookie-kush-indoor",
+  "name": "Cookie Kush Indoor",
+  "category": "flower",
+  "availability": "available",
+  "intensity": "doux",
+  "aromas": [
+    "Sucré",
+    "Sirupeux",
+    "Gourmand"
+  ],
+  "aroma_families": [
+    "sucre"
+  ],
+  "image": "public/Fiche produit/Cookie Kush (intérieur)/cookie-pile.webp",
+  "appearance_title": "ASPECT",
+  "appearance_short": "Têtes soignées · Régulières",
+  "appearance_items": [
+    "Soignées",
+    "Régulières"
+  ],
+  "aroma_description": "Un profil gourmand, sucré et sirupeux à l'expression aromatique ronde.",
+  "source_note": "Données actives validées et photographie entière du catalogue Verdanza.",
+  "forbidden_image": null,
+  "selectionProfile": {
+    "category": "flower",
+    "intensity": "doux",
+    "aromaFamilies": [
+      "sucre"
+    ]
+  },
+  "source_image": "public/Fiche produit/Cookie Kush (intérieur)/cookie-pile.webp",
+  "source_image_sha256": "cf71fc9bd235a5b0da2ffc9ac2f4fd297373b7ed8386229fcb318c16e2566020",
+  "source_image_dimensions": [
+    713,
+    713
+  ],
+  "ai_generated": false,
+  "source": "Données actives validées et photographie entière du catalogue Verdanza."
+}

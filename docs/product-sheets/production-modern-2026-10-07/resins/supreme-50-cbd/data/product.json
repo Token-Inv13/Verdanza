@@ -1,0 +1,37 @@
+{
+  "product_id": "resin-supreme-50-cbd",
+  "slug": "supreme-50-cbd",
+  "name": "Suprême 50 % CBD",
+  "category": "resin",
+  "availability": "available",
+  "intensity": "doux",
+  "aromas": [
+    "Floral",
+    "Raffiné"
+  ],
+  "aroma_families": [],
+  "image": "public/Fiche produit/Supreme/supreme-50-cbd.webp",
+  "appearance_title": "TEXTURE & APPARENCE",
+  "appearance_short": "Dense · Homogène · Malléable",
+  "appearance_items": [
+    "Dense",
+    "Homogène",
+    "Malléable"
+  ],
+  "aroma_description": "Des notes florales légères et raffinées, à l'expression délicate.",
+  "source_note": "Données actives validées et photographie entière du catalogue Verdanza.",
+  "forbidden_image": null,
+  "selectionProfile": {
+    "category": "resin",
+    "intensity": "doux",
+    "aromaFamilies": []
+  },
+  "source_image": "public/Fiche produit/Supreme/supreme-50-cbd.webp",
+  "source_image_sha256": "932ca6e84080382c2e3e18e6396820776ce7a03632267be24b5f3aa5ee4afa45",
+  "source_image_dimensions": [
+    713,
+    713
+  ],
+  "ai_generated": false,
+  "source": "Données actives validées et photographie entière du catalogue Verdanza."
+}

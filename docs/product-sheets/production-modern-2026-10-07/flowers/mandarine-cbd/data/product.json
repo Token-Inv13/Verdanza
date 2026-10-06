@@ -1,0 +1,43 @@
+{
+  "product_id": "flower-mandarine-cbd",
+  "slug": "mandarine-cbd",
+  "name": "Mandarine",
+  "category": "flower",
+  "availability": "available",
+  "intensity": "doux",
+  "aromas": [
+    "Mandarine",
+    "Agrumes",
+    "Citron"
+  ],
+  "aroma_families": [
+    "agrumes",
+    "fruite"
+  ],
+  "image": "public/Fiche produit/Mandarine/Mandarine_pile.webp",
+  "appearance_title": "ASPECT",
+  "appearance_short": "Fleur hydroponique · Présentation soignée",
+  "appearance_items": [
+    "Hydroponique",
+    "Soignée"
+  ],
+  "aroma_description": "Un profil frais et fruité dominé par la mandarine et les agrumes.",
+  "source_note": "Données actives validées et photographie entière du catalogue Verdanza.",
+  "forbidden_image": null,
+  "selectionProfile": {
+    "category": "flower",
+    "intensity": "doux",
+    "aromaFamilies": [
+      "agrumes",
+      "fruite"
+    ]
+  },
+  "source_image": "public/Fiche produit/Mandarine/Mandarine_pile.webp",
+  "source_image_sha256": "d390261e345437e94a60fb92b8698faaf0fff438f4ecb891c13a5ebfc6956ec8",
+  "source_image_dimensions": [
+    713,
+    713
+  ],
+  "ai_generated": false,
+  "source": "Données actives validées et photographie entière du catalogue Verdanza."
+}

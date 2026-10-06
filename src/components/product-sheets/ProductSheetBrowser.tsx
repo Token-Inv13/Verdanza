@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import {
   availableProductSheets,
+  plannedProductSheets,
   productSheetIntensityLabels,
   type ProductSheet,
   type ProductSheetCategory,
@@ -192,6 +193,67 @@ export function ProductSheetBrowser({ library = availableProductSheets }: { libr
         </div>
       </div>
     </div>
+  );
+}
+
+export function PlannedProductSheets({ library = plannedProductSheets }: { library?: ProductSheet[] }) {
+  if (library.length === 0) return null;
+
+  return (
+    <section className="mt-12 border-t border-forest/10 pt-8 sm:mt-16 sm:pt-10" aria-labelledby="planned-product-sheets-title">
+      <div className="max-w-2xl">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-champagne">À venir</p>
+        <h3 id="planned-product-sheets-title" className="mt-2 font-display text-3xl text-forest sm:text-4xl">
+          Prochainement dans la sélection
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-ink/60 sm:text-base">
+          Les prochaines références déjà documentées par Verdanza.
+        </p>
+        <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-forest/50">
+          {library.length} références à venir
+        </p>
+      </div>
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-planned-product-sheets>
+        {library.map((sheet) => (
+          <article key={sheet.slug} className="rounded-xl border border-champagne/35 bg-cream/55 p-4 shadow-sm">
+            <div className="mb-4 aspect-[111/154] overflow-hidden rounded-lg border border-forest/10 bg-ivory">
+              <img
+                src={sheet.previewUrl}
+                alt={`Aperçu de la fiche à venir ${sheet.name}`}
+                width={640}
+                height={888}
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="inline-flex rounded-full border border-champagne/45 bg-ivory px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-forest">
+                  À venir
+                </span>
+                <h4 className="mt-3 font-display text-2xl leading-tight text-forest">{sheet.name}</h4>
+              </div>
+            </div>
+            <p className="mt-2 min-h-10 text-sm leading-5 text-ink/60">{sheet.aromas.join(" · ")}</p>
+            <p className="mt-3 text-xs font-semibold uppercase tracking-[0.14em] text-forest/55">
+              {sheet.selectionProfile.category === "flower" ? "Fleur" : "Résine"} · {productSheetIntensityLabels[sheet.selectionProfile.intensity]}
+            </p>
+            <a
+              href={sheet.pdfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-forest/20 bg-ivory px-4 py-2 text-sm font-semibold text-forest transition hover:border-champagne focus:outline-none focus:ring-2 focus:ring-champagne focus:ring-offset-2"
+              aria-label={`Voir la fiche à venir ${sheet.name} (PDF, nouvel onglet)`}
+            >
+              Voir la fiche
+              <ExternalLink aria-hidden="true" size={15} />
+            </a>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 

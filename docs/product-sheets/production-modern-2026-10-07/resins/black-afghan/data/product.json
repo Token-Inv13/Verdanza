@@ -1,0 +1,46 @@
+{
+  "product_id": "resin-black-afghan",
+  "slug": "black-afghan",
+  "name": "Black Afghan",
+  "category": "resin",
+  "availability": "planned",
+  "intensity": "moyen",
+  "aromas": [
+    "Terreux",
+    "Sucré",
+    "Fruits rouges"
+  ],
+  "aroma_families": [
+    "terreux",
+    "sucre",
+    "fruite"
+  ],
+  "image": "docs/product-sheets/modern-inputs-2026-10-07/black-afghan-historical-photo.png",
+  "appearance_title": "TEXTURE & APPARENCE",
+  "appearance_short": "Résine sombre, souple et malléable, facile à effriter.",
+  "appearance_items": [
+    "Sombre",
+    "Souple",
+    "Malléable"
+  ],
+  "aroma_description": "Une dominante terreuse adoucie par une nuance sucrée et des notes de cassis et de framboise.",
+  "source_note": "Données et photographie extraites de la fiche historique ; composition graphique reconstruite.",
+  "forbidden_image": null,
+  "selectionProfile": {
+    "category": "resin",
+    "intensity": "moyen",
+    "aromaFamilies": [
+      "terreux",
+      "sucre",
+      "fruite"
+    ]
+  },
+  "source_image": "docs/product-sheets/modern-inputs-2026-10-07/black-afghan-historical-photo.png",
+  "source_image_sha256": "1818a3ecb0459a9adc75ced410f6f4241750423e8af2dc5f0ead9ad35a25a8ec",
+  "source_image_dimensions": [
+    600,
+    600
+  ],
+  "ai_generated": false,
+  "source": "Données et photographie extraites de la fiche historique ; composition graphique reconstruite."
+}

@@ -69,6 +69,7 @@
     "test:category-page-v2": "node --import tsx scripts/testCategoryPageV2.ts",
     "test:category-page-v2-ui": "node --import tsx scripts/testCategoryPageV2Ui.ts",
     "test:product-sheets-ui-v2": "node --import tsx scripts/testProductSheetsUiV2.ts",
+    "test:product-sheets-modern-collection": "node --import tsx scripts/testProductSheetModernCollection.ts",
     "test:cagnotte": "node --import tsx scripts/testCagnotteCalculations.ts",
     "test:cagnotte-runtime-config": "node --import tsx scripts/testCagnotteRuntimeConfig.ts",
     "test:cagnotte-ledger": "node --import tsx scripts/runCagnotteLedgerTests.ts",

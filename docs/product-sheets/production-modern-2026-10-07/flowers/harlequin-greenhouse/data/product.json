@@ -1,0 +1,43 @@
+{
+  "product_id": "flower-harlequin-greenhouse",
+  "slug": "harlequin-greenhouse",
+  "name": "Harlequin Greenhouse",
+  "category": "flower",
+  "availability": "available",
+  "intensity": "doux",
+  "aromas": [
+    "Musc",
+    "Sous-bois",
+    "Notes torréfiées"
+  ],
+  "aroma_families": [
+    "terreux",
+    "boise"
+  ],
+  "image": "public/Fiche produit/Harlequin (sous-serre)/harlequin_pile.webp",
+  "appearance_title": "ASPECT",
+  "appearance_short": "Têtes mûres · Notes boisées",
+  "appearance_items": [
+    "Mûres",
+    "Boisées"
+  ],
+  "aroma_description": "Un profil profond et naturel, entre musc, sous-bois et notes torréfiées.",
+  "source_note": "Données actives validées et photographie entière du catalogue Verdanza.",
+  "forbidden_image": null,
+  "selectionProfile": {
+    "category": "flower",
+    "intensity": "doux",
+    "aromaFamilies": [
+      "terreux",
+      "boise"
+    ]
+  },
+  "source_image": "public/Fiche produit/Harlequin (sous-serre)/harlequin_pile.webp",
+  "source_image_sha256": "bc220070ac764abe1fdd300d6b56ee269a11efff89552b3e076234b3b39cb040",
+  "source_image_dimensions": [
+    713,
+    713
+  ],
+  "ai_generated": false,
+  "source": "Données actives validées et photographie entière du catalogue Verdanza."
+}

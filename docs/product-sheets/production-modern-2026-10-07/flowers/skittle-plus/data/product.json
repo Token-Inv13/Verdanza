@@ -1,0 +1,46 @@
+{
+  "product_id": "flower-skittle-plus",
+  "slug": "skittle-plus",
+  "name": "Skittle Plus",
+  "category": "flower",
+  "availability": "planned",
+  "intensity": "fort",
+  "aromas": [
+    "Citron",
+    "Bonbon",
+    "Diesel"
+  ],
+  "aroma_families": [
+    "agrumes",
+    "sucre",
+    "fruite"
+  ],
+  "image": "docs/product-sheets/modern-inputs-2026-10-07/skittle-plus-historical-photo.png",
+  "appearance_title": "ASPECT",
+  "appearance_short": "Fleurs compactes et résineuses, aux nuances vertes et aux pistils orangés.",
+  "appearance_items": [
+    "Compactes",
+    "Résineuses",
+    "Pistils orangés"
+  ],
+  "aroma_description": "Un départ citronné et gourmand, suivi d'une note de confiserie fruitée et d'un fond diesel.",
+  "source_note": "Données et photographie extraites de la fiche historique ; composition graphique reconstruite.",
+  "forbidden_image": null,
+  "selectionProfile": {
+    "category": "flower",
+    "intensity": "fort",
+    "aromaFamilies": [
+      "agrumes",
+      "sucre",
+      "fruite"
+    ]
+  },
+  "source_image": "docs/product-sheets/modern-inputs-2026-10-07/skittle-plus-historical-photo.png",
+  "source_image_sha256": "31f0ed15ba826c858a9611d462c18c7129cdf236a73f08942552c2014f51b5e2",
+  "source_image_dimensions": [
+    1024,
+    1024
+  ],
+  "ai_generated": false,
+  "source": "Données et photographie extraites de la fiche historique ; composition graphique reconstruite."
+}

@@ -1,0 +1,44 @@
+{
+  "product_id": "resin-golden-static",
+  "slug": "golden-static",
+  "name": "Golden Static",
+  "category": "resin",
+  "availability": "available",
+  "intensity": "doux",
+  "aromas": [
+    "Herbacé",
+    "Végétal",
+    "Authentique"
+  ],
+  "aroma_families": [
+    "terreux",
+    "boise"
+  ],
+  "image": "public/Fiche produit/Golden static/Composition-ezgif.com-resize.webp",
+  "appearance_title": "TEXTURE & APPARENCE",
+  "appearance_short": "Crémeuse · Dense · Travaillée",
+  "appearance_items": [
+    "Crémeuse",
+    "Dense",
+    "Travaillée"
+  ],
+  "aroma_description": "Un profil herbacé et végétal à l'identité authentique.",
+  "source_note": "Source entière 713 × 713 imposée par le pilote.",
+  "forbidden_image": "public/Fiche produit/Golden static/goldenstatic.webp",
+  "selectionProfile": {
+    "category": "resin",
+    "intensity": "doux",
+    "aromaFamilies": [
+      "terreux",
+      "boise"
+    ]
+  },
+  "source_image": "public/Fiche produit/Golden static/Composition-ezgif.com-resize.webp",
+  "source_image_sha256": "8cc588388bd397e14ac8f02e025737109332a5ad0eeb6a8b80cbe7d16e3f2436",
+  "source_image_dimensions": [
+    713,
+    713
+  ],
+  "ai_generated": false,
+  "source": "Source entière 713 × 713 imposée par le pilote."
+}

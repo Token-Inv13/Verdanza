@@ -1,0 +1,41 @@
+{
+  "product_id": "flower-petites-tetes-og-kush",
+  "slug": "petites-tetes-og-kush",
+  "name": "OG Kush",
+  "category": "flower",
+  "availability": "available",
+  "intensity": "doux",
+  "aromas": [
+    "Menthe fraîche",
+    "Agrumes",
+    "Fraîcheur végétale"
+  ],
+  "aroma_families": [
+    "agrumes"
+  ],
+  "image": "public/Fiche produit/Petite tetes OG Kush ( sous serre)/PTOGKush_pile.webp",
+  "appearance_title": "ASPECT",
+  "appearance_short": "Petites têtes · Compactes",
+  "appearance_items": [
+    "Petites têtes",
+    "Compactes"
+  ],
+  "aroma_description": "Un profil frais et direct associant menthe, agrumes et fraîcheur végétale.",
+  "source_note": "Données actives validées et photographie entière du catalogue Verdanza.",
+  "forbidden_image": null,
+  "selectionProfile": {
+    "category": "flower",
+    "intensity": "doux",
+    "aromaFamilies": [
+      "agrumes"
+    ]
+  },
+  "source_image": "public/Fiche produit/Petite tetes OG Kush ( sous serre)/PTOGKush_pile.webp",
+  "source_image_sha256": "3e8c9fdca1197a658b1cd326fb8905cc6d6698c0c999f056b13362157e2d5315",
+  "source_image_dimensions": [
+    713,
+    712
+  ],
+  "ai_generated": false,
+  "source": "Données actives validées et photographie entière du catalogue Verdanza."
+}

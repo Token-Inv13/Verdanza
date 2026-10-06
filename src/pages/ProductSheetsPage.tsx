@@ -1,8 +1,8 @@
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
 import { ProductProfileSelector } from "../components/product-sheets/ProductProfileSelector";
-import { ProductSheetBrowser } from "../components/product-sheets/ProductSheetBrowser";
-import { productSheets } from "../data/productSheets";
+import { PlannedProductSheets, ProductSheetBrowser } from "../components/product-sheets/ProductSheetBrowser";
+import { availableProductSheets, plannedProductSheets } from "../data/productSheets";
 
 export function ProductSheetsPage() {
   return (
@@ -36,7 +36,7 @@ export function ProductSheetsPage() {
       </header>
 
       <div className="container-page pt-6 sm:pt-10 lg:pt-12">
-        <ProductProfileSelector sheets={productSheets} />
+        <ProductProfileSelector sheets={availableProductSheets} />
 
         <section
           id="all-product-sheets"
@@ -58,7 +58,8 @@ export function ProductSheetsPage() {
             </p>
           </div>
 
-          <ProductSheetBrowser library={productSheets} />
+          <ProductSheetBrowser library={availableProductSheets} />
+          <PlannedProductSheets library={plannedProductSheets} />
         </section>
       </div>
     </main>

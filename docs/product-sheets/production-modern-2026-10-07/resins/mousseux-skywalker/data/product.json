@@ -1,0 +1,46 @@
+{
+  "product_id": "resin-mousseux-skywalker",
+  "slug": "mousseux-skywalker",
+  "name": "Mousseux Skywalker",
+  "category": "resin",
+  "availability": "planned",
+  "intensity": "fort",
+  "aromas": [
+    "Pin",
+    "Boisé",
+    "Agrumes"
+  ],
+  "aroma_families": [
+    "boise",
+    "agrumes",
+    "epice"
+  ],
+  "image": "docs/product-sheets/modern-inputs-2026-10-07/mousseux-skywalker-historical-photo.png",
+  "appearance_title": "TEXTURE & APPARENCE",
+  "appearance_short": "Résine aérée, souple et malléable, à la texture mousseuse.",
+  "appearance_items": [
+    "Aérée",
+    "Souple",
+    "Mousseuse"
+  ],
+  "aroma_description": "Un bouquet de pin frais et de bois résineux, relevé d'une touche d'agrumes et d'épices.",
+  "source_note": "Données et photographie extraites de la fiche historique ; composition graphique reconstruite.",
+  "forbidden_image": null,
+  "selectionProfile": {
+    "category": "resin",
+    "intensity": "fort",
+    "aromaFamilies": [
+      "boise",
+      "agrumes",
+      "epice"
+    ]
+  },
+  "source_image": "docs/product-sheets/modern-inputs-2026-10-07/mousseux-skywalker-historical-photo.png",
+  "source_image_sha256": "35f04235f0a984b8369511613b66d7f1ac71b96d7bdd3b08dc00ae2497cd17c5",
+  "source_image_dimensions": [
+    1024,
+    1024
+  ],
+  "ai_generated": false,
+  "source": "Données et photographie extraites de la fiche historique ; composition graphique reconstruite."
+}

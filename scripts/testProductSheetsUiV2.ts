@@ -67,7 +67,8 @@ try {
     assert.equal(await page.locator("[data-product-sheet-card]").count(), 2, `${width}px: resin tab must contain both active resins`);
     assert.deepEqual(await page.locator("[data-product-sheet-card] h3").allTextContents(), ["Golden Static", "Suprême 50 % CBD"]);
     assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "1 / 2");
-    assert.equal(await page.locator("[data-unavailable-product-sheets]").count(), 0, "historical sheets must stay outside the public experience");
+    assert.equal(await page.locator("[data-planned-product-sheets] article").count(), 4, "the four planned sheets must stay visible outside the active tabs");
+    assert.deepEqual(await page.locator("[data-planned-product-sheets] h4").allTextContents(), ["Skittle Plus", "Black Afghan", "Ice-o-Lator", "Mousseux Skywalker"]);
 
     await selector.scrollIntoViewIfNeeded();
     const edit = page.locator('[data-selector-summary][data-sticky="false"] [data-selector-edit]');
@@ -127,4 +128,4 @@ try {
   await server.close();
 }
 
-console.log("Product sheets UI V2 tests passed: 8 active products, selector, sticky summary, tabs, carousel, accessibility and 8 responsive widths.");
+console.log("Product sheets UI V2 tests passed: 8 active + 4 planned, selector isolation, tabs, carousel, accessibility and 8 responsive widths.");

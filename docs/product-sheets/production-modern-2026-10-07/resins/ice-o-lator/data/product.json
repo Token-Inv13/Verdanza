@@ -1,0 +1,46 @@
+{
+  "product_id": "resin-ice-o-lator",
+  "slug": "ice-o-lator",
+  "name": "Ice-o-Lator",
+  "category": "resin",
+  "availability": "planned",
+  "intensity": "moyen",
+  "aromas": [
+    "Floral",
+    "Fruits mûrs",
+    "Épicé"
+  ],
+  "aroma_families": [
+    "fruite",
+    "epice",
+    "sucre"
+  ],
+  "image": "docs/product-sheets/modern-inputs-2026-10-07/ice-o-lator-historical-photo.png",
+  "appearance_title": "TEXTURE & APPARENCE",
+  "appearance_short": "Résine blond doré, fine et compacte, légèrement grasse au toucher.",
+  "appearance_items": [
+    "Blond doré",
+    "Compacte",
+    "Légèrement grasse"
+  ],
+  "aroma_description": "Des notes florales et de fruits mûrs, sur un fond résineux, légèrement sucré et épicé.",
+  "source_note": "Données et photographie extraites de la fiche historique ; composition graphique reconstruite.",
+  "forbidden_image": null,
+  "selectionProfile": {
+    "category": "resin",
+    "intensity": "moyen",
+    "aromaFamilies": [
+      "fruite",
+      "epice",
+      "sucre"
+    ]
+  },
+  "source_image": "docs/product-sheets/modern-inputs-2026-10-07/ice-o-lator-historical-photo.png",
+  "source_image_sha256": "af23992dcec1c0087a0e55f0a5f8bfb00f2813eced63f80b1fcb0486722bb92e",
+  "source_image_dimensions": [
+    600,
+    600
+  ],
+  "ai_generated": false,
+  "source": "Données et photographie extraites de la fiche historique ; composition graphique reconstruite."
+}
