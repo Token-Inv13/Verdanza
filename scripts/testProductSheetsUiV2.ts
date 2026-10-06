@@ -119,7 +119,7 @@ try {
     await page.locator('[data-product-selector-results][data-result-category="resin"][data-result-intensity="fort"]').waitFor();
     assert.deepEqual(
       await page.locator("[data-selector-result-card]").allTextContents(),
-      ["Le mousseux", "Kief", "Libanais", "Mousseux Skywalker", "Marocain"],
+      ["Kief", "Libanais", "Mousseux Skywalker", "Marocain"],
       `${width}px: strong resin selector names must use the published references`,
     );
     await page.locator('[data-selector-summary][data-sticky="false"] [data-selector-edit]').click();
@@ -142,14 +142,15 @@ try {
     assert.equal(await page.locator('[data-product-sheet-card]').first().getAttribute("data-product-sheet-card"), "biscotti", `${width}px: first flower must be immediately visible`);
     await page.locator('[data-product-sheet-tab="resin"]').click();
     await page.locator('[data-product-sheet-category="resin"]').waitFor();
-    assert.equal(await page.locator('[data-product-sheet-card]').count(), 8, `${width}px: resin tab must contain eight sheets`);
-    assert.equal(await page.locator('[data-product-sheet-card]').first().getAttribute("data-product-sheet-card"), "le-mousseux", `${width}px: resins must be one tap away`);
+    assert.equal(await page.locator('[data-product-sheet-card]').count(), 7, `${width}px: resin tab must contain seven sheets`);
+    assert.equal(await page.locator('[data-product-sheet-card]').first().getAttribute("data-product-sheet-card"), "kief", `${width}px: resins must be one tap away`);
+    assert.equal(await page.locator('[data-product-sheet-card="le-mousseux"]').count(), 0, `${width}px: the retired sheet must not appear`);
     assert.deepEqual(
       await page.locator('[data-product-sheet-card] h3').allTextContents(),
-      ["Le mousseux", "Kief", "Libanais", "Black Butter", "Mousseux Skywalker", "Ice-o-Lator", "Black Afghan", "Marocain"],
+      ["Kief", "Libanais", "Black Butter", "Mousseux Skywalker", "Ice-o-Lator", "Black Afghan", "Marocain"],
       `${width}px: resin library names must use the published references`,
     );
-    assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "1 / 8", `${width}px: category change must reset position`);
+    assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "1 / 7", `${width}px: category change must reset position`);
 
     await page.locator('[data-product-sheet-tab="flower"]').click();
     await page.locator('[data-product-sheet-category="flower"]').waitFor();

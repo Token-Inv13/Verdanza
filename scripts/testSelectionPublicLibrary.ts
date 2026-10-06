@@ -18,6 +18,11 @@ try {
       selectionProfile: { category: "resin", intensity: "douce", aromaFamilies: ["sucre"] },
       pdfUrl: "/api/selection?action=asset&slug=resine-ajoutee&kind=pdf",
       previewUrl: "/api/selection?action=asset&slug=resine-ajoutee&kind=image",
+    }, {
+      name: "Le mousseux", slug: "le-mousseux", aromas: ["Terreux"],
+      selectionProfile: { category: "resin", intensity: "fort", aromaFamilies: ["terreux"] },
+      pdfUrl: "/fiches-produits/le-mousseux/verdanza-le-mousseux.pdf",
+      previewUrl: "/images/fiches-produits/le-mousseux.webp",
     }] }) });
   });
   const page = await context.newPage();
@@ -26,6 +31,7 @@ try {
   await gotoDomReady(page, `${server.baseUrl}/fiches-produits`);
   await page.locator('[data-product-sheet-tab="resin"]').click();
   await page.locator('[data-product-sheet-card="resine-ajoutee"]').waitFor();
+  assert.equal(await page.locator('[data-product-sheet-card="le-mousseux"]').count(), 0);
   assert.equal(await page.locator('[data-product-sheet-card="resine-ajoutee"] a[href*="kind=pdf"]').count(), 1);
   await page.locator('[data-selector-option="category:resin"]').click();
   assert.equal(await page.locator('[data-selector-option="intensity:doux"]').isDisabled(), false);

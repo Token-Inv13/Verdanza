@@ -90,14 +90,6 @@ export const productSheets: ProductSheet[] = [
     previewUrl: "/images/fiches-produits/skittle-plus.webp",
   },
   {
-    name: "Le mousseux",
-    slug: "le-mousseux",
-    aromas: ["Terreux", "Boisé", "Subtilement fruité"],
-    selectionProfile: { category: "resin", intensity: "fort", aromaFamilies: ["terreux", "boise", "agrumes"] },
-    pdfUrl: "/fiches-produits/le-mousseux/verdanza-le-mousseux.pdf",
-    previewUrl: "/images/fiches-produits/le-mousseux.webp",
-  },
-  {
     name: "Kief",
     slug: "kief",
     aromas: ["Terreux", "Épicé", "Boisé"],
