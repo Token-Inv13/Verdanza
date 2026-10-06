@@ -58,10 +58,10 @@ try {
     assert.match(await page.locator('[data-selector-summary][data-sticky="false"]').innerText(), /Fleurs\s*·\s*Fort\s*·\s*Fruité/i, `${width}px: compact summary is incomplete`);
     assert.deepEqual(
       await page.locator("[data-selector-result-card]").evaluateAll((cards) => cards.map((card) => card.getAttribute("data-selector-result-card"))),
-      ["zkittlez-og", "blue-dream", "lemon-skunk"],
+      ["zkittlez-og", "skittle-plus", "blue-dream", "lemon-skunk"],
       `${width}px: Fruité must reorder all strict V6 matches without filtering them`,
     );
-    assert.equal(await page.locator("[data-selector-result-card]").count(), 3, `${width}px: all exact results must stay visible`);
+    assert.equal(await page.locator("[data-selector-result-card]").count(), 4, `${width}px: all exact results must stay visible`);
 
     if (width === 390) {
       const transforms = await page.locator("[data-selector-result-card]").evaluateAll((cards) => cards.map((card) => getComputedStyle(card).transform));
@@ -86,7 +86,7 @@ try {
       "blue-dream",
       `${width}px: Peu importe must restore stable exact-match order`,
     );
-    assert.equal(await page.locator("[data-selector-result-card]").count(), 3, `${width}px: Peu importe must keep all exact matches`);
+    assert.equal(await page.locator("[data-selector-result-card]").count(), 4, `${width}px: Peu importe must keep all exact matches`);
     assert.match(await page.locator('[data-selector-summary][data-sticky="false"]').innerText(), /Peu importe/i, `${width}px: explicit Peu importe must appear in the final summary`);
     const activeResultCard = page.locator('[data-selector-primary-card="true"]');
     const restingResultStyle = await activeResultCard.evaluate((card) => ({
@@ -119,8 +119,8 @@ try {
     await page.locator('[data-product-selector-results][data-result-category="resin"][data-result-intensity="fort"]').waitFor();
     assert.deepEqual(
       await page.locator("[data-selector-result-card]").allTextContents(),
-      ["Le mousseux", "Kief", "Libanais"],
-      `${width}px: strong resin selector names must use the V6.1 references`,
+      ["Le mousseux", "Kief", "Libanais", "Mousseux Skywalker", "Marocain"],
+      `${width}px: strong resin selector names must use the published references`,
     );
     await page.locator('[data-selector-summary][data-sticky="false"] [data-selector-edit]').click();
     await page.locator('[data-selector-step="2"] > button').click();
@@ -138,18 +138,18 @@ try {
     const library = page.locator("#all-product-sheets");
     await library.scrollIntoViewIfNeeded();
     assert.equal(await page.locator('[data-product-sheet-tab="flower"]').getAttribute("aria-selected"), "true", `${width}px: flowers must be the default tab`);
-    assert.equal(await page.locator('[data-product-sheet-card]').count(), 6, `${width}px: flower tab must contain six sheets`);
+    assert.equal(await page.locator('[data-product-sheet-card]').count(), 7, `${width}px: flower tab must contain seven sheets`);
     assert.equal(await page.locator('[data-product-sheet-card]').first().getAttribute("data-product-sheet-card"), "biscotti", `${width}px: first flower must be immediately visible`);
     await page.locator('[data-product-sheet-tab="resin"]').click();
     await page.locator('[data-product-sheet-category="resin"]').waitFor();
-    assert.equal(await page.locator('[data-product-sheet-card]').count(), 4, `${width}px: resin tab must contain four sheets`);
+    assert.equal(await page.locator('[data-product-sheet-card]').count(), 8, `${width}px: resin tab must contain eight sheets`);
     assert.equal(await page.locator('[data-product-sheet-card]').first().getAttribute("data-product-sheet-card"), "le-mousseux", `${width}px: resins must be one tap away`);
     assert.deepEqual(
       await page.locator('[data-product-sheet-card] h3').allTextContents(),
-      ["Le mousseux", "Kief", "Libanais", "Black Butter"],
-      `${width}px: resin library names must use the V6.1 references`,
+      ["Le mousseux", "Kief", "Libanais", "Black Butter", "Mousseux Skywalker", "Ice-o-Lator", "Black Afghan", "Marocain"],
+      `${width}px: resin library names must use the published references`,
     );
-    assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "1 / 4", `${width}px: category change must reset position`);
+    assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "1 / 8", `${width}px: category change must reset position`);
 
     await page.locator('[data-product-sheet-tab="flower"]').click();
     await page.locator('[data-product-sheet-category="flower"]').waitFor();
@@ -170,7 +170,7 @@ try {
       const activeCard = document.querySelector<HTMLElement>('[data-product-sheet-card][data-active="true"]');
       return activeCard ? getComputedStyle(activeCard).transform === "none" : false;
     });
-    assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "2 / 6", `${width}px: keyboard navigation must advance the carousel`);
+    assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "2 / 7", `${width}px: keyboard navigation must advance the carousel`);
 
     const layout = await page.evaluate(() => {
       const carouselElement = document.querySelector<HTMLElement>("[data-product-sheet-carousel]");

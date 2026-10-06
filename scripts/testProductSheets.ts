@@ -21,18 +21,23 @@ const expectedPdfHashes: Record<string, string> = {
   kief: "79de3490c076dfcf5fb4f3e1b73d74c0dcbe42a20cbe65aca44b54ed3a54bb5b",
   libanais: "b665cdcb3c14c5c38a0367c417bab601d04ceaf54f47fecd9abdf19426e37bdf",
   "black-butter": "da2d01aa97defdd62efd02a41abd56492a6162aa218dc9901a4cf41de5583a04",
+  "skittle-plus": "a9497853add5180eae2f2ae323ca22c02c851fa46eec8da1f559c179b1dd29f5",
+  "mousseux-skywalker": "2ab31f691a5f031a23336131fb1f769d5fd957946a535626e2ccd84259fb58d7",
+  "ice-o-lator": "7e755d48c77c411f578fc6329dbb2c3100d8c8d4545f2c84bd20b33fa7063df2",
+  "black-afghan": "356eb3ecc18919d7261a1730e185a9a245de0a87524e2d2e436a007fb520da2d",
+  marocain: "8284679df66b7812e738ba45c191170e9093571586cb10ff0aaa407111657f75",
 };
 
-assert.equal(productSheets.length, 10, "the library must contain exactly 10 sheets");
+assert.equal(productSheets.length, 15, "the library must contain exactly 15 sheets");
 assert.equal(
   productSheets.filter((sheet) => sheet.selectionProfile.category === "flower").length,
-  6,
-  "the library must contain six flowers",
+  7,
+  "the library must contain seven flowers",
 );
 assert.equal(
   productSheets.filter((sheet) => sheet.selectionProfile.category === "resin").length,
-  4,
-  "the library must contain four resins",
+  8,
+  "the library must contain eight resins",
 );
 assert.equal(
   new Set(productSheets.map((sheet) => sheet.slug)).size,
@@ -41,8 +46,8 @@ assert.equal(
 );
 assert.deepEqual(
   productSheets.filter((sheet) => sheet.selectionProfile.category === "resin").map((sheet) => sheet.name),
-  ["Le mousseux", "Kief", "Libanais", "Black Butter"],
-  "the active resin library must use the V6.1 names",
+  ["Le mousseux", "Kief", "Libanais", "Black Butter", "Mousseux Skywalker", "Ice-o-Lator", "Black Afghan", "Marocain"],
+  "the active resin library must use the published names",
 );
 
 for (const sheet of productSheets) {
@@ -86,8 +91,8 @@ const publicPdfFiles = walkFiles(join(publicDir, "fiches-produits")).filter(
 const distPdfFiles = walkFiles(join(distDir, "fiches-produits")).filter(
   (file) => extname(file).toLowerCase() === ".pdf",
 );
-assert.equal(publicPdfFiles.length, 10, "public tree must contain exactly 10 PDFs");
-assert.equal(distPdfFiles.length, 10, "build tree must contain exactly 10 PDFs");
+assert.equal(publicPdfFiles.length, 15, "public tree must contain exactly 15 PDFs");
+assert.equal(distPdfFiles.length, 15, "build tree must contain exactly 15 PDFs");
 assert.ok(
   [...publicPdfFiles, ...distPdfFiles].every(
     (file) => !file.toLowerCase().includes("print-safe"),
@@ -112,8 +117,8 @@ assert.match(
 assert.equal(metaContent(routeHtml, "robots"), "noindex,follow", "robots must be noindex,follow");
 assert.equal(
   [...routeHtml.matchAll(/href=["'][^"']+\.pdf["']/gi)].length,
-  6,
-  "the prerendered route must link the six default flower PDFs; the four resins are exposed by the client-side tab",
+  7,
+  "the prerendered route must link the seven default flower PDFs; the eight resins are exposed by the client-side tab",
 );
 assert.doesNotMatch(routeHtml, /"@type"\s*:\s*"Product"/i, "Product schema must not be present");
 assert.doesNotMatch(routeHtml, /production-v5\.1/i, "internal production path leaked into HTML");
@@ -295,7 +300,7 @@ try {
 
     const metrics = await page.evaluate(() => {
       const cards = [...document.querySelectorAll<HTMLElement>('[data-product-sheet-card]')];
-      const flowerCards = cards.slice(0, 6);
+      const flowerCards = cards.slice(0, 7);
       const columnCount = new Set(flowerCards.map((card) => Math.round(card.getBoundingClientRect().left))).size;
       const pdfLinks = [...document.querySelectorAll<HTMLAnchorElement>('[data-product-sheet-card] a[href$=".pdf"]')];
       return {
@@ -319,14 +324,14 @@ try {
       };
     });
 
-    assert.equal(metrics.cards, 10, `${width}px: all product cards must render`);
+    assert.equal(metrics.cards, 15, `${width}px: all product cards must render`);
     assert.equal(metrics.h1, 1, `${width}px: exactly one H1 is required`);
     assert.equal(metrics.h2, 4, `${width}px: selector, library and category H2 headings are required`);
     assert.equal(metrics.scrollWidth, metrics.viewportWidth, `${width}px: horizontal overflow detected`);
     assert.equal(metrics.columnCount, width < 640 ? 1 : width < 1280 ? 2 : 3, `${width}px: unexpected grid columns`);
     assert.equal(metrics.imageAltMissing, false, `${width}px: image alt text is missing`);
     assert.equal(metrics.badLinkAttributes, false, `${width}px: PDF link attributes are incomplete`);
-    assert.equal(metrics.pdfLinks, 10, `${width}px: exactly 10 PDF links are required`);
+    assert.equal(metrics.pdfLinks, 15, `${width}px: exactly 15 PDF links are required`);
     assert.equal(metrics.embeds, 0, `${width}px: PDFs must not be embedded`);
     assert.deepEqual(pdfRequests, [], `${width}px: PDFs must not load before a click`);
     assert.deepEqual(pageErrors, [], `${width}px: page errors detected`);
@@ -345,7 +350,7 @@ try {
   await server.close();
 }
 
-console.log("Product sheets tests passed: 10 PDFs, 10 previews, SEO and sitemap integrity.");
+console.log("Product sheets tests passed: 15 PDFs, 15 previews, SEO and sitemap integrity.");
 
 function sha256(path: string) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
