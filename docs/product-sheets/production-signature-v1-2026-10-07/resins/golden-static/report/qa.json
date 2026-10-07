@@ -1,0 +1,227 @@
+{
+  "name": "Golden Static",
+  "slug": "golden-static",
+  "category": "resin",
+  "availability": "available",
+  "intensity": "doux",
+  "source_json_sha256": "973ef4d6e4edaa091b6bed469b43476c82ee0dd486e2ed300ffb364854441f42",
+  "source_photo": "public/Fiche produit/Golden static/Composition-ezgif.com-resize.webp",
+  "source_photo_sha256": "8cc588388bd397e14ac8f02e025737109332a5ad0eeb6a8b80cbe7d16e3f2436",
+  "effective_photo_ppi": 207.3,
+  "geometry": {
+    "front": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "RÉSINE / VERDANZA",
+          143,
+          111,
+          433,
+          142
+        ],
+        [
+          "Golden Static",
+          140,
+          222,
+          887,
+          325
+        ],
+        [
+          "Herbacé · Végétal · Authentique",
+          143,
+          1445,
+          751,
+          1484
+        ],
+        [
+          "INTENSITÉ / DOUCE",
+          143,
+          1534,
+          456,
+          1566
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "back": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "FICHE PRODUIT / RÉSINE",
+          143,
+          111,
+          453,
+          140
+        ],
+        [
+          "Golden Static",
+          140,
+          223,
+          849,
+          321
+        ],
+        [
+          "01",
+          142,
+          485,
+          203,
+          518
+        ],
+        [
+          "PROFIL AROMATIQUE",
+          282,
+          502,
+          623,
+          525
+        ],
+        [
+          "Un profil herbacé et végétal à",
+          282,
+          580,
+          973,
+          642
+        ],
+        [
+          "l'identité authentique.",
+          282,
+          660,
+          802,
+          722
+        ],
+        [
+          "Herbacé · Végétal · Authentique",
+          282,
+          796,
+          946,
+          850
+        ],
+        [
+          "02",
+          142,
+          1015,
+          209,
+          1049
+        ],
+        [
+          "INTENSITÉ",
+          282,
+          1032,
+          448,
+          1060
+        ],
+        [
+          "Douce",
+          277,
+          1091,
+          527,
+          1156
+        ],
+        [
+          "03",
+          142,
+          1255,
+          208,
+          1308
+        ],
+        [
+          "TEXTURE & APPARENCE",
+          282,
+          1272,
+          662,
+          1293
+        ],
+        [
+          "Crémeuse · Dense · Travaillée",
+          282,
+          1331,
+          854,
+          1362
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "web": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "Golden Static",
+          65,
+          559,
+          505,
+          622
+        ],
+        [
+          "Herbacé · Végétal · Authentique",
+          66,
+          652,
+          469,
+          679
+        ],
+        [
+          "DOUCE",
+          66,
+          713,
+          156,
+          730
+        ]
+      ]
+    },
+    "front_title_size_px": 139,
+    "back_title_size_px": 132,
+    "web_title_size_px": 82,
+    "description_lines": 2
+  },
+  "standard": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 4,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": true,
+    "full_page_raster": false
+  },
+  "print_safe": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 0,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": false,
+    "full_page_raster": false
+  },
+  "standard_sha256": "0033eb393bcb302535b52a086f5aafa8dc0e65ddb19d85e913d60fce8cba9a3c",
+  "print_safe_sha256": "5f73c8f24d25711b855e0ab1a6389127ccd1da59d80e3be7b12b0d01a6d387a9",
+  "web_320_bytes": 6842,
+  "web_640_bytes": 17916,
+  "web_320_sha256": "1ae62c81885edac203014298059bb646e20dcdcea2caccd2c6b04b2d7e038af8",
+  "web_640_sha256": "a63ef135bd1f2f96ae45cf8c470049659912f20b5961c975178e2af042a178f8",
+  "reference": null
+}

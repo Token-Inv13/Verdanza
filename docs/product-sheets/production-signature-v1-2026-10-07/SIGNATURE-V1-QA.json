@@ -1,0 +1,2835 @@
+{
+  "status": "PASS",
+  "master": {
+    "front": "100ef1499a2fbbe95152862a9a714a306b4ee7cf501b1845dbfe91957a6c7d47",
+    "back": "5f29c9707e21e31b0e7b420c7553aceebf8e0a64f19cfe49da42c355da2b072d",
+    "web": "333c1078921e14035759291a7d906a4115aa0fd9244d39f6d0add80e4727ad6e"
+  },
+  "products": [
+    {
+      "name": "Blue Dream",
+      "slug": "blue-dream-cbd",
+      "category": "flower",
+      "availability": "available",
+      "intensity": "doux",
+      "source_json_sha256": "42c58a86a43ade3ed2dd2cffc6a05139ef83b966d7b271631b295a4948317732",
+      "source_photo": "public/Fiche produit/Blue Dream/bl.webp",
+      "source_photo_sha256": "65f9eb1d3d9a029abde6c71128f342701f1e13f6a7c05c655594e8dc67d93b7e",
+      "effective_photo_ppi": 207.3,
+      "geometry": {
+        "front": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FLEUR / VERDANZA",
+              143,
+              111,
+              424,
+              136
+            ],
+            [
+              "Blue Dream",
+              140,
+              222,
+              775,
+              325
+            ],
+            [
+              "Citron · Pin · Fruit doux",
+              143,
+              1445,
+              573,
+              1475
+            ],
+            [
+              "INTENSITÉ / DOUCE",
+              143,
+              1534,
+              456,
+              1566
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "back": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FICHE PRODUIT / FLEUR",
+              143,
+              111,
+              443,
+              135
+            ],
+            [
+              "Blue Dream",
+              140,
+              223,
+              742,
+              321
+            ],
+            [
+              "01",
+              142,
+              485,
+              203,
+              518
+            ],
+            [
+              "PROFIL AROMATIQUE",
+              282,
+              502,
+              623,
+              525
+            ],
+            [
+              "Un profil frais associant citron, pin",
+              282,
+              580,
+              1111,
+              641
+            ],
+            [
+              "et une touche fruitée douce.",
+              282,
+              660,
+              931,
+              706
+            ],
+            [
+              "Citron · Pin · Fruit doux",
+              282,
+              796,
+              777,
+              836
+            ],
+            [
+              "02",
+              142,
+              1015,
+              209,
+              1049
+            ],
+            [
+              "INTENSITÉ",
+              282,
+              1032,
+              448,
+              1060
+            ],
+            [
+              "Douce",
+              277,
+              1091,
+              527,
+              1156
+            ],
+            [
+              "03",
+              142,
+              1255,
+              208,
+              1308
+            ],
+            [
+              "ASPECT",
+              282,
+              1272,
+              407,
+              1293
+            ],
+            [
+              "Compacte · Résineuse · Soigneusement",
+              282,
+              1331,
+              1040,
+              1370
+            ],
+            [
+              "manucurée",
+              282,
+              1388,
+              498,
+              1419
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "web": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "Blue Dream",
+              65,
+              559,
+              438,
+              622
+            ],
+            [
+              "Citron · Pin · Fruit doux",
+              66,
+              652,
+              361,
+              673
+            ],
+            [
+              "DOUCE",
+              66,
+              713,
+              156,
+              730
+            ]
+          ]
+        },
+        "front_title_size_px": 139,
+        "back_title_size_px": 132,
+        "web_title_size_px": 82,
+        "description_lines": 2
+      },
+      "standard": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 4,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": true,
+        "full_page_raster": false
+      },
+      "print_safe": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 0,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": false,
+        "full_page_raster": false
+      },
+      "standard_sha256": "380ee51bfda0de456e67431bcdb2b29e08f78943edf73e07d196ef4e8ac46b78",
+      "print_safe_sha256": "a1d0bd9dbe4aae1c626d3e50271fa90fceff41086e4a72e86d25fcb13ca74124",
+      "web_320_bytes": 18140,
+      "web_640_bytes": 58100,
+      "web_320_sha256": "4ddfa464b0300db84d86dfc692c1745670ba74104218fe041ba568d25c2bf0a4",
+      "web_640_sha256": "333c1078921e14035759291a7d906a4115aa0fd9244d39f6d0add80e4727ad6e",
+      "reference": {
+        "front_png_sha256": "100ef1499a2fbbe95152862a9a714a306b4ee7cf501b1845dbfe91957a6c7d47",
+        "back_png_sha256": "5f29c9707e21e31b0e7b420c7553aceebf8e0a64f19cfe49da42c355da2b072d",
+        "web_640_sha256": "333c1078921e14035759291a7d906a4115aa0fd9244d39f6d0add80e4727ad6e",
+        "pixel_difference": 0,
+        "pdf_front_mae_0_255": 3.66,
+        "pdf_back_mae_0_255": 6.01
+      }
+    },
+    {
+      "name": "Cookie Kush Indoor",
+      "slug": "cookie-kush-indoor",
+      "category": "flower",
+      "availability": "available",
+      "intensity": "doux",
+      "source_json_sha256": "eba0aa367298179ffa72f682fe11c5805096cfb22c240c3b3b65ccc8de265f55",
+      "source_photo": "public/Fiche produit/Cookie Kush (intérieur)/cookie-pile.webp",
+      "source_photo_sha256": "cf71fc9bd235a5b0da2ffc9ac2f4fd297373b7ed8386229fcb318c16e2566020",
+      "effective_photo_ppi": 207.3,
+      "geometry": {
+        "front": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FLEUR / VERDANZA",
+              143,
+              111,
+              424,
+              136
+            ],
+            [
+              "Cookie Kush Indoor",
+              140,
+              222,
+              1133,
+              316
+            ],
+            [
+              "Sucré · Sirupeux · Gourmand",
+              143,
+              1445,
+              688,
+              1484
+            ],
+            [
+              "INTENSITÉ / DOUCE",
+              143,
+              1534,
+              456,
+              1566
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "back": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FICHE PRODUIT / FLEUR",
+              143,
+              111,
+              443,
+              135
+            ],
+            [
+              "Cookie Kush Indoor",
+              140,
+              223,
+              1133,
+              317
+            ],
+            [
+              "01",
+              142,
+              485,
+              203,
+              518
+            ],
+            [
+              "PROFIL AROMATIQUE",
+              282,
+              502,
+              623,
+              525
+            ],
+            [
+              "Un profil gourmand, sucré et",
+              282,
+              580,
+              963,
+              642
+            ],
+            [
+              "sirupeux à l'expression aromatique",
+              282,
+              660,
+              1086,
+              722
+            ],
+            [
+              "ronde.",
+              282,
+              740,
+              430,
+              786
+            ],
+            [
+              "Sucré · Sirupeux · Gourmand",
+              282,
+              871,
+              873,
+              925
+            ],
+            [
+              "02",
+              142,
+              1015,
+              209,
+              1049
+            ],
+            [
+              "INTENSITÉ",
+              282,
+              1032,
+              448,
+              1060
+            ],
+            [
+              "Douce",
+              277,
+              1091,
+              527,
+              1156
+            ],
+            [
+              "03",
+              142,
+              1255,
+              208,
+              1308
+            ],
+            [
+              "ASPECT",
+              282,
+              1272,
+              407,
+              1293
+            ],
+            [
+              "Têtes soignées · Régulières",
+              282,
+              1331,
+              812,
+              1370
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "web": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "Cookie Kush Indoor",
+              65,
+              559,
+              612,
+              611
+            ],
+            [
+              "Sucré · Sirupeux · Gourmand",
+              66,
+              652,
+              435,
+              679
+            ],
+            [
+              "DOUCE",
+              66,
+              713,
+              156,
+              730
+            ]
+          ]
+        },
+        "front_title_size_px": 125,
+        "back_title_size_px": 125,
+        "web_title_size_px": 69,
+        "description_lines": 3
+      },
+      "standard": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 4,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": true,
+        "full_page_raster": false
+      },
+      "print_safe": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 0,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": false,
+        "full_page_raster": false
+      },
+      "standard_sha256": "9e59fa16b32f0e87ed291a7c62b1dd020ba9d6c23b3937c0eb0ae316b682adba",
+      "print_safe_sha256": "4ef929d1c31eb932451d36410f1002739ab1190aa9c5413d5ea6269ca697ecec",
+      "web_320_bytes": 12046,
+      "web_640_bytes": 36912,
+      "web_320_sha256": "8c7e639c635fb9fa80c654748ea27baa505b168e396ea4ff88c5e8841ecaaa33",
+      "web_640_sha256": "0f045d7d10c804f5058b49511febcb114a6fb7fc3663ef3aaa16d3aaa84c94b6",
+      "reference": null
+    },
+    {
+      "name": "Harlequin Greenhouse",
+      "slug": "harlequin-greenhouse",
+      "category": "flower",
+      "availability": "available",
+      "intensity": "doux",
+      "source_json_sha256": "c1a9eaa3a9207a2d4dbf2d0f4eb93f0c06e000c5aeca26b74605532bb3cbcef8",
+      "source_photo": "public/Fiche produit/Harlequin (sous-serre)/harlequin_pile.webp",
+      "source_photo_sha256": "bc220070ac764abe1fdd300d6b56ee269a11efff89552b3e076234b3b39cb040",
+      "effective_photo_ppi": 207.3,
+      "geometry": {
+        "front": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FLEUR / VERDANZA",
+              143,
+              111,
+              424,
+              136
+            ],
+            [
+              "Harlequin Greenhouse",
+              140,
+              222,
+              1133,
+              336
+            ],
+            [
+              "Musc · Sous-bois · Notes torréfiées",
+              143,
+              1445,
+              819,
+              1476
+            ],
+            [
+              "INTENSITÉ / DOUCE",
+              143,
+              1534,
+              456,
+              1566
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "back": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FICHE PRODUIT / FLEUR",
+              143,
+              111,
+              443,
+              135
+            ],
+            [
+              "Harlequin Greenhouse",
+              140,
+              223,
+              1133,
+              337
+            ],
+            [
+              "01",
+              142,
+              485,
+              203,
+              518
+            ],
+            [
+              "PROFIL AROMATIQUE",
+              282,
+              502,
+              623,
+              525
+            ],
+            [
+              "Un profil profond et naturel, entre",
+              282,
+              580,
+              1098,
+              642
+            ],
+            [
+              "musc, sous-bois et notes torréfiées.",
+              282,
+              660,
+              1085,
+              717
+            ],
+            [
+              "Musc · Sous-bois · Notes torréfiées",
+              282,
+              796,
+              986,
+              837
+            ],
+            [
+              "02",
+              142,
+              1015,
+              209,
+              1049
+            ],
+            [
+              "INTENSITÉ",
+              282,
+              1032,
+              448,
+              1060
+            ],
+            [
+              "Douce",
+              277,
+              1091,
+              527,
+              1156
+            ],
+            [
+              "03",
+              142,
+              1255,
+              208,
+              1308
+            ],
+            [
+              "ASPECT",
+              282,
+              1272,
+              407,
+              1293
+            ],
+            [
+              "Têtes mûres · Notes boisées",
+              282,
+              1331,
+              830,
+              1362
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "web": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "Harlequin Greenhouse",
+              65,
+              559,
+              620,
+              622
+            ],
+            [
+              "Musc · Sous-bois · Notes torréfiées",
+              66,
+              652,
+              517,
+              673
+            ],
+            [
+              "DOUCE",
+              66,
+              713,
+              156,
+              730
+            ]
+          ]
+        },
+        "front_title_size_px": 113,
+        "back_title_size_px": 113,
+        "web_title_size_px": 63,
+        "description_lines": 2
+      },
+      "standard": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 4,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": true,
+        "full_page_raster": false
+      },
+      "print_safe": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 0,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": false,
+        "full_page_raster": false
+      },
+      "standard_sha256": "721b120e37d7bd6261aa2d8b2e896b47fd4b5aa37b02cdd4519985a8f3089b80",
+      "print_safe_sha256": "fcadd70466a9956b9870c2cc85cf4229defa639265e09732e2f34991f292fc88",
+      "web_320_bytes": 13430,
+      "web_640_bytes": 40594,
+      "web_320_sha256": "1fe6d3dea32ddeb8d1e01a39c7d6685036843f59e0d42881db9c2950ab04b1cd",
+      "web_640_sha256": "1f3298156288302327ddb5fc71e8f8bb58db30759bafb54fc4224042fc381fa2",
+      "reference": null
+    },
+    {
+      "name": "Mandarine",
+      "slug": "mandarine-cbd",
+      "category": "flower",
+      "availability": "available",
+      "intensity": "doux",
+      "source_json_sha256": "b0e10923aa40dbb908c09c4d9859eab77155ade7c58052239df321b787cadb77",
+      "source_photo": "public/Fiche produit/Mandarine/Mandarine_pile.webp",
+      "source_photo_sha256": "d390261e345437e94a60fb92b8698faaf0fff438f4ecb891c13a5ebfc6956ec8",
+      "effective_photo_ppi": 207.3,
+      "geometry": {
+        "front": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FLEUR / VERDANZA",
+              143,
+              111,
+              424,
+              136
+            ],
+            [
+              "Mandarine",
+              140,
+              222,
+              729,
+              325
+            ],
+            [
+              "Mandarine · Agrumes · Citron",
+              143,
+              1445,
+              699,
+              1483
+            ],
+            [
+              "INTENSITÉ / DOUCE",
+              143,
+              1534,
+              456,
+              1566
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "back": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FICHE PRODUIT / FLEUR",
+              143,
+              111,
+              443,
+              135
+            ],
+            [
+              "Mandarine",
+              140,
+              223,
+              702,
+              320
+            ],
+            [
+              "01",
+              142,
+              485,
+              203,
+              518
+            ],
+            [
+              "PROFIL AROMATIQUE",
+              282,
+              502,
+              623,
+              525
+            ],
+            [
+              "Un profil frais et fruité dominé par",
+              282,
+              580,
+              1108,
+              642
+            ],
+            [
+              "la mandarine et les agrumes.",
+              282,
+              660,
+              945,
+              722
+            ],
+            [
+              "Mandarine · Agrumes · Citron",
+              282,
+              796,
+              902,
+              850
+            ],
+            [
+              "02",
+              142,
+              1015,
+              209,
+              1049
+            ],
+            [
+              "INTENSITÉ",
+              282,
+              1032,
+              448,
+              1060
+            ],
+            [
+              "Douce",
+              277,
+              1091,
+              527,
+              1156
+            ],
+            [
+              "03",
+              142,
+              1255,
+              208,
+              1308
+            ],
+            [
+              "ASPECT",
+              282,
+              1272,
+              407,
+              1293
+            ],
+            [
+              "Fleur hydroponique · Présentation soignée",
+              282,
+              1331,
+              1092,
+              1370
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "web": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "Mandarine",
+              65,
+              559,
+              411,
+              621
+            ],
+            [
+              "Mandarine · Agrumes · Citron",
+              66,
+              652,
+              439,
+              679
+            ],
+            [
+              "DOUCE",
+              66,
+              713,
+              156,
+              730
+            ]
+          ]
+        },
+        "front_title_size_px": 139,
+        "back_title_size_px": 132,
+        "web_title_size_px": 82,
+        "description_lines": 2
+      },
+      "standard": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 4,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": true,
+        "full_page_raster": false
+      },
+      "print_safe": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 0,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": false,
+        "full_page_raster": false
+      },
+      "standard_sha256": "69215009bcd741e3a76a5145b2156092804ed3608055d835ea961309b8540e6e",
+      "print_safe_sha256": "986da4c3777890371a2cdab5df81dcea18702d2c19e2429a366ef5cd40a6d270",
+      "web_320_bytes": 13942,
+      "web_640_bytes": 43838,
+      "web_320_sha256": "e65098ff910ca30d524c22a316be4ab81c00e57087949eb7ad685d39984dca6d",
+      "web_640_sha256": "a93a1b0ff5f748a2e31922b9c2c93b2f61264fe6b1f7ad7b8eef4f7b0cce0500",
+      "reference": null
+    },
+    {
+      "name": "Mango Haze",
+      "slug": "mango-haze-cbd",
+      "category": "flower",
+      "availability": "available",
+      "intensity": "doux",
+      "source_json_sha256": "90f511961e76e45d6766b485e3bf1f8a90d1e1fa284a16860ec4bca77ba8c41d",
+      "source_photo": "public/Fiche produit/Mango Haze/mango.webp",
+      "source_photo_sha256": "15950dad4f1e5976c15e52b1c0af9ff0bc19650a0f456f79e4aa2ceee6507a41",
+      "effective_photo_ppi": 207.3,
+      "geometry": {
+        "front": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FLEUR / VERDANZA",
+              143,
+              111,
+              424,
+              136
+            ],
+            [
+              "Mango Haze",
+              140,
+              222,
+              821,
+              348
+            ],
+            [
+              "Sucré · Fruité · Acidulé",
+              143,
+              1445,
+              571,
+              1476
+            ],
+            [
+              "INTENSITÉ / DOUCE",
+              143,
+              1534,
+              456,
+              1566
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "back": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FICHE PRODUIT / FLEUR",
+              143,
+              111,
+              443,
+              135
+            ],
+            [
+              "Mango Haze",
+              140,
+              223,
+              788,
+              342
+            ],
+            [
+              "01",
+              142,
+              485,
+              203,
+              518
+            ],
+            [
+              "PROFIL AROMATIQUE",
+              282,
+              502,
+              623,
+              525
+            ],
+            [
+              "Un profil gourmand, fruité et",
+              282,
+              580,
+              975,
+              642
+            ],
+            [
+              "acidulé à l'expression aromatique",
+              282,
+              660,
+              1053,
+              722
+            ],
+            [
+              "nette.",
+              282,
+              740,
+              415,
+              769
+            ],
+            [
+              "Sucré · Fruité · Acidulé",
+              282,
+              871,
+              753,
+              911
+            ],
+            [
+              "02",
+              142,
+              1015,
+              209,
+              1049
+            ],
+            [
+              "INTENSITÉ",
+              282,
+              1032,
+              448,
+              1060
+            ],
+            [
+              "Douce",
+              277,
+              1091,
+              527,
+              1156
+            ],
+            [
+              "03",
+              142,
+              1255,
+              208,
+              1308
+            ],
+            [
+              "ASPECT",
+              282,
+              1272,
+              407,
+              1293
+            ],
+            [
+              "Fleur hydroponique · Manucure à la main",
+              282,
+              1331,
+              1062,
+              1370
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "web": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "Mango Haze",
+              65,
+              559,
+              466,
+              636
+            ],
+            [
+              "Sucré · Fruité · Acidulé",
+              66,
+              652,
+              355,
+              673
+            ],
+            [
+              "DOUCE",
+              66,
+              713,
+              156,
+              730
+            ]
+          ]
+        },
+        "front_title_size_px": 139,
+        "back_title_size_px": 132,
+        "web_title_size_px": 82,
+        "description_lines": 3
+      },
+      "standard": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 4,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": true,
+        "full_page_raster": false
+      },
+      "print_safe": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 0,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": false,
+        "full_page_raster": false
+      },
+      "standard_sha256": "52e9998935ab515c828e9d3fe5db84846a1100eeb6f733b7db1fb96bb9d29c92",
+      "print_safe_sha256": "6c4d73dc68da5a736b456ddcab96c8aacfbb79dafb0acaf614b3494b6ff225b4",
+      "web_320_bytes": 14878,
+      "web_640_bytes": 48462,
+      "web_320_sha256": "cb98d70ffd7f028c474600bbc8793448cc0222b0fa4b357300289d4bf655e80d",
+      "web_640_sha256": "4bf0c4b56059d62bdc756347dfc53971e9484451784c96d92b6638eb331af02e",
+      "reference": null
+    },
+    {
+      "name": "OG Kush",
+      "slug": "petites-tetes-og-kush",
+      "category": "flower",
+      "availability": "available",
+      "intensity": "doux",
+      "source_json_sha256": "e168f7bd41496b91418665b66a59ddc2b7ef5a7b8b4bcbe0904aa8455e9971af",
+      "source_photo": "public/Fiche produit/Petite tetes OG Kush ( sous serre)/PTOGKush_pile.webp",
+      "source_photo_sha256": "3e8c9fdca1197a658b1cd326fb8905cc6d6698c0c999f056b13362157e2d5315",
+      "effective_photo_ppi": 207.0,
+      "geometry": {
+        "front": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FLEUR / VERDANZA",
+              143,
+              111,
+              424,
+              136
+            ],
+            [
+              "OG Kush",
+              140,
+              222,
+              655,
+              325
+            ],
+            [
+              "Menthe fraîche · Agrumes · Fraîcheur végétale",
+              143,
+              1445,
+              1030,
+              1484
+            ],
+            [
+              "INTENSITÉ / DOUCE",
+              143,
+              1534,
+              456,
+              1566
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "back": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FICHE PRODUIT / FLEUR",
+              143,
+              111,
+              443,
+              135
+            ],
+            [
+              "OG Kush",
+              140,
+              223,
+              626,
+              321
+            ],
+            [
+              "01",
+              142,
+              485,
+              203,
+              518
+            ],
+            [
+              "PROFIL AROMATIQUE",
+              282,
+              502,
+              623,
+              525
+            ],
+            [
+              "Un profil frais et direct associant",
+              282,
+              580,
+              1058,
+              642
+            ],
+            [
+              "menthe, agrumes et fraîcheur",
+              282,
+              660,
+              969,
+              722
+            ],
+            [
+              "végétale.",
+              282,
+              740,
+              480,
+              801
+            ],
+            [
+              "Menthe fraîche · Agrumes · Fraîcheur végétale",
+              282,
+              871,
+              1126,
+              919
+            ],
+            [
+              "02",
+              142,
+              1015,
+              209,
+              1049
+            ],
+            [
+              "INTENSITÉ",
+              282,
+              1032,
+              448,
+              1060
+            ],
+            [
+              "Douce",
+              277,
+              1091,
+              527,
+              1156
+            ],
+            [
+              "03",
+              142,
+              1255,
+              208,
+              1308
+            ],
+            [
+              "ASPECT",
+              282,
+              1272,
+              407,
+              1293
+            ],
+            [
+              "Petites têtes · Compactes",
+              282,
+              1331,
+              771,
+              1370
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "web": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "OG Kush",
+              65,
+              559,
+              367,
+              622
+            ],
+            [
+              "Menthe fraîche · Agrumes",
+              66,
+              646,
+              395,
+              673
+            ],
+            [
+              "Fraîcheur végétale",
+              66,
+              682,
+              301,
+              709
+            ],
+            [
+              "DOUCE",
+              66,
+              738,
+              156,
+              755
+            ]
+          ]
+        },
+        "front_title_size_px": 139,
+        "back_title_size_px": 132,
+        "web_title_size_px": 82,
+        "description_lines": 3
+      },
+      "standard": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 4,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": true,
+        "full_page_raster": false
+      },
+      "print_safe": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 0,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": false,
+        "full_page_raster": false
+      },
+      "standard_sha256": "b927d9efc636a386853ba60a365b2bec35acf031eed92d39916f1685fcb8d0e4",
+      "print_safe_sha256": "ef17f34a4e40222a578cac9d5eab1430c07b0e6411e8e55cfc1bfdd541d2f9d4",
+      "web_320_bytes": 12000,
+      "web_640_bytes": 37112,
+      "web_320_sha256": "e98bf5eb16990b8811c8f83a3eb59600fb8fc7099b457a67b217fda1dab04995",
+      "web_640_sha256": "c6a7792aee84740a60079f70d3784258d2e52731a65255df2c28ac94028b585f",
+      "reference": null
+    },
+    {
+      "name": "Golden Static",
+      "slug": "golden-static",
+      "category": "resin",
+      "availability": "available",
+      "intensity": "doux",
+      "source_json_sha256": "973ef4d6e4edaa091b6bed469b43476c82ee0dd486e2ed300ffb364854441f42",
+      "source_photo": "public/Fiche produit/Golden static/Composition-ezgif.com-resize.webp",
+      "source_photo_sha256": "8cc588388bd397e14ac8f02e025737109332a5ad0eeb6a8b80cbe7d16e3f2436",
+      "effective_photo_ppi": 207.3,
+      "geometry": {
+        "front": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "RÉSINE / VERDANZA",
+              143,
+              111,
+              433,
+              142
+            ],
+            [
+              "Golden Static",
+              140,
+              222,
+              887,
+              325
+            ],
+            [
+              "Herbacé · Végétal · Authentique",
+              143,
+              1445,
+              751,
+              1484
+            ],
+            [
+              "INTENSITÉ / DOUCE",
+              143,
+              1534,
+              456,
+              1566
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "back": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FICHE PRODUIT / RÉSINE",
+              143,
+              111,
+              453,
+              140
+            ],
+            [
+              "Golden Static",
+              140,
+              223,
+              849,
+              321
+            ],
+            [
+              "01",
+              142,
+              485,
+              203,
+              518
+            ],
+            [
+              "PROFIL AROMATIQUE",
+              282,
+              502,
+              623,
+              525
+            ],
+            [
+              "Un profil herbacé et végétal à",
+              282,
+              580,
+              973,
+              642
+            ],
+            [
+              "l'identité authentique.",
+              282,
+              660,
+              802,
+              722
+            ],
+            [
+              "Herbacé · Végétal · Authentique",
+              282,
+              796,
+              946,
+              850
+            ],
+            [
+              "02",
+              142,
+              1015,
+              209,
+              1049
+            ],
+            [
+              "INTENSITÉ",
+              282,
+              1032,
+              448,
+              1060
+            ],
+            [
+              "Douce",
+              277,
+              1091,
+              527,
+              1156
+            ],
+            [
+              "03",
+              142,
+              1255,
+              208,
+              1308
+            ],
+            [
+              "TEXTURE & APPARENCE",
+              282,
+              1272,
+              662,
+              1293
+            ],
+            [
+              "Crémeuse · Dense · Travaillée",
+              282,
+              1331,
+              854,
+              1362
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "web": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "Golden Static",
+              65,
+              559,
+              505,
+              622
+            ],
+            [
+              "Herbacé · Végétal · Authentique",
+              66,
+              652,
+              469,
+              679
+            ],
+            [
+              "DOUCE",
+              66,
+              713,
+              156,
+              730
+            ]
+          ]
+        },
+        "front_title_size_px": 139,
+        "back_title_size_px": 132,
+        "web_title_size_px": 82,
+        "description_lines": 2
+      },
+      "standard": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 4,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": true,
+        "full_page_raster": false
+      },
+      "print_safe": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 0,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": false,
+        "full_page_raster": false
+      },
+      "standard_sha256": "0033eb393bcb302535b52a086f5aafa8dc0e65ddb19d85e913d60fce8cba9a3c",
+      "print_safe_sha256": "5f73c8f24d25711b855e0ab1a6389127ccd1da59d80e3be7b12b0d01a6d387a9",
+      "web_320_bytes": 6842,
+      "web_640_bytes": 17916,
+      "web_320_sha256": "1ae62c81885edac203014298059bb646e20dcdcea2caccd2c6b04b2d7e038af8",
+      "web_640_sha256": "a63ef135bd1f2f96ae45cf8c470049659912f20b5961c975178e2af042a178f8",
+      "reference": null
+    },
+    {
+      "name": "Suprême 50 % CBD",
+      "slug": "supreme-50-cbd",
+      "category": "resin",
+      "availability": "available",
+      "intensity": "doux",
+      "source_json_sha256": "78ca3a37699fa28b5edb629dd5fbdd86ca30919582909c436b33398794ffb3eb",
+      "source_photo": "public/Fiche produit/Supreme/supreme-50-cbd.webp",
+      "source_photo_sha256": "932ca6e84080382c2e3e18e6396820776ce7a03632267be24b5f3aa5ee4afa45",
+      "effective_photo_ppi": 207.3,
+      "geometry": {
+        "front": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "RÉSINE / VERDANZA",
+              143,
+              111,
+              433,
+              142
+            ],
+            [
+              "Suprême 50 % CBD",
+              140,
+              222,
+              1128,
+              355
+            ],
+            [
+              "Floral · Raffiné",
+              143,
+              1445,
+              418,
+              1476
+            ],
+            [
+              "INTENSITÉ / DOUCE",
+              143,
+              1534,
+              456,
+              1566
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "back": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FICHE PRODUIT / RÉSINE",
+              143,
+              111,
+              453,
+              140
+            ],
+            [
+              "Suprême 50 % CBD",
+              140,
+              223,
+              1128,
+              356
+            ],
+            [
+              "01",
+              142,
+              485,
+              203,
+              518
+            ],
+            [
+              "PROFIL AROMATIQUE",
+              282,
+              502,
+              623,
+              525
+            ],
+            [
+              "Des notes florales légères et",
+              282,
+              580,
+              917,
+              642
+            ],
+            [
+              "raffinées, à l'expression délicate.",
+              282,
+              660,
+              1024,
+              722
+            ],
+            [
+              "Floral · Raffiné",
+              282,
+              796,
+              592,
+              836
+            ],
+            [
+              "02",
+              142,
+              1015,
+              209,
+              1049
+            ],
+            [
+              "INTENSITÉ",
+              282,
+              1032,
+              448,
+              1060
+            ],
+            [
+              "Douce",
+              277,
+              1091,
+              527,
+              1156
+            ],
+            [
+              "03",
+              142,
+              1255,
+              208,
+              1308
+            ],
+            [
+              "TEXTURE & APPARENCE",
+              282,
+              1272,
+              662,
+              1293
+            ],
+            [
+              "Dense · Homogène · Malléable",
+              282,
+              1331,
+              867,
+              1370
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "web": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "Suprême 50 % CBD",
+              65,
+              559,
+              617,
+              634
+            ],
+            [
+              "Floral · Raffiné",
+              66,
+              652,
+              253,
+              673
+            ],
+            [
+              "DOUCE",
+              66,
+              713,
+              156,
+              730
+            ]
+          ]
+        },
+        "front_title_size_px": 132,
+        "back_title_size_px": 132,
+        "web_title_size_px": 74,
+        "description_lines": 2
+      },
+      "standard": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 4,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": true,
+        "full_page_raster": false
+      },
+      "print_safe": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 0,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": false,
+        "full_page_raster": false
+      },
+      "standard_sha256": "6414a202da879e8c58d3e4037e009981fada59585ee99c49ec7e2f65defac1ac",
+      "print_safe_sha256": "fe9b07cd65ab84d8bad815eddccede392b4f709f18e8bed73605ca1bccb3b4d7",
+      "web_320_bytes": 10950,
+      "web_640_bytes": 34160,
+      "web_320_sha256": "e16266d009012ef68e0613d3701d985262344bd74a37a9d55d4197f3690546d2",
+      "web_640_sha256": "aec47b41edd0cddae6217f23a70fc4b30e168fcb8fe3deb6275df7586350382b",
+      "reference": null
+    },
+    {
+      "name": "Skittle Plus",
+      "slug": "skittle-plus",
+      "category": "flower",
+      "availability": "planned",
+      "intensity": "fort",
+      "source_json_sha256": "55833d1228c33488153cd49d50c1c5c9fe90b296c02222b768aef12c69563726",
+      "source_photo": "docs/product-sheets/modern-inputs-2026-10-07/skittle-plus-historical-photo.png",
+      "source_photo_sha256": "31f0ed15ba826c858a9611d462c18c7129cdf236a73f08942552c2014f51b5e2",
+      "effective_photo_ppi": 297.7,
+      "geometry": {
+        "front": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FLEUR / VERDANZA",
+              143,
+              111,
+              424,
+              136
+            ],
+            [
+              "Skittle Plus",
+              140,
+              222,
+              762,
+              325
+            ],
+            [
+              "Citron · Bonbon · Diesel",
+              143,
+              1445,
+              589,
+              1475
+            ],
+            [
+              "INTENSITÉ / FORTE",
+              143,
+              1534,
+              446,
+              1566
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "back": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FICHE PRODUIT / FLEUR",
+              143,
+              111,
+              443,
+              135
+            ],
+            [
+              "Skittle Plus",
+              140,
+              223,
+              727,
+              321
+            ],
+            [
+              "01",
+              142,
+              485,
+              203,
+              518
+            ],
+            [
+              "PROFIL AROMATIQUE",
+              282,
+              502,
+              623,
+              525
+            ],
+            [
+              "Un départ citronné et gourmand,",
+              282,
+              580,
+              1067,
+              642
+            ],
+            [
+              "suivi d'une note de confiserie fruitée",
+              282,
+              660,
+              1129,
+              706
+            ],
+            [
+              "et d'un fond diesel.",
+              282,
+              740,
+              721,
+              786
+            ],
+            [
+              "Citron · Bonbon · Diesel",
+              282,
+              871,
+              779,
+              911
+            ],
+            [
+              "02",
+              142,
+              1015,
+              209,
+              1049
+            ],
+            [
+              "INTENSITÉ",
+              282,
+              1032,
+              448,
+              1060
+            ],
+            [
+              "Forte",
+              277,
+              1091,
+              488,
+              1155
+            ],
+            [
+              "03",
+              142,
+              1255,
+              208,
+              1308
+            ],
+            [
+              "ASPECT",
+              282,
+              1272,
+              407,
+              1293
+            ],
+            [
+              "Fleurs compactes et résineuses, aux",
+              282,
+              1331,
+              985,
+              1370
+            ],
+            [
+              "nuances vertes et aux pistils orangés.",
+              282,
+              1388,
+              1005,
+              1427
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "web": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "Skittle Plus",
+              65,
+              559,
+              432,
+              622
+            ],
+            [
+              "Citron · Bonbon · Diesel",
+              66,
+              652,
+              367,
+              673
+            ],
+            [
+              "FORTE",
+              66,
+              713,
+              149,
+              730
+            ]
+          ]
+        },
+        "front_title_size_px": 139,
+        "back_title_size_px": 132,
+        "web_title_size_px": 82,
+        "description_lines": 3
+      },
+      "standard": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 4,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": true,
+        "full_page_raster": false
+      },
+      "print_safe": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 0,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": false,
+        "full_page_raster": false
+      },
+      "standard_sha256": "6e37d5d14d4413d198a81a174ab3585769ccf47187cdc0933eb5fa986efc69df",
+      "print_safe_sha256": "dcd46a768fe8257fe8d584a2ad733dc0703d5e186d8f262fc6f8aa3f7e3996d1",
+      "web_320_bytes": 18638,
+      "web_640_bytes": 62846,
+      "web_320_sha256": "bd48175764a414d72c58152373d2537ece49e0d7087c936732e59a5b4ee36519",
+      "web_640_sha256": "fec148f2e0c610b9ebd7b734e13a2334ac097502902ce92b47c27d9abf14286f",
+      "reference": null
+    },
+    {
+      "name": "Black Afghan",
+      "slug": "black-afghan",
+      "category": "resin",
+      "availability": "planned",
+      "intensity": "moyen",
+      "source_json_sha256": "12e215ddf95cb0458fde36bfbbe319ebef4c8940b4142b33c440cab51e077572",
+      "source_photo": "docs/product-sheets/modern-inputs-2026-10-07/black-afghan-historical-photo.png",
+      "source_photo_sha256": "1818a3ecb0459a9adc75ced410f6f4241750423e8af2dc5f0ead9ad35a25a8ec",
+      "effective_photo_ppi": 174.4,
+      "geometry": {
+        "front": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "RÉSINE / VERDANZA",
+              143,
+              111,
+              433,
+              142
+            ],
+            [
+              "Black Afghan",
+              140,
+              222,
+              868,
+              362
+            ],
+            [
+              "Terreux · Sucré · Fruits rouges",
+              143,
+              1445,
+              722,
+              1484
+            ],
+            [
+              "INTENSITÉ / MOYENNE",
+              143,
+              1534,
+              503,
+              1566
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "back": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FICHE PRODUIT / RÉSINE",
+              143,
+              111,
+              453,
+              140
+            ],
+            [
+              "Black Afghan",
+              140,
+              223,
+              831,
+              356
+            ],
+            [
+              "01",
+              142,
+              485,
+              203,
+              518
+            ],
+            [
+              "PROFIL AROMATIQUE",
+              282,
+              502,
+              623,
+              525
+            ],
+            [
+              "Une dominante terreuse adoucie",
+              282,
+              580,
+              1046,
+              626
+            ],
+            [
+              "par une nuance sucrée et des notes",
+              282,
+              660,
+              1088,
+              722
+            ],
+            [
+              "de cassis et de framboise.",
+              282,
+              740,
+              863,
+              786
+            ],
+            [
+              "Terreux · Sucré · Fruits rouges",
+              282,
+              871,
+              898,
+              925
+            ],
+            [
+              "02",
+              142,
+              1015,
+              209,
+              1049
+            ],
+            [
+              "INTENSITÉ",
+              282,
+              1032,
+              448,
+              1060
+            ],
+            [
+              "Moyenne",
+              277,
+              1091,
+              640,
+              1183
+            ],
+            [
+              "03",
+              142,
+              1255,
+              208,
+              1308
+            ],
+            [
+              "TEXTURE & APPARENCE",
+              282,
+              1272,
+              662,
+              1293
+            ],
+            [
+              "Résine sombre, souple et malléable, facile à",
+              282,
+              1331,
+              1123,
+              1370
+            ],
+            [
+              "effriter.",
+              282,
+              1388,
+              423,
+              1419
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "web": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "Black Afghan",
+              65,
+              559,
+              495,
+              644
+            ],
+            [
+              "Terreux · Sucré · Fruits rouges",
+              66,
+              652,
+              453,
+              679
+            ],
+            [
+              "MOYENNE",
+              66,
+              713,
+              197,
+              730
+            ]
+          ]
+        },
+        "front_title_size_px": 139,
+        "back_title_size_px": 132,
+        "web_title_size_px": 82,
+        "description_lines": 3
+      },
+      "standard": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 4,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": true,
+        "full_page_raster": false
+      },
+      "print_safe": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 0,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": false,
+        "full_page_raster": false
+      },
+      "standard_sha256": "2eac3618b8db747d8f713d76528c587a87b68854c8d6f50d018dc7daa6413543",
+      "print_safe_sha256": "b4aa6588ce68b5f5d5574e71f19c9b292534e6d6099ca0a9fce682adbefe8d27",
+      "web_320_bytes": 10036,
+      "web_640_bytes": 29800,
+      "web_320_sha256": "4738d045087f57243eaf6f2982ab6c341d814789de3a53d8f14fb9b2c062e8ad",
+      "web_640_sha256": "a5bd47cb80f4cb6352831f314dc1050e00357723eab0e889cdfc3734c2dfd290",
+      "reference": null
+    },
+    {
+      "name": "Ice-o-Lator",
+      "slug": "ice-o-lator",
+      "category": "resin",
+      "availability": "planned",
+      "intensity": "moyen",
+      "source_json_sha256": "698ff7fe2524fbc98cf2b4fce68b6e6b2e1b95098d28a0fa3556cac0aeb1002e",
+      "source_photo": "docs/product-sheets/modern-inputs-2026-10-07/ice-o-lator-historical-photo.png",
+      "source_photo_sha256": "af23992dcec1c0087a0e55f0a5f8bfb00f2813eced63f80b1fcb0486722bb92e",
+      "effective_photo_ppi": 174.4,
+      "geometry": {
+        "front": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "RÉSINE / VERDANZA",
+              143,
+              111,
+              433,
+              142
+            ],
+            [
+              "Ice-o-Lator",
+              140,
+              222,
+              748,
+              311
+            ],
+            [
+              "Floral · Fruits mûrs · Épicé",
+              143,
+              1445,
+              634,
+              1491
+            ],
+            [
+              "INTENSITÉ / MOYENNE",
+              143,
+              1534,
+              503,
+              1566
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "back": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FICHE PRODUIT / RÉSINE",
+              143,
+              111,
+              453,
+              140
+            ],
+            [
+              "Ice-o-Lator",
+              140,
+              223,
+              721,
+              307
+            ],
+            [
+              "01",
+              142,
+              485,
+              203,
+              518
+            ],
+            [
+              "PROFIL AROMATIQUE",
+              282,
+              502,
+              623,
+              525
+            ],
+            [
+              "Des notes florales et de fruits mûrs,",
+              282,
+              580,
+              1103,
+              637
+            ],
+            [
+              "sur un fond résineux, légèrement",
+              282,
+              660,
+              1048,
+              722
+            ],
+            [
+              "sucré et épicé.",
+              282,
+              740,
+              606,
+              801
+            ],
+            [
+              "Floral · Fruits mûrs · Épicé",
+              282,
+              871,
+              821,
+              928
+            ],
+            [
+              "02",
+              142,
+              1015,
+              209,
+              1049
+            ],
+            [
+              "INTENSITÉ",
+              282,
+              1032,
+              448,
+              1060
+            ],
+            [
+              "Moyenne",
+              277,
+              1091,
+              640,
+              1183
+            ],
+            [
+              "03",
+              142,
+              1255,
+              208,
+              1308
+            ],
+            [
+              "TEXTURE & APPARENCE",
+              282,
+              1272,
+              662,
+              1293
+            ],
+            [
+              "Résine blond doré, fine et compacte,",
+              282,
+              1331,
+              985,
+              1370
+            ],
+            [
+              "légèrement grasse au toucher.",
+              282,
+              1388,
+              869,
+              1427
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "web": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "Ice-o-Lator",
+              65,
+              559,
+              422,
+              614
+            ],
+            [
+              "Floral · Fruits mûrs · Épicé",
+              66,
+              652,
+              398,
+              684
+            ],
+            [
+              "MOYENNE",
+              66,
+              713,
+              197,
+              730
+            ]
+          ]
+        },
+        "front_title_size_px": 139,
+        "back_title_size_px": 132,
+        "web_title_size_px": 82,
+        "description_lines": 3
+      },
+      "standard": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 4,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": true,
+        "full_page_raster": false
+      },
+      "print_safe": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 0,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": false,
+        "full_page_raster": false
+      },
+      "standard_sha256": "709c0c52247d410119792dabe3f70ad223da29d99b056a4d701e592e820009e6",
+      "print_safe_sha256": "708a1550c19805a424c3ea283aa705245b2ebd4d0c102a11b29057a197f472f7",
+      "web_320_bytes": 12318,
+      "web_640_bytes": 40662,
+      "web_320_sha256": "668cf2d21b8df45b21fc0329e1cf008d31f0a52841c773a057b01952b828d420",
+      "web_640_sha256": "70beb3393eb8d7f99a93aa9cf3cae4e0d6d2a7ddabc5b1af251d5495b5e3e9b5",
+      "reference": null
+    },
+    {
+      "name": "Mousseux Skywalker",
+      "slug": "mousseux-skywalker",
+      "category": "resin",
+      "availability": "planned",
+      "intensity": "fort",
+      "source_json_sha256": "6820e51e6590d9a6c2b0526bec6e9646d8ac888dd28f359eef4f7b7afd537054",
+      "source_photo": "docs/product-sheets/modern-inputs-2026-10-07/mousseux-skywalker-historical-photo.png",
+      "source_photo_sha256": "35f04235f0a984b8369511613b66d7f1ac71b96d7bdd3b08dc00ae2497cd17c5",
+      "effective_photo_ppi": 297.7,
+      "geometry": {
+        "front": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "RÉSINE / VERDANZA",
+              143,
+              111,
+              433,
+              142
+            ],
+            [
+              "Mousseux Skywalker",
+              140,
+              222,
+              1139,
+              347
+            ],
+            [
+              "Pin · Boisé · Agrumes",
+              143,
+              1445,
+              546,
+              1484
+            ],
+            [
+              "INTENSITÉ / FORTE",
+              143,
+              1534,
+              446,
+              1566
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "back": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "FICHE PRODUIT / RÉSINE",
+              143,
+              111,
+              453,
+              140
+            ],
+            [
+              "Mousseux Skywalker",
+              140,
+              223,
+              1139,
+              348
+            ],
+            [
+              "01",
+              142,
+              485,
+              203,
+              518
+            ],
+            [
+              "PROFIL AROMATIQUE",
+              282,
+              502,
+              623,
+              525
+            ],
+            [
+              "Un bouquet de pin frais et de bois",
+              282,
+              580,
+              1081,
+              642
+            ],
+            [
+              "résineux, relevé d'une touche",
+              282,
+              660,
+              950,
+              717
+            ],
+            [
+              "d'agrumes et d'épices.",
+              282,
+              740,
+              779,
+              802
+            ],
+            [
+              "Pin · Boisé · Agrumes",
+              282,
+              871,
+              714,
+              925
+            ],
+            [
+              "02",
+              142,
+              1015,
+              209,
+              1049
+            ],
+            [
+              "INTENSITÉ",
+              282,
+              1032,
+              448,
+              1060
+            ],
+            [
+              "Forte",
+              277,
+              1091,
+              488,
+              1155
+            ],
+            [
+              "03",
+              142,
+              1255,
+              208,
+              1308
+            ],
+            [
+              "TEXTURE & APPARENCE",
+              282,
+              1272,
+              662,
+              1293
+            ],
+            [
+              "Résine aérée, souple et malléable, à la",
+              282,
+              1331,
+              1017,
+              1370
+            ],
+            [
+              "texture mousseuse.",
+              282,
+              1388,
+              660,
+              1415
+            ],
+            [
+              "verdanza.fr",
+              193,
+              1612,
+              346,
+              1634
+            ]
+          ]
+        },
+        "web": {
+          "text_overflow": 0,
+          "clipping": 0,
+          "collision": 0,
+          "text_boxes": [
+            [
+              "Mousseux Skywalker",
+              65,
+              559,
+              620,
+              628
+            ],
+            [
+              "Pin · Boisé · Agrumes",
+              66,
+              652,
+              337,
+              679
+            ],
+            [
+              "FORTE",
+              66,
+              713,
+              149,
+              730
+            ]
+          ]
+        },
+        "front_title_size_px": 124,
+        "back_title_size_px": 124,
+        "web_title_size_px": 69,
+        "description_lines": 3
+      },
+      "standard": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 4,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": true,
+        "full_page_raster": false
+      },
+      "print_safe": {
+        "pages": 2,
+        "boxes": "PASS",
+        "fonts": 0,
+        "type3": 0,
+        "raster_images_per_page": [
+          1,
+          0
+        ],
+        "poppler": "PASS",
+        "pdfium": "PASS",
+        "extractable_text": false,
+        "full_page_raster": false
+      },
+      "standard_sha256": "adb96588e689724a1892c998e57a9959f45679c1a71f6e71c821d74cfef5cf30",
+      "print_safe_sha256": "6503d13a0da8d951e4f31958c84a3ff59f08ced238a1082f44f6ed12fe62fb93",
+      "web_320_bytes": 18374,
+      "web_640_bytes": 65730,
+      "web_320_sha256": "496ca4f53bd260f43ca47f4cd69e9d08ff9881a61a40651facc3503473014b1a",
+      "web_640_sha256": "3dffdf755e159175fa59fa30105fc8b85fd25286d0b179ac4b1f3ed3be8909c9",
+      "reference": null
+    }
+  ],
+  "available": 8,
+  "planned": 4,
+  "source_integrity": "PASS"
+}

@@ -1,0 +1,241 @@
+{
+  "name": "Black Afghan",
+  "slug": "black-afghan",
+  "category": "resin",
+  "availability": "planned",
+  "intensity": "moyen",
+  "source_json_sha256": "12e215ddf95cb0458fde36bfbbe319ebef4c8940b4142b33c440cab51e077572",
+  "source_photo": "docs/product-sheets/modern-inputs-2026-10-07/black-afghan-historical-photo.png",
+  "source_photo_sha256": "1818a3ecb0459a9adc75ced410f6f4241750423e8af2dc5f0ead9ad35a25a8ec",
+  "effective_photo_ppi": 174.4,
+  "geometry": {
+    "front": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "RÉSINE / VERDANZA",
+          143,
+          111,
+          433,
+          142
+        ],
+        [
+          "Black Afghan",
+          140,
+          222,
+          868,
+          362
+        ],
+        [
+          "Terreux · Sucré · Fruits rouges",
+          143,
+          1445,
+          722,
+          1484
+        ],
+        [
+          "INTENSITÉ / MOYENNE",
+          143,
+          1534,
+          503,
+          1566
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "back": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "FICHE PRODUIT / RÉSINE",
+          143,
+          111,
+          453,
+          140
+        ],
+        [
+          "Black Afghan",
+          140,
+          223,
+          831,
+          356
+        ],
+        [
+          "01",
+          142,
+          485,
+          203,
+          518
+        ],
+        [
+          "PROFIL AROMATIQUE",
+          282,
+          502,
+          623,
+          525
+        ],
+        [
+          "Une dominante terreuse adoucie",
+          282,
+          580,
+          1046,
+          626
+        ],
+        [
+          "par une nuance sucrée et des notes",
+          282,
+          660,
+          1088,
+          722
+        ],
+        [
+          "de cassis et de framboise.",
+          282,
+          740,
+          863,
+          786
+        ],
+        [
+          "Terreux · Sucré · Fruits rouges",
+          282,
+          871,
+          898,
+          925
+        ],
+        [
+          "02",
+          142,
+          1015,
+          209,
+          1049
+        ],
+        [
+          "INTENSITÉ",
+          282,
+          1032,
+          448,
+          1060
+        ],
+        [
+          "Moyenne",
+          277,
+          1091,
+          640,
+          1183
+        ],
+        [
+          "03",
+          142,
+          1255,
+          208,
+          1308
+        ],
+        [
+          "TEXTURE & APPARENCE",
+          282,
+          1272,
+          662,
+          1293
+        ],
+        [
+          "Résine sombre, souple et malléable, facile à",
+          282,
+          1331,
+          1123,
+          1370
+        ],
+        [
+          "effriter.",
+          282,
+          1388,
+          423,
+          1419
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "web": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "Black Afghan",
+          65,
+          559,
+          495,
+          644
+        ],
+        [
+          "Terreux · Sucré · Fruits rouges",
+          66,
+          652,
+          453,
+          679
+        ],
+        [
+          "MOYENNE",
+          66,
+          713,
+          197,
+          730
+        ]
+      ]
+    },
+    "front_title_size_px": 139,
+    "back_title_size_px": 132,
+    "web_title_size_px": 82,
+    "description_lines": 3
+  },
+  "standard": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 4,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": true,
+    "full_page_raster": false
+  },
+  "print_safe": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 0,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": false,
+    "full_page_raster": false
+  },
+  "standard_sha256": "2eac3618b8db747d8f713d76528c587a87b68854c8d6f50d018dc7daa6413543",
+  "print_safe_sha256": "b4aa6588ce68b5f5d5574e71f19c9b292534e6d6099ca0a9fce682adbefe8d27",
+  "web_320_bytes": 10036,
+  "web_640_bytes": 29800,
+  "web_320_sha256": "4738d045087f57243eaf6f2982ab6c341d814789de3a53d8f14fb9b2c062e8ad",
+  "web_640_sha256": "a5bd47cb80f4cb6352831f314dc1050e00357723eab0e889cdfc3734c2dfd290",
+  "reference": null
+}

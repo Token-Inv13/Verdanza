@@ -1,0 +1,234 @@
+{
+  "name": "Mango Haze",
+  "slug": "mango-haze-cbd",
+  "category": "flower",
+  "availability": "available",
+  "intensity": "doux",
+  "source_json_sha256": "90f511961e76e45d6766b485e3bf1f8a90d1e1fa284a16860ec4bca77ba8c41d",
+  "source_photo": "public/Fiche produit/Mango Haze/mango.webp",
+  "source_photo_sha256": "15950dad4f1e5976c15e52b1c0af9ff0bc19650a0f456f79e4aa2ceee6507a41",
+  "effective_photo_ppi": 207.3,
+  "geometry": {
+    "front": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "FLEUR / VERDANZA",
+          143,
+          111,
+          424,
+          136
+        ],
+        [
+          "Mango Haze",
+          140,
+          222,
+          821,
+          348
+        ],
+        [
+          "Sucré · Fruité · Acidulé",
+          143,
+          1445,
+          571,
+          1476
+        ],
+        [
+          "INTENSITÉ / DOUCE",
+          143,
+          1534,
+          456,
+          1566
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "back": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "FICHE PRODUIT / FLEUR",
+          143,
+          111,
+          443,
+          135
+        ],
+        [
+          "Mango Haze",
+          140,
+          223,
+          788,
+          342
+        ],
+        [
+          "01",
+          142,
+          485,
+          203,
+          518
+        ],
+        [
+          "PROFIL AROMATIQUE",
+          282,
+          502,
+          623,
+          525
+        ],
+        [
+          "Un profil gourmand, fruité et",
+          282,
+          580,
+          975,
+          642
+        ],
+        [
+          "acidulé à l'expression aromatique",
+          282,
+          660,
+          1053,
+          722
+        ],
+        [
+          "nette.",
+          282,
+          740,
+          415,
+          769
+        ],
+        [
+          "Sucré · Fruité · Acidulé",
+          282,
+          871,
+          753,
+          911
+        ],
+        [
+          "02",
+          142,
+          1015,
+          209,
+          1049
+        ],
+        [
+          "INTENSITÉ",
+          282,
+          1032,
+          448,
+          1060
+        ],
+        [
+          "Douce",
+          277,
+          1091,
+          527,
+          1156
+        ],
+        [
+          "03",
+          142,
+          1255,
+          208,
+          1308
+        ],
+        [
+          "ASPECT",
+          282,
+          1272,
+          407,
+          1293
+        ],
+        [
+          "Fleur hydroponique · Manucure à la main",
+          282,
+          1331,
+          1062,
+          1370
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "web": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "Mango Haze",
+          65,
+          559,
+          466,
+          636
+        ],
+        [
+          "Sucré · Fruité · Acidulé",
+          66,
+          652,
+          355,
+          673
+        ],
+        [
+          "DOUCE",
+          66,
+          713,
+          156,
+          730
+        ]
+      ]
+    },
+    "front_title_size_px": 139,
+    "back_title_size_px": 132,
+    "web_title_size_px": 82,
+    "description_lines": 3
+  },
+  "standard": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 4,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": true,
+    "full_page_raster": false
+  },
+  "print_safe": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 0,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": false,
+    "full_page_raster": false
+  },
+  "standard_sha256": "52e9998935ab515c828e9d3fe5db84846a1100eeb6f733b7db1fb96bb9d29c92",
+  "print_safe_sha256": "6c4d73dc68da5a736b456ddcab96c8aacfbb79dafb0acaf614b3494b6ff225b4",
+  "web_320_bytes": 14878,
+  "web_640_bytes": 48462,
+  "web_320_sha256": "cb98d70ffd7f028c474600bbc8793448cc0222b0fa4b357300289d4bf655e80d",
+  "web_640_sha256": "4bf0c4b56059d62bdc756347dfc53971e9484451784c96d92b6638eb331af02e",
+  "reference": null
+}

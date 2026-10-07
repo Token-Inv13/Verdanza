@@ -7,6 +7,8 @@ import {
 } from "../../data/productSheets";
 import { trackEvent } from "../../lib/analytics";
 import type { ProductSheetMatch } from "../../lib/productSheetRecommendation";
+import { SignaturePreview } from "./SignaturePreview";
+import { hasSignaturePreview } from "./signatureAssets";
 
 export function ProductRecommendation({ matches, selectionKey }: { matches: ProductSheetMatch[]; selectionKey: string }) {
   const [activeIndex, setActiveIndex] = useState(0);
@@ -200,11 +202,22 @@ function TiltProductCard({ sheet, active, onSelect }: { sheet: ProductSheet; act
       data-selector-result-card={sheet.slug}
       data-selector-primary-card={active ? "true" : undefined}
     >
-      <img src={sheet.previewUrl} alt={`Fiche produit ${sheet.name} Verdanza`} width={640} height={888} loading="lazy" decoding="async" className="aspect-[111/154] w-full object-cover" />
+      {hasSignaturePreview(sheet.previewUrl) ? (
+        <SignaturePreview
+          slug={sheet.slug}
+          previewUrl={sheet.previewUrl}
+          alt={`${sheet.name}, ${sheet.aromas.join(" · ")}, intensité ${productSheetIntensityLabels[sheet.selectionProfile.intensity]}`}
+          className="aspect-[4/5] w-full object-cover"
+        />
+      ) : (
+        <img src={sheet.previewUrl} alt={`Fiche produit ${sheet.name} Verdanza`} width={640} height={888} loading="lazy" decoding="async" className="aspect-[111/154] w-full object-cover" />
+      )}
       <span className="product-result-highlight pointer-events-none absolute inset-0" aria-hidden="true" />
-      <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-forest/95 via-forest/75 to-transparent px-4 pb-4 pt-14 text-ivory">
-        <span className="block font-display text-2xl leading-tight sm:text-3xl">{sheet.name}</span>
-      </span>
+      {!hasSignaturePreview(sheet.previewUrl) && (
+        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-forest/95 via-forest/75 to-transparent px-4 pb-4 pt-14 text-ivory">
+          <span className="block font-display text-2xl leading-tight sm:text-3xl">{sheet.name}</span>
+        </span>
+      )}
     </button>
   );
 }

@@ -1,0 +1,241 @@
+{
+  "name": "OG Kush",
+  "slug": "petites-tetes-og-kush",
+  "category": "flower",
+  "availability": "available",
+  "intensity": "doux",
+  "source_json_sha256": "e168f7bd41496b91418665b66a59ddc2b7ef5a7b8b4bcbe0904aa8455e9971af",
+  "source_photo": "public/Fiche produit/Petite tetes OG Kush ( sous serre)/PTOGKush_pile.webp",
+  "source_photo_sha256": "3e8c9fdca1197a658b1cd326fb8905cc6d6698c0c999f056b13362157e2d5315",
+  "effective_photo_ppi": 207.0,
+  "geometry": {
+    "front": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "FLEUR / VERDANZA",
+          143,
+          111,
+          424,
+          136
+        ],
+        [
+          "OG Kush",
+          140,
+          222,
+          655,
+          325
+        ],
+        [
+          "Menthe fraîche · Agrumes · Fraîcheur végétale",
+          143,
+          1445,
+          1030,
+          1484
+        ],
+        [
+          "INTENSITÉ / DOUCE",
+          143,
+          1534,
+          456,
+          1566
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "back": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "FICHE PRODUIT / FLEUR",
+          143,
+          111,
+          443,
+          135
+        ],
+        [
+          "OG Kush",
+          140,
+          223,
+          626,
+          321
+        ],
+        [
+          "01",
+          142,
+          485,
+          203,
+          518
+        ],
+        [
+          "PROFIL AROMATIQUE",
+          282,
+          502,
+          623,
+          525
+        ],
+        [
+          "Un profil frais et direct associant",
+          282,
+          580,
+          1058,
+          642
+        ],
+        [
+          "menthe, agrumes et fraîcheur",
+          282,
+          660,
+          969,
+          722
+        ],
+        [
+          "végétale.",
+          282,
+          740,
+          480,
+          801
+        ],
+        [
+          "Menthe fraîche · Agrumes · Fraîcheur végétale",
+          282,
+          871,
+          1126,
+          919
+        ],
+        [
+          "02",
+          142,
+          1015,
+          209,
+          1049
+        ],
+        [
+          "INTENSITÉ",
+          282,
+          1032,
+          448,
+          1060
+        ],
+        [
+          "Douce",
+          277,
+          1091,
+          527,
+          1156
+        ],
+        [
+          "03",
+          142,
+          1255,
+          208,
+          1308
+        ],
+        [
+          "ASPECT",
+          282,
+          1272,
+          407,
+          1293
+        ],
+        [
+          "Petites têtes · Compactes",
+          282,
+          1331,
+          771,
+          1370
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "web": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "OG Kush",
+          65,
+          559,
+          367,
+          622
+        ],
+        [
+          "Menthe fraîche · Agrumes",
+          66,
+          646,
+          395,
+          673
+        ],
+        [
+          "Fraîcheur végétale",
+          66,
+          682,
+          301,
+          709
+        ],
+        [
+          "DOUCE",
+          66,
+          738,
+          156,
+          755
+        ]
+      ]
+    },
+    "front_title_size_px": 139,
+    "back_title_size_px": 132,
+    "web_title_size_px": 82,
+    "description_lines": 3
+  },
+  "standard": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 4,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": true,
+    "full_page_raster": false
+  },
+  "print_safe": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 0,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": false,
+    "full_page_raster": false
+  },
+  "standard_sha256": "b927d9efc636a386853ba60a365b2bec35acf031eed92d39916f1685fcb8d0e4",
+  "print_safe_sha256": "ef17f34a4e40222a578cac9d5eab1430c07b0e6411e8e55cfc1bfdd541d2f9d4",
+  "web_320_bytes": 12000,
+  "web_640_bytes": 37112,
+  "web_320_sha256": "e98bf5eb16990b8811c8f83a3eb59600fb8fc7099b457a67b217fda1dab04995",
+  "web_640_sha256": "c6a7792aee84740a60079f70d3784258d2e52731a65255df2c28ac94028b585f",
+  "reference": null
+}

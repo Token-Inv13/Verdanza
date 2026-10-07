@@ -1,0 +1,241 @@
+{
+  "name": "Ice-o-Lator",
+  "slug": "ice-o-lator",
+  "category": "resin",
+  "availability": "planned",
+  "intensity": "moyen",
+  "source_json_sha256": "698ff7fe2524fbc98cf2b4fce68b6e6b2e1b95098d28a0fa3556cac0aeb1002e",
+  "source_photo": "docs/product-sheets/modern-inputs-2026-10-07/ice-o-lator-historical-photo.png",
+  "source_photo_sha256": "af23992dcec1c0087a0e55f0a5f8bfb00f2813eced63f80b1fcb0486722bb92e",
+  "effective_photo_ppi": 174.4,
+  "geometry": {
+    "front": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "RÉSINE / VERDANZA",
+          143,
+          111,
+          433,
+          142
+        ],
+        [
+          "Ice-o-Lator",
+          140,
+          222,
+          748,
+          311
+        ],
+        [
+          "Floral · Fruits mûrs · Épicé",
+          143,
+          1445,
+          634,
+          1491
+        ],
+        [
+          "INTENSITÉ / MOYENNE",
+          143,
+          1534,
+          503,
+          1566
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "back": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "FICHE PRODUIT / RÉSINE",
+          143,
+          111,
+          453,
+          140
+        ],
+        [
+          "Ice-o-Lator",
+          140,
+          223,
+          721,
+          307
+        ],
+        [
+          "01",
+          142,
+          485,
+          203,
+          518
+        ],
+        [
+          "PROFIL AROMATIQUE",
+          282,
+          502,
+          623,
+          525
+        ],
+        [
+          "Des notes florales et de fruits mûrs,",
+          282,
+          580,
+          1103,
+          637
+        ],
+        [
+          "sur un fond résineux, légèrement",
+          282,
+          660,
+          1048,
+          722
+        ],
+        [
+          "sucré et épicé.",
+          282,
+          740,
+          606,
+          801
+        ],
+        [
+          "Floral · Fruits mûrs · Épicé",
+          282,
+          871,
+          821,
+          928
+        ],
+        [
+          "02",
+          142,
+          1015,
+          209,
+          1049
+        ],
+        [
+          "INTENSITÉ",
+          282,
+          1032,
+          448,
+          1060
+        ],
+        [
+          "Moyenne",
+          277,
+          1091,
+          640,
+          1183
+        ],
+        [
+          "03",
+          142,
+          1255,
+          208,
+          1308
+        ],
+        [
+          "TEXTURE & APPARENCE",
+          282,
+          1272,
+          662,
+          1293
+        ],
+        [
+          "Résine blond doré, fine et compacte,",
+          282,
+          1331,
+          985,
+          1370
+        ],
+        [
+          "légèrement grasse au toucher.",
+          282,
+          1388,
+          869,
+          1427
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "web": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "Ice-o-Lator",
+          65,
+          559,
+          422,
+          614
+        ],
+        [
+          "Floral · Fruits mûrs · Épicé",
+          66,
+          652,
+          398,
+          684
+        ],
+        [
+          "MOYENNE",
+          66,
+          713,
+          197,
+          730
+        ]
+      ]
+    },
+    "front_title_size_px": 139,
+    "back_title_size_px": 132,
+    "web_title_size_px": 82,
+    "description_lines": 3
+  },
+  "standard": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 4,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": true,
+    "full_page_raster": false
+  },
+  "print_safe": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 0,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": false,
+    "full_page_raster": false
+  },
+  "standard_sha256": "709c0c52247d410119792dabe3f70ad223da29d99b056a4d701e592e820009e6",
+  "print_safe_sha256": "708a1550c19805a424c3ea283aa705245b2ebd4d0c102a11b29057a197f472f7",
+  "web_320_bytes": 12318,
+  "web_640_bytes": 40662,
+  "web_320_sha256": "668cf2d21b8df45b21fc0329e1cf008d31f0a52841c773a057b01952b828d420",
+  "web_640_sha256": "70beb3393eb8d7f99a93aa9cf3cae4e0d6d2a7ddabc5b1af251d5495b5e3e9b5",
+  "reference": null
+}

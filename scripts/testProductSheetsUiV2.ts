@@ -61,10 +61,15 @@ try {
     }
     assert.equal(await page.locator('[data-product-sheet-tab="flower"]').getAttribute("aria-selected"), "true");
     assert.equal(await page.locator("[data-product-sheet-card]").count(), 6, `${width}px: flower tab must contain the complete active range`);
+    assert.equal(await library.locator("[data-signature-v1-preview]").count(), 10, `${width}px: all visible flower and planned cards must use Signature V1`);
+    assert.equal(await library.locator("[data-signature-v1-preview]").evaluateAll((images) => images.every((image) =>
+      image.getAttribute("src")?.includes("/signature-v1/") && image.getAttribute("srcset")?.includes("-320.webp")
+    )), true, `${width}px: Signature V1 responsive previews must use the versioned 320/640 assets`);
     assert.equal(await page.locator("[data-product-sheet-card]").first().getAttribute("data-product-sheet-card"), "blue-dream-cbd");
     await page.locator('[data-product-sheet-tab="resin"]').click();
     await page.locator('[data-product-sheet-category="resin"]').waitFor();
     assert.equal(await page.locator("[data-product-sheet-card]").count(), 2, `${width}px: resin tab must contain both active resins`);
+    assert.equal(await library.locator("[data-signature-v1-preview]").count(), 6, `${width}px: both resin and all planned cards must use Signature V1`);
     assert.deepEqual(await page.locator("[data-product-sheet-card] h3").allTextContents(), ["Golden Static", "Suprême 50 % CBD"]);
     assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "1 / 2");
     assert.equal(await page.locator("[data-planned-product-sheets] article").count(), 4, "the four planned sheets must stay visible outside the active tabs");

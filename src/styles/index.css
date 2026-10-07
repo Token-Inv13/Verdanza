@@ -379,6 +379,10 @@
     box-shadow: 0 1rem 2.5rem rgba(11, 61, 46, 0.12);
   }
 
+  .signature-v1-card {
+    align-self: flex-start;
+  }
+
   .product-sheet-card-v2:active {
     transform: translateY(-0.125rem) scale(1.006);
   }

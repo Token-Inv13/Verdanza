@@ -1,0 +1,227 @@
+{
+  "name": "Mandarine",
+  "slug": "mandarine-cbd",
+  "category": "flower",
+  "availability": "available",
+  "intensity": "doux",
+  "source_json_sha256": "b0e10923aa40dbb908c09c4d9859eab77155ade7c58052239df321b787cadb77",
+  "source_photo": "public/Fiche produit/Mandarine/Mandarine_pile.webp",
+  "source_photo_sha256": "d390261e345437e94a60fb92b8698faaf0fff438f4ecb891c13a5ebfc6956ec8",
+  "effective_photo_ppi": 207.3,
+  "geometry": {
+    "front": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "FLEUR / VERDANZA",
+          143,
+          111,
+          424,
+          136
+        ],
+        [
+          "Mandarine",
+          140,
+          222,
+          729,
+          325
+        ],
+        [
+          "Mandarine · Agrumes · Citron",
+          143,
+          1445,
+          699,
+          1483
+        ],
+        [
+          "INTENSITÉ / DOUCE",
+          143,
+          1534,
+          456,
+          1566
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "back": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "FICHE PRODUIT / FLEUR",
+          143,
+          111,
+          443,
+          135
+        ],
+        [
+          "Mandarine",
+          140,
+          223,
+          702,
+          320
+        ],
+        [
+          "01",
+          142,
+          485,
+          203,
+          518
+        ],
+        [
+          "PROFIL AROMATIQUE",
+          282,
+          502,
+          623,
+          525
+        ],
+        [
+          "Un profil frais et fruité dominé par",
+          282,
+          580,
+          1108,
+          642
+        ],
+        [
+          "la mandarine et les agrumes.",
+          282,
+          660,
+          945,
+          722
+        ],
+        [
+          "Mandarine · Agrumes · Citron",
+          282,
+          796,
+          902,
+          850
+        ],
+        [
+          "02",
+          142,
+          1015,
+          209,
+          1049
+        ],
+        [
+          "INTENSITÉ",
+          282,
+          1032,
+          448,
+          1060
+        ],
+        [
+          "Douce",
+          277,
+          1091,
+          527,
+          1156
+        ],
+        [
+          "03",
+          142,
+          1255,
+          208,
+          1308
+        ],
+        [
+          "ASPECT",
+          282,
+          1272,
+          407,
+          1293
+        ],
+        [
+          "Fleur hydroponique · Présentation soignée",
+          282,
+          1331,
+          1092,
+          1370
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "web": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "Mandarine",
+          65,
+          559,
+          411,
+          621
+        ],
+        [
+          "Mandarine · Agrumes · Citron",
+          66,
+          652,
+          439,
+          679
+        ],
+        [
+          "DOUCE",
+          66,
+          713,
+          156,
+          730
+        ]
+      ]
+    },
+    "front_title_size_px": 139,
+    "back_title_size_px": 132,
+    "web_title_size_px": 82,
+    "description_lines": 2
+  },
+  "standard": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 4,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": true,
+    "full_page_raster": false
+  },
+  "print_safe": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 0,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": false,
+    "full_page_raster": false
+  },
+  "standard_sha256": "69215009bcd741e3a76a5145b2156092804ed3608055d835ea961309b8540e6e",
+  "print_safe_sha256": "986da4c3777890371a2cdab5df81dcea18702d2c19e2429a366ef5cd40a6d270",
+  "web_320_bytes": 13942,
+  "web_640_bytes": 43838,
+  "web_320_sha256": "e65098ff910ca30d524c22a316be4ab81c00e57087949eb7ad685d39984dca6d",
+  "web_640_sha256": "a93a1b0ff5f748a2e31922b9c2c93b2f61264fe6b1f7ad7b8eef4f7b0cce0500",
+  "reference": null
+}

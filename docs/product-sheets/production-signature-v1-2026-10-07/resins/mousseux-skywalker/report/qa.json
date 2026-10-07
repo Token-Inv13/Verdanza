@@ -1,0 +1,241 @@
+{
+  "name": "Mousseux Skywalker",
+  "slug": "mousseux-skywalker",
+  "category": "resin",
+  "availability": "planned",
+  "intensity": "fort",
+  "source_json_sha256": "6820e51e6590d9a6c2b0526bec6e9646d8ac888dd28f359eef4f7b7afd537054",
+  "source_photo": "docs/product-sheets/modern-inputs-2026-10-07/mousseux-skywalker-historical-photo.png",
+  "source_photo_sha256": "35f04235f0a984b8369511613b66d7f1ac71b96d7bdd3b08dc00ae2497cd17c5",
+  "effective_photo_ppi": 297.7,
+  "geometry": {
+    "front": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "RÉSINE / VERDANZA",
+          143,
+          111,
+          433,
+          142
+        ],
+        [
+          "Mousseux Skywalker",
+          140,
+          222,
+          1139,
+          347
+        ],
+        [
+          "Pin · Boisé · Agrumes",
+          143,
+          1445,
+          546,
+          1484
+        ],
+        [
+          "INTENSITÉ / FORTE",
+          143,
+          1534,
+          446,
+          1566
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "back": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "FICHE PRODUIT / RÉSINE",
+          143,
+          111,
+          453,
+          140
+        ],
+        [
+          "Mousseux Skywalker",
+          140,
+          223,
+          1139,
+          348
+        ],
+        [
+          "01",
+          142,
+          485,
+          203,
+          518
+        ],
+        [
+          "PROFIL AROMATIQUE",
+          282,
+          502,
+          623,
+          525
+        ],
+        [
+          "Un bouquet de pin frais et de bois",
+          282,
+          580,
+          1081,
+          642
+        ],
+        [
+          "résineux, relevé d'une touche",
+          282,
+          660,
+          950,
+          717
+        ],
+        [
+          "d'agrumes et d'épices.",
+          282,
+          740,
+          779,
+          802
+        ],
+        [
+          "Pin · Boisé · Agrumes",
+          282,
+          871,
+          714,
+          925
+        ],
+        [
+          "02",
+          142,
+          1015,
+          209,
+          1049
+        ],
+        [
+          "INTENSITÉ",
+          282,
+          1032,
+          448,
+          1060
+        ],
+        [
+          "Forte",
+          277,
+          1091,
+          488,
+          1155
+        ],
+        [
+          "03",
+          142,
+          1255,
+          208,
+          1308
+        ],
+        [
+          "TEXTURE & APPARENCE",
+          282,
+          1272,
+          662,
+          1293
+        ],
+        [
+          "Résine aérée, souple et malléable, à la",
+          282,
+          1331,
+          1017,
+          1370
+        ],
+        [
+          "texture mousseuse.",
+          282,
+          1388,
+          660,
+          1415
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "web": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "Mousseux Skywalker",
+          65,
+          559,
+          620,
+          628
+        ],
+        [
+          "Pin · Boisé · Agrumes",
+          66,
+          652,
+          337,
+          679
+        ],
+        [
+          "FORTE",
+          66,
+          713,
+          149,
+          730
+        ]
+      ]
+    },
+    "front_title_size_px": 124,
+    "back_title_size_px": 124,
+    "web_title_size_px": 69,
+    "description_lines": 3
+  },
+  "standard": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 4,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": true,
+    "full_page_raster": false
+  },
+  "print_safe": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 0,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": false,
+    "full_page_raster": false
+  },
+  "standard_sha256": "adb96588e689724a1892c998e57a9959f45679c1a71f6e71c821d74cfef5cf30",
+  "print_safe_sha256": "6503d13a0da8d951e4f31958c84a3ff59f08ced238a1082f44f6ed12fe62fb93",
+  "web_320_bytes": 18374,
+  "web_640_bytes": 65730,
+  "web_320_sha256": "496ca4f53bd260f43ca47f4cd69e9d08ff9881a61a40651facc3503473014b1a",
+  "web_640_sha256": "3dffdf755e159175fa59fa30105fc8b85fd25286d0b179ac4b1f3ed3be8909c9",
+  "reference": null
+}

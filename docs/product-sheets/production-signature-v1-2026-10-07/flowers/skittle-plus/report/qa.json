@@ -1,0 +1,241 @@
+{
+  "name": "Skittle Plus",
+  "slug": "skittle-plus",
+  "category": "flower",
+  "availability": "planned",
+  "intensity": "fort",
+  "source_json_sha256": "55833d1228c33488153cd49d50c1c5c9fe90b296c02222b768aef12c69563726",
+  "source_photo": "docs/product-sheets/modern-inputs-2026-10-07/skittle-plus-historical-photo.png",
+  "source_photo_sha256": "31f0ed15ba826c858a9611d462c18c7129cdf236a73f08942552c2014f51b5e2",
+  "effective_photo_ppi": 297.7,
+  "geometry": {
+    "front": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "FLEUR / VERDANZA",
+          143,
+          111,
+          424,
+          136
+        ],
+        [
+          "Skittle Plus",
+          140,
+          222,
+          762,
+          325
+        ],
+        [
+          "Citron · Bonbon · Diesel",
+          143,
+          1445,
+          589,
+          1475
+        ],
+        [
+          "INTENSITÉ / FORTE",
+          143,
+          1534,
+          446,
+          1566
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "back": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "FICHE PRODUIT / FLEUR",
+          143,
+          111,
+          443,
+          135
+        ],
+        [
+          "Skittle Plus",
+          140,
+          223,
+          727,
+          321
+        ],
+        [
+          "01",
+          142,
+          485,
+          203,
+          518
+        ],
+        [
+          "PROFIL AROMATIQUE",
+          282,
+          502,
+          623,
+          525
+        ],
+        [
+          "Un départ citronné et gourmand,",
+          282,
+          580,
+          1067,
+          642
+        ],
+        [
+          "suivi d'une note de confiserie fruitée",
+          282,
+          660,
+          1129,
+          706
+        ],
+        [
+          "et d'un fond diesel.",
+          282,
+          740,
+          721,
+          786
+        ],
+        [
+          "Citron · Bonbon · Diesel",
+          282,
+          871,
+          779,
+          911
+        ],
+        [
+          "02",
+          142,
+          1015,
+          209,
+          1049
+        ],
+        [
+          "INTENSITÉ",
+          282,
+          1032,
+          448,
+          1060
+        ],
+        [
+          "Forte",
+          277,
+          1091,
+          488,
+          1155
+        ],
+        [
+          "03",
+          142,
+          1255,
+          208,
+          1308
+        ],
+        [
+          "ASPECT",
+          282,
+          1272,
+          407,
+          1293
+        ],
+        [
+          "Fleurs compactes et résineuses, aux",
+          282,
+          1331,
+          985,
+          1370
+        ],
+        [
+          "nuances vertes et aux pistils orangés.",
+          282,
+          1388,
+          1005,
+          1427
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "web": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "Skittle Plus",
+          65,
+          559,
+          432,
+          622
+        ],
+        [
+          "Citron · Bonbon · Diesel",
+          66,
+          652,
+          367,
+          673
+        ],
+        [
+          "FORTE",
+          66,
+          713,
+          149,
+          730
+        ]
+      ]
+    },
+    "front_title_size_px": 139,
+    "back_title_size_px": 132,
+    "web_title_size_px": 82,
+    "description_lines": 3
+  },
+  "standard": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 4,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": true,
+    "full_page_raster": false
+  },
+  "print_safe": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 0,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": false,
+    "full_page_raster": false
+  },
+  "standard_sha256": "6e37d5d14d4413d198a81a174ab3585769ccf47187cdc0933eb5fa986efc69df",
+  "print_safe_sha256": "dcd46a768fe8257fe8d584a2ad733dc0703d5e186d8f262fc6f8aa3f7e3996d1",
+  "web_320_bytes": 18638,
+  "web_640_bytes": 62846,
+  "web_320_sha256": "bd48175764a414d72c58152373d2537ece49e0d7087c936732e59a5b4ee36519",
+  "web_640_sha256": "fec148f2e0c610b9ebd7b734e13a2334ac097502902ce92b47c27d9abf14286f",
+  "reference": null
+}

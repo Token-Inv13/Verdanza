@@ -1,0 +1,227 @@
+{
+  "name": "Suprême 50 % CBD",
+  "slug": "supreme-50-cbd",
+  "category": "resin",
+  "availability": "available",
+  "intensity": "doux",
+  "source_json_sha256": "78ca3a37699fa28b5edb629dd5fbdd86ca30919582909c436b33398794ffb3eb",
+  "source_photo": "public/Fiche produit/Supreme/supreme-50-cbd.webp",
+  "source_photo_sha256": "932ca6e84080382c2e3e18e6396820776ce7a03632267be24b5f3aa5ee4afa45",
+  "effective_photo_ppi": 207.3,
+  "geometry": {
+    "front": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "RÉSINE / VERDANZA",
+          143,
+          111,
+          433,
+          142
+        ],
+        [
+          "Suprême 50 % CBD",
+          140,
+          222,
+          1128,
+          355
+        ],
+        [
+          "Floral · Raffiné",
+          143,
+          1445,
+          418,
+          1476
+        ],
+        [
+          "INTENSITÉ / DOUCE",
+          143,
+          1534,
+          456,
+          1566
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "back": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "FICHE PRODUIT / RÉSINE",
+          143,
+          111,
+          453,
+          140
+        ],
+        [
+          "Suprême 50 % CBD",
+          140,
+          223,
+          1128,
+          356
+        ],
+        [
+          "01",
+          142,
+          485,
+          203,
+          518
+        ],
+        [
+          "PROFIL AROMATIQUE",
+          282,
+          502,
+          623,
+          525
+        ],
+        [
+          "Des notes florales légères et",
+          282,
+          580,
+          917,
+          642
+        ],
+        [
+          "raffinées, à l'expression délicate.",
+          282,
+          660,
+          1024,
+          722
+        ],
+        [
+          "Floral · Raffiné",
+          282,
+          796,
+          592,
+          836
+        ],
+        [
+          "02",
+          142,
+          1015,
+          209,
+          1049
+        ],
+        [
+          "INTENSITÉ",
+          282,
+          1032,
+          448,
+          1060
+        ],
+        [
+          "Douce",
+          277,
+          1091,
+          527,
+          1156
+        ],
+        [
+          "03",
+          142,
+          1255,
+          208,
+          1308
+        ],
+        [
+          "TEXTURE & APPARENCE",
+          282,
+          1272,
+          662,
+          1293
+        ],
+        [
+          "Dense · Homogène · Malléable",
+          282,
+          1331,
+          867,
+          1370
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "web": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "Suprême 50 % CBD",
+          65,
+          559,
+          617,
+          634
+        ],
+        [
+          "Floral · Raffiné",
+          66,
+          652,
+          253,
+          673
+        ],
+        [
+          "DOUCE",
+          66,
+          713,
+          156,
+          730
+        ]
+      ]
+    },
+    "front_title_size_px": 132,
+    "back_title_size_px": 132,
+    "web_title_size_px": 74,
+    "description_lines": 2
+  },
+  "standard": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 4,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": true,
+    "full_page_raster": false
+  },
+  "print_safe": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 0,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": false,
+    "full_page_raster": false
+  },
+  "standard_sha256": "6414a202da879e8c58d3e4037e009981fada59585ee99c49ec7e2f65defac1ac",
+  "print_safe_sha256": "fe9b07cd65ab84d8bad815eddccede392b4f709f18e8bed73605ca1bccb3b4d7",
+  "web_320_bytes": 10950,
+  "web_640_bytes": 34160,
+  "web_320_sha256": "e16266d009012ef68e0613d3701d985262344bd74a37a9d55d4197f3690546d2",
+  "web_640_sha256": "aec47b41edd0cddae6217f23a70fc4b30e168fcb8fe3deb6275df7586350382b",
+  "reference": null
+}

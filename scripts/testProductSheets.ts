@@ -37,12 +37,12 @@ for (const sheet of availableProductSheets) {
   assert.ok(product, `${sheet.productId}: catalogue product is missing`);
   assert.equal(product.slug, sheet.slug, `${sheet.productId}: catalogue/sheet slug mismatch`);
   assert.equal(product.category === "flowers" ? "flower" : "resin", sheet.selectionProfile.category);
-  assert.equal(sheet.pdfUrl, `/fiches-produits/${sheet.slug}/verdanza-${sheet.slug}-modern-20261007.pdf`);
-  assert.equal(sheet.previewUrl, `/images/fiches-produits/${sheet.slug}-modern-20261007.webp`);
+  assert.equal(sheet.pdfUrl, `/fiches-produits/${sheet.slug}/verdanza-${sheet.slug}-signature-v1.pdf`);
+  assert.equal(sheet.previewUrl, `/images/fiches-produits/signature-v1/${sheet.slug}-signature-v1-640.webp`);
   const family = sheet.selectionProfile.category === "flower" ? "flowers" : "resins";
-  const sourceRoot = resolve("docs/product-sheets/production-modern-2026-10-07");
-  const sourcePdf = join(sourceRoot, family, sheet.slug, "print", `verdanza-${sheet.slug}-a6-modern-20261007-standard.pdf`);
-  const safePdf = join(sourceRoot, family, sheet.slug, "print", `verdanza-${sheet.slug}-a6-modern-20261007-print-safe.pdf`);
+  const sourceRoot = resolve("docs/product-sheets/production-signature-v1-2026-10-07");
+  const sourcePdf = join(sourceRoot, family, sheet.slug, "print", `verdanza-${sheet.slug}-signature-v1-standard.pdf`);
+  const safePdf = join(sourceRoot, family, sheet.slug, "print", `verdanza-${sheet.slug}-signature-v1-print-safe.pdf`);
   assert.ok(existsSync(sourcePdf), `${relative(process.cwd(), sourcePdf)} is missing`);
   assert.ok(existsSync(safePdf), `${relative(process.cwd(), safePdf)} is missing`);
   for (const root of [publicDir, distDir]) {
@@ -52,10 +52,11 @@ for (const sheet of availableProductSheets) {
     assert.ok(existsSync(preview), `${relative(process.cwd(), preview)} is missing`);
     assert.equal(readFileSync(publicPdf).subarray(0, 5).toString("ascii"), "%PDF-");
     assert.equal(sha256(publicPdf), sha256(sourcePdf), `${sheet.slug}: published standard differs from documentary source`);
+    assert.equal(sha256(preview), sha256(join(sourceRoot, family, sheet.slug, "previews", `${sheet.slug}-signature-v1-640.webp`)), `${sheet.slug}: published preview differs from documentary source`);
     const metadata = await sharp(preview).metadata();
     assert.equal(metadata.format, "webp");
     assert.equal(metadata.width, 640);
-    assert.equal(metadata.height, 888);
+    assert.equal(metadata.height, 800);
   }
 }
 
@@ -69,28 +70,64 @@ for (const sheet of plannedProductSheets) {
     assert.ok(existsSync(publicPdf), `${sheet.slug}: planned PDF is missing`);
     assert.ok(existsSync(preview), `${sheet.slug}: planned preview is missing`);
     const family = sheet.selectionProfile.category === "flower" ? "flowers" : "resins";
-    const sourcePdf = join(resolve("docs/product-sheets/production-modern-2026-10-07"), family, sheet.slug, "print", `verdanza-${sheet.slug}-a6-modern-20261007-standard.pdf`);
-    assert.equal(sha256(publicPdf), sha256(sourcePdf), `${sheet.slug}: planned public copy differs from modern source`);
+    const sourceRoot = resolve("docs/product-sheets/production-signature-v1-2026-10-07");
+    const sourcePdf = join(sourceRoot, family, sheet.slug, "print", `verdanza-${sheet.slug}-signature-v1-standard.pdf`);
+    assert.equal(sha256(publicPdf), sha256(sourcePdf), `${sheet.slug}: planned public copy differs from Signature V1 source`);
+    assert.equal(sha256(preview), sha256(join(sourceRoot, family, sheet.slug, "previews", `${sheet.slug}-signature-v1-640.webp`)), `${sheet.slug}: planned preview differs from Signature V1 source`);
   }
 }
 
 const publicPdfs = walkFiles(join(publicDir, "fiches-produits")).filter((path) => extname(path).toLowerCase() === ".pdf");
 const distPdfs = walkFiles(join(distDir, "fiches-produits")).filter((path) => extname(path).toLowerCase() === ".pdf");
-assert.equal(publicPdfs.length, 20, "public assets must retain eight stable PDFs plus exactly twelve modern versioned PDFs");
-assert.equal(distPdfs.length, 20, "the build must retain eight stable PDFs plus exactly twelve modern versioned PDFs");
+assert.equal(publicPdfs.length, 32, "public assets must retain eight stable, twelve modern and twelve Signature V1 PDFs");
+assert.equal(distPdfs.length, 32, "the build must retain eight stable, twelve modern and twelve Signature V1 PDFs");
 assert.ok([...publicPdfs, ...distPdfs].every((path) => !path.toLowerCase().includes("print-safe")));
+
+for (const sheet of productSheets) {
+  const family = sheet.selectionProfile.category === "flower" ? "flowers" : "resins";
+  const source = join(resolve("docs/product-sheets/production-signature-v1-2026-10-07"), family, sheet.slug);
+  const pdf = join(source, "print", `verdanza-${sheet.slug}-signature-v1-standard.pdf`);
+  assert.ok(existsSync(pdf), `${sheet.slug}: Signature V1 standard missing`);
+  assert.equal(sheet.pdfUrl, `/fiches-produits/${sheet.slug}/verdanza-${sheet.slug}-signature-v1.pdf`);
+  assert.equal(sheet.previewUrl, `/images/fiches-produits/signature-v1/${sheet.slug}-signature-v1-640.webp`);
+  for (const root of [publicDir, distDir]) {
+    const versioned = join(root, "fiches-produits", sheet.slug, `verdanza-${sheet.slug}-signature-v1.pdf`);
+    assert.equal(sha256(versioned), sha256(pdf), `${sheet.slug}: Signature V1 PDF copy differs`);
+    for (const width of [320, 640]) {
+      const webp = join(root, "images/fiches-produits/signature-v1", `${sheet.slug}-signature-v1-${width}.webp`);
+      assert.ok(existsSync(webp), `${sheet.slug}: Signature V1 ${width}px WebP missing`);
+      assert.equal(sha256(webp), sha256(join(source, "previews", `${sheet.slug}-signature-v1-${width}.webp`)), `${sheet.slug}: Signature V1 ${width}px WebP copy differs`);
+      const metadata = await sharp(webp).metadata();
+      assert.equal(metadata.format, "webp");
+      assert.equal(metadata.width, width);
+      assert.equal(metadata.height, width * 1.25);
+    }
+  }
+}
 
 const routeHtml = readFileSync(join(distDir, "fiches-produits.html"), "utf8");
 assert.match(routeHtml, /<h1[^>]*>Fiches produits<\/h1>/i);
 assert.match(routeHtml, /<link[^>]+rel=["']canonical["'][^>]+href=["']https:\/\/verdanza\.fr\/fiches-produits["']/i);
 assert.equal(metaContent(routeHtml, "robots"), "noindex,follow");
 assert.match(routeHtml, /À venir/i);
+assert.doesNotMatch(routeHtml, /modern-20261007\.(?:pdf|webp)/i);
 assert.equal([...routeHtml.matchAll(/href=["'][^"']+\.pdf["']/gi)].length, 10, "the prerendered page must expose six current flower PDFs and four planned documentary PDFs");
 assert.doesNotMatch(routeHtml, /"@type"\s*:\s*"Product"/i);
 
 const sitemap = readFileSync(join(distDir, "sitemap.xml"), "utf8");
 assert.doesNotMatch(sitemap, /fiches-produits/i);
 assert.doesNotMatch(sitemap, /\.pdf(?:<|$)/i);
+const signatureQa = JSON.parse(readFileSync(resolve("docs/product-sheets/production-signature-v1-2026-10-07/SIGNATURE-V1-QA.json"), "utf8")) as {
+  status: string;
+  products: Array<{ slug: string; source_photo: string; source_photo_sha256: string }>;
+};
+assert.equal(signatureQa.status, "PASS");
+assert.equal(signatureQa.products.length, 12);
+const golden = signatureQa.products.find((product) => product.slug === "golden-static");
+assert.ok(golden);
+assert.equal(golden.source_photo, "public/Fiche produit/Golden static/Composition-ezgif.com-resize.webp");
+assert.equal(golden.source_photo_sha256, "8cc588388bd397e14ac8f02e025737109332a5ad0eeb6a8b80cbe7d16e3f2436");
+assert.equal(sha256(resolve(golden.source_photo)), golden.source_photo_sha256, "Golden Static must use the approved full-product source photograph");
 const vercel = JSON.parse(readFileSync(resolve("vercel.json"), "utf8")) as { headers?: Array<{ source?: string; headers?: Array<{ key?: string; value?: string }> }> };
 assert.ok(vercel.headers?.some((rule) => rule.source === "/fiches-produits/(.*)" && rule.headers?.some((header) => header.key?.toLowerCase() === "x-robots-tag" && header.value === "noindex")));
 

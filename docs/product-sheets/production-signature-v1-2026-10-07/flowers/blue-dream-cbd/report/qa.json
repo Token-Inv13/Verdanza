@@ -1,0 +1,241 @@
+{
+  "name": "Blue Dream",
+  "slug": "blue-dream-cbd",
+  "category": "flower",
+  "availability": "available",
+  "intensity": "doux",
+  "source_json_sha256": "42c58a86a43ade3ed2dd2cffc6a05139ef83b966d7b271631b295a4948317732",
+  "source_photo": "public/Fiche produit/Blue Dream/bl.webp",
+  "source_photo_sha256": "65f9eb1d3d9a029abde6c71128f342701f1e13f6a7c05c655594e8dc67d93b7e",
+  "effective_photo_ppi": 207.3,
+  "geometry": {
+    "front": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "FLEUR / VERDANZA",
+          143,
+          111,
+          424,
+          136
+        ],
+        [
+          "Blue Dream",
+          140,
+          222,
+          775,
+          325
+        ],
+        [
+          "Citron · Pin · Fruit doux",
+          143,
+          1445,
+          573,
+          1475
+        ],
+        [
+          "INTENSITÉ / DOUCE",
+          143,
+          1534,
+          456,
+          1566
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "back": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "FICHE PRODUIT / FLEUR",
+          143,
+          111,
+          443,
+          135
+        ],
+        [
+          "Blue Dream",
+          140,
+          223,
+          742,
+          321
+        ],
+        [
+          "01",
+          142,
+          485,
+          203,
+          518
+        ],
+        [
+          "PROFIL AROMATIQUE",
+          282,
+          502,
+          623,
+          525
+        ],
+        [
+          "Un profil frais associant citron, pin",
+          282,
+          580,
+          1111,
+          641
+        ],
+        [
+          "et une touche fruitée douce.",
+          282,
+          660,
+          931,
+          706
+        ],
+        [
+          "Citron · Pin · Fruit doux",
+          282,
+          796,
+          777,
+          836
+        ],
+        [
+          "02",
+          142,
+          1015,
+          209,
+          1049
+        ],
+        [
+          "INTENSITÉ",
+          282,
+          1032,
+          448,
+          1060
+        ],
+        [
+          "Douce",
+          277,
+          1091,
+          527,
+          1156
+        ],
+        [
+          "03",
+          142,
+          1255,
+          208,
+          1308
+        ],
+        [
+          "ASPECT",
+          282,
+          1272,
+          407,
+          1293
+        ],
+        [
+          "Compacte · Résineuse · Soigneusement",
+          282,
+          1331,
+          1040,
+          1370
+        ],
+        [
+          "manucurée",
+          282,
+          1388,
+          498,
+          1419
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "web": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "Blue Dream",
+          65,
+          559,
+          438,
+          622
+        ],
+        [
+          "Citron · Pin · Fruit doux",
+          66,
+          652,
+          361,
+          673
+        ],
+        [
+          "DOUCE",
+          66,
+          713,
+          156,
+          730
+        ]
+      ]
+    },
+    "front_title_size_px": 139,
+    "back_title_size_px": 132,
+    "web_title_size_px": 82,
+    "description_lines": 2
+  },
+  "standard": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 4,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": true,
+    "full_page_raster": false
+  },
+  "print_safe": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 0,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": false,
+    "full_page_raster": false
+  },
+  "standard_sha256": "380ee51bfda0de456e67431bcdb2b29e08f78943edf73e07d196ef4e8ac46b78",
+  "print_safe_sha256": "a1d0bd9dbe4aae1c626d3e50271fa90fceff41086e4a72e86d25fcb13ca74124",
+  "web_320_bytes": 18140,
+  "web_640_bytes": 58100,
+  "web_320_sha256": "4ddfa464b0300db84d86dfc692c1745670ba74104218fe041ba568d25c2bf0a4",
+  "web_640_sha256": "333c1078921e14035759291a7d906a4115aa0fd9244d39f6d0add80e4727ad6e",
+  "reference": {
+    "front_png_sha256": "100ef1499a2fbbe95152862a9a714a306b4ee7cf501b1845dbfe91957a6c7d47",
+    "back_png_sha256": "5f29c9707e21e31b0e7b420c7553aceebf8e0a64f19cfe49da42c355da2b072d",
+    "web_640_sha256": "333c1078921e14035759291a7d906a4115aa0fd9244d39f6d0add80e4727ad6e",
+    "pixel_difference": 0,
+    "pdf_front_mae_0_255": 3.66,
+    "pdf_back_mae_0_255": 6.01
+  }
+}

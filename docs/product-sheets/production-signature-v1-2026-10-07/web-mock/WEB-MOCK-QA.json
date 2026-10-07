@@ -1,0 +1,24 @@
+[
+  {
+    "width": 390,
+    "categories": [
+      "flower",
+      "resin"
+    ],
+    "previews": 12,
+    "pdfs": 12,
+    "horizontalOverflow": 0,
+    "browserErrors": []
+  },
+  {
+    "width": 1280,
+    "categories": [
+      "flower",
+      "resin"
+    ],
+    "previews": 12,
+    "pdfs": 12,
+    "horizontalOverflow": 0,
+    "browserErrors": []
+  }
+]

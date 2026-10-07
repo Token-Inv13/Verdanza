@@ -1,0 +1,227 @@
+{
+  "name": "Harlequin Greenhouse",
+  "slug": "harlequin-greenhouse",
+  "category": "flower",
+  "availability": "available",
+  "intensity": "doux",
+  "source_json_sha256": "c1a9eaa3a9207a2d4dbf2d0f4eb93f0c06e000c5aeca26b74605532bb3cbcef8",
+  "source_photo": "public/Fiche produit/Harlequin (sous-serre)/harlequin_pile.webp",
+  "source_photo_sha256": "bc220070ac764abe1fdd300d6b56ee269a11efff89552b3e076234b3b39cb040",
+  "effective_photo_ppi": 207.3,
+  "geometry": {
+    "front": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "FLEUR / VERDANZA",
+          143,
+          111,
+          424,
+          136
+        ],
+        [
+          "Harlequin Greenhouse",
+          140,
+          222,
+          1133,
+          336
+        ],
+        [
+          "Musc · Sous-bois · Notes torréfiées",
+          143,
+          1445,
+          819,
+          1476
+        ],
+        [
+          "INTENSITÉ / DOUCE",
+          143,
+          1534,
+          456,
+          1566
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "back": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "FICHE PRODUIT / FLEUR",
+          143,
+          111,
+          443,
+          135
+        ],
+        [
+          "Harlequin Greenhouse",
+          140,
+          223,
+          1133,
+          337
+        ],
+        [
+          "01",
+          142,
+          485,
+          203,
+          518
+        ],
+        [
+          "PROFIL AROMATIQUE",
+          282,
+          502,
+          623,
+          525
+        ],
+        [
+          "Un profil profond et naturel, entre",
+          282,
+          580,
+          1098,
+          642
+        ],
+        [
+          "musc, sous-bois et notes torréfiées.",
+          282,
+          660,
+          1085,
+          717
+        ],
+        [
+          "Musc · Sous-bois · Notes torréfiées",
+          282,
+          796,
+          986,
+          837
+        ],
+        [
+          "02",
+          142,
+          1015,
+          209,
+          1049
+        ],
+        [
+          "INTENSITÉ",
+          282,
+          1032,
+          448,
+          1060
+        ],
+        [
+          "Douce",
+          277,
+          1091,
+          527,
+          1156
+        ],
+        [
+          "03",
+          142,
+          1255,
+          208,
+          1308
+        ],
+        [
+          "ASPECT",
+          282,
+          1272,
+          407,
+          1293
+        ],
+        [
+          "Têtes mûres · Notes boisées",
+          282,
+          1331,
+          830,
+          1362
+        ],
+        [
+          "verdanza.fr",
+          193,
+          1612,
+          346,
+          1634
+        ]
+      ]
+    },
+    "web": {
+      "text_overflow": 0,
+      "clipping": 0,
+      "collision": 0,
+      "text_boxes": [
+        [
+          "Harlequin Greenhouse",
+          65,
+          559,
+          620,
+          622
+        ],
+        [
+          "Musc · Sous-bois · Notes torréfiées",
+          66,
+          652,
+          517,
+          673
+        ],
+        [
+          "DOUCE",
+          66,
+          713,
+          156,
+          730
+        ]
+      ]
+    },
+    "front_title_size_px": 113,
+    "back_title_size_px": 113,
+    "web_title_size_px": 63,
+    "description_lines": 2
+  },
+  "standard": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 4,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": true,
+    "full_page_raster": false
+  },
+  "print_safe": {
+    "pages": 2,
+    "boxes": "PASS",
+    "fonts": 0,
+    "type3": 0,
+    "raster_images_per_page": [
+      1,
+      0
+    ],
+    "poppler": "PASS",
+    "pdfium": "PASS",
+    "extractable_text": false,
+    "full_page_raster": false
+  },
+  "standard_sha256": "721b120e37d7bd6261aa2d8b2e896b47fd4b5aa37b02cdd4519985a8f3089b80",
+  "print_safe_sha256": "fcadd70466a9956b9870c2cc85cf4229defa639265e09732e2f34991f292fc88",
+  "web_320_bytes": 13430,
+  "web_640_bytes": 40594,
+  "web_320_sha256": "1fe6d3dea32ddeb8d1e01a39c7d6685036843f59e0d42881db9c2950ab04b1cd",
+  "web_640_sha256": "1f3298156288302327ddb5fc71e8f8bb58db30759bafb54fc4224042fc381fa2",
+  "reference": null
+}

@@ -32,7 +32,8 @@ for (const sheet of availableProductSheets) {
   );
   const expectedCategory = product.category === "flowers" ? "flower" : "resin";
   assert.equal(sheet.selectionProfile.category, expectedCategory, `${sheet.productId}: wrong category`);
-  assert.equal(sheet.pdfUrl, `/fiches-produits/${product.slug}/verdanza-${product.slug}-modern-20261007.pdf`, `${sheet.productId}: wrong PDF URL`);
+  assert.equal(sheet.pdfUrl, `/fiches-produits/${product.slug}/verdanza-${product.slug}-signature-v1.pdf`, `${sheet.productId}: wrong PDF URL`);
+  assert.equal(sheet.previewUrl, `/images/fiches-produits/signature-v1/${product.slug}-signature-v1-640.webp`, `${sheet.productId}: wrong preview URL`);
   assert.ok(existsSync(resolve("public", sheet.pdfUrl.slice(1))), `${sheet.productId}: active PDF is missing`);
   assert.ok(existsSync(resolve("public", sheet.previewUrl.slice(1))), `${sheet.productId}: active preview is missing`);
 }

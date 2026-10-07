@@ -1,2 +1,3 @@
 public/fiches-produits/*/*.pdf -diff
 docs/product-sheets/**/*.pdf -diff
+docs/product-sheets/production-signature-v1-2026-10-07/** -text whitespace=cr-at-eol

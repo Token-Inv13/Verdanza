@@ -8,6 +8,8 @@ import {
   type ProductSheetCategory,
 } from "../../data/productSheets";
 import { trackEvent } from "../../lib/analytics";
+import { SignaturePreview } from "./SignaturePreview";
+import { hasSignaturePreview } from "./signatureAssets";
 
 const categoryOptions: Array<{ category: ProductSheetCategory; label: string }> = [
   { category: "flower", label: "Fleurs" },
@@ -215,7 +217,29 @@ export function PlannedProductSheets({ library = plannedProductSheets }: { libra
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-planned-product-sheets>
-        {library.map((sheet) => (
+        {library.map((sheet) => hasSignaturePreview(sheet.previewUrl) ? (
+          <article key={sheet.slug} className="signature-v1-card overflow-hidden rounded-xl border border-champagne/35 bg-ivory" data-signature-v1-card={sheet.slug}>
+            <h4 className="sr-only">{sheet.name}</h4>
+            <SignaturePreview
+              slug={sheet.slug}
+              previewUrl={sheet.previewUrl}
+              alt={`${sheet.name}, ${sheet.aromas.join(" · ")}, intensité ${productSheetIntensityLabels[sheet.selectionProfile.intensity]}`}
+              className="aspect-[4/5] w-full object-cover"
+            />
+            <div className="flex min-h-16 items-center justify-between gap-2 px-3 py-2">
+              <span className="rounded-full border border-champagne/45 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-forest">À venir</span>
+              <a
+                href={sheet.pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-forest px-3 py-2 text-xs font-semibold text-ivory focus:outline-none focus:ring-2 focus:ring-champagne focus:ring-offset-2"
+                aria-label={`Voir la fiche à venir ${sheet.name} (PDF, nouvel onglet)`}
+              >
+                Voir la fiche <ExternalLink aria-hidden="true" size={14} />
+              </a>
+            </div>
+          </article>
+        ) : (
           <article key={sheet.slug} className="rounded-xl border border-champagne/35 bg-cream/55 p-4 shadow-sm">
             <div className="mb-4 aspect-[111/154] overflow-hidden rounded-lg border border-forest/10 bg-ivory">
               <img
@@ -268,6 +292,39 @@ function ProductSheetCard({
   position: number;
   total: number;
 }) {
+  if (hasSignaturePreview(sheet.previewUrl)) {
+    return (
+      <article
+        className={`product-sheet-card-v2 signature-v1-card group min-w-0 overflow-hidden rounded-xl border bg-ivory ${active ? "is-active border-champagne/45" : "border-forest/10"}`}
+        data-product-sheet-card={sheet.slug}
+        data-signature-v1-card={sheet.slug}
+        data-active={active ? "true" : "false"}
+        aria-label={`${sheet.name}, fiche ${position} sur ${total}`}
+      >
+        <h3 className="sr-only">{sheet.name}</h3>
+        <SignaturePreview
+          slug={sheet.slug}
+          previewUrl={sheet.previewUrl}
+          alt={`${sheet.name}, ${sheet.aromas.join(" · ")}, intensité ${productSheetIntensityLabels[sheet.selectionProfile.intensity]}`}
+          className="aspect-[4/5] w-full object-cover"
+        />
+        <div className="flex min-h-16 items-center justify-between gap-3 border-t border-forest/10 px-4 py-2">
+          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-forest/55">Fiche produit</span>
+          <a
+            href={sheet.pdfUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-forest px-3 py-2 text-sm font-semibold text-ivory focus:outline-none focus:ring-2 focus:ring-champagne focus:ring-offset-2"
+            aria-label={`Voir la fiche ${sheet.name} (PDF, nouvel onglet)`}
+            onClick={() => trackEvent("product_sheet_card_opened", { product_slug: sheet.slug, product_category: sheet.selectionProfile.category })}
+          >
+            Voir la fiche <ExternalLink aria-hidden="true" size={15} />
+          </a>
+        </div>
+      </article>
+    );
+  }
+
   return (
     <article
       className={`product-sheet-card-v2 group min-w-0 overflow-hidden rounded-xl border bg-ivory ${active ? "is-active border-champagne/45" : "border-forest/10"}`}
