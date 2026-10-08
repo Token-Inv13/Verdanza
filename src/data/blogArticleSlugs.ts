@@ -1,4 +1,5 @@
 export const publishedBlogArticleSlugs = [
+  "analyse-cbd-laboratoire-echantillon-rapport",
   "trichomes-fleurs-cbd-observation",
   "incertitude-mesure-arrondis-analyse-cbd",
   "emballage-cbd-contenant-fermeture",

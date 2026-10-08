@@ -335,6 +335,27 @@ export const staticImageVariants: Record<string, ResponsiveImageVariant> = {
     width: 1774,
     height: 440,
   },
+  "/images/blog/analyse-cbd-laboratoire-echantillon-rapport-editorial-1x1.webp": {
+    src: "/images/blog/analyse-cbd-laboratoire-echantillon-rapport-editorial-1x1.webp",
+    srcSet: "/images/blog/analyse-cbd-laboratoire-echantillon-rapport-editorial-1x1.webp 800w",
+    sizes: "(min-width: 1024px) 420px, 92vw",
+    width: 800,
+    height: 800,
+  },
+  "/images/blog/analyse-cbd-laboratoire-echantillon-rapport-editorial-4x3.webp": {
+    src: "/images/blog/analyse-cbd-laboratoire-echantillon-rapport-editorial-4x3.webp",
+    srcSet: "/images/blog/analyse-cbd-laboratoire-echantillon-rapport-editorial-4x3.webp 1040w",
+    sizes: "(min-width: 1024px) 520px, 92vw",
+    width: 1040,
+    height: 780,
+  },
+  "/images/blog/analyse-cbd-laboratoire-echantillon-rapport-editorial-16x9.webp": {
+    src: "/images/blog/analyse-cbd-laboratoire-echantillon-rapport-editorial-16x9.webp",
+    srcSet: "/images/blog/analyse-cbd-laboratoire-echantillon-rapport-editorial-16x9.webp 1600w",
+    sizes: "100vw",
+    width: 1600,
+    height: 900,
+  },
   "/images/blog/trichomes-fleurs-cbd-observation-editorial-1x1.webp": {
     src: "/images/blog/trichomes-fleurs-cbd-observation-editorial-1x1.webp",
     srcSet: "/images/blog/trichomes-fleurs-cbd-observation-editorial-1x1.webp 800w",

@@ -6,6 +6,339 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "analyse-cbd-laboratoire-echantillon-rapport",
+    title: "Analyse CBD : vérifier le laboratoire, l'échantillon et le rapport",
+    seoTitle: "Analyse CBD : vérifier rapport et échantillon | Verdanza",
+    description:
+      "Apprenez à vérifier l'identité d'un rapport d'analyse CBD, son laboratoire, l'échantillon, les dates et la version avant de lire les résultats.",
+    excerpt:
+      "Avant de comparer des taux, il faut s'assurer que le rapport est complet, à jour et relié au bon échantillon comme au bon lot.",
+    category: "Guide qualité",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-10-08T09:12:00+02:00",
+    dateModified: "2026-10-08T09:12:00+02:00",
+    readingTime: "8 min",
+    status: "published",
+    images: {
+      square: "/images/blog/analyse-cbd-laboratoire-echantillon-rapport-editorial-1x1.webp",
+      landscape: "/images/blog/analyse-cbd-laboratoire-echantillon-rapport-editorial-4x3.webp",
+      wide: "/images/blog/analyse-cbd-laboratoire-echantillon-rapport-editorial-16x9.webp",
+    },
+    relatedSlugs: [
+      "comment-lire-analyse-cbd",
+      "etiquette-numero-lot-cbd-tracabilite",
+      "analyse-cbd-nd-lod-loq",
+      "incertitude-mesure-arrondis-analyse-cbd",
+    ],
+    links: [
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/comment-lire-analyse-cbd",
+        label: "Lire les résultats d'une analyse CBD",
+      },
+      {
+        to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+        label: "Relier l'analyse au numéro de lot",
+      },
+      {
+        to: "/blog/analyse-cbd-nd-lod-loq",
+        label: "Comprendre ND, LOD et LOQ",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Un bulletin d'analyse ne se résume pas à un tableau de taux. Il doit
+            d'abord permettre d'identifier le laboratoire, le document et
+            l'échantillon examiné. Ces repères servent à vérifier que les
+            résultats consultés correspondent bien au produit et au lot
+            concernés.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Une mise en page soignée, un logo ou un QR code ne suffisent pas à
+            prouver qu'un rapport est authentique ou qu'il concerne le bon lot.
+            Il faut croiser plusieurs informations présentes sur le document.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "identifier-rapport",
+        text: "Commencer par identifier le rapport",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La première page doit fournir assez d'éléments pour distinguer le
+            rapport d'un autre document. Leur emplacement varie selon le
+            laboratoire : en-tête, pied de page, cartouche ou zone réservée à
+            l'échantillon.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Repères utiles pour identifier un rapport d'analyse CBD.",
+          headers: ["Repère", "Ce qu'il permet de vérifier", "Point d'attention"],
+          rows: [
+            [
+              "Nom du laboratoire",
+              "L'entité qui a émis le document et ses coordonnées.",
+              "Ne pas se fier uniquement à un logo isolé.",
+            ],
+            [
+              "Référence du rapport",
+              "L'identifiant propre au document ou au dossier d'analyse.",
+              "La même référence doit être cohérente sur toutes les pages.",
+            ],
+            [
+              "Nombre de pages",
+              "Le périmètre complet du rapport consulté.",
+              "Une page manquante peut contenir la méthode, les notes ou une conclusion.",
+            ],
+            [
+              "Émetteur ou signataire",
+              "La personne ou le service qui a validé le rapport.",
+              "Sa présence ne remplace pas la vérification de la référence du document.",
+            ],
+            [
+              "Version ou révision",
+              "L'état du document lorsqu'une correction a été publiée.",
+              "Une version révisée peut remplacer un rapport antérieur.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "relier-echantillon-produit",
+        text: "Relier l'échantillon au bon produit et au bon lot",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le laboratoire attribue souvent son propre code à l'échantillon. Ce
+            code n'est pas toujours identique au numéro de lot commercial. Il
+            faut donc rechercher la désignation du produit, la référence fournie
+            par le client et, lorsqu'il est indiqué, le numéro de lot repris sur
+            l'étiquette.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le guide sur l'{" "}
+            <Link to="/blog/etiquette-numero-lot-cbd-tracabilite">
+              étiquette et le numéro de lot CBD
+            </Link>{" "}
+            détaille cette correspondance. Une ressemblance de nom ou de variété
+            ne suffit pas lorsque deux lots distincts existent.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "repérer le code interne attribué par le laboratoire ;",
+          "chercher la désignation exacte de l'échantillon ;",
+          "comparer le numéro de lot du rapport à celui de l'étiquette ;",
+          "vérifier la forme analysée : fleur, résine, extrait ou autre matrice ;",
+          "signaler toute différence de référence avant d'interpréter les résultats.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "distinguer-dates",
+        text: "Distinguer les dates du document",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Plusieurs dates peuvent figurer sur un même rapport. Elles décrivent
+            des étapes différentes et ne doivent pas être confondues avec une
+            date de récolte, de fabrication ou de conditionnement qui ne serait
+            pas explicitement mentionnée.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Dates fréquemment rencontrées sur un rapport.",
+          headers: ["Date", "Ce qu'elle décrit", "Ce qu'elle ne prouve pas seule"],
+          rows: [
+            [
+              "Réception de l'échantillon",
+              "L'arrivée du prélèvement au laboratoire.",
+              "La date de récolte ou de fabrication du produit.",
+            ],
+            [
+              "Début ou période d'analyse",
+              "Le moment où les essais ont été réalisés.",
+              "La date à laquelle le lot a été commercialisé.",
+            ],
+            [
+              "Émission du rapport",
+              "La publication du document par le laboratoire.",
+              "L'absence de version plus récente.",
+            ],
+            [
+              "Révision",
+              "La date d'une modification apportée au rapport.",
+              "La nature exacte du changement sans lire la note de révision.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "version-pages",
+        text: "Vérifier la version et toutes les pages",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Un rapport peut être corrigé après sa première émission. La version
+            la plus récente doit alors être lue avec sa note de révision. Avant
+            de conserver ou de partager un PDF, vérifiez que ses pages utilisent
+            la même référence, la même version et une numérotation continue.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "contrôler la référence dans l'en-tête ou le pied de chaque page ;",
+          "vérifier que le nombre total de pages annoncé est présent ;",
+          "repérer une mention de remplacement ou de révision ;",
+          "ne pas assembler des pages provenant de rapports différents ;",
+          "demander le fichier complet lorsqu'une capture d'écran ne montre qu'un extrait.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "perimetre-analyse",
+        text: "Lire le périmètre réel de l'analyse",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le rapport décrit les essais effectués sur l'échantillon reçu. Il ne
+            faut pas lui attribuer des contrôles qui ne figurent pas dans la liste
+            des paramètres. La méthode, l'unité, les limites de mesure et les
+            éventuelles notes encadrent chaque résultat.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "identifier précisément les cannabinoïdes ou autres paramètres recherchés ;",
+          "lire la méthode associée à chaque groupe de résultats ;",
+          "vérifier les unités et la base de calcul ;",
+          "tenir compte des mentions ND, LOD et LOQ ;",
+          "ne pas étendre un résultat à un autre produit ou à un autre lot.",
+        ],
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une fois le document identifié, le guide {" "}
+            <Link to="/blog/comment-lire-analyse-cbd">
+              comment lire une analyse CBD
+            </Link>{" "}
+            permet de parcourir les résultats. Les guides consacrés aux {" "}
+            <Link to="/blog/analyse-cbd-nd-lod-loq">mentions ND, LOD et LOQ</Link>{" "}
+            et à l'{" "}
+            <Link to="/blog/incertitude-mesure-arrondis-analyse-cbd">
+              incertitude de mesure
+            </Link>{" "}
+            apportent ensuite les repères nécessaires pour éviter une précision
+            excessive.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "authenticite-indices",
+        text: "Authenticité : croiser les indices sans se fier à un seul signe",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Certains rapports proposent un lien ou un QR code de vérification.
+            Avant de l'utiliser, contrôlez l'adresse de destination et vérifiez
+            qu'elle appartient bien au laboratoire indiqué. En l'absence de
+            vérification directe, demandez le PDF complet au vendeur et comparez
+            ses références avec celles du produit.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Un QR code peut conduire vers une copie ou vers un domaine sans lien
+            avec le laboratoire. Son existence est un moyen d'accès, pas une
+            preuve isolée d'authenticité.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "methode-verification",
+        text: "Une méthode simple en sept étapes",
+      },
+      {
+        type: "list",
+        items: [
+          "identifier le laboratoire et la référence du rapport ;",
+          "vérifier que toutes les pages et la version sont présentes ;",
+          "relier le code d'échantillon à la désignation du produit ;",
+          "comparer le numéro de lot avec celui de l'étiquette ;",
+          "distinguer réception, analyse, émission et éventuelle révision ;",
+          "lire le périmètre des essais avant les valeurs ;",
+          "demander une clarification lorsque deux références ne correspondent pas.",
+        ],
+      },
+      {
+        type: "links",
+        title: "Poursuivre la vérification d'une analyse CBD",
+        links: [
+          {
+            to: "/blog/comment-lire-analyse-cbd",
+            label: "Lire les résultats du rapport",
+          },
+          {
+            to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+            label: "Contrôler le numéro de lot",
+          },
+          {
+            to: "/qualite-conformite",
+            label: "Consulter les engagements qualité Verdanza",
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "trichomes-fleurs-cbd-observation",
     title: "Trichomes des fleurs CBD : ce que l'on peut réellement observer",
     seoTitle: "Trichomes des fleurs CBD : guide d'observation | Verdanza",

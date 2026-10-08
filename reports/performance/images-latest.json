@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-01T18:46:53.818Z",
+  "generatedAt": "2026-10-08T07:11:46.599Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -775,6 +775,31 @@
   ],
   "blogImages": [
     {
+      "articleSlug": "analyse-cbd-laboratoire-echantillon-rapport",
+      "articleTitle": "Analyse CBD : vérifier le laboratoire, l'échantillon et le rapport",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/analyse-cbd-laboratoire-echantillon-rapport-editorial-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 42270
+        },
+        {
+          "src": "/images/blog/analyse-cbd-laboratoire-echantillon-rapport-editorial-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 59324
+        },
+        {
+          "src": "/images/blog/analyse-cbd-laboratoire-echantillon-rapport-editorial-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 108682
+        }
+      ]
+    },
+    {
       "articleSlug": "trichomes-fleurs-cbd-observation",
       "articleTitle": "Trichomes des fleurs CBD : ce que l'on peut réellement observer",
       "artDirection": "verdanza-editorial",
@@ -1437,6 +1462,6 @@
     "productDetailBytes": 1718692,
     "staticSourceBytes": 2177258,
     "staticLargestBytes": 224006,
-    "blogImageBytes": 5600680
+    "blogImageBytes": 5810956
   }
 }

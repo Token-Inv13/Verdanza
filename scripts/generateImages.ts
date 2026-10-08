@@ -121,6 +121,10 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" | "packaging" }
 > = {
+  "analyse-cbd-laboratoire-echantillon-rapport": {
+    label: "Analyse CBD : laboratoire, échantillon et rapport",
+    kind: "analysis",
+  },
   "trichomes-fleurs-cbd-observation": {
     label: "Trichomes des fleurs CBD",
     sources: [
