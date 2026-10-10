@@ -39,9 +39,10 @@ for (const sheet of availableProductSheets) {
 }
 
 assert.deepEqual(plannedProductSheets.map((sheet) => sheet.slug), ["skittle-plus", "black-afghan", "ice-o-lator", "mousseux-skywalker"]);
-assert.ok(plannedProductSheets.every((sheet) => !products.some((product) => product.id === sheet.productId)), "planned sheets must remain outside the commercial catalogue");
+assert.ok(plannedProductSheets.every((sheet) => !availableProductSheets.some((available) => available.productId === sheet.productId)),
+  "planned sheets must remain outside the published sheet selector even if their products enter commerce");
 
-console.log("Catalogue/product-sheet consistency passed: 8 shop-linked sheets and 4 documentary planned sheets kept outside commerce.");
+console.log("Catalogue/product-sheet consistency passed: 8 shop-linked sheets and 4 documentary planned sheets kept outside the published sheet selector.");
 
 function normalizeName(value: string) {
   return value.normalize("NFKC").trim().replace(/\s+CBD$/i, "").toLocaleLowerCase("fr");

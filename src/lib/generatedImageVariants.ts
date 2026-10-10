@@ -251,6 +251,70 @@ export const productImageVariants: Record<string, ProductImageVariantSet> = {
       width: 600,
       height: 600,
     },
+  },
+  "/images/products/skittlez-plus-source.webp": {
+    card: {
+      src: "/images/products/skittlez-plus-card-640.webp",
+      srcSet: "/images/products/skittlez-plus-card-320.webp 320w, /images/products/skittlez-plus-card-640.webp 640w",
+      sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
+      width: 640,
+      height: 640,
+    },
+    detail: {
+      src: "/images/products/skittlez-plus-detail.webp",
+      srcSet: "/images/products/skittlez-plus-detail.webp 713w",
+      sizes: "(min-width: 1024px) 45vw, 92vw",
+      width: 713,
+      height: 713,
+    },
+  },
+  "/images/products/black-afghan-source.webp": {
+    card: {
+      src: "/images/products/black-afghan-card-640.webp",
+      srcSet: "/images/products/black-afghan-card-320.webp 320w, /images/products/black-afghan-card-640.webp 600w",
+      sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
+      width: 600,
+      height: 600,
+    },
+    detail: {
+      src: "/images/products/black-afghan-detail.webp",
+      srcSet: "/images/products/black-afghan-detail.webp 600w",
+      sizes: "(min-width: 1024px) 45vw, 92vw",
+      width: 600,
+      height: 600,
+    },
+  },
+  "/images/products/ice-o-lator-source.webp": {
+    card: {
+      src: "/images/products/ice-o-lator-card-640.webp",
+      srcSet: "/images/products/ice-o-lator-card-320.webp 320w, /images/products/ice-o-lator-card-640.webp 600w",
+      sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
+      width: 600,
+      height: 600,
+    },
+    detail: {
+      src: "/images/products/ice-o-lator-detail.webp",
+      srcSet: "/images/products/ice-o-lator-detail.webp 600w",
+      sizes: "(min-width: 1024px) 45vw, 92vw",
+      width: 600,
+      height: 600,
+    },
+  },
+  "/images/products/mousseux-skywalker-source.webp": {
+    card: {
+      src: "/images/products/mousseux-skywalker-card-640.webp",
+      srcSet: "/images/products/mousseux-skywalker-card-320.webp 320w, /images/products/mousseux-skywalker-card-640.webp 640w",
+      sizes: "(min-width: 1280px) 280px, (min-width: 640px) 45vw, 92vw",
+      width: 640,
+      height: 640,
+    },
+    detail: {
+      src: "/images/products/mousseux-skywalker-detail.webp",
+      srcSet: "/images/products/mousseux-skywalker-detail.webp 713w",
+      sizes: "(min-width: 1024px) 45vw, 92vw",
+      width: 713,
+      height: 713,
+    },
   }
 };
 

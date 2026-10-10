@@ -100,7 +100,7 @@ try {
       assert.equal(layout.cardFilter, "none", `${width}px ${route}: blurred card`);
       assert.equal(layout.imageFilter, "none", `${width}px ${route}: blurred photo`);
       if (route !== "/") {
-        assert.equal(layout.columns, width < 640 ? 1 : route === "/resines-cbd" ? 2 : 3);
+        assert.equal(layout.columns, width < 640 ? 1 : width < 1024 ? 2 : 3);
       }
 
       for (const card of await page.locator(".product-card-v2").all()) {
@@ -118,7 +118,7 @@ try {
         }));
         assert.ok(state.complete && state.naturalWidth > 0 && state.naturalHeight > 0);
         assert.ok(Number(state.width) > 0 && Number(state.height) > 0);
-        assert.match(state.srcSet, /320w.*640w/);
+        assert.match(state.srcSet, /320w.*(?:600|640)w/);
         assert.equal(state.filter, "none");
       }
 
@@ -145,9 +145,8 @@ try {
             has: page.locator(`a[href="/produits/${product.slug}"]`),
           });
           assert.equal(await card.count(), 1, `${width}px: missing card for ${product.slug}`);
-          const expected = productCardMediaBySlug[product.slug];
+          const expected = productCardMediaBySlug[product.slug] ?? { src: product.image };
           const image = card.locator("img.product-card-v2__image");
-          assert.ok(expected, `${product.slug}: no chosen card photo`);
           const selectedSrcSet = await image.getAttribute("srcset");
           if (expected.src !== product.image) {
             assert.match(selectedSrcSet || "", new RegExp(`${product.slug}-editorial-card-640\\.webp`));

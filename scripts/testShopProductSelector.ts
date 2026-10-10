@@ -26,16 +26,15 @@ const ids = (criteria: ProductDiscoveryCriteria) =>
 
 const initial = createInitialProductDiscoveryCriteria();
 
-assert.equal(products.length, 7, "the selector fixture must use the seven active catalog products");
-assert.equal(ids(initial).length, 7, "initial state must show the complete active catalog");
-assert.equal(ids({ ...initial, category: "flowers" }).length, 5, "Fleurs must keep five products");
-assert.equal(ids({ ...initial, category: "resins" }).length, 2, "Résines must keep two products");
+assert.equal(products.length, 11, "the selector fixture must use the eleven active catalog products");
+assert.equal(ids(initial).length, 11, "initial state must show the complete active catalog");
+assert.equal(ids({ ...initial, category: "flowers" }).length, 6, "Fleurs must contain six products");
+assert.equal(ids({ ...initial, category: "resins" }).length, 5, "Résines must contain five products");
 
-assert.deepEqual(ids({ ...initial, intensity: "doux" }), ids(initial));
-assert.deepEqual(ids({ ...initial, intensity: "moyen" }), []);
-assert.deepEqual(ids({ ...initial, intensity: "fort" }), []);
-assert.deepEqual([...getAvailableProductIntensities(products)], ["doux"]);
-assert.ok(products.every((product) => resolveProductCardPresentation(product).intensityLabel === "Doux"));
+assert.equal(ids({ ...initial, intensity: "doux" }).length, 7);
+assert.deepEqual(ids({ ...initial, intensity: "moyen" }), ["resin-black-afghan", "resin-ice-o-lator"]);
+assert.deepEqual(ids({ ...initial, intensity: "fort" }), ["flower-skittlez-plus", "resin-mousseux-skywalker"]);
+assert.deepEqual([...getAvailableProductIntensities(products)], ["doux", "moyen", "fort"]);
 const blueDream = getLocalProducts(false).find((product) => product.slug === "blue-dream-cbd");
 assert.ok(blueDream, "Blue Dream is published in Firestore despite its inactive static fallback");
 assert.equal(resolveProductCardPresentation(blueDream).intensity, "doux");
@@ -44,7 +43,7 @@ assert.equal(resolveProductIntensity(["Puissant"], "unrelated-future-product"), 
 
 assert.deepEqual(
   ids({ ...initial, aromas: ["fruite"] }),
-  ["flower-mandarine-cbd", "flower-mango-haze-cbd"],
+  ["flower-mandarine-cbd", "flower-mango-haze-cbd", "flower-skittlez-plus", "resin-black-afghan", "resin-ice-o-lator"],
   "a single aroma family must filter the active catalog",
 );
 assert.deepEqual(
@@ -53,18 +52,22 @@ assert.deepEqual(
     "flower-mandarine-cbd",
     "flower-mango-haze-cbd",
     "flower-petites-tetes-og-kush",
+    "flower-skittlez-plus",
+    "resin-black-afghan",
+    "resin-ice-o-lator",
+    "resin-mousseux-skywalker",
   ],
   "multiple aroma families must use OR semantics",
 );
 assert.deepEqual(
   ids({ ...initial, category: "resins", intensity: "fort" }),
-  [],
-  "a non-matching intensity must not misclassify a published resin",
+  ["resin-mousseux-skywalker"],
+  "the strong resin must be selected without changing its category",
 );
 assert.deepEqual(
   ids({ ...initial, category: "resins", intensity: "moyen" }),
-  [],
-  "an impossible combination must expose the zero-result state",
+  ["resin-black-afghan", "resin-ice-o-lator"],
+  "medium resins must be selected exactly",
 );
 assert.deepEqual(
   createInitialProductDiscoveryCriteria(),
@@ -99,7 +102,7 @@ assert.equal(
 const availableAromas = [...getAvailableProductAromaFamilies(products)].sort();
 assert.deepEqual(
   availableAromas,
-  ["agrumes", "boise", "fruite", "sucre"],
+  ["agrumes", "boise", "epice", "fruite", "sucre", "terreux"],
   "the shop must propose only canonical families present in active products",
 );
 
@@ -119,5 +122,5 @@ assert.ok(
 );
 
 console.log(
-  "Shop selector tests passed: seven static and eight published intensity profiles, categories, aroma OR, filters, reset, zero results and out-of-stock behavior.",
+  "Shop selector tests passed: eleven active intensity profiles, categories, aroma OR, filters, reset and out-of-stock behavior.",
 );

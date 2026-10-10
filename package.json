@@ -39,6 +39,8 @@
     "test:admin-settings-ui": "node --import tsx scripts/testAdminSettingsUi.ts",
     "test:admin-read-states-ui": "node --import tsx scripts/testAdminReadStatesUi.ts",
     "test:catalog": "node --import tsx scripts/testProductAvailability.ts",
+    "test:prepared-shop-products": "node --import tsx scripts/testPreparedShopProducts.ts",
+    "upsert:shop-four-products": "node --import tsx scripts/upsertShopFourProducts.ts",
     "test:product-catalog-fallback": "node --import tsx scripts/testProductCatalogFallback.ts",
     "test:public-catalog-runtime": "node --import tsx scripts/testPublicAuditCatalog.ts",
     "test:product-catalog-prerender": "node --import tsx scripts/testProductCatalogPrerender.ts",

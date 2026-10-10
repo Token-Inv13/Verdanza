@@ -11,6 +11,10 @@ const products = [
   ["petites-tetes-og-kush", "OG Kush"],
   ["golden-static", "Golden Static"],
   ["supreme-50-cbd", "Suprême 50 % CBD"],
+  ["skittlez-plus", "Skittlez Plus"],
+  ["black-afghan", "Black Afghan"],
+  ["ice-o-lator", "Ice-o-Lator"],
+  ["mousseux-skywalker", "Mousseux Skywalker"],
 ] as const;
 const server = await startAuditStaticServer();
 const browser = await chromium.launch({ headless: true });
@@ -26,6 +30,12 @@ try {
     assert.equal(response?.status(), 200, `${name}: prerendered route must return HTTP 200`);
     await desktopPage.locator("[data-product-page-v2]").waitFor();
     assert.equal(await desktopPage.locator("h1").innerText(), name);
+    if (["skittlez-plus", "black-afghan", "ice-o-lator", "mousseux-skywalker"].includes(slug)) {
+      const moleculeFact = desktopPage.locator("[data-product-editorial] dl > div").filter({ has: desktopPage.locator("dt", { hasText: "Molécule" }) });
+      assert.equal(await moleculeFact.count(), 1, `${name}: Molécule fact must be visible`);
+      assert.equal(await moleculeFact.locator("dd").innerText(), "THCX");
+      assert.doesNotMatch(await desktopPage.locator("[data-product-editorial]").innerText(), /THC THCX|THCX\s*\d+\s*%/i);
+    }
     assert.equal(await desktopPage.locator("[data-product-profile]").count(), 1);
     assert.ok((await desktopPage.locator("[data-product-aroma]").count()) <= 3);
     assert.ok((await desktopPage.locator("[data-product-aspect]").count()) <= 2);
@@ -143,7 +153,7 @@ try {
 }
 
 console.log(
-  "ProductPage V2 UI tests passed: seven prerendered products, SEO/JSON-LD, gallery keyboard switch, fail-closed formats, 390px/1280px layouts, reduced motion, crisp images and no overflow.",
+  "ProductPage V2 UI tests passed: eleven prerendered products, SEO/JSON-LD, gallery keyboard switch, fail-closed formats, 390px/1280px layouts, reduced motion, crisp images and no overflow.",
 );
 
 async function createContext(width: number, reducedMotion: "reduce" | "no-preference") {

@@ -41,6 +41,7 @@ export type Product = {
   cbgRate: string;
   cbnRate?: string;
   thcRate: string;
+  moleculeLabel?: string;
   origin: string;
   cultureType: CultureType;
   aromas: string[];

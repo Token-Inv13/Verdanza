@@ -19,15 +19,15 @@ const ids = (catalog: typeof products, criteria: ProductDiscoveryCriteria) =>
     .map((product) => product.id)
     .sort();
 
-assert.equal(products.length, 7, "category pages must use the seven active local products");
-assert.equal(flowers.length, 5, "the flower category must contain five active products");
-assert.equal(resins.length, 2, "the resin category must contain two active products");
+assert.equal(products.length, 11, "category pages must use the eleven active local products");
+assert.equal(flowers.length, 6, "the flower category must contain six active products");
+assert.equal(resins.length, 5, "the resin category must contain five active products");
 
 assert.deepEqual(Array.from(getAvailableProductIntensities(flowers, "flowers")), [
-  "doux",
+  "doux", "fort",
 ]);
 assert.deepEqual(Array.from(getAvailableProductIntensities(resins, "resins")), [
-  "doux",
+  "doux", "moyen", "fort",
 ]);
 assert.deepEqual(Array.from(getAvailableProductAromaFamilies(flowers, {
   category: "flowers",
@@ -36,11 +36,11 @@ assert.deepEqual(Array.from(getAvailableProductAromaFamilies(flowers, {
 assert.deepEqual(Array.from(getAvailableProductAromaFamilies(resins, {
   category: "resins",
   intensity: null,
-})), []);
+})), ["fruite", "agrumes", "sucre", "terreux", "epice", "boise"]);
 
 assert.deepEqual(
   ids(flowers, { category: "flowers", intensity: "doux", aromas: [] }),
-  flowers.map((product) => product.id).sort(),
+  flowers.filter((product) => product.id !== "flower-skittlez-plus").map((product) => product.id).sort(),
 );
 assert.deepEqual(
   ids(flowers, { category: "flowers", intensity: "moyen", aromas: [] }),
@@ -48,15 +48,15 @@ assert.deepEqual(
 );
 assert.deepEqual(
   ids(flowers, { category: "flowers", intensity: "fort", aromas: [] }),
-  [],
+  ["flower-skittlez-plus"],
 );
 assert.deepEqual(
   ids(resins, { category: "resins", intensity: "doux", aromas: [] }),
-  resins.map((product) => product.id).sort(),
+  resins.filter((product) => !["resin-black-afghan", "resin-ice-o-lator", "resin-mousseux-skywalker"].includes(product.id)).map((product) => product.id).sort(),
 );
 assert.deepEqual(
   ids(resins, { category: "resins", intensity: "fort", aromas: [] }),
-  [],
+  ["resin-mousseux-skywalker"],
 );
 assert.deepEqual(
   ids(flowers, { category: "flowers", intensity: null, aromas: ["fruite", "agrumes"] }),
@@ -64,13 +64,14 @@ assert.deepEqual(
     "flower-mandarine-cbd",
     "flower-mango-haze-cbd",
     "flower-petites-tetes-og-kush",
+    "flower-skittlez-plus",
   ],
   "multiple aroma filters must preserve the shared OR semantics",
 );
 assert.deepEqual(
   ids(flowers, { category: "flowers", intensity: "fort", aromas: ["fruite"] }),
-  [],
-  "a valid but incompatible combination must expose the empty state",
+  ["flower-skittlez-plus"],
+  "the strong floral aroma selection must resolve to Skittlez Plus",
 );
 
 const parsed = parseProductDiscoverySearchParams("intensity=moyen&aroma=fruite&aroma=sucre");
@@ -118,5 +119,5 @@ assert.match(stylesSource, /\.category-product-grid:has\(> :nth-child\(4\):last-
 assert.match(stylesSource, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.category-filter-aromas/);
 
 console.log(
-  "Category Page V2 tests passed: active 5/2 catalog, dynamic intensities/aromas, OR filtering, empty state, clean URL contract, shared ProductCard/SEO, analytics, contextual help and reduced motion.",
+  "Category Page V2 tests passed: active 6/5 catalog, dynamic intensities/aromas, OR filtering, clean URL contract, shared ProductCard/SEO, analytics, contextual help and reduced motion.",
 );

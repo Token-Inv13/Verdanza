@@ -40,11 +40,11 @@ try {
     await assertShopMode(page, "full");
     assert.equal(await page.locator("h1").innerText(), "Trouvez votre sélection");
     assert.equal(await page.locator('.selector-step [aria-expanded="true"]').count(), 1);
-    await waitForProductCardCount(page, 7);
+    await waitForProductCardCount(page, 11);
 
     await gotoDomReady(page, `${server.baseUrl}/boutique?type=flowers`);
     await assertShopMode(page, "full");
-    await waitForProductCardCount(page, 5);
+    await waitForProductCardCount(page, 6);
     assert.equal(
       await page.locator('[data-selector-option="shop-category:flowers"]').getAttribute("aria-pressed"),
       "true",
@@ -97,7 +97,7 @@ try {
     await page.locator("[data-shop-selector-reset]").click();
     await page.waitForURL(`${server.baseUrl}/boutique`);
     await assertShopMode(page, "full");
-    await waitForProductCardCount(page, 7);
+    await waitForProductCardCount(page, 11);
     assert.equal(new URL(page.url()).hash, "", `${width}px: reset must remove the anchor`);
 
     await gotoDomReady(page, `${server.baseUrl}/boutique`);
@@ -105,12 +105,14 @@ try {
     await assertShopMode(page, "compact");
     await page.goBack({ waitUntil: "domcontentloaded" });
     await assertShopMode(page, "full");
-    await waitForProductCardCount(page, 7);
+    await waitForProductCardCount(page, 11);
     await page.goForward({ waitUntil: "domcontentloaded" });
     await assertCompactSelection(page, "Résines · Doux · Peu importe", 2);
 
     await gotoDomReady(page, `${server.baseUrl}/boutique?type=resins&intensity=moyen`);
-    await assertCompactSelection(page, "Résines · Moyen · Peu importe", 0);
+    await assertCompactSelection(page, "Résines · Moyen · Peu importe", 2);
+    await gotoDomReady(page, `${server.baseUrl}/boutique?type=flowers&intensity=moyen`);
+    await assertCompactSelection(page, "Fleurs · Moyen · Peu importe", 0);
     assert.equal(
       await page.getByRole("heading", { name: "Aucun produit ne correspond" }).isVisible(),
       true,
@@ -121,7 +123,7 @@ try {
     await page.locator("[data-shop-selector-reset]").click();
     await page.waitForURL(`${server.baseUrl}/boutique`);
     await assertShopMode(page, "full");
-    await waitForProductCardCount(page, 7);
+    await waitForProductCardCount(page, 11);
 
     await gotoDomReady(page, `${server.baseUrl}/boutique?type=resins&intensity=doux#produits`);
     await assertCompactSelection(page, "Résines · Doux · Peu importe", 2);

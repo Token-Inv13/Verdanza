@@ -19,9 +19,9 @@ const activeStaticProducts = getLocalProducts();
 const supreme = requiredProduct("resin-supreme-50-cbd");
 const mandarine = requiredProduct("flower-mandarine-cbd");
 
-assert.equal(activeStaticProducts.length, 7, "the static editorial catalogue must contain 7 products");
-assert.equal(activeStaticProducts.filter((product) => product.category === "flowers").length, 5);
-assert.equal(activeStaticProducts.filter((product) => product.category === "resins").length, 2);
+assert.equal(activeStaticProducts.length, 11, "the static editorial catalogue must contain 11 products");
+assert.equal(activeStaticProducts.filter((product) => product.category === "flowers").length, 6);
+assert.equal(activeStaticProducts.filter((product) => product.category === "resins").length, 5);
 assert.equal(mandarine.isActive, true, "Mandarine must remain active in static data");
 assert.equal(mandarine.slug, "mandarine-cbd", "Mandarine public slug must remain stable");
 assert.equal(supreme.stock, 0, "Suprême static stock must be defensive zero");
@@ -49,7 +49,7 @@ const degraded = await getProductsWithFallback(async () => {
 assert.equal(degraded.source, "local");
 assert.equal(degraded.status, "degraded");
 assert.equal(degraded.commerceAvailable, false);
-assert.equal(degraded.products.length, 7, "degraded mode must retain editorial page structure");
+assert.equal(degraded.products.length, 11, "degraded mode must retain editorial page structure");
 assert.ok(
   degraded.products.every((product) => product.stock === 0 && !isProductOrderable(product)),
   "degraded products must all be non-orderable regardless of static stock",
@@ -118,7 +118,7 @@ assert.ok(
 );
 
 const routes = productSeoRoutes();
-assert.equal(routes.length, 7, "SEO/prerender routing must expose the seven active products");
+assert.equal(routes.length, 11, "SEO/prerender routing must expose the eleven active products");
 assert.ok(routes.some((route) => route.path === "/produits/mandarine-cbd"));
 for (const inactive of products.filter((product) => !product.isActive)) {
   assert.ok(
@@ -140,7 +140,7 @@ assert.doesNotMatch(
 );
 
 console.log(
-  "Product catalogue fallback tests passed: 7 static products, exact/empty/error Firestore states, non-commercial fallback, CartContext guard, Suprême zero stock, stale format blocking and Mandarine SEO route.",
+  "Product catalogue fallback tests passed: 11 static products, exact/empty/error Firestore states, non-commercial fallback, CartContext guard, Suprême zero stock, stale format blocking and Mandarine SEO route.",
 );
 
 function requiredProduct(id: string) {

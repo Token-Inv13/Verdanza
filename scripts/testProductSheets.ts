@@ -63,7 +63,8 @@ for (const sheet of availableProductSheets) {
 assert.deepEqual(plannedProductSheets.map((sheet) => sheet.slug), ["skittle-plus", "black-afghan", "ice-o-lator", "mousseux-skywalker"]);
 for (const sheet of plannedProductSheets) {
   assert.equal(sheet.availability, "planned");
-  assert.equal(products.some((product) => product.id === sheet.productId), false, `${sheet.slug}: planned sheet must not enter the shop catalogue`);
+  assert.equal(availableProductSheets.some((available) => available.productId === sheet.productId), false,
+    `${sheet.slug}: planned sheet must stay out of the published sheet selector`);
   for (const root of [publicDir, distDir]) {
     const publicPdf = join(root, ...sheet.pdfUrl.split("/").filter(Boolean));
     const preview = join(root, ...sheet.previewUrl.split("/").filter(Boolean));

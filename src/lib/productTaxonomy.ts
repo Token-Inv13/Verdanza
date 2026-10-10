@@ -52,9 +52,8 @@ const strongIntensitySignals = ["intense", "puissant", "profond", "tonique", "pr
 const softIntensitySignals = ["leger", "delicat", "doux", "subtil"];
 const intensityOnlySignals = new Set([...strongIntensitySignals, ...softIntensitySignals]);
 
-// Editorial intensity for the eight products currently published in the shop.
-// Keep the canonical intensity vocabulary; unknown/future products still use
-// the aroma-based inference below until their profile is explicitly reviewed.
+// Reviewed storefront intensities, including prepared inactive products.
+// Unknown products still use aroma-based inference until reviewed.
 const storefrontIntensityBySlug: Partial<Record<string, ProductIntensity>> = {
   "blue-dream-cbd": "doux",
   "cookie-kush-indoor": "doux",
@@ -63,7 +62,18 @@ const storefrontIntensityBySlug: Partial<Record<string, ProductIntensity>> = {
   "mandarine-cbd": "doux",
   "mango-haze-cbd": "doux",
   "petites-tetes-og-kush": "doux",
+  "skittlez-plus": "fort",
+  "black-afghan": "moyen",
+  "ice-o-lator": "moyen",
+  "mousseux-skywalker": "fort",
   "supreme-50-cbd": "doux",
+};
+
+const storefrontAromaFamiliesBySlug: Partial<Record<string, ProductAromaFamily[]>> = {
+  "skittlez-plus": ["agrumes", "sucre", "fruite"],
+  "black-afghan": ["terreux", "sucre", "fruite"],
+  "ice-o-lator": ["fruite", "epice", "sucre"],
+  "mousseux-skywalker": ["boise", "agrumes", "epice"],
 };
 
 const aromaFamilySignals: Record<ProductAromaFamily, string[]> = {
@@ -87,7 +97,8 @@ export function resolveProductIntensity(aromas: string[], slug?: string): Produc
   return "moyen";
 }
 
-export function resolveProductAromaFamilies(aromas: string[]): ProductAromaFamily[] {
+export function resolveProductAromaFamilies(aromas: string[], slug?: string): ProductAromaFamily[] {
+  if (slug && storefrontAromaFamiliesBySlug[slug]) return [...storefrontAromaFamiliesBySlug[slug]];
   const normalized = aromas.map(normalizeProductTaxonomyValue);
   return productAromaFamilyValues.filter((family) =>
     normalized.some((aroma) =>

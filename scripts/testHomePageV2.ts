@@ -9,7 +9,7 @@ const styleSource = readFileSync("src/styles/index.css", "utf8");
 const floatingContactSource = readFileSync("src/components/FloatingContactButton.tsx", "utf8");
 const activeProducts = getLocalProducts();
 
-assert.equal(activeProducts.length, 7, "Homepage V2 must keep the seven-product active catalog");
+assert.equal(activeProducts.length, 11, "Homepage V2 must expose the eleven-product active catalog");
 assert.ok(
   activeProducts.filter((product) => product.isFeatured).length >= 3,
   "Homepage V2 requires three existing featured products without changing catalog data",

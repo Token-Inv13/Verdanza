@@ -9,14 +9,18 @@ const routes = productSeoRoutes();
 const expectedSlugs = routes.map((route) => route.path.split("/").at(-1) || "").sort();
 const sitemap = readFileSync(resolve("public/sitemap.xml"), "utf8");
 
-assert.equal(expectedSlugs.length, 7, "exactly seven active product routes must be generated");
+assert.equal(expectedSlugs.length, 11, "exactly eleven active product routes must be generated");
 assert.deepEqual(expectedSlugs, [
+  "black-afghan",
   "cookie-kush-indoor",
   "golden-static",
   "harlequin-greenhouse",
+  "ice-o-lator",
   "mandarine-cbd",
   "mango-haze-cbd",
+  "mousseux-skywalker",
   "petites-tetes-og-kush",
+  "skittlez-plus",
   "supreme-50-cbd",
 ]);
 
@@ -67,5 +71,5 @@ for (const inactive of products.filter((product) => !product.isActive)) {
 }
 
 console.log(
-  "Product catalogue prerender tests passed: 7 routes, Mandarine canonical/JSON-LD/links/sitemap, fail-closed availability, Suprême non-orderable and inactive products absent.",
+  "Product catalogue prerender tests passed: 11 routes, Mandarine canonical/JSON-LD/links/sitemap, fail-closed availability, Suprême non-orderable and inactive products absent.",
 );

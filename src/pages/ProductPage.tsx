@@ -73,6 +73,9 @@ function resolveProductFacts(product: Product, presentation: ProductCardPresenta
     hasProductValue(product.texture)
       ? { label: "Texture", value: product.texture || "" }
       : null,
+    hasProductValue(product.moleculeLabel)
+      ? { label: "Molécule", value: product.moleculeLabel || "" }
+      : null,
     cannabinoidSummary
       ? { label: "Cannabinoïdes", value: cannabinoidSummary }
       : null,

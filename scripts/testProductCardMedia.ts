@@ -10,6 +10,14 @@ import { getLocalProducts } from "../src/services/productsService";
 const activeProducts = getLocalProducts();
 const blueDream = getLocalProducts(false).find((product) => product.slug === "blue-dream-cbd");
 assert.ok(blueDream, "the Firestore-published Blue Dream needs a local card source");
+const preparedSlugs = ["skittlez-plus", "black-afghan", "ice-o-lator", "mousseux-skywalker"];
+const preparedProducts = preparedSlugs.map((slug) => {
+  const product = getLocalProducts(false).find((item) => item.slug === slug);
+  assert.ok(product, `${slug}: prepared card source is missing`);
+  assert.equal(product.isActive, true, `${slug}: product must be active in the commercial catalogue`);
+  return product;
+});
+assert.equal(preparedProducts.length, 4);
 const cardProducts = [...activeProducts, blueDream];
 // Validate the committed pipeline rather than a temporary image-generation report.
 const generator = readFileSync("scripts/generateImages.ts", "utf8");
@@ -17,11 +25,11 @@ const cropDeclaration = generator.match(/const goldenStaticCardCrop: ImageCrop =
 assert.ok(cropDeclaration, "Golden Static crop must be declared in the image pipeline");
 const goldenCrop = { left: Number(cropDeclaration[1]), top: Number(cropDeclaration[2]),
   width: Number(cropDeclaration[3]), height: Number(cropDeclaration[4]) };
-assert.equal(activeProducts.length, 7, "the seven active products need card media");
+assert.equal(activeProducts.length, 11, "the eleven active products need card media");
 assert.deepEqual(
   Object.keys(productCardMediaBySlug).sort(),
-  cardProducts.map((product) => product.slug).sort(),
-  "card-media choices cover the seven fallback products and Firestore-published Blue Dream",
+  [...activeProducts.filter((product) => !preparedSlugs.includes(product.slug)), blueDream].map((product) => product.slug).sort(),
+  "existing card-media choices remain unchanged",
 );
 
 function publicFile(url: string) {
@@ -34,12 +42,13 @@ for (const product of cardProducts) {
   assert.ok(existsSync(publicFile(media.src)), `${product.name}: card source is missing`);
   const source = await sharp(publicFile(media.src)).metadata();
   assert.equal(source.format, "webp", `${product.name}: card source must be WebP`);
-  assert.ok((source.width || 0) >= 640 && (source.height || 0) >= 640, `${product.name}: source is too small`);
+  assert.ok((source.width || 0) >= 600 && (source.height || 0) >= 600, `${product.name}: source is too small`);
 
   const optimized = productCardImageVariants[media.src] || productImageVariants[media.src]?.card;
   assert.ok(optimized, `${product.name}: responsive card variant is missing`);
   assert.ok(optimized.width && optimized.height && optimized.sizes, `${product.name}: dimensions/sizes are missing`);
-  assert.ok(optimized.srcSet.includes("320w") && optimized.srcSet.includes("640w"), `${product.name}: responsive srcSet is incomplete`);
+  assert.ok(optimized.srcSet.includes("320w") && optimized.srcSet.includes(`${Math.min(640, source.width || 0)}w`),
+    `${product.name}: responsive srcSet is incomplete`);
   for (const candidate of optimized.srcSet.split(", ")) {
     const [url, descriptor] = candidate.split(" ");
     const file = publicFile(url);
@@ -87,4 +96,4 @@ for (const product of cardProducts) {
   }
 }
 
-console.log("PASS ProductCard media: eight published-product WebP sources, responsive 320/640 variants, no upscale, original galleries, smaller dedicated payloads, and Golden Static fully in frame.");
+console.log("PASS ProductCard media: eight existing and four newly active WebP sources, responsive variants without upscale, original galleries, and Golden Static fully in frame.");

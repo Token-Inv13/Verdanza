@@ -38,9 +38,13 @@ const expectedProducts = [
   ["petites-tetes-og-kush", "OG Kush"],
   ["golden-static", "Golden Static"],
   ["supreme-50-cbd", "Suprême 50 % CBD"],
+  ["skittlez-plus", "Skittlez Plus"],
+  ["black-afghan", "Black Afghan"],
+  ["ice-o-lator", "Ice-o-Lator"],
+  ["mousseux-skywalker", "Mousseux Skywalker"],
 ] as const;
 
-assert.equal(activeProducts.length, 7, "ProductPage V2 must cover the seven active products");
+assert.equal(activeProducts.length, 11, "ProductPage V2 must cover the eleven active products");
 assert.deepEqual(
   activeProducts.map(({ slug, name }) => [slug, name]).sort(),
   [...expectedProducts].sort(),
@@ -70,8 +74,8 @@ for (const product of activeProducts) {
 
 assert.deepEqual(
   new Set(activeProducts.map((product) => resolveProductCardPresentation(product).intensityLabel)),
-  new Set(["Doux"]),
-  "the published catalog must consistently show the reviewed soft intensity",
+  new Set(["Doux", "Moyen", "Fort"]),
+  "the published catalog must show all reviewed intensity levels",
 );
 
 const goldenStatic = activeProducts.find((product) => product.slug === "golden-static");
@@ -170,7 +174,7 @@ assert.match(
 );
 
 console.log(
-  "ProductPage V2 tests passed: seven products, canonical profiles, one/multiple-image galleries, formats, effective price, zero stock, JSON-LD, sticky observer, crisp images and reduced motion.",
+  "ProductPage V2 tests passed: eleven products, canonical profiles, one/multiple-image galleries, formats, effective price, zero stock, JSON-LD, sticky observer, crisp images and reduced motion.",
 );
 
 function occurrences(value: string, fragment: string) {

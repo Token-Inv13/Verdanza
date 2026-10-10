@@ -47,7 +47,7 @@ try {
     assert.equal(flowerResponse?.status(), 200, `${width}px: flowers route must return HTTP 200`);
     const rawFlowerHtml = (await flowerResponse?.text()) ?? "";
     await page.locator('[data-category-page][data-category="flowers"]').waitFor();
-    await waitForProductCardCount(page, 5);
+    await waitForProductCardCount(page, 6);
     assert.equal(await page.locator("h1").count(), 1, `${width}px: flowers must keep one H1`);
     assert.equal(await page.locator("h1").innerText(), "Une sélection de fleurs CBD Verdanza");
     assert.equal(
@@ -58,11 +58,11 @@ try {
       await page.locator("[data-category-intensity]").evaluateAll((buttons) =>
         buttons.map((button) => button.getAttribute("data-category-intensity")),
       ),
-      ["all", "doux"],
+      ["all", "doux", "fort"],
       `${width}px: flowers must expose only available intensities`,
     );
     assert.equal(await page.locator("[data-category-aroma-toggle]").count(), 1);
-    assert.equal(await page.locator("[data-category-result-count]").innerText(), "5 produits");
+    assert.equal(await page.locator("[data-category-result-count]").innerText(), "6 produits");
     assert.equal(await page.locator('[data-floating-help-footprint]').count(), 1,
       "help stays measurable; the availability matrix asserts collision-only visibility");
 
@@ -127,10 +127,10 @@ try {
 
     await page.locator("[data-category-filter-reset]").click();
     await waitForSearch(page, "");
-    await waitForProductCardCount(page, 5);
+    await waitForProductCardCount(page, 6);
     assert.equal(await page.locator("[data-category-filter-reset]").count(), 0);
 
-    await gotoDomReady(page, `${server.baseUrl}/fleurs-cbd?intensity=fort&aroma=fruite`);
+    await gotoDomReady(page, `${server.baseUrl}/fleurs-cbd?intensity=moyen&aroma=fruite`);
     await waitForProductCardCount(page, 0);
     assert.equal(
       await page.locator("[data-category-empty-state] h2").innerText(),
@@ -138,21 +138,21 @@ try {
     );
     await page.locator("[data-category-empty-reset]").click();
     await waitForSearch(page, "");
-    await waitForProductCardCount(page, 5);
+    await waitForProductCardCount(page, 6);
 
     const resinResponse = await gotoDomReady(page, `${server.baseUrl}/resines-cbd`);
     assert.equal(resinResponse?.status(), 200, `${width}px: resins route must return HTTP 200`);
     const rawResinHtml = (await resinResponse?.text()) ?? "";
     await page.locator('[data-category-page][data-category="resins"]').waitFor();
-    await waitForProductCardCount(page, 2);
+    await waitForProductCardCount(page, 5);
     assert.deepEqual(
       await page.locator("[data-category-intensity]").evaluateAll((buttons) =>
         buttons.map((button) => button.getAttribute("data-category-intensity")),
       ),
-      ["all", "doux"],
+      ["all", "doux", "moyen", "fort"],
       `${width}px: resins must expose only available intensities`,
     );
-    assert.equal(await page.locator("[data-category-aroma-toggle]").count(), 0);
+    assert.equal(await page.locator("[data-category-aroma-toggle]").count(), 1);
     assert.equal(
       await page.locator('link[rel="canonical"]').getAttribute("href"),
       "https://verdanza.fr/resines-cbd",
@@ -171,13 +171,7 @@ try {
       };
     });
     assert.ok(resinLayout.overflow <= 1, `${width}px: resins must not overflow horizontally`);
-    assert.equal(resinLayout.columns, width < 640 ? 1 : 2);
-    if (width === 1280) {
-      assert.ok(
-        Math.abs(resinLayout.cardsCenter - resinLayout.gridCenter) <= 2,
-        "1280px: the two resin cards must stay centered",
-      );
-    }
+    assert.equal(resinLayout.columns, width < 640 ? 1 : width < 1024 ? 2 : 3);
 
     // On this short category page, purchase controls remain in view even at
     // the bottom. A route without protected controls must restore help.
@@ -220,5 +214,5 @@ try {
 }
 
 console.log(
-  "Category Page V2 UI tests passed at 390px, 430px, 768px and 1280px: SEO, dynamic filters, keyboard, URLs/history, 5/2 grids, empty/reset states, contextual help, reduced motion and no overflow.",
+  "Category Page V2 UI tests passed at 390px, 430px, 768px and 1280px: SEO, dynamic filters, keyboard, URLs/history, 6/5 grids, empty/reset states, contextual help, reduced motion and no overflow.",
 );

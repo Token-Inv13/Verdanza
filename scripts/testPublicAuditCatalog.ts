@@ -75,7 +75,7 @@ try {
           assert.equal(state.enabledPurchaseButtons > 0, orderable, `${mode}: availability ${route.path}`);
           assert.match(state.productData, orderable ? /schema.org\/InStock/ : /schema.org\/OutOfStock/);
           if (mode !== "pending") {
-            assert.equal(state.catalog?.productCount, 7);
+            assert.equal(state.catalog?.productCount, 11);
             assert.equal(state.catalog?.status, mode === "authoritative" ? "authoritative" : "degraded");
             assert.equal(state.catalog?.commerceAvailable, mode === "authoritative");
           }

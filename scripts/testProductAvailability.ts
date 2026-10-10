@@ -132,7 +132,7 @@ test("inactive product is unavailable and not orderable", () => {
   expect(productAvailability(normalized) === "https://schema.org/OutOfStock", "expected OutOfStock JSON-LD");
 });
 
-test("local static fixture exposes the seven products required for SEO and prerender", () => {
+test("local static fixture exposes the eleven products required for SEO and prerender", () => {
   const activeProducts = getLocalProducts();
   const expectedActiveIds = [
     "flower-cookie-kush-indoor",
@@ -140,18 +140,22 @@ test("local static fixture exposes the seven products required for SEO and prere
     "flower-mandarine-cbd",
     "flower-mango-haze-cbd",
     "flower-petites-tetes-og-kush",
+    "flower-skittlez-plus",
+    "resin-black-afghan",
     "resin-golden-static",
+    "resin-ice-o-lator",
+    "resin-mousseux-skywalker",
     "resin-supreme-50-cbd",
   ];
 
-  expect(activeProducts.length === 7, `expected 7 active static products, got ${activeProducts.length}`);
+  expect(activeProducts.length === 11, `expected 11 active static products, got ${activeProducts.length}`);
   expect(
-    activeProducts.filter((entry) => entry.category === "flowers").length === 5,
-    "expected 5 active static flowers",
+    activeProducts.filter((entry) => entry.category === "flowers").length === 6,
+    "expected 6 active static flowers",
   );
   expect(
-    activeProducts.filter((entry) => entry.category === "resins").length === 2,
-    "expected 2 active fallback resins",
+    activeProducts.filter((entry) => entry.category === "resins").length === 5,
+    "expected 5 active fallback resins",
   );
   expect(
     JSON.stringify(activeProducts.map((entry) => entry.id).sort()) ===

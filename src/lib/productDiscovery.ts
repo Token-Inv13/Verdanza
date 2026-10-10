@@ -25,7 +25,7 @@ export function resolveProductDiscoveryProfile(product: Product) {
   return {
     category: product.category,
     intensity: resolveProductIntensity(product.aromas, product.slug),
-    aromaFamilies: resolveProductAromaFamilies(product.aromas),
+    aromaFamilies: resolveProductAromaFamilies(product.aromas, product.slug),
   };
 }
 
@@ -69,7 +69,7 @@ export function getAvailableProductAromaFamilies(
     aromas: [],
   });
   const available = new Set(
-    compatibleProducts.flatMap((product) => resolveProductAromaFamilies(product.aromas)),
+    compatibleProducts.flatMap((product) => resolveProductAromaFamilies(product.aromas, product.slug)),
   );
   return new Set(productAromaFamilyValues.filter((family) => available.has(family)));
 }
