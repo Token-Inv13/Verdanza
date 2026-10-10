@@ -34,8 +34,7 @@ export const productSheetCategoryLabels: Record<ProductSheetCategory, string> = 
 export const productSheetIntensityLabels = productIntensityLabels;
 export const productSheetAromaFamilyLabels = productAromaFamilyLabels;
 
-// Public documentary library. Planned sheets stay visible here without entering
-// the shop catalogue or the profile selector.
+// Public documentary library. Availability controls the active browser and selector.
 export const productSheets: ProductSheet[] = [
   {
     productId: "flower-blue-dream-cbd",
@@ -118,14 +117,14 @@ export const productSheets: ProductSheet[] = [
     availability: "available",
   },
   {
-    productId: "flower-skittle-plus",
-    name: "Skittle Plus",
-    slug: "skittle-plus",
+    productId: "flower-skittlez-plus",
+    name: "Skittlez Plus",
+    slug: "skittlez-plus",
     aromas: ["Citron", "Bonbon", "Diesel"],
     selectionProfile: { category: "flower", intensity: "fort", aromaFamilies: ["agrumes", "sucre", "fruite"] },
-    pdfUrl: "/fiches-produits/skittle-plus/verdanza-skittle-plus-signature-v1.pdf",
-    previewUrl: "/images/fiches-produits/signature-v1/skittle-plus-signature-v1-640.webp",
-    availability: "planned",
+    pdfUrl: "/fiches-produits/skittlez-plus/verdanza-skittlez-plus-signature-v1.pdf",
+    previewUrl: "/images/fiches-produits/signature-v1/skittlez-plus-signature-v1-640.webp",
+    availability: "available",
   },
   {
     productId: "resin-black-afghan",
@@ -135,7 +134,7 @@ export const productSheets: ProductSheet[] = [
     selectionProfile: { category: "resin", intensity: "moyen", aromaFamilies: ["terreux", "sucre", "fruite"] },
     pdfUrl: "/fiches-produits/black-afghan/verdanza-black-afghan-signature-v1.pdf",
     previewUrl: "/images/fiches-produits/signature-v1/black-afghan-signature-v1-640.webp",
-    availability: "planned",
+    availability: "available",
   },
   {
     productId: "resin-ice-o-lator",
@@ -145,7 +144,7 @@ export const productSheets: ProductSheet[] = [
     selectionProfile: { category: "resin", intensity: "moyen", aromaFamilies: ["fruite", "epice", "sucre"] },
     pdfUrl: "/fiches-produits/ice-o-lator/verdanza-ice-o-lator-signature-v1.pdf",
     previewUrl: "/images/fiches-produits/signature-v1/ice-o-lator-signature-v1-640.webp",
-    availability: "planned",
+    availability: "available",
   },
   {
     productId: "resin-mousseux-skywalker",
@@ -155,7 +154,7 @@ export const productSheets: ProductSheet[] = [
     selectionProfile: { category: "resin", intensity: "fort", aromaFamilies: ["boise", "agrumes", "epice"] },
     pdfUrl: "/fiches-produits/mousseux-skywalker/verdanza-mousseux-skywalker-signature-v1.pdf",
     previewUrl: "/images/fiches-produits/signature-v1/mousseux-skywalker-signature-v1-640.webp",
-    availability: "planned",
+    availability: "available",
   },
 ];
 

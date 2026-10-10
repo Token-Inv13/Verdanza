@@ -37,7 +37,7 @@ try {
     await page.locator('[data-selector-option="category:flower"]').click();
     assert.equal(await page.locator('[data-selector-option="intensity:doux"]').isDisabled(), false);
     assert.equal(await page.locator('[data-selector-option="intensity:moyen"]').isDisabled(), true);
-    assert.equal(await page.locator('[data-selector-option="intensity:fort"]').isDisabled(), true);
+    assert.equal(await page.locator('[data-selector-option="intensity:fort"]').isDisabled(), false);
     await page.locator('[data-selector-option="intensity:doux"]').click();
     assert.equal(await page.locator("[data-product-selector-results]").count(), 0, `${width}px: results require the explicit aroma choice`);
     await page.locator('[data-selector-option="aroma:fruite"]').click();
@@ -60,20 +60,20 @@ try {
       assert.match(await page.locator('[data-selector-summary][data-sticky="true"]').innerText(), /Fleurs\s*·\s*Doux\s*·\s*Fruité/i);
     }
     assert.equal(await page.locator('[data-product-sheet-tab="flower"]').getAttribute("aria-selected"), "true");
-    assert.equal(await page.locator("[data-product-sheet-card]").count(), 6, `${width}px: flower tab must contain the complete active range`);
-    assert.equal(await library.locator("[data-signature-v1-preview]").count(), 10, `${width}px: all visible flower and planned cards must use Signature V1`);
+    assert.equal(await page.locator("[data-product-sheet-card]").count(), 7, `${width}px: flower tab must contain seven available flowers`);
+    assert.equal(await library.locator("[data-signature-v1-preview]").count(), 7, `${width}px: all visible flower cards must use Signature V1`);
     assert.equal(await library.locator("[data-signature-v1-preview]").evaluateAll((images) => images.every((image) =>
       image.getAttribute("src")?.includes("/signature-v1/") && image.getAttribute("srcset")?.includes("-320.webp")
     )), true, `${width}px: Signature V1 responsive previews must use the versioned 320/640 assets`);
     assert.equal(await page.locator("[data-product-sheet-card]").first().getAttribute("data-product-sheet-card"), "blue-dream-cbd");
     await page.locator('[data-product-sheet-tab="resin"]').click();
     await page.locator('[data-product-sheet-category="resin"]').waitFor();
-    assert.equal(await page.locator("[data-product-sheet-card]").count(), 2, `${width}px: resin tab must contain both active resins`);
-    assert.equal(await library.locator("[data-signature-v1-preview]").count(), 6, `${width}px: both resin and all planned cards must use Signature V1`);
-    assert.deepEqual(await page.locator("[data-product-sheet-card] h3").allTextContents(), ["Golden Static", "Suprême 50 % CBD"]);
-    assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "1 / 2");
-    assert.equal(await page.locator("[data-planned-product-sheets] article").count(), 4, "the four planned sheets must stay visible outside the active tabs");
-    assert.deepEqual(await page.locator("[data-planned-product-sheets] h4").allTextContents(), ["Skittle Plus", "Black Afghan", "Ice-o-Lator", "Mousseux Skywalker"]);
+    assert.equal(await page.locator("[data-product-sheet-card]").count(), 5, `${width}px: resin tab must contain five available resins`);
+    assert.equal(await library.locator("[data-signature-v1-preview]").count(), 5, `${width}px: all visible resin cards must use Signature V1`);
+    assert.deepEqual(await page.locator("[data-product-sheet-card] h3").allTextContents(), ["Golden Static", "Suprême 50 % CBD", "Black Afghan", "Ice-o-Lator", "Mousseux Skywalker"]);
+    assert.equal(await page.locator("[data-product-sheet-position]").innerText(), "1 / 5");
+    assert.equal(await page.locator("[data-planned-product-sheets]").count(), 0, "no planned section may remain");
+    assert.equal(await page.getByText(/Prochainement dans la sélection/).count(), 0);
 
     await selector.scrollIntoViewIfNeeded();
     const edit = page.locator('[data-selector-summary][data-sticky="false"] [data-selector-edit]');
@@ -96,6 +96,27 @@ try {
     assert.equal(await selector.getAttribute("data-selector-collapsed"), "false");
     assert.equal(await page.locator('[data-selector-step="1"] > button').getAttribute("aria-expanded"), "true");
     assert.match(await page.locator('[data-selector-step="3"] > button').innerText(), /À choisir/i);
+    assert.equal(await page.locator('a[href*="/skittle-plus/"]').count(), 0, `${width}px: historical Skittle Plus URL must not be active`);
+
+    if (width === 390) {
+      await page.locator('[data-selector-option="category:flower"]').click();
+      await page.locator('[data-selector-option="intensity:fort"]').click();
+      await page.locator('[data-selector-option="aroma:agrumes"]').click();
+      assert.deepEqual(await page.locator("[data-selector-result-card]").evaluateAll((cards) => cards.map((card) => card.getAttribute("data-selector-result-card"))), ["skittlez-plus"]);
+      await page.locator("[data-selector-reset]").click();
+
+      await page.locator('[data-selector-option="category:resin"]').click();
+      await page.locator('[data-selector-option="intensity:moyen"]').click();
+      await page.locator('[data-selector-option="aroma:epice"]').click();
+      assert.deepEqual(await page.locator("[data-selector-result-card]").evaluateAll((cards) => cards.map((card) => card.getAttribute("data-selector-result-card"))), ["ice-o-lator", "black-afghan"]);
+      await page.locator("[data-selector-reset]").click();
+
+      await page.locator('[data-selector-option="category:resin"]').click();
+      await page.locator('[data-selector-option="intensity:fort"]').click();
+      await page.locator('[data-selector-option="aroma:boise"]').click();
+      assert.deepEqual(await page.locator("[data-selector-result-card]").evaluateAll((cards) => cards.map((card) => card.getAttribute("data-selector-result-card"))), ["mousseux-skywalker"]);
+      await page.locator("[data-selector-reset]").click();
+    }
 
     const layout = await page.evaluate(() => {
       const carousel = document.querySelector<HTMLElement>("[data-product-sheet-carousel]");
@@ -133,4 +154,4 @@ try {
   await server.close();
 }
 
-console.log("Product sheets UI V2 tests passed: 8 active + 4 planned, selector isolation, tabs, carousel, accessibility and 8 responsive widths.");
+console.log("Product sheets UI V2 tests passed: 12 active + 0 planned, tabs, carousel, accessibility and 8 responsive widths.");

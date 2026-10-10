@@ -13,6 +13,10 @@ const auditedPublishedProductIds = [
   "flower-petites-tetes-og-kush",
   "resin-golden-static",
   "resin-supreme-50-cbd",
+  "flower-skittlez-plus",
+  "resin-black-afghan",
+  "resin-ice-o-lator",
+  "resin-mousseux-skywalker",
 ] as const;
 
 assert.deepEqual(
@@ -38,11 +42,10 @@ for (const sheet of availableProductSheets) {
   assert.ok(existsSync(resolve("public", sheet.previewUrl.slice(1))), `${sheet.productId}: active preview is missing`);
 }
 
-assert.deepEqual(plannedProductSheets.map((sheet) => sheet.slug), ["skittle-plus", "black-afghan", "ice-o-lator", "mousseux-skywalker"]);
-assert.ok(plannedProductSheets.every((sheet) => !availableProductSheets.some((available) => available.productId === sheet.productId)),
-  "planned sheets must remain outside the published sheet selector even if their products enter commerce");
+assert.equal(availableProductSheets.length, 12);
+assert.equal(plannedProductSheets.length, 0);
 
-console.log("Catalogue/product-sheet consistency passed: 8 shop-linked sheets and 4 documentary planned sheets kept outside the published sheet selector.");
+console.log("Catalogue/product-sheet consistency passed: 12 shop-linked available sheets, 0 planned.");
 
 function normalizeName(value: string) {
   return value.normalize("NFKC").trim().replace(/\s+CBD$/i, "").toLocaleLowerCase("fr");
