@@ -121,6 +121,14 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" | "packaging" }
 > = {
+  "sechage-affinage-fleurs-cbd-reperes": {
+    label: "Séchage et affinage des fleurs CBD",
+    sources: [
+      "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
+      "/Fiche produit/Amnesia/amnesia_hydro_zoom.webp",
+      "/Fiche produit/Mandarine/mandarine_zoom.webp",
+    ],
+  },
   "analyse-cbd-laboratoire-echantillon-rapport": {
     label: "Analyse CBD : laboratoire, échantillon et rapport",
     kind: "analysis",

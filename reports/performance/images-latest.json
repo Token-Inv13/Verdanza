@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-08T07:11:46.599Z",
+  "generatedAt": "2026-10-12T07:13:26.458Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -641,6 +641,138 @@
           "bytes": 124958
         }
       ]
+    },
+    {
+      "productId": "flower-skittlez-plus",
+      "productName": "Skittlez Plus",
+      "sourceUrl": "/images/products/skittlez-plus-source.webp",
+      "sourceFile": "public/images/products/skittlez-plus-source.webp",
+      "sourceBytes": 162972,
+      "sourceWidth": 1024,
+      "sourceHeight": 1024,
+      "format": "webp",
+      "hasAlpha": false,
+      "card": [
+        {
+          "src": "/images/products/skittlez-plus-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 14236
+        },
+        {
+          "src": "/images/products/skittlez-plus-card-640.webp",
+          "width": 640,
+          "height": 640,
+          "bytes": 52426
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/skittlez-plus-detail.webp",
+          "width": 713,
+          "height": 713,
+          "bytes": 65860
+        }
+      ]
+    },
+    {
+      "productId": "resin-black-afghan",
+      "productName": "Black Afghan",
+      "sourceUrl": "/images/products/black-afghan-source.webp",
+      "sourceFile": "public/images/products/black-afghan-source.webp",
+      "sourceBytes": 27890,
+      "sourceWidth": 600,
+      "sourceHeight": 600,
+      "format": "webp",
+      "hasAlpha": false,
+      "card": [
+        {
+          "src": "/images/products/black-afghan-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 4082
+        },
+        {
+          "src": "/images/products/black-afghan-card-640.webp",
+          "width": 600,
+          "height": 600,
+          "bytes": 17238
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/black-afghan-detail.webp",
+          "width": 600,
+          "height": 600,
+          "bytes": 19700
+        }
+      ]
+    },
+    {
+      "productId": "resin-ice-o-lator",
+      "productName": "Ice-o-Lator",
+      "sourceUrl": "/images/products/ice-o-lator-source.webp",
+      "sourceFile": "public/images/products/ice-o-lator-source.webp",
+      "sourceBytes": 48122,
+      "sourceWidth": 600,
+      "sourceHeight": 600,
+      "format": "webp",
+      "hasAlpha": false,
+      "card": [
+        {
+          "src": "/images/products/ice-o-lator-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 6712
+        },
+        {
+          "src": "/images/products/ice-o-lator-card-640.webp",
+          "width": 600,
+          "height": 600,
+          "bytes": 28810
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/ice-o-lator-detail.webp",
+          "width": 600,
+          "height": 600,
+          "bytes": 33102
+        }
+      ]
+    },
+    {
+      "productId": "resin-mousseux-skywalker",
+      "productName": "Mousseux Skywalker",
+      "sourceUrl": "/images/products/mousseux-skywalker-source.webp",
+      "sourceFile": "public/images/products/mousseux-skywalker-source.webp",
+      "sourceBytes": 197994,
+      "sourceWidth": 1024,
+      "sourceHeight": 1024,
+      "format": "webp",
+      "hasAlpha": false,
+      "card": [
+        {
+          "src": "/images/products/mousseux-skywalker-card-320.webp",
+          "width": 320,
+          "height": 320,
+          "bytes": 13414
+        },
+        {
+          "src": "/images/products/mousseux-skywalker-card-640.webp",
+          "width": 640,
+          "height": 640,
+          "bytes": 53850
+        }
+      ],
+      "detail": [
+        {
+          "src": "/images/products/mousseux-skywalker-detail.webp",
+          "width": 713,
+          "height": 713,
+          "bytes": 69240
+        }
+      ]
     }
   ],
   "staticImages": [
@@ -774,6 +906,36 @@
     }
   ],
   "blogImages": [
+    {
+      "articleSlug": "sechage-affinage-fleurs-cbd-reperes",
+      "articleTitle": "Séchage et affinage des fleurs CBD : comprendre les étapes",
+      "artDirection": "verdanza-editorial",
+      "sources": [
+        "/Fiche produit/Cookie Kush (int%C3%A9rieur)/cookie-zoom.webp",
+        "/Fiche produit/Amnesia/amnesia_hydro_zoom.webp",
+        "/Fiche produit/Mandarine/mandarine_zoom.webp"
+      ],
+      "variants": [
+        {
+          "src": "/images/blog/sechage-affinage-fleurs-cbd-reperes-editorial-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 85670
+        },
+        {
+          "src": "/images/blog/sechage-affinage-fleurs-cbd-reperes-editorial-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 101624
+        },
+        {
+          "src": "/images/blog/sechage-affinage-fleurs-cbd-reperes-editorial-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 143636
+        }
+      ]
+    },
     {
       "articleSlug": "analyse-cbd-laboratoire-echantillon-rapport",
       "articleTitle": "Analyse CBD : vérifier le laboratoire, l'échantillon et le rapport",
@@ -1456,12 +1618,12 @@
     }
   ],
   "totals": {
-    "productSourceBytes": 2164456,
-    "productCardLargestBytes": 1160236,
-    "productCardSelectedLargestBytes": 547834,
-    "productDetailBytes": 1718692,
+    "productSourceBytes": 2601434,
+    "productCardLargestBytes": 1312560,
+    "productCardSelectedLargestBytes": 700158,
+    "productDetailBytes": 1906594,
     "staticSourceBytes": 2177258,
     "staticLargestBytes": 224006,
-    "blogImageBytes": 5810956
+    "blogImageBytes": 6141886
   }
 }

@@ -6,6 +6,333 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "sechage-affinage-fleurs-cbd-reperes",
+    title: "Séchage et affinage des fleurs CBD : comprendre les étapes",
+    seoTitle: "Séchage et affinage des fleurs CBD | Verdanza",
+    description:
+      "Comprenez le séchage et l'affinage des fleurs CBD, leurs différences, les repères observables et les limites d'une vérification à l'œil ou au toucher.",
+    excerpt:
+      "Du séchage au conditionnement, plusieurs étapes influencent la présentation d'une fleur. Voici les repères utiles sans transformer l'apparence en preuve.",
+    category: "Guide qualité",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-10-12T09:00:00+02:00",
+    dateModified: "2026-10-12T09:00:00+02:00",
+    readingTime: "8 min",
+    status: "published",
+    images: {
+      square: "/images/blog/sechage-affinage-fleurs-cbd-reperes-editorial-1x1.webp",
+      landscape: "/images/blog/sechage-affinage-fleurs-cbd-reperes-editorial-4x3.webp",
+      wide: "/images/blog/sechage-affinage-fleurs-cbd-reperes-editorial-16x9.webp",
+    },
+    relatedSlugs: [
+      "trichomes-fleurs-cbd-observation",
+      "signes-alteration-fleurs-resines-cbd",
+      "conserver-fleurs-resines-cbd",
+      "aspect-fleur-cbd-couleur-structure",
+    ],
+    links: [
+      { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/signes-alteration-fleurs-resines-cbd",
+        label: "Repérer les signes d'altération",
+      },
+      {
+        to: "/blog/conserver-fleurs-resines-cbd",
+        label: "Conserver fleurs et résines CBD",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Entre la récolte et le conditionnement, une fleur de chanvre passe
+            par plusieurs étapes destinées à réduire puis à stabiliser son
+            humidité. Les mots <strong>séchage</strong> et <strong>affinage</strong>{" "}
+            décrivent deux moments différents. Ils donnent des repères sur la
+            préparation du lot, mais ne permettent pas à eux seuls d'en déduire
+            la composition ou la conformité.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            L'aspect, le toucher et l'odeur apportent des indices. Ils ne
+            remplacent ni l'identification du lot, ni son étiquette, ni un
+            rapport d'analyse correspondant exactement à ce lot.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "recolte-conditionnement",
+        text: "De la récolte au conditionnement : cinq étapes à distinguer",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le vocabulaire varie selon les producteurs, mais la progression
+            générale reste lisible. Chaque étape répond à un objectif distinct
+            et aucune durée unique ne convient à tous les lots.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Étapes courantes entre la récolte et le conditionnement.",
+          headers: ["Étape", "Objectif principal", "Ce qu'elle ne prouve pas"],
+          rows: [
+            [
+              "Récolte",
+              "Séparer la matière végétale arrivée à maturité de la plante.",
+              "La teneur exacte en cannabinoïdes du lot final.",
+            ],
+            [
+              "Préparation",
+              "Retirer les parties végétales qui ne seront pas conservées et organiser les branches ou fleurs.",
+              "La qualité du séchage qui suivra.",
+            ],
+            [
+              "Séchage",
+              "Faire diminuer progressivement l'humidité de la matière végétale.",
+              "Une stabilité durable une fois le produit conditionné.",
+            ],
+            [
+              "Stabilisation ou affinage",
+              "Laisser l'humidité résiduelle se répartir plus régulièrement dans un environnement maîtrisé.",
+              "Une amélioration automatique de la composition ou de la conformité.",
+            ],
+            [
+              "Conditionnement",
+              "Protéger le lot et conserver ses références pendant le stockage et le transport.",
+              "Le maintien des conditions si le contenant est ensuite mal refermé ou exposé.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "role-sechage",
+        text: "Ce que le séchage cherche à stabiliser",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une fleur fraîche contient beaucoup d'eau. Le séchage vise une
+            diminution progressive et régulière de cette humidité. Une perte
+            trop rapide peut laisser une surface sèche alors que les parties
+            plus denses restent plus souples. À l'inverse, un environnement peu
+            renouvelé peut ralentir l'évolution du lot et favoriser des écarts
+            entre les fleurs.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "le volume et la densité des fleurs ;",
+          "la présence de petites branches ou de tiges plus épaisses ;",
+          "la circulation de l'air autour de la matière végétale ;",
+          "la régularité de l'environnement pendant toute l'étape ;",
+          "la manipulation du lot avant son conditionnement.",
+        ],
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Ces variables expliquent pourquoi une durée annoncée, prise
+            isolément, ne suffit pas à qualifier un lot. Deux récoltes peuvent
+            suivre un calendrier différent tout en aboutissant à une
+            présentation cohérente.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "affinage-definition",
+        text: "Affinage : une phase de stabilisation, pas une garantie",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Après le séchage, certains producteurs conservent les fleurs dans
+            des contenants propres et fermés afin d'homogénéiser progressivement
+            leur humidité résiduelle et leur présentation. Cette phase est
+            souvent appelée affinage. Le terme est largement utilisé dans le
+            commerce, mais il ne décrit pas à lui seul un protocole normalisé,
+            une durée fixe ou un résultat mesurable identique pour tous les lots.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une mention comme « affinage long » doit donc être lue comme une
+            information déclarative. Elle peut expliquer le choix du producteur,
+            mais elle ne remplace pas les données de lot et ne permet pas de
+            prédire un profil de cannabinoïdes.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "indices-observables",
+        text: "Les indices observables et leurs limites",
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Indices pratiques lors de l'ouverture d'un contenant.",
+          headers: ["Indice", "Ce qu'il peut suggérer", "Limite de lecture"],
+          rows: [
+            [
+              "Souplesse",
+              "Une fleur qui conserve une légère élasticité n'est pas totalement cassante.",
+              "Le toucher ne mesure pas l'humidité interne et dépend de la structure.",
+            ],
+            [
+              "Friabilité",
+              "Une matière très cassante peut avoir perdu beaucoup d'humidité.",
+              "La variété, la taille et la manucure modifient aussi cette sensation.",
+            ],
+            [
+              "Condensation",
+              "Des gouttelettes dans un contenant fermé signalent un déséquilibre à examiner.",
+              "Il faut isoler le lot et contacter le vendeur plutôt que conclure à distance.",
+            ],
+            [
+              "Odeur homogène",
+              "Un profil régulier peut indiquer que le contenant a protégé le lot.",
+              "L'intensité aromatique ne révèle ni le taux de CBD ni celui de THC.",
+            ],
+            [
+              "Couleur",
+              "Une teinte régulière aide à comparer les fleurs d'un même lot.",
+              "La couleur varie aussi avec la génétique, la culture et la lumière des photos.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le guide consacré à l'{" "}
+            <Link to="/blog/aspect-fleur-cbd-couleur-structure">
+              aspect des fleurs CBD
+            </Link>{" "}
+            détaille la couleur et la structure. Celui sur les {" "}
+            <Link to="/blog/trichomes-fleurs-cbd-observation">
+              trichomes des fleurs
+            </Link>{" "}
+            explique pourquoi leur observation ne permet pas d'estimer une
+            concentration.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "confusions-eviter",
+        text: "Quatre confusions à éviter",
+      },
+      {
+        type: "list",
+        items: [
+          "un séchage annoncé n'est pas une analyse de composition ;",
+          "une odeur intense ne mesure pas la teneur en CBD, THC ou autres cannabinoïdes ;",
+          "une fleur souple n'est pas nécessairement trop humide ;",
+          "une teinte sombre ne prouve pas à elle seule un vieillissement ou une altération.",
+        ],
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            En présence de condensation, de dépôts visibles, d'une odeur
+            franchement inhabituelle ou d'un emballage endommagé, mettez le
+            produit de côté et contactez le vendeur avec le numéro de lot. Le
+            guide sur les {" "}
+            <Link to="/blog/signes-alteration-fleurs-resines-cbd">
+              signes d'altération
+            </Link>{" "}
+            aide à organiser cette vérification.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "verification-reception",
+        text: "Une vérification simple à la réception",
+      },
+      {
+        type: "list",
+        items: [
+          "contrôler que le contenant et sa fermeture sont intacts ;",
+          "identifier le numéro de lot avant de manipuler le produit ;",
+          "observer l'absence de condensation ou de dépôt inhabituel ;",
+          "comparer plusieurs fleurs du même lot plutôt qu'un seul fragment ;",
+          "ne pas déduire la composition d'une sensation au toucher ou d'une odeur ;",
+          "conserver des photos et les références du lot en cas de question.",
+        ],
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Après ouverture, les conditions de conservation prennent le relais
+            du travail réalisé avant le conditionnement. Un contenant refermé,
+            protégé de la lumière et des variations importantes aide à préserver
+            la stabilité du produit. Le guide {" "}
+            <Link to="/blog/conserver-fleurs-resines-cbd">
+              comment conserver fleurs et résines CBD
+            </Link>{" "}
+            rassemble ces repères sans imposer une durée universelle.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "retenir-sechage-affinage",
+        text: "Ce qu'il faut retenir",
+      },
+      {
+        type: "list",
+        items: [
+          "le séchage réduit progressivement l'humidité après la récolte ;",
+          "l'affinage désigne généralement une phase ultérieure de stabilisation ;",
+          "ces termes ne décrivent pas un protocole commercial unique ;",
+          "l'apparence et le toucher donnent des indices, jamais une preuve de composition ;",
+          "le numéro de lot, l'étiquette et l'analyse restent les références vérifiables.",
+        ],
+      },
+      {
+        type: "links",
+        title: "Poursuivre les vérifications qualité",
+        links: [
+          { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+          { to: "/qualite-conformite", label: "Qualité et conformité" },
+          {
+            to: "/blog/signes-alteration-fleurs-resines-cbd",
+            label: "Repérer les signes d'altération",
+          },
+          {
+            to: "/blog/conserver-fleurs-resines-cbd",
+            label: "Conserver fleurs et résines CBD",
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "analyse-cbd-laboratoire-echantillon-rapport",
     title: "Analyse CBD : vérifier le laboratoire, l'échantillon et le rapport",
     seoTitle: "Analyse CBD : vérifier rapport et échantillon | Verdanza",
