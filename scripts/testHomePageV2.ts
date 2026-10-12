@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { getLocalProducts } from "../src/services/productsService";
+import { selectHomeFeaturedProducts } from "../src/lib/homeFeaturedProducts";
+import { resolveProductCardPresentation } from "../src/lib/productPresentation";
 import { homeHeroImageVariant, homeHeroTabletImageVariant, homeHeroMobileImageVariant,
   staticImageVariants } from "../src/lib/generatedImageVariants";
 
@@ -10,9 +12,34 @@ const floatingContactSource = readFileSync("src/components/FloatingContactButton
 const activeProducts = getLocalProducts();
 
 assert.equal(activeProducts.length, 11, "Homepage V2 must expose the eleven-product active catalog");
-assert.ok(
-  activeProducts.filter((product) => product.isFeatured).length >= 3,
-  "Homepage V2 requires three existing featured products without changing catalog data",
+const homeSelection = selectHomeFeaturedProducts([...activeProducts].reverse());
+const withoutFeaturedFlags = selectHomeFeaturedProducts(
+  activeProducts.map((product) => ({ ...product, isFeatured: false })),
+);
+assert.deepEqual(
+  homeSelection.map((product) => product.id),
+  ["flower-cookie-kush-indoor", "resin-black-afghan", "flower-skittlez-plus"],
+  "the homepage selection must keep its intended order regardless of catalog order or featured flags",
+);
+assert.deepEqual(
+  withoutFeaturedFlags.map((product) => product.id),
+  homeSelection.map((product) => product.id),
+  "homepage editorial selection must not depend on Firestore featured flags",
+);
+assert.deepEqual(
+  homeSelection.map((product) => resolveProductCardPresentation(product).intensityLabel),
+  ["Doux", "Moyen", "Fort"],
+);
+assert.equal(
+  selectHomeFeaturedProducts(activeProducts.filter((product) => product.id !== "resin-black-afghan")).length,
+  2,
+  "an unavailable selection must not be silently replaced by another product",
+);
+assert.equal(
+  selectHomeFeaturedProducts(activeProducts.map((product) =>
+    product.id === "resin-black-afghan" ? { ...product, isActive: false } : product)).length,
+  2,
+  "an inactive selection must not appear on the homepage",
 );
 
 assert.match(pageSource, /<main className="home-page-v2" data-home-page-v2>/);
@@ -95,7 +122,7 @@ assert.match(floatingContactSource, /passive: true, capture: true/);
 assert.match(floatingContactSource, /"\/fiches-produits"/);
 
 console.log(
-  "Homepage V2 tests passed: active catalog, two-CTA hero, responsive LCP image, one finder, contextual floating-help suppression, three reassurance items, three featured products, two guides, SEO and reduced motion.",
+  "Homepage V2 tests passed: active catalog, two-CTA hero, responsive LCP image, one finder, contextual floating-help suppression, three reassurance items, ordered soft/medium/strong selection, two guides, SEO and reduced motion.",
 );
 
 function occurrences(value: string, fragment: string) {

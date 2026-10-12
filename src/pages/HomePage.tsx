@@ -8,6 +8,7 @@ import { JsonLd } from "../components/JsonLd";
 import { Seo } from "../components/Seo";
 import { blogArticlePath, publishedBlogArticles } from "../data/blogArticles";
 import { useProducts } from "../hooks/useProducts";
+import { selectHomeFeaturedProducts } from "../lib/homeFeaturedProducts";
 import {
   homeHeroImageVariant, homeHeroTabletImageVariant, homeHeroMobileImageVariant,
   staticImageVariants,
@@ -51,7 +52,7 @@ const homeAssurances = [
 
 export function HomePage() {
   const { products } = useProducts();
-  const featuredProducts = products.filter((product) => product.isFeatured);
+  const featuredProducts = selectHomeFeaturedProducts(products);
   const trackedListSignature = useRef("");
   const [isAgeConfirmed, setIsAgeConfirmed] = useState(isAgeConfirmedLocally);
   const heroImage = homeHeroImageVariant;

@@ -50,6 +50,24 @@ try {
       `${width}px: retain a measurable help footprint`);
     assert.equal(await page.locator("[data-home-reassurance-item]").count(), 3);
     assert.equal(await page.locator("[data-home-selection] .product-card-v2").count(), 3);
+    const selectionCards = page.locator("[data-home-selection] .product-card-v2");
+    assert.deepEqual(
+      await selectionCards.locator('a[id^="product-card-title-"]').allTextContents(),
+      ["Cookie Kush Indoor", "Black Afghan", "Skittlez Plus"],
+      `${width}px: homepage selection must show the three chosen products in order`,
+    );
+    assert.deepEqual(
+      await selectionCards.locator('a[id^="product-card-title-"]').evaluateAll((links) =>
+        links.map((link) => link.getAttribute("href"))),
+      ["/produits/cookie-kush-indoor", "/produits/black-afghan", "/produits/skittlez-plus"],
+      `${width}px: homepage selection links must target the selected products`,
+    );
+    assert.deepEqual(
+      await selectionCards.locator('[role="img"][aria-label^="Intensité "]').evaluateAll((labels) =>
+        labels.map((label) => label.getAttribute("aria-label"))),
+      ["Intensité doux", "Intensité moyen", "Intensité fort"],
+      `${width}px: homepage selection must show soft, medium and strong intensities`,
+    );
     assert.equal(await page.locator("[data-home-guide-card]").count(), 2);
     assert.equal(
       await page.locator('link[rel="canonical"]').getAttribute("href"),
@@ -155,5 +173,5 @@ try {
 }
 
 console.log(
-  "Homepage V2 UI tests passed at 390, 430, 768, 1024, 1280, 1600px: hierarchy, art-directed hero, finder overlap, contextual help, section order, cards, guides, SEO, LCP priority, reduced motion and no overflow.",
+  "Homepage V2 UI tests passed at 390, 430, 768, 1024, 1280, 1600px: hierarchy, art-directed hero, finder overlap, contextual help, section order, featured product identity/intensity, guides, SEO, LCP priority, reduced motion and no overflow.",
 );
