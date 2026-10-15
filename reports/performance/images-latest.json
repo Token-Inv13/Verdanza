@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-12T07:13:26.458Z",
+  "generatedAt": "2026-10-15T10:37:23.951Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -907,6 +907,36 @@
   ],
   "blogImages": [
     {
+      "articleSlug": "resines-cbd-tamisage-pressage-extraction",
+      "articleTitle": "Résines CBD : comprendre tamisage, pressage et extraction",
+      "artDirection": "verdanza-editorial",
+      "sources": [
+        "/images/products/black-afghan-source.webp",
+        "/images/products/ice-o-lator-source.webp",
+        "/images/products/mousseux-skywalker-source.webp"
+      ],
+      "variants": [
+        {
+          "src": "/images/blog/resines-cbd-tamisage-pressage-extraction-editorial-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 45592
+        },
+        {
+          "src": "/images/blog/resines-cbd-tamisage-pressage-extraction-editorial-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 70292
+        },
+        {
+          "src": "/images/blog/resines-cbd-tamisage-pressage-extraction-editorial-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 116536
+        }
+      ]
+    },
+    {
       "articleSlug": "sechage-affinage-fleurs-cbd-reperes",
       "articleTitle": "Séchage et affinage des fleurs CBD : comprendre les étapes",
       "artDirection": "verdanza-editorial",
@@ -1624,6 +1654,6 @@
     "productDetailBytes": 1906594,
     "staticSourceBytes": 2177258,
     "staticLargestBytes": 224006,
-    "blogImageBytes": 6141886
+    "blogImageBytes": 6374306
   }
 }

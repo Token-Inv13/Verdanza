@@ -121,6 +121,14 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" | "packaging" }
 > = {
+  "resines-cbd-tamisage-pressage-extraction": {
+    label: "Résines CBD : tamisage, pressage et extraction",
+    sources: [
+      "/images/products/black-afghan-source.webp",
+      "/images/products/ice-o-lator-source.webp",
+      "/images/products/mousseux-skywalker-source.webp",
+    ],
+  },
   "sechage-affinage-fleurs-cbd-reperes": {
     label: "Séchage et affinage des fleurs CBD",
     sources: [

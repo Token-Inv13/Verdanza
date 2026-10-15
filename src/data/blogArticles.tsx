@@ -6,6 +6,316 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "resines-cbd-tamisage-pressage-extraction",
+    title: "Résines CBD : comprendre tamisage, pressage et extraction",
+    seoTitle: "Résines CBD : tamisage, pressage et extraction | Verdanza",
+    description:
+      "Comprenez ce que désignent tamisage, pressage et extraction sur une résine CBD, ce que ces mentions indiquent et les vérifications qui restent nécessaires.",
+    excerpt:
+      "Ces trois mots décrivent des familles de procédés différentes. Ils aident à lire une fiche, sans suffire à établir la composition ou la qualité d'un lot.",
+    category: "Guide produits",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-10-15T12:31:00+02:00",
+    dateModified: "2026-10-15T12:31:00+02:00",
+    readingTime: "8 min",
+    status: "published",
+    images: {
+      square: "/images/blog/resines-cbd-tamisage-pressage-extraction-editorial-1x1.webp",
+      landscape: "/images/blog/resines-cbd-tamisage-pressage-extraction-editorial-4x3.webp",
+      wide: "/images/blog/resines-cbd-tamisage-pressage-extraction-editorial-16x9.webp",
+    },
+    relatedSlugs: [
+      "aspect-resine-cbd-texture-couleur",
+      "fleur-cbd-ou-resine-cbd-differences",
+      "isolat-spectre-large-complet-cbd",
+      "comment-lire-analyse-cbd",
+    ],
+    links: [
+      { to: "/resines-cbd", label: "Voir les résines CBD" },
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/aspect-resine-cbd-texture-couleur",
+        label: "Observer l'aspect d'une résine",
+      },
+      {
+        to: "/blog/comment-lire-analyse-cbd",
+        label: "Lire une analyse CBD",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Sur une fiche de résine CBD, les mots <strong>tamisage</strong>,{" "}
+            <strong>pressage</strong> et <strong>extraction</strong> peuvent sembler
+            résumer tout le produit. Ils décrivent pourtant des familles de
+            transformation différentes et ne donnent pas, à eux seuls, la
+            composition exacte du lot.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Ce vocabulaire commercial n'est pas une échelle automatique de
+            qualité. Une mention de procédé doit rester cohérente avec la fiche,
+            l'étiquette, le numéro de lot et le rapport d'analyse correspondant.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "trois-familles-procedes",
+        text: "Trois mots pour trois familles de procédés",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le tamisage sépare des particules végétales par une action mécanique.
+            Le pressage compacte une matière déjà préparée. L'extraction désigne
+            une séparation plus poussée de certains constituants. Dans la pratique,
+            plusieurs étapes peuvent être associées et les appellations varient
+            selon les fabricants.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Lecture prudente des principales mentions de procédé.",
+          headers: ["Mention", "Ce qu'elle décrit généralement", "Ce qu'elle ne prouve pas"],
+          rows: [
+            [
+              "Tamisage",
+              "Une séparation mécanique de particules selon la maille et la préparation annoncées.",
+              "La composition exacte, la pureté ou l'homogénéité de tout le lot.",
+            ],
+            [
+              "Pressage",
+              "La mise en forme d'une matière sous pression, parfois après un tamisage.",
+              "Une teneur précise en cannabinoïdes ou une qualité supérieure.",
+            ],
+            [
+              "Extraction",
+              "Une famille large de procédés destinés à séparer certains constituants.",
+              "Le procédé exact, sa maîtrise ou la composition finale sans autre document.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "tamisage-separation-mecanique",
+        text: "Tamisage : une séparation mécanique, pas une analyse",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le tamisage repose sur le passage d'une matière végétale préparée à
+            travers une maille. La fraction recueillie peut ensuite être conservée
+            sous forme meuble ou être travaillée davantage. Le mot donne donc un
+            indice sur la famille de fabrication, mais pas sur le détail du tri ni
+            sur les résultats mesurés dans le produit fini.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "la finesse visuelle ne permet pas d'identifier seule la maille utilisée ;",
+          "une couleur uniforme ne démontre ni la pureté ni la composition ;",
+          "deux produits annoncés comme tamisés peuvent avoir des textures différentes ;",
+          "le rapport d'analyse doit concerner le lot effectivement présenté.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "pressage-mise-forme",
+        text: "Pressage : une étape de mise en forme",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le pressage rapproche et compacte les particules d'une matière déjà
+            préparée. Son résultat peut être plus ou moins dense, souple, friable
+            ou brillant selon la matière de départ et les conditions annoncées par
+            le fabricant. Ces variations décrivent une présentation ; elles ne
+            permettent pas de calculer une teneur en CBD ou en THC.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Une texture peut aussi évoluer avec la température, le transport et le
+            stockage. Il faut donc distinguer le procédé déclaré de l'état observé
+            au moment de la réception.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "extraction-terme-large",
+        text: "Extraction : un terme trop large pour se suffire à lui-même",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le mot extraction peut recouvrir des approches très différentes. Sans
+            précision complémentaire, il ne permet pas d'identifier la matière de
+            départ, les constituants recherchés, les étapes de purification ni la
+            composition finale. Une présentation transparente doit séparer le nom
+            commercial du procédé déclaré et des données réellement mesurées.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les mentions isolat, spectre large ou spectre complet répondent encore
+            à une autre question : elles décrivent la famille de constituants
+            annoncée. Le guide sur les{" "}
+            <Link to="/blog/isolat-spectre-large-complet-cbd">
+              isolats et spectres CBD
+            </Link>{" "}
+            explique pourquoi ce vocabulaire commercial ne remplace ni une liste
+            d'ingrédients ni une analyse de lot.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "aspect-indices-limites",
+        text: "Ce que l'aspect montre, et ce qu'il ne montre pas",
+      },
+      {
+        type: "list",
+        items: [
+          "la forme indique si la matière est meuble, compactée ou conditionnée en portion ;",
+          "la texture renseigne sur l'état observé à un instant donné ;",
+          "la couleur peut varier avec la matière de départ, le procédé et la conservation ;",
+          "aucun de ces repères ne fournit une mesure fiable des cannabinoïdes ;",
+          "une photo ne permet pas de confirmer la conformité d'un lot.",
+        ],
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Pour décrire sans surinterpréter, commencez par la forme, la couleur et
+            la texture visibles, puis revenez aux documents du lot. Le guide sur{" "}
+            <Link to="/blog/aspect-resine-cbd-texture-couleur">
+              l'aspect des résines CBD
+            </Link>{" "}
+            détaille cette observation sans transformer un indice visuel en preuve.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "documents-bonne-question",
+        text: "Associer chaque question au bon document",
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Documents utiles pour vérifier une présentation de résine CBD.",
+          headers: ["Question", "Source à consulter", "Point de contrôle"],
+          rows: [
+            [
+              "Comment le produit est-il présenté ?",
+              "Fiche produit",
+              "Dénomination, forme, procédé annoncé et description cohérente.",
+            ],
+            [
+              "Quel lot ai-je reçu ?",
+              "Étiquette et contenant",
+              "Numéro de lot lisible et identique aux documents associés.",
+            ],
+            [
+              "Qu'a mesuré le laboratoire ?",
+              "Rapport d'analyse",
+              "Échantillon, dates, unités, cannabinoïdes et résultats du lot.",
+            ],
+            [
+              "Le produit a-t-il changé ?",
+              "Observation à la réception",
+              "Fermeture, aspect, odeur inhabituelle et conditions de transport.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "checklist-fiche-resine",
+        text: "Une checklist pour lire une fiche de résine",
+      },
+      {
+        type: "list",
+        items: [
+          "repérer la dénomination exacte sans déduire le procédé à partir du seul nom ;",
+          "chercher une explication claire de la fabrication annoncée ;",
+          "vérifier que le numéro de lot relie le contenant et le rapport d'analyse ;",
+          "lire séparément les cannabinoïdes, leurs unités et les limites de mesure ;",
+          "comparer l'aspect reçu à la description sans en déduire une teneur ;",
+          "conserver les références du lot en cas de question adressée au vendeur.",
+        ],
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Pour contrôler les résultats plutôt que l'apparence, le guide{" "}
+            <Link to="/blog/comment-lire-analyse-cbd">
+              comment lire une analyse CBD
+            </Link>{" "}
+            aide à retrouver l'échantillon, les dates, les unités et les lignes de
+            cannabinoïdes avant toute comparaison.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "retenir-procedes-resines",
+        text: "Ce qu'il faut retenir",
+      },
+      {
+        type: "list",
+        items: [
+          "tamisage, pressage et extraction ne décrivent pas la même transformation ;",
+          "plusieurs étapes peuvent être associées dans un même produit ;",
+          "ces termes commerciaux ne constituent pas une échelle de qualité ;",
+          "l'aspect renseigne sur la présentation, pas sur la composition mesurée ;",
+          "la fiche, l'étiquette et l'analyse doivent rester rattachées au même lot.",
+        ],
+      },
+      {
+        type: "links",
+        title: "Poursuivre la lecture des résines CBD",
+        links: [
+          { to: "/resines-cbd", label: "Voir les résines CBD" },
+          { to: "/qualite-conformite", label: "Qualité et conformité" },
+          {
+            to: "/blog/aspect-resine-cbd-texture-couleur",
+            label: "Observer l'aspect d'une résine",
+          },
+          {
+            to: "/blog/comment-lire-analyse-cbd",
+            label: "Lire une analyse CBD",
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "sechage-affinage-fleurs-cbd-reperes",
     title: "Séchage et affinage des fleurs CBD : comprendre les étapes",
     seoTitle: "Séchage et affinage des fleurs CBD | Verdanza",
