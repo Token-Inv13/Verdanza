@@ -1,14 +1,15 @@
-import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, runTransaction, serverTimestamp, updateDoc } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { db } from "../lib/firebase";
 import { collections } from "./collections";
 import type { CustomerProfile } from "../types";
 
-export async function ensureCustomerProfile(user: User) {
+/** Only call after an explicit registration or profile-save action. Existing
+ * profiles are preserved, including when another creation wins the transaction. */
+export async function createCustomerProfileIfMissing(user: User) {
   if (!db || !user.email) return null;
 
   const customerRef = doc(db, collections.customers, user.uid);
-  const snapshot = await getDoc(customerRef);
   const baseProfile = {
     uid: user.uid,
     email: user.email,
@@ -20,25 +21,16 @@ export async function ensureCustomerProfile(user: User) {
     totalSpent: 0,
   };
 
-  if (!snapshot.exists()) {
-    await setDoc(customerRef, {
-      ...baseProfile,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-  } else {
-    await setDoc(
-      customerRef,
-      {
-        email: user.email,
-        displayName: snapshot.data().displayName || user.displayName || "",
-        phone: snapshot.data().phone || user.phoneNumber || "",
-        role: "customer",
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(customerRef);
+    if (!snapshot.exists()) {
+      transaction.set(customerRef, {
+        ...baseProfile,
+        createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-  }
+      });
+    }
+  });
 
   return getCustomerProfile(user.uid);
 }

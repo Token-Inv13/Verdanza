@@ -1,9 +1,8 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { updateCustomerProfile } from "../../services/customersService";
 
 export function AccountProfilePage() {
-  const { user, customerProfile, refreshCustomerProfile } = useAuth();
+  const { user, customerProfile, saveCustomerProfile } = useAuth();
   const [displayName, setDisplayName] = useState("");
   const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
@@ -20,8 +19,7 @@ export function AccountProfilePage() {
     setMessage("");
     setError("");
     try {
-      await updateCustomerProfile(user.uid, { displayName, phone });
-      await refreshCustomerProfile();
+      await saveCustomerProfile({ displayName, phone });
       setMessage("Profil mis à jour.");
     } catch (profileError) {
       setError(
