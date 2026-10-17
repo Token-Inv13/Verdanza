@@ -24,9 +24,16 @@ export async function getAdminUserForAuthUser(user: User | null) {
   return null;
 }
 
+export function isAdminRecordForAuthUser(record: AdminUser | null, user: User | null): boolean {
+  if (!user || !record?.isActive || !user.email || !record.email) return false;
+  if (record.email.trim().toLowerCase() !== user.email.trim().toLowerCase()) return false;
+  // Legacy email-keyed records omit UID or store null; any other value must match Auth.
+  return record.uid == null || record.uid === user.uid;
+}
+
 export async function isAuthorizedAdmin(user: User | null) {
   const adminUser = await getAdminUserForAuthUser(user);
-  return Boolean(adminUser?.isActive && adminUser.email === user?.email);
+  return isAdminRecordForAuthUser(adminUser, user);
 }
 
 export async function createAdminUserRecord(data: {
