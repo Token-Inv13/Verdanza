@@ -50,7 +50,9 @@ const firestoreMock = `
   export const serverTimestamp=()=>({syntheticServerTimestamp:true});
   export const setDoc=async(ref,data,options)=>{window.__fixture.writes.push({method:"setDoc",path:ref.path,data:structuredClone(data)});
     documents.set(ref.path,options?.merge?{...documents.get(ref.path),...data}:structuredClone(data));};
-  export const updateDoc=async(ref,data)=>{if(!documents.has(ref.path))throw Error("missing document");
+  export const updateDoc=async(ref,data)=>{const fixture=window.__fixture;
+    const hold=fixture.holds.get("update:"+ref.path);if(hold){fixture.holds.delete("update:"+ref.path);hold.started=true;await hold.promise;}
+    if(!documents.has(ref.path))throw Error("missing document");
     window.__fixture.writes.push({method:"updateDoc",path:ref.path,data:structuredClone(data)});
     documents.set(ref.path,{...documents.get(ref.path),...data});};
   export const runTransaction=async(_db,run)=>{const pending=[];const result=await run({get:getDoc,
@@ -378,7 +380,22 @@ try {
     assert.equal((await storedProfile(page))?.loyaltyPoints, 123);
     assert.equal((await storedProfile(page))?.orderCount, 7);
   });
-  await withPage("/compte?logout-race", async page => {
+  await withPage("/compte?edit-observer-race", async page => {
+    const heldWrite = await holdNextRead(page, "update:customers/auth-test-owner");
+    await page.getByLabel("Nom affiché", { exact: true }).fill("Sauvegarde prioritaire");
+    await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
+    await waitForHeldRead(page, heldWrite);
+    const oldRead = await holdNextRead(page, "customers/auth-test-owner");
+    await page.evaluate(() => { Reflect.set(window, "__oldAuthPromise", Reflect.get(window, "__emitAuth")()); });
+    await waitForHeldRead(page, oldRead);
+    await releaseHeldRead(page, heldWrite);
+    await page.getByText("Profil mis à jour.", { exact: true }).waitFor();
+    await releaseHeldRead(page, oldRead);
+    await page.evaluate(() => Reflect.get(window, "__oldAuthPromise"));
+    assert.equal((await state(page)).profile?.displayName, "Sauvegarde prioritaire");
+    assert.equal((await writes(page)).length, 1);
+    assert.equal((await storedProfile(page))?.displayName, "Sauvegarde prioritaire");
+  });  await withPage("/compte?logout-race", async page => {
     const oldRead = await holdNextRead(page, "customers/auth-test-owner");
     await page.getByRole("button", { name: "Actualiser profil", exact: true }).click();
     await waitForHeldRead(page, oldRead);

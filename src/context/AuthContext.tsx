@@ -146,9 +146,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ++profileRevision.current;
     await createCustomerProfileIfMissing(currentUser);
     const profile = await updateCustomerProfile(uid, data);
+    // A completed explicit save supersedes reads started by a later same-UID Auth event.
     if (
       observedUid.current === uid &&
-      authRevision.current === session &&
       auth.currentUser?.uid === uid
     ) {
       ++profileRevision.current;
