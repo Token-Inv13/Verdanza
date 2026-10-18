@@ -100,7 +100,7 @@ try {
     assert.equal(serialized.includes(secret), false, `champ interne exposé: ${secret}`);
   }
 
-  await db.collection("adminUsers").doc("admin-1").set({ isActive: true });
+  await db.collection("adminUsers").doc("admin-1").set({ isActive: true, uid: "admin-1", email: "admin@example.test" });
   await seedWallet("target", 2222, 0, 0);
   await seedMovement("target-pay", "target", 900, "payment_confirmed", 2222, 0, 0);
   const adminResponse = new FakeResponse();

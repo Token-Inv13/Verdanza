@@ -33,7 +33,7 @@ function fixture(overrides: Partial<Dependencies> = {}, membership = { uid: true
   const db = { projectId: "verdanza-1f621", collection: (name: string) => {
     equal(name, "adminUsers"); return { doc: (id: string) => ({ get: async () => {
       calls.push("admin-read"); const active = id === privateUid ? membership.uid : membership.email;
-      return { exists: active, data: () => ({ isActive: active }) };
+      return { exists: active, data: () => ({ isActive: active, email: privateEmail, ...(id === privateUid ? { uid: privateUid } : {}) }) };
     } }) };
   } } as unknown as Firestore;
   const dependencies: Dependencies = {
@@ -102,7 +102,7 @@ for (const raw of [undefined, "", "bad-json", "[]", JSON.stringify({ activeVersi
 });
 await test("ordre exact des gates et compteur-only", async () => {
   const h = fixture(); const result = await h.invoke(JSON.stringify({ action: "dry_run" })); equal(result.statusCode, 200);
-  deepStrictEqual(h.calls, ["gate", "project", "db", "auth", "admin-read", "admin-read", "off", "keyring", "engine"]);
+  deepStrictEqual(h.calls, ["gate", "project", "db", "auth", "admin-read", "off", "keyring", "engine"]);
   deepStrictEqual(Object.keys(result.body as object).sort(), [...REFERRAL_MAINTENANCE_COUNTERS].sort());
 });
 await test("projection rejette toute PII ajoutée par le moteur", async () => {

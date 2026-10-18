@@ -337,9 +337,9 @@ const refundConflictMessage = "Enregistrement non confirmé : vérification ou n
 
 try {
   equal(CAGNOTTE_SERVER_PROGRAM, null); equal(CAGNOTTE_CLOSED_RUNTIME_CONFIGURATION.orderRefundsEnabled, false);
-  await db.collection("adminUsers").doc(actor.uid).set({ isActive: true });
+  await db.collection("adminUsers").doc(actor.uid).set({ isActive: true, uid: actor.uid, email: actor.email });
   await db.collection("adminUsers").doc("inactive-refund").set({ isActive: false });
-  await db.collection("adminUsers").doc("fallback-refund@example.test").set({ isActive: true });
+  await db.collection("adminUsers").doc("fallback-refund@example.test").set({ isActive: true, email: "fallback-refund@example.test" });
   await db.collection("products").doc("refund-product").set({ name: "Synthetic", stock: 1000, price: 10 });
   await test("entree normale desactivee pour toutes les actions, aucun commutateur HTTP", async () => {
     for (const action of ["preview", "record_confirmed", "inspect", "preview_correction", "record_correction"]) {

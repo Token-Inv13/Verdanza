@@ -46,8 +46,8 @@ try {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore(); const batch = writeBatch(db);
-    batch.set(doc(db, "adminUsers/admin-uid"), { isActive: true });
-    batch.set(doc(db, "adminUsers/email-admin@example.test"), { isActive: true });
+    batch.set(doc(db, "adminUsers/admin-uid"), { isActive: true, uid: "admin-uid", email: "uid-admin@example.test" });
+    batch.set(doc(db, "adminUsers/email-admin@example.test"), { isActive: true, email: "email-admin@example.test" });
     batch.set(doc(db, "adminUsers/inactive"), { isActive: false });
     batch.set(doc(db, "products/public"), { isActive: true, stock: 10 });
     batch.set(doc(db, "products/private"), { isActive: false, stock: 10 });
@@ -228,7 +228,7 @@ try {
     }
   });
   await test("Non regression", "admin legitimate registry operation retained", async () => {
-    await setDoc(doc(admin, "adminUsers/synthetic-delegate"), { isActive: true });
+    await setDoc(doc(admin, "adminUsers/synthetic-delegate"), { isActive: true, uid: "synthetic-delegate", email: "synthetic-delegate@example.test" });
     await deleteDoc(doc(admin, "adminUsers/synthetic-delegate"));
   });
   console.table(Object.fromEntries(counts));

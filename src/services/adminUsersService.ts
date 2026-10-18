@@ -3,6 +3,7 @@ import { db } from "../lib/firebase";
 import { collections } from "./collections";
 import type { AdminUser } from "../types";
 import type { User } from "firebase/auth";
+import { isAdminRecordBoundToIdentity } from "../lib/adminBinding";
 
 export async function getAdminUserForAuthUser(user: User | null) {
   if (!db || !user?.email) return null;
@@ -10,12 +11,13 @@ export async function getAdminUserForAuthUser(user: User | null) {
   try {
     const byUid = await getDoc(doc(db, collections.adminUsers, user.uid));
     if (byUid.exists()) {
-      return { id: byUid.id, ...byUid.data() } as AdminUser;
+      return { ...byUid.data(), id: byUid.id } as AdminUser;
     }
 
+    if (user.emailVerified !== true) return null;
     const byEmail = await getDoc(doc(db, collections.adminUsers, user.email));
     if (byEmail.exists()) {
-      return { id: byEmail.id, ...byEmail.data() } as AdminUser;
+      return { ...byEmail.data(), id: byEmail.id } as AdminUser;
     }
   } catch (error) {
     console.warn("Admin lookup unavailable for current user", error);
@@ -25,10 +27,9 @@ export async function getAdminUserForAuthUser(user: User | null) {
 }
 
 export function isAdminRecordForAuthUser(record: AdminUser | null, user: User | null): boolean {
-  if (!user || !record?.isActive || !user.email || !record.email) return false;
-  if (record.email.trim().toLowerCase() !== user.email.trim().toLowerCase()) return false;
-  // Legacy email-keyed records omit UID or store null; any other value must match Auth.
-  return record.uid == null || record.uid === user.uid;
+  if (!record || !user || !isAdminRecordBoundToIdentity(record, user)) return false;
+  if (record.id === user.uid) return true;
+  return user.emailVerified === true && record.id === user.email;
 }
 
 export async function isAuthorizedAdmin(user: User | null) {

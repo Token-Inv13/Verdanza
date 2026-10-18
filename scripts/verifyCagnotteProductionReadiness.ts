@@ -48,7 +48,7 @@ const baseMain = "322f65895fb0a75479c92bc4a3054caa4073d2f8";
 const historicalRulesCommit = "eb35d8dcc7383528e6f4e7b53eebe02ce9bb413d";
 const historicalRulesHash = "f90ea99267b4f422fd40ce62513e050f6649b2e92abc94ca0c89595769281c80";
 // Reviewed cumulative Admin V3 and legacy referral email-block rules; retain the exact-file guard and baseline proof.
-const expectedRulesHash = "02ece4445ed5a2b24a1d4b4b24914739f5ba66f82ef1605bb062df4d614a68c4";
+const expectedRulesHash = "c436e4fe2a6ed88a50a636ea84cab6e2f9c3ae4774a80dee20de0a6792698132";
 const expectedEndpoints = [
   "admin-contests.ts",
   "admin-payment-links.ts",

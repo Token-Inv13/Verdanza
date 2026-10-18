@@ -10,7 +10,7 @@ import type { VercelRequestLike, VercelResponseLike } from "../api/_server/http.
 import type { StockAdjustment } from "../src/types/adminStock.js";
 
 const db = await connectCagnotteEmulator(CAGNOTTE_DEMO);
-const admin = { uid: "stock-admin", email: null };
+const admin = { uid: "stock-admin", email: "stock-admin@example.test" };
 let checks = 0;
 const test = async (name: string, run: () => Promise<unknown>) => { await run(); console.log(`PASS ${name}`); checks++; };
 const invalid = (code: string) => (error: unknown) => error instanceof AdminStockError && error.code === code;
@@ -26,16 +26,16 @@ async function call(token?: string, operation?: StockAdjustment, method = "POST"
     if (value === "invalid") throw new FirebaseIdTokenVerificationError("authentication");
     if (value === "verified-email") return { uid: "email-uid", email: "stock-email@example.test", emailVerified: true };
     if (value === "unverified-email") return { uid: "email-uid", email: "stock-email@example.test", emailVerified: false };
-    return { uid: value, email: null };
+    return { uid: value, email: `${value}@example.test` };
   } });
   const response = { setHeader() {}, status(code: number) { status = code; return this; }, json(body: Record<string, unknown>) { payload = body; return this; } };
   await handler({ method, headers: token ? { authorization: `Bearer ${token}` } : {}, body: { action: "adminStockOperation", operation, adminUid: "stock-admin" }, url: "/api/invoices" } as VercelRequestLike, response as unknown as VercelResponseLike);
   return { status, payload };
 }
 try {
-  await db.collection("adminUsers").doc(admin.uid).set({ isActive: true });
+  await db.collection("adminUsers").doc(admin.uid).set({ isActive: true, uid: admin.uid, email: admin.email });
   await db.collection("adminUsers").doc("stock-inactive").set({ isActive: false });
-  await db.collection("adminUsers").doc("stock-email@example.test").set({ isActive: true });
+  await db.collection("adminUsers").doc("stock-email@example.test").set({ isActive: true, email: "stock-email@example.test" });
   await test("20 → 25, mouvement +5 atomique, valeurs et auteur serveur", async () => {
     const f = await setup(); const result = await commitAdminStock(db, { ...f.input, adminUid: "forged", delta: 999, beforeStock: 0 }, admin);
     equal(result.beforeStock, 20); equal(result.afterStock, 25); equal(result.delta, 5); equal(result.adminUid, admin.uid);

@@ -6,18 +6,29 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function adminBinding(data) {
+      return data.isActive == true
+        && request.auth.token.get("email", null) is string
+        && request.auth.token.email != ""
+        && data.get("email", null) is string
+        && data.email == request.auth.token.email
+        && (data.get("uid", null) == null || data.get("uid", null) == request.auth.uid);
+    }
+
     function adminByUid() {
       return signedIn()
         && firestore.exists(/databases/(default)/documents/adminUsers/$(request.auth.uid))
-        && firestore.get(/databases/(default)/documents/adminUsers/$(request.auth.uid)).data.isActive == true;
+        && adminBinding(firestore.get(/databases/(default)/documents/adminUsers/$(request.auth.uid)).data);
     }
 
     function adminByEmail() {
       return signedIn()
-        && request.auth.token.email != null
         && request.auth.token.email_verified == true
+        && !firestore.exists(/databases/(default)/documents/adminUsers/$(request.auth.uid))
+        && request.auth.token.get("email", null) is string
+        && request.auth.token.email != ""
         && firestore.exists(/databases/(default)/documents/adminUsers/$(request.auth.token.email))
-        && firestore.get(/databases/(default)/documents/adminUsers/$(request.auth.token.email)).data.isActive == true;
+        && adminBinding(firestore.get(/databases/(default)/documents/adminUsers/$(request.auth.token.email)).data);
     }
 
     function isAdmin() {

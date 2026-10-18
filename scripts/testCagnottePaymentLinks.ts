@@ -129,9 +129,9 @@ async function requests(id: string) { return (await db.collection("paymentLinkRe
 
 try {
   equal(CAGNOTTE_SERVER_PROGRAM, null);
-  await db.collection("adminUsers").doc(admin.uid).set({ isActive: true });
+  await db.collection("adminUsers").doc(admin.uid).set({ isActive: true, uid: admin.uid, email: admin.email });
   await db.collection("adminUsers").doc("inactive-links").set({ isActive: false });
-  await db.collection("adminUsers").doc("fallback-links@example.test").set({ isActive: true });
+  await db.collection("adminUsers").doc("fallback-links@example.test").set({ isActive: true, email: "fallback-links@example.test" });
   await db.collection("products").doc("links-product").set({ stock: 1000, name: "Synthetic", price: 10, isActive: true });
   await test("100 EUR : lien sans journal, paiement 500 pending, livraison 500 available", async () => {
     const f = await fixture(), before = await ledger(); const original = await stored(f.id);

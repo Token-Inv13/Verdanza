@@ -55,7 +55,7 @@ async function seed(cents = 5000) {
   await db.collection("referralMigrations").doc(ORDER_EMAIL_NORMALIZATION_VERSION).set({ schemaVersion: 1, version: ORDER_EMAIL_NORMALIZATION_VERSION, status: "complete", completedAtEpochMs: 3000,
     verifiedOrders: 0, verifiedPaidProductOrders: 0, verifiedReferralRelations: 1, verifiedUnresolvedIdentityRelations: 0, verifiedLinkedRelationsWithPaidHistory: 0,
     verifiedPaymentIdentityEvidence: 0, verifiedDetachedPaymentIdentityEvidence: 0, verifiedEmailClaims: 0, verifiedCorruptEmailClaims: 0, verifiedLegacyEmailBlocks: 0, verifiedCorruptLegacyEmailBlocks: 0, verifiedOrphanLegacyEmailBlocks: 0,  verifiedMissingPaymentIdentityEvidence: 0, verifiedUnresolvedPaymentIdentityEvidence: 0, verifiedCorruptPaymentIdentityEvidence: 0 });
-  await db.collection("adminUsers").doc(actor.uid).set({ isActive: true });
+  await db.collection("adminUsers").doc(actor.uid).set({ isActive: true, uid: actor.uid, email: actor.email });
 }
 const address = { firstName: "Test", lastName: "Client", line1: "1 rue Test", postalCode: "75001", city: "Paris", country: "FR" };
 function body() { return { items: [{ productId: "main", quantity: 1 }], deliveryMethod: "postal" as "postal" | "local_express", authToken: uid, email: "checkout-different@example.test", address,
