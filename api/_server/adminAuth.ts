@@ -1,4 +1,5 @@
 import type { Firestore } from "firebase-admin/firestore";
+import { isAdminRecordBoundToIdentity } from "../../src/lib/adminBinding.js";
 
 export type VerifiedFirebaseUser = {
   uid: string;
@@ -62,16 +63,14 @@ export async function assertAdminUser(
 ) {
   const user = await verify(idToken);
   const uidSnapshot = await db.collection("adminUsers").doc(user.uid).get();
-  const emailSnapshot = user.email && user.emailVerified === true
-    ? await db.collection("adminUsers").doc(user.email).get()
-    : null;
-  const adminData = uidSnapshot.exists
-    ? uidSnapshot.data()
-    : emailSnapshot?.exists
-      ? emailSnapshot.data()
-      : null;
-
-  if (adminData?.isActive !== true) {
+  // An existing UID record is authoritative, including when it is malformed.
+  if (uidSnapshot.exists) {
+    if (!isAdminRecordBoundToIdentity(uidSnapshot.data(), user)) throw new Error("Acces admin requis.");
+    return user;
+  }
+  if (!user.email || user.emailVerified !== true) throw new Error("Acces admin requis.");
+  const emailSnapshot = await db.collection("adminUsers").doc(user.email).get();
+  if (!emailSnapshot.exists || !isAdminRecordBoundToIdentity(emailSnapshot.data(), user)) {
     throw new Error("Acces admin requis.");
   }
 

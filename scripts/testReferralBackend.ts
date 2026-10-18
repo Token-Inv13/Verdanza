@@ -1765,7 +1765,7 @@ for (const action of ["payment", "delivery"] as const) {
     const id = `referral-runtime-invalid-snapshot-${action}`;
     await createRouteCandidate(id, `referee-runtime-invalid-snapshot-${action}`);
     if (action === "delivery") await routeTransition(id, { paymentStatus: "paid", finalPaymentMethod: "card_payment_link" });
-    await db.collection("adminUsers").doc(routeActor.uid).set({ isActive: true });
+    await db.collection("adminUsers").doc(routeActor.uid).set({ isActive: true, uid: routeActor.uid, email: routeActor.email });
     const before = await capturePaymentState();
     let runtimeCalls = 0; let effectCalls = 0; let status = 0; let payload: unknown;
     const handler = createOrderStatusHandler({ getDb: () => noReferralDb, verifyToken: async () => routeActor,
@@ -2076,7 +2076,7 @@ await test("marqueur absent: link et ensure_code nouveau ou existant refusés sa
 await test("snapshot remisé et marker absent: HTTP 409, zéro mutation de paiement", async () => {
   const id = "email-discount-marker-missing";
   await createRouteCandidate(id, "referee-discount-marker-missing");
-  await db.collection("adminUsers").doc(routeActor.uid).set({ isActive: true });
+  await db.collection("adminUsers").doc(routeActor.uid).set({ isActive: true, uid: routeActor.uid, email: routeActor.email });
   await historyMarker.delete();
   try {
     const before = await capturePaymentState();
@@ -2444,7 +2444,7 @@ await test("replay delivered pendant off: zéro lecture Referral, aucun nouveau 
 await test("handler replay delivered 200: reward réconcilié, aucun email ni analytics secondaire", async () => {
   const id = "referral-catchup-handler"; const child = await createSettlementCandidate(id, false);
   await replayDelivery(id, REFERRAL_CLOSED_RUNTIME);
-  await db.collection("adminUsers").doc(routeActor.uid).set({ isActive: true });
+  await db.collection("adminUsers").doc(routeActor.uid).set({ isActive: true, uid: routeActor.uid, email: routeActor.email });
   const beforeEffects = await captureCatchupSideEffects(id, child.uid);
   let status = 0; let payload: unknown; let effectCalls = 0;
   const handler = createOrderStatusHandler({ getDb: () => db, verifyToken: async () => routeActor,
@@ -2626,7 +2626,7 @@ await test("action historique off et malformed: 503 et zéro mutation commercial
 });
 await test("handler historique: booléen strict, action exclusive, admin requis, puis 200 sans effets", async () => {
   const id = "referral-history-handler"; const child = await createSettlementCandidate(id, false); await cancelAfterOffDelivery(id);
-  await db.collection("adminUsers").doc(routeActor.uid).set({ isActive: true });
+  await db.collection("adminUsers").doc(routeActor.uid).set({ isActive: true, uid: routeActor.uid, email: routeActor.email });
   let calls = 0; let effects = 0;
   let actor = routeActor; let runtime = () => drain as Parameters<typeof commitOrderStatusTransition>[0]["referralProgram"];
   const handler = createOrderStatusHandler({ getDb: () => db, verifyToken: async () => { calls++; return actor; },
@@ -2864,7 +2864,7 @@ await test("plain payments unresolved concurrents: les deux paiements sérialise
 });
 await test("route order status: snapshot avant instant du programme conserve HTTP 503 et zéro mutation", async () => {
   const id = "referral-route-before-program-start"; await createRouteCandidate(id, `referee-${id}`);
-  await db.collection("adminUsers").doc(routeActor.uid).set({ isActive: true });
+  await db.collection("adminUsers").doc(routeActor.uid).set({ isActive: true, uid: routeActor.uid, email: routeActor.email });
   const before = await capturePaymentState();
   let status = 0; let payload: unknown;
   const handler = createOrderStatusHandler({ getDb: () => db, verifyToken: async () => routeActor,

@@ -7,12 +7,12 @@ const env = await initializeTestEnvironment({ projectId: CAGNOTTE_DEMO.projectId
 const denied = (op: Promise<unknown>) => rejects(op, (e: unknown) => Boolean(e && typeof e === "object" && "code" in e && e.code === "permission-denied")); let checks = 0;
 try {
   const collections = ["marketingDrafts", "marketingOperations", "marketingAuditLogs", "marketingCouponCodes"];
-  await env.withSecurityRulesDisabled(async (context) => { const db = context.firestore(); await db.doc("adminUsers/marketing-rules-admin").set({ isActive: true }); for (const collection of collections) await db.doc(`${collection}/fixture`).set({ secret: "private proposal" }); await db.doc("coupons/marketing-rules-coupon").set({ code: "FIXTURE", isActive: false, usedCount: 4 }); await db.doc("coupons/marketing-rules-contest").set({ code: "PROTECTED", source: "contest", isActive: true, usedCount: 0 }); await db.doc("promoBanners/marketing-rules-banner").set({ title: "Fixture", isActive: false, isArchived: false }); await db.doc("promoBanners/marketing-rules-active").set({ title: "Active", isActive: true, isArchived: false }); });
-  for (const context of [env.unauthenticatedContext(), env.authenticatedContext("customer"), env.authenticatedContext("marketing-rules-admin")]) {
+  await env.withSecurityRulesDisabled(async (context) => { const db = context.firestore(); await db.doc("adminUsers/marketing-rules-admin").set({ isActive: true, uid: "marketing-rules-admin", email: "marketing-rules-admin@example.test" }); for (const collection of collections) await db.doc(`${collection}/fixture`).set({ secret: "private proposal" }); await db.doc("coupons/marketing-rules-coupon").set({ code: "FIXTURE", isActive: false, usedCount: 4 }); await db.doc("coupons/marketing-rules-contest").set({ code: "PROTECTED", source: "contest", isActive: true, usedCount: 0 }); await db.doc("promoBanners/marketing-rules-banner").set({ title: "Fixture", isActive: false, isArchived: false }); await db.doc("promoBanners/marketing-rules-active").set({ title: "Active", isActive: true, isArchived: false }); });
+  for (const context of [env.unauthenticatedContext(), env.authenticatedContext("customer"), env.authenticatedContext("marketing-rules-admin", { email: "marketing-rules-admin@example.test" })]) {
     const db = context.firestore();
     for (const collection of collections) { await denied(db.doc(`${collection}/fixture`).get()); await denied(db.doc(`${collection}/forged`).set({ secret: "forged" })); await denied(db.doc(`${collection}/fixture`).update({ secret: "changed" })); await denied(db.doc(`${collection}/fixture`).delete()); checks += 4; }
   }
-  const admin = env.authenticatedContext("marketing-rules-admin").firestore();
+  const admin = env.authenticatedContext("marketing-rules-admin", { email: "marketing-rules-admin@example.test" }).firestore();
   await denied(admin.doc("coupons/marketing-rules-coupon").update({ usedCount: 0 })); checks++;
   await denied(admin.doc("coupons/marketing-rules-coupon").update({ isActive: true })); checks++;
   await denied(admin.doc("coupons/marketing-rules-new-active").set({ code: "NEW", isActive: true, usedCount: 0 })); checks++;

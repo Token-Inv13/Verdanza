@@ -35,7 +35,7 @@ async function api(token: string, method = "POST", body: unknown = request(), qu
   let status = 200, payload: unknown;
   const response = { setHeader() {}, status(value: number) { status = value; return this; }, json(value: unknown) { payload = value; } };
   await handleMarketingAiAdmin({ method, url: "/api/admin-contests?action=marketing-ai" + query, headers: token ? { authorization: "Bearer " + token } : {}, body } as VercelRequestLike, response as unknown as VercelResponseLike,
-    { db, verify: async (value) => ({ uid: value, email: null }), provider, now: aiNow });
+    { db, verify: async (value) => ({ uid: value, email: `${value}@example.test` }), provider, now: aiNow });
   return { status, payload: payload as Record<string, unknown> };
 }
 try {
@@ -107,13 +107,13 @@ try {
     equal((await db.collection(marketingAiCollection).doc(second.id).get()).data()?.proposals.length, 3);
   });
   await test("API : lecture admin propriétaire uniquement, résultat existant retrouvé sans nouveau fournisseur", async () => {
-    const { gen, admin } = await generated(); await db.collection("adminUsers").doc(admin).set({ isActive: true }); const other = actor(); await db.collection("adminUsers").doc(other).set({ isActive: true });
+    const { gen, admin } = await generated(); await db.collection("adminUsers").doc(admin).set({ isActive: true, uid: admin, email: `${admin}@example.test` }); const other = actor(); await db.collection("adminUsers").doc(other).set({ isActive: true, uid: other, email: `${other}@example.test` });
     equal((await api(admin, "GET", undefined)).payload.configured, true); const before = calls;
     const result = await api(admin, "GET", undefined, "&generationId=" + gen.id); equal(result.status, 200); equal(result.payload.id, gen.id); equal(calls, before);
     equal((await api(other, "GET", undefined, "&generationId=" + gen.id)).status, 403);
   });
   await test("API POST authentifiée, JSON et brief malformés rejetés sans nouvelle génération", async () => {
-    const admin = actor(); await db.collection("adminUsers").doc(admin).set({ isActive: true });
+    const admin = actor(); await db.collection("adminUsers").doc(admin).set({ isActive: true, uid: admin, email: `${admin}@example.test` });
     const req = request(), before = calls, result = await api(admin, "POST", JSON.stringify(req)); equal(result.status, 200); equal(result.payload.id, req.generationId); equal(calls, before + 1);
     equal((await api(admin, "POST", "{broken")).status, 400); equal((await api(admin, "POST", { ...request(), action: "activate" })).status, 400); equal(calls, before + 1);
   });

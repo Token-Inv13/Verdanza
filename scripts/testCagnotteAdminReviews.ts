@@ -69,7 +69,7 @@ async function dump(id: string) {
 }
 
 try {
-  await db.collection("adminUsers").doc(actor.uid).set({ isActive: true });
+  await db.collection("adminUsers").doc(actor.uid).set({ isActive: true, uid: actor.uid, email: actor.email });
   await db.collection("products").doc("review-product").set({ name: "Produit fictif", stock: 10 });
   await test("seuil 72 heures : repere de revue seulement, aucune liberation", async () => {
     const f = await fixture("none"), before = await dump(f.id), current = await context(f.id);

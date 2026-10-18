@@ -31,11 +31,11 @@ async function sizes(collections: string[]) { return Promise.all(collections.map
 async function api(token: string, method = "GET", operation?: unknown) {
   let status = 200; let payload: unknown;
   const response = { setHeader() {}, status(value: number) { status = value; return this; }, json(value: unknown) { payload = value; } };
-  await handleMarketingAdmin({ method, url: "/api/admin-contests?action=marketing", headers: token ? { authorization: `Bearer ${token}` } : {}, body: { operation } } as VercelRequestLike, response as unknown as VercelResponseLike, { db, verify: async (value) => { if (value === "invalid") throw new FirebaseIdTokenVerificationError("authentication"); return { uid: value, email: null }; } });
+  await handleMarketingAdmin({ method, url: "/api/admin-contests?action=marketing", headers: token ? { authorization: `Bearer ${token}` } : {}, body: { operation } } as VercelRequestLike, response as unknown as VercelResponseLike, { db, verify: async (value) => { if (value === "invalid") throw new FirebaseIdTokenVerificationError("authentication"); return { uid: value, email: `${value}@example.test` }; } });
   return { status, payload };
 }
 try {
-  await db.collection("adminUsers").doc(actor).set({ isActive: true });
+  await db.collection("adminUsers").doc(actor).set({ isActive: true, uid: actor, email: `${actor}@example.test` });
   await db.collection("products").doc("marketing-product").set({ name: "Produit cadeau fixture", isActive: true, category: "flowers", stock: 100 });
   await test("brouillons manuels des quatre types : zéro effet public, participants, gains ou emails", async () => { const collections = ["coupons", "promoBanners", "contests", "contestEntries", "contestDraws", "contestPrizes", "contestAuditLogs"]; const before = await sizes(collections); for (const kind of ["promotion", "banner", "contest", "campaign"] as const) { const f = await setup(kind); equal(f.result.draft.origin, "manual"); equal(f.result.draft.authorId, actor); equal(f.result.draft.state, "draft"); equal(f.result.draft.revision, 1); } deepEqual(await sizes(collections), before); });
   await test("brouillon incomplet conservé en privé, revue invalide sans objet créé", async () => { const f = await setup("promotion", { promotion: { ...params("promotion").promotion!, code: "", label: "" } }); await rejects(step(f.result, "review"), invalid("invalid_draft")); equal(f.result.draft.state, "draft"); });

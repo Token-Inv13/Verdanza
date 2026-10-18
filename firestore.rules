@@ -6,18 +6,30 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Exact Firebase Auth email equality is shared with the client and API.
+    function adminBinding(data) {
+      return data.isActive == true
+        && request.auth.token.get("email", null) is string
+        && request.auth.token.email != ""
+        && data.get("email", null) is string
+        && data.email == request.auth.token.email
+        && (data.get("uid", null) == null || data.get("uid", null) == request.auth.uid);
+    }
+
     function adminByUid() {
       return signedIn()
         && exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid))
-        && get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data.isActive == true;
+        && adminBinding(get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data);
     }
 
     function adminByEmail() {
       return signedIn()
         && request.auth.token.email_verified == true
-        && request.auth.token.email != null
+        && !exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid))
+        && request.auth.token.get("email", null) is string
+        && request.auth.token.email != ""
         && exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email))
-        && get(/databases/$(database)/documents/adminUsers/$(request.auth.token.email)).data.isActive == true;
+        && adminBinding(get(/databases/$(database)/documents/adminUsers/$(request.auth.token.email)).data);
     }
 
     function isAdmin() {

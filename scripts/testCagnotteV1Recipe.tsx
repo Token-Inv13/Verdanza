@@ -388,7 +388,7 @@ async function seedSyntheticData() {
     category: "flowers",
     cultureType: "indoor",
   });
-  await db.collection("adminUsers").doc(admin.uid).set({ isActive: true });
+  await db.collection("adminUsers").doc(admin.uid).set({ isActive: true, uid: admin.uid, email: admin.email });
 }
 
 function checkoutBody(checkoutRequestId: string): JsonRecord {

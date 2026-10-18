@@ -583,7 +583,7 @@ async function seed(withCoupon = false) {
     name: "Produit synthétique", slug: "product-main", price: 10, stock: 1_000,
     isActive: true, category: "flowers", cultureType: "indoor",
   });
-  await rawDb.collection("adminUsers").doc(admin.uid).set({ isActive: true });
+  await rawDb.collection("adminUsers").doc(admin.uid).set({ isActive: true, uid: admin.uid, email: admin.email });
   if (withCoupon) await rawDb.collection("coupons").doc("test5").set({
     code: "TEST5", label: "Test 5", isActive: true, usedCount: 0,
     minimumOrder: 0, discountType: "fixed", discountValue: 5,

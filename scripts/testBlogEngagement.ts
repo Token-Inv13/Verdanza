@@ -312,10 +312,10 @@ test("l'acces administrateur est protege par token et adminUsers", () => {
 
 test("la liste Admin sans slug garde auth, vide confirme et pagination", async () => {
   const raw = new FakeFirestore();
-  raw.documents.set("adminUsers/admin-fixture", { isActive: true });
+  raw.documents.set("adminUsers/admin-fixture", { isActive: true, uid: "admin-fixture", email: "admin-fixture@example.test" });
   const handler = createBlogInteractionsHandler({
     getDb: () => raw as unknown as FirebaseFirestore.Firestore,
-    verifyToken: async (token) => ({ uid: token === "admin" ? "admin-fixture" : "visitor", email: null }),
+    verifyToken: async (token) => ({ uid: token === "admin" ? "admin-fixture" : "visitor", email: token === "admin" ? "admin-fixture@example.test" : "visitor@example.test" }),
   });
   async function get(url: string, token?: string) {
     let status = 200;

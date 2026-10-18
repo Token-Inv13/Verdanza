@@ -14,11 +14,11 @@ let checks = 0;
 try {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
-    await db.doc("adminUsers/rules-stock-admin").set({ isActive: true });
+    await db.doc("adminUsers/rules-stock-admin").set({ isActive: true, uid: "rules-stock-admin", email: "rules-stock-admin@example.test" });
     await db.doc("products/rules-stock-product").set({ isActive: true, isFeatured: false, stock: 20, lowStockThreshold: 5 });
     await db.doc("stockMovements/rules-stock-legacy").set({ productId: "rules-stock-product", type: "sale", quantity: -2 });
   });
-  for (const context of [env.authenticatedContext("rules-stock-admin"), env.authenticatedContext("customer"), env.unauthenticatedContext()]) {
+  for (const context of [env.authenticatedContext("rules-stock-admin", { email: "rules-stock-admin@example.test" }), env.authenticatedContext("customer"), env.unauthenticatedContext()]) {
     const db = context.firestore();
     await denied(db.doc("products/rules-stock-product").update({ stock: 25 }));
     await denied(db.doc("products/rules-stock-product").update({ lowStockThreshold: 7 }));
@@ -27,7 +27,7 @@ try {
     await denied(db.doc("stockMovements/rules-stock-legacy").update({ quantity: 999 }));
     await denied(db.doc("stockMovements/rules-stock-legacy").delete()); checks += 6;
   }
-  const admin = env.authenticatedContext("rules-stock-admin").firestore();
+  const admin = env.authenticatedContext("rules-stock-admin", { email: "rules-stock-admin@example.test" }).firestore();
   await admin.doc("products/rules-stock-product").update({ isFeatured: true, updatedAt: "fixture" }); checks++;
   equal((await admin.doc("stockMovements/rules-stock-legacy").get()).data()?.quantity, -2); checks++;
   equal((await env.unauthenticatedContext().firestore().doc("products/rules-stock-product").get()).data()?.stock, 20); checks++;

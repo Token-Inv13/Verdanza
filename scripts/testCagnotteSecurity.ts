@@ -66,8 +66,8 @@ async function route(body: Record<string, unknown>, identity: VerifiedFirebaseUs
 
 try {
   equal(CAGNOTTE_SERVER_PROGRAM, null);
-  await db.collection("adminUsers").doc(admin.uid).set({ isActive: true });
-  await db.collection("adminUsers").doc("verified-fallback@example.test").set({ isActive: true });
+  await db.collection("adminUsers").doc(admin.uid).set({ isActive: true, uid: admin.uid, email: admin.email });
+  await db.collection("adminUsers").doc("verified-fallback@example.test").set({ isActive: true, email: "verified-fallback@example.test" });
   await db.collection("adminUsers").doc("inactive-security").set({ isActive: false });
   await db.collection("adminUsers").doc("truthy-security").set({ isActive: "yes" });
   await db.collection("customers").doc("self-admin").set({ role: "admin", isAdmin: true, email: admin.email, uid: admin.uid });
