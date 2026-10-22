@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-15T10:37:23.951Z",
+  "generatedAt": "2026-10-22T07:05:43.866Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -907,6 +907,31 @@
   ],
   "blogImages": [
     {
+      "articleSlug": "chanvre-graines-fibres-feuilles-fleurs",
+      "articleTitle": "Chanvre : distinguer graines, fibres, feuilles et fleurs",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/chanvre-graines-fibres-feuilles-fleurs-editorial-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 87158
+        },
+        {
+          "src": "/images/blog/chanvre-graines-fibres-feuilles-fleurs-editorial-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 101878
+        },
+        {
+          "src": "/images/blog/chanvre-graines-fibres-feuilles-fleurs-editorial-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 144118
+        }
+      ]
+    },
+    {
       "articleSlug": "resines-cbd-tamisage-pressage-extraction",
       "articleTitle": "Résines CBD : comprendre tamisage, pressage et extraction",
       "artDirection": "verdanza-editorial",
@@ -1654,6 +1679,6 @@
     "productDetailBytes": 1906594,
     "staticSourceBytes": 2177258,
     "staticLargestBytes": 224006,
-    "blogImageBytes": 6374306
+    "blogImageBytes": 6707460
   }
 }

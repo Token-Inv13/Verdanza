@@ -121,6 +121,9 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" | "packaging" }
 > = {
+  "chanvre-graines-fibres-feuilles-fleurs": {
+    label: "Chanvre : graines, fibres, feuilles et fleurs",
+  },
   "resines-cbd-tamisage-pressage-extraction": {
     label: "Résines CBD : tamisage, pressage et extraction",
     sources: [

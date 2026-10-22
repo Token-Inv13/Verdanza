@@ -6,6 +6,352 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "chanvre-graines-fibres-feuilles-fleurs",
+    title: "Chanvre : distinguer graines, fibres, feuilles et fleurs",
+    seoTitle: "Chanvre : graines, fibres, feuilles et fleurs | Verdanza",
+    description:
+      "Apprenez à distinguer graines, fibres, feuilles et fleurs de chanvre, et à séparer la partie de plante du profil en cannabinoïdes annoncé.",
+    excerpt:
+      "Une partie de la plante, une matière transformée et un cannabinoïde ne désignent pas la même chose. Ce guide remet chaque mot à sa place.",
+    category: "Guide CBD",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-10-22T09:00:00+02:00",
+    dateModified: "2026-10-22T09:00:00+02:00",
+    readingTime: "8 min",
+    status: "published",
+    images: {
+      square: "/images/blog/chanvre-graines-fibres-feuilles-fleurs-editorial-1x1.webp",
+      landscape: "/images/blog/chanvre-graines-fibres-feuilles-fleurs-editorial-4x3.webp",
+      wide: "/images/blog/chanvre-graines-fibres-feuilles-fleurs-editorial-16x9.webp",
+    },
+    relatedSlugs: [
+      "denominations-cbd-cbn-cbg",
+      "origine-variete-lot-cbd-differences",
+      "aspect-fleur-cbd-couleur-structure",
+      "comment-lire-analyse-cbd",
+    ],
+    links: [
+      { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/denominations-cbd-cbn-cbg",
+        label: "Distinguer CBD, CBN et CBG",
+      },
+      {
+        to: "/blog/comment-lire-analyse-cbd",
+        label: "Lire une analyse CBD",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Graine, fibre, feuille et fleur décrivent des parties ou des matières
+            issues du chanvre. <strong>CBD</strong>, <strong>THC</strong>, CBN et
+            CBG désignent, eux, des cannabinoïdes. Mélanger ces deux niveaux de
+            vocabulaire conduit vite à attribuer à une partie de plante une
+            composition qu'elle ne permet pas de prouver.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Le nom de la partie végétale renseigne sur la matière présentée. Il ne
+            remplace ni la liste des ingrédients, ni l'étiquette, ni le rapport
+            d'analyse correspondant au lot.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "deux-niveaux-vocabulaire",
+        text: "Deux niveaux de vocabulaire à ne pas confondre",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une partie botanique répond à la question « de quelle structure de la
+            plante parle-t-on ? ». Un profil en cannabinoïdes répond à une autre
+            question : « quels composés ont été recherchés et mesurés dans cet
+            échantillon ? ». Entre les deux se trouvent parfois des étapes de tri,
+            de séchage, de séparation ou de transformation qui doivent être
+            décrites séparément.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Repères pour distinguer les principales matières issues du chanvre.",
+          headers: ["Terme", "Ce qu'il désigne", "Confusion à éviter"],
+          rows: [
+            [
+              "Graine",
+              "Le petit fruit sec du chanvre, couramment appelé graine.",
+              "Le mot chanvre ne signifie pas qu'une teneur en CBD est établie.",
+            ],
+            [
+              "Fibre",
+              "Une matière extraite principalement des tissus de la tige.",
+              "La fibre n'est ni une fleur ni un profil de cannabinoïdes.",
+            ],
+            [
+              "Feuille",
+              "Un organe végétal plat rattaché à la tige par un pétiole.",
+              "Une silhouette de feuille ne décrit pas la composition d'un produit.",
+            ],
+            [
+              "Fleur",
+              "Un ensemble floral récolté, séché et préparé selon le produit annoncé.",
+              "L'aspect ne permet pas de calculer les teneurs du lot.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "graines-fruits-secs",
+        text: "Graines de chanvre : un nom courant pour de petits fruits secs",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Dans le langage courant, on parle de graines de chanvre. En botanique,
+            ces éléments sont des fruits secs souvent décrits comme des akènes. Ils
+            possèdent une enveloppe, une forme arrondie à ovoïde et une couleur qui
+            peut varier. Ces caractéristiques servent à reconnaître la matière,
+            pas à déduire un profil en cannabinoïdes.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "identifier le nom exact de la matière sur l'étiquette ;",
+          "ne pas transformer la présence du mot chanvre en preuve de teneur en CBD ;",
+          "séparer l'origine botanique d'une éventuelle composition mesurée ;",
+          "vérifier le produit fini et son lot plutôt qu'une image générique de graines.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "fibres-tige",
+        text: "Fibres : une matière liée à la structure de la tige",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La tige du chanvre comporte plusieurs tissus. Les fibres longues
+            associées à sa partie externe peuvent être séparées et préparées pour
+            former une matière fibreuse. Le mot fibre décrit donc une origine et
+            une structure matérielle. Il ne décrit ni une fleur séchée, ni une
+            résine, ni la concentration d'un cannabinoïde.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Une présentation peut réunir des mots botaniques, techniques et
+            commerciaux. Pour la comprendre, classez chaque terme : partie de
+            plante, procédé, forme finale ou résultat d'analyse.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "feuilles-repere-visuel",
+        text: "Feuilles : un repère visuel qui ne résume pas le produit",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La feuille palmée est devenue un symbole très reconnaissable du
+            chanvre. Cette silhouette reste pourtant un repère botanique. Sur un
+            emballage ou une photographie, elle ne permet pas d'identifier la
+            partie réellement utilisée, la variété, le lot, la teneur en CBD ni
+            la présence ou l'absence d'autres cannabinoïdes.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les feuilles visibles autour d'une fleur doivent aussi être distinguées
+            de la fleur elle-même. Le guide sur la{" "}
+            <Link to="/blog/manucure-fleurs-cbd-feuilles-tiges">
+              manucure des fleurs CBD
+            </Link>{" "}
+            explique comment observer petites feuilles, tiges et préparation sans
+            les transformer en verdict automatique de qualité.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "fleurs-ensembles-floraux",
+        text: "Fleurs : des ensembles floraux, pas un résultat d'analyse",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une fleur commercialisée correspond à un ensemble floral préparé. On
+            peut en décrire la forme, la couleur, la structure, la présence de
+            petites feuilles ou l'aspect des trichomes. Ces observations donnent
+            des repères descriptifs, mais aucune ne fournit à l'œil une mesure
+            fiable du CBD, du THC, du CBN ou du CBG.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Pour garder cette limite claire, le guide sur{" "}
+            <Link to="/blog/aspect-fleur-cbd-couleur-structure">
+              l'aspect d'une fleur CBD
+            </Link>{" "}
+            traite l'observation visuelle, tandis que le guide{" "}
+            <Link to="/blog/comment-lire-analyse-cbd">
+              comment lire une analyse CBD
+            </Link>{" "}
+            explique où chercher l'échantillon, les unités et les résultats du lot.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "cbd-compose-non-partie",
+        text: "Le CBD est un composé, pas une cinquième partie de la plante",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le cannabidiol est un cannabinoïde. Son nom peut apparaître dans une
+            dénomination commerciale, une liste de constituants annoncés ou un
+            rapport d'analyse. Dans chaque cas, il faut demander ce que le document
+            affirme exactement : présence annoncée, quantité déclarée ou résultat
+            mesuré sur un échantillon identifié.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "une partie de plante n'est pas une unité de mesure ;",
+          "une appellation commerciale n'est pas un résultat de laboratoire ;",
+          "une photographie ne remplace pas l'identification du lot ;",
+          "un résultat ne vaut que pour l'échantillon et le rapport auxquels il se rattache ;",
+          "CBD, THC, CBN et CBG doivent être lus sur des lignes distinctes lorsqu'ils sont recherchés.",
+        ],
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le guide sur les{" "}
+            <Link to="/blog/denominations-cbd-cbn-cbg">
+              dénominations CBD, CBN et CBG
+            </Link>{" "}
+            détaille cette différence entre nom commercial, profil annoncé et
+            statut du produit, sans attribuer d'effet à ces molécules.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "lire-fiche-etiquette-analyse",
+        text: "Lire la fiche, l'étiquette et l'analyse dans le bon ordre",
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Associer chaque information au document qui peut la confirmer.",
+          headers: ["Question", "Document utile", "Vérification"],
+          rows: [
+            [
+              "Quelle matière est présentée ?",
+              "Fiche et dénomination",
+              "Graine, fibre, feuille, fleur ou produit transformé clairement nommé.",
+            ],
+            [
+              "Quel produit ai-je reçu ?",
+              "Étiquette",
+              "Dénomination, format et numéro de lot cohérents avec la fiche.",
+            ],
+            [
+              "Quels cannabinoïdes ont été mesurés ?",
+              "Rapport d'analyse",
+              "Échantillon, dates, unités et lignes de résultats rattachés au même lot.",
+            ],
+            [
+              "Que montre la photo ?",
+              "Image du produit",
+              "Aspect général seulement, sans conclusion chiffrée sur la composition.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "checklist-quatre-mots",
+        text: "Une checklist simple pour remettre chaque mot à sa place",
+      },
+      {
+        type: "list",
+        items: [
+          "repérer si le mot décrit une partie de plante, un procédé ou un composé ;",
+          "identifier la forme réellement présentée au lieu de se fier au décor visuel ;",
+          "retrouver le numéro de lot sur le contenant et les documents associés ;",
+          "lire chaque cannabinoïde avec son unité et son résultat propres ;",
+          "ne jamais déduire une teneur, une conformité ou une qualité du seul aspect botanique.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "retenir-parties-chanvre",
+        text: "Ce qu'il faut retenir",
+      },
+      {
+        type: "list",
+        items: [
+          "graines, fibres, feuilles et fleurs désignent des matières différentes ;",
+          "le CBD, le THC, le CBN et le CBG sont des cannabinoïdes, pas des organes de la plante ;",
+          "un symbole de feuille ne renseigne pas sur la composition du produit ;",
+          "l'observation d'une fleur reste descriptive ;",
+          "la fiche, l'étiquette et l'analyse doivent parler du même produit et du même lot.",
+        ],
+      },
+      {
+        type: "links",
+        title: "Poursuivre la lecture du chanvre et des analyses",
+        links: [
+          { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+          { to: "/qualite-conformite", label: "Qualité et conformité" },
+          {
+            to: "/blog/denominations-cbd-cbn-cbg",
+            label: "Distinguer CBD, CBN et CBG",
+          },
+          {
+            to: "/blog/comment-lire-analyse-cbd",
+            label: "Lire une analyse CBD",
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "resines-cbd-tamisage-pressage-extraction",
     title: "Résines CBD : comprendre tamisage, pressage et extraction",
     seoTitle: "Résines CBD : tamisage, pressage et extraction | Verdanza",

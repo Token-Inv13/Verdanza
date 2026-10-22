@@ -1,4 +1,5 @@
 export const publishedBlogArticleSlugs = [
+  "chanvre-graines-fibres-feuilles-fleurs",
   "resines-cbd-tamisage-pressage-extraction",
   "sechage-affinage-fleurs-cbd-reperes",
   "analyse-cbd-laboratoire-echantillon-rapport",
