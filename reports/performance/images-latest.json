@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T07:05:43.866Z",
+  "generatedAt": "2026-10-26T07:06:57.646Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -907,6 +907,31 @@
   ],
   "blogImages": [
     {
+      "articleSlug": "novel-food-cbd-procedure-terminee",
+      "articleTitle": "Novel Food et CBD : que signifie une procédure terminée ?",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/novel-food-cbd-procedure-terminee-editorial-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 56370
+        },
+        {
+          "src": "/images/blog/novel-food-cbd-procedure-terminee-editorial-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 72758
+        },
+        {
+          "src": "/images/blog/novel-food-cbd-procedure-terminee-editorial-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 103808
+        }
+      ]
+    },
+    {
       "articleSlug": "chanvre-graines-fibres-feuilles-fleurs",
       "articleTitle": "Chanvre : distinguer graines, fibres, feuilles et fleurs",
       "artDirection": "verdanza-editorial",
@@ -1679,6 +1704,6 @@
     "productDetailBytes": 1906594,
     "staticSourceBytes": 2177258,
     "staticLargestBytes": 224006,
-    "blogImageBytes": 6707460
+    "blogImageBytes": 6940396
   }
 }

@@ -121,6 +121,9 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" | "packaging" }
 > = {
+  "novel-food-cbd-procedure-terminee": {
+    label: "Novel Food et CBD : procédure terminée",
+  },
   "chanvre-graines-fibres-feuilles-fleurs": {
     label: "Chanvre : graines, fibres, feuilles et fleurs",
   },

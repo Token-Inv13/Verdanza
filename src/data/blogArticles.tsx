@@ -6,6 +6,310 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "novel-food-cbd-procedure-terminee",
+    title: "Novel Food et CBD : que signifie une procédure terminée ?",
+    seoTitle: "Novel Food et CBD : comprendre une procédure terminée | Verdanza",
+    description:
+      "Une procédure Novel Food sur un isolat de CBD a été terminée sans mise à jour de la liste de l'Union. Voici ce que cette décision signifie vraiment.",
+    excerpt:
+      "La fin d'une procédure Novel Food ne vaut pas autorisation. Ce guide distingue demande, évaluation, décision et inscription sur la liste de l'Union.",
+    category: "Actualité réglementaire",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-10-26T08:00:00+01:00",
+    dateModified: "2026-10-26T08:00:00+01:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/novel-food-cbd-procedure-terminee-editorial-1x1.webp",
+      landscape: "/images/blog/novel-food-cbd-procedure-terminee-editorial-4x3.webp",
+      wide: "/images/blog/novel-food-cbd-procedure-terminee-editorial-16x9.webp",
+    },
+    relatedSlugs: [
+      "isolat-spectre-large-complet-cbd",
+      "denominations-cbd-cbn-cbg",
+      "comment-lire-analyse-cbd",
+      "infusions-feuilles-chanvre-reglement-ue-2027",
+    ],
+    links: [
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/isolat-spectre-large-complet-cbd",
+        label: "Comprendre isolat et spectres CBD",
+      },
+      {
+        to: "/blog/denominations-cbd-cbn-cbg",
+        label: "Distinguer CBD, CBN et CBG",
+      },
+      {
+        to: "/blog/comment-lire-analyse-cbd",
+        label: "Lire une analyse CBD",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le 16 octobre 2026, la Commission européenne a publié une décision
+            mettant fin à la procédure d'autorisation d'un isolat de cannabidiol
+            issu de <em>Cannabis sativa</em> L. Cette décision concerne la demande
+            NF 2021/2340 et précise que la liste de l'Union des nouveaux aliments
+            n'est pas mise à jour.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Cette décision porte sur une demande identifiée. Elle ne constitue ni
+            une autorisation générale du CBD alimentaire, ni une interdiction
+            générale de tous les produits contenant du CBD. Elle indique que la
+            procédure visée est terminée sans ajout de cet aliment à la liste
+            positive de l'Union.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "decision-16-octobre-2026",
+        text: "Ce que dit la décision du 16 octobre 2026",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La page officielle de la Commission recense la décision C(2026) 7198
+            final. Son objet est de terminer la procédure relative à la mise sur
+            le marché d'un isolat de cannabidiol comme nouvel aliment, sans
+            mettre à jour la liste de l'Union. Le libellé ne dit pas que
+            l'application a obtenu une autorisation et ne crée pas une nouvelle
+            entrée utilisable par les opérateurs.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            L'article 10, paragraphe 6, du règlement (UE) 2015/2283 permet à la
+            Commission de terminer une procédure lorsqu'elle estime que la mise à
+            jour demandée n'est pas justifiée. La Commission informe alors le
+            demandeur et les États membres des motifs, puis rend la demande
+            concernée publique dans la liste des procédures terminées.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "liste-union-signal-autorisation",
+        text: "La liste de l'Union reste le repère d'autorisation",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Le cadre européen repose sur une liste positive des nouveaux aliments
+            autorisés. La Commission rappelle qu'un nouvel aliment ajouté à cette
+            liste est considéré comme autorisé, sous réserve de respecter ses
+            spécifications, ses conditions d'utilisation et ses éventuelles
+            exigences d'étiquetage. À l'inverse, une procédure terminée sans mise
+            à jour ne crée pas cette inscription.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Repères pour distinguer les principales étapes d'un dossier Novel Food.",
+          headers: ["Étape", "Ce qu'elle indique", "Ce qu'elle ne prouve pas"],
+          rows: [
+            [
+              "Détermination du statut",
+              "L'opérateur vérifie si l'aliment relève du règlement Novel Food et peut consulter une autorité nationale en cas de doute.",
+              "Une consultation de statut n'est pas une autorisation de mise sur le marché.",
+            ],
+            [
+              "Dépôt d'une demande",
+              "Un dossier est soumis pour un aliment défini, avec ses caractéristiques et les usages demandés.",
+              "Le dépôt ou le numéro de dossier ne signifie pas que l'aliment est autorisé.",
+            ],
+            [
+              "Évaluation et instruction",
+              "Les éléments administratifs et scientifiques du dossier sont examinés selon la procédure applicable.",
+              "Une procédure en cours n'est pas une inscription sur la liste de l'Union.",
+            ],
+            [
+              "Mise à jour de la liste",
+              "L'aliment autorisé est ajouté avec ses spécifications et conditions d'emploi.",
+              "L'autorisation ne s'étend pas automatiquement à une matière de composition différente.",
+            ],
+            [
+              "Procédure terminée sans mise à jour",
+              "Le dossier concerné est clos et aucune nouvelle entrée n'est créée dans la liste de l'Union.",
+              "Cette clôture ne permet pas de conclure, à elle seule, sur tous les aliments ou produits au CBD.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "demande-autorisation-distinction",
+        text: "Une demande n'est pas une autorisation",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Un numéro de demande permet d'identifier un dossier. Il ne suffit pas
+            à démontrer qu'une matière peut être commercialisée comme denrée dans
+            l'Union européenne. Pour lire correctement une annonce ou un document,
+            il faut distinguer le statut du dossier, la substance décrite, les
+            usages demandés et l'existence éventuelle d'une entrée correspondante
+            dans la liste de l'Union.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "identifier le numéro exact de la demande et la matière qu'elle décrit ;",
+          "vérifier si la procédure est en cours, terminée ou suivie d'une autorisation ;",
+          "chercher une inscription effective dans la liste de l'Union plutôt qu'un simple dépôt ;",
+          "lire les spécifications et conditions d'utilisation propres à une entrée autorisée ;",
+          "éviter d'étendre la conclusion d'un dossier individuel à toutes les formes de CBD.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "terminologie-commerciale-reglementaire",
+        text: "Isolat et spectres : ne pas confondre commerce et réglementation",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            « Isolat », « spectre large » et « spectre complet » sont des termes
+            commerciaux non normalisés. Ils servent à présenter une composition
+            annoncée, mais ne déterminent pas le statut réglementaire alimentaire
+            du produit. Le guide consacré aux{" "}
+            <Link to="/blog/isolat-spectre-large-complet-cbd">
+              mentions isolat et spectres CBD
+            </Link>{" "}
+            explique comment les rapprocher d'une analyse de lot sans les
+            transformer en preuve d'autorisation.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Deux matières portant le mot « isolat » peuvent différer par leur
+            pureté, leur procédé, leurs impuretés, leur matrice et leur destination.
+            Une décision portant sur NF 2021/2340 ne doit donc pas être présentée
+            comme une décision automatique sur toute matière décrite commercialement
+            par le même mot.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "statut-novel-food",
+        text: "Le statut Novel Food se vérifie pour l'aliment concerné",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La Commission indique que les opérateurs doivent vérifier si l'aliment
+            qu'ils souhaitent mettre sur le marché relève du règlement sur les
+            nouveaux aliments. En cas d'incertitude, ils peuvent consulter
+            l'autorité compétente du pays de première mise sur le marché. Les
+            consultations officielles publiées par la Commission comprennent
+            notamment des conclusions Novel Food pour des isolats et extraits de
+            CBD décrits dans des dossiers précis.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Ce guide explique la lecture d'une procédure européenne à partir des
+            sources officielles disponibles au 26 octobre 2026. Il ne remplace pas
+            l'analyse réglementaire d'un produit, d'une composition ou d'un usage
+            déterminé.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "sources-officielles",
+        text: "Sources officielles",
+      },
+      {
+        type: "paragraph",
+        text: "Sources consultées le 26 octobre 2026.",
+      },
+      {
+        type: "list",
+        items: [
+          <a
+            href="https://food.ec.europa.eu/food-safety/novel-food/decisions-terminating-procedure_en"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Commission européenne - Décisions mettant fin à une procédure Novel Food
+          </a>,
+          <a
+            href="https://eur-lex.europa.eu/eli/reg/2015/2283/oj"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            EUR-Lex - Règlement (UE) 2015/2283 relatif aux nouveaux aliments
+          </a>,
+          <a
+            href="https://food.ec.europa.eu/food-safety/novel-food/legislation_en"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Commission européenne - Législation et liste de l'Union des nouveaux aliments
+          </a>,
+          <a
+            href="https://food.ec.europa.eu/food-safety/novel-food/consultation-process-novel-food-status_en"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Commission européenne - Consultations sur le statut Novel Food
+          </a>,
+        ],
+      },
+      {
+        type: "links",
+        title: "Compléter la lecture",
+        links: [
+          {
+            to: "/blog/isolat-spectre-large-complet-cbd",
+            label: "Comprendre isolat, spectre large et spectre complet",
+          },
+          {
+            to: "/blog/denominations-cbd-cbn-cbg",
+            label: "Distinguer CBD, CBN et CBG",
+          },
+          {
+            to: "/blog/comment-lire-analyse-cbd",
+            label: "Lire un bulletin d'analyse CBD",
+          },
+          {
+            to: "/qualite-conformite",
+            label: "Consulter la démarche qualité Verdanza",
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "chanvre-graines-fibres-feuilles-fleurs",
     title: "Chanvre : distinguer graines, fibres, feuilles et fleurs",
     seoTitle: "Chanvre : graines, fibres, feuilles et fleurs | Verdanza",
