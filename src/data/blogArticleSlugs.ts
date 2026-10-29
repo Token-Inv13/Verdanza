@@ -1,4 +1,5 @@
 export const publishedBlogArticleSlugs = [
+  "semis-bouture-clone-chanvre",
   "novel-food-cbd-procedure-terminee",
   "chanvre-graines-fibres-feuilles-fleurs",
   "resines-cbd-tamisage-pressage-extraction",

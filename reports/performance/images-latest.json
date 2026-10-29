@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-26T07:06:57.646Z",
+  "generatedAt": "2026-10-29T07:04:48.440Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -907,6 +907,31 @@
   ],
   "blogImages": [
     {
+      "articleSlug": "semis-bouture-clone-chanvre",
+      "articleTitle": "Semis, bouture et clone : comprendre l'origine d'un lot de chanvre",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/semis-bouture-clone-chanvre-editorial-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 68800
+        },
+        {
+          "src": "/images/blog/semis-bouture-clone-chanvre-editorial-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 82516
+        },
+        {
+          "src": "/images/blog/semis-bouture-clone-chanvre-editorial-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 111910
+        }
+      ]
+    },
+    {
       "articleSlug": "novel-food-cbd-procedure-terminee",
       "articleTitle": "Novel Food et CBD : que signifie une procédure terminée ?",
       "artDirection": "verdanza-editorial",
@@ -1704,6 +1729,6 @@
     "productDetailBytes": 1906594,
     "staticSourceBytes": 2177258,
     "staticLargestBytes": 224006,
-    "blogImageBytes": 6940396
+    "blogImageBytes": 7203622
   }
 }

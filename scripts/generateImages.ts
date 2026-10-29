@@ -121,6 +121,9 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" | "packaging" }
 > = {
+  "semis-bouture-clone-chanvre": {
+    label: "Semis, bouture et clone du chanvre",
+  },
   "novel-food-cbd-procedure-terminee": {
     label: "Novel Food et CBD : procédure terminée",
   },

@@ -6,6 +6,289 @@ import type { BlogArticle } from "../types/blog";
 // indépendants du stock, des prix, des promos ou des disponibilités temporaires.
 export const blogArticles: BlogArticle[] = [
   {
+    slug: "semis-bouture-clone-chanvre",
+    title: "Semis, bouture et clone : comprendre l'origine d'un lot de chanvre",
+    seoTitle: "Semis, bouture et clone du chanvre : différences | Verdanza",
+    description:
+      "Semis, bouture, clone : comprendre ces origines du chanvre, leur lien génétique et ce qu'elles ne prouvent pas sur un lot CBD.",
+    excerpt:
+      "Un semis part d'une graine, une bouture d'une plante mère et le mot clone décrit un lien de multiplication. Voici comment lire ces termes sans les transformer en garantie de qualité.",
+    category: "Guide culture",
+    authorName: "Rédaction Verdanza",
+    datePublished: "2026-10-29T08:03:00+01:00",
+    dateModified: "2026-10-29T08:03:00+01:00",
+    readingTime: "7 min",
+    status: "published",
+    images: {
+      square: "/images/blog/semis-bouture-clone-chanvre-editorial-1x1.webp",
+      landscape: "/images/blog/semis-bouture-clone-chanvre-editorial-4x3.webp",
+      wide: "/images/blog/semis-bouture-clone-chanvre-editorial-16x9.webp",
+    },
+    relatedSlugs: [
+      "origine-variete-lot-cbd-differences",
+      "indoor-greenhouse-hydroponique-differences",
+      "chanvre-graines-fibres-feuilles-fleurs",
+      "etiquette-numero-lot-cbd-tracabilite",
+    ],
+    links: [
+      { to: "/fleurs-cbd", label: "Voir les fleurs CBD" },
+      { to: "/qualite-conformite", label: "Qualité et conformité" },
+      {
+        to: "/blog/origine-variete-lot-cbd-differences",
+        label: "Distinguer origine, variété et lot",
+      },
+      {
+        to: "/blog/indoor-greenhouse-hydroponique-differences",
+        label: "Comprendre les méthodes de culture",
+      },
+    ],
+    blocks: [
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les mots semis, bouture et clone décrivent la manière dont une plante
+            a commencé son développement ou sa relation avec une plante mère. Ils
+            peuvent aider à comprendre l'origine végétale d'un lot, mais ils ne
+            donnent pas à eux seuls sa composition, son profil aromatique, son
+            état de conservation ou sa conformité.
+          </>
+        ),
+      },
+      {
+        type: "note",
+        text: (
+          <>
+            Repère simple : un semis commence par une graine. Une bouture est une
+            partie végétale prélevée sur une plante puis enracinée. Le mot clone
+            décrit la parenté issue de cette multiplication végétative ; ce n'est
+            pas un classement de qualité.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "semis-graine",
+        text: "Le semis commence par une graine",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une plante issue de semis se développe à partir d'une graine. La
+            graine réunit un patrimoine génétique issu de la reproduction de deux
+            parents. Dans une même variété, les individus partagent des caractères
+            attendus, mais ils ne sont pas nécessairement des copies génétiques
+            les uns des autres. Leur port, leur précocité ou leur expression
+            visible peuvent donc présenter des variations.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La mention « issu de semis » ne renseigne toutefois ni sur le taux de
+            cannabinoïdes du produit fini, ni sur la régularité d'un lot. Ces
+            éléments doivent être lus dans les documents et informations qui se
+            rapportent au lot concerné.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "bouture-plante-mere",
+        text: "La bouture part d'une plante mère",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Une bouture est un fragment végétal prélevé sur une plante mère puis
+            conduit à former ses propres racines. Il s'agit d'une multiplication
+            végétative : la nouvelle plante dérive du même individu, sans passer
+            par une nouvelle graine. Dans ce contexte, le terme clone sert à
+            décrire cette proximité génétique avec la plante mère.
+          </>
+        ),
+      },
+      {
+        type: "table",
+        table: {
+          caption: "Semis, bouture, clone et lot : quatre niveaux à distinguer.",
+          headers: ["Terme", "Ce qu'il décrit", "Ce qu'il ne prouve pas"],
+          rows: [
+            [
+              "Semis",
+              "Une plante commencée à partir d'une graine.",
+              "Une composition ou une qualité identique entre tous les individus.",
+            ],
+            [
+              "Bouture",
+              "Un fragment végétal enraciné provenant d'une plante mère.",
+              "Un résultat final identique dans tous les environnements de production.",
+            ],
+            [
+              "Clone",
+              "La relation de multiplication végétative avec un même individu d'origine.",
+              "Un profil aromatique, une teneur ou une conformité automatique.",
+            ],
+            [
+              "Lot",
+              "Une production identifiée et rattachée à des informations précises.",
+              "Que les lots précédents ou suivants portent exactement les mêmes caractéristiques.",
+            ],
+          ],
+        },
+      },
+      {
+        type: "heading",
+        id: "clone-pas-garantie",
+        text: "Le mot clone ne constitue pas une garantie de qualité",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Des plantes génétiquement proches peuvent être cultivées, récoltées,
+            séchées et conservées dans des conditions différentes. Le mot clone
+            ne permet donc pas, à lui seul, de prédire l'aspect d'une fleur, son
+            profil aromatique ou les valeurs d'une analyse. Il ne remplace pas non
+            plus l'identification du lot et la consultation de ses documents.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "le lien génétique ne décrit pas les conditions de culture ;",
+          "une même origine végétale n'efface pas les différences entre lots ;",
+          "l'aspect ne remplace pas une mesure analytique ;",
+          "le nom d'une plante mère ne vaut pas preuve de traçabilité ;",
+          "la conformité se vérifie avec les informations applicables au produit et au lot.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "genetique-environnement-lot",
+        text: "Même origine génétique, lots différents",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            La génétique constitue un point de départ. L'environnement de culture,
+            le calendrier de récolte, le séchage, l'affinage, la manucure, le
+            conditionnement et la conservation participent ensuite à la
+            présentation du lot. Deux productions issues d'une même plante mère
+            peuvent ainsi ne pas avoir exactement le même aspect.
+          </>
+        ),
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Cette distinction rejoint celle entre origine, variété et lot. Le
+            guide dédié à ces trois repères explique pourquoi une référence
+            commerciale ou un nom de variété ne doit pas être appliqué
+            automatiquement à toutes les productions successives.
+          </>
+        ),
+      },
+      {
+        type: "heading",
+        id: "lire-fiche-lot",
+        text: "Comment lire ces mentions sur une fiche",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Lorsqu'une fiche mentionne un semis, une bouture ou un clone, utilisez
+            cette information pour situer l'origine végétale. Puis revenez aux
+            repères qui décrivent réellement la production consultée : origine,
+            méthode de culture, numéro de lot, date des documents, présentation et
+            analyse disponible. La page <Link to="/qualite-conformite">qualité et
+            conformité</Link> rassemble les principaux contrôles Verdanza.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          "identifier si la fiche parle d'une graine, d'une bouture ou d'une relation clonale ;",
+          "ne pas confondre ce mode d'origine avec le nom de variété ;",
+          "vérifier le numéro de lot et les documents associés ;",
+          "séparer les observations visuelles des résultats mesurés ;",
+          "éviter de transformer un terme de culture en promesse de qualité.",
+        ],
+      },
+      {
+        type: "heading",
+        id: "sources-officielles",
+        text: "Sources officielles consultées",
+      },
+      {
+        type: "paragraph",
+        text: (
+          <>
+            Les définitions ont été vérifiées le 29 octobre 2026 à partir de la
+            présentation des types de variétés publiée par le GEVES et du
+            protocole technique de l'Office communautaire des variétés végétales
+            consacré à <em>Cannabis sativa</em> L. Ces sources décrivent la
+            multiplication végétative, les clones et les formes de matériel
+            végétal utilisées pour l'examen variétal ; elles ne constituent pas
+            une évaluation d'un produit CBD fini.
+          </>
+        ),
+      },
+      {
+        type: "list",
+        items: [
+          <a
+            key="geves-variete"
+            href="https://www.geves.fr/informations-toutes-especes/quest-ce-quune-variete/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GEVES - Qu'est-ce qu'une variété ?
+          </a>,
+          <a
+            key="cpvo-chanvre"
+            href="https://cpvo.europa.eu/en/applications-and-examinations/technical-examinations/technical-protocols/cpvotp-2762-rev"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            OCVV - Protocole technique pour le chanvre et le cannabis
+          </a>,
+        ],
+      },
+      {
+        type: "links",
+        title: "Poursuivre la lecture",
+        links: [
+          {
+            to: "/blog/origine-variete-lot-cbd-differences",
+            label: "Distinguer origine, variété et lot",
+          },
+          {
+            to: "/blog/indoor-greenhouse-hydroponique-differences",
+            label: "Comprendre les méthodes de culture",
+          },
+          {
+            to: "/blog/chanvre-graines-fibres-feuilles-fleurs",
+            label: "Distinguer les parties du chanvre",
+          },
+          {
+            to: "/blog/etiquette-numero-lot-cbd-tracabilite",
+            label: "Lire l'étiquette et le numéro de lot",
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "novel-food-cbd-procedure-terminee",
     title: "Novel Food et CBD : que signifie une procédure terminée ?",
     seoTitle: "Novel Food et CBD : comprendre une procédure terminée | Verdanza",
