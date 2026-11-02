@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-29T07:04:48.440Z",
+  "generatedAt": "2026-11-02T08:19:20.366Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -907,6 +907,31 @@
   ],
   "blogImages": [
     {
+      "articleSlug": "humidite-activite-eau-fleurs-cbd",
+      "articleTitle": "Fleurs CBD : teneur en eau, humidité relative et activité de l'eau",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/humidite-activite-eau-fleurs-cbd-editorial-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 30696
+        },
+        {
+          "src": "/images/blog/humidite-activite-eau-fleurs-cbd-editorial-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 33374
+        },
+        {
+          "src": "/images/blog/humidite-activite-eau-fleurs-cbd-editorial-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 43442
+        }
+      ]
+    },
+    {
       "articleSlug": "semis-bouture-clone-chanvre",
       "articleTitle": "Semis, bouture et clone : comprendre l'origine d'un lot de chanvre",
       "artDirection": "verdanza-editorial",
@@ -1729,6 +1754,6 @@
     "productDetailBytes": 1906594,
     "staticSourceBytes": 2177258,
     "staticLargestBytes": 224006,
-    "blogImageBytes": 7203622
+    "blogImageBytes": 7311134
   }
 }

@@ -121,6 +121,9 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" | "packaging" }
 > = {
+  "humidite-activite-eau-fleurs-cbd": {
+    label: "Teneur en eau et activité de l'eau",
+  },
   "semis-bouture-clone-chanvre": {
     label: "Semis, bouture et clone du chanvre",
   },
