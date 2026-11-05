@@ -121,6 +121,9 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" | "packaging" }
 > = {
+  "bractees-stigmates-fleurs-cbd": {
+    label: "Bractées et stigmates des fleurs CBD",
+  },
   "humidite-activite-eau-fleurs-cbd": {
     label: "Teneur en eau et activité de l'eau",
   },

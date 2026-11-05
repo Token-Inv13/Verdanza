@@ -1,4 +1,5 @@
 export const publishedBlogArticleSlugs = [
+  "bractees-stigmates-fleurs-cbd",
   "humidite-activite-eau-fleurs-cbd",
   "semis-bouture-clone-chanvre",
   "novel-food-cbd-procedure-terminee",
