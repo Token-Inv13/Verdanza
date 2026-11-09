@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-05T07:01:43.074Z",
+  "generatedAt": "2026-11-09T07:02:28.022Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -907,6 +907,31 @@
   ],
   "blogImages": [
     {
+      "articleSlug": "poids-net-brut-tare-commande-cbd",
+      "articleTitle": "Poids net, poids brut et tare : lire le poids d'une commande CBD",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/poids-net-brut-tare-commande-cbd-editorial-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 33484
+        },
+        {
+          "src": "/images/blog/poids-net-brut-tare-commande-cbd-editorial-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 44504
+        },
+        {
+          "src": "/images/blog/poids-net-brut-tare-commande-cbd-editorial-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 75650
+        }
+      ]
+    },
+    {
       "articleSlug": "bractees-stigmates-fleurs-cbd",
       "articleTitle": "Fleurs CBD : reconnaître bractées et stigmates sans surinterpréter",
       "artDirection": "verdanza-editorial",
@@ -1779,6 +1804,6 @@
     "productDetailBytes": 1906594,
     "staticSourceBytes": 2177258,
     "staticLargestBytes": 224006,
-    "blogImageBytes": 7504882
+    "blogImageBytes": 7658520
   }
 }
