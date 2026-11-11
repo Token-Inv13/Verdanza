@@ -144,6 +144,7 @@ function testFunctionInventoryAndSecuritySources() {
     "create-review.ts",
     "invoices.ts",
     "order-refunds.ts",
+    "product-page.ts",
     "quote-order.ts",
     "referral-maintenance.ts",
     "referral.ts",
@@ -154,7 +155,7 @@ function testFunctionInventoryAndSecuritySources() {
     "send-payment-link.ts",
     "update-order-status.ts",
   ]);
-  assert.equal(functions.length, 21);
+  assert.equal(functions.length, 22);
 
   for (const file of [
     "api/_server/contestAdminRoute.ts",
@@ -206,4 +207,4 @@ await testEndpointContracts();
 testRewriteConfiguration();
 testFunctionInventoryAndSecuritySources();
 
-console.log("Direct API endpoint contract tests passed (21 functions)");
+console.log("Direct API endpoint contract tests passed (22 functions)");
