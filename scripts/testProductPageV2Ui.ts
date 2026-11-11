@@ -74,7 +74,8 @@ try {
     assert.match(rawHtml || "", /data-product-page-v2/);
     assert.ok((rawHtml || "").includes(name), `${name}: prerender must contain the product name`);
     assert.match(rawHtml || "", /application\/ld\+json/);
-    assert.match(rawHtml || "", /https:\/\/schema.org\/OutOfStock/);
+    assert.doesNotMatch(rawHtml || "", /https:\/\/schema.org\/OutOfStock/);
+    assert.match(rawHtml || "", /Disponibilité à confirmer/);
     assert.doesNotMatch(rawHtml || "", /https:\/\/schema.org\/InStock/);
     assert.doesNotMatch(rawHtml || "", /data-purchase-option-available="true"/);
   }
@@ -95,7 +96,7 @@ try {
   assert.equal(await fixedFormat.isDisabled(), true);
   const primaryPurchaseButton = desktopPage.locator("[data-product-purchase] .btn-primary");
   assert.equal(await primaryPurchaseButton.isDisabled(), true);
-  assert.match(await primaryPurchaseButton.innerText(), /Rupture de stock/);
+  assert.match(await primaryPurchaseButton.innerText(), /Disponibilité à confirmer/);
   assert.deepEqual(
     await desktopPage.evaluate(() => JSON.parse(window.localStorage.getItem("verdanza-cart") || "[]")),
     [],

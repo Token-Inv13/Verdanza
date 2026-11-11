@@ -4,10 +4,12 @@ export const POSTAL_DELIVERY_NAME = "Colissimo France";
 export const POSTAL_DELIVERY_FEE = 5.49;
 export const POSTAL_DELIVERY_MINIMUM = 15;
 export const POSTAL_FREE_SHIPPING_THRESHOLD = 50;
+export const POSTAL_HANDLING_MAX_DAYS = 1;
+export const POSTAL_TRANSIT_DAYS = 2;
 export const POSTAL_DELIVERY_ESTIMATE =
-  "Livraison estimée sous 2 à 3 jours ouvrés. Suivi Colissimo inclus.";
+  `Livraison estimée sous ${POSTAL_TRANSIT_DAYS} à ${POSTAL_TRANSIT_DAYS + POSTAL_HANDLING_MAX_DAYS} jours ouvrés. Suivi Colissimo inclus.`;
 export const POSTAL_DELIVERY_PREPARATION =
-  "Préparation sous 24 h ouvrées, généralement le jour même pour les commandes passées avant 14 h.";
+  `Préparation sous ${POSTAL_HANDLING_MAX_DAYS * 24} h ouvrées, généralement le jour même pour les commandes passées avant 14 h.`;
 export const POSTAL_DELIVERY_SIGNATURE = "Sans signature par défaut.";
 export const DEFAULT_LOCAL_DELIVERY_ESTIMATE_MIN_MINUTES = 60;
 export const DEFAULT_LOCAL_DELIVERY_ESTIMATE_MAX_MINUTES = 120;

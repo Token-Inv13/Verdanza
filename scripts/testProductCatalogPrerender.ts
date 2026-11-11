@@ -29,8 +29,10 @@ for (const slug of expectedSlugs) {
   assert.ok(existsSync(htmlPath), `missing prerendered product route ${slug}`);
   const html = readFileSync(htmlPath, "utf8");
   assert.match(html, /data-product-page-v2/);
-  assert.match(html, /https:\/\/schema.org\/OutOfStock/);
+  assert.doesNotMatch(html, /https:\/\/schema.org\/OutOfStock/);
   assert.doesNotMatch(html, /https:\/\/schema.org\/InStock/);
+  assert.match(html, /Disponibilité à confirmer/);
+  assert.match(html, /"shippingDetails"/);
   assert.doesNotMatch(html, /data-purchase-option-available="true"/);
   assert.match(sitemap, new RegExp(`<loc>https://verdanza\\.fr/produits/${slug}</loc>`));
 }
@@ -50,7 +52,7 @@ const supremeHtml = readFileSync(
   join(distDir, "produits", "supreme-50-cbd", "index.html"),
   "utf8",
 );
-assert.match(supremeHtml, /Rupture de stock/);
+assert.match(supremeHtml, /Disponibilité à confirmer/);
 assert.doesNotMatch(supremeHtml, />Disponible</);
 assert.doesNotMatch(supremeHtml, /data-purchase-option-available="true"/);
 

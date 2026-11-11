@@ -10,6 +10,8 @@ import {
 } from "../src/lib/siteUrl";
 import {
   productAvailability,
+  buildPostalShippingDetailsJsonLd,
+  buildPostalShippingServiceJsonLd,
   productCategoryLabel,
   productPath,
   type JsonLdValue,
@@ -213,6 +215,9 @@ function countTypes(nodes: Record<string, JsonLdValue>[]) {
 function auditHome(nodes: Record<string, JsonLdValue>[], failures: string[]) {
   const website = nodeByType(nodes, "WebSite");
   const store = nodeByType(nodes, "OnlineStore");
+  if (JSON.stringify(store?.hasShippingService) !== JSON.stringify(buildPostalShippingServiceJsonLd())) {
+    failures.push("OnlineStore shipping service mismatch");
+  }
   if (website?.["@id"] !== `${absoluteUrl("/")}#website`) failures.push("WebSite @id mismatch");
   if (website?.url !== absoluteUrl("/")) failures.push("WebSite url mismatch");
   if (website?.name !== "Verdanza") failures.push("WebSite name mismatch");
@@ -280,6 +285,12 @@ function auditProduct(
     failures.push("Offer itemCondition mismatch");
   }
   if (offer.availability !== productAvailability(product)) failures.push("Offer availability mismatch");
+  if (product.stockVerified === false && "availability" in offer) {
+    failures.push("unverified stock must not declare Offer availability");
+  }
+  if (JSON.stringify(offer.shippingDetails) !== JSON.stringify(buildPostalShippingDetailsJsonLd())) {
+    failures.push("Offer shipping details mismatch");
+  }
   if (!isRecord(offer.seller) || offer.seller["@id"] !== `${absoluteUrl("/")}#organization`) {
     failures.push("Offer seller mismatch");
   }

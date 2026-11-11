@@ -58,7 +58,7 @@ assert.ok(
 const staleSupreme = { ...supreme, stock: 22 };
 const editorialSupreme = asEditorialFallbackProducts([staleSupreme])[0];
 assert.equal(editorialSupreme.stock, 0, "stale positive fallback stock must be neutralized");
-assert.equal(publicProductStockLabel(editorialSupreme), "Rupture de stock");
+assert.equal(publicProductStockLabel(editorialSupreme), "Disponibilité à confirmer");
 assert.ok(
   resolveProductPurchaseOptions(editorialSupreme).every((option) => !option.available),
   "no Suprême fallback format may be commercially available",
@@ -132,7 +132,7 @@ const mandarineJsonLd = JSON.stringify(
 );
 assert.match(mandarineJsonLd, /"@type":"Product"/);
 assert.match(mandarineJsonLd, /\/produits\/mandarine-cbd/);
-assert.match(mandarineJsonLd, /https:\/\/schema.org\/OutOfStock/);
+assert.doesNotMatch(mandarineJsonLd, /"availability"/);
 assert.doesNotMatch(
   mandarineJsonLd,
   /https:\/\/schema.org\/InStock/,

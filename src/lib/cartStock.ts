@@ -18,6 +18,7 @@ export type CartStockIssue = {
 };
 
 export function availableProductStock(product?: Product | null) {
+  if (product?.stockVerified === false) return 0;
   const stock = Math.floor(Number(product?.stock ?? 0));
   return Number.isFinite(stock) ? Math.max(0, stock) : 0;
 }
@@ -25,6 +26,7 @@ export function availableProductStock(product?: Product | null) {
 export function publicProductStockLabel(product?: Product | null) {
   const stock = availableProductStock(product);
   if (!product || product.isActive === false) return "Indisponible";
+  if (product.stockVerified === false) return "Disponibilité à confirmer";
   if (stock <= 0) return "Rupture de stock";
   return "Disponible";
 }

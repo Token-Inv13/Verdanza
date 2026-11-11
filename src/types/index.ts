@@ -53,6 +53,8 @@ export type Product = {
   whyChooseDescription?: string;
   advisedProfile?: string;
   stock: number;
+  // Runtime catalogue metadata: false means the real stock is not yet verified.
+  stockVerified?: boolean;
   lowStockThreshold: number;
   isActive: boolean;
   isFeatured: boolean;
