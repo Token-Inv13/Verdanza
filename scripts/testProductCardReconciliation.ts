@@ -14,6 +14,8 @@ const bundle = await build({
   stdin: { contents: `import React from "react"; import { createRoot } from "react-dom/client";
     import { BrowserRouter } from "react-router-dom";
     import { ProductCard } from "./src/components/ProductCard";
+    import { JsonLd } from "./src/components/JsonLd";
+    import { buildProductJsonLd } from "./src/lib/structuredData";
     const root = createRoot(document.getElementById("root"));
     const initial = ${JSON.stringify(fixture)}; let product = initial;
     window.calls = []; window.analytics = [];
@@ -21,7 +23,7 @@ const bundle = await build({
       addItem(id) { window.calls.push(["gram", id]); window.fixtureCart.items = [...window.fixtureCart.items, {productId:id,quantity:1,purchaseMode:"gram"}]; render(); },
       addFixedPriceOption(id, option) { window.calls.push(["fixed", id, option]); window.fixtureCart.items = [...window.fixtureCart.items, {productId:id,quantity:1,purchaseMode:"fixed_price",fixedPriceOptionId:option}]; render(); }
     };
-    function render() { root.render(<BrowserRouter><ProductCard product={product} priorityImage itemListId="fixture-list" itemListName="Fixtures" /></BrowserRouter>); }
+    function render() { root.render(<BrowserRouter><ProductCard product={product} priorityImage itemListId="fixture-list" itemListName="Fixtures" /><JsonLd id="product" data={buildProductJsonLd(product)} /></BrowserRouter>); }
     window.setFixture = ({overrides = {}, items = []}) => { product = {...initial,...overrides}; window.fixtureCart.items = items; window.calls = []; window.analytics = []; render(); };
     render();`, loader: "tsx", resolveDir: process.cwd(), sourcefile: "product-card-fixture.tsx" },
   bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
@@ -105,6 +107,18 @@ try {
   assert.equal(await card.getByRole("button", { name: /Indisponible/ }).isDisabled(), true);
   await page.evaluate("window.setFixture({overrides:{stock:0}})");
   await card.getByRole("button", { name: /Rupture/ }).waitFor();
+  assert.equal(await card.getByRole("button", { name: /Rupture/ }).isDisabled(), true);
+  await page.evaluate("window.setFixture({overrides:{stock:8,stockVerified:false}})");
+  await card.getByRole("button", { name: /Disponibilité à confirmer/ }).waitFor();
+  assert.equal(await card.getByRole("button", { name: /Disponibilité à confirmer/ }).isDisabled(), true);
+  const productSchema = page.locator('[data-jsonld-id="jsonld-product"]');
+  await page.waitForFunction("!JSON.parse(document.querySelector('[data-jsonld-id=\"jsonld-product\"]').textContent).offers.availability");
+  assert.ok(!("availability" in JSON.parse((await productSchema.textContent())!).offers));
+  await page.evaluate("window.setFixture({overrides:{stock:8}})");
+  await page.waitForFunction("JSON.parse(document.querySelector('[data-jsonld-id=\"jsonld-product\"]').textContent).offers.availability === 'https://schema.org/InStock'");
+  assert.equal(await card.getByRole("button", { name: /^Ajouter .* au panier$/ }).isEnabled(), true);
+  await page.evaluate("window.setFixture({overrides:{stock:0}})");
+  await page.waitForFunction("JSON.parse(document.querySelector('[data-jsonld-id=\"jsonld-product\"]').textContent).offers.availability === 'https://schema.org/OutOfStock'");
   assert.equal(await card.getByRole("button", { name: /Rupture/ }).isDisabled(), true);
   assert.deepEqual(errors, []); assert.deepEqual(unexpected, []);
   console.log("PASS ProductCard V2.1: dedicated media, concise aromas/intensity, no card-only appearance or seal, cart-aware formats, prices, analytics, stock and no network.");

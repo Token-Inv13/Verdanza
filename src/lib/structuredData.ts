@@ -6,6 +6,14 @@ import { isProductOrderable as isPublicProductOrderable } from "./cartStock";
 import { getActiveSocialLinks } from "./socialLinks";
 import { absoluteUrl } from "./siteUrl";
 import { normalizeProductImages } from "./productImages";
+import {
+  POSTAL_DELIVERY_FEE,
+  POSTAL_DELIVERY_MINIMUM,
+  POSTAL_DELIVERY_NAME,
+  POSTAL_FREE_SHIPPING_THRESHOLD,
+  POSTAL_HANDLING_MAX_DAYS,
+  POSTAL_TRANSIT_DAYS,
+} from "../config/deliveryRules";
 
 export type JsonLdValue =
   | string
@@ -28,6 +36,8 @@ export function isProductOrderable(product: Product) {
 }
 
 export function productAvailability(product: Product) {
+  // A disabled editorial fallback is not evidence that the real stock is zero.
+  if (product.stockVerified === false) return undefined;
   return isPublicProductOrderable(product)
     ? "https://schema.org/InStock"
     : "https://schema.org/OutOfStock";
@@ -44,6 +54,7 @@ export function productPath(product: Pick<Product, "slug">) {
 export function buildProductJsonLd(product: Product): JsonLdValue {
   const url = absoluteUrl(productPath(product));
   const imageUrls = normalizeProductImages(product).map((image) => absoluteUrl(image.url));
+  const availability = productAvailability(product);
 
   return {
     "@context": "https://schema.org",
@@ -62,11 +73,75 @@ export function buildProductJsonLd(product: Product): JsonLdValue {
       price: product.price,
       priceCurrency: "EUR",
       itemCondition: "https://schema.org/NewCondition",
-      availability: productAvailability(product),
+      ...(availability ? { availability } : {}),
+      shippingDetails: buildPostalShippingDetailsJsonLd(),
       seller: {
         "@id": organizationId,
       },
     },
+  };
+}
+
+function shippingDays(minValue: number, maxValue: number): JsonLdValue {
+  return { "@type": "QuantitativeValue", minValue, maxValue, unitCode: "DAY" };
+}
+
+export function buildPostalShippingDetailsJsonLd(): JsonLdValue {
+  return {
+    "@type": "OfferShippingDetails",
+    shippingLabel: `${POSTAL_DELIVERY_NAME} — France métropolitaine`,
+    shippingDestination: { "@type": "DefinedRegion", addressCountry: "FR" },
+    shippingSettingsLink: absoluteUrl("/livraison-postale"),
+    // The final rate depends on the whole eligible basket, not the unit price.
+    // A maximum remains true for both paid shipping and free shipping at €50.
+    shippingRate: { "@type": "MonetaryAmount", maxValue: POSTAL_DELIVERY_FEE, currency: "EUR" },
+    deliveryTime: {
+      "@type": "ShippingDeliveryTime",
+      handlingTime: shippingDays(0, POSTAL_HANDLING_MAX_DAYS),
+      transitTime: shippingDays(POSTAL_TRANSIT_DAYS, POSTAL_TRANSIT_DAYS),
+    },
+  };
+}
+
+export function buildPostalShippingServiceJsonLd(): JsonLdValue {
+  const destination = { "@type": "DefinedRegion", addressCountry: "FR" };
+  const transitTime = {
+    "@type": "ServicePeriod",
+    duration: shippingDays(POSTAL_TRANSIT_DAYS, POSTAL_TRANSIT_DAYS),
+  };
+  return {
+    "@type": "ShippingService",
+    "@id": `${absoluteUrl("/livraison-postale")}#colissimo`,
+    name: `${POSTAL_DELIVERY_NAME} — France métropolitaine`,
+    description: `Minimum ${POSTAL_DELIVERY_MINIMUM} EUR ; frais ${POSTAL_DELIVERY_FEE} EUR, offerts dès ${POSTAL_FREE_SHIPPING_THRESHOLD} EUR de sous-total éligible.`,
+    url: absoluteUrl("/livraison-postale"),
+    fulfillmentType: "https://schema.org/FulfillmentTypeDelivery",
+    handlingTime: {
+      "@type": "ServicePeriod",
+      duration: shippingDays(0, POSTAL_HANDLING_MAX_DAYS),
+    },
+    shippingConditions: [
+      {
+        "@type": "ShippingConditions",
+        shippingDestination: destination,
+        orderValue: { "@type": "MonetaryAmount", maxValue: POSTAL_DELIVERY_MINIMUM - 0.01, currency: "EUR" },
+        doesNotShip: true,
+      },
+      {
+        "@type": "ShippingConditions",
+        shippingDestination: destination,
+        orderValue: { "@type": "MonetaryAmount", minValue: POSTAL_DELIVERY_MINIMUM, maxValue: POSTAL_FREE_SHIPPING_THRESHOLD - 0.01, currency: "EUR" },
+        shippingRate: { "@type": "MonetaryAmount", value: POSTAL_DELIVERY_FEE, currency: "EUR" },
+        transitTime,
+      },
+      {
+        "@type": "ShippingConditions",
+        shippingDestination: destination,
+        orderValue: { "@type": "MonetaryAmount", minValue: POSTAL_FREE_SHIPPING_THRESHOLD, currency: "EUR" },
+        shippingRate: { "@type": "MonetaryAmount", value: 0, currency: "EUR" },
+        transitTime,
+      },
+    ],
   };
 }
 
@@ -86,6 +161,7 @@ export function buildHomeJsonLd(contactEmail?: string): JsonLdValue {
     telephone: verdanzaPublicContact.internationalPhone,
     sameAs: getActiveSocialLinks().map((link) => link.url),
     contactPoint,
+    hasShippingService: buildPostalShippingServiceJsonLd(),
   };
 
   if (contactEmail) {

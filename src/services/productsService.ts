@@ -56,6 +56,7 @@ export function asEditorialFallbackProducts(products: Product[]) {
     // Static stock is useful as editorial fixture data, never as a runtime
     // commercial authority when Firestore cannot be reached.
     stock: 0,
+    stockVerified: false,
   }));
 }
 

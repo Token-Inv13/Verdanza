@@ -73,7 +73,11 @@ try {
           assert.match(state.productData, /"@type":"Product"/);
           const orderable = mode === "authoritative" && !route.path.includes("supreme");
           assert.equal(state.enabledPurchaseButtons > 0, orderable, `${mode}: availability ${route.path}`);
-          assert.match(state.productData, orderable ? /schema.org\/InStock/ : /schema.org\/OutOfStock/);
+          if (mode === "authoritative") {
+            assert.match(state.productData, orderable ? /schema.org\/InStock/ : /schema.org\/OutOfStock/);
+          } else {
+            assert.doesNotMatch(state.productData, /"availability"/, `${mode}: unverified stock must not claim a shortage`);
+          }
           if (mode !== "pending") {
             assert.equal(state.catalog?.productCount, 11);
             assert.equal(state.catalog?.status, mode === "authoritative" ? "authoritative" : "degraded");
