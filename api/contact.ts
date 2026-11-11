@@ -1,4 +1,5 @@
-import { sendContactMessageEmail } from "./_server/email.js";
+import { sendContactMessageEmail, sendWithdrawalReceiptEmail } from "./_server/email.js";
+import { receiveWithdrawal, validateWithdrawalBody } from "./_server/withdrawal.js";
 import {
   assertMethod,
   sendJson,
@@ -21,13 +22,27 @@ type ContactBody = {
   message?: string;
   company?: string;
   submissionSecurity?: PublicSubmissionSecurityContext;
+  withdrawal?: unknown;
 };
 
-export default async function handler(
+type ContactServices = {
+  sendContactMessageEmail: typeof sendContactMessageEmail;
+  sendWithdrawalReceiptEmail: typeof sendWithdrawalReceiptEmail;
+  enforcePublicSubmissionRateLimit: typeof enforcePublicSubmissionRateLimit;
+};
+
+export function createContactHandler(services: Partial<ContactServices> = {}) {
+  const dependencies = { sendContactMessageEmail, sendWithdrawalReceiptEmail, enforcePublicSubmissionRateLimit, ...services };
+  return (request: VercelRequestLike, response: VercelResponseLike) => handleContact(request, response, dependencies);
+}
+
+async function handleContact(
   request: VercelRequestLike,
   response: VercelResponseLike,
+  dependencies: ContactServices,
 ) {
   if (assertMethod(request, response, "POST")) return;
+  response.setHeader("Cache-Control", "no-store");
 
   try {
     const body = parseBody(request.body);
@@ -36,13 +51,14 @@ export default async function handler(
       return;
     }
 
-    const payload = validateContactBody(body);
+    const withdrawal = body.withdrawal === undefined ? undefined : validateWithdrawalBody(body.withdrawal);
+    const payload = withdrawal ?? validateContactBody(body);
     const trap = assessPublicSubmissionTrap({ context: body.submissionSecurity });
     if (trap) {
       sendPublicSubmissionTrapResponse(response, "/api/contact", false, trap);
       return;
     }
-    const rateLimit = await enforcePublicSubmissionRateLimit({
+    const rateLimit = await dependencies.enforcePublicSubmissionRateLimit({
       route: "/api/contact",
       request,
       email: payload.email,
@@ -53,7 +69,22 @@ export default async function handler(
       sendPublicRateLimitResponse(response, rateLimit);
       return;
     }
-    const result = await sendContactMessageEmail(payload);
+    if (withdrawal) {
+      try {
+        const result = await receiveWithdrawal(withdrawal, {
+          notifyMerchant: (receipt) => dependencies.sendContactMessageEmail({
+            name: receipt.name, email: receipt.email,
+            subject: `Rétractation — ${receipt.id}`, message: receipt.text,
+          }),
+          acknowledgeCustomer: dependencies.sendWithdrawalReceiptEmail,
+        });
+        sendJson(response, result);
+      } catch {
+        sendJson(response, { error: "Déclaration non transmise. Réessayez ou écrivez à contact@verdanza.fr." }, 502);
+      }
+      return;
+    }
+    const result = await dependencies.sendContactMessageEmail(validateContactBody(body));
 
     if (result.status === "failed") {
       sendJson(response, { error: "Message non envoye pour le moment." }, 502);
@@ -67,6 +98,8 @@ export default async function handler(
     sendJson(response, { error: message }, 400);
   }
 }
+
+export default createContactHandler();
 
 function parseBody(value: unknown): ContactBody {
   const body = typeof value === "string" ? JSON.parse(value) : value;

@@ -37,6 +37,7 @@ type TransactionalEmailKind =
   | "admin_new_order"
   | "order_status_update"
   | "contact_message"
+  | "withdrawal_receipt"
   | "invoice"
   | "payment_link"
   | "contest_prize";
@@ -243,6 +244,18 @@ export async function sendContactMessageEmail(input: {
     html: contactEmailHtml(input),
     text: contactEmailText(input),
     idempotencyKey: `contact-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  });
+}
+
+export async function sendWithdrawalReceiptEmail(receipt: { id: string; email: string; text: string }) {
+  return sendTransactionalEmail({
+    kind: "withdrawal_receipt",
+    orderId: "withdrawal",
+    to: receipt.email,
+    subject: "Verdanza — accusé de réception de votre rétractation",
+    html: `<pre style="white-space:pre-wrap;font-family:sans-serif">${escapeHtml(receipt.text)}</pre>`,
+    text: receipt.text,
+    idempotencyKey: `withdrawal-receipt-${receipt.id}`,
   });
 }
 

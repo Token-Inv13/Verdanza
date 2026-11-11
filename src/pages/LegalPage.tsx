@@ -1,5 +1,9 @@
 import { Breadcrumbs, type BreadcrumbLink } from "../components/Breadcrumbs";
 import { Seo } from "../components/Seo";
+import { JsonLd } from "../components/JsonLd";
+import { WithdrawalForm } from "../components/WithdrawalForm";
+import { returnPolicySections } from "../config/returnPolicy";
+import { buildReturnPolicyOrganizationJsonLd } from "../lib/structuredData";
 import { DEFAULT_LOCAL_DELIVERY_ESTIMATE_LABEL } from "../lib/deliveryEstimate";
 
 export function LegalPage({ title }: { title: string }) {
@@ -9,21 +13,30 @@ export function LegalPage({ title }: { title: string }) {
   const sections = legalSections(title, contactEmail);
   const path = legalPath(title);
   const breadcrumbs = legalBreadcrumbs(title, path);
+  const isReturnPolicy = path === "/retours";
   return (
     <main className="container-page py-12">
       <Seo
         title={`${title} - Verdanza CBD`}
-        description={`${title} Verdanza.`}
+        description={isReturnPolicy ? "Retours Verdanza : rétractation sous 14 jours, conditions des sachets zip, frais, remboursement et déclaration en ligne." : `${title} Verdanza.`}
         path={path}
       />
+      {isReturnPolicy && <JsonLd id="return-policy" data={buildReturnPolicyOrganizationJsonLd()} />}
       <Breadcrumbs items={breadcrumbs} />
       <div className="page-intro">
         <h1>{title}</h1>
         <p>
-          Informations de conformité Verdanza pour les commandes, la livraison,
-          la confidentialité et les produits CBD réservés aux adultes.
+          {isReturnPolicy ? "Les démarches pour changer d’avis, renvoyer un produit ou signaler un problème avec votre commande Verdanza." : "Informations de conformité Verdanza pour les commandes, la livraison, la confidentialité et les produits CBD réservés aux adultes."}
         </p>
+        {isReturnPolicy && <a href="#retractation" className="mt-4 inline-block underline">Renoncer au contrat ici</a>}
       </div>
+      {isReturnPolicy && <WithdrawalForm contactEmail={contactEmail} />}
+      {path === "/cgv" && (
+        <section className="mt-6 rounded-lg border border-forest/10 bg-cream p-6 leading-7">
+          <h2 className="font-display text-3xl text-forest">Rétractation et retours</h2>
+          <p className="mt-3">Pour vos achats à distance, vous disposez d’un droit de rétractation de 14 jours. Consultez les démarches, frais et modalités de remboursement dans notre <a href="/retours" className="underline">politique de retour</a>. Vous pouvez <a href="/retours#retractation" className="underline">renoncer au contrat ici</a>.</p>
+        </section>
+      )}
       <div className="mt-10 grid gap-4">
         {sections.map((section) => (
           <section
@@ -132,6 +145,7 @@ function legalSections(title: string, contactEmail?: string) {
         heading: "Données collectées",
         items: [
           "Les données de compte, commande, livraison et contact sont utilisées pour exécuter la commande et assurer le suivi client.",
+          "Les déclarations de rétractation et leurs accusés de réception servent à traiter les retours et à conserver la preuve de votre demande. Elles sont transmises au service client et à l’adresse e-mail indiquée pour l’accusé de réception.",
           "Les données sont traitées par des prestataires techniques nécessaires au fonctionnement du site et au suivi des commandes.",
           "Les données de règlement manuel sont utilisées uniquement pour le suivi de commande et la confirmation administrative.",
           "Les J'aime des guides utilisent un identifiant technique aléatoire conservé dans le navigateur, transformé côté serveur avant stockage, sans connexion obligatoire et sans adresse IP brute enregistrée.",
@@ -166,15 +180,5 @@ function legalSections(title: string, contactEmail?: string) {
     ];
   }
 
-  return [
-    {
-      heading: "Retours et annulation",
-      items: [
-        "Les demandes de retour sont examinées au cas par cas selon les produits, leur état et les obligations applicables.",
-        "Les produits ouverts, altérés ou impropres à la remise en vente peuvent être exclus du retour selon la politique finale.",
-        `Les demandes client sont traitées via ${contactEmail} ou le formulaire de contact du site.`,
-      ],
-    },
-    ...common,
-  ];
+  return [...returnPolicySections(contactEmail || "contact@verdanza.fr"), ...common];
 }

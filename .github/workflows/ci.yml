@@ -170,6 +170,9 @@ jobs:
       - name: Verify
         run: npm run verify
 
+      - name: Verify return policy declaration UI
+        run: node --import tsx --import ./scripts/cagnotteNetworkGuard.ts scripts/testReturnPolicyUi.ts
+
       - name: Verify accounting periods and frozen referral revenue
         run: npm run test:accounting-periods
 

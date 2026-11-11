@@ -12,6 +12,8 @@ import {
   productAvailability,
   buildPostalShippingDetailsJsonLd,
   buildPostalShippingServiceJsonLd,
+  buildMerchantReturnPolicyJsonLd,
+  buildReturnPolicyOrganizationJsonLd,
   productCategoryLabel,
   productPath,
   type JsonLdValue,
@@ -106,6 +108,13 @@ function auditRoute(route: SeoRoute, filePath: string) {
     expectCount(typeCounts, "Product", 0, failures);
     expectCount(typeCounts, "Offer", 0, failures);
     auditBlogPosting(nodes, article, canonical, failures);
+    auditBreadcrumb(nodes, expectedBreadcrumbItems(route.path), canonical, failures);
+  } else if (route.path === "/retours") {
+    expectCount(typeCounts, "OnlineStore", 1, failures);
+    expectCount(typeCounts, "BreadcrumbList", 1, failures);
+    if (JSON.stringify(nodeByType(nodes, "OnlineStore")) !== JSON.stringify(buildReturnPolicyOrganizationJsonLd())) {
+      failures.push("Return policy organization mismatch");
+    }
     auditBreadcrumb(nodes, expectedBreadcrumbItems(route.path), canonical, failures);
   } else if (isNoindex) {
     expectCount(typeCounts, "Product", 0, failures);
@@ -292,6 +301,9 @@ function auditProduct(
   }
   if (JSON.stringify(offer.shippingDetails) !== JSON.stringify(buildPostalShippingDetailsJsonLd())) {
     failures.push("Offer shipping details mismatch");
+  }
+  if (JSON.stringify(offer.hasMerchantReturnPolicy) !== JSON.stringify(buildMerchantReturnPolicyJsonLd())) {
+    failures.push("Offer return policy mismatch");
   }
   if (!isRecord(offer.seller) || offer.seller["@id"] !== `${absoluteUrl("/")}#organization`) {
     failures.push("Offer seller mismatch");
