@@ -38,8 +38,29 @@ assert.equal(offer({ ...fixture, stock: 0 }).availability, "https://schema.org/O
 assert.equal(offer({ ...fixture, isActive: false }).availability, "https://schema.org/OutOfStock");
 for (const product of [fixture, unverified, { ...fixture, stock: 0 }]) {
   const schema = JSON.parse(JSON.stringify(buildProductJsonLd(product)));
-  assert.ok(!("review" in schema) && !("aggregateRating" in schema) && !("brand" in schema));
+  assert.deepEqual(schema.brand, { "@type": "Brand", name: "Verdanza" });
+  assert.ok(!("review" in schema) && !("aggregateRating" in schema));
   assert.ok(!("hasMerchantReturnPolicy" in schema.offers), "do not invent a return policy");
 }
 
-console.log("PASS product structured data: shipping minimum/free threshold boundaries, 2–3 day delivery, unverified/available/sold-out/inactive stock and no invented identifiers or returns.");
+const sku = (reference: string | undefined) => JSON.parse(JSON.stringify(buildProductJsonLd({
+  ...fixture,
+  internalReference: reference,
+}))).sku;
+assert.equal(sku("VDZ-FLR-GNWHRQ"), "VDZ-FLR-GNWHRQ", "use the current product reference instead of the technical ID");
+assert.equal(sku("  vdz-res-rpv29j  "), "VDZ-RES-RPV29J");
+for (const reference of [undefined, "", "invalid", "VDZ-FLR-000000"]) {
+  assert.equal(sku(reference), fixture.id, "keep the technical fallback when no valid reference exists");
+}
+const activeSkus = new Set<string>();
+for (const product of products.filter((entry) => entry.isActive)) {
+  const schema = JSON.parse(JSON.stringify(buildProductJsonLd(product)));
+  assert.match(schema.sku, /^VDZ-(FLR|RES|HUI|PCK|AUT)-[A-HJ-NP-Z2-9]{6}$/);
+  assert.equal(schema.sku, product.internalReference, `${product.id}: prerender must use its existing reference`);
+  assert.ok(!activeSkus.has(schema.sku), "each active product must have a unique SKU");
+  activeSkus.add(schema.sku);
+  assert.deepEqual(schema.brand, { "@type": "Brand", name: "Verdanza" });
+  assert.ok(!("mpn" in schema) && !Object.keys(schema).some((key) => key.startsWith("gtin")), "do not invent global identifiers");
+}
+
+console.log("PASS product structured data: Verdanza brand, unique VDZ SKUs, normalization/fallback, shipping boundaries, verified availability and no invented global identifiers or returns.");

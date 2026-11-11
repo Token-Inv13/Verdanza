@@ -266,10 +266,12 @@ function auditProduct(
   if (!Array.isArray(node.image) || node.image[0] !== absoluteUrl(product.image)) {
     failures.push("Product image mismatch");
   }
-  if (node.sku !== product.id) failures.push("Product sku mismatch");
+  if (node.sku !== product.internalReference) failures.push("Product sku mismatch");
   if (node.category !== productCategoryLabel(product)) failures.push("Product category mismatch");
   if (node.url !== url) failures.push("Product url mismatch");
-  if ("brand" in node) failures.push("Product brand present");
+  if (!isRecord(node.brand) || node.brand["@type"] !== "Brand" || node.brand.name !== "Verdanza") {
+    failures.push("Product brand mismatch");
+  }
   if (!offer) {
     failures.push("missing Product offers");
     return;
