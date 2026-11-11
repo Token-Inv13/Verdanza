@@ -348,7 +348,7 @@ export function ProductPage() {
     purchaseOptions.find(
       (option) => option.id === selectedPurchaseOptionId && option.available,
     ) || purchaseOptions.find((option) => option.available);
-  const purchaseAvailabilityLabel = selectedPurchaseOption
+  const purchaseAvailabilityLabel = product.stockVerified === false ? stockLabel : selectedPurchaseOption
     ? stockLabel
     : stockLabel !== "Disponible"
       ? stockLabel
@@ -433,6 +433,7 @@ export function ProductPage() {
             selectedPurchaseOption={selectedPurchaseOption}
             availabilityLabel={purchaseAvailabilityLabel}
             stockLabel={stockLabel}
+            isCatalogLoading={isLoading}
             purchaseBlockRef={purchaseBlockRef}
             onSelectPurchaseOption={setSelectedPurchaseOptionId}
             onAddToCart={handleAddToCart}

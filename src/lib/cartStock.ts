@@ -1,4 +1,5 @@
 import type { Product } from "../types";
+import { serverProductAvailability } from "./serverProductAvailability";
 
 export type CartStockLine = {
   productId: string;
@@ -26,7 +27,10 @@ export function availableProductStock(product?: Product | null) {
 export function publicProductStockLabel(product?: Product | null) {
   const stock = availableProductStock(product);
   if (!product || product.isActive === false) return "Indisponible";
-  if (product.stockVerified === false) return "Disponibilité à confirmer";
+  if (product.stockVerified === false) {
+    const verified = serverProductAvailability(product);
+    return verified === "https://schema.org/InStock" ? "Disponible" : verified === "https://schema.org/OutOfStock" ? "Rupture de stock" : "Disponibilité à confirmer";
+  }
   if (stock <= 0) return "Rupture de stock";
   return "Disponible";
 }

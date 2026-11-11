@@ -62,6 +62,7 @@ const expectedEndpoints = [
   "create-review.ts",
   "invoices.ts",
   "order-refunds.ts",
+  "product-page.ts",
   "quote-order.ts",
   "referral-maintenance.ts",
   "referral.ts",
@@ -434,7 +435,7 @@ await check("configuration runtime invalide refusée avant Firebase, Auth et lec
   assert.equal(dependencyCalls, 0);
 });
 
-await check("21 fonctions API attendues, deux endpoints fidélité et trois endpoints indépendants connus", () => {
+await check("22 fonctions API attendues, deux endpoints fidélité et quatre endpoints indépendants connus", () => {
   const endpoints = readdirSync(resolve("api"), { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
     .map((entry) => entry.name)
@@ -448,8 +449,8 @@ await check("21 fonctions API attendues, deux endpoints fidélité et trois endp
   assert.equal(mainEndpoints.length, 16);
   const addedEndpoints = endpoints.filter((file) => !mainEndpoints.includes(file));
   const fidelityEndpoints = ["cagnotte.ts", "order-refunds.ts"];
-  const independentEndpoints = ["referral-maintenance.ts", "referral.ts", "selection.ts"];
-  assert.equal(endpoints.length, 21);
+  const independentEndpoints = ["product-page.ts", "referral-maintenance.ts", "referral.ts", "selection.ts"];
+  assert.equal(endpoints.length, 22);
   assert.deepEqual(addedEndpoints, [...fidelityEndpoints, ...independentEndpoints].sort());
   assert.deepEqual(addedEndpoints.filter((file) => !independentEndpoints.includes(file)), fidelityEndpoints);
 });

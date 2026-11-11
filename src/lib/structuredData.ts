@@ -7,6 +7,7 @@ import { isProductOrderable as isPublicProductOrderable } from "./cartStock";
 import { getActiveSocialLinks } from "./socialLinks";
 import { absoluteUrl } from "./siteUrl";
 import { normalizeProductImages } from "./productImages";
+import { serverProductAvailability } from "./serverProductAvailability";
 import { isProductInternalReference, normalizeInternalReference } from "./productReferences";
 import {
   POSTAL_DELIVERY_FEE,
@@ -39,7 +40,7 @@ export function isProductOrderable(product: Product) {
 
 export function productAvailability(product: Product) {
   // A disabled editorial fallback is not evidence that the real stock is zero.
-  if (product.stockVerified === false) return undefined;
+  if (product.stockVerified === false) return product.isActive === false ? undefined : serverProductAvailability(product);
   return isPublicProductOrderable(product)
     ? "https://schema.org/InStock"
     : "https://schema.org/OutOfStock";

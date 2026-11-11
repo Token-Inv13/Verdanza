@@ -173,6 +173,9 @@ jobs:
       - name: Verify return policy declaration UI
         run: node --import tsx --import ./scripts/cagnotteNetworkGuard.ts scripts/testReturnPolicyUi.ts
 
+      - name: Verify request-time product availability
+        run: node --import tsx --import ./scripts/cagnotteNetworkGuard.ts scripts/testServerProductAvailabilityUi.ts
+
       - name: Verify accounting periods and frozen referral revenue
         run: npm run test:accounting-periods
 
