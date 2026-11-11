@@ -3,6 +3,7 @@ import type { Product } from "../types/index.js";
 export const products: Product[] = [
   {
     id: "resin-golden-static",
+    internalReference: "VDZ-RES-RPV29J",
     slug: "golden-static",
     name: "Golden Static",
     category: "resins",
@@ -103,6 +104,7 @@ export const products: Product[] = [
   },
   {
     id: "resin-supreme-50-cbd",
+    internalReference: "VDZ-RES-FG2WMK",
     slug: "supreme-50-cbd",
     name: "Suprême 50 % CBD",
     category: "resins",
@@ -161,6 +163,7 @@ export const products: Product[] = [
   },
   {
     id: "flower-cookie-kush-indoor",
+    internalReference: "VDZ-FLR-GSFQ32",
     slug: "cookie-kush-indoor",
     name: "Cookie Kush Indoor",
     category: "flowers",
@@ -224,6 +227,7 @@ export const products: Product[] = [
   },
   {
     id: "flower-petites-tetes-og-kush",
+    internalReference: "VDZ-FLR-972CCM",
     slug: "petites-tetes-og-kush",
     name: "OG Kush",
     category: "flowers",
@@ -281,6 +285,7 @@ export const products: Product[] = [
   },
   {
     id: "flower-harlequin-greenhouse",
+    internalReference: "VDZ-FLR-6PU25B",
     slug: "harlequin-greenhouse",
     name: "Harlequin Greenhouse",
     category: "flowers",
@@ -527,6 +532,7 @@ export const products: Product[] = [
   },
   {
     id: "flower-mango-haze-cbd",
+    internalReference: "VDZ-FLR-DLXWAS",
     slug: "mango-haze-cbd",
     name: "Mango Haze",
     category: "flowers",
@@ -583,6 +589,7 @@ export const products: Product[] = [
   },
   {
     id: "flower-mandarine-cbd",
+    internalReference: "VDZ-FLR-JJFNA3",
     slug: "mandarine-cbd",
     name: "Mandarine",
     category: "flowers",
@@ -695,6 +702,7 @@ export const products: Product[] = [
   },
   {
     id: "flower-blue-dream-cbd",
+    internalReference: "VDZ-FLR-GS4AJV",
     slug: "blue-dream-cbd",
     name: "Blue Dream CBD",
     category: "flowers",
@@ -784,6 +792,7 @@ export const products: Product[] = [
   },
   {
     id: "flower-skittlez-plus",
+    internalReference: "VDZ-FLR-GNWHRQ",
     slug: "skittlez-plus",
     name: "Skittlez Plus",
     category: "flowers",
@@ -813,6 +822,7 @@ export const products: Product[] = [
   },
   {
     id: "resin-black-afghan",
+    internalReference: "VDZ-RES-SUVAGV",
     slug: "black-afghan",
     name: "Black Afghan",
     category: "resins",
@@ -842,6 +852,7 @@ export const products: Product[] = [
   },
   {
     id: "resin-ice-o-lator",
+    internalReference: "VDZ-RES-8TLW8U",
     slug: "ice-o-lator",
     name: "Ice-o-Lator",
     category: "resins",
@@ -871,6 +882,7 @@ export const products: Product[] = [
   },
   {
     id: "resin-mousseux-skywalker",
+    internalReference: "VDZ-RES-SQ7WQT",
     slug: "mousseux-skywalker",
     name: "Mousseux Skywalker",
     category: "resins",

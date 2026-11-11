@@ -6,6 +6,7 @@ import { isProductOrderable as isPublicProductOrderable } from "./cartStock";
 import { getActiveSocialLinks } from "./socialLinks";
 import { absoluteUrl } from "./siteUrl";
 import { normalizeProductImages } from "./productImages";
+import { isProductInternalReference, normalizeInternalReference } from "./productReferences";
 import {
   POSTAL_DELIVERY_FEE,
   POSTAL_DELIVERY_MINIMUM,
@@ -51,6 +52,11 @@ export function productPath(product: Pick<Product, "slug">) {
   return `/produits/${product.slug}`;
 }
 
+export function productSku(product: Pick<Product, "id" | "internalReference">) {
+  const reference = normalizeInternalReference(product.internalReference);
+  return isProductInternalReference(reference) ? reference : product.id;
+}
+
 export function buildProductJsonLd(product: Product): JsonLdValue {
   const url = absoluteUrl(productPath(product));
   const imageUrls = normalizeProductImages(product).map((image) => absoluteUrl(image.url));
@@ -63,7 +69,8 @@ export function buildProductJsonLd(product: Product): JsonLdValue {
     name: product.name,
     description: product.longDescription,
     image: imageUrls.length ? imageUrls : [absoluteUrl(product.image)],
-    sku: product.id,
+    sku: productSku(product),
+    brand: { "@type": "Brand", name: "Verdanza" },
     category: productCategoryLabel(product),
     url,
     offers: {
