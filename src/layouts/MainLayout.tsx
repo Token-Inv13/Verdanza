@@ -254,6 +254,7 @@ export function MainLayout() {
             <NavLink to="/cgv">CGV</NavLink>
             <NavLink to="/confidentialite">Confidentialité</NavLink>
             <NavLink to="/retours">Retours</NavLink>
+            <a href="/retours#retractation">Renoncer au contrat ici</a>
           </div>
           {socialLinks.length > 0 && (
             <div className="grid content-start gap-2 text-sm text-forest/80">

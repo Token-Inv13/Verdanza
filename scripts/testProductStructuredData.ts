@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import "./testReturnPolicy";
 import { products } from "../src/data/products";
 import { availableProductStock, isProductOrderable, publicProductStockLabel } from "../src/lib/cartStock";
-import { buildHomeJsonLd, buildProductJsonLd } from "../src/lib/structuredData";
+import { buildHomeJsonLd, buildMerchantReturnPolicyJsonLd, buildProductJsonLd } from "../src/lib/structuredData";
 
 const fixture = { ...products[0], isActive: true, stock: 8 };
 const offer = (product = fixture) => JSON.parse(JSON.stringify(buildProductJsonLd(product))).offers;
@@ -40,7 +41,7 @@ for (const product of [fixture, unverified, { ...fixture, stock: 0 }]) {
   const schema = JSON.parse(JSON.stringify(buildProductJsonLd(product)));
   assert.deepEqual(schema.brand, { "@type": "Brand", name: "Verdanza" });
   assert.ok(!("review" in schema) && !("aggregateRating" in schema));
-  assert.ok(!("hasMerchantReturnPolicy" in schema.offers), "do not invent a return policy");
+  assert.deepEqual(schema.offers.hasMerchantReturnPolicy, buildMerchantReturnPolicyJsonLd());
 }
 
 const sku = (reference: string | undefined) => JSON.parse(JSON.stringify(buildProductJsonLd({
@@ -63,4 +64,4 @@ for (const product of products.filter((entry) => entry.isActive)) {
   assert.ok(!("mpn" in schema) && !Object.keys(schema).some((key) => key.startsWith("gtin")), "do not invent global identifiers");
 }
 
-console.log("PASS product structured data: Verdanza brand, unique VDZ SKUs, normalization/fallback, shipping boundaries, verified availability and no invented global identifiers or returns.");
+console.log("PASS product structured data: Verdanza brand, unique VDZ SKUs, shipping boundaries, verified availability, return policy and no invented global identifiers.");

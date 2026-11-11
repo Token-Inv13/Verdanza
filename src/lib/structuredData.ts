@@ -1,6 +1,7 @@
 import type { Product } from "../types";
 import type { BlogArticle } from "../types/blog";
 import { verdanzaPublicContact } from "../config/publicContact";
+import { RETURN_POLICY_PATH, WITHDRAWAL_NOTICE_DAYS } from "../config/returnPolicy";
 import { BRAND_STRUCTURED_DATA_LOGO } from "./brandAssets";
 import { isProductOrderable as isPublicProductOrderable } from "./cartStock";
 import { getActiveSocialLinks } from "./socialLinks";
@@ -82,10 +83,44 @@ export function buildProductJsonLd(product: Product): JsonLdValue {
       itemCondition: "https://schema.org/NewCondition",
       ...(availability ? { availability } : {}),
       shippingDetails: buildPostalShippingDetailsJsonLd(),
+      hasMerchantReturnPolicy: buildMerchantReturnPolicyJsonLd(),
       seller: {
         "@id": organizationId,
       },
     },
+  };
+}
+
+export function buildMerchantReturnPolicyJsonLd(): JsonLdValue {
+  return {
+    "@type": "MerchantReturnPolicy",
+    "@id": `${absoluteUrl(RETURN_POLICY_PATH)}#politique-de-retour`,
+    applicableCountry: "FR",
+    returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
+    merchantReturnDays: WITHDRAWAL_NOTICE_DAYS,
+    returnMethod: "https://schema.org/ReturnByMail",
+    returnFees: "https://schema.org/ReturnFeesCustomerResponsibility",
+    merchantReturnLink: absoluteUrl(RETURN_POLICY_PATH),
+  };
+}
+
+function organizationReturnPolicy(): JsonLdValue {
+  return {
+    ...buildMerchantReturnPolicyJsonLd() as Record<string, JsonLdValue>,
+    customerRemorseReturnFees: "https://schema.org/ReturnFeesCustomerResponsibility",
+    itemDefectReturnFees: "https://schema.org/FreeReturn",
+    refundType: "https://schema.org/FullRefund",
+  };
+}
+
+export function buildReturnPolicyOrganizationJsonLd(): JsonLdValue {
+  return {
+    "@context": "https://schema.org",
+    "@type": "OnlineStore",
+    "@id": organizationId,
+    name: "Verdanza",
+    url: absoluteUrl("/"),
+    hasMerchantReturnPolicy: organizationReturnPolicy(),
   };
 }
 
@@ -169,6 +204,7 @@ export function buildHomeJsonLd(contactEmail?: string): JsonLdValue {
     sameAs: getActiveSocialLinks().map((link) => link.url),
     contactPoint,
     hasShippingService: buildPostalShippingServiceJsonLd(),
+    hasMerchantReturnPolicy: organizationReturnPolicy(),
   };
 
   if (contactEmail) {
