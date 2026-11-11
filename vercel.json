@@ -4,6 +4,10 @@
   "devCommand": "npm run dev -- --host 127.0.0.1",
   "outputDirectory": "dist",
   "functions": {
+    "api/product-page.ts": {
+      "includeFiles": "dist/{produits/**,404.html}",
+      "maxDuration": 15
+    },
     "api/selection.ts": {
       "includeFiles": "public/brand/verdanza-v1/email/verdanza-logo-horizontal-compact-full-color-512.png"
     },
@@ -12,6 +16,10 @@
     }
   },
   "cleanUrls": true,
+  "proxy": {
+    "entrypoint": "proxy.ts",
+    "matcher": ["/produits/:slug"]
+  },
   "redirects": [
     {
       "source": "/fiches-produits/blue-dream/verdanza-blue-dream.pdf",

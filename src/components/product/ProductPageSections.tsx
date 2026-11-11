@@ -96,6 +96,7 @@ type ProductPurchasePanelProps = {
   selectedPurchaseOption?: ProductPurchaseOption;
   availabilityLabel: string;
   stockLabel: string;
+  isCatalogLoading?: boolean;
   purchaseBlockRef?: RefObject<HTMLDivElement>;
   onSelectPurchaseOption: (optionId: string) => void;
   onAddToCart: () => void;
@@ -107,6 +108,7 @@ export function ProductPurchasePanel({
   selectedPurchaseOption,
   availabilityLabel,
   stockLabel,
+  isCatalogLoading = false,
   purchaseBlockRef,
   onSelectPurchaseOption,
   onAddToCart,
@@ -210,6 +212,8 @@ export function ProductPurchasePanel({
         <ShoppingBag size={18} aria-hidden="true" />
         {selectedPurchaseOption
           ? `Ajouter ${productPurchaseCtaLabel(selectedPurchaseOption)}`
+          : product.stockVerified === false && stockLabel === "Disponible"
+            ? isCatalogLoading ? "Chargement des formats…" : "Commande momentanément indisponible"
           : stockLabel !== "Disponible"
             ? stockLabel
             : "Stock restant insuffisant"}

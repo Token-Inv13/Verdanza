@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import "./testServerProductAvailability";
 import "./testReturnPolicy";
 import { products } from "../src/data/products";
 import { availableProductStock, isProductOrderable, publicProductStockLabel } from "../src/lib/cartStock";
