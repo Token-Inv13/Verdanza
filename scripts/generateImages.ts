@@ -121,6 +121,9 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" | "packaging" }
 > = {
+  "chromatogramme-analyse-cbd-pics": {
+    label: "Chromatogramme et pics d'analyse CBD",
+  },
   "poids-net-brut-tare-commande-cbd": {
     label: "Poids net, poids brut et tare d'une commande CBD",
   },

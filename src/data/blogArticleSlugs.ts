@@ -1,4 +1,5 @@
 export const publishedBlogArticleSlugs = [
+  "chromatogramme-analyse-cbd-pics",
   "poids-net-brut-tare-commande-cbd",
   "bractees-stigmates-fleurs-cbd",
   "humidite-activite-eau-fleurs-cbd",
