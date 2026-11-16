@@ -121,6 +121,9 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" | "packaging" }
 > = {
+  "accreditation-laboratoire-portee-analyse-cbd": {
+    label: "Portée d'accréditation et analyse CBD",
+  },
   "chromatogramme-analyse-cbd-pics": {
     label: "Chromatogramme et pics d'analyse CBD",
   },

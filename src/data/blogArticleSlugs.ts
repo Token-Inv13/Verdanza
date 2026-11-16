@@ -1,4 +1,5 @@
 export const publishedBlogArticleSlugs = [
+  "accreditation-laboratoire-portee-analyse-cbd",
   "chromatogramme-analyse-cbd-pics",
   "poids-net-brut-tare-commande-cbd",
   "bractees-stigmates-fleurs-cbd",

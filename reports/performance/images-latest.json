@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-12T07:03:27.239Z",
+  "generatedAt": "2026-11-16T07:06:41.167Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -906,6 +906,31 @@
     }
   ],
   "blogImages": [
+    {
+      "articleSlug": "accreditation-laboratoire-portee-analyse-cbd",
+      "articleTitle": "Analyse CBD : que signifie la portée d'accréditation d'un laboratoire ?",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/accreditation-laboratoire-portee-analyse-cbd-editorial-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 24968
+        },
+        {
+          "src": "/images/blog/accreditation-laboratoire-portee-analyse-cbd-editorial-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 32584
+        },
+        {
+          "src": "/images/blog/accreditation-laboratoire-portee-analyse-cbd-editorial-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 48460
+        }
+      ]
+    },
     {
       "articleSlug": "chromatogramme-analyse-cbd-pics",
       "articleTitle": "Analyse CBD : comprendre un chromatogramme et ses pics",
@@ -1829,6 +1854,6 @@
     "productDetailBytes": 1906594,
     "staticSourceBytes": 2177258,
     "staticLargestBytes": 224006,
-    "blogImageBytes": 7774668
+    "blogImageBytes": 7880680
   }
 }
