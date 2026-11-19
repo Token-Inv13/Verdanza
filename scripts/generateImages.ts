@@ -121,6 +121,9 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" | "packaging" }
 > = {
+  "fleurs-cbd-volume-masse-structure": {
+    label: "Volume, masse et structure des fleurs CBD",
+  },
   "accreditation-laboratoire-portee-analyse-cbd": {
     label: "Portée d'accréditation et analyse CBD",
   },

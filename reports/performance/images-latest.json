@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-16T07:06:41.167Z",
+  "generatedAt": "2026-11-19T14:15:30.011Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -906,6 +906,31 @@
     }
   ],
   "blogImages": [
+    {
+      "articleSlug": "fleurs-cbd-volume-masse-structure",
+      "articleTitle": "Fleurs CBD : pourquoi le volume ne suffit pas à estimer la masse",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/fleurs-cbd-volume-masse-structure-editorial-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 29490
+        },
+        {
+          "src": "/images/blog/fleurs-cbd-volume-masse-structure-editorial-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 33186
+        },
+        {
+          "src": "/images/blog/fleurs-cbd-volume-masse-structure-editorial-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 44232
+        }
+      ]
+    },
     {
       "articleSlug": "accreditation-laboratoire-portee-analyse-cbd",
       "articleTitle": "Analyse CBD : que signifie la portée d'accréditation d'un laboratoire ?",
@@ -1854,6 +1879,6 @@
     "productDetailBytes": 1906594,
     "staticSourceBytes": 2177258,
     "staticLargestBytes": 224006,
-    "blogImageBytes": 7880680
+    "blogImageBytes": 7987588
   }
 }
