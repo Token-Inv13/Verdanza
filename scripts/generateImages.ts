@@ -121,6 +121,9 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" | "packaging" }
 > = {
+  "trier-emballages-commande-cbd": {
+    label: "Tri des emballages d'une commande CBD",
+  },
   "fleurs-cbd-volume-masse-structure": {
     label: "Volume, masse et structure des fleurs CBD",
   },

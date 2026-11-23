@@ -1,4 +1,5 @@
 export const publishedBlogArticleSlugs = [
+  "trier-emballages-commande-cbd",
   "fleurs-cbd-volume-masse-structure",
   "accreditation-laboratoire-portee-analyse-cbd",
   "chromatogramme-analyse-cbd-pics",

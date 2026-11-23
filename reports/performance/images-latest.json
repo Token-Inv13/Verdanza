@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-19T14:15:30.011Z",
+  "generatedAt": "2026-11-23T07:05:39.416Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -906,6 +906,31 @@
     }
   ],
   "blogImages": [
+    {
+      "articleSlug": "trier-emballages-commande-cbd",
+      "articleTitle": "Emballages CBD : comment lire les consignes de tri ?",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/trier-emballages-commande-cbd-editorial-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 41116
+        },
+        {
+          "src": "/images/blog/trier-emballages-commande-cbd-editorial-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 53842
+        },
+        {
+          "src": "/images/blog/trier-emballages-commande-cbd-editorial-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 90416
+        }
+      ]
+    },
     {
       "articleSlug": "fleurs-cbd-volume-masse-structure",
       "articleTitle": "Fleurs CBD : pourquoi le volume ne suffit pas à estimer la masse",
@@ -1879,6 +1904,6 @@
     "productDetailBytes": 1906594,
     "staticSourceBytes": 2177258,
     "staticLargestBytes": 224006,
-    "blogImageBytes": 7987588
+    "blogImageBytes": 8172962
   }
 }
