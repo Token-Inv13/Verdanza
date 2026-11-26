@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-23T07:05:39.416Z",
+  "generatedAt": "2026-11-26T07:08:47.773Z",
   "productImages": [
     {
       "productId": "resin-golden-static",
@@ -906,6 +906,31 @@
     }
   ],
   "blogImages": [
+    {
+      "articleSlug": "graines-fleurs-cbd-pollinisation-observation",
+      "articleTitle": "Graines dans une fleur CBD : que peut-on en déduire ?",
+      "artDirection": "verdanza-editorial",
+      "variants": [
+        {
+          "src": "/images/blog/graines-fleurs-cbd-pollinisation-observation-editorial-1x1.webp",
+          "width": 800,
+          "height": 800,
+          "bytes": 79936
+        },
+        {
+          "src": "/images/blog/graines-fleurs-cbd-pollinisation-observation-editorial-4x3.webp",
+          "width": 1040,
+          "height": 780,
+          "bytes": 87898
+        },
+        {
+          "src": "/images/blog/graines-fleurs-cbd-pollinisation-observation-editorial-16x9.webp",
+          "width": 1600,
+          "height": 900,
+          "bytes": 111584
+        }
+      ]
+    },
     {
       "articleSlug": "trier-emballages-commande-cbd",
       "articleTitle": "Emballages CBD : comment lire les consignes de tri ?",
@@ -1904,6 +1929,6 @@
     "productDetailBytes": 1906594,
     "staticSourceBytes": 2177258,
     "staticLargestBytes": 224006,
-    "blogImageBytes": 8172962
+    "blogImageBytes": 8452380
   }
 }

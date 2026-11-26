@@ -121,6 +121,9 @@ const blogImageSources: Record<
   string,
   { label: string; sources?: string[]; kind?: "collage" | "analysis" | "aroma" | "driving" | "packaging" }
 > = {
+  "graines-fleurs-cbd-pollinisation-observation": {
+    label: "Graines et observation des fleurs de chanvre",
+  },
   "trier-emballages-commande-cbd": {
     label: "Tri des emballages d'une commande CBD",
   },
